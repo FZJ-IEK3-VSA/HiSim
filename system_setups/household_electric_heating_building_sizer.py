@@ -18,7 +18,7 @@ from hisim.components import (
     advanced_battery_bslib,
     controller_l2_energy_management_system,
     heat_distribution_system,
-    generic_district_heating,
+    generic_electric_heating,
     electricity_meter,
     simple_water_storage,
 )
@@ -56,7 +56,7 @@ def setup_function(
         - Weather
         - Photovoltaic System
         - Building
-        - District Heating
+        - Electric Heating
         - Heat Distribution System
         - Heat Distribution Controller
         - Battery
@@ -73,9 +73,9 @@ def setup_function(
     my_config = read_in_configs(my_sim.my_module_config)
 
     if my_config is None:
-        my_config = ModularHouseholdConfig().get_default_config_for_household_district_heating()
+        my_config = ModularHouseholdConfig().get_default_config_for_household_electric_heating()
         log.warning(
-            f"Could not read the modular household config from path '{config_filename}'. Using the district heating household default config instead."
+            f"Could not read the modular household config from path '{config_filename}'. Using the electric heating household default config instead."
         )
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None
@@ -113,9 +113,9 @@ def setup_function(
 
     # Set heating systems for space heating and domestic hot water
     heating_system = energy_system_config_.heating_system
-    if heating_system != HeatingSystems.DISTRICT_HEATING:
+    if heating_system != HeatingSystems.ELECTRIC_HEATING:
         raise ValueError(
-            f"Heating system was set as {heating_system} but needs to be {HeatingSystems.DISTRICT_HEATING.value} for this system setup."
+            f"Heating system was set as {heating_system} but needs to be {HeatingSystems.ELECTRIC_HEATING.value} for this system setup."
         )
 
     heating_reference_temperature_in_celsius = -12.2
@@ -248,25 +248,25 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    # Build district heating controller
-    my_district_heating_controller_sh_config = (
-        generic_district_heating.DistrictHeatingControllerConfig.get_default_district_heating_controller_config(
+    # Build electric heating controller
+    my_electric_heating_controller_sh_config = (
+        generic_electric_heating.ElectricHeatingControllerConfig.get_default_electric_heating_controller_config(
             with_domestic_hot_water_preparation=True
         )
     )
-    my_district_heating_controller = generic_district_heating.DistrictHeatingController(
-        my_simulation_parameters=my_simulation_parameters, config=my_district_heating_controller_sh_config
+    my_electric_heating_controller = generic_electric_heating.ElectricHeatingController(
+        my_simulation_parameters=my_simulation_parameters, config=my_electric_heating_controller_sh_config
     )
-    my_sim.add_component(my_district_heating_controller, connect_automatically=True)
+    my_sim.add_component(my_electric_heating_controller, connect_automatically=True)
 
-    # Build district heating For Space Heating and DHW
-    my_district_heating_sh_config = generic_district_heating.DistrictHeatingConfig.get_default_district_heating_config(
+    # Build electric heating For Space Heating and DHW
+    my_electric_heating_sh_config = generic_electric_heating.ElectricHeatingConfig.get_default_electric_heating_config(
         with_domestic_hot_water_preparation=True
     )
-    my_district_heating = generic_district_heating.DistrictHeating(
-        config=my_district_heating_sh_config, my_simulation_parameters=my_simulation_parameters
+    my_electric_heating = generic_electric_heating.ElectricHeating(
+        config=my_electric_heating_sh_config, my_simulation_parameters=my_simulation_parameters
     )
-    my_sim.add_component(my_district_heating, connect_automatically=True)
+    my_sim.add_component(my_electric_heating, connect_automatically=True)
 
     my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
         number_of_apartments=number_of_apartments

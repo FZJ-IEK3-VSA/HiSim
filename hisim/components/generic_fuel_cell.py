@@ -248,7 +248,7 @@ class FuelCell(cp.Component):
         self.current_hydrogen_demand: ComponentOutput = self.add_output(
             self.fuelcellconfig.name,
             FuelCell.HydrogenDemand,
-            lt.LoadTypes.HYDROGEN,
+            lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.ANY,
             output_description="Current hydrogen demand",
         )
@@ -283,7 +283,7 @@ class FuelCell(cp.Component):
         self.hydrogen_flow_rate: ComponentOutput = self.add_output(
             self.fuelcellconfig.name,
             FuelCell.CurrentHydrogenFlowRate,
-            lt.LoadTypes.HYDROGEN,
+            lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG_PER_SEC,
             output_description="Current hydrogen flow rate",
         )
@@ -291,7 +291,7 @@ class FuelCell(cp.Component):
         self.total_hydrogen: ComponentOutput = self.add_output(
             self.fuelcellconfig.name,
             FuelCell.TotalHydrogenConsumed,
-            lt.LoadTypes.HYDROGEN,
+            lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG,
             output_description="Total hydrogen produced during simulation time",
         )

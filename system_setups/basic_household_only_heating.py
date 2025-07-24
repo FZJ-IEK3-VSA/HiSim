@@ -1,4 +1,5 @@
-""" Shows a single household with only heating. """
+"""Shows a single household with only heating."""
+
 # clean
 from typing import Optional, Any
 from hisim.simulator import SimulationParameters
@@ -45,7 +46,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # Set simulation parameters
     year = 2021
     seconds_per_timestep = 60 * 15
-    heating_reference_temperature_in_celsius = - 12.2
+    heating_reference_temperature_in_celsius = -12.2
 
     # =================================================================================================================================
     # Build Components
@@ -87,17 +88,21 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        my_simulation_parameters=my_simulation_parameters, config=my_heat_distribution_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_controller_config,
     )
     my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
         config=my_heat_distribution_controller_config
     )
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
-        absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+    my_heat_distribution_system_config = (
+        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+        )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
-        config=my_heat_distribution_system_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_system_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Gas Heater
@@ -106,13 +111,16 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         config=my_gas_heater_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_gas_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-        minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt,
-        maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt,
-        with_domestic_hot_water_preparation=False
+    my_gas_heater_controller_config = (
+        generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
+            minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt,
+            maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt,
+            with_domestic_hot_water_preparation=False,
+        )
     )
     my_gas_heater_controller = generic_boiler.GenericBoilerController(
-        my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_gas_heater_controller_config,
     )
 
     # Build Storage
@@ -123,7 +131,8 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
-        config=my_simple_heat_water_storage_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_simple_heat_water_storage_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # =================================================================================================================================

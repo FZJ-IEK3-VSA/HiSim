@@ -47,7 +47,7 @@ def test_chp_system():
         lt.Units.WATT,
     )
     hydrogensoc = cp.ComponentOutput(
-        "FakeH2SOC", "HydrogenSOC", lt.LoadTypes.HYDROGEN, lt.Units.PERCENT
+        "FakeH2SOC", "HydrogenSOC", lt.LoadTypes.GREEN_HYDROGEN, lt.Units.PERCENT
     )
 
     number_of_outputs = fft.get_number_of_outputs(

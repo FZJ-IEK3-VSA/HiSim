@@ -482,7 +482,6 @@ class SolarThermalSystem(Component):
         list_of_kpi_entries.append(total_co2_footprint)
         return list_of_kpi_entries
 
-
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""
         seconds_per_year = 365 * 24 * 60 * 60

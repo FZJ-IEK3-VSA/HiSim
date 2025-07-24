@@ -395,7 +395,7 @@ def setup_function(
         car_battery.connect_only_predefined_connections(car_battery_controller)
 
     # use ems and battery only when PV is used
-    if share_of_maximum_pv_potential != 0:
+    if share_of_maximum_pv_potential != 0 and energy_system_config_.use_battery_and_ems:
 
         # Build EMS
         my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()

@@ -104,7 +104,11 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # Setup the transformer and rectifier unit
     my_transformer = Transformer(
         my_simulation_parameters=my_simulation_parameters,
-        config=TransformerConfig(building_name=building_name, name=name, efficiency=efficiency,),
+        config=TransformerConfig(
+            building_name=building_name,
+            name=name,
+            efficiency=efficiency,
+        ),
     )
 
     # Setup the controller
@@ -126,15 +130,21 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_transformer.connect_input(my_transformer.TransformerInput, csv_loader.component_name, csv_loader.Output1)
 
     my_controller.connect_input(
-        my_controller.ProvidedLoad, my_transformer.component_name, my_transformer.TransformerOutput,
+        my_controller.ProvidedLoad,
+        my_transformer.component_name,
+        my_transformer.TransformerOutput,
     )
 
     my_electrolyzer.connect_input(
-        my_electrolyzer.InputState, my_controller.component_name, my_controller.CurrentMode,
+        my_electrolyzer.InputState,
+        my_controller.component_name,
+        my_controller.CurrentMode,
     )
 
     my_electrolyzer.connect_input(
-        my_electrolyzer.LoadInput, my_controller.component_name, my_controller.DistributedLoad,
+        my_electrolyzer.LoadInput,
+        my_controller.component_name,
+        my_controller.DistributedLoad,
     )
 
     # =================================================================================================================================

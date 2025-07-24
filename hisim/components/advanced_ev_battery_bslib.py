@@ -287,7 +287,7 @@ class CarBattery(Component):
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=0,
-            consumption_in_kwh=battery_losses_in_kwh,
+            total_consumption_in_kwh=battery_losses_in_kwh,
             loadtype=LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.CAR_BATTERY
         )

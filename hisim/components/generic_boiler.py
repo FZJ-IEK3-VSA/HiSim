@@ -323,6 +323,35 @@ class GenericBoilerConfig(ConfigBase):
         )
         return config
 
+    @classmethod
+    def get_scaled_condensing_hydrogen_boiler_config(
+        cls,
+        heating_load_of_building_in_watt: float,
+        number_of_apartments_in_building: Optional[int] = None,
+        building_name: str = "BUI1",
+    ) -> Any:
+        """Get a scaled condensing hydrogen boiler scaled to heating load."""
+        maximal_thermal_power_in_watt = cls.scale_thermal_power(
+            heating_load_of_building_in_watt, number_of_apartments_in_building
+        )
+        config = GenericBoilerConfig(
+            building_name=building_name,
+            name="CondensingHydrogenBoiler",
+            boiler_type=BoilerType.CONDENSING,
+            energy_carrier=lt.LoadTypes.GREEN_HYDROGEN,
+            temperature_delta_in_celsius=20,
+            minimal_thermal_power_in_watt=0,
+            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            eff_th_min=0.60,
+            eff_th_max=0.90,
+            co2_footprint=0,  # green hydrogen is CO2-neutral
+            cost=7416,  # value from emission_factros_and_costs_devices.csv
+            lifetime=20,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            consumption_in_kilowatt_hour=0,
+        )
+        return config
+
 
 class GenericBoiler(Component):
     """GenericBoiler class.
@@ -852,7 +881,7 @@ class GenericBoiler(Component):
             capex_cost_data_class.kpi_tag = KpiTagEnumClass.GAS_BOILER
         elif config.energy_carrier == lt.LoadTypes.OIL:
             capex_cost_data_class.kpi_tag = KpiTagEnumClass.OIL_BOILER
-        elif config.energy_carrier == lt.LoadTypes.HYDROGEN:
+        elif config.energy_carrier == lt.LoadTypes.GREEN_HYDROGEN:
             capex_cost_data_class.kpi_tag = KpiTagEnumClass.HYDROGEN_BOILER
         elif config.energy_carrier == lt.LoadTypes.PELLETS:
             capex_cost_data_class.kpi_tag = KpiTagEnumClass.PELLET_BOILER
@@ -871,16 +900,29 @@ class GenericBoiler(Component):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
+        sh_consumption_in_kilowatt_hour = None
+        dhw_consumption_in_kwh = None
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == self.component_name
                 and output.field_name == self.EnergyDemandSh
                 and output.unit == lt.Units.WATT_HOUR
             ):
-                self.config.consumption_in_kilowatt_hour = round(
+                sh_consumption_in_kilowatt_hour = round(
                     sum(postprocessing_results.iloc[:, index]) * 1e-3, 1
                 )
-                break
+            if (
+                output.component_name == self.component_name
+                and output.field_name == self.EnergyDemandDhw
+                and output.unit == lt.Units.WATT_HOUR
+            ):
+                dhw_consumption_in_kwh = round(
+                    sum(postprocessing_results.iloc[:, index]) * 1e-3, 1
+                )
+
+        assert sh_consumption_in_kilowatt_hour is not None
+        assert dhw_consumption_in_kwh is not None
+        self.config.consumption_in_kilowatt_hour = sh_consumption_in_kilowatt_hour + dhw_consumption_in_kwh
 
         self.fuel_consumption_in_liter = round(
             self.config.consumption_in_kilowatt_hour
@@ -927,11 +969,11 @@ class GenericBoiler(Component):
             )
 
         elif (
-            self.energy_carrier == lt.LoadTypes.HYDROGEN
-        ):  # TODO: implement costs and co2
+            self.energy_carrier == lt.LoadTypes.GREEN_HYDROGEN
+        ):
             kpi_tag = KpiTagEnumClass.HYDROGEN_BOILER
-            co2_per_unit = 0
-            euro_per_unit = 0
+            co2_per_unit = emissions_and_cost_factors.green_hydrogen_gas_footprint_in_kg_per_kwh
+            euro_per_unit = emissions_and_cost_factors.green_hydrogen_gas_costs_in_euro_per_kwh
             co2_per_simulated_period_in_kg = (
                 self.config.consumption_in_kilowatt_hour * co2_per_unit
             )
@@ -978,7 +1020,9 @@ class GenericBoiler(Component):
             opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=self.config.consumption_in_kilowatt_hour,
+            total_consumption_in_kwh=self.config.consumption_in_kilowatt_hour,
+            consumption_for_domestic_hot_water_in_kwh=dhw_consumption_in_kwh,
+            consumption_for_space_heating_in_kwh=sh_consumption_in_kilowatt_hour,
             loadtype=self.energy_carrier,
             kpi_tag=kpi_tag,
         )
@@ -1001,38 +1045,83 @@ class GenericBoiler(Component):
         )
 
         # Energy related KPIs
-        thermal_energy_delivered_in_kilowatt_hour: float
+        sh_thermal_energy_delivered_in_kilowatt_hour = None
+        dhw_thermal_energy_delivered_in_kilowatt_hour = None
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
                 if (
                     output.field_name == self.ThermalOutputEnergySh
                     and output.unit == lt.Units.WATT_HOUR
                 ):
-                    thermal_energy_delivered_in_kilowatt_hour = round(
+                    sh_thermal_energy_delivered_in_kilowatt_hour = round(
                         sum(postprocessing_results.iloc[:, index]) * 1e-3, 1
                     )
-                    break
+                if (
+                    output.field_name == self.ThermalOutputEnergyDhw
+                    and output.unit == lt.Units.WATT_HOUR
+                ):
+                    dhw_thermal_energy_delivered_in_kilowatt_hour = round(
+                        sum(postprocessing_results.iloc[:, index]) * 1e-3, 1
+                    )
 
+        assert sh_thermal_energy_delivered_in_kilowatt_hour is not None
+        assert dhw_thermal_energy_delivered_in_kilowatt_hour is not None
+        total_thermal_energy_delivered_in_kilowatt_hour = sh_thermal_energy_delivered_in_kilowatt_hour + dhw_thermal_energy_delivered_in_kilowatt_hour
         thermal_energy_delivered_entry = KpiEntry(
-            name="Thermal energy delivered",
+            name="Total thermal energy delivered",
             unit="kWh",
-            value=thermal_energy_delivered_in_kilowatt_hour,
+            value=total_thermal_energy_delivered_in_kilowatt_hour,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )
         list_of_kpi_entries.append(thermal_energy_delivered_entry)
 
-        energy_consumption = KpiEntry(
-            name=f"{self.energy_carrier.value} consumption (energy)",
+        sh_thermal_energy_delivered_entry = KpiEntry(
+            name="Thermal energy delivered for space heating",
             unit="kWh",
-            value=opex_dataclass.consumption_in_kwh,
+            value=sh_thermal_energy_delivered_in_kilowatt_hour,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(sh_thermal_energy_delivered_entry)
+        dhw_thermal_energy_delivered_entry = KpiEntry(
+            name="Thermal energy delivered for domestic hot water",
+            unit="kWh",
+            value=dhw_thermal_energy_delivered_in_kilowatt_hour,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(dhw_thermal_energy_delivered_entry)
+
+        energy_consumption = KpiEntry(
+            name=f"Total {self.energy_carrier.value} consumption (energy)",
+            unit="kWh",
+            value=opex_dataclass.total_consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )
         list_of_kpi_entries.append(energy_consumption)
 
+        sh_energy_consumption = KpiEntry(
+            name=f"Energy {self.energy_carrier.value} consumption for space heating",
+            unit="kWh",
+            value=opex_dataclass.consumption_for_space_heating_in_kwh,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(sh_energy_consumption)
+
+        dhw_energy_consumption = KpiEntry(
+            name=f"Energy {self.energy_carrier.value} consumption for doemstic hot water",
+            unit="kWh",
+            value=opex_dataclass.consumption_for_domestic_hot_water_in_kwh,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(dhw_energy_consumption)
+
         fuel_consumption_l = KpiEntry(
-            name=f"{self.energy_carrier.value} consumption (volume)",
+            name=f"Total {self.energy_carrier.value} consumption (volume)",
             unit="l",
             value=self.fuel_consumption_in_liter,
             tag=opex_dataclass.kpi_tag,
@@ -1041,7 +1130,7 @@ class GenericBoiler(Component):
         list_of_kpi_entries.append(fuel_consumption_l)
 
         fuel_consumption_kg = KpiEntry(
-            name=f"{self.energy_carrier.value} consumption (mass)",
+            name=f"Total {self.energy_carrier.value} consumption (mass)",
             unit="kg",
             value=self.fuel_consumption_in_kg,
             tag=opex_dataclass.kpi_tag,

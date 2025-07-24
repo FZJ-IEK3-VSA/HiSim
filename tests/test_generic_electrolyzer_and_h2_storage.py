@@ -90,12 +90,12 @@ def test_hydrogen_generator():
         lt.Units.WATT,
     )
     hydrogen_not_stored = cp.ComponentOutput(
-        "FakeHydrogenNotStored", "HydrogenNotStored", lt.LoadTypes.HYDROGEN, lt.Units.KG
+        "FakeHydrogenNotStored", "HydrogenNotStored", lt.LoadTypes.GREEN_HYDROGEN, lt.Units.KG
     )
     discharging_hydrogen_amount_target = cp.ComponentOutput(
         "DischargingHydrogenAmountTarget",
         "DischargingHydrogenAmountTarget",
-        lt.LoadTypes.HYDROGEN,
+        lt.LoadTypes.GREEN_HYDROGEN,
         lt.Units.KG_PER_SEC,
     )
 

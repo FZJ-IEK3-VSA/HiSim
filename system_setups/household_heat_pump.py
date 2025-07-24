@@ -1,4 +1,4 @@
-"""  Household system setup with advanced heat pump. """
+"""Household system setup with advanced heat pump."""
 
 from dataclasses import dataclass
 import os
@@ -151,11 +151,13 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
                 predictive_control=False,
                 predictive=False,
             ),
-            pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-                rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2, location=weather_location
-            )
-            if options.photovoltaic
-            else None,
+            pv_config=(
+                generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+                    rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2, location=weather_location
+                )
+                if options.photovoltaic
+                else None
+            ),
             options=options,
             building_config=building_config,
             hds_controller_config=hds_controller_config,
@@ -244,7 +246,8 @@ def setup_function(
     """
     # Heat Distribution System Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        config=my_config.hds_controller_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_config.hds_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Occupancy
@@ -269,7 +272,8 @@ def setup_function(
 
     # Advanced Heat Pump Controller
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
-        config=my_config.hp_controller_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_config.hp_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Advanced Heat Pump
@@ -306,7 +310,8 @@ def setup_function(
         my_display_config=DisplayConfig.show("Warmwasserspeicher"),
     )
     my_domestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters, config=my_dhw_heatpump_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
     my_domestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
         config=my_dhw_heatpump_config,
@@ -358,7 +363,8 @@ def setup_function(
             # Build EMS
             my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
             my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-                my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config,
+                my_simulation_parameters=my_simulation_parameters,
+                config=my_electricity_controller_config,
             )
 
             # Build Battery
@@ -366,7 +372,8 @@ def setup_function(
                 total_pv_power_in_watt_peak=my_config.pv_config.power_in_watt
             )
             my_advanced_battery = advanced_battery_bslib.Battery(
-                my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config,
+                my_simulation_parameters=my_simulation_parameters,
+                config=my_advanced_battery_config,
             )
 
             # -----------------------------------------------------------------------------------------------------------------

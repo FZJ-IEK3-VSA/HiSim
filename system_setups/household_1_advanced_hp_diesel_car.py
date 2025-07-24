@@ -1,4 +1,4 @@
-"""  Household system setup with advanced heat pump and diesel car. """
+"""Household system setup with advanced heat pump and diesel car."""
 
 # clean
 
@@ -41,7 +41,6 @@ __status__ = "development"
 
 @dataclass
 class HouseholdAdvancedHPDieselCarOptions:
-
     """Set options for the system setup."""
 
     pass
@@ -49,7 +48,6 @@ class HouseholdAdvancedHPDieselCarOptions:
 
 @dataclass
 class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
-
     """Configuration for with advanced heat pump and diesel car."""
 
     building_type: str
@@ -190,7 +188,8 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
 
 
 def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None,
+    my_sim: Any,
+    my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
     """System setup with advanced hp and diesel car.
 
@@ -242,7 +241,8 @@ def setup_function(
 
     # Build heat Distribution System Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        config=my_config.hds_controller_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_config.hds_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Occupancy
@@ -259,7 +259,8 @@ def setup_function(
 
     # Build Building
     my_building = building.Building(
-        config=my_config.building_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_config.building_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
@@ -272,7 +273,8 @@ def setup_function(
     my_heat_pump_controller_config.name = "HeatPumpHplibController"
 
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
-        config=my_heat_pump_controller_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump
@@ -280,12 +282,14 @@ def setup_function(
     my_heat_pump_config.name = "HeatPumpHPLib"
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Water Storage
     my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
-        config=my_config.simple_hot_water_storage_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_config.simple_hot_water_storage_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build DHW
@@ -312,7 +316,8 @@ def setup_function(
     )
 
     my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters, config=my_dhw_heatpump_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
@@ -340,7 +345,8 @@ def setup_function(
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
-        my_simulation_parameters=my_simulation_parameters, config=my_config.electricity_meter_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.electricity_meter_config,
     )
 
     # =================================================================================================================================

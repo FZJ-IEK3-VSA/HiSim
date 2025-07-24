@@ -1,4 +1,4 @@
-""" Iterative Energy Surplus Controller.
+"""Iterative Energy Surplus Controller.
 
 It received the electricity consumption
 of all components and the PV production. According to the balance it
@@ -287,6 +287,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
+        self.add_dynamic_default_connections(self.get_default_connections_from_electric_heater())
 
     def get_default_connections_from_pv_system(
         self,
@@ -458,11 +459,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
 
         dynamic_connections = []
-        self.dhw_heat_pump_class_name = ModularHeatPump.get_classname()
+        self.electric_heater_class_name = ModularHeatPump.get_classname()
         dynamic_connections.append(
             dynamic_component.DynamicComponentConnection(
                 source_component_class=ModularHeatPump,
-                source_class_name=self.dhw_heat_pump_class_name,
+                source_class_name=self.electric_heater_class_name,
                 source_component_field_name=ModularHeatPump.ElectricityOutput,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
@@ -472,7 +473,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
 
         self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOf{self.dhw_heat_pump_class_name}_",
+            source_output_name=f"ElectricityToOrFromGridOf{self.electric_heater_class_name}_",
             source_tags=[
                 lt.ComponentType.HEAT_PUMP_DHW,
                 lt.InandOutputType.ELECTRICITY_TARGET,
@@ -481,6 +482,68 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for dhw heat pump.",
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_electric_heater(
+        self,
+    ):
+        """Get electric heater default connections."""
+
+        from hisim.components.generic_electric_heating import ElectricHeating  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        self.electric_heater_class_name = ElectricHeating.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=ElectricHeating,
+                source_class_name=self.electric_heater_class_name,
+                source_component_field_name=ElectricHeating.ElectricOutputShPower,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.ELECTRIC_HEATING_SH,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                ],
+                source_weight=2,
+            )
+        )
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=ElectricHeating,
+                source_class_name=self.electric_heater_class_name,
+                source_component_field_name=ElectricHeating.ElectricOutputDhwPower,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.ELECTRIC_HEATING_DHW,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                ],
+                source_weight=3,
+            )
+        )
+
+        self.add_component_output(
+            source_output_name=f"ElectricityToOrFromGridOf{self.electric_heater_class_name}_",
+            source_tags=[
+                lt.ComponentType.ELECTRIC_HEATING_SH,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=2,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for electric heater space heating.",
+        )
+        self.add_component_output(
+            source_output_name=f"ElectricityToOrFromGridOf{self.electric_heater_class_name}_",
+            source_tags=[
+                lt.ComponentType.ELECTRIC_HEATING_DHW,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=3,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for electric heater domestic hot water.",
         )
         return dynamic_connections
 
@@ -922,7 +985,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         return opex_cost_data_class
 
     @staticmethod
-    def get_cost_capex(config: EMSConfig, simulation_parameters: SimulationParameters) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
+    def get_cost_capex(
+        config: EMSConfig, simulation_parameters: SimulationParameters
+    ) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         capex_cost_data_class = cp.CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class

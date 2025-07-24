@@ -318,24 +318,33 @@ class SolarThermalSystem(Component):
     ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
         """Calculate OPEX."""
+        dhw_consumption_in_kilowatt_hour = None
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == self.component_name
                 and output.field_name == self.ElectricityConsumptionOutput
-                and output.unit == loadtypes.Units.WATT_HOUR
+                and output.unit == loadtypes.Units.WATT
             ):
-                consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+                dhw_consumption_in_kilowatt_hour = round(
+                    sum(postprocessing_results.iloc[:, index])
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
                 break
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
         )
+        assert dhw_consumption_in_kilowatt_hour is not None
+        total_consumption_in_kilowatt_hour = dhw_consumption_in_kilowatt_hour
 
         opex_cost_data_class = OpexCostDataClass(
-            opex_energy_cost_in_euro=consumption_in_kilowatt_hour * emissions_and_cost_factors.electricity_costs_in_euro_per_kwh,
+            opex_energy_cost_in_euro=total_consumption_in_kilowatt_hour * emissions_and_cost_factors.electricity_costs_in_euro_per_kwh,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
-            co2_footprint_in_kg=consumption_in_kilowatt_hour * emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh,
-            consumption_in_kwh=consumption_in_kilowatt_hour,
+            co2_footprint_in_kg=total_consumption_in_kilowatt_hour * emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh,
+            total_consumption_in_kwh=total_consumption_in_kilowatt_hour,
+            consumption_for_domestic_hot_water_in_kwh=dhw_consumption_in_kilowatt_hour,
             loadtype=loadtypes.LoadTypes.WARM_WATER,
             kpi_tag=KpiTagEnumClass.SOLAR_THERMAL
         )
@@ -348,7 +357,130 @@ class SolarThermalSystem(Component):
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        return []
+        list_of_kpi_entries: List[KpiEntry] = []
+        opex_dataclass = self.get_cost_opex(
+            all_outputs=all_outputs,
+            postprocessing_results=postprocessing_results,
+        )
+        capex_dataclass = self.get_cost_capex(
+            self.config, self.my_simulation_parameters
+        )
+        dhw_thermal_energy_delivered_in_kilowatt_hour = None
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.component_name:
+                if (
+                    output.field_name == self.ThermalEnergyOutput
+                    and output.unit == loadtypes.Units.WATT_HOUR
+                ):
+                    dhw_thermal_energy_delivered_in_kilowatt_hour = round(
+                        sum(postprocessing_results.iloc[:, index]) * 1e-3, 1
+                    )
+
+        assert dhw_thermal_energy_delivered_in_kilowatt_hour is not None
+        total_thermal_energy_delivered_in_kilowatt_hour = dhw_thermal_energy_delivered_in_kilowatt_hour
+        thermal_energy_delivered_entry = KpiEntry(
+            name="Total thermal energy delivered",
+            unit="kWh",
+            value=total_thermal_energy_delivered_in_kilowatt_hour,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(thermal_energy_delivered_entry)
+
+        dhw_thermal_energy_delivered_entry = KpiEntry(
+            name="Thermal energy delivered for domestic hot water",
+            unit="kWh",
+            value=dhw_thermal_energy_delivered_in_kilowatt_hour,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(dhw_thermal_energy_delivered_entry)
+
+        energy_consumption = KpiEntry(
+            name="Total consumption (energy)",
+            unit="kWh",
+            value=opex_dataclass.total_consumption_in_kwh,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(energy_consumption)
+
+        dhw_energy_consumption = KpiEntry(
+            name="Energy consumption for doemstic hot water",
+            unit="kWh",
+            value=opex_dataclass.consumption_for_domestic_hot_water_in_kwh,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(dhw_energy_consumption)
+
+        # Economic and environmental KPIs
+        capex = KpiEntry(
+            name="CAPEX - Investment cost",
+            unit="EUR",
+            value=capex_dataclass.capex_investment_cost_in_euro,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(capex)
+
+        co2_footprint_capex = KpiEntry(
+            name="CAPEX - CO2 Footprint",
+            unit="kg",
+            value=capex_dataclass.device_co2_footprint_in_kg,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(co2_footprint_capex)
+
+        opex = KpiEntry(
+            name="OPEX - Fuel costs",
+            unit="EUR",
+            value=opex_dataclass.opex_energy_cost_in_euro,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(opex)
+
+        maintenance_costs = KpiEntry(
+            name="OPEX - Maintenance costs",
+            unit="EUR",
+            value=opex_dataclass.opex_maintenance_cost_in_euro,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(maintenance_costs)
+
+        co2_footprint = KpiEntry(
+            name="OPEX - CO2 Footprint",
+            unit="kg",
+            value=opex_dataclass.co2_footprint_in_kg,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(co2_footprint)
+
+        total_costs = KpiEntry(
+            name="Total Costs (CAPEX for simulated period + OPEX fuel and maintenance)",
+            unit="EUR",
+            value=capex_dataclass.capex_investment_cost_for_simulated_period_in_euro
+            + opex_dataclass.opex_energy_cost_in_euro
+            + opex_dataclass.opex_maintenance_cost_in_euro,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(total_costs)
+
+        total_co2_footprint = KpiEntry(
+            name="Total CO2 Footprint (CAPEX for simulated period + OPEX)",
+            unit="kg",
+            value=capex_dataclass.device_co2_footprint_for_simulated_period_in_kg
+            + opex_dataclass.co2_footprint_in_kg,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(total_co2_footprint)
+        return list_of_kpi_entries
 
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""
@@ -823,6 +955,36 @@ class SolarThermalSystemController(Component):
         if mass_flow_kg_s < 0.01:
             # deactivate when mass flow is too low
             self.state.deactivate(timestep)
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
+        """Calculate OPEX costs, consisting of electricity costs and revenues."""
+        opex_cost_data_class = (
+            OpexCostDataClass.get_default_opex_cost_data_class()
+        )
+        return opex_cost_data_class
+
+    @staticmethod
+    def get_cost_capex(
+        config: SolarThermalSystemControllerConfig,
+        simulation_parameters: SimulationParameters,
+    ) -> CapexCostDataClass:  # pylint: disable=unused-argument
+        """Returns investment cost, CO2 emissions and lifetime."""
+        capex_cost_data_class = (
+            CapexCostDataClass.get_default_capex_cost_data_class()
+        )
+        return capex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []
 
 
 class SolarThermalSystemControllerState:

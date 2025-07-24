@@ -374,7 +374,7 @@ class Car(cp.Component):
             opex_energy_cost_in_euro=energy_costs_in_euro,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=consumption_in_kwh,
+            total_consumption_in_kwh=consumption_in_kwh,
             loadtype=self.config.fuel,
             kpi_tag=KpiTagEnumClass.CAR
         )

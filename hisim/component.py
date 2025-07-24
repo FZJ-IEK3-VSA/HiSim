@@ -16,7 +16,7 @@ import pandas as pd
 from dataclass_wizard import JSONWizard
 
 from hisim import loadtypes as lt
-from hisim import log, utils
+from hisim import log
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass

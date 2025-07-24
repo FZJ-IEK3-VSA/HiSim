@@ -11,7 +11,7 @@ import pandas as pd
 from dataclasses_json import dataclass_json
 
 import hisim.component as cp
-from hisim import loadtypes as lt, log
+from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import (
     SingleTimeStepValues,

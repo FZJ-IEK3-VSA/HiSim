@@ -73,7 +73,7 @@ class CHPConfig(cp.ConfigBase):
             building_name=building_name,
             name="CHP",
             source_weight=1,
-            use=lt.LoadTypes.HYDROGEN,
+            use=lt.LoadTypes.GREEN_HYDROGEN,
             p_el=(0.48 / 0.43) * thermal_power,
             p_th=thermal_power,
             p_fuel=(1 / 0.43) * thermal_power,
@@ -128,7 +128,7 @@ class SimpleCHP(cp.Component):
         )
 
         self.config = config
-        if self.config.use == lt.LoadTypes.HYDROGEN:
+        if self.config.use == lt.LoadTypes.GREEN_HYDROGEN:
             self.p_fuel = config.p_fuel / (3.6e3 * 3.939e4)  # converted to kg / s
         else:
             self.p_fuel = config.p_fuel * my_simulation_parameters.seconds_per_timestep / 3.6e3  # converted to Wh
@@ -181,13 +181,13 @@ class SimpleCHP(cp.Component):
             ],
             output_description="Electrical Power output of CHP in Watt.",
         )
-        if self.config.use == lt.LoadTypes.HYDROGEN:
+        if self.config.use == lt.LoadTypes.GREEN_HYDROGEN:
             self.fuel_consumption_channel: cp.ComponentOutput = self.add_output(
                 object_name=self.component_name,
                 field_name=self.FuelDelivered,
-                load_type=lt.LoadTypes.HYDROGEN,
+                load_type=lt.LoadTypes.GREEN_HYDROGEN,
                 unit=lt.Units.KG_PER_SEC,
-                postprocessing_flag=[lt.LoadTypes.HYDROGEN],
+                postprocessing_flag=[lt.LoadTypes.GREEN_HYDROGEN],
                 output_description="Hydrogen consumption of CHP in kg / s.",
             )
         elif self.config.use == lt.LoadTypes.GAS:

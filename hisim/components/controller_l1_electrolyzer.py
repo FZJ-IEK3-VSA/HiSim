@@ -148,7 +148,7 @@ class L1GenericElectrolyzerController(cp.Component):
         self.hydrogen_soc_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.HydrogenSOC,
-            lt.LoadTypes.HYDROGEN,
+            lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.PERCENT,
             mandatory=True,
         )

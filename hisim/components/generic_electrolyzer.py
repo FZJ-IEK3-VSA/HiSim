@@ -134,7 +134,7 @@ class GenericElectrolyzer(cp.Component):
         self.hydrogen_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             GenericElectrolyzer.HydrogenOutput,
-            lt.LoadTypes.HYDROGEN,
+            lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG_PER_SEC,
             output_description="Hydrogen output",
         )

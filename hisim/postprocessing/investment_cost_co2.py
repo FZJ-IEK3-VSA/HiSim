@@ -78,7 +78,7 @@ def compute_investment_cost(components: List[ComponentWrapper],) -> Tuple[float,
         elif isinstance(component.my_component, generic_chp.SimpleCHP):
             if component.my_component.config.use == LoadTypes.GAS:
                 column = price_frame.iloc[price_frame.index == "Gas powered Combined Heat and Power"]
-            elif component.my_component.config.use == LoadTypes.HYDROGEN:
+            elif component.my_component.config.use == LoadTypes.GREEN_HYDROGEN:
                 column = price_frame.iloc[price_frame.index == "Hydrogen fuelcell"]
             component_capacity = component.my_component.config.p_fuel * 1e-3
         elif isinstance(component.my_component, generic_hydrogen_storage.GenericHydrogenStorage):

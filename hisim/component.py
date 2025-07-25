@@ -1,7 +1,8 @@
-""" Defines the component class and helpers.
+"""Defines the component class and helpers.
 
 The component class is the base class for all other components.
 """
+
 # clean
 
 from __future__ import annotations
@@ -19,12 +20,12 @@ from hisim import log
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
+
 # Package
 
 
 @dataclass
 class ConfigBase(JSONWizard):
-
     """Base class for all configurations."""
 
     building_name: str
@@ -60,7 +61,6 @@ class ConfigBase(JSONWizard):
 
 @dataclass
 class ComponentConnection:
-
     """Used in the component class for defining a connection."""
 
     target_input_name: str
@@ -70,7 +70,6 @@ class ComponentConnection:
 
 
 class ComponentOutput:  # noqa: too-few-public-methods
-
     """Used in the component class for defining an output."""
 
     def __init__(
@@ -101,7 +100,6 @@ class ComponentOutput:  # noqa: too-few-public-methods
 
 
 class ComponentInput:  # noqa: too-few-public-methods
-
     """Used in the component class for defining an input."""
 
     def __init__(
@@ -126,7 +124,6 @@ class ComponentInput:  # noqa: too-few-public-methods
 
 
 class SingleTimeStepValues:
-
     """Contains the values for a single time step."""
 
     def __init__(self, number_of_values: int):
@@ -180,7 +177,6 @@ class SingleTimeStepValues:
 
 @dataclass
 class DisplayConfig:
-
     """Configure how to display this component in postprocessing."""
 
     pretty_name: str | None = None
@@ -193,7 +189,6 @@ class DisplayConfig:
 
 
 class Component:
-
     """Base class for all components."""
 
     @classmethod
@@ -234,7 +229,9 @@ class Component:
             )
         self.my_display_config: DisplayConfig = my_display_config
 
-    def get_component_name(self,):
+    def get_component_name(
+        self,
+    ):
         """Create component name."""
         if self.my_simulation_parameters.multiple_buildings:
             name = str(self.config.building_name) + "_" + str(self.config.name)
@@ -426,7 +423,9 @@ class Component:
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""
         seconds_per_year = 365 * 24 * 60 * 60
-        investment = self.get_cost_capex(config=self.config, simulation_parameters=self.my_simulation_parameters).capex_investment_cost_in_euro
+        investment = self.get_cost_capex(
+            config=self.config, simulation_parameters=self.my_simulation_parameters
+        ).capex_investment_cost_in_euro
 
         # add maintenance costs per simulated period
         maintenance_cost_per_simulated_period_in_euro: float = (
@@ -459,15 +458,16 @@ class Component:
 
 @dataclass
 class OpexCostDataClass:
-
     """Return element of type OpexCostDataClass in function get_opex_cost from Component."""
 
     opex_energy_cost_in_euro: float
     opex_maintenance_cost_in_euro: float
     co2_footprint_in_kg: float
-    consumption_in_kwh: float
+    total_consumption_in_kwh: float
     loadtype: lt.LoadTypes
-    kpi_tag: Optional[KpiTagEnumClass]
+    kpi_tag: Optional[KpiTagEnumClass] = None
+    consumption_for_space_heating_in_kwh: Optional[float] = None
+    consumption_for_domestic_hot_water_in_kwh: Optional[float] = None
 
     @classmethod
     def get_default_opex_cost_data_class(cls) -> OpexCostDataClass:
@@ -476,15 +476,16 @@ class OpexCostDataClass:
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=0,
-            consumption_in_kwh=0,
+            total_consumption_in_kwh=0,
+            consumption_for_space_heating_in_kwh=0,
+            consumption_for_domestic_hot_water_in_kwh=0,
             loadtype=lt.LoadTypes.ANY,
-            kpi_tag=None
+            kpi_tag=None,
         )
 
 
 @dataclass
 class CapexCostDataClass:
-
     """Return element of type CapexCostDataClass in function get_capex_cost from Component."""
 
     capex_investment_cost_in_euro: float
@@ -503,7 +504,7 @@ class CapexCostDataClass:
             lifetime_in_years=1,
             capex_investment_cost_for_simulated_period_in_euro=0,
             device_co2_footprint_for_simulated_period_in_kg=0,
-            kpi_tag=None
+            kpi_tag=None,
         )
 
 

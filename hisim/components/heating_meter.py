@@ -402,7 +402,7 @@ class HeatingMeter(DynamicComponent):
             opex_energy_cost_in_euro=opex_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=total_used_energy_in_kwh,
+            total_consumption_in_kwh=total_used_energy_in_kwh,
             loadtype=lt.LoadTypes.GAS,
             kpi_tag=KpiTagEnumClass.HEATING_METER
         )

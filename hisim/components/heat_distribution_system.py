@@ -265,6 +265,7 @@ class HeatDistribution(cp.Component):
         self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
         self.add_default_connections(self.get_default_connections_from_building())
         self.add_default_connections(self.get_default_connections_from_district_heating())
+        self.add_default_connections(self.get_default_connections_from_electric_heating())
         if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
             self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
 
@@ -322,6 +323,28 @@ class HeatDistribution(cp.Component):
         component_module_name = "hisim.components.generic_district_heating"
         component_module = importlib.import_module(name=component_module_name)
         component_class = getattr(component_module, "DistrictHeating")
+
+        connections = []
+        classname = component_class.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                HeatDistribution.WaterTemperatureInput, classname, component_class.WaterOutputShTemperature,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                HeatDistribution.ThermalPowerReceived, classname, component_class.ThermalOutputShPower,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_electric_heating(self,):
+        """Get electric heating default connections."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        # for district heating as heating source no
+        component_module_name = "hisim.components.generic_electric_heating"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "ElectricHeating")
 
         connections = []
         classname = component_class.get_classname()
@@ -608,7 +631,7 @@ class HeatDistribution(cp.Component):
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
-            consumption_in_kwh=0,
+            total_consumption_in_kwh=0,
             loadtype=lt.LoadTypes.ANY,
             kpi_tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
         )

@@ -17,12 +17,12 @@ from hisim.components import building
 from hisim.components import (
     advanced_battery_bslib,
     controller_l2_energy_management_system,
-    simple_water_storage,
     heat_distribution_system,
+    generic_electric_heating,
     electricity_meter,
-    generic_boiler,
+    simple_water_storage,
 )
-
+from hisim.components.heat_distribution_system import PositionHotWaterStorageInSystemSetup
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -56,11 +56,9 @@ def setup_function(
         - Weather
         - Photovoltaic System
         - Building
-        - Oil Heater
-        - Oil Heater Controller
+        - Electric Heating
         - Heat Distribution System
         - Heat Distribution Controller
-        - Heat Water Storage
         - Battery
         - Energy Management System
         - Electricity Meter
@@ -73,10 +71,11 @@ def setup_function(
     config_filename = my_sim.my_module_config
     # try reading energ system and archetype configs
     my_config = read_in_configs(my_sim.my_module_config)
+
     if my_config is None:
-        my_config = ModularHouseholdConfig().get_default_config_for_household_oil()
+        my_config = ModularHouseholdConfig().get_default_config_for_household_electric_heating()
         log.warning(
-            f"Could not read the modular household config from path '{config_filename}'. Using the oil household default config instead."
+            f"Could not read the modular household config from path '{config_filename}'. Using the electric heating household default config instead."
         )
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None
@@ -114,8 +113,10 @@ def setup_function(
 
     # Set heating systems for space heating and domestic hot water
     heating_system = energy_system_config_.heating_system
-    if heating_system != HeatingSystems.OIL_HEATING:
-        raise ValueError("Heating system needs to be oil heater for this system setup.")
+    if heating_system != HeatingSystems.ELECTRIC_HEATING:
+        raise ValueError(
+            f"Heating system was set as {heating_system} but needs to be {HeatingSystems.ELECTRIC_HEATING.value} for this system setup."
+        )
 
     heating_reference_temperature_in_celsius = -12.2
     building_set_heating_temperature_in_celsius = 22.0
@@ -235,7 +236,7 @@ def setup_function(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
-    my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
+    # my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
@@ -247,63 +248,40 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    # Set sizing option for Hot water Storage
-    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM
-
-    # Build Oil heater
-    my_oil_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_oil_boiler_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
-    )
-    my_oil_heater = generic_boiler.GenericBoiler(
-        config=my_oil_heater_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    my_sim.add_component(my_oil_heater, connect_automatically=True)
-
-    # Build Oil Heater Controller
-    my_oil_heater_controller_config = (
-        generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-            minimal_thermal_power_in_watt=my_oil_heater_config.minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=my_oil_heater_config.maximal_thermal_power_in_watt,
-            with_domestic_hot_water_preparation=True,
+    # Build electric heating controller
+    my_electric_heating_controller_sh_config = (
+        generic_electric_heating.ElectricHeatingControllerConfig.get_default_electric_heating_controller_config(
+            with_domestic_hot_water_preparation=True
         )
     )
-    my_oil_heater_controller = generic_boiler.GenericBoilerController(
-        my_simulation_parameters=my_simulation_parameters, config=my_oil_heater_controller_config
+    my_electric_heating_controller = generic_electric_heating.ElectricHeatingController(
+        my_simulation_parameters=my_simulation_parameters, config=my_electric_heating_controller_sh_config
     )
-    my_sim.add_component(my_oil_heater_controller, connect_automatically=True)
+    my_sim.add_component(my_electric_heating_controller, connect_automatically=True)
 
-    # Build Oil Heater for DHW
-    # DHW oil heater and storage configs
+    # Build electric heating For Space Heating and DHW
+    my_electric_heating_sh_config = generic_electric_heating.ElectricHeatingConfig.get_default_electric_heating_config(
+        with_domestic_hot_water_preparation=True
+    )
+    my_electric_heating = generic_electric_heating.ElectricHeating(
+        config=my_electric_heating_sh_config, my_simulation_parameters=my_simulation_parameters
+    )
+    my_sim.add_component(my_electric_heating, connect_automatically=True)
 
     my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
         number_of_apartments=number_of_apartments
     )
-
     my_dhw_storage = simple_water_storage.SimpleDHWStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
-
     my_sim.add_component(my_dhw_storage, connect_automatically=True)
-
-    # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-        sizing_option=sizing_option,
-    )
-    my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
-        config=my_simple_heat_water_storage_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    # Add to simulator
-    my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX,
         )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(

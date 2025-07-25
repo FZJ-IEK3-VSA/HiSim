@@ -125,14 +125,14 @@ class GenericHydrogenStorage(cp.Component):
         self.hydrogen_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.HydrogenInput,
-            lt.LoadTypes.HYDROGEN,
+            lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG_PER_SEC,
             True,
         )
         self.hydrogen_output_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.HydrogenOutput,
-            lt.LoadTypes.HYDROGEN,
+            lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG_PER_SEC,
             True,
         )
@@ -140,7 +140,7 @@ class GenericHydrogenStorage(cp.Component):
         self.hydrogen_soc: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.HydrogenSOC,
-            load_type=lt.LoadTypes.HYDROGEN,
+            load_type=lt.LoadTypes.GREEN_HYDROGEN,
             unit=lt.Units.PERCENT,
             postprocessing_flag=[lt.InandOutputType.STORAGE_CONTENT],
             output_description="Hydrogen SOC",

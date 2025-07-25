@@ -88,7 +88,7 @@ class LoadTypes(str, enum.Enum):
     # Substance
     GAS = "Gas"
     AIR = "Air"
-    HYDROGEN = "Hydrogen"
+    GREEN_HYDROGEN = "Green Hydrogen"
     OXYGEN = "Oxygen"
     WATER = "Water"
     WARM_WATER = "WarmWater"
@@ -202,7 +202,8 @@ class ComponentType(str, enum.Enum):
     CHP = "CHP"
     H2_STORAGE = "H2Storage"
     ELECTRIC_VEHICLE = "ElectricVehicle"
-    ELECTRIC_BOILER = "ElectricBoiler"
+    ELECTRIC_HEATING_SH = "ElectricBoilerSH"  # Electric heating for space heating
+    ELECTRIC_HEATING_DHW = "ElectricBoilerDHW"  # Electric heating for domnestic hot water
     BOILER = "Boiler"
     BUFFER = "Buffer"
     HEATERS = [HEAT_PUMP, GAS_HEATER]

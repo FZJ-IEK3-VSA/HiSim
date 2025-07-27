@@ -700,6 +700,7 @@ class PostProcessor:
             simulation_parameters=ppdt.simulation_parameters,
             building_objects_in_district_list=building_objects_in_district_list,
         )
+
         # write capex to report if option is chosen
         if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
             if report is not None:
@@ -787,6 +788,7 @@ class PostProcessor:
         """
         pass  # noqa: unnecessary-pass
 
+    @utils.measure_execution_time
     def prepare_results_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer) -> None:
         """Prepare the results for the scenario evaluation."""
 
@@ -800,22 +802,7 @@ class PostProcessor:
             log.information("This result data path exists already: " + self.result_data_folder_for_scenario_evaluation)
 
         # --------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # make dictionaries with pyam data structure for hourly and yearly data
-        # Base structure for time series data
-        def empty_timeseries_dict():
-            return {
-                "model": [],
-                "scenario": [],
-                "region": [],
-                "variable": [],
-                "unit": [],
-                "time": [],
-                "value": [],
-            }
-
-        simple_dict_hourly_data = empty_timeseries_dict()
-        simple_dict_daily_data = empty_timeseries_dict()
-        simple_dict_monthly_data = empty_timeseries_dict()
+        # make dictionaries with pyam data structure yearly data
 
         simple_dict_cumulative_data: Dict = {
             "model": [],
@@ -843,15 +830,13 @@ class PostProcessor:
 
         # Time series
         time_configs = [
-            ("hourly", ppdt.results_hourly, simple_dict_hourly_data, ppdt.results_hourly.index),
-            ("daily", ppdt.results_daily, simple_dict_daily_data, ppdt.results_daily.index),
-            ("monthly", ppdt.results_monthly, simple_dict_monthly_data, ppdt.results_monthly.index),
+            ("hourly", ppdt.results_hourly, ppdt.results_hourly.index),
+            ("daily", ppdt.results_daily, ppdt.results_daily.index),
+            ("monthly", ppdt.results_monthly, ppdt.results_monthly.index),
         ]
 
-        for time_res, df, target_dict, index in time_configs:
-            result_df = self.iterate_over_results_and_add_values_to_dict(
-                results_df=df, dict_to_check=target_dict, timeseries=index
-            )
+        for time_res, df, index in time_configs:
+            result_df = self.iterate_over_results_and_add_values_to_dict(results_df=df, timeseries=index)
             self.write_filename_and_save_to_csv(
                 dataframe=result_df,
                 folder=self.result_data_folder_for_scenario_evaluation,
@@ -1002,32 +987,30 @@ class PostProcessor:
 
         return variable_name, unit
 
-    def iterate_over_results_and_add_values_to_dict(
-        self, results_df: pd.DataFrame, dict_to_check: Dict[str, Any], timeseries: Any
-    ) -> pd.DataFrame:
+    def iterate_over_results_and_add_values_to_dict(self, results_df: pd.DataFrame, timeseries: Any) -> pd.DataFrame:
         """Iterate over results and add values to dict, write to dataframe and save as csv."""
 
-        for column in results_df:
-            for index, timestep in enumerate(timeseries):
-                # values = ppdt.results_hourly[column].values
-                values = results_df[column].values
+        column_meta = {col: self.get_variable_name_and_unit_from_ppdt_results_column(col) for col in results_df.columns}
+        frames = []
 
-                (
-                    variable_name,
-                    unit,
-                ) = self.get_variable_name_and_unit_from_ppdt_results_column(column=str(column))
+        for col in results_df.columns:
+            values = results_df[col].values
+            variable_name, unit = column_meta[col]
+            frames.append(
+                pd.DataFrame(
+                    {
+                        "model": self.model,
+                        "scenario": self.scenario,
+                        "region": self.region,
+                        "variable": variable_name,
+                        "unit": unit,
+                        "time": timeseries,
+                        "value": values,
+                    }
+                )
+            )
 
-                dict_to_check["model"].append(self.model)
-                dict_to_check["scenario"].append(self.scenario)
-                dict_to_check["region"].append(self.region)
-                dict_to_check["variable"].append(variable_name)
-                dict_to_check["unit"].append(unit)
-                dict_to_check["time"].append(timestep)
-                dict_to_check["value"].append(values[index])
-
-        dataframe_from_dict = pd.DataFrame(dict_to_check)
-
-        return dataframe_from_dict
+        return pd.concat(frames, ignore_index=True)
 
     def write_filename_and_save_to_csv(
         self,

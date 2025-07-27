@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
 from oemof.thermal.solar_thermal_collector import flat_plate_precalc
-
 from hisim.component import (
     CapexCostDataClass,
     Component,
@@ -19,7 +18,7 @@ from hisim.component import (
     SingleTimeStepValues,
     DisplayConfig,
 )
-from hisim import loadtypes
+from hisim import loadtypes, log, utils
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, PhysicsConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.weather import Weather
@@ -104,13 +103,15 @@ class SolarThermalSystemConfig(ConfigBase):
             old_solar_pump=old_solar_pump,
             co2_footprint_kg_co2eq=(
                 area_m2 * (240.1 / 2.03)  # material solar collector
-                + area_m2 * (34.74 / 2.03) + 108.28  # material external support
+                + area_m2 * (34.74 / 2.03)
+                + 108.28  # material external support
                 + area_m2 * (8.64 / 2.03)  # manufacturing solar collector
                 + area_m2 * (2.53 / 2.03)  # manufacturing external support
-                + area_m2 * (4.39 * 0.56 / 2.03)),  # 56% (share of mass of solar collector+support/total, i.e., including storage)
-                                                    # of transport phase 1 https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1255
+                + area_m2 * (4.39 * 0.56 / 2.03)
+            ),  # 56% (share of mass of solar collector+support/total, i.e., including storage)
+            # of transport phase 1 https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1255
             investment_cost_eur=area_m2 * 797,  # Flachkollektoren
-                                                # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
+            # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
             maintenance_cost_eur_per_y=100,  # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
             lifetime_y=20,  # https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1712
             source_weight=source_weight,
@@ -164,6 +165,9 @@ class SolarThermalSystem(Component):
         self.previous_state = deepcopy(self.state)
         # Initialized variables
         self.factor = 1.0
+        self.precalc_data_for_all_timesteps_data: List = []
+        self.precalc_data_for_all_timesteps_output: List = []
+        self.cache_filepath: str
 
         # Add inputs
         self.t_out_channel: ComponentInput = self.add_input(
@@ -232,27 +236,21 @@ class SolarThermalSystem(Component):
             output_description="Thermal power output [W]",
         )
 
-        self.thermal_energy_wh_output_channel: ComponentOutput = (
-            self.add_output(
-                object_name=self.component_name,
-                field_name=self.ThermalEnergyOutput,
-                load_type=loadtypes.LoadTypes.HEATING,
-                unit=loadtypes.Units.WATT_HOUR,
-                output_description="Thermal energy output [Wh]",
-                postprocessing_flag=[
-                    loadtypes.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL
-                ],
-            )
+        self.thermal_energy_wh_output_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalEnergyOutput,
+            load_type=loadtypes.LoadTypes.HEATING,
+            unit=loadtypes.Units.WATT_HOUR,
+            output_description="Thermal energy output [Wh]",
+            postprocessing_flag=[loadtypes.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
-        self.water_mass_flow_kg_s_output_channel: ComponentOutput = (
-            self.add_output(
-                object_name=self.component_name,
-                field_name=self.WaterMassFlowOutput,
-                load_type=loadtypes.LoadTypes.WATER,
-                unit=loadtypes.Units.KG_PER_SEC,
-                output_description="Mass flow of heat transfer liquid [kg/s]",
-            )
+        self.water_mass_flow_kg_s_output_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.WaterMassFlowOutput,
+            load_type=loadtypes.LoadTypes.WATER,
+            unit=loadtypes.Units.KG_PER_SEC,
+            output_description="Mass flow of heat transfer liquid [kg/s]",
         )
         self.required_water_mass_flow_kg_s_output_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -275,23 +273,17 @@ class SolarThermalSystem(Component):
             load_type=loadtypes.LoadTypes.ELECTRICITY,
             unit=loadtypes.Units.WATT,
             output_description="Electricity consumption of the solar pump.",
-            postprocessing_flag=[
-                loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
-            ],
+            postprocessing_flag=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
         )
 
-        self.add_default_connections(
-            self.get_default_connections_from_simple_hot_water_storage()
-        )
-        self.add_default_connections(
-            self.get_default_connections_from_weather()
-        )
-        self.add_default_connections(
-            self.get_default_connections_from_controller()
-        )
+        self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
+        self.add_default_connections(self.get_default_connections_from_weather())
+        self.add_default_connections(self.get_default_connections_from_controller())
 
     @staticmethod
-    def get_cost_capex(config: SolarThermalSystemConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
+    def get_cost_capex(
+        config: SolarThermalSystemConfig, simulation_parameters: SimulationParameters
+    ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         seconds_per_year = 365 * 24 * 60 * 60
         capex_per_simulated_period = (config.investment_cost_eur / config.lifetime_y) * (
@@ -307,7 +299,7 @@ class SolarThermalSystem(Component):
             lifetime_in_years=config.lifetime_y,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.SOLAR_THERMAL
+            kpi_tag=KpiTagEnumClass.SOLAR_THERMAL,
         )
         return capex_cost_data_class
 
@@ -340,13 +332,15 @@ class SolarThermalSystem(Component):
         total_consumption_in_kilowatt_hour = dhw_consumption_in_kilowatt_hour
 
         opex_cost_data_class = OpexCostDataClass(
-            opex_energy_cost_in_euro=total_consumption_in_kilowatt_hour * emissions_and_cost_factors.electricity_costs_in_euro_per_kwh,
+            opex_energy_cost_in_euro=total_consumption_in_kilowatt_hour
+            * emissions_and_cost_factors.electricity_costs_in_euro_per_kwh,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
-            co2_footprint_in_kg=total_consumption_in_kilowatt_hour * emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh,
+            co2_footprint_in_kg=total_consumption_in_kilowatt_hour
+            * emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh,
             total_consumption_in_kwh=total_consumption_in_kilowatt_hour,
             consumption_for_domestic_hot_water_in_kwh=dhw_consumption_in_kilowatt_hour,
             loadtype=loadtypes.LoadTypes.WARM_WATER,
-            kpi_tag=KpiTagEnumClass.SOLAR_THERMAL
+            kpi_tag=KpiTagEnumClass.SOLAR_THERMAL,
         )
 
         return opex_cost_data_class
@@ -362,16 +356,11 @@ class SolarThermalSystem(Component):
             all_outputs=all_outputs,
             postprocessing_results=postprocessing_results,
         )
-        capex_dataclass = self.get_cost_capex(
-            self.config, self.my_simulation_parameters
-        )
+        capex_dataclass = self.get_cost_capex(self.config, self.my_simulation_parameters)
         dhw_thermal_energy_delivered_in_kilowatt_hour = None
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
-                if (
-                    output.field_name == self.ThermalEnergyOutput
-                    and output.unit == loadtypes.Units.WATT_HOUR
-                ):
+                if output.field_name == self.ThermalEnergyOutput and output.unit == loadtypes.Units.WATT_HOUR:
                     dhw_thermal_energy_delivered_in_kilowatt_hour = round(
                         sum(postprocessing_results.iloc[:, index]) * 1e-3, 1
                     )
@@ -474,8 +463,7 @@ class SolarThermalSystem(Component):
         total_co2_footprint = KpiEntry(
             name="Total CO2 Footprint (CAPEX for simulated period + OPEX)",
             unit="kg",
-            value=capex_dataclass.device_co2_footprint_for_simulated_period_in_kg
-            + opex_dataclass.co2_footprint_in_kg,
+            value=capex_dataclass.device_co2_footprint_for_simulated_period_in_kg + opex_dataclass.co2_footprint_in_kg,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )
@@ -487,9 +475,8 @@ class SolarThermalSystem(Component):
         seconds_per_year = 365 * 24 * 60 * 60
 
         # add maintenance costs per simulated period
-        maintenance_cost_per_simulated_period_in_euro: float = (
-            self.config.maintenance_cost_eur_per_y
-            * (self.my_simulation_parameters.duration.total_seconds() / seconds_per_year)
+        maintenance_cost_per_simulated_period_in_euro: float = self.config.maintenance_cost_eur_per_y * (
+            self.my_simulation_parameters.duration.total_seconds() / seconds_per_year
         )
         return maintenance_cost_per_simulated_period_in_euro
 
@@ -535,11 +522,7 @@ class SolarThermalSystem(Component):
                 Weather.DiffuseHorizontalIrradiance,
             )
         )
-        connections.append(
-            ComponentConnection(
-                SolarThermalSystem.Azimuth, weather_classname, Weather.Azimuth
-            )
-        )
+        connections.append(ComponentConnection(SolarThermalSystem.Azimuth, weather_classname, Weather.Azimuth))
         connections.append(
             ComponentConnection(
                 SolarThermalSystem.ApparentZenith,
@@ -579,7 +562,31 @@ class SolarThermalSystem(Component):
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
-        pass
+        file_exists, self.cache_filepath = utils.get_cache_file(
+            self.config.name, self.config, self.my_simulation_parameters
+        )
+
+        if file_exists:
+            log.information("Get solar thermal results from cache.")
+            df = pd.read_csv(self.cache_filepath, sep=",", decimal=".")
+            # Reconstruct list of DataFrames per timestep (if needed)
+            self.precalc_data_for_all_timesteps_output = [
+                group_df.drop(columns="timestep")
+                for _, group_df in df.groupby("timestep", sort=True)
+            ]
+
+            if len(self.precalc_data_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:
+                raise Exception(
+                    "Reading the cached solar thermal precalc values seems to have failed. "
+                    + "Expected "
+                    + str(self.my_simulation_parameters.timesteps)
+                    + " values, but got "
+                    + str(len(self.precalc_data_for_all_timesteps_output))
+                )
+
+        # create empty result lists as a preparation for caching
+        # in i_simulate
+        self.precalc_data_for_all_timesteps_data = [0] * self.my_simulation_parameters.timesteps
 
     def i_simulate(
         self,
@@ -588,61 +595,49 @@ class SolarThermalSystem(Component):
         force_convergence: bool,
     ) -> None:
         """Simulates the component."""
+        # get inputs
         control_signal = stsv.get_input_value(self.control_signal_channel)
-        global_horizontal_irradiance_w_m2 = stsv.get_input_value(
-            self.ghi_channel
-        )
-        diffuse_horizontal_irradiance_w_m2 = stsv.get_input_value(
-            self.dhi_channel
-        )
-        ambient_air_temperature_deg_c = stsv.get_input_value(
-            self.t_out_channel
-        )
-        temperature_collector_inlet_deg_c = stsv.get_input_value(
-            self.water_temperature_input_channel
-        )
+        global_horizontal_irradiance_w_m2 = stsv.get_input_value(self.ghi_channel)
+        diffuse_horizontal_irradiance_w_m2 = stsv.get_input_value(self.dhi_channel)
+        ambient_air_temperature_deg_c = stsv.get_input_value(self.t_out_channel)
+        temperature_collector_inlet_deg_c = stsv.get_input_value(self.water_temperature_input_channel)
+        # check if results could be found in cache and if the list has
+        # the right length
+        if (
+            hasattr(self, "precalc_data_for_all_timesteps_output")
+            and len(self.precalc_data_for_all_timesteps_output) == self.my_simulation_parameters.timesteps
+        ):
+            precalc_data = self.precalc_data_for_all_timesteps_output[timestep]  # use precalculated data from cache
 
-        # calculate collectors heat
-        # Some more info on equation:
-        # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters #noqa
-        time_ind = (
-            self.my_simulation_parameters.start_date
-            + datetime.timedelta(
+        # calculate outputs
+        else:
+
+            # calculate collectors heat
+            # Some more info on equation:
+            # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters #noqa
+            time_ind = self.my_simulation_parameters.start_date + datetime.timedelta(
                 0,
                 self.my_simulation_parameters.seconds_per_timestep * timestep,
             )
-        )
 
-        precalc_data = flat_plate_precalc(
-            lat=self.config.coordinates.latitude,
-            long=self.config.coordinates.longitude,
-            collector_tilt=self.config.tilt,
-            collector_azimuth=self.config.azimuth,
-            eta_0=self.config.eta_0,  # optical efficiency of the collector
-            a_1=self.config.a_1_w_m2_k,  # thermal loss parameter 1
-            a_2=self.config.a_2_w_m2_k,  # thermal loss parameter 2
-            temp_collector_inlet=temperature_collector_inlet_deg_c,  # collectors inlet temperature
-            delta_temp_n=self.config.delta_temperature_n_k,  # temperature difference between collector inlet and mean temperature
-            irradiance_global=pd.Series(
-                global_horizontal_irradiance_w_m2, index=[time_ind]
-            ),
-            irradiance_diffuse=pd.Series(
-                diffuse_horizontal_irradiance_w_m2, index=[time_ind]
-            ),
-            temp_amb=pd.Series(
-                ambient_air_temperature_deg_c, index=[time_ind]
-            ),
-        )
+            precalc_data = flat_plate_precalc(
+                lat=self.config.coordinates.latitude,
+                long=self.config.coordinates.longitude,
+                collector_tilt=self.config.tilt,
+                collector_azimuth=self.config.azimuth,
+                eta_0=self.config.eta_0,  # optical efficiency of the collector
+                a_1=self.config.a_1_w_m2_k,  # thermal loss parameter 1
+                a_2=self.config.a_2_w_m2_k,  # thermal loss parameter 2
+                temp_collector_inlet=temperature_collector_inlet_deg_c,  # collectors inlet temperature
+                delta_temp_n=self.config.delta_temperature_n_k,  # temperature difference between collector inlet and mean temperature
+                irradiance_global=pd.Series(global_horizontal_irradiance_w_m2, index=[time_ind]),
+                irradiance_diffuse=pd.Series(diffuse_horizontal_irradiance_w_m2, index=[time_ind]),
+                temp_amb=pd.Series(ambient_air_temperature_deg_c, index=[time_ind]),
+            )
 
-        thermal_power_output_w = (
-            precalc_data["collectors_heat"].iloc[0] * self.config.area_m2
-        )
+        thermal_power_output_w = precalc_data["collectors_heat"].iloc[0] * self.config.area_m2
 
-        thermal_energy_output_wh = (
-            thermal_power_output_w
-            * self.my_simulation_parameters.seconds_per_timestep
-            / 3.6e3
-        )
+        thermal_energy_output_wh = thermal_power_output_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         required_mass_flow_output_kg_s = thermal_power_output_w / (
             PhysicsConfig.get_properties_for_energy_carrier(
                 energy_carrier=loadtypes.LoadTypes.WATER
@@ -653,15 +648,12 @@ class SolarThermalSystem(Component):
         if thermal_power_output_w > 0:
             # Given the right mass flow, assume that target temperature rise is achieved
             # Factor of 2 because delta_temperature_n_k is difference between inlet and mean temperature
-            water_temperature_output_deg_c = (
-                2 * self.config.delta_temperature_n_k
-                + stsv.get_input_value(self.water_temperature_input_channel)
+            water_temperature_output_deg_c = 2 * self.config.delta_temperature_n_k + stsv.get_input_value(
+                self.water_temperature_input_channel
             )
         else:
             # Simplified assumption, neglecting heat losses: collector temperature equals input temperature
-            water_temperature_output_deg_c = stsv.get_input_value(
-                self.water_temperature_input_channel
-            )
+            water_temperature_output_deg_c = stsv.get_input_value(self.water_temperature_input_channel)
 
         if control_signal == 0:
             # If the controller signals 'off', the solar pump does not pump the solar fluid from
@@ -673,23 +665,15 @@ class SolarThermalSystem(Component):
         else:
             mass_flow_output_kg_s = required_mass_flow_output_kg_s
             # Calculate electricity consumption of solar pump
-            electric_power_demand_solar_pump_w = (
-                35 if self.config.old_solar_pump else 10
-            )
+            electric_power_demand_solar_pump_w = 35 if self.config.old_solar_pump else 10
 
-        stsv.set_output_value(
-            self.thermal_power_w_output_channel, thermal_power_output_w
-        )
-        stsv.set_output_value(
-            self.thermal_energy_wh_output_channel, thermal_energy_output_wh
-        )
+        stsv.set_output_value(self.thermal_power_w_output_channel, thermal_power_output_w)
+        stsv.set_output_value(self.thermal_energy_wh_output_channel, thermal_energy_output_wh)
         stsv.set_output_value(
             self.water_temperature_deg_c_output_channel,
             water_temperature_output_deg_c,
         )
-        stsv.set_output_value(
-            self.water_mass_flow_kg_s_output_channel, mass_flow_output_kg_s
-        )
+        stsv.set_output_value(self.water_mass_flow_kg_s_output_channel, mass_flow_output_kg_s)
         stsv.set_output_value(
             self.required_water_mass_flow_kg_s_output_channel,
             required_mass_flow_output_kg_s,
@@ -698,6 +682,18 @@ class SolarThermalSystem(Component):
             self.electricity_consumption_output_channel,
             electric_power_demand_solar_pump_w,
         )
+        # cache results at the end of the simulation
+        self.precalc_data_for_all_timesteps_data[timestep] = precalc_data
+
+        if timestep + 1 == self.my_simulation_parameters.timesteps:
+            for i, df in enumerate(self.precalc_data_for_all_timesteps_data):
+                df["timestep"] = i  # Add timestep column to each
+
+            # Combine all into one large DataFrame
+            full_df = pd.concat(self.precalc_data_for_all_timesteps_data, ignore_index=True)
+
+            # Save directly as flat CSV
+            full_df.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)
 
 
 @dataclass
@@ -788,24 +784,20 @@ class SolarThermalSystemController(Component):
         self.warm_water_temperature_aim_in_celsius: float = 60.0
 
         # Configure Input Channels
-        self.mean_water_temperature_storage_input_channel: ComponentInput = (
-            self.add_input(
-                self.component_name,
-                self.MeanWaterTemperatureInStorage,
-                loadtypes.LoadTypes.TEMPERATURE,
-                loadtypes.Units.CELSIUS,
-                True,
-            )
+        self.mean_water_temperature_storage_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.MeanWaterTemperatureInStorage,
+            loadtypes.LoadTypes.TEMPERATURE,
+            loadtypes.Units.CELSIUS,
+            True,
         )
 
-        self.collector_temperature_input_channel: ComponentInput = (
-            self.add_input(
-                self.component_name,
-                self.CollectorTemperature,
-                loadtypes.LoadTypes.TEMPERATURE,
-                loadtypes.Units.CELSIUS,
-                True,
-            )
+        self.collector_temperature_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.CollectorTemperature,
+            loadtypes.LoadTypes.TEMPERATURE,
+            loadtypes.Units.CELSIUS,
+            True,
         )
 
         self.required_mass_flow_input_channel: ComponentInput = self.add_input(
@@ -825,22 +817,12 @@ class SolarThermalSystemController(Component):
             output_description="Control signal to solar pump in SolarThermalSystem",
         )
 
-        self.state: SolarThermalSystemControllerState = (
-            SolarThermalSystemControllerState(0, 0, 0)
-        )
-        self.previous_state: SolarThermalSystemControllerState = (
-            self.state.clone()
-        )
-        self.processed_state: SolarThermalSystemControllerState = (
-            self.state.clone()
-        )
+        self.state: SolarThermalSystemControllerState = SolarThermalSystemControllerState(0, 0, 0)
+        self.previous_state: SolarThermalSystemControllerState = self.state.clone()
+        self.processed_state: SolarThermalSystemControllerState = self.state.clone()
 
-        self.add_default_connections(
-            self.get_default_connections_from_simple_hot_water_storage()
-        )
-        self.add_default_connections(
-            self.get_default_connections_from_solar_thermal_system()
-        )
+        self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
+        self.add_default_connections(self.get_default_connections_from_solar_thermal_system())
 
     def get_default_connections_from_simple_hot_water_storage(
         self,
@@ -909,12 +891,8 @@ class SolarThermalSystemController(Component):
             mean_water_temperature_storage_deg_c = stsv.get_input_value(
                 self.mean_water_temperature_storage_input_channel
             )
-            collector_temperature_deg_c = stsv.get_input_value(
-                self.collector_temperature_input_channel
-            )
-            required_mass_flow_kg_s = stsv.get_input_value(
-                self.required_mass_flow_input_channel
-            )
+            collector_temperature_deg_c = stsv.get_input_value(self.collector_temperature_input_channel)
+            required_mass_flow_kg_s = stsv.get_input_value(self.required_mass_flow_input_channel)
 
             self.get_controller_state(
                 timestep,
@@ -944,10 +922,7 @@ class SolarThermalSystemController(Component):
             # is at least 6 K
             self.state.activate(timestep)
 
-        if (
-            mean_water_temperature_storage_deg_c
-            > self.warm_water_temperature_aim_in_celsius
-        ):
+        if mean_water_temperature_storage_deg_c > self.warm_water_temperature_aim_in_celsius:
             # deactivate heating when storage temperature is too high
             # this overrides the activation based on temperature difference
             self.state.deactivate(timestep)
@@ -962,9 +937,7 @@ class SolarThermalSystemController(Component):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
-        opex_cost_data_class = (
-            OpexCostDataClass.get_default_opex_cost_data_class()
-        )
+        opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
         return opex_cost_data_class
 
     @staticmethod
@@ -973,9 +946,7 @@ class SolarThermalSystemController(Component):
         simulation_parameters: SimulationParameters,
     ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
-        capex_cost_data_class = (
-            CapexCostDataClass.get_default_capex_cost_data_class()
-        )
+        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class
 
     def get_component_kpi_entries(

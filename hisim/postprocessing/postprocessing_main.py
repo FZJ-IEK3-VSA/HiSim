@@ -700,6 +700,7 @@ class PostProcessor:
             simulation_parameters=ppdt.simulation_parameters,
             building_objects_in_district_list=building_objects_in_district_list,
         )
+
         # write capex to report if option is chosen
         if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
             if report is not None:

@@ -1,83 +1,81 @@
-"""Basic household new system setup."""
-
-# clean
+"""Basic household system setup. Shows how to set up a standard system."""
 
 from typing import Optional, Any, Union, List
-import re
 import os
+import re
 from utspclient.helpers.lpgdata import (
     Households,
 )
 from utspclient.helpers.lpgpythonbindings import JsonReference
+from hisim.building_sizer_utils.interface_configs.modular_household_config import (
+    ModularHouseholdConfig,
+    read_in_configs,
+)
 from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_utsp_connector
-from hisim.components import weather
-from hisim.components import generic_pv_system
-from hisim.components import building
 from hisim.components import (
+    more_advanced_heat_pump_hplib,
+    heat_distribution_system,
+    loadprofilegenerator_utsp_connector,
+    simple_water_storage,
+    solar_thermal_system,
     advanced_battery_bslib,
     controller_l2_energy_management_system,
-    simple_water_storage,
-    heat_distribution_system,
-    electricity_meter,
-    generic_boiler,
-    gas_meter,
+    generic_pv_system,
 )
-
+from hisim.components import weather
+from hisim.components import building
+from hisim.components import electricity_meter
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
+from hisim.units import Quantity, Celsius, Watt
 from hisim.loadtypes import HeatingSystems
-from hisim.building_sizer_utils.interface_configs.modular_household_config import (
-    read_in_configs,
-    ModularHouseholdConfig,
-)
 from hisim import log
 
-__authors__ = "Katharina Rieck"
-__copyright__ = "Copyright 2022, FZJ-IEK-3"
-__credits__ = ["Noah Pflugradt"]
+__authors__ = "Kristina Dabrock, Katharina Rieck"
+__copyright__ = "Copyright 2021, the House Infrastructure Project"
+__credits__ = ["Kristina Dabrock"]
 __license__ = "MIT"
-__version__ = "1.0"
-__maintainer__ = "Noah Pflugradt"
+__version__ = "0.1"
+__maintainer__ = "Kristina Dabrock"
+__email__ = "k.dabrock@fz-juelich.de"
 __status__ = "development"
 
 
 def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
+    my_sim: Any,
+    my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """Household system setup.
+    """Basic household system setup.
 
-    This setup function emulates an household including the following components:
+    This setup function emulates an household including the basic components. Here the residents have their
+    electricity and warm water and heating needs covered by the solar thermal system and a gas boiler.
+    Furthermore, a DHW storage is installed.
 
     - Simulation Parameters
     - Components
         - Occupancy (Residents' Demands)
         - Weather
-        - Photovoltaic System
+        - SolarThermalSystem
+        - SolarThermalSystemController
         - Building
-        - Hydrogen Boiler
-        - Hydrogen Boiler Controller
+        - Heat Pump
+        - Heat Pump Controller
         - Heat Distribution System
         - Heat Distribution Controller
-        - Heat Water Storage
-        - Battery
-        - Energy Management System
-        - Electricity Meter
+        - DHW Water Storage
     """
 
     # =================================================================================================================================
-    # Set System Parameters from Config
 
-    # household-pv-config
     config_filename = my_sim.my_module_config
     # try reading energ system and archetype configs
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
-        my_config = ModularHouseholdConfig().get_default_config_for_household_hydrogen()
+        my_config = ModularHouseholdConfig().get_default_config_for_household_heatpump_solar_thermal()
         log.warning(
-            f"Could not read the modular household config from path '{config_filename}'. Using the hydrogen household default config instead."
+            f"Could not read the modular household config from path '{config_filename}'. Using the heatpump and solar thermal household default config instead."
         )
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None
@@ -87,7 +85,7 @@ def setup_function(
     # Set Simulation Parameters
     if my_simulation_parameters is None:
         year = 2021
-        seconds_per_timestep = 60 * 60
+        seconds_per_timestep = 60 * 15
         my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         if os.path.exists(cache_dir_path_simuparams):
@@ -107,19 +105,19 @@ def setup_function(
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.logging_level = 3
-
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================
-    # Set System Parameters
+    # Build Components
 
     # Set heating systems for space heating and domestic hot water
     heating_system = energy_system_config_.heating_system
-    if heating_system != HeatingSystems.HYDROGEN_HEATING:
-        raise ValueError("Heating system needs to be hydrogen heating for this system setup.")
+    if heating_system != HeatingSystems.HEAT_PUMP_SOLAR_THERMAL:
+        raise ValueError("Heating system needs to be heat pump solar thermal for this system setup.")
 
-    heating_reference_temperature_in_celsius = -12.2
+    heating_reference_temperature_in_celsius = -7.0
     building_set_heating_temperature_in_celsius = 22.0
+    hp_controller_mode = 2  # mode 1 for heating/off and mode 2 for heating/cooling/off
 
     # Set Weather
     weather_location = arche_type_config_.weather_location
@@ -171,6 +169,8 @@ def setup_function(
 
     # =================================================================================================================================
     # Build Basic Components
+
+    # Building
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
@@ -187,7 +187,7 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_building, connect_automatically=True)
 
-    # Build Occupancy
+    # Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
     my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG
     my_occupancy_config.household = lpg_households
@@ -229,14 +229,13 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
-    # Build Heat Distribution Controller
+    # Heat Distribution Controller
     my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
         set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
-    my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
@@ -248,50 +247,55 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    # Set sizing option for Hot water Storage
-    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
-
-    # Build hydrogen boiler For Space Heating
-    my_hydrogen_boiler_config = generic_boiler.GenericBoilerConfig.get_scaled_condensing_hydrogen_boiler_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        number_of_apartments_in_building=number_of_apartments,
+    # Build Heat Pump Controller for hot water (heating building)
+    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
+        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
     )
-    my_hydrogen_boiler = generic_boiler.GenericBoiler(
-        config=my_hydrogen_boiler_config,
+    my_heatpump_controller_sh_config.mode = hp_controller_mode
+
+    my_heatpump_controller_sh = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
+        config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
+    )
+
+    my_heatpump_controller_dhw_config = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config()
+    )
+
+    # Build Heat Pump Controller for dhw
+    my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
+        config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
+    )
+
+    # Build Heat Pump
+    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
+        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
+        heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
+    )
+    my_heatpump_config.with_domestic_hot_water_preparation = True
+
+    my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
+        config=my_heatpump_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_sim.add_component(my_hydrogen_boiler, connect_automatically=True)
-
-    # Build hydrogen boiler Controller
-    my_hydrogen_boiler_controller_config = (
-        generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-            minimal_thermal_power_in_watt=my_hydrogen_boiler_config.minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=my_hydrogen_boiler_config.maximal_thermal_power_in_watt,
-            with_domestic_hot_water_preparation=True,
+    # Verknüpfung mit Luft als Umgebungswärmeqzuelle
+    if my_heatpump.parameters["Group"].iloc[0] == 1.0 or my_heatpump.parameters["Group"].iloc[0] == 4.0:
+        my_heatpump.connect_input(
+            my_heatpump.TemperatureInputPrimary,
+            my_weather.component_name,
+            my_weather.DailyAverageOutsideTemperatures,
         )
-    )
-    my_hydrogen_boiler_controller = generic_boiler.GenericBoilerController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_hydrogen_boiler_controller_config,
-    )
-    my_sim.add_component(my_hydrogen_boiler_controller, connect_automatically=True)
+    else:
+        raise KeyError(
+            "Wasser oder Sole als primäres Wärmeträgermedium muss über extra Wärmenetz-Modell noch bereitgestellt werden"
+        )
+    # Add to simulator
+    my_sim.add_component(my_heatpump, connect_automatically=True)
 
-    # DHW storage configs
-    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
-        number_of_apartments=number_of_apartments
-    )
-
-    my_dhw_storage = simple_water_storage.SimpleDHWStorage(
-        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
-    )
-
-    my_sim.add_component(my_dhw_storage, connect_automatically=True)
-
-    # Build Heat Water Storage
+    # Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-        sizing_option=sizing_option,
+        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
     )
 
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
@@ -301,7 +305,7 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
-    # Build Heat Distribution System
+    # Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
@@ -315,18 +319,72 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
 
+    # Solar thermal for DHW
+    my_solar_thermal_system_config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(
+        area_m2=4 * number_of_apartments,  # 4 m2 per apartment
+    )
+    my_solar_thermal_system = solar_thermal_system.SolarThermalSystem(
+        config=my_solar_thermal_system_config,
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    my_sim.add_component(my_solar_thermal_system, connect_automatically=True)
+
+    # Solar thermal for DHW - Controller
+    my_solar_thermal_system_controller_config = (
+        solar_thermal_system.SolarThermalSystemControllerConfig.get_solar_thermal_system_controller_config()
+    )
+
+    my_solar_thermal_system_controller = solar_thermal_system.SolarThermalSystemController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_solar_thermal_system_controller_config,
+    )
+    my_sim.add_component(my_solar_thermal_system_controller, connect_automatically=True)
+
+    # DHW Storage (needs manual connection to solar thermal and heatpump)
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
+        number_of_apartments=number_of_apartments
+    )
+
+    my_dhw_storage = simple_water_storage.SimpleDHWStorage(
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
+    )
+
+    my_dhw_storage.connect_input(
+        my_dhw_storage.WaterConsumption,
+        my_occupancy.component_name,
+        my_occupancy.WaterConsumption,
+    )
+
+    # Connect solarthermal as primary heat generator
+    my_dhw_storage.connect_input(
+        my_dhw_storage.WaterTemperatureFromHeatGenerator,
+        my_solar_thermal_system.component_name,
+        my_solar_thermal_system.WaterTemperatureOutput,
+    )
+    my_dhw_storage.connect_input(
+        my_dhw_storage.WaterMassFlowRateFromHeatGenerator,
+        my_solar_thermal_system.component_name,
+        my_solar_thermal_system.WaterMassFlowOutput,
+    )
+
+    # Connect gas as secondary heat generator
+    my_dhw_storage.connect_input(
+        my_dhw_storage.WaterTemperatureFromSecondaryHeatGenerator,
+        my_heatpump.component_name,
+        my_heatpump.TemperatureOutputDHW,
+    )
+    my_dhw_storage.connect_input(
+        my_dhw_storage.WaterMassFlowRateFromSecondaryHeatGenerator,
+        my_heatpump.component_name,
+        my_heatpump.MassFlowOutputDHW,
+    )
+    my_sim.add_component(my_dhw_storage)
+
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
         config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
-
-    # Build Gas Meter
-    my_gas_meter = gas_meter.GasMeter(
-        my_simulation_parameters=my_simulation_parameters,
-        config=gas_meter.GasMeterConfig.get_gas_meter_default_config(),
-    )
-    my_sim.add_component(my_gas_meter, connect_automatically=True)
 
     # use ems and battery only when PV is used
     if share_of_maximum_pv_potential != 0:
@@ -387,6 +445,14 @@ def setup_function(
     # when no PV is used, connect electricty meter automatically
     else:
         my_sim.add_component(my_electricity_meter, connect_automatically=True)
+
+    # Connect Heat Pump
+    my_heatpump_controller_sh.connect_only_predefined_connections(
+        my_heat_distribution_controller, my_weather, my_simple_water_storage
+    )
+    my_heatpump_controller_dhw.connect_only_predefined_connections(my_dhw_storage)
+    my_sim.add_component(my_heatpump_controller_sh)
+    my_sim.add_component(my_heatpump_controller_dhw)
 
     # Set Results Path
     # if config_filename is given, get hash number and sampling mode for result path

@@ -15,14 +15,11 @@ from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import (
-    advanced_heat_pump_hplib,
+    more_advanced_heat_pump_hplib,
     advanced_battery_bslib,
     controller_l2_energy_management_system,
     simple_water_storage,
     heat_distribution_system,
-    generic_heat_pump_modular,
-    generic_hot_water_storage_modular,
-    controller_l1_heatpump,
     electricity_meter,
 )
 
@@ -66,9 +63,9 @@ def setup_function(
         - Heat Distribution System
         - Heat Distribution Controller
         - Heat Water Storage
+        - DHW Storage
         - Battery
         - Energy Management System
-        - Domestic water heat pump
         - Electricity Meter
     """
 
@@ -107,11 +104,11 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER
         )
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
-        # my_simulation_parameters.logging_level = 4
+        my_simulation_parameters.logging_level = 3
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -252,77 +249,68 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    # Set sizing option for Hot water Storage
-    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
-
-    # Build Heat Pump Controller
-    my_heat_pump_controller_config = (
-        advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
-            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
-        )
+    # Build Heat Pump Controller for space heating
+    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
+        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
     )
-    my_heat_pump_controller_config.mode = hp_controller_mode
+    my_heatpump_controller_sh_config.mode = hp_controller_mode
 
-    my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
-        config=my_heat_pump_controller_config,
-        my_simulation_parameters=my_simulation_parameters,
+    my_heatpump_controller_sh = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
+        config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
     )
-    # Add to simulator
-    my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
+    my_sim.add_component(my_heatpump_controller_sh, connect_automatically=True)
 
-    # Build Heat Pump
-    my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
+    my_heatpump_controller_dhw_config = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config()
+    )
+
+    # Build Heat Pump Controller for dhw
+    my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
+        config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
+    )
+    my_sim.add_component(my_heatpump_controller_dhw, connect_automatically=True)
+
+    # Build Heat Pump (for dhw and space heating)
+    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
         heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
         heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
     )
+    my_heatpump_config.with_domestic_hot_water_preparation = True
 
-    my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config,
+    my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
+        config=my_heatpump_config,
         my_simulation_parameters=my_simulation_parameters,
     )
+    # Verknüpfung mit Luft als Umgebungswärmeqzuelle
+    if my_heatpump.parameters["Group"].iloc[0] == 1.0 or my_heatpump.parameters["Group"].iloc[0] == 4.0:
+        my_heatpump.connect_input(
+            my_heatpump.TemperatureInputPrimary,
+            my_weather.component_name,
+            my_weather.DailyAverageOutsideTemperatures,
+        )
+    else:
+        raise KeyError(
+            "Wasser oder Sole als primäres Wärmeträgermedium muss über extra Wärmenetz-Modell noch bereitgestellt werden"
+        )
     # Add to simulator
-    my_sim.add_component(my_heat_pump, connect_automatically=True)
+    my_sim.add_component(my_heatpump, connect_automatically=True)
 
-    # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
-    my_dhw_heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments,
-        default_power_in_watt=6000,
+    # DHW storage configs
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
+        number_of_apartments=number_of_apartments
     )
-    my_dhw_heatpump_controller_config = (
-        controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-            name="DHWHeatpumpController"
-        )
-    )
-    my_dhw_storage_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-            number_of_apartments=my_building_information.number_of_apartments,
-            default_volume_in_liter=450,
-        )
-    )
-    my_dhw_storage_config.compute_default_cycle(
-        temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
-        - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
-    )
-    my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
+
+    my_dhw_storage = simple_water_storage.SimpleDHWStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
-    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_dhw_heatpump_controller_config,
-    )
-    my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
-        config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
-    )
-    # Add to simulator
-    my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
+
+    my_sim.add_component(my_dhw_storage, connect_automatically=True)
 
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-        sizing_option=sizing_option,
+        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
     )
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

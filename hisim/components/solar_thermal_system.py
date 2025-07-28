@@ -310,14 +310,14 @@ class SolarThermalSystem(Component):
     ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
         """Calculate OPEX."""
-        dhw_consumption_in_kilowatt_hour = None
+        electricity_consumption_in_kilowatt_hour = None
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == self.component_name
                 and output.field_name == self.ElectricityConsumptionOutput
                 and output.unit == loadtypes.Units.WATT
             ):
-                dhw_consumption_in_kilowatt_hour = round(
+                electricity_consumption_in_kilowatt_hour = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
@@ -328,18 +328,17 @@ class SolarThermalSystem(Component):
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
         )
-        assert dhw_consumption_in_kilowatt_hour is not None
-        total_consumption_in_kilowatt_hour = dhw_consumption_in_kilowatt_hour
+        assert electricity_consumption_in_kilowatt_hour is not None
 
         opex_cost_data_class = OpexCostDataClass(
-            opex_energy_cost_in_euro=total_consumption_in_kilowatt_hour
+            opex_energy_cost_in_euro=electricity_consumption_in_kilowatt_hour
             * emissions_and_cost_factors.electricity_costs_in_euro_per_kwh,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
-            co2_footprint_in_kg=total_consumption_in_kilowatt_hour
+            co2_footprint_in_kg=electricity_consumption_in_kilowatt_hour
             * emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh,
-            total_consumption_in_kwh=total_consumption_in_kilowatt_hour,
-            consumption_for_domestic_hot_water_in_kwh=dhw_consumption_in_kilowatt_hour,
-            loadtype=loadtypes.LoadTypes.WARM_WATER,
+            total_consumption_in_kwh=electricity_consumption_in_kilowatt_hour,
+            consumption_for_domestic_hot_water_in_kwh=electricity_consumption_in_kilowatt_hour,
+            loadtype=loadtypes.LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.SOLAR_THERMAL,
         )
 

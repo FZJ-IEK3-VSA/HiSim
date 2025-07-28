@@ -49,7 +49,7 @@ from hisim.units import (
     Years,
     KilogramPerSecond,
 )
-from hisim.components.configuration import PhysicsConfig
+from hisim.components.configuration import PhysicsConfig, EmissionFactorsAndCostsForFuelsConfig
 
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
@@ -1381,7 +1381,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
         No electricity costs for components except for Electricity Meter,
         because part of electricity consumption is feed by PV
         """
-        consumption_in_kwh: float
+        total_consumption_in_kwh: float
+        sh_consumption_in_kwh: float
+        dhw_consumption_in_kwh: float
 
         for index, output in enumerate(all_outputs):
             if (
@@ -1389,17 +1391,49 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 and output.load_type == LoadTypes.ELECTRICITY
                 and output.field_name == self.ElectricalInputPowerTotal
             ):
-                consumption_in_kwh = round(
+                total_consumption_in_kwh = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
                     1,
                 )
+            if (
+                output.component_name == self.component_name
+                and output.load_type == LoadTypes.ELECTRICITY
+                and output.field_name == self.ElectricalInputPowerSH
+            ):
+                sh_consumption_in_kwh = round(
+                    sum(postprocessing_results.iloc[:, index])
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
+            if (
+                output.component_name == self.component_name
+                and output.load_type == LoadTypes.ELECTRICITY
+                and output.field_name == self.ElectricalInputPowerDHW
+            ):
+                dhw_consumption_in_kwh = round(
+                    sum(postprocessing_results.iloc[:, index])
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+            self.my_simulation_parameters.year
+        )
+        co2_per_unit = emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh
+        euro_per_unit = emissions_and_cost_factors.electricity_costs_in_euro_per_kwh
+        co2_per_simulated_period_in_kg = total_consumption_in_kwh * co2_per_unit
+        opex_energy_cost_per_simulated_period_in_euro = total_consumption_in_kwh * euro_per_unit
+
         opex_cost_data_class = OpexCostDataClass(
-            opex_energy_cost_in_euro=0,
+            opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
-            co2_footprint_in_kg=0,
-            total_consumption_in_kwh=consumption_in_kwh,
+            co2_footprint_in_kg=co2_per_simulated_period_in_kg,
+            total_consumption_in_kwh=total_consumption_in_kwh,
+            consumption_for_domestic_hot_water_in_kwh=dhw_consumption_in_kwh,
+            consumption_for_space_heating_in_kwh=sh_consumption_in_kwh,
             loadtype=LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING_AND_DOMESTIC_HOT_WATER,
         )

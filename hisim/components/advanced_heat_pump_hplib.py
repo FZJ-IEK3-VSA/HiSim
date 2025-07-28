@@ -39,7 +39,7 @@ from hisim.units import (
     Euro,
     Years,
 )
-
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 
@@ -638,15 +638,23 @@ class HeatPumpHplib(Component):
                     / 3.6e6,
                     1,
                 )
-        opex_cost_data_class = OpexCostDataClass(
-            opex_energy_cost_in_euro=0,
-            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
-            co2_footprint_in_kg=0,
-            total_consumption_in_kwh=self.config.consumption_in_kwh,
-            loadtype=LoadTypes.ELECTRICITY,
-            kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+            self.my_simulation_parameters.year
         )
+        co2_per_unit = emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh
+        euro_per_unit = emissions_and_cost_factors.electricity_costs_in_euro_per_kwh
+        co2_per_simulated_period_in_kg = self.config.consumption_in_kwh * co2_per_unit
+        opex_energy_cost_per_simulated_period_in_euro = self.config.consumption_in_kwh * euro_per_unit
 
+        opex_cost_data_class = OpexCostDataClass(
+            opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=co2_per_simulated_period_in_kg,
+            total_consumption_in_kwh=self.config.consumption_in_kwh,
+            consumption_for_space_heating_in_kwh=self.config.consumption_in_kwh,
+            loadtype=LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
         return opex_cost_data_class
 
     def get_cached_results_or_run_hplib_simulation(

@@ -209,6 +209,7 @@ class ComponentType(str, enum.Enum):
     HEATERS = [HEAT_PUMP, GAS_HEATER]
     RESIDENTS = "Residents"
     BUILDINGS = "Buildings"
+    SOLAR_THERMAL_SYSTEM = "SolarThermalSystem"
 
     # different heat_pump types
     HEAT_PUMP_BUILDING = "HeatPumpBuilding"  # Heatpump for heating the house

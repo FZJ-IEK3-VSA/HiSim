@@ -322,7 +322,7 @@ def setup_function(
         loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
             source_output_name="LoadingPowerInputForBattery_",
             source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-            source_weight=4,
+            source_weight=5,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Battery Control. ",

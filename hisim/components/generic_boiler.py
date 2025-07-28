@@ -280,7 +280,7 @@ class GenericBoilerConfig(ConfigBase):
             # gas value from emission_factros_and_costs_devices.csv,
             # factor pellet/gas from https://www.dein-heizungsbauer.de/ratgeber/bauen-sanieren/pelletheizung-kosten/
             cost=3.33 * 7416,
-            lifetime=20,  # use same value as for others
+            lifetime=15,  # https://www.gebaeudeforum.de/fileadmin/gebaeudeforum/Downloads/Factsheet/Factsheet_65ProzentEE_07_Pelletkessel.pdf
             # from https://www.dein-heizungsbauer.de/ratgeber/bauen-sanieren/pelletheizung-kosten/
             maintenance_cost_as_percentage_of_investment=0.01,
             consumption_in_kilowatt_hour=0,
@@ -317,7 +317,7 @@ class GenericBoilerConfig(ConfigBase):
             co2_footprint=0.63
             * 49.47,  # did not find value for wood chips, using same as for pellet heating
             cost=21500,  # approximate value based on https://www.heizung.de/holzheizung/hackschnitzelheizung.html
-            lifetime=20,  # use same value as for others
+            lifetime=15,  # assume same as for pellet heater
             maintenance_cost_as_percentage_of_investment=0.03,  # approximate value based on https://www.heizung.de/holzheizung/hackschnitzelheizung.html
             consumption_in_kilowatt_hour=0,
         )
@@ -344,7 +344,9 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             eff_th_min=0.60,
             eff_th_max=0.90,
-            co2_footprint=0,  # green hydrogen is CO2-neutral
+            co2_footprint=maximal_thermal_power_in_watt
+            * 1e-3
+            * 49.47,  # value from emission_factros_and_costs_devices.csv (same values as condensing gasboiler (assume H2-ready boiler))
             cost=7416,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1

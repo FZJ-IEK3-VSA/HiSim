@@ -391,7 +391,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 raise KeyError("HP modell does not fit to heat source in config!")
             if self.passive_cooling_with_brine:
                 raise KeyError("HP modell with air as heat source does not support passive cooling with brine!")
-            if self.electrical_input_power_brine_pump_in_watt is not None or self.electrical_input_power_brine_pump_in_watt != 0.0 :
+            if self.electrical_input_power_brine_pump_in_watt != 0.0:
                 raise KeyError("HP modell with air as heat source does not support electrical input power for brine pump!")
 
         if self.parameters["Group"].iloc[0] == 2.0 or self.parameters["Group"].iloc[0] == 5.0:
@@ -406,7 +406,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     "HP modell with brine/water as heat source need config parameter specific_heat_capacity_of_primary_fluid! "
                     "--> connection with information class of heat source"
                 )
-            if self.electrical_input_power_brine_pump_in_watt is None or self.electrical_input_power_brine_pump_in_watt == 0.0 :
+            if self.electrical_input_power_brine_pump_in_watt == 0.0:
                 raise KeyError(
                     "HP modell with brine/water as heat source need config parameter electrical_input_power_brine_pump_in_watt!"
                 )
@@ -418,7 +418,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 raise KeyError(
                     "HP modell with brine/water as heat source need config parameter massflow_nominal_primary_side_in_kg_per_s!"
                 )
-            if self.electrical_input_power_brine_pump_in_watt is None or self.electrical_input_power_brine_pump_in_watt == 0.0 :
+            if self.electrical_input_power_brine_pump_in_watt == 0.0 :
                 raise KeyError(
                     "HP modell with brine/water as heat source need config parameter electrical_input_power_brine_pump_in_watt!"
                 )

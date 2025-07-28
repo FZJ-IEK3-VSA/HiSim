@@ -62,6 +62,8 @@ def test_heat_pump_hplib_new():
         minimum_thermal_output_power_in_watt=Quantity(1500, Watt),
         position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
         with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
+        passive_cooling_with_brine=False,
+        electrical_input_power_brine_pump_in_watt=None,
         massflow_nominal_secondary_side_in_kg_per_s=Quantity(0.333, KilogramPerSecond),
         massflow_nominal_primary_side_in_kg_per_s=0,
         specific_heat_capacity_of_primary_fluid=0,

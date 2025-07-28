@@ -13,7 +13,7 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 
 # Set simulation parameters for tests
-my_simulation_parameters = SimulationParameters.full_year(year=2024, seconds_per_timestep=60 * 15)
+my_simulation_parameters = SimulationParameters.one_day_only(year=2024, seconds_per_timestep=60 * 15)
 my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION)
 my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
 my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)

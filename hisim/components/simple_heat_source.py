@@ -413,7 +413,7 @@ class SimpleHeatSource(cp.Component):
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
-            consumption_in_kwh=0,
+            total_consumption_in_kwh=0,
             loadtype=lt.LoadTypes.ANY,
             kpi_tag=KpiTagEnumClass.GENERIC_HEAT_SOURCE
         )

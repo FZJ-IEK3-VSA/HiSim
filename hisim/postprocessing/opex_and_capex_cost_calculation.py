@@ -70,7 +70,7 @@ def opex_calculation(
                     cost_energy = opex_cost_data_class.opex_energy_cost_in_euro
                     cost_maintenance = opex_cost_data_class.opex_maintenance_cost_in_euro
                     co2_footprint = opex_cost_data_class.co2_footprint_in_kg
-                    consumption = opex_cost_data_class.consumption_in_kwh
+                    consumption = opex_cost_data_class.total_consumption_in_kwh
                     total_energy_cost_building_object += cost_energy
                     total_maintenance_cost_building_object += cost_maintenance
                     total_operational_co2_footprint_building_object += co2_footprint

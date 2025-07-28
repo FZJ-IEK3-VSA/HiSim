@@ -59,13 +59,18 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     # Create sum builder object
     my_sum = SumBuilderForTwoInputs(
-        config=SumBuilderConfig.get_sumbuilder_default_config(), my_simulation_parameters=my_simulation_parameters,
+        config=SumBuilderConfig.get_sumbuilder_default_config(),
+        my_simulation_parameters=my_simulation_parameters,
     )
     # Connect inputs from sum object to both previous outputs
     my_sum.connect_input(
-        input_fieldname=my_sum.SumInput1, src_object_name=my_rn1.component_name, src_field_name=my_rn1.RandomOutput,
+        input_fieldname=my_sum.SumInput1,
+        src_object_name=my_rn1.component_name,
+        src_field_name=my_rn1.RandomOutput,
     )
     my_sum.connect_input(
-        input_fieldname=my_sum.SumInput2, src_object_name=my_rn2.component_name, src_field_name=my_rn2.RandomOutput,
+        input_fieldname=my_sum.SumInput2,
+        src_object_name=my_rn2.component_name,
+        src_field_name=my_rn2.RandomOutput,
     )
     my_sim.add_component(my_sum)

@@ -48,6 +48,7 @@ class KpiTagEnumClass(Enum):
     CONTRACTING = "Contracting"
     GENERIC_HEAT_SOURCE = "Generic Heat Source"  # used in simple_heat_source.py
     GROUND_PROBE = "Ground Probe"
+    ELECTRIC_HEATING = "Electric Heating"
 
 
 @dataclass

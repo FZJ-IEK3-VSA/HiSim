@@ -801,6 +801,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         if self.with_domestic_hot_water_preparation:
             self.add_default_connections(self.get_default_connections_from_heat_pump_controller_dhw())
             self.add_default_connections(self.get_default_connections_from_dhw_storage())
+            self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
             # self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
 
     def get_default_connections_from_heat_pump_controller_space_heating(self,):
@@ -888,24 +889,24 @@ class MoreAdvancedHeatPumpHPLib(Component):
         )
         return connections
 
-    # def get_default_connections_from_simple_dhw_storage(
-    #         self,
-    # ):
-    #     """Get simple dhw water storage default connections."""
-    #     # use importlib for importing the other component in order to avoid circular-import errors
-    #     component_module_name = "hisim.components.simple_dhw_storage"
-    #     component_module = importlib.import_module(name=component_module_name)
-    #     component_class = getattr(component_module, "SimpleDHWStorage")
-    #     connections = []
-    #     dhw_classname = component_class.get_classname()
-    #     connections.append(
-    #         ComponentConnection(
-    #             MoreAdvancedHeatPumpHPLib.TemperatureInputSecondary_DHW,
-    #             dhw_classname,
-    #             component_class.WaterTemperatureToHeatGenerator,
-    #         )
-    #     )
-    #     return connections
+    def get_default_connections_from_simple_dhw_storage(
+            self,
+    ):
+        """Get simple dhw water storage default connections."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.simple_water_storage"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "SimpleDHWStorage")
+        connections = []
+        dhw_classname = component_class.get_classname()
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.TemperatureInputSecondary_DHW,
+                dhw_classname,
+                component_class.WaterTemperatureToHeatGenerator,
+            )
+        )
+        return connections
 
     def write_to_report(self):
         """Write configuration to the report."""
@@ -1400,7 +1401,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
-            consumption_in_kwh=consumption_in_kwh,
+            total_consumption_in_kwh=consumption_in_kwh,
             loadtype=LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING_AND_DOMESTIC_HOT_WATER,
         )
@@ -2429,7 +2430,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         )
 
         self.add_default_connections(self.get_default_connections_from_dhw_storage())
-        # self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
+        self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
 
     def get_default_connections_from_dhw_storage(self,):
         """Get simple hot water storage default connections."""
@@ -2448,24 +2449,24 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         )
         return connections
 
-    # def get_default_connections_from_simple_dhw_storage(
-    #         self,
-    # ):
-    #     """Get simple dhw water storage default connections."""
-    #     # use importlib for importing the other component in order to avoid circular-import errors
-    #     component_module_name = "hisim.components.simple_dhw_storage"
-    #     component_module = importlib.import_module(name=component_module_name)
-    #     component_class = getattr(component_module, "SimpleDHWStorage")
-    #     connections = []
-    #     dhw_classname = component_class.get_classname()
-    #     connections.append(
-    #         ComponentConnection(
-    #             MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage,
-    #             dhw_classname,
-    #             component_class.WaterTemperatureToHeatGenerator,
-    #         )
-    #     )
-    #     return connections
+    def get_default_connections_from_simple_dhw_storage(
+            self,
+    ):
+        """Get simple dhw water storage default connections."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.simple_water_storage"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "SimpleDHWStorage")
+        connections = []
+        dhw_classname = component_class.get_classname()
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage,
+                dhw_classname,
+                component_class.WaterTemperatureToHeatGenerator,
+            )
+        )
+        return connections
 
     def build(self,) -> None:
         """Build function.

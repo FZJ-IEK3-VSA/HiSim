@@ -31,12 +31,12 @@ def test_chp_system():
 
     # Set Fake Inputs
     h2_input = cp.ComponentOutput(
-        "FakeHydrogenInput", "HydrogenInput", lt.LoadTypes.HYDROGEN, lt.Units.KG_PER_SEC
+        "FakeHydrogenInput", "HydrogenInput", lt.LoadTypes.GREEN_HYDROGEN, lt.Units.KG_PER_SEC
     )
     h2_output = cp.ComponentOutput(
         "FakeHydrogenOutput",
         "HydrogenOutput",
-        lt.LoadTypes.HYDROGEN,
+        lt.LoadTypes.GREEN_HYDROGEN,
         lt.Units.KG_PER_SEC,
     )
 

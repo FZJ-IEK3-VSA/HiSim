@@ -86,20 +86,29 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_advanced_battery_config_1.source_weight = 1
 
     my_advanced_battery_1 = advanced_battery_bslib.Battery(
-        my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config_1,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_advanced_battery_config_1,
     )
 
     # buffer bat test start
     my_rsoc_controller_l2 = RsocBatteryController(
         my_simulation_parameters=my_simulation_parameters,
-        config=RsocBatteryControllerConfig.confic_rsoc_name(rsoc_name=rsoc_name, operation_mode=operation_mode_rsoc,),
+        config=RsocBatteryControllerConfig.confic_rsoc_name(
+            rsoc_name=rsoc_name,
+            operation_mode=operation_mode_rsoc,
+        ),
     )
     my_rsoc_controller_l1 = RsocController(
         my_simulation_parameters=my_simulation_parameters,
-        config=RsocControllerConfig.config_rsoc(rsoc_name=rsoc_name,),
+        config=RsocControllerConfig.config_rsoc(
+            rsoc_name=rsoc_name,
+        ),
     )
     my_rsoc = Rsoc(
-        my_simulation_parameters=my_simulation_parameters, config=RsocConfig.config_rsoc(rsoc_name=rsoc_name,),
+        my_simulation_parameters=my_simulation_parameters,
+        config=RsocConfig.config_rsoc(
+            rsoc_name=rsoc_name,
+        ),
     )
     # buffer bat test end
 
@@ -125,7 +134,8 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_photovoltaic_system_config.cost = pv_cost
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
-        my_simulation_parameters=my_simulation_parameters, config=my_photovoltaic_system_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_photovoltaic_system_config,
     )
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
 
@@ -211,20 +221,27 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_component_output=my_heat_pump.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,],
+        source_tags=[
+            lt.ComponentType.HEAT_PUMP,
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
         source_weight=999,
     )
     my_building.connect_only_predefined_connections(my_weather)
     my_building.connect_only_predefined_connections(my_occupancy)
 
     my_building.connect_input(
-        my_building.ThermalPowerDelivered, my_heat_pump.component_name, my_heat_pump.ThermalPowerDelivered,
+        my_building.ThermalPowerDelivered,
+        my_heat_pump.component_name,
+        my_heat_pump.ThermalPowerDelivered,
     )
 
     my_heat_pump_controller.connect_only_predefined_connections(my_building)
 
     my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.ElectricityInput, my_cl2.component_name, my_cl2.TotalElectricityToOrFromGrid,
+        my_heat_pump_controller.ElectricityInput,
+        my_cl2.component_name,
+        my_cl2.TotalElectricityToOrFromGrid,
     )
     my_heat_pump.connect_only_predefined_connections(my_weather, my_heat_pump_controller)
     my_heat_pump.get_default_connections_heatpump_controller()
@@ -234,7 +251,10 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_component_output=my_rsoc.SOFCCurrentOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_PRODUCTION,],
+        source_tags=[
+            lt.ComponentType.FUEL_CELL,
+            lt.InandOutputType.ELECTRICITY_PRODUCTION,
+        ],
         source_weight=2,
     )
 
@@ -243,7 +263,10 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_component_output=my_rsoc.SOECCurrentLoad,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.ELECTROLYZER, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,],
+        source_tags=[
+            lt.ComponentType.ELECTROLYZER,
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+        ],
         source_weight=1,  # maybe change the weigth
     )
 
@@ -257,7 +280,10 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
     electricity_to_electrolyzer_target = my_cl2.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[lt.ComponentType.ELECTROLYZER, lt.InandOutputType.ELECTRICITY_TARGET,],
+        source_tags=[
+            lt.ComponentType.ELECTROLYZER,
+            lt.InandOutputType.ELECTRICITY_TARGET,
+        ],
         source_weight=1,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -265,10 +291,12 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     my_rsoc_controller_l2.connect_dynamic_input(
-        input_fieldname=my_rsoc_controller_l2.Demand, src_object=electricity_from_rsofc_target_1,
+        input_fieldname=my_rsoc_controller_l2.Demand,
+        src_object=electricity_from_rsofc_target_1,
     )
     my_rsoc_controller_l2.connect_dynamic_input(
-        input_fieldname=my_rsoc_controller_l2.RESLoad, src_object=electricity_to_electrolyzer_target,
+        input_fieldname=my_rsoc_controller_l2.RESLoad,
+        src_object=electricity_to_electrolyzer_target,
     )
 
     my_rsoc_controller_l1.connect_input(
@@ -279,10 +307,14 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     # buffer bat test end
     my_rsoc.connect_input(
-        my_rsoc.PowerInput, my_rsoc_controller_l1.component_name, my_rsoc_controller_l1.PowerVsDemand,
+        my_rsoc.PowerInput,
+        my_rsoc_controller_l1.component_name,
+        my_rsoc_controller_l1.PowerVsDemand,
     )
     my_rsoc.connect_input(
-        my_rsoc.RSOCInputState, my_rsoc_controller_l1.component_name, my_rsoc_controller_l1.StateToRSOC,
+        my_rsoc.RSOCInputState,
+        my_rsoc_controller_l1.component_name,
+        my_rsoc_controller_l1.StateToRSOC,
     )
 
     my_cl2.add_component_input_and_connect(

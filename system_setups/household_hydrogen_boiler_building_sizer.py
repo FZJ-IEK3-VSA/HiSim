@@ -21,6 +21,7 @@ from hisim.components import (
     heat_distribution_system,
     electricity_meter,
     generic_boiler,
+    gas_meter,
 )
 
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
@@ -56,8 +57,8 @@ def setup_function(
         - Weather
         - Photovoltaic System
         - Building
-        - Wood Chips Heater
-        - Wood Chips Heater Controller
+        - Hydrogen Boiler
+        - Hydrogen Boiler Controller
         - Heat Distribution System
         - Heat Distribution Controller
         - Heat Water Storage
@@ -74,9 +75,9 @@ def setup_function(
     # try reading energ system and archetype configs
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
-        my_config = ModularHouseholdConfig().get_default_config_for_household_wood_chips()
+        my_config = ModularHouseholdConfig().get_default_config_for_household_hydrogen()
         log.warning(
-            f"Could not read the modular household config from path '{config_filename}'. Using the woodchips household default config instead."
+            f"Could not read the modular household config from path '{config_filename}'. Using the hydrogen household default config instead."
         )
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None
@@ -86,9 +87,8 @@ def setup_function(
     # Set Simulation Parameters
     if my_simulation_parameters is None:
         year = 2021
-        seconds_per_timestep = 60 * 15
-        my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(year, seconds_per_timestep)
-        # my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+        seconds_per_timestep = 60 * 60
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         if os.path.exists(cache_dir_path_simuparams):
             my_simulation_parameters.cache_dir_path = cache_dir_path_simuparams
@@ -115,8 +115,8 @@ def setup_function(
 
     # Set heating systems for space heating and domestic hot water
     heating_system = energy_system_config_.heating_system
-    if heating_system != HeatingSystems.WOOD_CHIP_HEATING:
-        raise ValueError("Heating system needs to be wood chip heater for this system setup.")
+    if heating_system != HeatingSystems.HYDROGEN_HEATING:
+        raise ValueError("Heating system needs to be hydrogen heating for this system setup.")
 
     heating_reference_temperature_in_celsius = -12.2
     building_set_heating_temperature_in_celsius = 22.0
@@ -208,7 +208,7 @@ def setup_function(
     # Build PV
     if pv_power_in_watt is None:
         my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-            rooftop_area_in_m2=my_building_information.roof_area_in_m2,
+            rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             location=weather_location,
         )
@@ -249,34 +249,34 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Set sizing option for Hot water Storage
-    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_WOOD_CHIP_HEATING
+    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
 
-    # Build wood chip heater For Space Heating
-    my_wood_chip_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_wood_chip_boiler_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+    # Build hydrogen boiler For Space Heating
+    my_hydrogen_boiler_config = generic_boiler.GenericBoilerConfig.get_scaled_condensing_hydrogen_boiler_config(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        number_of_apartments_in_building=number_of_apartments,
     )
-    my_wood_chip_heater = generic_boiler.GenericBoiler(
-        config=my_wood_chip_heater_config,
+    my_hydrogen_boiler = generic_boiler.GenericBoiler(
+        config=my_hydrogen_boiler_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_sim.add_component(my_wood_chip_heater, connect_automatically=True)
+    my_sim.add_component(my_hydrogen_boiler, connect_automatically=True)
 
-    # Build Wood Chip Heater Controller
-    # Wood chip boiler cannot modulate and it has long run/idle times, so use specific config
-    my_wood_chip_heater_controller_config = (
-        generic_boiler.GenericBoilerControllerConfig.get_default_wood_chip_controller_config(
-            minimal_thermal_power_in_watt=my_wood_chip_heater_config.minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=my_wood_chip_heater_config.maximal_thermal_power_in_watt,
+    # Build hydrogen boiler Controller
+    my_hydrogen_boiler_controller_config = (
+        generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
+            minimal_thermal_power_in_watt=my_hydrogen_boiler_config.minimal_thermal_power_in_watt,
+            maximal_thermal_power_in_watt=my_hydrogen_boiler_config.maximal_thermal_power_in_watt,
             with_domestic_hot_water_preparation=True,
         )
     )
-    my_wood_chip_heater_controller = generic_boiler.GenericBoilerController(
+    my_hydrogen_boiler_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters,
-        config=my_wood_chip_heater_controller_config,
+        config=my_hydrogen_boiler_controller_config,
     )
-    my_sim.add_component(my_wood_chip_heater_controller, connect_automatically=True)
+    my_sim.add_component(my_hydrogen_boiler_controller, connect_automatically=True)
 
-    # DHW storage
+    # DHW storage configs
     my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
         number_of_apartments=number_of_apartments
     )
@@ -287,12 +287,13 @@ def setup_function(
 
     my_sim.add_component(my_dhw_storage, connect_automatically=True)
 
-    # Build Heat Water Storage; buffer storage is important for wood chip heating, as it cannot modulate
+    # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         sizing_option=sizing_option,
     )
+
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -319,6 +320,13 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters,
         config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
+
+    # Build Gas Meter
+    my_gas_meter = gas_meter.GasMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=gas_meter.GasMeterConfig.get_gas_meter_default_config(),
+    )
+    my_sim.add_component(my_gas_meter, connect_automatically=True)
 
     # use ems and battery only when PV is used
     if share_of_maximum_pv_potential != 0:
@@ -412,7 +420,11 @@ def setup_function(
         ResultPathProviderSingleton().set_important_result_path_information(
             module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/analysis_austria_for_kristina_20_11_2024_2",
             model_name=my_sim.module_filename,
-            further_result_folder_description=os.path.join(*[further_result_folder_description]),
+            further_result_folder_description=os.path.join(
+                *[
+                    further_result_folder_description,
+                ]
+            ),
             variant_name="_",
             scenario_hash_string=scenario_hash_string,
             sorting_option=sorting_option,

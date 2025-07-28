@@ -1,82 +1,81 @@
-"""Basic household new system setup."""
-
-# clean
+"""Basic household system setup. Shows how to set up a standard system."""
 
 from typing import Optional, Any, Union, List
-import re
 import os
+import re
 from utspclient.helpers.lpgdata import (
     Households,
 )
 from utspclient.helpers.lpgpythonbindings import JsonReference
+from hisim.building_sizer_utils.interface_configs.modular_household_config import (
+    ModularHouseholdConfig,
+    read_in_configs,
+)
 from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_utsp_connector
-from hisim.components import weather
-from hisim.components import generic_pv_system
-from hisim.components import building
 from hisim.components import (
+    gas_meter,
+    generic_boiler,
+    heat_distribution_system,
+    loadprofilegenerator_utsp_connector,
+    simple_water_storage,
+    solar_thermal_system,
     advanced_battery_bslib,
     controller_l2_energy_management_system,
-    simple_water_storage,
-    heat_distribution_system,
-    electricity_meter,
-    generic_boiler,
+    generic_pv_system,
 )
-
+from hisim.components import weather
+from hisim.components import building
+from hisim.components import electricity_meter
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.loadtypes import HeatingSystems
-from hisim.building_sizer_utils.interface_configs.modular_household_config import (
-    read_in_configs,
-    ModularHouseholdConfig,
-)
 from hisim import log
 
-__authors__ = "Katharina Rieck"
-__copyright__ = "Copyright 2022, FZJ-IEK-3"
-__credits__ = ["Noah Pflugradt"]
+__authors__ = "Kristina Dabrock, Katharina Rieck"
+__copyright__ = "Copyright 2021, the House Infrastructure Project"
+__credits__ = ["Kristina Dabrock"]
 __license__ = "MIT"
-__version__ = "1.0"
-__maintainer__ = "Noah Pflugradt"
+__version__ = "0.1"
+__maintainer__ = "Kristina Dabrock"
+__email__ = "k.dabrock@fz-juelich.de"
 __status__ = "development"
 
 
 def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
+    my_sim: Any,
+    my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """Household system setup.
+    """Basic household system setup.
 
-    This setup function emulates an household including the following components:
+    This setup function emulates an household including the basic components. Here the residents have their
+    electricity and warm water and heating needs covered by the solar thermal system and a gas boiler.
+    Furthermore, a DHW storage is installed.
 
     - Simulation Parameters
     - Components
         - Occupancy (Residents' Demands)
         - Weather
-        - Photovoltaic System
+        - SolarThermalSystem
+        - SolarThermalSystemController
         - Building
-        - Wood Chips Heater
-        - Wood Chips Heater Controller
+        - Gas Heater
+        - Gas Heater Controller
         - Heat Distribution System
         - Heat Distribution Controller
-        - Heat Water Storage
-        - Battery
-        - Energy Management System
-        - Electricity Meter
+        - DHW Water Storage
     """
 
     # =================================================================================================================================
-    # Set System Parameters from Config
 
-    # household-pv-config
     config_filename = my_sim.my_module_config
     # try reading energ system and archetype configs
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
-        my_config = ModularHouseholdConfig().get_default_config_for_household_wood_chips()
+        my_config = ModularHouseholdConfig().get_default_config_for_household_gas_solar_thermal()
         log.warning(
-            f"Could not read the modular household config from path '{config_filename}'. Using the woodchips household default config instead."
+            f"Could not read the modular household config from path '{config_filename}'. Using the gas and solar thermal household default config instead."
         )
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None
@@ -87,8 +86,7 @@ def setup_function(
     if my_simulation_parameters is None:
         year = 2021
         seconds_per_timestep = 60 * 15
-        my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(year, seconds_per_timestep)
-        # my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         if os.path.exists(cache_dir_path_simuparams):
             my_simulation_parameters.cache_dir_path = cache_dir_path_simuparams
@@ -111,12 +109,12 @@ def setup_function(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================
-    # Set System Parameters
+    # Build Components
 
     # Set heating systems for space heating and domestic hot water
     heating_system = energy_system_config_.heating_system
-    if heating_system != HeatingSystems.WOOD_CHIP_HEATING:
-        raise ValueError("Heating system needs to be wood chip heater for this system setup.")
+    if heating_system != HeatingSystems.GAS_SOLAR_THERMAL:
+        raise ValueError("Heating system needs to be gas solar thermal for this system setup.")
 
     heating_reference_temperature_in_celsius = -12.2
     building_set_heating_temperature_in_celsius = 22.0
@@ -171,6 +169,8 @@ def setup_function(
 
     # =================================================================================================================================
     # Build Basic Components
+
+    # Building
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
@@ -187,7 +187,7 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_building, connect_automatically=True)
 
-    # Build Occupancy
+    # Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
     my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG
     my_occupancy_config.household = lpg_households
@@ -208,7 +208,7 @@ def setup_function(
     # Build PV
     if pv_power_in_watt is None:
         my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-            rooftop_area_in_m2=my_building_information.roof_area_in_m2,
+            rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             location=weather_location,
         )
@@ -229,14 +229,13 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
-    # Build Heat Distribution Controller
+    # Heat Distribution Controller
     my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
         set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
-    my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
@@ -248,51 +247,38 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    # Set sizing option for Hot water Storage
-    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_WOOD_CHIP_HEATING
-
-    # Build wood chip heater For Space Heating
-    my_wood_chip_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_wood_chip_boiler_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+    # Build Gas heater For Space Heating and DHW
+    my_gas_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_condensing_gas_boiler_config(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        number_of_apartments_in_building=number_of_apartments,
     )
-    my_wood_chip_heater = generic_boiler.GenericBoiler(
-        config=my_wood_chip_heater_config,
+    my_gas_heater = generic_boiler.GenericBoiler(
+        config=my_gas_heater_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_sim.add_component(my_wood_chip_heater, connect_automatically=True)
+    my_sim.add_component(my_gas_heater, connect_automatically=True)
 
-    # Build Wood Chip Heater Controller
-    # Wood chip boiler cannot modulate and it has long run/idle times, so use specific config
-    my_wood_chip_heater_controller_config = (
-        generic_boiler.GenericBoilerControllerConfig.get_default_wood_chip_controller_config(
-            minimal_thermal_power_in_watt=my_wood_chip_heater_config.minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=my_wood_chip_heater_config.maximal_thermal_power_in_watt,
+    # Build Gas Heater Controller For Space Heating and DHW
+    my_gas_heater_controller_config = (
+        generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
+            minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt,
+            maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt,
             with_domestic_hot_water_preparation=True,
         )
     )
-    my_wood_chip_heater_controller = generic_boiler.GenericBoilerController(
+    my_gas_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters,
-        config=my_wood_chip_heater_controller_config,
+        config=my_gas_heater_controller_config,
     )
-    my_sim.add_component(my_wood_chip_heater_controller, connect_automatically=True)
+    my_sim.add_component(my_gas_heater_controller, connect_automatically=True)
 
-    # DHW storage
-    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
-        number_of_apartments=number_of_apartments
-    )
-
-    my_dhw_storage = simple_water_storage.SimpleDHWStorage(
-        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
-    )
-
-    my_sim.add_component(my_dhw_storage, connect_automatically=True)
-
-    # Build Heat Water Storage; buffer storage is important for wood chip heating, as it cannot modulate
+    # Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-        sizing_option=sizing_option,
+        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER,
     )
+
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -300,7 +286,7 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
-    # Build Heat Distribution System
+    # Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
@@ -314,11 +300,79 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
 
+    # Solar thermal for DHW
+    my_solar_thermal_system_config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(
+        area_m2=4 * number_of_apartments,  # 4 m2 per apartment
+    )
+    my_solar_thermal_system = solar_thermal_system.SolarThermalSystem(
+        config=my_solar_thermal_system_config,
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    my_sim.add_component(my_solar_thermal_system, connect_automatically=True)
+
+    # Solar thermal for DHW - Controller
+    my_solar_thermal_system_controller_config = (
+        solar_thermal_system.SolarThermalSystemControllerConfig.get_solar_thermal_system_controller_config()
+    )
+
+    my_solar_thermal_system_controller = solar_thermal_system.SolarThermalSystemController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_solar_thermal_system_controller_config,
+    )
+    my_sim.add_component(my_solar_thermal_system_controller, connect_automatically=True)
+
+    # DHW Storage (needs manual connection to solar thermal and gas heater)
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
+        number_of_apartments=number_of_apartments
+    )
+
+    my_dhw_storage = simple_water_storage.SimpleDHWStorage(
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
+    )
+
+    my_dhw_storage.connect_input(
+        my_dhw_storage.WaterConsumption,
+        my_occupancy.component_name,
+        my_occupancy.WaterConsumption,
+    )
+
+    # Connect solarthermal as primary heat generator
+    my_dhw_storage.connect_input(
+        my_dhw_storage.WaterTemperatureFromHeatGenerator,
+        my_solar_thermal_system.component_name,
+        my_solar_thermal_system.WaterTemperatureOutput,
+    )
+    my_dhw_storage.connect_input(
+        my_dhw_storage.WaterMassFlowRateFromHeatGenerator,
+        my_solar_thermal_system.component_name,
+        my_solar_thermal_system.WaterMassFlowOutput,
+    )
+
+    # Connect gas as secondary heat generator
+    my_dhw_storage.connect_input(
+        my_dhw_storage.WaterTemperatureFromSecondaryHeatGenerator,
+        my_gas_heater.component_name,
+        my_gas_heater.WaterOutputTemperatureDhw,
+    )
+    my_dhw_storage.connect_input(
+        my_dhw_storage.WaterMassFlowRateFromSecondaryHeatGenerator,
+        my_gas_heater.component_name,
+        my_gas_heater.WaterOutputMassFlowDhw,
+    )
+    my_sim.add_component(my_dhw_storage)
+
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
         config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
+
+    # Build Gas Meter
+    my_gas_meter = gas_meter.GasMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=gas_meter.GasMeterConfig.get_gas_meter_default_config(),
+    )
+    my_sim.add_component(my_gas_meter, connect_automatically=True)
 
     # use ems and battery only when PV is used
     if share_of_maximum_pv_potential != 0:
@@ -412,7 +466,11 @@ def setup_function(
         ResultPathProviderSingleton().set_important_result_path_information(
             module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/analysis_austria_for_kristina_20_11_2024_2",
             model_name=my_sim.module_filename,
-            further_result_folder_description=os.path.join(*[further_result_folder_description]),
+            further_result_folder_description=os.path.join(
+                *[
+                    further_result_folder_description,
+                ]
+            ),
             variant_name="_",
             scenario_hash_string=scenario_hash_string,
             sorting_option=sorting_option,

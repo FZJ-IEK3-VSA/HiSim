@@ -95,7 +95,7 @@ class L1CHPControllerConfig(ConfigBase):
             building_name=building_name,
             name="Fuel Cell Controller",
             source_weight=1,
-            use=LoadTypes.HYDROGEN,
+            use=LoadTypes.GREEN_HYDROGEN,
             electricity_threshold=300,
             h2_soc_threshold=8.0,
             t_min_heating_in_celsius=20.0,
@@ -143,7 +143,7 @@ class L1CHPControllerConfig(ConfigBase):
             building_name=building_name,
             name="CHP Controller",
             source_weight=1,
-            use=LoadTypes.HYDROGEN,
+            use=LoadTypes.GREEN_HYDROGEN,
             electricity_threshold=300,
             h2_soc_threshold=8.0,
             t_min_heating_in_celsius=31.0,
@@ -319,7 +319,7 @@ class L1CHPController(cp.Component):
         self.hydrogen_soc_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.HydrogenSOC,
-            LoadTypes.HYDROGEN,
+            LoadTypes.GREEN_HYDROGEN,
             Units.PERCENT,
             mandatory=False,
         )

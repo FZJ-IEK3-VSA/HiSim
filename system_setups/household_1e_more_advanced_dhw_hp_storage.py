@@ -1,4 +1,4 @@
-"""  Household system setup with advanced heat pump and diesel car. """
+"""Household system setup with advanced heat pump and diesel car."""
 
 # clean
 from typing import List, Optional, Any
@@ -37,15 +37,13 @@ __status__ = ""
 
 @dataclass
 class HouseholdMoreAdvancedHPDieselCarDHWStorageOptions:
-
-    """ Set options for the system setup."""
+    """Set options for the system setup."""
 
     pass
 
 
 @dataclass
 class HouseholdMoreAdvancedHPDieselCarDHWStorageConfig(SystemSetupConfigBase):
-
     """Configuration for with more advanced heat pump and diesel car."""
 
     building_type: str
@@ -181,7 +179,8 @@ class HouseholdMoreAdvancedHPDieselCarDHWStorageConfig(SystemSetupConfigBase):
 
 
 def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None,
+    my_sim: Any,
+    my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
     """System setup with more advanced hp and diesel car.
 
@@ -232,7 +231,8 @@ def setup_function(
 
     # Build heat Distribution System Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        config=my_config.hds_controller_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_config.hds_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Occupancy
@@ -249,7 +249,8 @@ def setup_function(
 
     # Build Building
     my_building = building.Building(
-        config=my_config.building_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_config.building_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
@@ -260,8 +261,10 @@ def setup_function(
     my_heatpump_controller_sh_config = my_config.sh_controller_config
     my_heatpump_controller_sh_config.name = "HeatPumpControllerSH"
 
-    my_heatpump_controller_space_heating = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
-        config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
+    my_heatpump_controller_space_heating = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
+            config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
+        )
     )
 
     # Build Heat Pump Controller for dhw
@@ -276,12 +279,14 @@ def setup_function(
     my_heatpump_config.name = "HeatPumpHPLib"
 
     my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
-        config=my_heatpump_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_heatpump_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Water Storage
     my_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
-        config=my_config.simple_hot_water_storage_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_config.simple_hot_water_storage_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     my_dhw_storage_config = my_config.dhw_storage_config
@@ -312,7 +317,8 @@ def setup_function(
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
-        my_simulation_parameters=my_simulation_parameters, config=my_config.electricity_meter_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.electricity_meter_config,
     )
 
     # =================================================================================================================================
@@ -348,7 +354,9 @@ def setup_function(
     # Verknüpfung mit Luft als Umgebungswärmequelle
     if my_heatpump.parameters["Group"].iloc[0] == 1.0 or my_heatpump.parameters["Group"].iloc[0] == 4.0:
         my_heatpump.connect_input(
-            my_heatpump.TemperatureInputPrimary, my_weather.component_name, my_weather.DailyAverageOutsideTemperatures,
+            my_heatpump.TemperatureInputPrimary,
+            my_weather.component_name,
+            my_weather.DailyAverageOutsideTemperatures,
         )
     else:
         raise KeyError(
@@ -406,7 +414,9 @@ def setup_function(
         source_component_output=my_heatpump.ElectricalInputPowerTotal,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,],
+        source_tags=[
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
         source_weight=999,
     )
 

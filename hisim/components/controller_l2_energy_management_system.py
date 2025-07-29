@@ -545,7 +545,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
 
         self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOf{electric_heater_class_name}_",
+            source_output_name=f"ElectricityToOrFromGridOfSH{electric_heater_class_name}_",
             source_tags=[
                 lt.ComponentType.ELECTRIC_HEATING_SH,
                 lt.InandOutputType.ELECTRICITY_TARGET,
@@ -557,7 +557,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             output_description="Target electricity for electric heater space heating.",
         )
         self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOf{electric_heater_class_name}_",
+            source_output_name=f"ElectricityToOrFromGridOfDHW{electric_heater_class_name}_",
             source_tags=[
                 lt.ComponentType.ELECTRIC_HEATING_DHW,
                 lt.InandOutputType.ELECTRICITY_TARGET,

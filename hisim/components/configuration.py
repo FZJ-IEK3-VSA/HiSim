@@ -5,11 +5,11 @@
 from typing import Any
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
-from hisim.loadtypes import LoadTypes
+from hisim.loadtypes import LoadTypes, ComponentType
 from hisim.component import ConfigBase
 
 """
-Sources:
+Sources for opex techno-economic parameters:
         [1]: https://de.statista.com/statistik/daten/studie/914784/umfrage/entwicklung-der-strompreise-in-deutschland-verivox-verbraucherpreisindex/
         [2]: https://echtsolar.de/einspeiseverguetung/  (average of monthly injection revenue)
         [3]: https://de.statista.com/statistik/daten/studie/779/umfrage/durchschnittspreis-fuer-dieselkraftstoff-seit-dem-jahr-1950/
@@ -30,7 +30,7 @@ Sources:
         [16]: https://de.statista.com/statistik/daten/studie/250114/umfrage/preis-fuer-fernwaerme-nach-anschlusswert-in-deutschland/
         [17]: https://doi.org/10.1016/j.enbuild.2022.112480 (Knosala et al. 2022)
 """
-techno_economic_parameters = {
+opex_techno_economic_parameters = {
     2018: {
         "electricity_costs_in_euro_per_kwh": 0.27825,  # EUR/kWh  # Source: [1]
         "electricity_footprint_in_kg_per_kwh": 0.473,  # kgCO2eq/kWh  # Source: [5]
@@ -191,7 +191,7 @@ techno_economic_parameters = {
         "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
         "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
         "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
-    }
+    },
 }
 
 
@@ -228,12 +228,160 @@ class EmissionFactorsAndCostsForFuelsConfig:
     ) -> "EmissionFactorsAndCostsForFuelsConfig":  # pylint: disable=too-many-return-statements
         """Get emission factors and fuel costs for certain year."""
 
-        if year not in techno_economic_parameters:
-            raise KeyError(
-                f"No Emission and cost factors implemented yet for the year {year}."
-            )
+        if year not in opex_techno_economic_parameters:
+            raise KeyError(f"No Emission and cost factors implemented yet for the year {year}.")
 
-        return EmissionFactorsAndCostsForFuelsConfig(**techno_economic_parameters[year])
+        return EmissionFactorsAndCostsForFuelsConfig(**opex_techno_economic_parameters[year])
+
+
+"""
+Sources for capex techno-economic parameters:
+        [18]: http://dx.doi.org/10.1016/j.enbuild.2017.04.079
+        [19]: /hisim/modular_household/emission_factors_and_costs_devices.csv
+        (values are taken from WHY-project: https://cordis.europa.eu/project/id/891943/results but no concrete source was found)
+        [20]: https://www.gebaeudeforum.de/service/downloads/ -> search for "Wärmeerzeugung im Bestand mit EE", January 2024
+        [21]: https://  doi.org/10.3390/su13041938
+        [22]: https://www.duh.de/fileadmin/user_upload/download/Projektinformation/Energieeffizienz/Wärmepumpen/300623_Waermepumpen_Faktenpapier_Neuauflage_Digital.pdf
+        [23]: VDI2067-1
+        [24]: https://doi.org/10.1016/j.renene.2023.01.117
+        [25]: https://solarenergie.de/stromspeicher/preise
+        [26]: https://www.ostrom.de/en/post/how-much-does-a-smart-meter-cost-in-2025
+        [27]: https://mcsmeters.com/collections/gas-meters
+        [28]: https://www.gasag.de/magazin/energiesparen/energiemanagementsystem-privathaushalt/
+        [29]: https://www.adac.de/rund-ums-haus/energie/spartipps/energiemanagementsystem-zuhause/
+"""
+capex_techno_economic_parameters = {
+    2024: {
+        ComponentType.HEAT_PUMP: {
+            "investment_costs_in_euro_per_kw": 1600,  # Source: [22]
+            "maintenance_costs_as_percentage_of_investment_per_year": 0.015,  # Source: [20]
+            "technical_lifetime_in_years": 18,  # Source: [20]
+            "co2_footprint_in_kg_per_kw": 165.84,  # Source: [19]
+            "subsidy_in_percent_of_investment_costs": 0.3,  # Source: [20]
+        },
+        ComponentType.GAS_HEATER: {
+            "investment_costs_in_euro_per_kw": 0.36 * 1600,  # 36% of heat pump costs, Source: [20]
+            "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
+            "technical_lifetime_in_years": 18,  # Source: [20]
+            "co2_footprint_in_kg_per_kw": 49.47,  # Source: [19]
+            "subsidy_in_percent_of_investment_costs": 0,
+        },
+        ComponentType.OIL_HEATER: {
+            "investment_costs_in_euro_per_kw": 0.75 * 0.36 * 1600,  # 75% of gas heater costs, Source: [19]
+            "maintenance_costs_as_percentage_of_investment_per_year": 0.03,  # Source: [23]
+            "technical_lifetime_in_years": 18,  # assume same as gas heater based on [19]
+            "co2_footprint_in_kg_per_kw": 19.4,  # Source: [19]
+            "subsidy_in_percent_of_investment_costs": 0,
+        },
+        ComponentType.PELLET_HEATER: {
+            "investment_costs_in_euro_per_kw": 0.96 * 1600,  # 96% of heat pump costs, Source: [20]
+            "maintenance_costs_as_percentage_of_investment_per_year": 0.047,  # Source: [20]
+            "technical_lifetime_in_years": 18,  # Source: [20]
+            "co2_footprint_in_kg_per_kw": 49.47,  # assume similar to gas heater based on [19]
+            "subsidy_in_percent_of_investment_costs": 0.3,
+        },
+        ComponentType.WOOD_CHIP_HEATER: {
+            "investment_costs_in_euro_per_kw": 0.96 * 1600,  # 96% of heat pump costs, Source: [20]
+            "maintenance_costs_as_percentage_of_investment_per_year": 0.047,  # Source: [20]
+            "technical_lifetime_in_years": 18,  # Source: [20]
+            "co2_footprint_in_kg_per_kw": 49.47,  # assume similar to gas heater based on [19]
+            "subsidy_in_percent_of_investment_costs": 0.3,
+        },
+        ComponentType.DISTRICT_HEATING: {
+            "investment_costs_in_euro_per_kw": 0.636 * 1600,  # 63.6% of heat pump costs, Source: [20]
+            "maintenance_costs_as_percentage_of_investment_per_year": 0.026,  # Source: [20]
+            "technical_lifetime_in_years": 20,  # Source: [20]
+            "co2_footprint_in_kg_per_kw": 35.09,  # Source: [19], biomass district heating
+            "subsidy_in_percent_of_investment_costs": 0.3,
+        },
+        ComponentType.ELECTRIC_HEATER: {
+            "investment_costs_in_euro_per_kw": 0.196 * 1600,  # 19.6% of heat pump costs, Source: [20]
+            "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
+            "technical_lifetime_in_years": 22,  # Source: [20]
+            "co2_footprint_in_kg_per_kw": 1.21,  # Source: [19]
+            "subsidy_in_percent_of_investment_costs": 0,  # Source: [20]
+        },
+        ComponentType.HYDROGEN_HEATER: {
+            "investment_costs_in_euro_per_kw": 0.36 * 1600,  # 36% of heat pump costs, Source: [20], same as gas heater
+            "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
+            "technical_lifetime_in_years": 18,  # Source: [20]
+            "co2_footprint_in_kg_per_kw": 49.47,  # Source: [19]
+            "subsidy_in_percent_of_investment_costs": 0.3,  # green hydrogen, source: [20]
+        },
+        ComponentType.THERMAL_ENERGY_STORAGE: {
+            "investment_costs_in_euro_per_liter": 14.51,  # EUR/liter, Source: [19]
+            "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
+            "technical_lifetime_in_years": 20,  # Source: [20]
+            "co2_footprint_in_kg_per_kw": 29.79,  # Source: [19]
+            "subsidy_in_percent_of_investment_costs": 0.15,
+        },
+        ComponentType.SOLAR_THERMAL_SYSTEM: {
+            "investment_costs_in_euro_per_kw": 0.38 * 1600,  # 38% of heat pump costs, Source: [20]
+            "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
+            "technical_lifetime_in_years": 20,
+            "co2_footprint_in_kg_per_m2": 92.4,  # kgCO2eq/m2, source: [24]
+            "subsidy_in_percent_of_investment_costs": 0.3,
+        },
+        ComponentType.BATTERY: {
+            "investment_costs_in_euro_per_kw": 546,  # Source: [21]
+            "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
+            "technical_lifetime_in_years": 10,  # Source: [19]
+            "co2_footprint_in_kg_per_kw": 130.7,  # Source: [19]
+            "subsidy_in_percent_of_investment_costs": 0,
+        },
+        ComponentType.PV: {
+            "investment_costs_in_euro_per_kw": 794.41,  # Source: [19]
+            "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [25]
+            "technical_lifetime_in_years": 25,  # Source: [19]
+            "co2_footprint_in_kg_per_kw": 330.51,  # Source: [19]
+            "subsidy_in_percent_of_investment_costs": 0,
+        },
+        ComponentType.ELECTRICITY_METER: {
+            "investment_costs_in_euro": 100,  # EUR, Source: [26]
+            "maintenance_costs_as_percentage_of_investment_per_year": 0.3,  # Source: [26]
+            "technical_lifetime_in_years": 20,  # no idea, assumption
+            "co2_footprint_in_kg_per_kw": 0,  # no idea, assume 0
+            "subsidy_in_percent_of_investment_costs": 0,
+        },
+        ComponentType.GAS_METER: {
+            "investment_costs_in_euro": 200,  # EUR, Source: [27]
+            "maintenance_costs_as_percentage_of_investment_per_year": 0.15,  # assume around 30€ per year
+            "technical_lifetime_in_years": 20,  # no idea, assumption
+            "co2_footprint_in_kg_per_kw": 0,  # no idea, assume 0
+            "subsidy_in_percent_of_investment_costs": 0,
+        },
+        ComponentType.ENERGY_MANAGEMENT_SYSTEM: {
+            "investment_costs_in_euro": 3500,  # EUR/kW, Source: [28]
+            "maintenance_costs_as_percentage_of_investment_per_year": 0.028,  # Source: [28]
+            "technical_lifetime_in_years": 20,  # no idea, assumption
+            "co2_footprint_in_kg_per_kw": 0,
+            "subsidy_in_percent_of_investment_costs": 0.15,  # Source: [29]
+        },
+    }
+}
+
+
+@dataclass_json
+@dataclass
+class EmissionFactorsAndCostsForDevicesConfig:
+    """Emission factors and costs for devices config class."""
+
+    investment_costs_in_euro_per_kw: float  # EUR/kW
+    maintenance_costs_as_percentage_of_investment_per_year: float  # [-]
+    technical_lifetime_in_years: int  # years
+    co2_footprint_in_kg_per_kw: float  # kgCO₂/kW
+
+    @classmethod
+    def get_values_for_year(cls, year: int, device: ComponentType) -> "EmissionFactorsAndCostsForDevicesConfig":
+        """Get emission factors and costs for a given year and device."""
+
+        if year not in capex_techno_economic_parameters:
+            raise KeyError(f"No data available for year {year}.")
+
+        if device not in capex_techno_economic_parameters[year]:
+            raise KeyError(f"No data available for device '{device}' in year {year}.")
+
+        return cls(**capex_techno_economic_parameters[year][device])
 
 
 @dataclass_json
@@ -397,12 +545,8 @@ class AdvElectrolyzerConfig:
     max_power_percent = 100  # [%]
     min_hydrogen_production_rate_hour = 300  # [Nl/h]
     max_hydrogen_production_rate_hour = 5000  # [Nl/h]   #500
-    min_hydrogen_production_rate = (
-        min_hydrogen_production_rate_hour / 3600
-    )  # [Nl/s]
-    max_hydrogen_production_rate = (
-        max_hydrogen_production_rate_hour / 3600
-    )  # [Nl/s]
+    min_hydrogen_production_rate = min_hydrogen_production_rate_hour / 3600  # [Nl/s]
+    max_hydrogen_production_rate = max_hydrogen_production_rate_hour / 3600  # [Nl/s]
     pressure_hydrogen_output = 30  # [bar]     --> max pressure mode at 35 bar
 
     """
@@ -490,9 +634,7 @@ class PhysicsConfig:
     specific_volume_in_m3_per_kg: float = field(init=False)
     lower_heating_value_in_joule_per_kg: float = field(init=False)
     higher_heating_value_in_joule_per_kg: float = field(init=False)
-    specific_heat_capacity_in_watthour_per_kg_per_kelvin: float = field(
-        init=False
-    )
+    specific_heat_capacity_in_watthour_per_kg_per_kelvin: float = field(init=False)
 
     def __post_init__(self):
         """Post init function.
@@ -501,22 +643,16 @@ class PhysicsConfig:
         """
 
         self.specific_volume_in_m3_per_kg = 1 / self.density_in_kg_per_m3
-        self.lower_heating_value_in_joule_per_kg = (
-            self.lower_heating_value_in_joule_per_m3
-            / self.density_in_kg_per_m3
-        )
+        self.lower_heating_value_in_joule_per_kg = self.lower_heating_value_in_joule_per_m3 / self.density_in_kg_per_m3
         self.higher_heating_value_in_joule_per_kg = (
-            self.higher_heating_value_in_joule_per_m3
-            / self.density_in_kg_per_m3
+            self.higher_heating_value_in_joule_per_m3 / self.density_in_kg_per_m3
         )
         self.specific_heat_capacity_in_watthour_per_kg_per_kelvin = (
             self.specific_heat_capacity_in_joule_per_kg_per_kelvin / 3600
         )
 
     @classmethod
-    def get_properties_for_energy_carrier(
-        cls, energy_carrier: LoadTypes
-    ) -> "PhysicsConfig":
+    def get_properties_for_energy_carrier(cls, energy_carrier: LoadTypes) -> "PhysicsConfig":
         """Get physical and chemical properties from specific energy carrier."""
         if energy_carrier == LoadTypes.GAS:
             # natural gas (here we use the values of methane because this is what natural gas for residential heating mostly consists of)
@@ -570,9 +706,7 @@ class PhysicsConfig:
                 specific_heat_capacity_in_joule_per_kg_per_kelvin=4180,
             )
 
-        raise ValueError(
-            f"Energy carrier {energy_carrier} not implemented in PhysicsConfig yet."
-        )
+        raise ValueError(f"Energy carrier {energy_carrier} not implemented in PhysicsConfig yet.")
 
     # Schmidt 2020: Wasserstofftechnik  S.170ff
     # fuel value H2:    10.782 MJ/m³    (S.172)

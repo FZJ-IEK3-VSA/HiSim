@@ -61,6 +61,7 @@ class KpiEntry(JSONWizard):
     value: Optional[float]
     description: Optional[str] = None
     tag: Optional[KpiTagEnumClass] = None
+    name_of_source_component: Optional[str] = None
 
 
 class KpiHelperClass:

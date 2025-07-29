@@ -175,5 +175,6 @@ class ComponentWrapper:
             if cinput.is_mandatory and cinput.source_output is None:
                 raise SystemError(
                     f"The ComponentInput {cinput.field_name} (cp: {cinput.component_name}, "
-                    f"unit: {cinput.unit}) is not connected to any ComponentOutput."
+                    f"unit: {cinput.unit}) is not connected to any ComponentOutput. "
+                    "You could run debug mode (logging_level=4) to check all inputs, outputs and connections."
                 )  #

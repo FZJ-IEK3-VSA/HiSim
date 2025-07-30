@@ -408,7 +408,7 @@ class Component:
         raise NotImplementedError(f"{self.component_name} has no opex costs implemented.")
 
     @staticmethod
-    def get_cost_capex(config: ConfigBase, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
+    def get_cost_capex(config: ConfigBase, simulation_parameters: SimulationParameters, component_type: Optional[lt.ComponentType], kpi_tag: Optional[KpiTagEnumClass]) -> CapexCostDataClass:
         # pylint: disable=unused-argument
         """Calculates lifetime, total capital expenditure cost and total co2 footprint of production of device."""
         raise NotImplementedError(f"{config.get_main_classname()} has no capex costs implemented.")
@@ -424,17 +424,18 @@ class Component:
 
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        investment = self.get_cost_capex(
-            config=self.config, simulation_parameters=self.my_simulation_parameters
-        ).capex_investment_cost_in_euro
+        # seconds_per_year = 365 * 24 * 60 * 60
+        # investment = self.get_cost_capex(
+        #     config=self.config, simulation_parameters=self.my_simulation_parameters
+        # ).capex_investment_cost_in_euro
 
-        # add maintenance costs per simulated period
-        maintenance_cost_per_simulated_period_in_euro: float = (
-            self.config.maintenance_cost_as_percentage_of_investment
-            * investment
-            * (self.my_simulation_parameters.duration.total_seconds() / seconds_per_year)
-        )
+        # # add maintenance costs per simulated period
+        # maintenance_cost_per_simulated_period_in_euro: float = (
+        #     self.config.maintenance_cost_as_percentage_of_investment
+        #     * investment
+        #     * (self.my_simulation_parameters.duration.total_seconds() / seconds_per_year)
+        # )
+        maintenance_cost_per_simulated_period_in_euro = self.get_cost_capex(config=self.config, simulation_parameters=self.my_simulation_parameters).maintenance_cost_per_simulated_period_in_euro  
         return maintenance_cost_per_simulated_period_in_euro
 
     def i_save_state(self) -> None:
@@ -495,6 +496,8 @@ class CapexCostDataClass:
     lifetime_in_years: float
     capex_investment_cost_for_simulated_period_in_euro: float
     device_co2_footprint_for_simulated_period_in_kg: float
+    maintenance_costs_in_euro: float = 0.0
+    maintenance_cost_per_simulated_period_in_euro: float = 0.0
     kpi_tag: Optional[KpiTagEnumClass] = None
 
     @classmethod
@@ -506,6 +509,8 @@ class CapexCostDataClass:
             lifetime_in_years=1,
             capex_investment_cost_for_simulated_period_in_euro=0,
             device_co2_footprint_for_simulated_period_in_kg=0,
+            maintenance_costs_in_euro=0,
+            maintenance_cost_per_simulated_period_in_euro=0,
             kpi_tag=None,
         )
 

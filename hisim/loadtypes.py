@@ -128,6 +128,9 @@ class Units(str, enum.Enum):
     # Distance
     METER = "m"
 
+    # Area
+    SQUARE_METER = "m2"
+
     # Energy
     WATT_HOUR = "Wh"
     KWH = "kWh"
@@ -136,7 +139,7 @@ class Units(str, enum.Enum):
 
     # Volume
     LITER = "L"
-    CUBICMETERS = "m^3"
+    CUBICMETERS = "m3"
 
     # Volume per time
     LITER_PER_TIMESTEP = "Liter per timestep"

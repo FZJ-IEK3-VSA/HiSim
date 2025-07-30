@@ -5,7 +5,7 @@
 from typing import Any, Optional
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
-from hisim.loadtypes import LoadTypes, ComponentType
+from hisim.loadtypes import LoadTypes, ComponentType, Units
 from hisim.component import ConfigBase
 
 """
@@ -252,117 +252,126 @@ Sources for capex techno-economic parameters:
         [30]: https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
         [31]: https://www.finanztip.de/photovoltaik/pv-anlage-finanzieren/
         [31]: https://www.kfw.de/inlandsfoerderung/Unternehmen/Energie-Umwelt/F%C3%B6rderprodukte/Erneuerbare-Energien-Standard-(270)/
+        [32]: hisim/components/simple_water_storage.py -> function get_scaled_hot_water_storage
 """
 capex_techno_economic_parameters = {
     2024: {
-        ComponentType.HEAT_PUMP: {
-            "investment_costs_in_euro_per_kw": 1600,  # Source: [22]
-            "maintenance_costs_as_percentage_of_investment_per_year": 0.015,  # Source: [20]
-            "technical_lifetime_in_years": 18,  # Source: [20]
-            "co2_footprint_in_kg_per_kw": 165.84,  # Source: [19]
-            "subsidy_as_percentage_of_investment_costs": 0.3,  # Source: [20]
+        Units.KILOWATT: {
+            ComponentType.HEAT_PUMP: {
+                "investment_costs_in_euro_per_kw": 1600,  # Source: [22]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.015,  # Source: [20]
+                "technical_lifetime_in_years": 18,  # Source: [20]
+                "co2_footprint_in_kg_per_kw": 165.84,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0.3,  # Source: [20]
+            },
+            ComponentType.GAS_HEATER: {
+                "investment_costs_in_euro_per_kw": 0.36 * 1600,  # 36% of heat pump costs, Source: [20]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
+                "technical_lifetime_in_years": 18,  # Source: [20]
+                "co2_footprint_in_kg_per_kw": 49.47,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
+            ComponentType.OIL_HEATER: {
+                "investment_costs_in_euro_per_kw": 0.75 * 0.36 * 1600,  # 75% of gas heater costs, Source: [19]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.03,  # Source: [23]
+                "technical_lifetime_in_years": 18,  # assume same as gas heater based on [19]
+                "co2_footprint_in_kg_per_kw": 19.4,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
+            ComponentType.PELLET_HEATER: {
+                "investment_costs_in_euro_per_kw": 0.96 * 1600,  # 96% of heat pump costs, Source: [20]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.047,  # Source: [20]
+                "technical_lifetime_in_years": 18,  # Source: [20]
+                "co2_footprint_in_kg_per_kw": 49.47,  # assume similar to gas heater based on [19]
+                "subsidy_as_percentage_of_investment_costs": 0.3,
+            },
+            ComponentType.WOOD_CHIP_HEATER: {
+                "investment_costs_in_euro_per_kw": 0.96 * 1600,  # 96% of heat pump costs, Source: [20]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.047,  # Source: [20]
+                "technical_lifetime_in_years": 18,  # Source: [20]
+                "co2_footprint_in_kg_per_kw": 49.47,  # assume similar to gas heater based on [19]
+                "subsidy_as_percentage_of_investment_costs": 0.3,
+            },
+            ComponentType.DISTRICT_HEATING: {
+                "investment_costs_in_euro_per_kw": 0.636 * 1600,  # 63.6% of heat pump costs, Source: [20]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.026,  # Source: [20]
+                "technical_lifetime_in_years": 20,  # Source: [20]
+                "co2_footprint_in_kg_per_kw": 35.09,  # Source: [19], biomass district heating
+                "subsidy_as_percentage_of_investment_costs": 0.3,
+            },
+            ComponentType.ELECTRIC_HEATER: {
+                "investment_costs_in_euro_per_kw": 0.196 * 1600,  # 19.6% of heat pump costs, Source: [20]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
+                "technical_lifetime_in_years": 22,  # Source: [20]
+                "co2_footprint_in_kg_per_kw": 1.21,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0,  # Source: [20]
+            },
+            ComponentType.HYDROGEN_HEATER: {
+                "investment_costs_in_euro_per_kw": 0.36 * 1600,  # 36% of heat pump costs, Source: [20], same as gas heater
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
+                "technical_lifetime_in_years": 18,  # Source: [20]
+                "co2_footprint_in_kg_per_kw": 49.47,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0.3,  # green hydrogen, source: [20]
+            },
+            ComponentType.BATTERY: {
+                "investment_costs_in_euro_per_kw": 546,  # Source: [21]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
+                "technical_lifetime_in_years": 10,  # Source: [19]
+                "co2_footprint_in_kg_per_kw": 130.7,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0,  # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
+                # that's why we assume 0% subsidy here, source: [31,32]
+            },
+            ComponentType.PV: {
+                "investment_costs_in_euro_per_kw": 794.41,  # Source: [19]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [25]
+                "technical_lifetime_in_years": 25,  # Source: [19]
+                "co2_footprint_in_kg_per_kw": 330.51,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0,  # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
+                # that's why we assume 0% subsidy here, source: [31,32]
+            },
         },
-        ComponentType.GAS_HEATER: {
-            "investment_costs_in_euro_per_kw": 0.36 * 1600,  # 36% of heat pump costs, Source: [20]
-            "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
-            "technical_lifetime_in_years": 18,  # Source: [20]
-            "co2_footprint_in_kg_per_kw": 49.47,  # Source: [19]
-            "subsidy_as_percentage_of_investment_costs": 0,
+        Units.LITER: {
+            ComponentType.THERMAL_ENERGY_STORAGE: {
+                "investment_costs_in_euro_per_liter": 14.51,  # EUR/liter, Source: [19]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
+                "technical_lifetime_in_years": 20,  # Source: [20]
+                "co2_footprint_in_kg_per_liter": 29.79 / 50,  # Source: [19] ([19] is in kg/kW, and we assume 1kW approx. = 50l, based on [32])
+                "subsidy_as_percentage_of_investment_costs": 0.15,
+            },
         },
-        ComponentType.OIL_HEATER: {
-            "investment_costs_in_euro_per_kw": 0.75 * 0.36 * 1600,  # 75% of gas heater costs, Source: [19]
-            "maintenance_costs_as_percentage_of_investment_per_year": 0.03,  # Source: [23]
-            "technical_lifetime_in_years": 18,  # assume same as gas heater based on [19]
-            "co2_footprint_in_kg_per_kw": 19.4,  # Source: [19]
-            "subsidy_as_percentage_of_investment_costs": 0,
+        Units.SQUARE_METER: {
+            ComponentType.SOLAR_THERMAL_SYSTEM: {
+                "investment_costs_in_euro_per_m2": 797,  # Source: [30]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
+                "technical_lifetime_in_years": 20,
+                "co2_footprint_in_kg_per_m2": 92.4,  # kgCO2eq/m2, source: [24]
+                "subsidy_as_percentage_of_investment_costs": 0.3,  # Source: [30]
+            },
         },
-        ComponentType.PELLET_HEATER: {
-            "investment_costs_in_euro_per_kw": 0.96 * 1600,  # 96% of heat pump costs, Source: [20]
-            "maintenance_costs_as_percentage_of_investment_per_year": 0.047,  # Source: [20]
-            "technical_lifetime_in_years": 18,  # Source: [20]
-            "co2_footprint_in_kg_per_kw": 49.47,  # assume similar to gas heater based on [19]
-            "subsidy_as_percentage_of_investment_costs": 0.3,
-        },
-        ComponentType.WOOD_CHIP_HEATER: {
-            "investment_costs_in_euro_per_kw": 0.96 * 1600,  # 96% of heat pump costs, Source: [20]
-            "maintenance_costs_as_percentage_of_investment_per_year": 0.047,  # Source: [20]
-            "technical_lifetime_in_years": 18,  # Source: [20]
-            "co2_footprint_in_kg_per_kw": 49.47,  # assume similar to gas heater based on [19]
-            "subsidy_as_percentage_of_investment_costs": 0.3,
-        },
-        ComponentType.DISTRICT_HEATING: {
-            "investment_costs_in_euro_per_kw": 0.636 * 1600,  # 63.6% of heat pump costs, Source: [20]
-            "maintenance_costs_as_percentage_of_investment_per_year": 0.026,  # Source: [20]
-            "technical_lifetime_in_years": 20,  # Source: [20]
-            "co2_footprint_in_kg_per_kw": 35.09,  # Source: [19], biomass district heating
-            "subsidy_as_percentage_of_investment_costs": 0.3,
-        },
-        ComponentType.ELECTRIC_HEATER: {
-            "investment_costs_in_euro_per_kw": 0.196 * 1600,  # 19.6% of heat pump costs, Source: [20]
-            "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
-            "technical_lifetime_in_years": 22,  # Source: [20]
-            "co2_footprint_in_kg_per_kw": 1.21,  # Source: [19]
-            "subsidy_as_percentage_of_investment_costs": 0,  # Source: [20]
-        },
-        ComponentType.HYDROGEN_HEATER: {
-            "investment_costs_in_euro_per_kw": 0.36 * 1600,  # 36% of heat pump costs, Source: [20], same as gas heater
-            "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
-            "technical_lifetime_in_years": 18,  # Source: [20]
-            "co2_footprint_in_kg_per_kw": 49.47,  # Source: [19]
-            "subsidy_as_percentage_of_investment_costs": 0.3,  # green hydrogen, source: [20]
-        },
-        ComponentType.THERMAL_ENERGY_STORAGE: {
-            "investment_costs_in_euro_per_liter": 14.51,  # EUR/liter, Source: [19]
-            "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
-            "technical_lifetime_in_years": 20,  # Source: [20]
-            "co2_footprint_in_kg_per_kw": 29.79,  # Source: [19]
-            "subsidy_as_percentage_of_investment_costs": 0.15,
-        },
-        ComponentType.SOLAR_THERMAL_SYSTEM: {
-            "investment_costs_in_euro_per_m2": 797,  # Source: [30]
-            "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
-            "technical_lifetime_in_years": 20,
-            "co2_footprint_in_kg_per_m2": 92.4,  # kgCO2eq/m2, source: [24]
-            "subsidy_as_percentage_of_investment_costs": 0.3,  # Source: [30]
-        },
-        ComponentType.BATTERY: {
-            "investment_costs_in_euro_per_kw": 546,  # Source: [21]
-            "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
-            "technical_lifetime_in_years": 10,  # Source: [19]
-            "co2_footprint_in_kg_per_kw": 130.7,  # Source: [19]
-            "subsidy_as_percentage_of_investment_costs": 0,  # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
-            # that's why we assume 0% subsidy here, source: [31,32]
-        },
-        ComponentType.PV: {
-            "investment_costs_in_euro_per_kw": 794.41,  # Source: [19]
-            "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [25]
-            "technical_lifetime_in_years": 25,  # Source: [19]
-            "co2_footprint_in_kg_per_kw": 330.51,  # Source: [19]
-            "subsidy_as_percentage_of_investment_costs": 0,  # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
-            # that's why we assume 0% subsidy here, source: [31,32]
-        },
-        ComponentType.ELECTRICITY_METER: {
-            "investment_costs_in_euro": 100,  # EUR, Source: [26]
-            "maintenance_costs_as_percentage_of_investment_per_year": 0.3,  # Source: [26]
-            "technical_lifetime_in_years": 20,  # no idea, assumption
-            "co2_footprint_in_kg_per_kw": 0,  # no idea, assume 0
-            "subsidy_as_percentage_of_investment_costs": 0,
-        },
-        ComponentType.GAS_METER: {
-            "investment_costs_in_euro": 200,  # EUR, Source: [27]
-            "maintenance_costs_as_percentage_of_investment_per_year": 0.15,  # assume around 30€ per year
-            "technical_lifetime_in_years": 20,  # no idea, assumption
-            "co2_footprint_in_kg_per_kw": 0,  # no idea, assume 0
-            "subsidy_as_percentage_of_investment_costs": 0,
-        },
-        ComponentType.ENERGY_MANAGEMENT_SYSTEM: {
-            "investment_costs_in_euro": 3500,  # EUR/kW, Source: [28]
-            "maintenance_costs_as_percentage_of_investment_per_year": 0.028,  # Source: [28]
-            "technical_lifetime_in_years": 20,  # no idea, assumption
-            "co2_footprint_in_kg_per_kw": 0,  # no idea, assume 0
-            "subsidy_as_percentage_of_investment_costs": 0.15,  # Source: [29]
-        },
-    }
+        Units.ANY: {
+            ComponentType.ELECTRICITY_METER: {
+                "investment_costs_in_euro": 100,  # EUR, Source: [26]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.3,  # Source: [26]
+                "technical_lifetime_in_years": 20,  # no idea, assumption
+                "co2_footprint_in_kg": 0,  # no idea, assume 0
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
+            ComponentType.GAS_METER: {
+                "investment_costs_in_euro": 200,  # EUR, Source: [27]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.15,  # assume around 30€ per year
+                "technical_lifetime_in_years": 20,  # no idea, assumption
+                "co2_footprint_in_kg": 0,  # no idea, assume 0
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
+            ComponentType.ENERGY_MANAGEMENT_SYSTEM: {
+                "investment_costs_in_euro": 3500,  # EUR/kW, Source: [28]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.028,  # Source: [28]
+                "technical_lifetime_in_years": 20,  # no idea, assumption
+                "co2_footprint_in_kg": 0,  # no idea, assume 0
+                "subsidy_as_percentage_of_investment_costs": 0.15,  # Source: [29]
+            },
+        }
+    }   
 }
 
 
@@ -378,20 +387,25 @@ class EmissionFactorsAndCostsForDevicesConfig:
     maintenance_costs_as_percentage_of_investment_per_year: Optional[float] = None
     technical_lifetime_in_years: Optional[float] = None
     co2_footprint_in_kg_per_kw: Optional[float] = None
+    co2_footprint_in_kg_per_liter: Optional[float] = None
     co2_footprint_in_kg_per_m2: Optional[float] = None
+    co2_footprint_in_kg: Optional[float] = None
     subsidy_as_percentage_of_investment_costs: Optional[float] = None
 
     @classmethod
-    def get_values_for_year(cls, year: int, device: ComponentType) -> "EmissionFactorsAndCostsForDevicesConfig":
+    def get_values_for_year(cls, year: int, unit: Units, device: ComponentType) -> "EmissionFactorsAndCostsForDevicesConfig":
         """Get emission factors and costs for a given year and device."""
 
         if year not in capex_techno_economic_parameters:
             raise KeyError(f"No data available for year {year}.")
 
-        if device not in capex_techno_economic_parameters[year]:
-            raise KeyError(f"No data available for device '{device}' in year {year}.")
+        if unit not in capex_techno_economic_parameters[year]:
+            raise KeyError(f"No data available for unit '{unit}' in year {year}.")
 
-        return cls(**capex_techno_economic_parameters[year][device])
+        if device not in capex_techno_economic_parameters[year][unit]:
+            raise KeyError(f"No data available for device '{device}' in unit '{unit}' for year {year}.")
+
+        return cls(**capex_techno_economic_parameters[year][unit][device])
 
 
 @dataclass_json

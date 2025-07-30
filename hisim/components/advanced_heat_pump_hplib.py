@@ -29,7 +29,7 @@ from hisim.component import (
 )
 from hisim.components import weather, simple_water_storage, heat_distribution_system
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
-from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules
+from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules, ComponentType
 from hisim.units import (
     Quantity,
     Watt,
@@ -39,7 +39,7 @@ from hisim.units import (
     Euro,
     Years,
 )
-from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, EmissionFactorsAndCostsForDevicesConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 
@@ -609,6 +609,8 @@ class HeatPumpHplib(Component):
         device_co2_footprint_per_simulated_period = (config.co2_footprint.value / config.lifetime.value) * (
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
+        emissions_and_cost_factors_for_devices = EmissionFactorsAndCostsForDevicesConfig.get_values_for_year(year=simulation_parameters.year, device=ComponentType.HEATPUMP)
+        print(emissions_and_cost_factors_for_devices)
         capex_cost_data_class = CapexCostDataClass(
             capex_investment_cost_in_euro=config.cost.value,
             device_co2_footprint_in_kg=config.co2_footprint.value,

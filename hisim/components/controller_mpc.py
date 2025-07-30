@@ -151,7 +151,7 @@ class MpcControllerConfig(ConfigBase):
             pv_forecast_24h_1min=[],
             price_purchase_forecast_24h_1min=[],
             price_injection_forecast_24h_1min=[],
-            optimal_investment_costs_in_euro=[],
+            optimal_cost=[],
             revenues=[],
             air_conditioning_electricity=[],
             cost_optimal_temperature_set_point=[],

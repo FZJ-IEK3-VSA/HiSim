@@ -70,7 +70,7 @@ class HeatDistributionConfig(cp.ConfigBase):
 
     building_name: str
     name: str
-    heating_system: HeatDistributionSystemType
+    heating_system: Union[HeatDistributionSystemType, int]
     water_mass_flow_rate_in_kg_per_second: float
     absolute_conditioned_floor_area_in_m2: float
     position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
@@ -88,7 +88,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         cls,
         water_mass_flow_rate_in_kg_per_second: float,
         absolute_conditioned_floor_area_in_m2: float,
-        heating_system: HeatDistributionSystemType,
+        heating_system: Union[HeatDistributionSystemType, int],
         name: str = "HeatDistributionSystem",
         building_name: str = "BUI1",
         position_hot_water_storage_in_system: Union[
@@ -610,7 +610,7 @@ class HeatDistribution(cp.Component):
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         # consider costs of changing heat distribution system to floor heating
-        if config.heating_system == HeatDistributionSystemType.FLOORHEATING:
+        if config.heating_system in [HeatDistributionSystemType.FLOORHEATING, 2]:
             component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM
             kpi_tag = (
                 KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM

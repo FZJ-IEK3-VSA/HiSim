@@ -4,7 +4,7 @@
 # Owned
 import importlib
 from dataclasses import dataclass
-from typing import List, Any, Tuple, Union
+from typing import List, Any, Tuple, Union, Optional
 from enum import IntEnum
 import numpy as np
 import pandas as pd
@@ -26,6 +26,7 @@ from hisim.components import configuration
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -73,13 +74,13 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     # it should be checked how much energy the storage lost during the simulated period (see guidelines below, p.2, accepted loss in kWh/days)
     # https://www.bdh-industrie.de/fileadmin/user_upload/ISH2019/Infoblaetter/Infoblatt_Nr_74_Energetische_Bewertung_Warmwasserspeicher.pdf
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    co2_footprint: Optional[float]
     #: cost for investment in Euro
-    cost: float
+    cost: Optional[float]
     #: lifetime in years
-    lifetime: float
+    lifetime: Optional[float]
     # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    maintenance_cost_as_percentage_of_investment: Optional[float]
 
     @classmethod
     def get_default_simplehotwaterstorage_config(
@@ -98,10 +99,11 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
             position_hot_water_storage_in_system=position_hot_water_storage_in_system,
-            co2_footprint=100,  # Todo: check value
-            cost=volume_heating_water_storage_in_liter * 14.51,  # value from emission_factros_and_costs_devices.csv
-            lifetime=25,  # value from emission_factors_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.0,  # Todo: set correct value
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
         )
         return config
 
@@ -174,10 +176,11 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
             position_hot_water_storage_in_system=position_hot_water_storage_in_system,
-            co2_footprint=100,  # Todo: check value
-            cost=volume_heating_water_storage_in_liter * 14.51,  # value from emission_factros_and_costs_devices.csv
-            lifetime=100,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.0,  # Todo: set correct value
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
         )
         return config
 
@@ -243,10 +246,11 @@ class SimpleDHWStorageConfig(cp.ConfigBase):
             name="DHWStorage",
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=0.36,
-            co2_footprint=100,  # Todo: check value
-            cost=volume_heating_water_storage_in_liter * 14.51,  # value from emission_factros_and_costs_devices.csv
-            lifetime=25,  # value from emission_factors_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.0,  # Todo: set correct value
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
         )
         return config
 
@@ -268,10 +272,11 @@ class SimpleDHWStorageConfig(cp.ConfigBase):
             name=name,
             volume_heating_water_storage_in_liter=volume,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=0.36,
-            co2_footprint=100,  # Todo: check value
-            cost=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
-            lifetime=25,  # value from emission_factors_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.0,  # Todo: set correct value
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
         )
         return config
 
@@ -1216,22 +1221,20 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         config: SimpleHotWaterStorageConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
+        kpi_tag = KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING
+        component_type = lt.ComponentType.THERMAL_ENERGY_STORAGE
+        unit = lt.Units.LITER
+        size_of_energy_system = config.volume_heating_water_storage_in_liter
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
         )
 
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING,
-        )
         return capex_cost_data_class
 
     def get_cost_opex(
@@ -2096,22 +2099,20 @@ class SimpleDHWStorage(SimpleWaterStorage):
         config: SimpleDHWStorageConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
+        kpi_tag = KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER
+        component_type = lt.ComponentType.THERMAL_ENERGY_STORAGE
+        unit = lt.Units.LITER
+        size_of_energy_system = config.volume_heating_water_storage_in_liter
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
         )
 
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING,
-        )
         return capex_cost_data_class
 
     def get_cost_opex(

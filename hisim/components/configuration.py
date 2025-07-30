@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 from hisim.loadtypes import LoadTypes, ComponentType, Units
 from hisim.component import ConfigBase
+from hisim import log
 
 """
 Sources for opex techno-economic parameters:
@@ -401,7 +402,9 @@ class EmissionFactorsAndCostsForDevicesConfig:
         """Get emission factors and costs for a given year and device."""
 
         if year not in capex_techno_economic_parameters:
-            raise KeyError(f"No data available for year {year}.")
+            log.warning(f"No specfic capex and emission data available for year {year}. "
+                            f"Use data from year {next(iter(capex_techno_economic_parameters))}")
+            year = next(iter(capex_techno_economic_parameters))
 
         if unit not in capex_techno_economic_parameters[year]:
             raise KeyError(f"No data available for unit '{unit}' in year {year}.")

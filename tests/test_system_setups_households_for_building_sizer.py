@@ -34,41 +34,31 @@ def test_household_gas():
     log.information(os.getcwd())
 
 
-@pytest.mark.system_setups
-@utils.measure_execution_time
-def test_household_oil():
-    """Single day."""
-    path = "../system_setups/household_oil_building_sizer.py"
+# @pytest.mark.system_setups
+# @utils.measure_execution_time
+# def test_household_oil():
+#     """Single day."""
+#     path = "../system_setups/household_oil_building_sizer.py"
 
-    hisim_main.main(path, my_simulation_parameters)
-    log.information(os.getcwd())
-
-
-@pytest.mark.system_setups
-@utils.measure_execution_time
-def test_household_heatpump():
-    """Single day."""
-    path = "../system_setups/household_heatpump_building_sizer.py"
-
-    hisim_main.main(path, my_simulation_parameters)
-    log.information(os.getcwd())
-
-
-@pytest.mark.system_setups
-@utils.measure_execution_time
-def test_household_pellet_heating():
-    """Single day."""
-    path = "../system_setups/household_pellets_building_sizer.py"
-
-    hisim_main.main(path, my_simulation_parameters)
-    log.information(os.getcwd())
+#     hisim_main.main(path, my_simulation_parameters)
+#     log.information(os.getcwd())
 
 
 # @pytest.mark.system_setups
 # @utils.measure_execution_time
-# def test_household_district_heating():
+# def test_household_heatpump():
 #     """Single day."""
-#     path = "../system_setups/household_district_heating_building_sizer.py"
+#     path = "../system_setups/household_heatpump_building_sizer.py"
+
+#     hisim_main.main(path, my_simulation_parameters)
+#     log.information(os.getcwd())
+
+
+# @pytest.mark.system_setups
+# @utils.measure_execution_time
+# def test_household_pellet_heating():
+#     """Single day."""
+#     path = "../system_setups/household_pellets_building_sizer.py"
 
 #     hisim_main.main(path, my_simulation_parameters)
 #     log.information(os.getcwd())
@@ -76,19 +66,9 @@ def test_household_pellet_heating():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_wood_chips_heating():
+def test_household_district_heating():
     """Single day."""
-    path = "../system_setups/household_wood_chips_building_sizer.py"
-
-    hisim_main.main(path, my_simulation_parameters)
-    log.information(os.getcwd())
-
-
-@pytest.mark.system_setups
-@utils.measure_execution_time
-def test_household_hydrogen_heating():
-    """Single day."""
-    path = "../system_setups/household_hydrogen_boiler_building_sizer.py"
+    path = "../system_setups/household_district_heating_building_sizer.py"
 
     hisim_main.main(path, my_simulation_parameters)
     log.information(os.getcwd())
@@ -96,12 +76,32 @@ def test_household_hydrogen_heating():
 
 # @pytest.mark.system_setups
 # @utils.measure_execution_time
-# def test_household_electric_heating():
+# def test_household_wood_chips_heating():
 #     """Single day."""
-#     path = "../system_setups/household_electric_heating_building_sizer.py"
+#     path = "../system_setups/household_wood_chips_building_sizer.py"
 
 #     hisim_main.main(path, my_simulation_parameters)
 #     log.information(os.getcwd())
+
+
+# @pytest.mark.system_setups
+# @utils.measure_execution_time
+# def test_household_hydrogen_heating():
+#     """Single day."""
+#     path = "../system_setups/household_hydrogen_boiler_building_sizer.py"
+
+#     hisim_main.main(path, my_simulation_parameters)
+#     log.information(os.getcwd())
+
+
+@pytest.mark.system_setups
+@utils.measure_execution_time
+def test_household_electric_heating():
+    """Single day."""
+    path = "../system_setups/household_electric_heating_building_sizer.py"
+
+    hisim_main.main(path, my_simulation_parameters)
+    log.information(os.getcwd())
 
 
 # @pytest.mark.system_setups

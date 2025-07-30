@@ -11,7 +11,7 @@ import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
-from hisim.loadtypes import LoadTypes, Units, InandOutputType
+from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.component import (
     Component,
     ComponentConnection,
@@ -38,6 +38,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiEntry,
     KpiTagEnumClass,
 )
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
 __authors__ = "Katharina Rieck, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -66,13 +67,13 @@ class ElectricHeatingConfig(ConfigBase):
     # Efficiency for electric to thermal power conversion
     efficiency: float
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    co2_footprint: Optional[float]
     #: cost for investment in Euro
-    cost: float
+    cost: Optional[float]
     #: lifetime in years
-    lifetime: float
+    lifetime: Optional[float]
     # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    maintenance_cost_as_percentage_of_investment: Optional[float]
     with_domestic_hot_water_preparation: bool
 
     @classmethod
@@ -87,10 +88,11 @@ class ElectricHeatingConfig(ConfigBase):
             name="ElectricHeating",
             connected_load_w=40000,
             efficiency=1.0,  # 100% efficiency
-            co2_footprint=0,  # no idea
-            cost=4000,  # https://www.gebaeudeforum.de/fileadmin/gebaeudeforum/Downloads/Factsheet/Factsheet_65ProzentEE_12_Stromdirektheizung.pdf
-            lifetime=22,  # https://www.gebaeudeforum.de/fileadmin/gebaeudeforum/Downloads/Factsheet/Factsheet_65ProzentEE_12_Stromdirektheizung.pdf
-            maintenance_cost_as_percentage_of_investment=0.01,
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
         )
         return config
@@ -663,23 +665,21 @@ class ElectricHeating(Component):
         simulation_parameters: SimulationParameters,
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
+        component_type = ComponentType.ELECTRIC_HEATER
+        kpi_tag = (
+            KpiTagEnumClass.ELECTRIC_HEATING
         )
-        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
+        unit = Units.KILOWATT
+        size_of_energy_system = config.connected_load_w * 1e-3
 
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
         )
-
-        capex_cost_data_class.kpi_tag = KpiTagEnumClass.ELECTRIC_HEATING
 
         return capex_cost_data_class
 

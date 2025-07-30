@@ -74,13 +74,13 @@ class HeatDistributionConfig(cp.ConfigBase):
     absolute_conditioned_floor_area_in_m2: float
     position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
     #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: float
+    device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
-    investment_costs_in_euro: float
+    investment_costs_in_euro: Optional[float]
     #: lifetime in years
-    lifetime_in_years: float
+    lifetime_in_years: Optional[float]
     # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: float
+    maintenance_costs_in_euro_per_year: Optional[float]
 
     @classmethod
     def get_default_heatdistributionsystem_config(
@@ -100,10 +100,10 @@ class HeatDistributionConfig(cp.ConfigBase):
             water_mass_flow_rate_in_kg_per_second=water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
             position_hot_water_storage_in_system=position_hot_water_storage_in_system,
-            device_co2_footprint_in_kg=0,  # Todo: check value
-            investment_costs_in_euro=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in system_setups instead
-            lifetime_in_years=50,  # SOURCE: VDI2067-1
-            maintenance_costs_in_euro_per_year=0.01 * 8000,  # SOURCE: VDI2067-1
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
         )
         return config
 

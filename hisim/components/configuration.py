@@ -254,6 +254,7 @@ Sources for capex techno-economic parameters:
         [31]: https://www.finanztip.de/photovoltaik/pv-anlage-finanzieren/
         [31]: https://www.kfw.de/inlandsfoerderung/Unternehmen/Energie-Umwelt/F%C3%B6rderprodukte/Erneuerbare-Energien-Standard-(270)/
         [32]: hisim/components/simple_water_storage.py -> function get_scaled_hot_water_storage
+        [33]: https://renewa.de/sanierung/gewerke/heizung/fussbodenheizung/foerderung
 """
 capex_techno_economic_parameters = {
     2024: {
@@ -376,6 +377,13 @@ capex_techno_economic_parameters = {
                 "technical_lifetime_in_years": 20,  # no idea, assumption
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0.15,  # Source: [29]
+            },
+            ComponentType.HEAT_DISTRIBUTION_SYSTEM: {
+                "investment_costs_in_euro": 6500,  # Source: [20] (Factsheet_65ProzentEE_01_Luft-Wasser-Waermepumpe.pdf)
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [23]
+                "technical_lifetime_in_years": 50,  # Source: [23]
+                "co2_footprint_in_kg": 0,  # no idea, assume 0
+                "subsidy_as_percentage_of_investment_costs": 0.15,  # Source: [33]
             },
         },
     }

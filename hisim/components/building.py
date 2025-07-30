@@ -1293,7 +1293,7 @@ class Building(cp.Component):
     ) -> cp.OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
         if (
-                self.config.maintenance_cost_as_percentage_of_investment in [None, 0.0] or
+                self.config.maintenance_costs_in_euro_per_year in [None, 0.0] or
                 self.config.investment_costs_in_euro in [None, 0.0]
         ):
             opex_cost_data_class = cp.OpexCostDataClass.get_default_opex_cost_data_class()

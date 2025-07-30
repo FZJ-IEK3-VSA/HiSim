@@ -250,6 +250,8 @@ Sources for capex techno-economic parameters:
         [28]: https://www.gasag.de/magazin/energiesparen/energiemanagementsystem-privathaushalt/
         [29]: https://www.adac.de/rund-ums-haus/energie/spartipps/energiemanagementsystem-zuhause/
         [30]: https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
+        [31]: https://www.finanztip.de/photovoltaik/pv-anlage-finanzieren/
+        [31]: https://www.kfw.de/inlandsfoerderung/Unternehmen/Energie-Umwelt/F%C3%B6rderprodukte/Erneuerbare-Energien-Standard-(270)/
 """
 capex_techno_economic_parameters = {
     2024: {
@@ -328,14 +330,16 @@ capex_techno_economic_parameters = {
             "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
             "technical_lifetime_in_years": 10,  # Source: [19]
             "co2_footprint_in_kg_per_kw": 130.7,  # Source: [19]
-            "subsidy_as_percentage_of_investment_costs": 0,
+            "subsidy_as_percentage_of_investment_costs": 0,  # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
+            # that's why we assume 0% subsidy here, source: [31,32]
         },
         ComponentType.PV: {
             "investment_costs_in_euro_per_kw": 794.41,  # Source: [19]
             "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [25]
             "technical_lifetime_in_years": 25,  # Source: [19]
             "co2_footprint_in_kg_per_kw": 330.51,  # Source: [19]
-            "subsidy_as_percentage_of_investment_costs": 0,
+            "subsidy_as_percentage_of_investment_costs": 0,  # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
+            # that's why we assume 0% subsidy here, source: [31,32]
         },
         ComponentType.ELECTRICITY_METER: {
             "investment_costs_in_euro": 100,  # EUR, Source: [26]
@@ -355,7 +359,7 @@ capex_techno_economic_parameters = {
             "investment_costs_in_euro": 3500,  # EUR/kW, Source: [28]
             "maintenance_costs_as_percentage_of_investment_per_year": 0.028,  # Source: [28]
             "technical_lifetime_in_years": 20,  # no idea, assumption
-            "co2_footprint_in_kg_per_kw": 0,
+            "co2_footprint_in_kg_per_kw": 0,  # no idea, assume 0
             "subsidy_as_percentage_of_investment_costs": 0.15,  # Source: [29]
         },
     }

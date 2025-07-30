@@ -838,7 +838,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
-            heating_load_of_building_in_watt=heating_load_of_building_in_watt,
+            heating_load_of_building_in_watt=round(heating_load_of_building_in_watt, 2),
         )
 
 

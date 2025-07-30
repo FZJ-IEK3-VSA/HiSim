@@ -99,6 +99,7 @@ def setup_function(
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        heating_system=my_hds_controller_information.hds_controller_config.heating_system,
     )
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(

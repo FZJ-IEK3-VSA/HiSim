@@ -315,19 +315,21 @@ capex_techno_economic_parameters = {
                 "co2_footprint_in_kg_per_kw": 49.47,  # Source: [19]
                 "subsidy_as_percentage_of_investment_costs": 0.3,  # green hydrogen, source: [20]
             },
-            ComponentType.BATTERY: {
-                "investment_costs_in_euro_per_kw": 546,  # Source: [21]
-                "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
-                "technical_lifetime_in_years": 10,  # Source: [19]
-                "co2_footprint_in_kg_per_kw": 130.7,  # Source: [19]
-                "subsidy_as_percentage_of_investment_costs": 0,  # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
-                # that's why we assume 0% subsidy here, source: [31,32]
-            },
             ComponentType.PV: {
                 "investment_costs_in_euro_per_kw": 794.41,  # Source: [19]
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [25]
                 "technical_lifetime_in_years": 25,  # Source: [19]
                 "co2_footprint_in_kg_per_kw": 330.51,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0,  # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
+                # that's why we assume 0% subsidy here, source: [31,32]
+            },
+        },
+        Units.KWH: {
+            ComponentType.BATTERY: {
+                "investment_costs_in_euro_per_kwh": 546,  # Source: [21]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
+                "technical_lifetime_in_years": 10,  # Source: [19]
+                "co2_footprint_in_kg_per_kwh": 130.7,  # Source: [19]
                 "subsidy_as_percentage_of_investment_costs": 0,  # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
                 # that's why we assume 0% subsidy here, source: [31,32]
             },
@@ -387,10 +389,12 @@ class EmissionFactorsAndCostsForDevicesConfig:
     maintenance_costs_as_percentage_of_investment_per_year: float
     subsidy_as_percentage_of_investment_costs: float
     investment_costs_in_euro_per_kw: Optional[float] = None
+    investment_costs_in_euro_per_kwh: Optional[float] = None
     investment_costs_in_euro_per_liter: Optional[float] = None
     investment_costs_in_euro_per_m2: Optional[float] = None
     investment_costs_in_euro: Optional[float] = None
     co2_footprint_in_kg_per_kw: Optional[float] = None
+    co2_footprint_in_kg_per_kwh: Optional[float] = None
     co2_footprint_in_kg_per_liter: Optional[float] = None
     co2_footprint_in_kg_per_m2: Optional[float] = None
     co2_footprint_in_kg: Optional[float] = None

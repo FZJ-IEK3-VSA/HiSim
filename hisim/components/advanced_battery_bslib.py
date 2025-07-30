@@ -3,7 +3,7 @@
 # clean
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from dataclasses import dataclass
 from bslib import bslib as bsl
 from dataclasses_json import dataclass_json
@@ -26,6 +26,7 @@ from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -64,15 +65,15 @@ class BatteryConfig(ConfigBase):
     #: amount of energy discharged from the battery
     discharge_in_kwh: float
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    co2_footprint: Optional[float]
     #: cost for investment in Euro
-    cost: float
-    #: lifetime of battery in years
-    lifetime: float
+    cost: Optional[float]
+    #: lifetime in years
+    lifetime: Optional[float]
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: Optional[float]
     #: lifetime of battery in full cycles
     lifetime_in_cycles: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
 
     @classmethod
     def get_default_config(cls, building_name: str = "BUI1", name: str = "Battery") -> "BatteryConfig":
@@ -90,13 +91,12 @@ class BatteryConfig(ConfigBase):
             system_id="SG1",
             charge_in_kwh=0,
             discharge_in_kwh=0,
-            co2_footprint=custom_battery_capacity_generic_in_kilowatt_hour
-            * 130.7,  # value from emission_factros_and_costs_devices.csv
-            cost=custom_battery_capacity_generic_in_kilowatt_hour
-            * 535.81,  # value from emission_factros_and_costs_devices.csv
-            lifetime=10,  # estimated value , source: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
             lifetime_in_cycles=5e3,  # estimated value , source: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
-            maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: https://solarenergie.de/stromspeicher/preise
+            maintenance_cost_as_percentage_of_investment=None,
         )
         return config
 
@@ -119,13 +119,12 @@ class BatteryConfig(ConfigBase):
             system_id="SG1",
             charge_in_kwh=0,
             discharge_in_kwh=0,
-            co2_footprint=custom_battery_capacity_generic_in_kilowatt_hour
-            * 130.7,  # value from emission_factros_and_costs_devices.csv
-            cost=custom_battery_capacity_generic_in_kilowatt_hour
-            * 535.81,  # value from emission_factros_and_costs_devices.csv
-            lifetime=10,  # todo set correct values
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
             lifetime_in_cycles=5e3,  # todo set correct values
-            maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: https://solarenergie.de/stromspeicher/preise
+            maintenance_cost_as_percentage_of_investment=None,
         )
 
         return config
@@ -323,26 +322,40 @@ class Battery(Component):
         config: BatteryConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
+
+        component_type = ComponentType.BATTERY
+        kpi_tag = (
+            KpiTagEnumClass.BATTERY
+        )
+        unit = Units.KWH
+        size_of_energy_system = config.custom_battery_capacity_generic_in_kilowatt_hour * 1e-3
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
+        )
+
         # Todo: think about livetime in cycles not in years
         (virtual_number_of_full_charge_cycles, lifetime_in_cycles) = Battery.get_battery_aging_information(
             config=config
         )
         if lifetime_in_cycles > 0:
-            capex_per_simulated_period = (config.cost / lifetime_in_cycles) * (virtual_number_of_full_charge_cycles)
-            device_co2_footprint_per_simulated_period = (config.co2_footprint / lifetime_in_cycles) * (
+            capex_per_simulated_period = (capex_cost_data_class.capex_investment_cost_in_euro / lifetime_in_cycles) * (virtual_number_of_full_charge_cycles)
+            device_co2_footprint_per_simulated_period = (capex_cost_data_class.device_co2_footprint_in_kg / lifetime_in_cycles) * (
                 virtual_number_of_full_charge_cycles
             )
+
         else:
             log.warning("Capex calculation not valid. Check lifetime_in_cycles in Configuration of Battery.")
 
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.BATTERY,
-        )
+        # overwrite capex and emission based on battery cycles
+        capex_cost_data_class.capex_investment_cost_for_simulated_period_in_euro = capex_per_simulated_period
+        capex_cost_data_class.device_co2_footprint_for_simulated_period_in_kg = device_co2_footprint_per_simulated_period
+
         return capex_cost_data_class
 
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:

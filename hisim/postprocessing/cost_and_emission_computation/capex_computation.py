@@ -47,6 +47,13 @@ class CapexComputationHelperFunctions:
                     emissions_and_cost_factors_for_devices.investment_costs_in_euro_per_kw
                 )
                 co2_footprint_in_kg_per_size_unit = emissions_and_cost_factors_for_devices.co2_footprint_in_kg_per_kw
+            elif unit == Units.KWH:
+                # Size of energy system is in kWh
+                # Use the values in kWh
+                investment_costs_in_euro_per_size_unit = (
+                    emissions_and_cost_factors_for_devices.investment_costs_in_euro_per_kwh
+                )
+                co2_footprint_in_kg_per_size_unit = emissions_and_cost_factors_for_devices.co2_footprint_in_kg_per_kwh
 
             elif unit == Units.LITER:
                 # Size of energy system is in l

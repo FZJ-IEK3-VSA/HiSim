@@ -31,7 +31,7 @@ def test_advanced_battery_bslib():
     lifetime = 10
     lifetime_in_cycles = 5e3
     maintenance_costs_in_euro_per_year = 0.02 * cost
-    subsidy_as_percentage_of_investment_costs=0.0
+    subsidy_as_percentage_of_investment_costs = 0.0
 
     my_advanced_battery_config = advanced_battery_bslib.BatteryConfig(
         building_name="BUI1",

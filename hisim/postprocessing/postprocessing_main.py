@@ -23,7 +23,7 @@ from hisim.postprocessing import reportgenerator
 from hisim.postprocessing.chart_singleday import ChartSingleDay
 from hisim.postprocessing.kpi_computation.compute_kpis import KpiGenerator
 from hisim.postprocessing.generate_csv_for_housing_database import generate_csv_for_database
-from hisim.postprocessing.opex_and_capex_cost_calculation import (
+from repositories.HiSim.hisim.postprocessing.cost_and_emission_computation.opex_and_capex_cost_calculation import (
     opex_calculation,
     capex_calculation,
 )

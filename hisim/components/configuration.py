@@ -320,7 +320,8 @@ capex_techno_economic_parameters = {
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [25]
                 "technical_lifetime_in_years": 25,  # Source: [19]
                 "co2_footprint_in_kg_per_kw": 330.51,  # Source: [19]
-                "subsidy_as_percentage_of_investment_costs": 0,  # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
+                "subsidy_as_percentage_of_investment_costs": 0,
+                # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
                 # that's why we assume 0% subsidy here, source: [31,32]
             },
         },
@@ -330,7 +331,8 @@ capex_techno_economic_parameters = {
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
                 "technical_lifetime_in_years": 10,  # Source: [19]
                 "co2_footprint_in_kg_per_kwh": 130.7,  # Source: [19]
-                "subsidy_as_percentage_of_investment_costs": 0,  # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
+                "subsidy_as_percentage_of_investment_costs": 0,
+                # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
                 # that's why we assume 0% subsidy here, source: [31,32]
             },
         },

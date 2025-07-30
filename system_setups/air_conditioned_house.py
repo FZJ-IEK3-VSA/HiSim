@@ -119,6 +119,7 @@ def setup_function(
         device_co2_footprint_in_kg=None,
         investment_costs_in_euro=None,
         maintenance_costs_in_euro_per_year=None,
+        subsidy_as_percentage_of_investment_costs=None,
         lifetime_in_years=None,
     )
     my_building = building.Building(
@@ -167,6 +168,7 @@ def setup_function(
         device_co2_footprint_in_kg=pv_co2_footprint,
         investment_costs_in_euro=pv_cost,
         maintenance_costs_in_euro_per_year=0.01 * pv_cost,
+        subsidy_as_percentage_of_investment_costs=0.0,
         lifetime_in_years=25,
         share_of_maximum_pv_potential=1.0,
         predictive=False,

@@ -244,6 +244,7 @@ def setup_function(
         device_co2_footprint_in_kg=my_config.co2_footprint_pv_district,
         investment_costs_in_euro=my_config.investment_costs_in_euro_pv_district,
         maintenance_costs_in_euro_per_year=my_config.maintenance_cost_as_percentage_of_investment_pv_district * my_config.investment_costs_in_euro_pv_district,
+        subsidy_as_percentage_of_investment_costs=0.0,
         lifetime_in_years=my_config.lifetime_in_years_in_years_pv_district,
         predictive=my_config.predictive_pv_district,
         predictive_control=my_config.predictive_control_pv_district,
@@ -265,7 +266,8 @@ def setup_function(
         device_co2_footprint_in_kg=None,
         investment_costs_in_euro=None,
         lifetime_in_years=None,
-        maintenance_costs_in_euro_per_year=None
+        maintenance_costs_in_euro_per_year=None,
+        subsidy_as_percentage_of_investment_costs=None,
     )
 
     my_electricity_meter_district = electricity_meter.ElectricityMeter(

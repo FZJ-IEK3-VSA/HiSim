@@ -162,6 +162,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
             device_co2_footprint_in_kg=1,
             investment_costs_in_euro=1,
             maintenance_costs_in_euro_per_year=0.01,
+            subsidy_as_percentage_of_investment_costs=0.0,
             lifetime_in_years=1,
         ),
         my_simulation_parameters=my_simulation_parameters,

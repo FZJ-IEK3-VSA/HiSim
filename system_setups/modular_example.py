@@ -208,6 +208,7 @@ def setup_function(
         device_co2_footprint_in_kg=1,
         investment_costs_in_euro=1,
         maintenance_costs_in_euro_per_year=0.01,
+        subsidy_as_percentage_of_investment_costs=0.0,
         lifetime_in_years=1,
     )
     my_building_information = building.BuildingInformation(config=my_building_config)

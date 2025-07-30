@@ -408,7 +408,7 @@ class Component:
         raise NotImplementedError(f"{self.component_name} has no opex costs implemented.")
 
     @staticmethod
-    def get_cost_capex(config: ConfigBase, simulation_parameters: SimulationParameters, component_type: Optional[lt.ComponentType], kpi_tag: Optional[KpiTagEnumClass]) -> CapexCostDataClass:
+    def get_cost_capex(config: ConfigBase, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         # pylint: disable=unused-argument
         """Calculates lifetime, total capital expenditure cost and total co2 footprint of production of device."""
         raise NotImplementedError(f"{config.get_main_classname()} has no capex costs implemented.")

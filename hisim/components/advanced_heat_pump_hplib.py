@@ -39,7 +39,8 @@ from hisim.units import (
     Euro,
     Years,
 )
-from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, EmissionFactorsAndCostsForDevicesConfig
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 
@@ -602,23 +603,21 @@ class HeatPumpHplib(Component):
     @staticmethod
     def get_cost_capex(config: HeatPumpHplibConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost.value / config.lifetime.value) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
+        # set variables
+        component_type = ComponentType.HEAT_PUMP
+        kpi_tag = KpiTagEnumClass.HEATPUMP_SPACE_HEATING
+        unit = Units.KILOWATT
+        size_of_energy_system = config.set_thermal_output_power_in_watt.value * 1e-3
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
         )
-        device_co2_footprint_per_simulated_period = (config.co2_footprint.value / config.lifetime.value) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        emissions_and_cost_factors_for_devices = EmissionFactorsAndCostsForDevicesConfig.get_values_for_year(year=simulation_parameters.year, device=ComponentType.HEATPUMP)
-        print(emissions_and_cost_factors_for_devices)
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost.value,
-            device_co2_footprint_in_kg=config.co2_footprint.value,
-            lifetime_in_years=config.lifetime.value,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING
-        )
+
         return capex_cost_data_class
 
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:

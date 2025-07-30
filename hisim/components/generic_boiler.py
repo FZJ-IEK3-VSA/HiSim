@@ -187,6 +187,7 @@ class GenericBoilerConfig(ConfigBase):
             investment_costs_in_euro=None,
             lifetime_in_years=None,
             maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -213,6 +214,7 @@ class GenericBoilerConfig(ConfigBase):
             investment_costs_in_euro=None,
             lifetime_in_years=None,
             maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -243,6 +245,7 @@ class GenericBoilerConfig(ConfigBase):
             investment_costs_in_euro=None,
             lifetime_in_years=None,
             maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -279,6 +282,7 @@ class GenericBoilerConfig(ConfigBase):
             investment_costs_in_euro=None,
             lifetime_in_years=None,
             maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -315,6 +319,7 @@ class GenericBoilerConfig(ConfigBase):
             investment_costs_in_euro=None,
             lifetime_in_years=None,
             maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -345,6 +350,7 @@ class GenericBoilerConfig(ConfigBase):
             investment_costs_in_euro=None,
             lifetime_in_years=None,
             maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             consumption_in_kilowatt_hour=0,
         )
         return config

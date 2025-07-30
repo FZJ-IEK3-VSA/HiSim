@@ -38,6 +38,7 @@ from hisim.units import (
     Kilogram,
     Euro,
     Years,
+    Any
 )
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
@@ -75,13 +76,13 @@ class HeatPumpHplibConfig(ConfigBase):
     minimum_running_time_in_seconds: Optional[Quantity[int, Seconds]]
     minimum_idle_time_in_seconds: Optional[Quantity[int, Seconds]]
     #: CO2 footprint of investment in kg
-    co2_footprint: Quantity[float, Kilogram]
+    co2_footprint: Optional[Quantity[float, Kilogram]]
     #: cost for investment in Euro
-    cost: Quantity[float, Euro]
+    cost: Optional[Quantity[float, Euro]]
     #: lifetime in years
-    lifetime: Quantity[float, Years]
+    lifetime: Optional[Quantity[float, Years]]
     # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    maintenance_cost_as_percentage_of_investment: Optional[Quantity[float, Any]]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(
@@ -106,12 +107,11 @@ class HeatPumpHplibConfig(ConfigBase):
             cycling_mode=True,
             minimum_running_time_in_seconds=Quantity(3600, Seconds),
             minimum_idle_time_in_seconds=Quantity(3600, Seconds),
-            # value from emission_factors_and_costs_devices.csv
-            co2_footprint=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 165.84, Kilogram),
-            # value from emission_factors_and_costs_devices.csv
-            cost=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 1513.74, Euro),
-            lifetime=Quantity(10, Years),  # value from emission_factors_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
         )
 
     @classmethod
@@ -137,13 +137,11 @@ class HeatPumpHplibConfig(ConfigBase):
             cycling_mode=True,
             minimum_running_time_in_seconds=Quantity(3600, Seconds),
             minimum_idle_time_in_seconds=Quantity(3600, Seconds),
-            # value from emission_factros_and_costs_devices.csv
-            co2_footprint=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 165.84, Kilogram),
-            # value from emission_factros_and_costs_devices.csv
-            cost=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 1513.74, Euro),
-            # value from emission_factros_and_costs_devices.csv
-            lifetime=Quantity(10, Years),
-            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
         )
 
 

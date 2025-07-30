@@ -120,7 +120,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     #: lifetime in years
     lifetime: Optional[Quantity[float, Years]]
     # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: Optional[Quantity[float, Euro]]
+    maintenance_cost_as_percentage_of_investment: Optional[Quantity[float, Any]]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(

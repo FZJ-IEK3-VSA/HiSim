@@ -21,6 +21,7 @@ from hisim.components import controller_l1_heatpump
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
 __authors__ = "edited Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -54,13 +55,13 @@ class HeatPumpConfig(cp.ConfigBase):
     #: category of the heat pump: either heat pump or heating rod
     device_category: lt.HeatingSystems
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    co2_footprint: Optional[float]
     #: cost for investment in Euro
-    cost: float
+    cost: Optional[float]
     #: lifetime in years
-    lifetime: float
+    lifetime: Optional[float]
     # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    maintenance_cost_as_percentage_of_investment: Optional[float]
 
     @classmethod
     def get_main_classname(cls):
@@ -82,10 +83,11 @@ class HeatPumpConfig(cp.ConfigBase):
             power_th=power_th,
             water_vs_heating=lt.InandOutputType.HEATING,
             device_category=lt.HeatingSystems.HEAT_PUMP,
-            co2_footprint=power_th * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
-            cost=power_th * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
-            lifetime=10,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
         )
         return config
 
@@ -104,10 +106,11 @@ class HeatPumpConfig(cp.ConfigBase):
             power_th=power_th,
             water_vs_heating=lt.InandOutputType.WATER_HEATING,
             device_category=lt.HeatingSystems.HEAT_PUMP,
-            co2_footprint=power_th * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
-            cost=power_th * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
-            lifetime=10,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
         )
         return config
 
@@ -124,10 +127,11 @@ class HeatPumpConfig(cp.ConfigBase):
             power_th=power_th,
             water_vs_heating=lt.InandOutputType.HEATING,
             device_category=lt.HeatingSystems.ELECTRIC_HEATING,
-            co2_footprint=power_th * 1e-3 * 1.21,  # value from emission_factros_and_costs_devices.csv
-            cost=4635,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
         )
         return config
 
@@ -146,10 +150,11 @@ class HeatPumpConfig(cp.ConfigBase):
             power_th=power_th,
             water_vs_heating=lt.InandOutputType.WATER_HEATING,
             device_category=lt.HeatingSystems.ELECTRIC_HEATING,
-            co2_footprint=power_th * 1e-3 * 1.21,  # value from emission_factros_and_costs_devices.csv
-            cost=4635,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
         )
         return config
 
@@ -174,10 +179,11 @@ class HeatPumpConfig(cp.ConfigBase):
             power_th=power_th_in_watt,
             water_vs_heating=lt.InandOutputType.WATER_HEATING,
             device_category=lt.HeatingSystems.HEAT_PUMP,
-            co2_footprint=power_th_in_watt * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
-            cost=power_th_in_watt * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
-            lifetime=10,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
         )
         return config
 
@@ -406,22 +412,33 @@ class ModularHeatPump(cp.Component):
     @staticmethod
     def get_cost_capex(config: HeatPumpConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
+        # set variables
+        if config.device_category == lt.HeatingSystems.HEAT_PUMP:
+            component_type = lt.ComponentType.HEAT_PUMP
+        elif config.device_category == lt.HeatingSystems.ELECTRIC_HEATING:
+            component_type = lt.ComponentType.ELECTRIC_HEATER
+        else:
+            raise ValueError(f"Invalid device category for heat_pump_modular: {config.device_category}.")
+
+        if config.water_vs_heating ==lt.InandOutputType.WATER_HEATING:
+            kpi_tag = KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER
+        elif config.water_vs_heating == lt.InandOutputType.HEATING:
+            kpi_tag = KpiTagEnumClass.HEATPUMP_SPACE_HEATING
+        else:
+            raise ValueError(f"Invalid InandOutputType for heat_pump_modular: {config.water_vs_heating}.")
+
+        unit = lt.Units.KILOWATT
+        size_of_energy_system = config.power_th * 1e-3
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
         )
 
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER
-        )
         return capex_cost_data_class
 
     def get_cost_opex(

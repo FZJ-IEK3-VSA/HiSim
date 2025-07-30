@@ -55,6 +55,7 @@ def simulate_simple_water_storage(
         investment_costs_in_euro=volume_heating_water_storage_in_liter * 14.51,
         lifetime_in_years=100,
         maintenance_costs_in_euro_per_year=0.0,
+        subsidy_as_percentage_of_investment_costs=0.0,
     )
     my_simple_heat_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

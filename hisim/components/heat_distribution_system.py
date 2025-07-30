@@ -632,6 +632,7 @@ class HeatDistribution(cp.Component):
         else:
             capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
 
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
         return capex_cost_data_class
 
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:

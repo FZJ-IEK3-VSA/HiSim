@@ -360,6 +360,7 @@ class Battery(Component):
         capex_cost_data_class.capex_investment_cost_for_simulated_period_in_euro = capex_per_simulated_period
         capex_cost_data_class.device_co2_footprint_for_simulated_period_in_kg = device_co2_footprint_per_simulated_period
 
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
         return capex_cost_data_class
 
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:

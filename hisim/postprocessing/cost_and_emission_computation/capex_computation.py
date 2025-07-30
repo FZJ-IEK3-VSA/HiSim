@@ -110,7 +110,7 @@ class CapexComputationHelperFunctions:
                 device_co2_footprint_in_kg = config.device_co2_footprint_in_kg
                 technical_lifetime_in_years = config.lifetime_in_years
                 maintenance_costs_in_euro = (
-                    config.maintenance_costs_in_euro_per_year * capex_investment_cost_in_euro
+                    config.maintenance_costs_in_euro_per_year
                 )
                 subsidy_as_percentage_of_investment_costs = config.subsidy_as_percentage_of_investment_costs
 
@@ -120,7 +120,7 @@ class CapexComputationHelperFunctions:
                 device_co2_footprint_in_kg = config.device_co2_footprint_in_kg.value
                 technical_lifetime_in_years = config.lifetime_in_years.value
                 maintenance_costs_in_euro = (
-                    config.maintenance_costs_in_euro_per_year.value * capex_investment_cost_in_euro
+                    config.maintenance_costs_in_euro_per_year.value
                 )
                 subsidy_as_percentage_of_investment_costs = config.subsidy_as_percentage_of_investment_costs.value
             else:
@@ -138,14 +138,14 @@ class CapexComputationHelperFunctions:
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
         capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=capex_investment_cost_in_euro,
-            device_co2_footprint_in_kg=device_co2_footprint_in_kg,
-            lifetime_in_years=technical_lifetime_in_years,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            maintenance_costs_in_euro=maintenance_costs_in_euro,
-            maintenance_cost_per_simulated_period_in_euro=maintenance_costs_per_simulated_period_in_euro,
-            subsidy_as_percentage_of_investment_costs=subsidy_as_percentage_of_investment_costs,
+            capex_investment_cost_in_euro=round(capex_investment_cost_in_euro, 2),
+            device_co2_footprint_in_kg=round(device_co2_footprint_in_kg, 2),
+            lifetime_in_years=round(technical_lifetime_in_years, 2),
+            capex_investment_cost_for_simulated_period_in_euro=round(capex_per_simulated_period, 2),
+            device_co2_footprint_for_simulated_period_in_kg=round(device_co2_footprint_per_simulated_period, 2),
+            maintenance_costs_in_euro=round(maintenance_costs_in_euro, 2),
+            maintenance_cost_per_simulated_period_in_euro=round(maintenance_costs_per_simulated_period_in_euro, 2),
+            subsidy_as_percentage_of_investment_costs=round(subsidy_as_percentage_of_investment_costs, 2),
             kpi_tag=kpi_tag,
         )
         return capex_cost_data_class

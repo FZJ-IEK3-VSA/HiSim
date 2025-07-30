@@ -346,6 +346,7 @@ class SolarThermalSystem(Component):
             config=config,
             kpi_tag=kpi_tag,
         )
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
 
         return capex_cost_data_class
 

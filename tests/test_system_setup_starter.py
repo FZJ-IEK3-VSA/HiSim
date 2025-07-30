@@ -31,7 +31,7 @@ def test_system_setup_starter():
             "building_type": "some_building",
             "hp_config": {
                 "set_thermal_output_power_in_watt": {"value": 99999, "unit": "W"},
-                "cost": {"value": 1000000, "unit": "Euro"},
+                # "cost": {"value": 1000000, "unit": "Euro"},
             },
         },
     }

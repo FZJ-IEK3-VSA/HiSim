@@ -1,6 +1,6 @@
 """Module for capex and emission computation."""
 from typing import Optional, Any
-from hisim.component import CapexCostDataClass, ConfigBase
+from hisim.component import CapexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForDevicesConfig
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters

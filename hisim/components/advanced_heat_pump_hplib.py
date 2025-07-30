@@ -38,7 +38,7 @@ from hisim.units import (
     Kilogram,
     Euro,
     Years,
-    Any
+    Unitless
 )
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
@@ -82,7 +82,7 @@ class HeatPumpHplibConfig(ConfigBase):
     #: lifetime in years
     lifetime: Optional[Quantity[float, Years]]
     # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: Optional[Quantity[float, Any]]
+    maintenance_cost_as_percentage_of_investment: Optional[Quantity[float, Unitless]]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(

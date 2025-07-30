@@ -48,6 +48,7 @@ from hisim.units import (
     Euro,
     Years,
     KilogramPerSecond,
+    Unitless
 )
 from hisim.components.configuration import (
     PhysicsConfig,
@@ -120,7 +121,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     #: lifetime in years
     lifetime: Optional[Quantity[float, Years]]
     # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: Optional[Quantity[float, Any]]
+    maintenance_cost_as_percentage_of_investment: Optional[Quantity[float, Unitless]]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(

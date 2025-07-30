@@ -380,17 +380,17 @@ capex_techno_economic_parameters = {
 class EmissionFactorsAndCostsForDevicesConfig:
     """Emission factors and costs for devices config class."""
 
+    technical_lifetime_in_years: float
+    maintenance_costs_as_percentage_of_investment_per_year: float
+    subsidy_as_percentage_of_investment_costs: float
     investment_costs_in_euro_per_kw: Optional[float] = None
     investment_costs_in_euro_per_liter: Optional[float] = None
     investment_costs_in_euro_per_m2: Optional[float] = None
     investment_costs_in_euro: Optional[float] = None
-    maintenance_costs_as_percentage_of_investment_per_year: Optional[float] = None
-    technical_lifetime_in_years: Optional[float] = None
     co2_footprint_in_kg_per_kw: Optional[float] = None
     co2_footprint_in_kg_per_liter: Optional[float] = None
     co2_footprint_in_kg_per_m2: Optional[float] = None
     co2_footprint_in_kg: Optional[float] = None
-    subsidy_as_percentage_of_investment_costs: Optional[float] = None
 
     @classmethod
     def get_values_for_year(cls, year: int, unit: Units, device: ComponentType) -> "EmissionFactorsAndCostsForDevicesConfig":
@@ -405,7 +405,9 @@ class EmissionFactorsAndCostsForDevicesConfig:
         if device not in capex_techno_economic_parameters[year][unit]:
             raise KeyError(f"No data available for device '{device}' in unit '{unit}' for year {year}.")
 
-        return cls(**capex_techno_economic_parameters[year][unit][device])
+        capex_techno_economic_values = cls(**capex_techno_economic_parameters[year][unit][device])
+
+        return capex_techno_economic_values
 
 
 @dataclass_json

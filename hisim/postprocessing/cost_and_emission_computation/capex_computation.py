@@ -1,4 +1,5 @@
 """Module for capex and emission computation."""
+from typing import Optional, Any
 from hisim.component import CapexCostDataClass, ConfigBase
 from hisim.components.configuration import EmissionFactorsAndCostsForDevicesConfig
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
@@ -15,8 +16,8 @@ class CapexComputationHelperFunctions:
         component_type: ComponentType,
         unit: Units,
         size_of_energy_system: float,
-        config: any, # TODO: add config base type and add capex values to config base?
-        kpi_tag=None,
+        config: Any,  # these are component configs
+        kpi_tag: Optional[KpiTagEnumClass] = None,
     ) -> CapexCostDataClass:
         """Compute capex costs and emissions for a given component type."""
         # if config capex values are None, use values from EmissionFactorsAndCostsForDevicesConfig
@@ -55,6 +56,10 @@ class CapexComputationHelperFunctions:
             else:
                 raise ValueError(f"Unit {unit} of the energy system is not valid or not implemented yet.")
 
+            # make assertion for safety
+            assert investment_costs_in_euro_per_size_unit is not None
+            assert co2_footprint_in_kg_per_size_unit is not None
+
             # these values are independent of size unit of the energy system
             maintenance_costs_as_percentage_of_investment_per_year = (
                 emissions_and_cost_factors_for_devices.maintenance_costs_as_percentage_of_investment_per_year
@@ -63,7 +68,7 @@ class CapexComputationHelperFunctions:
             subsidy_as_percentage_of_investment_costs = (
                 emissions_and_cost_factors_for_devices.subsidy_as_percentage_of_investment_costs
             )
-            
+
             # Calculate total values
             capex_investment_cost_in_euro = investment_costs_in_euro_per_size_unit * size_of_energy_system- (
                 investment_costs_in_euro_per_size_unit

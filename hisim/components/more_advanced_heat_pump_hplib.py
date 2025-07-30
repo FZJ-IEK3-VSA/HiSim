@@ -122,6 +122,8 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     lifetime_in_years: Optional[Quantity[float, Years]]
     # maintenance cost in euro per year
     maintenance_costs_in_euro_per_year: Optional[Quantity[float, Euro]]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[Quantity[float, Unitless]]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(
@@ -162,6 +164,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             investment_costs_in_euro=None,
             lifetime_in_years=None,
             maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
         )
 
     @classmethod
@@ -202,6 +205,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             investment_costs_in_euro=None,
             lifetime_in_years=None,
             maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
         )
 
 

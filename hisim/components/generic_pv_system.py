@@ -112,6 +112,8 @@ class PVSystemConfig(ConfigBase):
     lifetime_in_years: Optional[float]
     # maintenance cost in euro per year
     maintenance_costs_in_euro_per_year: Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
     predictive: bool
     predictive_control: bool
     prediction_horizon: Optional[int]
@@ -153,6 +155,7 @@ class PVSystemConfig(ConfigBase):
             investment_costs_in_euro=None,
             lifetime_in_years=None,
             maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             predictive=False,
             predictive_control=False,
             prediction_horizon=None,
@@ -463,6 +466,7 @@ class PVSystem(cp.Component):
             device_co2_footprint_in_kg=None,
             investment_costs_in_euro=None,
             maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             lifetime_in_years=None,
             prediction_horizon=None,
             predictive=False,

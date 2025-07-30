@@ -72,6 +72,8 @@ class BatteryConfig(ConfigBase):
     lifetime_in_years: Optional[float]
     # maintenance cost in euro per year
     maintenance_costs_in_euro_per_year: Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
     #: lifetime of battery in full cycles
     lifetime_in_cycles: float
 
@@ -97,6 +99,7 @@ class BatteryConfig(ConfigBase):
             lifetime_in_years=None,
             lifetime_in_cycles=5e3,  # estimated value , source: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
             maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None
         )
         return config
 
@@ -125,6 +128,7 @@ class BatteryConfig(ConfigBase):
             lifetime_in_years=None,
             lifetime_in_cycles=5e3,  # todo set correct values
             maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None
         )
 
         return config

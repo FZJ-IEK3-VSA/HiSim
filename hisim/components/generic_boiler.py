@@ -103,6 +103,8 @@ class GenericBoilerConfig(ConfigBase):
     lifetime_in_years: Optional[float]
     # maintenance cost in euro per year
     maintenance_costs_in_euro_per_year: Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
     #: energy consumption in kWh
     consumption_in_kilowatt_hour: float
 
@@ -128,6 +130,7 @@ class GenericBoilerConfig(ConfigBase):
             investment_costs_in_euro=None,
             lifetime_in_years=None,
             maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             consumption_in_kilowatt_hour=0,
         )
         return config

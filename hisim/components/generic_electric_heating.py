@@ -74,6 +74,8 @@ class ElectricHeatingConfig(ConfigBase):
     lifetime_in_years: Optional[float]
     # maintenance cost in euro per year
     maintenance_costs_in_euro_per_year: Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
     with_domestic_hot_water_preparation: bool
 
     @classmethod
@@ -93,6 +95,7 @@ class ElectricHeatingConfig(ConfigBase):
             investment_costs_in_euro=None,
             lifetime_in_years=None,
             maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
         )
         return config

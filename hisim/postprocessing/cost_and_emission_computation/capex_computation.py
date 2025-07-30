@@ -22,15 +22,17 @@ class CapexComputationHelperFunctions:
         kpi_tag: Optional[KpiTagEnumClass] = None,
     ) -> CapexCostDataClass:
         """Compute capex costs and emissions for a given component type."""
-        # if config capex values are None, use values from EmissionFactorsAndCostsForDevicesConfig
-        if all(
-            v is None
-            for v in [
+        list_of_config_capex_variables = [
                 config.investment_costs_in_euro,
                 config.device_co2_footprint_in_kg,
                 config.lifetime_in_years,
                 config.maintenance_costs_in_euro_per_year,
+                config.subsidy_as_percentage_of_investment_costs
             ]
+        # if config capex values are None, use values from EmissionFactorsAndCostsForDevicesConfig
+        if all(
+            v is None
+            for v in list_of_config_capex_variables
         ):
             log.information(
                 f"Using EmissionFactorsAndCostsForDevicesConfig for {config.get_main_classname()} capex calculation."
@@ -92,11 +94,7 @@ class CapexComputationHelperFunctions:
             )
 
             # Calculate total values
-            capex_investment_cost_in_euro = investment_costs_in_euro_per_size_unit * size_of_energy_system - (
-                investment_costs_in_euro_per_size_unit
-                * size_of_energy_system
-                * subsidy_as_percentage_of_investment_costs
-            )
+            capex_investment_cost_in_euro = investment_costs_in_euro_per_size_unit * size_of_energy_system
             device_co2_footprint_in_kg = co2_footprint_in_kg_per_size_unit * size_of_energy_system
             maintenance_costs_in_euro = (
                 capex_investment_cost_in_euro * maintenance_costs_as_percentage_of_investment_per_year
@@ -106,12 +104,7 @@ class CapexComputationHelperFunctions:
             # Use values from config
             if all(
                 isinstance(v, (float, int))
-                for v in [
-                    config.investment_costs_in_euro,
-                    config.device_co2_footprint_in_kg,
-                    config.lifetime_in_years,
-                    config.maintenance_costs_in_euro_per_year,
-                ]
+                for v in list_of_config_capex_variables
             ):
                 capex_investment_cost_in_euro = config.investment_costs_in_euro
                 device_co2_footprint_in_kg = config.device_co2_footprint_in_kg
@@ -119,12 +112,9 @@ class CapexComputationHelperFunctions:
                 maintenance_costs_in_euro = (
                     config.maintenance_costs_in_euro_per_year * capex_investment_cost_in_euro
                 )
-            elif all(isinstance(v, Quantity) for v in [
-                    config.investment_costs_in_euro,
-                    config.device_co2_footprint_in_kg,
-                    config.lifetime_in_years,
-                    config.maintenance_costs_in_euro_per_year,
-            ]):
+                subsidy_as_percentage_of_investment_costs = config.subsidy_as_percentage_of_investment_costs
+
+            elif all(isinstance(v, Quantity) for v in list_of_config_capex_variables):
                 # if config values are Quantity objects, extract the values
                 capex_investment_cost_in_euro = config.investment_costs_in_euro.value
                 device_co2_footprint_in_kg = config.device_co2_footprint_in_kg.value
@@ -132,13 +122,9 @@ class CapexComputationHelperFunctions:
                 maintenance_costs_in_euro = (
                     config.maintenance_costs_in_euro_per_year.value * capex_investment_cost_in_euro
                 )
+                subsidy_as_percentage_of_investment_costs = config.subsidy_as_percentage_of_investment_costs.value
             else:
-                raise ValueError("Config values have wrong type: ", [type(v) for v in [
-                    config.investment_costs_in_euro,
-                    config.device_co2_footprint_in_kg,
-                    config.lifetime_in_years,
-                    config.maintenance_costs_in_euro_per_year,
-                ]])
+                raise ValueError("Config values have wrong type: ", [type(v) for v in list_of_config_capex_variables])
 
         # Calculate values per simulated period
         seconds_per_year = 365 * 24 * 60 * 60
@@ -159,6 +145,7 @@ class CapexComputationHelperFunctions:
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
             maintenance_costs_in_euro=maintenance_costs_in_euro,
             maintenance_cost_per_simulated_period_in_euro=maintenance_costs_per_simulated_period_in_euro,
+            subsidy_as_percentage_of_investment_costs=subsidy_as_percentage_of_investment_costs,
             kpi_tag=kpi_tag,
         )
         return capex_cost_data_class
@@ -172,4 +159,5 @@ class CapexComputationHelperFunctions:
         config.device_co2_footprint_in_kg = capex_cost_data_class.device_co2_footprint_in_kg
         config.lifetime_in_years = capex_cost_data_class.lifetime_in_years
         config.maintenance_costs_in_euro_per_year = capex_cost_data_class.maintenance_costs_in_euro
+        config.subsidy_as_percentage_of_investment_costs = capex_cost_data_class.subsidy_as_percentage_of_investment_costs
         return config

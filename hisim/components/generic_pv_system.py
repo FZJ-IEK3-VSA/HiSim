@@ -31,6 +31,8 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiTagEnumClass,
     KpiEntry,
 )
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+
 
 __authors__ = "Vitor Hugo Bellotto Zago, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -103,13 +105,13 @@ class PVSystemConfig(ConfigBase):
     load_module_data: bool
     source_weight: int
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    co2_footprint: Optional[float]
     #: cost for investment in Euro
-    cost: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    cost: Optional[float]
     #: lifetime in years
-    lifetime: float
+    lifetime: Optional[float]
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: Optional[float]
     predictive: bool
     predictive_control: bool
     prediction_horizon: Optional[int]
@@ -146,14 +148,11 @@ class PVSystemConfig(ConfigBase):
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             source_weight=source_weight,
             location=location,
-            co2_footprint=power_in_watt
-            * 1e-3
-            * 330.51,  # value from emission_factors_and_costs_devices.csv
-            cost=power_in_watt
-            * 1e-3
-            * 794.41,  # value from emission_factors_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise  # noqa: E501
-            lifetime=25,  # value from emission_factros_and_costs_devices.csv
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
             predictive=False,
             predictive_control=False,
             prediction_horizon=None,
@@ -480,22 +479,22 @@ class PVSystem(cp.Component):
         config: PVSystemConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
+        component_type = lt.ComponentType.PV
+        kpi_tag = (
+            KpiTagEnumClass.ROOFTOP_PV
         )
-        device_co2_footprint_per_simulated_period = (
-            config.co2_footprint / config.lifetime
-        ) * (simulation_parameters.duration.total_seconds() / seconds_per_year)
+        unit = lt.Units.KILOWATT
+        size_of_energy_system = config.power_in_watt * 1e-3
 
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,  # noqa: E501
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,  # noqa: E501
-            kpi_tag=KpiTagEnumClass.ROOFTOP_PV,
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
         )
+
         return capex_cost_data_class
 
     def get_cost_opex(

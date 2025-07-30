@@ -225,13 +225,13 @@ class SimpleDHWStorageConfig(cp.ConfigBase):
     volume_heating_water_storage_in_liter: float
     heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    co2_footprint: Optional[float]
     #: cost for investment in Euro
-    cost: float
+    cost: Optional[float]
     #: lifetime in years
-    lifetime: float
+    lifetime: Optional[float]
     # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    maintenance_cost_as_percentage_of_investment: Optional[float]
 
     @classmethod
     def get_default_simpledhwstorage_config(

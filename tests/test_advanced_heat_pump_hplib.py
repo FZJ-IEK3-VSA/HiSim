@@ -11,7 +11,7 @@ from hisim.components.advanced_heat_pump_hplib import (
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.units import Quantity, Watt, Celsius, Seconds, Kilogram, Euro, Years
+from hisim.units import Quantity, Watt, Celsius, Seconds, Kilogram, Euro, Years, Any
 
 
 @pytest.mark.base
@@ -50,7 +50,7 @@ def test_heat_pump_hplib():
         co2_footprint=Quantity(p_th_set.value * 1e-3 * 165.84, Kilogram),
         cost=Quantity(p_th_set.value * 1e-3 * 1513.74, Euro),
         lifetime=Quantity(10, Years),
-        maintenance_cost_as_percentage_of_investment=0.025,
+        maintenance_cost_as_percentage_of_investment=Quantity(0.025, Any),
     )
     heatpump = HeatPumpHplib(config=heatpump_config, my_simulation_parameters=simpars)
     heatpump.state = HeatPumpState(time_on_heating=0, time_off=0, time_on_cooling=0, on_off_previous=1)

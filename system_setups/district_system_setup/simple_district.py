@@ -262,6 +262,10 @@ def setup_function(
     my_electricity_meter_district_config = electricity_meter.ElectricityMeterConfig(
         building_name=my_config.district_name,
         name="ElectricityMeter",
+        co2_footprint=None,
+        cost=None,
+        lifetime=None,
+        maintenance_cost_as_percentage_of_investment=None
     )
 
     my_electricity_meter_district = electricity_meter.ElectricityMeter(

@@ -251,7 +251,7 @@ class PVSystemConfig(ConfigBase):
             * module_power_in_watt
         ) * share_of_maximum_pv_potential
 
-        return total_pv_power_in_watt
+        return round(total_pv_power_in_watt, 2)
 
 
 class PVSystem(cp.Component):

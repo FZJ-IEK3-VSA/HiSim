@@ -87,8 +87,8 @@ class BatteryConfig(ConfigBase):
             building_name=building_name,
             name=name,
             # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
-            custom_battery_capacity_generic_in_kilowatt_hour=custom_battery_capacity_generic_in_kilowatt_hour,
-            custom_pv_inverter_power_generic_in_watt=10 * 0.5 * 1e3,  # c-rate is 0.5C (0.5/h) here
+            custom_battery_capacity_generic_in_kilowatt_hour=round(custom_battery_capacity_generic_in_kilowatt_hour, 2),
+            custom_pv_inverter_power_generic_in_watt=round(10 * 0.5 * 1e3, 2),  # c-rate is 0.5C (0.5/h) here
             source_weight=1,
             system_id="SG1",
             charge_in_kwh=0,
@@ -116,8 +116,8 @@ class BatteryConfig(ConfigBase):
             building_name=building_name,
             name=name,
             # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
-            custom_battery_capacity_generic_in_kilowatt_hour=custom_battery_capacity_generic_in_kilowatt_hour,
-            custom_pv_inverter_power_generic_in_watt=custom_battery_capacity_generic_in_kilowatt_hour * c_rate * 1e3,
+            custom_battery_capacity_generic_in_kilowatt_hour=round(custom_battery_capacity_generic_in_kilowatt_hour, 2),
+            custom_pv_inverter_power_generic_in_watt=round(custom_battery_capacity_generic_in_kilowatt_hour * c_rate * 1e3, 2),
             source_weight=1,
             system_id="SG1",
             charge_in_kwh=0,

@@ -175,7 +175,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         config = SimpleHotWaterStorageConfig(
             building_name=building_name,
             name=name,
-            volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
+            volume_heating_water_storage_in_liter=round(volume_heating_water_storage_in_liter, 2),
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
             position_hot_water_storage_in_system=position_hot_water_storage_in_system,

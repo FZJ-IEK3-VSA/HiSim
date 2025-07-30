@@ -102,7 +102,7 @@ class HeatDistributionConfig(cp.ConfigBase):
             building_name=building_name,
             name=name,
             heating_system=heating_system,
-            water_mass_flow_rate_in_kg_per_second=water_mass_flow_rate_in_kg_per_second,
+            water_mass_flow_rate_in_kg_per_second=round(water_mass_flow_rate_in_kg_per_second, 2),
             absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
             position_hot_water_storage_in_system=position_hot_water_storage_in_system,
             device_co2_footprint_in_kg=None,

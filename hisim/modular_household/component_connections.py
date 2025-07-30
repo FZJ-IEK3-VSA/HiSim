@@ -393,6 +393,7 @@ def configure_battery(
             lifetime_in_years=10,  # todo set correct values
             lifetime_in_cycles=5e3,  # todo set correct values
             maintenance_costs_in_euro_per_year=0.02 * battery_capacity * 535.81,
+            subsidy_as_percentage_of_investment_costs=0,
         )
     else:
         my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_default_config()

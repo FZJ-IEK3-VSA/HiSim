@@ -110,7 +110,7 @@ class CapexComputationHelperFunctions:
                     config.investment_costs_in_euro,
                     config.device_co2_footprint_in_kg,
                     config.lifetime_in_years,
-                    config.maintenance_cost_as_percentage_of_investment,
+                    config.maintenance_costs_in_euro_per_year,
                 ]
             ):
                 capex_investment_cost_in_euro = config.investment_costs_in_euro

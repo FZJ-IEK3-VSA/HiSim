@@ -133,7 +133,8 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         maintenance_costs_in_euro_per_year=80,
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
         position_hot_water_storage_in_system=1,
-        absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
+        absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+        heating_system=my_hds_controller_information.hds_controller_config.heating_system,
     )
 
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(

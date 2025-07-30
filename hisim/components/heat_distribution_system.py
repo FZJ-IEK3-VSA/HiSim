@@ -70,6 +70,7 @@ class HeatDistributionConfig(cp.ConfigBase):
 
     building_name: str
     name: str
+    heating_system: HeatDistributionSystemType
     water_mass_flow_rate_in_kg_per_second: float
     absolute_conditioned_floor_area_in_m2: float
     position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
@@ -87,6 +88,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         cls,
         water_mass_flow_rate_in_kg_per_second: float,
         absolute_conditioned_floor_area_in_m2: float,
+        heating_system: HeatDistributionSystemType,
         name: str = "HeatDistributionSystem",
         building_name: str = "BUI1",
         position_hot_water_storage_in_system: Union[
@@ -97,6 +99,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         config = HeatDistributionConfig(
             building_name=building_name,
             name=name,
+            heating_system=heating_system,
             water_mass_flow_rate_in_kg_per_second=water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
             position_hot_water_storage_in_system=position_hot_water_storage_in_system,
@@ -606,21 +609,25 @@ class HeatDistribution(cp.Component):
         config: HeatDistributionConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM
-        kpi_tag = (
-            KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM
-        )
-        unit = lt.Units.ANY
-        size_of_energy_system = 1
+        # consider costs of changing heat distribution system to floor heating
+        if config.heating_system == HeatDistributionSystemType.FLOORHEATING:
+            component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM
+            kpi_tag = (
+                KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM
+            )
+            unit = lt.Units.ANY
+            size_of_energy_system = 1
 
-        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
-        simulation_parameters=simulation_parameters,
-        component_type=component_type,
-        unit=unit,
-        size_of_energy_system=size_of_energy_system,
-        config=config,
-        kpi_tag=kpi_tag
-        )
+            capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+            simulation_parameters=simulation_parameters,
+            component_type=component_type,
+            unit=unit,
+            size_of_energy_system=size_of_energy_system,
+            config=config,
+            kpi_tag=kpi_tag
+            )
+        else:
+            capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
 
         return capex_cost_data_class
 

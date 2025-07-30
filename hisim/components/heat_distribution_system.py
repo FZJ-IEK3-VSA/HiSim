@@ -19,7 +19,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
-
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -606,22 +606,22 @@ class HeatDistribution(cp.Component):
         config: HeatDistributionConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.investment_costs_in_euro / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
+        component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM
+        kpi_tag = (
+            KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM
         )
-        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
+        unit = lt.Units.ANY
+        size_of_energy_system = 1
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
         )
 
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.investment_costs_in_euro,
-            device_co2_footprint_in_kg=config.device_co2_footprint_in_kg,
-            lifetime_in_years=config.lifetime_in_years,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
-        )
         return capex_cost_data_class
 
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:

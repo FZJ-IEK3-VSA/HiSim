@@ -17,7 +17,7 @@ class CapexComputationHelperFunctions:
         size_of_energy_system: float,
         config: any, # TODO: add config base type and add capex values to config base?
         kpi_tag=None,
-    ):
+    ) -> CapexCostDataClass:
         """Compute capex costs and emissions for a given component type."""
         # if config capex values are None, use values from EmissionFactorsAndCostsForDevicesConfig
         if all(v is None for v in [

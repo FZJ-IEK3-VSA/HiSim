@@ -156,7 +156,8 @@ class SolarThermalSystemConfig(ConfigBase):
             # of transport phase 1 https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1255
             cost=area_m2 * 797,  # Flachkollektoren
             # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
-            maintenance_cost_as_percentage_of_investment=0.01,  # https://www.gebaeudeforum.de/fileadmin/gebaeudeforum/Downloads/Factsheet/Factsheet_65ProzentEE_06_Solarthermie.pdf
+            maintenance_cost_as_percentage_of_investment=0.01,
+            # https://www.gebaeudeforum.de/fileadmin/gebaeudeforum/Downloads/Factsheet/Factsheet_65ProzentEE_06_Solarthermie.pdf
             lifetime=20,  # https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1712
             source_weight=source_weight,
         )

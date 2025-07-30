@@ -406,8 +406,10 @@ class EmissionFactorsAndCostsForDevicesConfig:
         """Get emission factors and costs for a given year and device."""
 
         if year not in capex_techno_economic_parameters:
-            log.warning(f"No specfic capex and emission data available for year {year}. "
-                            f"Use data from year {next(iter(capex_techno_economic_parameters))}")
+            log.warning(
+                f"No specfic capex and emission data available for year {year}. "
+                f"Use data from year {next(iter(capex_techno_economic_parameters))}"
+            )
             year = next(iter(capex_techno_economic_parameters))
 
         if unit not in capex_techno_economic_parameters[year]:

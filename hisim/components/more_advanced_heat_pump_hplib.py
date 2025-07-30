@@ -115,13 +115,13 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     massflow_nominal_primary_side_in_kg_per_s: Optional[float]
     specific_heat_capacity_of_primary_fluid: Optional[float]
     #: CO2 footprint of investment in kg
-    co2_footprint: Optional[Quantity[float, Kilogram]]
+    device_co2_footprint_in_kg: Optional[Quantity[float, Kilogram]]
     #: cost for investment in Euro
-    cost: Optional[Quantity[float, Euro]]
+    investment_costs_in_euro: Optional[Quantity[float, Euro]]
     #: lifetime in years
-    lifetime: Optional[Quantity[float, Years]]
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: Optional[Quantity[float, Unitless]]
+    lifetime_in_years: Optional[Quantity[float, Years]]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[Quantity[float, Euro]]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(
@@ -158,10 +158,10 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             massflow_nominal_primary_side_in_kg_per_s=0,
             specific_heat_capacity_of_primary_fluid=0,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
         )
 
     @classmethod
@@ -198,10 +198,10 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             massflow_nominal_primary_side_in_kg_per_s=0,
             specific_heat_capacity_of_primary_fluid=0,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
         )
 
 

@@ -190,8 +190,8 @@ def capex_calculation(
 
     headline: List[object] = [
         "Component",
-        "Investment in EUR",
-        "Device CO2-footprint in kg",
+        "Investment for simulated period in EUR",
+        "Device CO2-footprint for simulated period in kg",
         "Lifetime in years",
     ]
     capex_table_as_list_of_list = []

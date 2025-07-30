@@ -7,7 +7,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim.loadtypes import ComponentType, Units
-
+from hisim.units import Quantity
 
 class CapexComputationHelperFunctions:
     """Helper functions for capex and emission computation."""
@@ -32,7 +32,7 @@ class CapexComputationHelperFunctions:
                 config.maintenance_cost_as_percentage_of_investment,
             ]
         ):
-            log.debug(
+            log.information(
                 f"Using EmissionFactorsAndCostsForDevicesConfig for {config.get_main_classname()} capex calculation."
             )
             # Get capex costs and CO2 footprint from EmissionFactorsAndCostsForDevicesConfig
@@ -105,7 +105,7 @@ class CapexComputationHelperFunctions:
             log.debug(f"Using config values for {config.get_main_classname()} capex calculation.")
             # Use values from config
             if all(
-                isinstance(v, float)
+                isinstance(v, (float, int))
                 for v in [
                     config.cost,
                     config.co2_footprint,
@@ -119,7 +119,12 @@ class CapexComputationHelperFunctions:
                 maintenance_costs_in_euro = (
                     config.maintenance_cost_as_percentage_of_investment * capex_investment_cost_in_euro
                 )
-            else:
+            elif all(isinstance(v, Quantity) for v in [
+                    config.cost,
+                    config.co2_footprint,
+                    config.lifetime,
+                    config.maintenance_cost_as_percentage_of_investment,
+            ]):
                 # if config values are Quantity objects, extract the values
                 capex_investment_cost_in_euro = config.cost.value
                 device_co2_footprint_in_kg = config.co2_footprint.value
@@ -127,6 +132,13 @@ class CapexComputationHelperFunctions:
                 maintenance_costs_in_euro = (
                     config.maintenance_cost_as_percentage_of_investment.value * capex_investment_cost_in_euro
                 )
+            else:
+                raise ValueError("Config values have wrong type: ", [type(v) for v in [
+                    config.cost,
+                    config.co2_footprint,
+                    config.lifetime,
+                    config.maintenance_cost_as_percentage_of_investment,
+                ]])
 
         # Calculate values per simulated period
         seconds_per_year = 365 * 24 * 60 * 60
@@ -150,3 +162,14 @@ class CapexComputationHelperFunctions:
             kpi_tag=kpi_tag,
         )
         return capex_cost_data_class
+
+
+    @staticmethod
+    def overwrite_config_values_with_new_capex_values(config: Any, capex_cost_data_class: CapexCostDataClass):
+        """Overwrite config values with new capex values and return."""
+        log.information(f"Overwriting {config.get_main_classname()} config values with new capex values.")
+        config.cost = capex_cost_data_class.capex_investment_cost_in_euro
+        config.co2_footprint = capex_cost_data_class.device_co2_footprint_in_kg
+        config.lifetime = capex_cost_data_class.lifetime_in_years
+        config.maintenance_cost_as_percentage_of_investment = capex_cost_data_class.maintenance_costs_in_euro
+        return config

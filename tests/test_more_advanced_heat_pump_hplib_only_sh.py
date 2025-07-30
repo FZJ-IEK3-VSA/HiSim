@@ -58,10 +58,10 @@ def test_heat_pump_hplib_new():
         massflow_nominal_secondary_side_in_kg_per_s=Quantity(0.333, KilogramPerSecond),
         massflow_nominal_primary_side_in_kg_per_s=0,
         specific_heat_capacity_of_primary_fluid=0,
-        co2_footprint=Quantity(p_th_set.value * 1e-3 * 165.84, Kilogram),
-        cost=Quantity(p_th_set.value * 1e-3 * 1513.74, Euro),
-        lifetime=Quantity(10, Years),
-        maintenance_cost_as_percentage_of_investment=Quantity(0.025, Unitless),
+        device_co2_footprint_in_kg=Quantity(p_th_set.value * 1e-3 * 165.84, Kilogram),
+        investment_costs_in_euro=Quantity(p_th_set.value * 1e-3 * 1513.74, Euro),
+        lifetime_in_years=Quantity(10, Years),
+        maintenance_costs_in_euro_per_year=Quantity(0.025 * p_th_set.value * 1e-3 * 1513.74, Euro),
     )
 
     heatpump = MoreAdvancedHeatPumpHPLib(config=heatpump_config, my_simulation_parameters=simpars)

@@ -76,13 +76,13 @@ class HeatPumpHplibConfig(ConfigBase):
     minimum_running_time_in_seconds: Optional[Quantity[int, Seconds]]
     minimum_idle_time_in_seconds: Optional[Quantity[int, Seconds]]
     #: CO2 footprint of investment in kg
-    co2_footprint: Optional[Quantity[float, Kilogram]]
+    device_co2_footprint_in_kg: Optional[Quantity[float, Kilogram]]
     #: cost for investment in Euro
-    cost: Optional[Quantity[float, Euro]]
+    investment_costs_in_euro: Optional[Quantity[float, Euro]]
     #: lifetime in years
-    lifetime: Optional[Quantity[float, Years]]
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: Optional[Quantity[float, Unitless]]
+    lifetime_in_years: Optional[Quantity[float, Years]]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[Quantity[float, Euro]]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(
@@ -108,10 +108,10 @@ class HeatPumpHplibConfig(ConfigBase):
             minimum_running_time_in_seconds=Quantity(3600, Seconds),
             minimum_idle_time_in_seconds=Quantity(3600, Seconds),
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
         )
 
     @classmethod
@@ -138,10 +138,10 @@ class HeatPumpHplibConfig(ConfigBase):
             minimum_running_time_in_seconds=Quantity(3600, Seconds),
             minimum_idle_time_in_seconds=Quantity(3600, Seconds),
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
         )
 
 

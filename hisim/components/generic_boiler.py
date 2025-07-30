@@ -96,13 +96,13 @@ class GenericBoilerConfig(ConfigBase):
     eff_th_max: float
     temperature_delta_in_celsius: float
     #: CO2 footprint of investment in kg
-    co2_footprint: Optional[float]
+    device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
-    cost: Optional[float]
+    investment_costs_in_euro: Optional[float]
     #: lifetime in years
-    lifetime: Optional[float]
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: Optional[float]
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
     #: energy consumption in kWh
     consumption_in_kilowatt_hour: float
 
@@ -124,10 +124,10 @@ class GenericBoilerConfig(ConfigBase):
             eff_th_min=0.60,
             eff_th_max=0.90,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -180,10 +180,10 @@ class GenericBoilerConfig(ConfigBase):
             eff_th_min=0.60,
             eff_th_max=0.90,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -206,10 +206,10 @@ class GenericBoilerConfig(ConfigBase):
             eff_th_min=0.60,
             eff_th_max=0.90,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -236,10 +236,10 @@ class GenericBoilerConfig(ConfigBase):
             eff_th_min=0.60,
             eff_th_max=0.90,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -272,10 +272,10 @@ class GenericBoilerConfig(ConfigBase):
             eff_th_min=0.60,
             eff_th_max=0.90,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -308,10 +308,10 @@ class GenericBoilerConfig(ConfigBase):
             eff_th_min=0.60,
             eff_th_max=0.90,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -338,10 +338,10 @@ class GenericBoilerConfig(ConfigBase):
             eff_th_min=0.60,
             eff_th_max=0.90,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
             consumption_in_kilowatt_hour=0,
         )
         return config

@@ -58,10 +58,10 @@ class AirConditionerConfig(ConfigBase):
     cop_ref: float
     cooling_capacity_ref: float
     heating_capacity_ref: float
-    cost: float
-    lifetime: int
+    investment_costs_in_euro: float
+    lifetime_in_years: int
     co2_emissions_kg_co2_eq: float
-    maintenance_cost_as_percentage_of_investment: float
+    maintenance_costs_in_euro_per_year: float
 
     @classmethod
     def get_main_classname(cls):

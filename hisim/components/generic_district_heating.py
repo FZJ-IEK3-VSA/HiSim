@@ -66,13 +66,13 @@ class DistrictHeatingConfig(ConfigBase):
     # Maximum thermal power that can be delivered
     connected_load_w: float
     #: CO2 footprint of investment in kg
-    co2_footprint: Optional[float]
+    device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
-    cost: Optional[float]
+    investment_costs_in_euro: Optional[float]
     #: lifetime in years
-    lifetime: Optional[float]
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: Optional[float]
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
     with_domestic_hot_water_preparation: bool
 
     @classmethod
@@ -87,10 +87,10 @@ class DistrictHeatingConfig(ConfigBase):
             name="DistrictHeating",
             connected_load_w=20000,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
         )
         return config
@@ -676,6 +676,7 @@ class DistrictHeating(Component):
         config=config,
         kpi_tag=kpi_tag
         )
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
 
         return capex_cost_data_class
 

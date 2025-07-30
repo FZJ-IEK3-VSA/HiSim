@@ -63,13 +63,13 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
     massflow_nominal_in_kg_per_s: Optional[float]
     use_external_massflow_as_signal_input_for_nominal_massflow: bool
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg: float
     #: cost for investment in Euro
-    cost: float
+    investment_costs_in_euro: float
     #: lifetime in years
-    lifetime: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    lifetime_in_years: float
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: float
 
     @classmethod
     def get_main_classname(cls):
@@ -92,10 +92,10 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             mass_fraction_of_fluid_mixed_in_water=0.20,
             massflow_nominal_in_kg_per_s=0.5,
             use_external_massflow_as_signal_input_for_nominal_massflow=False,
-            co2_footprint=100,  # Todo: check value
-            cost=2000,  # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
-            lifetime=25,
-            maintenance_cost_as_percentage_of_investment=10,  # from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
+            device_co2_footprint_in_kg=100,  # Todo: check value
+            investment_costs_in_euro=2000,  # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
+            lifetime_in_years=25,
+            maintenance_costs_in_euro_per_year=10,  # from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
         )
         return config
 
@@ -115,11 +115,11 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             mass_fraction_of_fluid_mixed_in_water=0.20,
             massflow_nominal_in_kg_per_s=0.5,
             use_external_massflow_as_signal_input_for_nominal_massflow=False,
-            co2_footprint=100,  # Todo: check value
-            cost=2000,
+            device_co2_footprint_in_kg=100,  # Todo: check value
+            investment_costs_in_euro=2000,
             # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
-            lifetime=25,  # value from emission_factors_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=10,
+            lifetime_in_years=25,  # value from emission_factors_and_costs_devices.csv
+            maintenance_costs_in_euro_per_year=10,
             # from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
         )
         return config
@@ -140,11 +140,11 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             mass_fraction_of_fluid_mixed_in_water=0.20,
             massflow_nominal_in_kg_per_s=0.5,
             use_external_massflow_as_signal_input_for_nominal_massflow=False,
-            co2_footprint=100,  # Todo: check value
-            cost=2000,
+            device_co2_footprint_in_kg=100,  # Todo: check value
+            investment_costs_in_euro=2000,
             # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
-            lifetime=25,  # value from emission_factors_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=10,
+            lifetime_in_years=25,  # value from emission_factors_and_costs_devices.csv
+            maintenance_costs_in_euro_per_year=10,
             # from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
         )
         return config

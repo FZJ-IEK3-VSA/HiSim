@@ -150,13 +150,13 @@ class CarConfig(cp.ConfigBase):
     #: consumption per kilometer driven, either in kWh/km or l/km
     consumption_per_km: float
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg: float
     #: cost for investment in Euro
-    cost: float
+    investment_costs_in_euro: float
     #: lifetime of car in years
-    lifetime: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    lifetime_in_years: float
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: float
     #: consumption of the car in kWh or l
 
     @classmethod
@@ -177,10 +177,10 @@ class CarConfig(cp.ConfigBase):
             source_weight=1,
             fuel=lt.LoadTypes.DIESEL,
             consumption_per_km=0.06,
-            co2_footprint=9139.3,
-            cost=32035.0,
-            lifetime=18,
-            maintenance_cost_as_percentage_of_investment=0.02,
+            device_co2_footprint_in_kg=9139.3,
+            investment_costs_in_euro=32035.0,
+            lifetime_in_years=18,
+            maintenance_costs_in_euro_per_year=0.02 * 32035.0,
         )
         return config
 
@@ -196,10 +196,10 @@ class CarConfig(cp.ConfigBase):
             source_weight=1,
             fuel=lt.LoadTypes.ELECTRICITY,
             consumption_per_km=0.15,
-            co2_footprint=8899.4,
-            cost=44498.0,
-            maintenance_cost_as_percentage_of_investment=0.02,
-            lifetime=18,
+            device_co2_footprint_in_kg=8899.4,
+            investment_costs_in_euro=44498.0,
+            maintenance_costs_in_euro_per_year=0.02 * 44498.0,
+            lifetime_in_years=18,
         )
         return config
 

@@ -63,13 +63,13 @@ class StorageConfig(cp.ConfigBase):
     #: power of heat source in kW
     power: float
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg: float
     #: cost for investment in Euro
-    cost: float
+    investment_costs_in_euro: float
     #: lifetime in years
-    lifetime: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    lifetime_in_years: float
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: float
 
     @classmethod
     def get_main_classname(cls):
@@ -97,10 +97,10 @@ class StorageConfig(cp.ConfigBase):
             u_value=0.36,
             energy_full_cycle=None,
             power=0,
-            co2_footprint=0,  # Todo: check value
-            cost=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # SOURCE: VDI2067-1
-            maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: VDI2067-1
+            device_co2_footprint_in_kg=0,  # Todo: check value
+            investment_costs_in_euro=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
+            lifetime_in_years=20,  # SOURCE: VDI2067-1
+            maintenance_costs_in_euro_per_year=0.02 * volume * 14.51,  # SOURCE: VDI2067-1
         )
         return config
 
@@ -127,10 +127,10 @@ class StorageConfig(cp.ConfigBase):
             u_value=0.36,
             energy_full_cycle=None,
             power=0,
-            co2_footprint=0,  # Todo: check value
-            cost=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # SOURCE: VDI2067-1
-            maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: VDI2067-1
+            device_co2_footprint_in_kg=0,  # Todo: check value
+            investment_costs_in_euro=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
+            lifetime_in_years=20,  # SOURCE: VDI2067-1
+            maintenance_costs_in_euro_per_year=0.02 * volume * 14.51,  # SOURCE: VDI2067-1
         )
         return config
 
@@ -156,10 +156,10 @@ class StorageConfig(cp.ConfigBase):
             u_value=0.36,
             energy_full_cycle=None,
             power=power,
-            co2_footprint=100,  # Todo: check value
-            cost=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
-            lifetime=100,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: VDI2067-1
+            device_co2_footprint_in_kg=100,  # Todo: check value
+            investment_costs_in_euro=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
+            lifetime_in_years=100,  # value from emission_factros_and_costs_devices.csv
+            maintenance_costs_in_euro_per_year=0.02 * volume * 14.51,  # SOURCE: VDI2067-1
         )
         return config
 

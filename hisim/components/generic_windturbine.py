@@ -81,13 +81,13 @@ class WindturbineConfig(ConfigBase):
 
     source_weight: int
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg: float
     #: cost for investment in Euro
-    cost: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    investment_costs_in_euro: float
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: float
     #: lifetime in years
-    lifetime: float
+    lifetime_in_years: float
     predictive: bool
     predictive_control: bool
     prediction_horizon: Optional[int]
@@ -119,10 +119,10 @@ class WindturbineConfig(ConfigBase):
             measuring_height_roughness_length=0,
             hellman_exp=0,  # This parameter is only used if the parameter `wind_speed_model` is 'hellman'.
             source_weight=999,
-            co2_footprint=0,
-            cost=0,
-            maintenance_cost_as_percentage_of_investment=0,
-            lifetime=0,
+            device_co2_footprint_in_kg=0,
+            investment_costs_in_euro=0,
+            maintenance_costs_in_euro_per_year=0,
+            lifetime_in_years=0,
             predictive=False,
             predictive_control=False,
             prediction_horizon=None,

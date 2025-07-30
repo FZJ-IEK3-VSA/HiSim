@@ -100,13 +100,13 @@ class BuildingConfig(cp.ConfigBase):
     set_cooling_temperature_in_celsius: float
     enable_opening_windows: bool
     #: CO2 footprint of investment in kg
-    co2_footprint:  Optional[float]
+    device_co2_footprint_in_kg:  Optional[float]
     #: cost for investment in Euro
-    cost:  Optional[float]
+    investment_costs_in_euro:  Optional[float]
     #: lifetime in years
-    lifetime:  Optional[float]
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment:  Optional[float]
+    lifetime_in_years:  Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year:  Optional[float]
 
     @classmethod
     def get_default_german_single_family_home(
@@ -141,10 +141,10 @@ class BuildingConfig(cp.ConfigBase):
             set_heating_temperature_in_celsius=set_heating_temperature_in_celsius,
             set_cooling_temperature_in_celsius=set_cooling_temperature_in_celsius,
             enable_opening_windows=False,
-            co2_footprint=None,  # todo: check value
-            cost=None,   # todo: check value
-            maintenance_cost_as_percentage_of_investment=None,  # noqa: E501 # todo: check value
-            lifetime=None,  # todo: check value
+            device_co2_footprint_in_kg=None,  # todo: check value
+            investment_costs_in_euro=None,   # todo: check value
+            maintenance_costs_in_euro_per_year=None,  # noqa: E501 # todo: check value
+            lifetime_in_years=None,  # todo: check value
         )
         return config
 

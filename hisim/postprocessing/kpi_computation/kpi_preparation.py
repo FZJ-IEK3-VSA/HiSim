@@ -642,41 +642,41 @@ class KpiPreparation:
             capex_df = pd.read_csv(capex_results_path, index_col=0, sep=";")
             log.debug("Capex df " + str(capex_df) + "\n")
             if self.simulation_parameters.multiple_buildings:
-                total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].loc[
+                total_investment_cost_per_simulated_period = capex_df["Investment for simulated period in EUR"].loc[
                     building_object + "_Total_per_simulated_period"
                 ]
-                total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint in kg"].loc[
+                total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint for simulated period in kg"].loc[
                     building_object + "_Total_per_simulated_period"
                 ]
-                total_investment_cost_per_simulated_period_without_hp = capex_df["Investment in EUR"].loc[
+                total_investment_cost_per_simulated_period_without_hp = capex_df["Investment for simulated period in EUR"].loc[
                     building_object + "_Total_per_simulated_period_without_heatpump"
                 ]
-                total_device_co2_footprint_per_simulated_period_without_hp = capex_df["Device CO2-footprint in kg"].loc[
+                total_device_co2_footprint_per_simulated_period_without_hp = capex_df["Device CO2-footprint for simulated period in kg"].loc[
                     building_object + "_Total_per_simulated_period_without_heatpump"
                 ]
-                total_investment_cost_per_simulated_period_only_hp = capex_df["Investment in EUR"].loc[
+                total_investment_cost_per_simulated_period_only_hp = capex_df["Investment for simulated period in EUR"].loc[
                     building_object + "_Total_per_simulated_period_only_heatpump"
                 ]
-                total_device_co2_footprint_per_simulated_period_only_hp = capex_df["Device CO2-footprint in kg"].loc[
+                total_device_co2_footprint_per_simulated_period_only_hp = capex_df["Device CO2-footprint for simulated period in kg"].loc[
                     building_object + "_Total_per_simulated_period_only_heatpump"
                 ]
             if not self.simulation_parameters.multiple_buildings:
-                total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].loc[
+                total_investment_cost_per_simulated_period = capex_df["Investment for simulated period in EUR"].loc[
                     "Total_per_simulated_period"
                 ]
-                total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint in kg"].loc[
+                total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint for simulated period in kg"].loc[
                     "Total_per_simulated_period"
                 ]
-                total_investment_cost_per_simulated_period_without_hp = capex_df["Investment in EUR"].loc[
+                total_investment_cost_per_simulated_period_without_hp = capex_df["Investment for simulated period in EUR"].loc[
                     "Total_per_simulated_period_without_heatpump"
                 ]
-                total_device_co2_footprint_per_simulated_period_without_hp = capex_df["Device CO2-footprint in kg"].loc[
+                total_device_co2_footprint_per_simulated_period_without_hp = capex_df["Device CO2-footprint for simulated period in kg"].loc[
                     "Total_per_simulated_period_without_heatpump"
                 ]
-                total_investment_cost_per_simulated_period_only_hp = capex_df["Investment in EUR"].loc[
+                total_investment_cost_per_simulated_period_only_hp = capex_df["Investment for simulated period in EUR"].loc[
                     "Total_per_simulated_period_only_heatpump"
                 ]
-                total_device_co2_footprint_per_simulated_period_only_hp = capex_df["Device CO2-footprint in kg"].loc[
+                total_device_co2_footprint_per_simulated_period_only_hp = capex_df["Device CO2-footprint for simulated period in kg"].loc[
                     "Total_per_simulated_period_only_heatpump"
                 ]
         else:

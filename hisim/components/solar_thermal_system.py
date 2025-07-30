@@ -66,13 +66,13 @@ class SolarThermalSystemConfig(ConfigBase):
 
     # techno-economic parameters
     #: CO2 footprint of investment in kg
-    co2_footprint: Optional[float]
+    device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
-    cost: Optional[float]
+    investment_costs_in_euro: Optional[float]
     #: lifetime in years
-    lifetime: Optional[float]
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: Optional[float]
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
 
     # Weight of component, defines hierachy in control. The default is 1.
     source_weight: int
@@ -108,10 +108,10 @@ class SolarThermalSystemConfig(ConfigBase):
             a_2_w_m2_k=a_2_w_m2_k,  # W/(m2*K2)
             old_solar_pump=old_solar_pump,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
             source_weight=source_weight,
         )
 
@@ -145,7 +145,7 @@ class SolarThermalSystemConfig(ConfigBase):
             a_1_w_m2_k=a_1_w_m2_k,  # W/(m2*K)
             a_2_w_m2_k=a_2_w_m2_k,  # W/(m2*K2)
             old_solar_pump=old_solar_pump,
-            co2_footprint=(
+            device_co2_footprint_in_kg=(
                 area_m2 * (240.1 / 2.03)  # material solar collector
                 + area_m2 * (34.74 / 2.03)
                 + 108.28  # material external support
@@ -154,11 +154,10 @@ class SolarThermalSystemConfig(ConfigBase):
                 + area_m2 * (4.39 * 0.56 / 2.03)
             ),  # 56% (share of mass of solar collector+support/total, i.e., including storage)
             # of transport phase 1 https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1255
-            cost=area_m2 * 797,  # Flachkollektoren
+            investment_costs_in_euro=area_m2 * 797,  # Flachkollektoren
             # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
-            maintenance_cost_as_percentage_of_investment=0.01,
-            # https://www.gebaeudeforum.de/fileadmin/gebaeudeforum/Downloads/Factsheet/Factsheet_65ProzentEE_06_Solarthermie.pdf
-            lifetime=20,  # https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1712
+            maintenance_costs_in_euro_per_year=100,  # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
+            lifetime_in_years=20,  # https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1712
             source_weight=source_weight,
         )
 

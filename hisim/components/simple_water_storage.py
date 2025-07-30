@@ -74,13 +74,13 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     # it should be checked how much energy the storage lost during the simulated period (see guidelines below, p.2, accepted loss in kWh/days)
     # https://www.bdh-industrie.de/fileadmin/user_upload/ISH2019/Infoblaetter/Infoblatt_Nr_74_Energetische_Bewertung_Warmwasserspeicher.pdf
     #: CO2 footprint of investment in kg
-    co2_footprint: Optional[float]
+    device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
-    cost: Optional[float]
+    investment_costs_in_euro: Optional[float]
     #: lifetime in years
-    lifetime: Optional[float]
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: Optional[float]
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
 
     @classmethod
     def get_default_simplehotwaterstorage_config(
@@ -100,10 +100,10 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
             position_hot_water_storage_in_system=position_hot_water_storage_in_system,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
         )
         return config
 
@@ -177,10 +177,10 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
             position_hot_water_storage_in_system=position_hot_water_storage_in_system,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
         )
         return config
 
@@ -225,13 +225,13 @@ class SimpleDHWStorageConfig(cp.ConfigBase):
     volume_heating_water_storage_in_liter: float
     heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float
     #: CO2 footprint of investment in kg
-    co2_footprint: Optional[float]
+    device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
-    cost: Optional[float]
+    investment_costs_in_euro: Optional[float]
     #: lifetime in years
-    lifetime: Optional[float]
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: Optional[float]
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
 
     @classmethod
     def get_default_simpledhwstorage_config(
@@ -247,10 +247,10 @@ class SimpleDHWStorageConfig(cp.ConfigBase):
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=0.36,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
         )
         return config
 
@@ -273,10 +273,10 @@ class SimpleDHWStorageConfig(cp.ConfigBase):
             volume_heating_water_storage_in_liter=volume,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=0.36,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
         )
         return config
 

@@ -105,13 +105,13 @@ class PVSystemConfig(ConfigBase):
     load_module_data: bool
     source_weight: int
     #: CO2 footprint of investment in kg
-    co2_footprint: Optional[float]
+    device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
-    cost: Optional[float]
+    investment_costs_in_euro: Optional[float]
     #: lifetime in years
-    lifetime: Optional[float]
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: Optional[float]
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
     predictive: bool
     predictive_control: bool
     prediction_horizon: Optional[int]
@@ -149,10 +149,10 @@ class PVSystemConfig(ConfigBase):
             source_weight=source_weight,
             location=location,
             # capex and device emissions are calculated in get_cost_capex function by default
-            co2_footprint=None,
-            cost=None,
-            lifetime=None,
-            maintenance_cost_as_percentage_of_investment=None,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
             predictive=False,
             predictive_control=False,
             prediction_horizon=None,
@@ -460,14 +460,10 @@ class PVSystem(cp.Component):
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             load_module_data=False,
             source_weight=source_weight,
-            co2_footprint=power_in_watt
-            * 1e-3
-            * 130.7,  # value from emission_factros_and_costs_devices.csv
-            cost=power_in_watt
-            * 1e-3
-            * 535.81,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
-            lifetime=25,  # value from emission_factros_and_costs_devices.csv
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            maintenance_costs_in_euro_per_year=None,
+            lifetime_in_years=None,
             prediction_horizon=None,
             predictive=False,
             predictive_control=False,

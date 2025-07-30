@@ -456,7 +456,7 @@ class Car(cp.Component):
     def get_cost_capex(config: CarConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
+        capex_per_simulated_period = (config.investment_costs_in_euro / config.lifetime) * (
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
         device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
@@ -464,9 +464,9 @@ class Car(cp.Component):
         )
 
         capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
+            capex_investment_cost_in_euro=config.investment_costs_in_euro,
+            device_co2_footprint_in_kg=config.device_co2_footprint_in_kg,
+            lifetime_in_years=config.lifetime_in_years,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
             kpi_tag=KpiTagEnumClass.CAR,

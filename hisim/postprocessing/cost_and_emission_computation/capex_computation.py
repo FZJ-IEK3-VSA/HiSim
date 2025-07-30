@@ -26,10 +26,10 @@ class CapexComputationHelperFunctions:
         if all(
             v is None
             for v in [
-                config.cost,
-                config.co2_footprint,
-                config.lifetime,
-                config.maintenance_cost_as_percentage_of_investment,
+                config.investment_costs_in_euro,
+                config.device_co2_footprint_in_kg,
+                config.lifetime_in_years,
+                config.maintenance_costs_in_euro_per_year,
             ]
         ):
             log.information(
@@ -107,37 +107,37 @@ class CapexComputationHelperFunctions:
             if all(
                 isinstance(v, (float, int))
                 for v in [
-                    config.cost,
-                    config.co2_footprint,
-                    config.lifetime,
+                    config.investment_costs_in_euro,
+                    config.device_co2_footprint_in_kg,
+                    config.lifetime_in_years,
                     config.maintenance_cost_as_percentage_of_investment,
                 ]
             ):
-                capex_investment_cost_in_euro = config.cost
-                device_co2_footprint_in_kg = config.co2_footprint
-                technical_lifetime_in_years = config.lifetime
+                capex_investment_cost_in_euro = config.investment_costs_in_euro
+                device_co2_footprint_in_kg = config.device_co2_footprint_in_kg
+                technical_lifetime_in_years = config.lifetime_in_years
                 maintenance_costs_in_euro = (
-                    config.maintenance_cost_as_percentage_of_investment * capex_investment_cost_in_euro
+                    config.maintenance_costs_in_euro_per_year * capex_investment_cost_in_euro
                 )
             elif all(isinstance(v, Quantity) for v in [
-                    config.cost,
-                    config.co2_footprint,
-                    config.lifetime,
-                    config.maintenance_cost_as_percentage_of_investment,
+                    config.investment_costs_in_euro,
+                    config.device_co2_footprint_in_kg,
+                    config.lifetime_in_years,
+                    config.maintenance_costs_in_euro_per_year,
             ]):
                 # if config values are Quantity objects, extract the values
-                capex_investment_cost_in_euro = config.cost.value
-                device_co2_footprint_in_kg = config.co2_footprint.value
-                technical_lifetime_in_years = config.lifetime.value
+                capex_investment_cost_in_euro = config.investment_costs_in_euro.value
+                device_co2_footprint_in_kg = config.device_co2_footprint_in_kg.value
+                technical_lifetime_in_years = config.lifetime_in_years.value
                 maintenance_costs_in_euro = (
-                    config.maintenance_cost_as_percentage_of_investment.value * capex_investment_cost_in_euro
+                    config.maintenance_costs_in_euro_per_year.value * capex_investment_cost_in_euro
                 )
             else:
                 raise ValueError("Config values have wrong type: ", [type(v) for v in [
-                    config.cost,
-                    config.co2_footprint,
-                    config.lifetime,
-                    config.maintenance_cost_as_percentage_of_investment,
+                    config.investment_costs_in_euro,
+                    config.device_co2_footprint_in_kg,
+                    config.lifetime_in_years,
+                    config.maintenance_costs_in_euro_per_year,
                 ]])
 
         # Calculate values per simulated period
@@ -168,8 +168,8 @@ class CapexComputationHelperFunctions:
     def overwrite_config_values_with_new_capex_values(config: Any, capex_cost_data_class: CapexCostDataClass):
         """Overwrite config values with new capex values and return."""
         log.information(f"Overwriting {config.get_main_classname()} config values with new capex values.")
-        config.cost = capex_cost_data_class.capex_investment_cost_in_euro
-        config.co2_footprint = capex_cost_data_class.device_co2_footprint_in_kg
-        config.lifetime = capex_cost_data_class.lifetime_in_years
-        config.maintenance_cost_as_percentage_of_investment = capex_cost_data_class.maintenance_costs_in_euro
+        config.investment_costs_in_euro = capex_cost_data_class.capex_investment_cost_in_euro
+        config.device_co2_footprint_in_kg = capex_cost_data_class.device_co2_footprint_in_kg
+        config.lifetime_in_years = capex_cost_data_class.lifetime_in_years
+        config.maintenance_costs_in_euro_per_year = capex_cost_data_class.maintenance_costs_in_euro
         return config

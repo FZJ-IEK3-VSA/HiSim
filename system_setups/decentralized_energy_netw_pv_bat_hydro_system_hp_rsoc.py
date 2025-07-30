@@ -131,7 +131,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system(power_in_watt=pv_power)
     my_photovoltaic_system_config.time = time
     my_photovoltaic_system_config.co2_footprint = pv_co2_footprint
-    my_photovoltaic_system_config.cost = pv_cost
+    my_photovoltaic_system_config.investment_costs_in_euro = pv_cost
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters,

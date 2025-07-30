@@ -307,7 +307,8 @@ capex_techno_economic_parameters = {
                 "subsidy_as_percentage_of_investment_costs": 0,  # Source: [20]
             },
             ComponentType.HYDROGEN_HEATER: {
-                "investment_costs_in_euro_per_kw": 0.36 * 1600,  # 36% of heat pump costs, Source: [20], same as gas heater
+                "investment_costs_in_euro_per_kw": 0.36
+                * 1600,  # 36% of heat pump costs, Source: [20], same as gas heater
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
                 "technical_lifetime_in_years": 18,  # Source: [20]
                 "co2_footprint_in_kg_per_kw": 49.47,  # Source: [19]
@@ -335,7 +336,8 @@ capex_techno_economic_parameters = {
                 "investment_costs_in_euro_per_liter": 14.51,  # EUR/liter, Source: [19]
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
                 "technical_lifetime_in_years": 20,  # Source: [20]
-                "co2_footprint_in_kg_per_liter": 29.79 / 50,  # Source: [19] ([19] is in kg/kW, and we assume 1kW approx. = 50l, based on [32])
+                "co2_footprint_in_kg_per_liter": 29.79
+                / 50,  # Source: [19] ([19] is in kg/kW, and we assume 1kW approx. = 50l, based on [32])
                 "subsidy_as_percentage_of_investment_costs": 0.15,
             },
         },
@@ -370,8 +372,8 @@ capex_techno_economic_parameters = {
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0.15,  # Source: [29]
             },
-        }
-    }   
+        },
+    }
 }
 
 
@@ -393,7 +395,9 @@ class EmissionFactorsAndCostsForDevicesConfig:
     co2_footprint_in_kg: Optional[float] = None
 
     @classmethod
-    def get_values_for_year(cls, year: int, unit: Units, device: ComponentType) -> "EmissionFactorsAndCostsForDevicesConfig":
+    def get_values_for_year(
+        cls, year: int, unit: Units, device: ComponentType
+    ) -> "EmissionFactorsAndCostsForDevicesConfig":
         """Get emission factors and costs for a given year and device."""
 
         if year not in capex_techno_economic_parameters:

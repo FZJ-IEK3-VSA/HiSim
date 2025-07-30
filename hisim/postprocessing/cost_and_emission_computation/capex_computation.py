@@ -1,4 +1,5 @@
 """Module for capex and emission computation."""
+
 from typing import Optional, Any
 from hisim.component import CapexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForDevicesConfig
@@ -6,6 +7,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim.loadtypes import ComponentType, Units
+
 
 class CapexComputationHelperFunctions:
     """Helper functions for capex and emission computation."""
@@ -21,12 +23,18 @@ class CapexComputationHelperFunctions:
     ) -> CapexCostDataClass:
         """Compute capex costs and emissions for a given component type."""
         # if config capex values are None, use values from EmissionFactorsAndCostsForDevicesConfig
-        if all(v is None for v in [
+        if all(
+            v is None
+            for v in [
                 config.cost,
                 config.co2_footprint,
                 config.lifetime,
-                config.maintenance_cost_as_percentage_of_investment]):
-            log.debug(f"Using EmissionFactorsAndCostsForDevicesConfig for {config.get_main_classname()} capex calculation.")
+                config.maintenance_cost_as_percentage_of_investment,
+            ]
+        ):
+            log.debug(
+                f"Using EmissionFactorsAndCostsForDevicesConfig for {config.get_main_classname()} capex calculation."
+            )
             # Get capex costs and CO2 footprint from EmissionFactorsAndCostsForDevicesConfig
             emissions_and_cost_factors_for_devices = EmissionFactorsAndCostsForDevicesConfig.get_values_for_year(
                 year=simulation_parameters.year, unit=unit, device=component_type
@@ -35,18 +43,24 @@ class CapexComputationHelperFunctions:
             if unit == Units.KILOWATT:
                 # Size of energy system is in kW
                 # Use the values in kW
-                investment_costs_in_euro_per_size_unit = emissions_and_cost_factors_for_devices.investment_costs_in_euro_per_kw
+                investment_costs_in_euro_per_size_unit = (
+                    emissions_and_cost_factors_for_devices.investment_costs_in_euro_per_kw
+                )
                 co2_footprint_in_kg_per_size_unit = emissions_and_cost_factors_for_devices.co2_footprint_in_kg_per_kw
 
             elif unit == Units.LITER:
                 # Size of energy system is in l
                 # Use the values in l
-                investment_costs_in_euro_per_size_unit = emissions_and_cost_factors_for_devices.investment_costs_in_euro_per_liter
+                investment_costs_in_euro_per_size_unit = (
+                    emissions_and_cost_factors_for_devices.investment_costs_in_euro_per_liter
+                )
                 co2_footprint_in_kg_per_size_unit = emissions_and_cost_factors_for_devices.co2_footprint_in_kg_per_liter
             elif unit == Units.SQUARE_METER:
                 # Size of energy system is in m2
                 # Use the values in m2
-                investment_costs_in_euro_per_size_unit = emissions_and_cost_factors_for_devices.investment_costs_in_euro_per_m2
+                investment_costs_in_euro_per_size_unit = (
+                    emissions_and_cost_factors_for_devices.investment_costs_in_euro_per_m2
+                )
                 co2_footprint_in_kg_per_size_unit = emissions_and_cost_factors_for_devices.co2_footprint_in_kg_per_m2
             elif unit == Units.ANY:
                 # Size of energy system has no unit
@@ -70,7 +84,7 @@ class CapexComputationHelperFunctions:
             )
 
             # Calculate total values
-            capex_investment_cost_in_euro = investment_costs_in_euro_per_size_unit * size_of_energy_system- (
+            capex_investment_cost_in_euro = investment_costs_in_euro_per_size_unit * size_of_energy_system - (
                 investment_costs_in_euro_per_size_unit
                 * size_of_energy_system
                 * subsidy_as_percentage_of_investment_costs
@@ -82,12 +96,15 @@ class CapexComputationHelperFunctions:
         else:
             log.debug(f"Using config values for {config.get_main_classname()} capex calculation.")
             # Use values from config
-            if all(isinstance(v, float) for v in [
-                config.cost,
-                config.co2_footprint,
-                config.lifetime,
-                config.maintenance_cost_as_percentage_of_investment
-            ]):
+            if all(
+                isinstance(v, float)
+                for v in [
+                    config.cost,
+                    config.co2_footprint,
+                    config.lifetime,
+                    config.maintenance_cost_as_percentage_of_investment,
+                ]
+            ):
                 capex_investment_cost_in_euro = config.cost
                 device_co2_footprint_in_kg = config.co2_footprint
                 technical_lifetime_in_years = config.lifetime

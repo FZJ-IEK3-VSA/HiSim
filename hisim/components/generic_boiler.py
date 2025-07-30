@@ -55,6 +55,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiEntry,
     KpiTagEnumClass,
 )
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
 __authors__ = "Frank Burkrad, Maximilian Hillen, Markus Blasberg, Katharina Rieck, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -95,13 +96,13 @@ class GenericBoilerConfig(ConfigBase):
     eff_th_max: float
     temperature_delta_in_celsius: float
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    co2_footprint: Optional[float]
     #: cost for investment in Euro
-    cost: float
+    cost: Optional[float]
     #: lifetime in years
-    lifetime: float
+    lifetime: Optional[float]
     # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    maintenance_cost_as_percentage_of_investment: Optional[float]
     #: energy consumption in kWh
     consumption_in_kilowatt_hour: float
 
@@ -122,12 +123,11 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             eff_th_min=0.60,
             eff_th_max=0.90,
-            co2_footprint=maximal_thermal_power_in_watt
-            * 1e-3
-            * 49.47,  # value from emission_factros_and_costs_devices.csv
-            cost=7416,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -179,12 +179,11 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             eff_th_min=0.60,
             eff_th_max=0.90,
-            co2_footprint=maximal_thermal_power_in_watt
-            * 1e-3
-            * 49.47,  # value from emission_factros_and_costs_devices.csv
-            cost=7416,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -206,12 +205,11 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             eff_th_min=0.60,
             eff_th_max=0.90,
-            co2_footprint=maximal_thermal_power_in_watt
-            * 1e-3
-            * 19.4,  # value from emission_factros_and_costs_devices.csv
-            cost=5562,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -237,12 +235,11 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             eff_th_min=0.60,
             eff_th_max=0.90,
-            co2_footprint=maximal_thermal_power_in_watt
-            * 1e-3
-            * 19.4,  # value from emission_factros_and_costs_devices.csv
-            cost=5562,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -274,15 +271,11 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             eff_th_min=0.60,
             eff_th_max=0.90,
-            # gas value from emission_factros_and_costs_devices.csv,
-            # factor pellet/gas from https://depv.de/p/Bessere-CO2-Bilanz-mit-Holzpellets-pWuQQ4VvuNQoYjUzRf778Z
-            co2_footprint=0.63 * 49.47,
-            # gas value from emission_factros_and_costs_devices.csv,
-            # factor pellet/gas from https://www.dein-heizungsbauer.de/ratgeber/bauen-sanieren/pelletheizung-kosten/
-            cost=3.33 * 7416,
-            lifetime=15,  # https://www.gebaeudeforum.de/fileadmin/gebaeudeforum/Downloads/Factsheet/Factsheet_65ProzentEE_07_Pelletkessel.pdf
-            # from https://www.dein-heizungsbauer.de/ratgeber/bauen-sanieren/pelletheizung-kosten/
-            maintenance_cost_as_percentage_of_investment=0.01,
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -314,11 +307,11 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             eff_th_min=0.60,
             eff_th_max=0.90,
-            co2_footprint=0.63
-            * 49.47,  # did not find value for wood chips, using same as for pellet heating
-            cost=21500,  # approximate value based on https://www.heizung.de/holzheizung/hackschnitzelheizung.html
-            lifetime=15,  # assume same as for pellet heater
-            maintenance_cost_as_percentage_of_investment=0.03,  # approximate value based on https://www.heizung.de/holzheizung/hackschnitzelheizung.html
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -344,12 +337,11 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             eff_th_min=0.60,
             eff_th_max=0.90,
-            co2_footprint=maximal_thermal_power_in_watt
-            * 1e-3
-            * 49.47,  # value from emission_factros_and_costs_devices.csv (same values as condensing gasboiler (assume H2-ready boiler))
-            cost=7416,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            co2_footprint=None,
+            cost=None,
+            lifetime=None,
+            maintenance_cost_as_percentage_of_investment=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -864,35 +856,36 @@ class GenericBoiler(Component):
         simulation_parameters: SimulationParameters,
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        device_co2_footprint_per_simulated_period = (
-            config.co2_footprint / config.lifetime
-        ) * (simulation_parameters.duration.total_seconds() / seconds_per_year)
 
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-        )
         if config.energy_carrier == lt.LoadTypes.GAS:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.GAS_BOILER
+            kpi_tag = KpiTagEnumClass.GAS_BOILER
+            component_type = lt.ComponentType.GAS_HEATER
         elif config.energy_carrier == lt.LoadTypes.OIL:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.OIL_BOILER
+            kpi_tag = KpiTagEnumClass.OIL_BOILER
+            component_type = lt.ComponentType.OIL_HEATER
         elif config.energy_carrier == lt.LoadTypes.GREEN_HYDROGEN:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.HYDROGEN_BOILER
+            kpi_tag = KpiTagEnumClass.HYDROGEN_BOILER
+            component_type = lt.ComponentType.HYDROGEN_HEATER
         elif config.energy_carrier == lt.LoadTypes.PELLETS:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.PELLET_BOILER
+            kpi_tag = KpiTagEnumClass.PELLET_BOILER
+            component_type = lt.ComponentType.PELLET_HEATER
         elif config.energy_carrier == lt.LoadTypes.WOOD_CHIPS:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.WOOD_CHIP_BOILER
+            kpi_tag = KpiTagEnumClass.WOOD_CHIP_BOILER
+            component_type = lt.ComponentType.WOOD_CHIP_HEATER
         else:
-            capex_cost_data_class = (
-                CapexCostDataClass.get_default_capex_cost_data_class()
-            )
+            raise ValueError(f"Energy carrier {config.energy_carrier} for generic_boiler not implemented yet.")
+
+        unit = lt.Units.KILOWATT
+        size_of_energy_system = config.maximal_thermal_power_in_watt * 1e-3
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
+        )
 
         return capex_cost_data_class
 

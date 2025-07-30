@@ -435,7 +435,9 @@ class Component:
         #     * investment
         #     * (self.my_simulation_parameters.duration.total_seconds() / seconds_per_year)
         # )
-        maintenance_cost_per_simulated_period_in_euro = self.get_cost_capex(config=self.config, simulation_parameters=self.my_simulation_parameters).maintenance_cost_per_simulated_period_in_euro  
+        maintenance_cost_per_simulated_period_in_euro = self.get_cost_capex(
+            config=self.config, simulation_parameters=self.my_simulation_parameters
+        ).maintenance_cost_per_simulated_period_in_euro
         return maintenance_cost_per_simulated_period_in_euro
 
     def i_save_state(self) -> None:

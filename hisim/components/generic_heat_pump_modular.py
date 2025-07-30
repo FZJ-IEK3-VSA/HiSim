@@ -1,4 +1,4 @@
-""" Modular Heat Pump Class together with Configuration and State. """
+"""Modular Heat Pump Class together with Configuration and State."""
 
 # clean
 
@@ -36,7 +36,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class HeatPumpConfig(cp.ConfigBase):
-
     """Configuration of a HeatPump."""
 
     building_name: str
@@ -115,7 +114,9 @@ class HeatPumpConfig(cp.ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_heating_electric(building_name: str = "BUI1",) -> "HeatPumpConfig":
+    def get_default_config_heating_electric(
+        building_name: str = "BUI1",
+    ) -> "HeatPumpConfig":
         """Returns default configuartion of simple electrical heating system with a COP of one."""
         power_th: float = 6200  # W
         config = HeatPumpConfig(
@@ -189,7 +190,6 @@ class HeatPumpConfig(cp.ConfigBase):
 
 
 class ModularHeatPumpState:
-
     """Modular heat pump state saves the state of the heat pump."""
 
     def __init__(self, state: int = 0):
@@ -202,7 +202,6 @@ class ModularHeatPumpState:
 
 
 class ModularHeatPump(cp.Component):
-
     """Heat pump implementation.
 
     The generic_heatpump_modular differs to generic_heatpump in the sense that the minimal runtime is not in the component,
@@ -420,7 +419,7 @@ class ModularHeatPump(cp.Component):
         else:
             raise ValueError(f"Invalid device category for heat_pump_modular: {config.device_category}.")
 
-        if config.water_vs_heating ==lt.InandOutputType.WATER_HEATING:
+        if config.water_vs_heating == lt.InandOutputType.WATER_HEATING:
             kpi_tag = KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER
         elif config.water_vs_heating == lt.InandOutputType.HEATING:
             kpi_tag = KpiTagEnumClass.HEATPUMP_SPACE_HEATING
@@ -431,12 +430,12 @@ class ModularHeatPump(cp.Component):
         size_of_energy_system = config.power_th * 1e-3
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
-        simulation_parameters=simulation_parameters,
-        component_type=component_type,
-        unit=unit,
-        size_of_energy_system=size_of_energy_system,
-        config=config,
-        kpi_tag=kpi_tag
+            simulation_parameters=simulation_parameters,
+            component_type=component_type,
+            unit=unit,
+            size_of_energy_system=size_of_energy_system,
+            config=config,
+            kpi_tag=kpi_tag,
         )
 
         return capex_cost_data_class
@@ -456,8 +455,9 @@ class ModularHeatPump(cp.Component):
 
         for index, output in enumerate(all_outputs):
             if (
-                    output.component_name == self.component_name
-                    and output.load_type == lt.LoadTypes.ELECTRICITY and output.field_name == self.ElectricityOutput
+                output.component_name == self.component_name
+                and output.load_type == lt.LoadTypes.ELECTRICITY
+                and output.field_name == self.ElectricityOutput
             ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
                 consumption_in_kwh = round(
                     sum(postprocessing_results.iloc[:, index])
@@ -472,7 +472,7 @@ class ModularHeatPump(cp.Component):
             co2_footprint_in_kg=0,
             total_consumption_in_kwh=consumption_in_kwh,
             loadtype=lt.LoadTypes.ELECTRICITY,
-            kpi_tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER
+            kpi_tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
         )
 
         return opex_cost_data_class
@@ -510,7 +510,7 @@ class ModularHeatPump(cp.Component):
             unit="kWh",
             value=dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(dhw_heatpump_total_electricity_consumption_entry)
 
@@ -519,7 +519,7 @@ class ModularHeatPump(cp.Component):
             unit="kWh",
             value=dhw_heat_pump_heating_energy_output_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(dhw_heatpump_heating_energy_output_entry)
 

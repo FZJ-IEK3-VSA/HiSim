@@ -32,7 +32,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiEntry,
 )
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
-
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 
 __authors__ = "Vitor Hugo Bellotto Zago, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -505,11 +505,23 @@ class PVSystem(cp.Component):
     ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
         """Calculate OPEX costs, consisting of maintenance costs for PV."""
+        production_in_kwh: float = 0.0
+        for index, output in enumerate(all_outputs):
+            if (
+                output.component_name == self.config.name
+                and output.load_type == lt.LoadTypes.ELECTRICITY
+                and output.field_name == self.ElectricityEnergyOutput
+                and output.unit == lt.Units.WATT_HOUR
+            ):
+                production_in_kwh = sum(postprocessing_results.iloc[:, index]) * 1e-3
+
+
+        # for production use negative value (co2 and revenue is handled by electricity meter)
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
-            total_consumption_in_kwh=0,
+            total_consumption_in_kwh=(-1) * production_in_kwh,
             loadtype=lt.LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.ROOFTOP_PV,
         )

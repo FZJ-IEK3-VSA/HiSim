@@ -109,7 +109,7 @@ class DistrictConfig:
             source_weight_pv_district=999,
             location_pv_district=location_district,
             co2_footprint_pv_district=15000 * 1e-3 * 330.51,
-            cost_pv_district=15000 * 1e-3 * 794.41,
+            investment_costs_in_euro_pv_district=15000 * 1e-3 * 794.41,
             maintenance_cost_as_percentage_of_investment_pv_district=0.01,
             lifetime_pv_district=25,
             predictive_pv_district=False,

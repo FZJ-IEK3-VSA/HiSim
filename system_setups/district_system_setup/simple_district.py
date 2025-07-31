@@ -59,7 +59,7 @@ class DistrictConfig:
     share_of_maximum_pv_potential_pv_district: float
     source_weight_pv_district: float
     location_pv_district: str
-    co2_footprint_pv_district: float
+    investment_costs_in_euro_pv_district: float
     cost_pv_district: float
     maintenance_cost_as_percentage_of_investment_pv_district: float
     lifetime_pv_district: float

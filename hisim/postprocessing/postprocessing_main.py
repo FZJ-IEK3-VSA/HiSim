@@ -1165,7 +1165,7 @@ class PostProcessor:
                     data=kpi_collection_dict, target_key="Maintenance costs for simulated period"
                 )
                 investment_costs_in_euro = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Investment costs for equipment per simulated period"
+                    data=kpi_collection_dict, target_key="Investment costs for equipment per simulated period minus subsidies"
                 )
                 total_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Total CO2 emissions for simulated period"

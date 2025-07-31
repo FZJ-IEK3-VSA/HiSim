@@ -1130,6 +1130,8 @@ class PostProcessor:
         """Write KPIs to json file for building sizer."""
 
         def get_kpi_entries_for_building_sizer(data, target_key):
+            """Get kpi entries for building sizer."""
+            result = None
             for key1, value1 in data.items():
                 if key1 == target_key:
                     result = value1["value"]
@@ -1137,6 +1139,8 @@ class PostProcessor:
                     for key2, value2 in value1.items():
                         if key2 == target_key:
                             result = value2["value"]
+            if result is None:
+                raise KeyError(f"No key is matching the target key {target_key}.")
             return result
 
         kpi_dict = {}

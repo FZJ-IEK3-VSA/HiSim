@@ -71,9 +71,13 @@ class WebtoolDict(JSONWizard):
                 raise ValueError("Expected header in first row.")
 
             for computed_values_row in computed_values[1:]:
+                if not computed_values_row:
+                    continue
+
                 if not isinstance(computed_values_row[0], str):
                     # Fist column is component name.
                     raise ValueError("Expected component name in first column.")
+
                 if "total" in computed_values_row[0].lower():
                     # Skip rows with total values.
                     continue

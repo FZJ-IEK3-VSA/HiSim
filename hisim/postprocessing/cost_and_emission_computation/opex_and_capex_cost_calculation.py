@@ -2,7 +2,6 @@
 
 import os
 from typing import List, Dict, Union
-
 import pandas as pd
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
@@ -78,7 +77,7 @@ def opex_calculation(
             },
         }
 
-        meter_rows: List = [["---"] * len(headline)]
+        meter_rows: List = []
         for component in components:
             component_unwrapped = component.my_component
 
@@ -137,7 +136,7 @@ def opex_calculation(
                     k: (
                         round(totals_per_building["all_components"][k] - totals_per_building["without_hp"].get(k, 0), 2)
                         if isinstance(totals_per_building["all_components"][k], (int, float))
-                        else "---"
+                        else None
                     )
                     for k in totals_per_building["all_components"]
                 }
@@ -155,6 +154,7 @@ def opex_calculation(
             # Total values per building
             opex_rows.extend(
                 [
+                    [] * len(headline),
                     prepare_row_for_writing_to_table(
                         row_name=f"{building_object}_Total", dict_with_values=totals_per_building["all_components"]
                     )
@@ -181,14 +181,14 @@ def opex_calculation(
             k: (
                 round(total_summary["all_components"][k] - total_summary["without_hp"].get(k, 0), 2)
                 if isinstance(total_summary["all_components"][k], (int, float))
-                else "---"
+                else None
             )
             for k in total_summary["all_components"]
         }
 
         opex_rows.extend(
             [
-                ["---"] * len(headline),
+                [] * len(headline),
                 prepare_row_for_writing_to_table(
                     row_name="Total_without_heatpump", dict_with_values=total_summary["without_hp"]
                 ),
@@ -198,12 +198,13 @@ def opex_calculation(
     # Total values
     opex_rows.extend(
         [
-            ["---"] * len(headline),
+            [] * len(headline),
             prepare_row_for_writing_to_table(row_name="Total", dict_with_values=total_summary["all_components"]),
         ]
     )
 
     # Add meter values at the end
+    opex_rows.extend([[] * len(headline)])
     for meter_row in meter_rows:
         opex_rows.extend([meter_row])
 
@@ -245,9 +246,9 @@ def capex_calculation(
         "all_components": {
             "investment": 0.0,
             "co2": 0.0,
-            "subsidy": "---",
+            "subsidy": None,
             "rest_investment": 0.0,
-            "lifetime": "---",
+            "lifetime": None,
             "investment_period": 0.0,
             "rest_investment_period": 0.0,
             "co2_period": 0.0,
@@ -255,9 +256,9 @@ def capex_calculation(
         "without_hp": {
             "investment": 0.0,
             "co2": 0.0,
-            "subsidy": "---",
+            "subsidy": None,
             "rest_investment": 0.0,
-            "lifetime": "---",
+            "lifetime": None,
             "investment_period": 0.0,
             "rest_investment_period": 0.0,
             "co2_period": 0.0,
@@ -269,9 +270,9 @@ def capex_calculation(
             "all_components": {
                 "investment": 0.0,
                 "co2": 0.0,
-                "subsidy": "---",
+                "subsidy": None,
                 "rest_investment": 0.0,
-                "lifetime": "---",
+                "lifetime": None,
                 "investment_period": 0.0,
                 "rest_investment_period": 0.0,
                 "co2_period": 0.0,
@@ -279,9 +280,9 @@ def capex_calculation(
             "without_hp": {
                 "investment": 0.0,
                 "co2": 0.0,
-                "subsidy": "---",
+                "subsidy": None,
                 "rest_investment": 0.0,
-                "lifetime": "---",
+                "lifetime": None,
                 "investment_period": 0.0,
                 "rest_investment_period": 0.0,
                 "co2_period": 0.0,
@@ -348,12 +349,13 @@ def capex_calculation(
                     k: (
                         round(totals_per_building["all_components"][k] - totals_per_building["without_hp"].get(k, 0), 2)
                         if isinstance(totals_per_building["all_components"][k], (int, float))
-                        else "---"
+                        else None
                     )
                     for k in totals_per_building["all_components"]
                 }
                 capex_rows.extend(
                     [
+                        [] * len(headline),
                         prepare_row_for_writing_to_table(
                             row_name=f"{building_object}_Total_without_heatpump",
                             dict_with_values=totals_per_building["without_hp"],
@@ -366,6 +368,7 @@ def capex_calculation(
             # Total values per building
             capex_rows.extend(
                 [
+                    [] * len(headline),
                     prepare_row_for_writing_to_table(
                         row_name=f"{building_object}_Total", dict_with_values=totals_per_building["all_components"]
                     )
@@ -378,7 +381,7 @@ def capex_calculation(
                 value = totals_per_building[group][key]
                 if isinstance(value, float):
                     value = round(value, 2)
-                elif isinstance(value, str):
+                else:
                     continue
                 total_summary[group][key] += value
 
@@ -389,14 +392,14 @@ def capex_calculation(
             k: (
                 round(total_summary["all_components"][k] - total_summary["without_hp"].get(k, 0), 2)
                 if isinstance(total_summary["all_components"][k], (int, float))
-                else "---"
+                else None
             )
             for k in total_summary["all_components"]
         }
 
         capex_rows.extend(
             [
-                ["---"] * len(headline),
+                [] * len(headline),
                 prepare_row_for_writing_to_table(
                     row_name="Total_without_heatpump", dict_with_values=total_summary["without_hp"]
                 ),
@@ -406,7 +409,7 @@ def capex_calculation(
     # Total values
     capex_rows.extend(
         [
-            ["---"] * len(headline),
+            [] * len(headline),
             prepare_row_for_writing_to_table(row_name="Total", dict_with_values=total_summary["all_components"]),
         ]
     )

@@ -608,30 +608,30 @@ class KpiPreparation:
         opex_results_path = os.path.join(
             self.simulation_parameters.result_directory, "operational_costs_co2_footprint.csv"
         )
+
         if Path(opex_results_path).exists():
             opex_df = pd.read_csv(opex_results_path, index_col=0, sep=";")
             log.debug("Opex df " + str(opex_df) + "\n")
             if self.simulation_parameters.multiple_buildings:
-                total_maintenance_cost_per_simulated_period = opex_df["Maintenance Costs in EUR"].loc[
+                total_maintenance_cost_per_simulated_period = opex_df["Maintenance costs per year [EUR]"].loc[
                     building_object + "_Total"
                 ]
-                total_maintenance_cost_per_simulated_period_without_hp = opex_df["Maintenance Costs in EUR"].loc[
+                total_maintenance_cost_per_simulated_period_without_hp = opex_df["Maintenance costs per year [EUR]"].loc[
                     building_object + "_Total_without_heatpump"
                 ]
-                total_maintenance_cost_per_simulated_period_only_hp = opex_df["Maintenance Costs in EUR"].loc[
+                total_maintenance_cost_per_simulated_period_only_hp = opex_df["Maintenance costs per year [EUR]"].loc[
                     building_object + "_Total_only_heatpump"
                 ]
             if not self.simulation_parameters.multiple_buildings:
-                total_maintenance_cost_per_simulated_period = opex_df["Maintenance Costs in EUR"].loc[
+                total_maintenance_cost_per_simulated_period = opex_df["Maintenance costs per year [EUR]"].loc[
                     "Total"
                 ]
-                total_maintenance_cost_per_simulated_period_without_hp = opex_df["Maintenance Costs in EUR"].loc[
+                total_maintenance_cost_per_simulated_period_without_hp = opex_df["Maintenance costs per year [EUR]"].loc[
                     "Total_without_heatpump"
                 ]
-                total_maintenance_cost_per_simulated_period_only_hp = opex_df["Maintenance Costs in EUR"].loc[
+                total_maintenance_cost_per_simulated_period_only_hp = opex_df["Maintenance costs per year [EUR]"].loc[
                     "Total_only_heatpump"
                 ]
-
         else:
             log.warning("OPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_OPEX")
             total_maintenance_cost_per_simulated_period = 0
@@ -642,42 +642,42 @@ class KpiPreparation:
             capex_df = pd.read_csv(capex_results_path, index_col=0, sep=";")
             log.debug("Capex df " + str(capex_df) + "\n")
             if self.simulation_parameters.multiple_buildings:
-                total_investment_cost_per_simulated_period = capex_df["Investment for simulated period in EUR"].loc[
-                    building_object + "_Total_per_simulated_period"
+                total_investment_cost_per_simulated_period = capex_df["Investment for simulated period [EUR]"].loc[
+                    building_object + "_Total"
                 ]
-                total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint for simulated period in kg"].loc[
-                    building_object + "_Total_per_simulated_period"
+                total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
+                    building_object + "_Total"
                 ]
-                total_investment_cost_per_simulated_period_without_hp = capex_df["Investment for simulated period in EUR"].loc[
-                    building_object + "_Total_per_simulated_period_without_heatpump"
+                total_investment_cost_per_simulated_period_without_hp = capex_df["Investment for simulated period [EUR]"].loc[
+                    building_object + "_Total_without_heatpump"
                 ]
-                total_device_co2_footprint_per_simulated_period_without_hp = capex_df["Device CO2-footprint for simulated period in kg"].loc[
-                    building_object + "_Total_per_simulated_period_without_heatpump"
+                total_device_co2_footprint_per_simulated_period_without_hp = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
+                    building_object + "_Total_without_heatpump"
                 ]
-                total_investment_cost_per_simulated_period_only_hp = capex_df["Investment for simulated period in EUR"].loc[
-                    building_object + "_Total_per_simulated_period_only_heatpump"
+                total_investment_cost_per_simulated_period_only_hp = capex_df["Investment for simulated period [EUR]"].loc[
+                    building_object + "_Total_only_heatpump"
                 ]
-                total_device_co2_footprint_per_simulated_period_only_hp = capex_df["Device CO2-footprint for simulated period in kg"].loc[
-                    building_object + "_Total_per_simulated_period_only_heatpump"
+                total_device_co2_footprint_per_simulated_period_only_hp = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
+                    building_object + "_Total_only_heatpump"
                 ]
             if not self.simulation_parameters.multiple_buildings:
-                total_investment_cost_per_simulated_period = capex_df["Investment for simulated period in EUR"].loc[
-                    "Total_per_simulated_period"
+                total_investment_cost_per_simulated_period = capex_df["Investment for simulated period [EUR]"].loc[
+                    "Total"
                 ]
-                total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint for simulated period in kg"].loc[
-                    "Total_per_simulated_period"
+                total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
+                    "Total"
                 ]
-                total_investment_cost_per_simulated_period_without_hp = capex_df["Investment for simulated period in EUR"].loc[
-                    "Total_per_simulated_period_without_heatpump"
+                total_investment_cost_per_simulated_period_without_hp = capex_df["Investment for simulated period [EUR]"].loc[
+                    "Total_without_heatpump"
                 ]
-                total_device_co2_footprint_per_simulated_period_without_hp = capex_df["Device CO2-footprint for simulated period in kg"].loc[
-                    "Total_per_simulated_period_without_heatpump"
+                total_device_co2_footprint_per_simulated_period_without_hp = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
+                    "Total_without_heatpump"
                 ]
-                total_investment_cost_per_simulated_period_only_hp = capex_df["Investment for simulated period in EUR"].loc[
-                    "Total_per_simulated_period_only_heatpump"
+                total_investment_cost_per_simulated_period_only_hp = capex_df["Investment for simulated period [EUR]"].loc[
+                    "Total_only_heatpump"
                 ]
-                total_device_co2_footprint_per_simulated_period_only_hp = capex_df["Device CO2-footprint for simulated period in kg"].loc[
-                    "Total_per_simulated_period_only_heatpump"
+                total_device_co2_footprint_per_simulated_period_only_hp = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
+                    "Total_only_heatpump"
                 ]
         else:
             log.warning("CAPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_CAPEX")
@@ -792,6 +792,11 @@ class KpiPreparation:
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
+        value = (total_maintenance_cost_per_simulated_period
+            + total_investment_cost_per_simulated_period
+            + gas_costs_in_euro
+            + electricity_costs_in_euro
+            + heating_costs_in_euro)
 
         total_cost_entry = KpiEntry(
             name="Total costs for simulated period",

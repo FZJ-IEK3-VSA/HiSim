@@ -115,10 +115,11 @@ def test_system_setup_starter_scaling():
             "u_value_roof_in_watt_per_m2_per_kelvin": None,
             "u_value_window_in_watt_per_m2_per_kelvin": None,
             "u_value_door_in_watt_per_m2_per_kelvin": None,
-            "co2_footprint": 1,
-            "cost": 1,
-            "maintenance_cost_as_percentage_of_investment": 0.1,
-            "lifetime": 1,
+            "device_co2_footprint_in_kg": 1,
+            "investment_costs_in_euro": 1,
+            "maintenance_costs_in_euro_per_year": 0.01,
+            "subsidy_as_percentage_of_investment_costs": 0,
+            "lifetime_in_years": 1,
         },
     }
 

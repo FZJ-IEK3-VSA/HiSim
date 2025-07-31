@@ -98,8 +98,8 @@ class WebtoolDict(JSONWizard):
                             raise ValueError(f"Key {computed_values_key} cannot be reformatted.")
                     # Create result entry
                     result_entry = ResultEntry(
-                        name=computed_values_name, unit=computed_values_unit, description="", value=computed_values_item
-                    
+                        name=computed_values_name, unit=computed_values_unit, description="", value=computed_values_item)
+
                     # Save to dict
                     self.components[this_component][categories[idx_column]].update({computed_values_name: result_entry})
 

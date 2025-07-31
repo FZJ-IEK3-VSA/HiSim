@@ -49,34 +49,35 @@ def opex_calculation(
 
     total_summary = {
         "all_components": {
-            "consumption": 0,
-            "co2_emissions": 0,
-            "energy_cost": 0,
-            "maintenance": 0,
+            "consumption": 0.0,
+            "co2_emissions": 0.0,
+            "energy_cost": 0.0,
+            "maintenance": 0.0,
         },
         "without_hp": {
-            "consumption": 0,
-            "co2_emissions": 0,
-            "energy_cost": 0,
-            "maintenance": 0,
+            "consumption": 0.0,
+            "co2_emissions": 0.0,
+            "energy_cost": 0.0,
+            "maintenance": 0.0,
         },
     }
 
     for building_object in building_objects_in_district_list:
         totals_per_building = {
             "all_components": {
-                "consumption": 0,
-                "co2_emissions": 0,
-                "energy_cost": 0,
-                "maintenance": 0,
+                "consumption": 0.0,
+                "co2_emissions": 0.0,
+                "energy_cost": 0.0,
+                "maintenance": 0.0,
             },
             "without_hp": {
-                "consumption": 0,
-                "co2_emissions": 0,
-                "energy_cost": 0,
-                "maintenance": 0,
+                "consumption": 0.0,
+                "co2_emissions": 0.0,
+                "energy_cost": 0.0,
+                "maintenance": 0.0,
             },
         }
+
         meter_rows: List = [["---"] * len(headline)]
         for component in components:
             component_unwrapped = component.my_component
@@ -176,7 +177,7 @@ def opex_calculation(
     # Final total rows
     # Add extra rows if heatpumps were involved
     if heat_pump_involved:
-        only_heatpump_dict: dict = {
+        only_heatpump_dict = {
             k: (
                 round(total_summary["all_components"][k] - total_summary["without_hp"].get(k, 0), 2)
                 if isinstance(total_summary["all_components"][k], (int, float))
@@ -242,48 +243,48 @@ def capex_calculation(
 
     total_summary = {
         "all_components": {
-            "investment": 0,
-            "co2": 0,
+            "investment": 0.0,
+            "co2": 0.0,
             "subsidy": "---",
-            "rest_investment": 0,
+            "rest_investment": 0.0,
             "lifetime": "---",
-            "investment_period": 0,
-            "rest_investment_period": 0,
-            "co2_period": 0,
+            "investment_period": 0.0,
+            "rest_investment_period": 0.0,
+            "co2_period": 0.0,
         },
         "without_hp": {
-            "investment": 0,
-            "co2": 0,
+            "investment": 0.0,
+            "co2": 0.0,
             "subsidy": "---",
-            "rest_investment": 0,
+            "rest_investment": 0.0,
             "lifetime": "---",
-            "investment_period": 0,
-            "rest_investment_period": 0,
-            "co2_period": 0,
+            "investment_period": 0.0,
+            "rest_investment_period": 0.0,
+            "co2_period": 0.0,
         },
     }
 
     for building_object in building_objects_in_district_list:
         totals_per_building = {
             "all_components": {
-                "investment": 0,
-                "co2": 0,
+                "investment": 0.0,
+                "co2": 0.0,
                 "subsidy": "---",
-                "rest_investment": 0,
+                "rest_investment": 0.0,
                 "lifetime": "---",
-                "investment_period": 0,
-                "rest_investment_period": 0,
-                "co2_period": 0,
+                "investment_period": 0.0,
+                "rest_investment_period": 0.0,
+                "co2_period": 0.0,
             },
             "without_hp": {
-                "investment": 0,
-                "co2": 0,
+                "investment": 0.0,
+                "co2": 0.0,
                 "subsidy": "---",
-                "rest_investment": 0,
+                "rest_investment": 0.0,
                 "lifetime": "---",
-                "investment_period": 0,
-                "rest_investment_period": 0,
-                "co2_period": 0,
+                "investment_period": 0.0,
+                "rest_investment_period": 0.0,
+                "co2_period": 0.0,
             },
         }
 
@@ -343,7 +344,7 @@ def capex_calculation(
             # Insert subtotal rows per building
             # Add extra rows if heatpumps were involved
             if heat_pump_involved:
-                only_heatpump_dict: dict = {
+                only_heatpump_dict = {
                     k: (
                         round(totals_per_building["all_components"][k] - totals_per_building["without_hp"].get(k, 0), 2)
                         if isinstance(totals_per_building["all_components"][k], (int, float))

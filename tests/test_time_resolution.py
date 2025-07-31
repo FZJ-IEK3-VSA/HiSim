@@ -343,12 +343,12 @@ def run_cluster_house(
             {yearly_results["variable"][i]: [yearly_results["value"][i]] for i in range(len(yearly_results))}
         )
         for j in range(len(opex_df)):
-            opex_consumptions_dict.update({opex_df.index[j]: [opex_df["Consumption in kWh"].iloc[j]]})
+            opex_consumptions_dict.update({opex_df.index[j]: [opex_df["Total energy consumption [kWh]"].iloc[j]]})
     else:
         for i in range(len(yearly_results)):
             yearly_result_dict[yearly_results["variable"][i]].append(yearly_results["value"][i])
 
         for j in range(len(opex_df)):
-            opex_consumptions_dict[opex_df.index[j]].append(opex_df["Consumption in kWh"].iloc[j])
+            opex_consumptions_dict[opex_df.index[j]].append(opex_df["Total energy consumption [kWh]"].iloc[j])
 
     return yearly_result_dict, opex_consumptions_dict

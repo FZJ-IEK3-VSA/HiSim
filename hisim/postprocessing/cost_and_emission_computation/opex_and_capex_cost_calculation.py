@@ -40,11 +40,6 @@ def opex_calculation(
     ]
 
     opex_rows = []
-    # check if heatpumps were installed in buildings
-    heat_pump_involved: bool = any(
-        isinstance(comp.my_component, (HeatPumpHplib, ModularHeatPump, MoreAdvancedHeatPumpHPLib, SimpleHeatSource))
-        for comp in components
-    )
 
     total_summary: Dict[Dict[float]] = {
         "all_components": {
@@ -130,27 +125,26 @@ def opex_calculation(
 
         if simulation_parameters.multiple_buildings:
             # Insert subtotal rows per building
-            # Add extra rows if heatpumps were involved
-            if heat_pump_involved:
-                only_heatpump_dict: dict = {
-                    k: (
-                        round(totals_per_building["all_components"][k] - totals_per_building["without_hp"].get(k, 0), 2)
-                        if isinstance(totals_per_building["all_components"][k], (int, float))
-                        else None
-                    )
-                    for k in totals_per_building["all_components"]
-                }
-                opex_rows.extend(
-                    [
-                        prepare_row_for_writing_to_table(
-                            row_name=f"{building_object}_Total_without_heatpump",
-                            dict_with_values=totals_per_building["without_hp"],
-                        ),
-                        prepare_row_for_writing_to_table(
-                            row_name=f"{building_object}_Total_only_heatpump", dict_with_values=only_heatpump_dict
-                        ),
-                    ]
+
+            only_heatpump_dict: dict = {
+                k: (
+                    round(totals_per_building["all_components"][k] - totals_per_building["without_hp"].get(k, 0), 2)
+                    if isinstance(totals_per_building["all_components"][k], (int, float))
+                    else None
                 )
+                for k in totals_per_building["all_components"]
+            }
+            opex_rows.extend(
+                [
+                    prepare_row_for_writing_to_table(
+                        row_name=f"{building_object}_Total_without_heatpump",
+                        dict_with_values=totals_per_building["without_hp"],
+                    ),
+                    prepare_row_for_writing_to_table(
+                        row_name=f"{building_object}_Total_only_heatpump", dict_with_values=only_heatpump_dict
+                    ),
+                ]
+            )
             # Total values per building
             opex_rows.extend(
                 [
@@ -175,26 +169,25 @@ def opex_calculation(
                 total_summary[group][key] += value
 
     # Final total rows
-    # Add extra rows if heatpumps were involved
-    if heat_pump_involved:
-        only_heatpump_dict = {
-            k: (
-                round(total_summary["all_components"][k] - total_summary["without_hp"].get(k, 0), 2)
-                if isinstance(total_summary["all_components"][k], (int, float))
-                else None
-            )
-            for k in total_summary["all_components"]
-        }
 
-        opex_rows.extend(
-            [
-                [] * len(headline),
-                prepare_row_for_writing_to_table(
-                    row_name="Total_without_heatpump", dict_with_values=total_summary["without_hp"]
-                ),
-                prepare_row_for_writing_to_table(row_name="Total_only_heatpump", dict_with_values=only_heatpump_dict),
-            ]
+    only_heatpump_dict = {
+        k: (
+            round(total_summary["all_components"][k] - total_summary["without_hp"].get(k, 0), 2)
+            if isinstance(total_summary["all_components"][k], (int, float))
+            else None
         )
+        for k in total_summary["all_components"]
+    }
+
+    opex_rows.extend(
+        [
+            [] * len(headline),
+            prepare_row_for_writing_to_table(
+                row_name="Total_without_heatpump", dict_with_values=total_summary["without_hp"]
+            ),
+            prepare_row_for_writing_to_table(row_name="Total_only_heatpump", dict_with_values=only_heatpump_dict),
+        ]
+    )
     # Total values
     opex_rows.extend(
         [
@@ -236,11 +229,6 @@ def capex_calculation(
     ]
 
     capex_rows = []
-    # check if heatpumps were installed in buildings
-    heat_pump_involved: bool = any(
-        isinstance(comp.my_component, (HeatPumpHplib, ModularHeatPump, MoreAdvancedHeatPumpHPLib, SimpleHeatSource))
-        for comp in components
-    )
 
     total_summary: Dict[Dict[Union[float, str]]] = {
         "all_components": {
@@ -343,28 +331,27 @@ def capex_calculation(
 
         if simulation_parameters.multiple_buildings:
             # Insert subtotal rows per building
-            # Add extra rows if heatpumps were involved
-            if heat_pump_involved:
-                only_heatpump_dict = {
-                    k: (
-                        round(totals_per_building["all_components"][k] - totals_per_building["without_hp"].get(k, 0), 2)
-                        if isinstance(totals_per_building["all_components"][k], (int, float))
-                        else None
-                    )
-                    for k in totals_per_building["all_components"]
-                }
-                capex_rows.extend(
-                    [
-                        [] * len(headline),
-                        prepare_row_for_writing_to_table(
-                            row_name=f"{building_object}_Total_without_heatpump",
-                            dict_with_values=totals_per_building["without_hp"],
-                        ),
-                        prepare_row_for_writing_to_table(
-                            row_name=f"{building_object}_Total_only_heatpump", dict_with_values=only_heatpump_dict
-                        ),
-                    ]
+
+            only_heatpump_dict = {
+                k: (
+                    round(totals_per_building["all_components"][k] - totals_per_building["without_hp"].get(k, 0), 2)
+                    if isinstance(totals_per_building["all_components"][k], (int, float))
+                    else None
                 )
+                for k in totals_per_building["all_components"]
+            }
+            capex_rows.extend(
+                [
+                    [] * len(headline),
+                    prepare_row_for_writing_to_table(
+                        row_name=f"{building_object}_Total_without_heatpump",
+                        dict_with_values=totals_per_building["without_hp"],
+                    ),
+                    prepare_row_for_writing_to_table(
+                        row_name=f"{building_object}_Total_only_heatpump", dict_with_values=only_heatpump_dict
+                    ),
+                ]
+            )
             # Total values per building
             capex_rows.extend(
                 [
@@ -386,26 +373,24 @@ def capex_calculation(
                 total_summary[group][key] += value
 
     # Final total rows
-    # Add extra rows if heatpumps were involved
-    if heat_pump_involved:
-        only_heatpump_dict = {
-            k: (
-                round(total_summary["all_components"][k] - total_summary["without_hp"].get(k, 0), 2)
-                if isinstance(total_summary["all_components"][k], (int, float))
-                else None
-            )
-            for k in total_summary["all_components"]
-        }
-
-        capex_rows.extend(
-            [
-                [] * len(headline),
-                prepare_row_for_writing_to_table(
-                    row_name="Total_without_heatpump", dict_with_values=total_summary["without_hp"]
-                ),
-                prepare_row_for_writing_to_table(row_name="Total_only_heatpump", dict_with_values=only_heatpump_dict),
-            ]
+    only_heatpump_dict = {
+        k: (
+            round(total_summary["all_components"][k] - total_summary["without_hp"].get(k, 0), 2)
+            if isinstance(total_summary["all_components"][k], (int, float))
+            else None
         )
+        for k in total_summary["all_components"]
+    }
+
+    capex_rows.extend(
+        [
+            [] * len(headline),
+            prepare_row_for_writing_to_table(
+                row_name="Total_without_heatpump", dict_with_values=total_summary["without_hp"]
+            ),
+            prepare_row_for_writing_to_table(row_name="Total_only_heatpump", dict_with_values=only_heatpump_dict),
+        ]
+    )
     # Total values
     capex_rows.extend(
         [

@@ -34,7 +34,7 @@ class CapexComputationHelperFunctions:
             v is None
             for v in list_of_config_capex_variables
         ):
-            log.information(
+            log.debug(
                 f"Using EmissionFactorsAndCostsForDevicesConfig for {config.get_main_classname()} capex calculation."
             )
             # Get capex costs and CO2 footprint from EmissionFactorsAndCostsForDevicesConfig
@@ -154,7 +154,7 @@ class CapexComputationHelperFunctions:
     @staticmethod
     def overwrite_config_values_with_new_capex_values(config: Any, capex_cost_data_class: CapexCostDataClass):
         """Overwrite config values with new capex values and return."""
-        log.information(f"Overwriting {config.get_main_classname()} config values with new capex values.")
+        log.debug(f"Overwriting {config.get_main_classname()} config values with new capex values.")
         config.investment_costs_in_euro = capex_cost_data_class.capex_investment_cost_in_euro
         config.device_co2_footprint_in_kg = capex_cost_data_class.device_co2_footprint_in_kg
         config.lifetime_in_years = capex_cost_data_class.lifetime_in_years

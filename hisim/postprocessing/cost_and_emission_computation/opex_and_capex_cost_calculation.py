@@ -53,8 +53,10 @@ def opex_calculation(
         total_consumption_in_kwh_building_object_without_hp = 0.0
         for component in components:
             component_unwrapped = component.my_component
-            if (building_object in str(component_unwrapped.component_name) or
-                    not simulation_parameters.multiple_buildings):
+            if (
+                building_object in str(component_unwrapped.component_name)
+                or not simulation_parameters.multiple_buildings
+            ):
                 # cost and co2_footprint are calculated per simulated period
                 component_class_name = component_unwrapped.get_classname()
                 # get opex data for all components except Electricity and Gas Meter
@@ -117,14 +119,17 @@ def opex_calculation(
             opex_table_as_list_of_list.append(
                 [
                     f"{building_object}_Total_only_heatpump",
-                    round(total_maintenance_cost_building_object - total_maintenance_cost_building_object_without_hp, 2),
+                    round(
+                        total_maintenance_cost_building_object - total_maintenance_cost_building_object_without_hp, 2
+                    ),
                     round(
                         total_operational_co2_footprint_building_object
                         - total_operational_co2_footprint_building_object_without_hp,
                         2,
                     ),
                     round(
-                        total_consumption_in_kwh_building_object - total_consumption_in_kwh_building_object_without_hp, 2
+                        total_consumption_in_kwh_building_object - total_consumption_in_kwh_building_object_without_hp,
+                        2,
                     ),
                 ]
             )
@@ -173,217 +178,211 @@ def opex_calculation(
     return opex_table_as_list_of_list
 
 
+def prepare_row_for_writing_to_table(row_name: str, dict_with_values: dict):
+    """Write row to table."""
+    value_list = list(dict_with_values.values())
+    return [row_name] + value_list
+
+
 def capex_calculation(
     components: List[ComponentWrapper],
     simulation_parameters: SimulationParameters,
     building_objects_in_district_list: list,
 ) -> List:
-    """Loops over all components and calls capex cost calculation."""
-    total_investment_cost = 0.0
-    total_device_co2_footprint = 0.0
-    total_investment_cost_per_simulated_period = 0.0
-    total_device_co2_footprint_per_simulated_period = 0.0
-    total_investment_cost_without_hp = 0.0
-    total_device_co2_footprint_without_hp = 0.0
-    total_investment_cost_per_simulated_period_without_hp = 0.0
-    total_device_co2_footprint_per_simulated_period_without_hp = 0.0
+    """Loops over all components and returns capex summary table."""
 
-    headline: List[object] = [
+    headline = [
         "Component",
-        "Investment for simulated period in EUR",
-        "Device CO2-footprint for simulated period in kg",
-        "Lifetime in years",
+        "Investment [EUR]",
+        "Device CO2-footprint [kg]",
+        "Subsidy as percentage of investment [-]",
+        "Rest-Investment [EUR]",
+        "Lifetime [Years]",
+        "Investment for simulated period [EUR]",
+        "Rest-Investment for simulated period [EUR]",
+        "Device CO2-footprint for simulated period [kg]",
     ]
-    capex_table_as_list_of_list = []
+
+    capex_rows = []
+    # check if heatpumps were installed in buildings
+    heat_pump_involved: bool = any(
+        isinstance(comp.my_component, (HeatPumpHplib, ModularHeatPump, MoreAdvancedHeatPumpHPLib, SimpleHeatSource))
+        for comp in components
+    )
+
+    total_summary = {
+        "all_components": {
+            "investment": 0,
+            "co2": 0,
+            "subsidy": "---",
+            "rest_investment": 0,
+            "lifetime": "---",
+            "investment_period": 0,
+            "rest_investment_period": 0,
+            "co2_period": 0,
+        },
+        "without_hp": {
+            "investment": 0,
+            "co2": 0,
+            "subsidy": "---",
+            "rest_investment": 0,
+            "lifetime": "---",
+            "investment_period": 0,
+            "rest_investment_period": 0,
+            "co2_period": 0,
+        },
+    }
+
     for building_object in building_objects_in_district_list:
-        total_investment_cost_building_object = 0.0
-        total_device_co2_footprint_building_object = 0.0
-        total_investment_cost_per_simulated_period_building_object = 0.0
-        total_device_co2_footprint_per_simulated_period_building_object = 0.0
-        total_investment_cost_building_object_without_hp = 0.0
-        total_device_co2_footprint_building_object_without_hp = 0.0
-        total_investment_cost_per_simulated_period_building_object_without_hp = 0.0
-        total_device_co2_footprint_per_simulated_period_building_object_without_hp = 0.0
+        totals_per_building = {
+            "all_components": {
+                "investment": 0,
+                "co2": 0,
+                "subsidy": "---",
+                "rest_investment": 0,
+                "lifetime": "---",
+                "investment_period": 0,
+                "rest_investment_period": 0,
+                "co2_period": 0,
+            },
+            "without_hp": {
+                "investment": 0,
+                "co2": 0,
+                "subsidy": "---",
+                "rest_investment": 0,
+                "lifetime": "---",
+                "investment_period": 0,
+                "rest_investment_period": 0,
+                "co2_period": 0,
+            },
+        }
+
         for component in components:
             component_unwrapped = component.my_component
-            # capex, co2_footprint, lifetime = component_unwrapped.get_cost_capex(
-            #     config=component_unwrapped.config,
-            # )
-            if (building_object in str(component_unwrapped.component_name) or
-                    not simulation_parameters.multiple_buildings):
-                capex_cost_data_class: CapexCostDataClass = component_unwrapped.get_cost_capex(
+
+            if (
+                building_object in str(component_unwrapped.component_name)
+                or not simulation_parameters.multiple_buildings
+            ):
+                capex: CapexCostDataClass = component_unwrapped.get_cost_capex(
                     config=component_unwrapped.config, simulation_parameters=simulation_parameters
                 )
 
-                if capex_cost_data_class.lifetime_in_years > 0:
+                if capex.lifetime_in_years <= 0:
+                    log.warning(f"Invalid lifetime in {component_unwrapped.component_name}, skipping entry.")
+                    continue
 
-                    total_investment_cost_building_object += capex_cost_data_class.capex_investment_cost_in_euro
-                    total_device_co2_footprint_building_object += capex_cost_data_class.device_co2_footprint_in_kg
-                    total_investment_cost_per_simulated_period_building_object += capex_cost_data_class.capex_investment_cost_for_simulated_period_in_euro
-                    total_device_co2_footprint_per_simulated_period_building_object += capex_cost_data_class.device_co2_footprint_for_simulated_period_in_kg
+                investment = round(capex.capex_investment_cost_in_euro, 2)
+                co2 = round(capex.device_co2_footprint_in_kg, 2)
+                subsidy_pct = round(capex.subsidy_as_percentage_of_investment_costs, 2)
+                rest_investment = round(investment * (1 - subsidy_pct), 2)
+                lifetime = round(capex.lifetime_in_years, 2)
+                investment_period = round(capex.capex_investment_cost_for_simulated_period_in_euro, 2)
+                rest_investment_period = round(investment_period * (1 - subsidy_pct), 2)
+                co2_period = round(capex.device_co2_footprint_for_simulated_period_in_kg, 2)
 
-                    if isinstance(
+                # Add to total and subtotal
+                for group in ["all_components", "without_hp"]:
+                    if group == "without_hp" and isinstance(
                         component_unwrapped,
                         (HeatPumpHplib, ModularHeatPump, MoreAdvancedHeatPumpHPLib, SimpleHeatSource),
                     ):
-                        pass
-                    else:
-                        total_investment_cost_building_object_without_hp += capex_cost_data_class.capex_investment_cost_in_euro
-                        total_device_co2_footprint_building_object_without_hp += capex_cost_data_class.device_co2_footprint_in_kg
-                        total_investment_cost_per_simulated_period_building_object_without_hp += (
-                            capex_cost_data_class.capex_investment_cost_for_simulated_period_in_euro
-                        )
-                        total_device_co2_footprint_per_simulated_period_building_object_without_hp += (
-                            capex_cost_data_class.device_co2_footprint_for_simulated_period_in_kg
-                        )
+                        continue
+                    totals_per_building[group]["investment"] += investment
+                    totals_per_building[group]["co2"] += co2
+                    totals_per_building[group]["rest_investment"] += rest_investment
+                    totals_per_building[group]["investment_period"] += investment_period
+                    totals_per_building[group]["rest_investment_period"] += rest_investment_period
+                    totals_per_building[group]["co2_period"] += co2_period
 
-                    capex_table_as_list_of_list.append(
-                        [
-                            component_unwrapped.component_name,
-                            round(capex_cost_data_class.capex_investment_cost_for_simulated_period_in_euro, 2),
-                            round(capex_cost_data_class.device_co2_footprint_for_simulated_period_in_kg, 2),
-                            capex_cost_data_class.lifetime_in_years,
-                        ]
-                    )
-                else:
-                    log.warning(f"capex calculation not valid. Check lifetime in Configuration of {component}")
+                capex_rows.append(
+                    [
+                        component_unwrapped.component_name,
+                        investment,
+                        co2,
+                        subsidy_pct,
+                        rest_investment,
+                        lifetime,
+                        investment_period,
+                        rest_investment_period,
+                        co2_period,
+                    ]
+                )
 
         if simulation_parameters.multiple_buildings:
-            capex_table_as_list_of_list.append(
+            # Insert subtotal rows per building
+            # Add extra rows if heatpumps were involved
+            if heat_pump_involved:
+                only_heatpump_dict: dict = {
+                    k: (
+                        round(totals_per_building["all_components"][k] - totals_per_building["without_hp"].get(k, 0), 2)
+                        if isinstance(totals_per_building["all_components"][k], (int, float))
+                        else "---"
+                    )
+                    for k in totals_per_building["all_components"]
+                }
+                capex_rows.extend(
+                    [
+                        prepare_row_for_writing_to_table(
+                            row_name=f"{building_object}_Total_without_heatpump",
+                            dict_with_values=totals_per_building["without_hp"],
+                        ),
+                        prepare_row_for_writing_to_table(
+                            row_name=f"{building_object}_Total_only_heatpump", dict_with_values=only_heatpump_dict
+                        ),
+                    ]
+                )
+            # Total values per building
+            capex_rows.extend(
                 [
-                    f"{building_object}_Total_per_simulated_period_without_heatpump",
-                    round(total_investment_cost_per_simulated_period_building_object_without_hp, 2),
-                    round(total_device_co2_footprint_per_simulated_period_building_object_without_hp, 2),
-                    "---",
-                ]
-            )
-            capex_table_as_list_of_list.append(
-                [
-                    f"{building_object}_Total_per_simulated_period_only_heatpump",
-                    round(
-                        total_investment_cost_per_simulated_period_building_object
-                        - total_investment_cost_per_simulated_period_building_object_without_hp,
-                        2,
-                    ),
-                    round(
-                        total_device_co2_footprint_per_simulated_period_building_object
-                        - total_device_co2_footprint_per_simulated_period_building_object_without_hp,
-                        2,
-                    ),
-                    "---",
-                ]
-            )
-            capex_table_as_list_of_list.append(
-                [
-                    f"{building_object}_Total_per_simulated_period",
-                    round(total_investment_cost_per_simulated_period_building_object, 2),
-                    round(total_device_co2_footprint_per_simulated_period_building_object, 2),
-                    "---",
-                ]
-            )
-            capex_table_as_list_of_list.append(
-                [
-                    f"{building_object}_Total_without_heatpump",
-                    round(total_investment_cost_building_object_without_hp, 2),
-                    round(total_device_co2_footprint_building_object_without_hp, 2),
-                    "---",
-                ]
-            )
-            capex_table_as_list_of_list.append(
-                [
-                    f"{building_object}_Total_only_heatpump",
-                    round(total_investment_cost_building_object - total_investment_cost_building_object_without_hp, 2),
-                    round(
-                        total_device_co2_footprint_building_object - total_device_co2_footprint_building_object_without_hp,
-                        2,
-                    ),
-                    "---",
-                ]
-            )
-            capex_table_as_list_of_list.append(
-                [
-                    f"{building_object}_Total",
-                    round(total_investment_cost_building_object, 2),
-                    round(total_device_co2_footprint_building_object, 2),
-                    "---",
+                    prepare_row_for_writing_to_table(
+                        row_name=f"{building_object}_Total", dict_with_values=totals_per_building["all_components"]
+                    )
                 ]
             )
 
-        total_investment_cost += total_investment_cost_building_object
-        total_device_co2_footprint += total_device_co2_footprint_building_object
-        total_investment_cost_per_simulated_period += total_investment_cost_per_simulated_period_building_object
-        total_device_co2_footprint_per_simulated_period += (
-            total_device_co2_footprint_per_simulated_period_building_object
+        # Summarize total values
+        for group in total_summary:  # pylint: disable=consider-using-dict-items
+            for key in total_summary[group]:
+                value = totals_per_building[group][key]
+                if isinstance(value, float):
+                    value = round(value, 2)
+                elif isinstance(value, str):
+                    continue
+                total_summary[group][key] += value
+
+    # Final total rows
+    # Add extra rows if heatpumps were involved
+    if heat_pump_involved:
+        only_heatpump_dict: dict = {
+            k: (
+                round(total_summary["all_components"][k] - total_summary["without_hp"].get(k, 0), 2)
+                if isinstance(total_summary["all_components"][k], (int, float))
+                else "---"
+            )
+            for k in total_summary["all_components"]
+        }
+
+        capex_rows.extend(
+            [
+                ["---", "---", "---", "---", "---", "---", "---", "---", "---"],
+                prepare_row_for_writing_to_table(
+                    row_name="Total_without_heatpump", dict_with_values=total_summary["without_hp"]
+                ),
+                prepare_row_for_writing_to_table(row_name="Total_only_heatpump", dict_with_values=only_heatpump_dict),
+            ]
         )
-
-        total_investment_cost_without_hp += total_investment_cost_building_object_without_hp
-        total_device_co2_footprint_without_hp += total_device_co2_footprint_building_object_without_hp
-        total_investment_cost_per_simulated_period_without_hp += (
-            total_investment_cost_per_simulated_period_building_object_without_hp
-        )
-        total_device_co2_footprint_per_simulated_period_without_hp += (
-            total_device_co2_footprint_per_simulated_period_building_object_without_hp
-        )
-
-    capex_table_as_list_of_list.append(
+    # Total values
+    capex_rows.extend(
         [
-            "Total_per_simulated_period",
-            round(total_investment_cost_per_simulated_period, 2),
-            round(total_device_co2_footprint_per_simulated_period, 2),
-            "---",
-        ]
-    )
-    capex_table_as_list_of_list.append(
-        [
-            "Total_per_simulated_period_without_heatpump",
-            round(total_investment_cost_per_simulated_period_without_hp, 2),
-            round(total_device_co2_footprint_per_simulated_period_without_hp, 2),
-            "---",
-        ]
-    )
-    capex_table_as_list_of_list.append(
-        [
-            "Total_per_simulated_period_only_heatpump",
-            round(
-                total_investment_cost_per_simulated_period - total_investment_cost_per_simulated_period_without_hp, 2
-            ),
-            round(
-                total_device_co2_footprint_per_simulated_period
-                - total_device_co2_footprint_per_simulated_period_without_hp,
-                2,
-            ),
-            "---",
-        ]
-    )
-    capex_table_as_list_of_list.append(
-        [
-            "Total",
-            round(total_investment_cost, 2),
-            round(total_device_co2_footprint, 2),
-            "---",
-        ]
-    )
-    capex_table_as_list_of_list.append(
-        [
-            "Total_without_heatpump",
-            round(total_investment_cost_without_hp, 2),
-            round(total_device_co2_footprint_without_hp, 2),
-            "---",
-        ]
-    )
-    capex_table_as_list_of_list.append(
-        [
-            "Total_only_heatpump",
-            round(total_investment_cost - total_investment_cost_without_hp, 2),
-            round(total_device_co2_footprint - total_device_co2_footprint_without_hp, 2),
-            "---",
+            ["---", "---", "---", "---", "---", "---", "---", "---", "---"],
+            prepare_row_for_writing_to_table(row_name="Total", dict_with_values=total_summary["all_components"]),
         ]
     )
 
+    # Export to CSV
     pathname = os.path.join(simulation_parameters.result_directory, "investment_cost_co2_footprint.csv")
-    capex_df = pd.DataFrame(capex_table_as_list_of_list, columns=headline)
+    capex_df = pd.DataFrame(capex_rows, columns=headline)
     capex_df.to_csv(pathname, index=False, header=True, encoding="utf8", sep=";")
 
-    capex_table_as_list_of_list.insert(0, headline)
-
-    return capex_table_as_list_of_list
+    return [headline] + capex_rows

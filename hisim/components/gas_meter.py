@@ -35,7 +35,7 @@ class GasMeterConfig(cp.ConfigBase):
 
     building_name: str
     name: str
-    total_energy_from_grid_in_kwh: None
+    total_energy_from_grid_in_kwh: float
     gas_loadtype: lt.LoadTypes
     #: CO2 footprint of investment in kg
     device_co2_footprint_in_kg: Optional[float]

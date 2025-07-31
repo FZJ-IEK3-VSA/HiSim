@@ -1,7 +1,7 @@
 """Calculate Opex and Capex for each component."""
 
 import os
-from typing import List
+from typing import List, Dict, Union
 
 import pandas as pd
 from hisim import log
@@ -47,7 +47,7 @@ def opex_calculation(
         for comp in components
     )
 
-    total_summary = {
+    total_summary: Dict[Dict[float]] = {
         "all_components": {
             "consumption": 0.0,
             "co2_emissions": 0.0,
@@ -63,7 +63,7 @@ def opex_calculation(
     }
 
     for building_object in building_objects_in_district_list:
-        totals_per_building = {
+        totals_per_building: Dict[Dict[float]] = {
             "all_components": {
                 "consumption": 0.0,
                 "co2_emissions": 0.0,
@@ -241,7 +241,7 @@ def capex_calculation(
         for comp in components
     )
 
-    total_summary = {
+    total_summary: Dict[Dict[Union[float, str]]] = {
         "all_components": {
             "investment": 0.0,
             "co2": 0.0,
@@ -265,7 +265,7 @@ def capex_calculation(
     }
 
     for building_object in building_objects_in_district_list:
-        totals_per_building = {
+        totals_per_building: Dict[Dict[Union[float, str]]] = {
             "all_components": {
                 "investment": 0.0,
                 "co2": 0.0,
@@ -385,7 +385,7 @@ def capex_calculation(
     # Final total rows
     # Add extra rows if heatpumps were involved
     if heat_pump_involved:
-        only_heatpump_dict: dict = {
+        only_heatpump_dict = {
             k: (
                 round(total_summary["all_components"][k] - total_summary["without_hp"].get(k, 0), 2)
                 if isinstance(total_summary["all_components"][k], (int, float))

@@ -60,7 +60,7 @@ class DistrictConfig:
     source_weight_pv_district: float
     location_pv_district: str
     investment_costs_in_euro_pv_district: float
-    cost_pv_district: float
+    co2_footprint_pv_district: float
     maintenance_cost_as_percentage_of_investment_pv_district: float
     lifetime_pv_district: float
     predictive_pv_district: bool

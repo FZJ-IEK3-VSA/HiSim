@@ -645,17 +645,27 @@ class KpiPreparation:
                 total_investment_cost_per_simulated_period = capex_df["Investment for simulated period [EUR]"].loc[
                     building_object + "_Total"
                 ]
+                # investment minus subsidies
+                total_rest_investment_cost_per_simulated_period = capex_df["Rest-Investment for simulated period [EUR]"].loc[
+                    building_object + "_Total"
+                ]
                 total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
                     building_object + "_Total"
                 ]
                 total_investment_cost_per_simulated_period_without_hp = capex_df["Investment for simulated period [EUR]"].loc[
                     building_object + "_Total_without_heatpump"
                 ]
+                total_rest_investment_cost_per_simulated_period_without_hp = capex_df["Rest-Investment for simulated period [EUR]"].loc[
+                    building_object + "_Total"
+                ]
                 total_device_co2_footprint_per_simulated_period_without_hp = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
                     building_object + "_Total_without_heatpump"
                 ]
                 total_investment_cost_per_simulated_period_only_hp = capex_df["Investment for simulated period [EUR]"].loc[
                     building_object + "_Total_only_heatpump"
+                ]
+                total_rest_investment_cost_per_simulated_period_only_hp = capex_df["Rest-Investment for simulated period [EUR]"].loc[
+                    building_object + "_Total"
                 ]
                 total_device_co2_footprint_per_simulated_period_only_hp = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
                     building_object + "_Total_only_heatpump"
@@ -664,10 +674,16 @@ class KpiPreparation:
                 total_investment_cost_per_simulated_period = capex_df["Investment for simulated period [EUR]"].loc[
                     "Total"
                 ]
+                total_rest_investment_cost_per_simulated_period = capex_df["Rest-Investment for simulated period [EUR]"].loc[
+                    "Total"
+                ]
                 total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
                     "Total"
                 ]
                 total_investment_cost_per_simulated_period_without_hp = capex_df["Investment for simulated period [EUR]"].loc[
+                    "Total_without_heatpump"
+                ]
+                total_rest_investment_cost_per_simulated_period_without_hp = capex_df["Rest-Investment for simulated period [EUR]"].loc[
                     "Total_without_heatpump"
                 ]
                 total_device_co2_footprint_per_simulated_period_without_hp = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
@@ -676,16 +692,22 @@ class KpiPreparation:
                 total_investment_cost_per_simulated_period_only_hp = capex_df["Investment for simulated period [EUR]"].loc[
                     "Total_only_heatpump"
                 ]
+                total_rest_investment_cost_per_simulated_period_only_hp = capex_df["Rest-Investment for simulated period [EUR]"].loc[
+                    "Total_only_heatpump"
+                ]
                 total_device_co2_footprint_per_simulated_period_only_hp = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
                     "Total_only_heatpump"
                 ]
         else:
             log.warning("CAPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_CAPEX")
             total_investment_cost_per_simulated_period = 0
+            total_rest_investment_cost_per_simulated_period = 0
             total_device_co2_footprint_per_simulated_period = 0
             total_investment_cost_per_simulated_period_without_hp = 0
+            total_rest_investment_cost_per_simulated_period_without_hp = 0
             total_device_co2_footprint_per_simulated_period_without_hp = 0
             total_investment_cost_per_simulated_period_only_hp = 0
+            total_rest_investment_cost_per_simulated_period_only_hp = 0
             total_device_co2_footprint_per_simulated_period_only_hp = 0
 
         # make kpi entry
@@ -759,6 +781,16 @@ class KpiPreparation:
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
+        total_rest_investment_cost_per_simulated_period_entry = KpiEntry(
+            name="Investment costs for equipment per simulated period minus subsidies",
+            unit="EUR",
+            value=total_rest_investment_cost_per_simulated_period,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if not any(word in building_object for word in DistrictNames)
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
+        )
         total_device_co2_footprint_per_simulated_period_entry = KpiEntry(
             name="CO2 footprint for equipment per simulated period",
             unit="kg",
@@ -797,7 +829,7 @@ class KpiPreparation:
             name="Total costs for simulated period",
             unit="EUR",
             value=total_maintenance_cost_per_simulated_period
-            + total_investment_cost_per_simulated_period
+            + total_rest_investment_cost_per_simulated_period
             + gas_costs_in_euro
             + electricity_costs_in_euro
             + heating_costs_in_euro,
@@ -831,6 +863,16 @@ class KpiPreparation:
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
+        total_rest_investment_cost_per_simulated_period_without_hp_entry = KpiEntry(
+            name="Investment costs for equipment without heatpump per simulated period minus subsidies",
+            unit="EUR",
+            value=total_rest_investment_cost_per_simulated_period_without_hp,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if not any(word in building_object for word in DistrictNames)
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
+        )
         total_device_co2_footprint_per_simulated_period_without_hp_entry = KpiEntry(
             name="CO2 footprint for equipment without heatpump per simulated period",
             unit="kg",
@@ -855,7 +897,7 @@ class KpiPreparation:
             name="Total costs without heatpump for simulated period",
             unit="EUR",
             value=total_maintenance_cost_per_simulated_period_without_hp
-            + total_investment_cost_per_simulated_period_without_hp
+            + total_rest_investment_cost_per_simulated_period_without_hp
             + gas_costs_in_euro
             + electricity_costs_in_euro
             + heating_costs_in_euro,
@@ -889,6 +931,16 @@ class KpiPreparation:
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
+        total_rest_investment_cost_per_simulated_period_only_hp_entry = KpiEntry(
+            name="Investment costs for equipment only heatpump per simulated period minus subsidies",
+            unit="EUR",
+            value=total_rest_investment_cost_per_simulated_period_only_hp,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if not any(word in building_object for word in DistrictNames)
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
+        )
         total_device_co2_footprint_per_simulated_period_only_hp_entry = KpiEntry(
             name="CO2 footprint for equipment only heatpump per simulated period",
             unit="kg",
@@ -913,7 +965,7 @@ class KpiPreparation:
             name="Total costs only heatpump for simulated period",
             unit="EUR",
             value=(
-                total_maintenance_cost_per_simulated_period_only_hp + total_investment_cost_per_simulated_period_only_hp
+                total_maintenance_cost_per_simulated_period_only_hp + total_rest_investment_cost_per_simulated_period_only_hp
             ),
             tag=(
                 KpiTagEnumClass.COSTS
@@ -942,17 +994,20 @@ class KpiPreparation:
                 total_heat_costs_entry.name: total_heat_costs_entry.to_dict(),
                 total_heat_co2_emissions_entry.name: total_heat_co2_emissions_entry.to_dict(),
                 total_investment_cost_per_simulated_period_entry.name: total_investment_cost_per_simulated_period_entry.to_dict(),
+                total_rest_investment_cost_per_simulated_period_entry.name: total_rest_investment_cost_per_simulated_period_entry.to_dict(),
                 total_device_co2_footprint_per_simulated_period_entry.name: total_device_co2_footprint_per_simulated_period_entry.to_dict(),
                 total_energy_cost_entry.name: total_energy_cost_entry.to_dict(),
                 total_maintenance_cost_entry.name: total_maintenance_cost_entry.to_dict(),
                 total_cost_entry.name: total_cost_entry.to_dict(),
                 total_emissions_entry.name: total_emissions_entry.to_dict(),
                 total_investment_cost_per_simulated_period_without_hp_entry.name: total_investment_cost_per_simulated_period_without_hp_entry.to_dict(),
+                total_rest_investment_cost_per_simulated_period_without_hp_entry.name: total_rest_investment_cost_per_simulated_period_without_hp_entry.to_dict(),
                 total_device_co2_footprint_per_simulated_period_without_hp_entry.name: total_device_co2_footprint_per_simulated_period_without_hp_entry.to_dict(),
                 total_maintenance_cost_without_hp_entry.name: total_maintenance_cost_without_hp_entry.to_dict(),
                 total_cost_without_hp_entry.name: total_cost_without_hp_entry.to_dict(),
                 total_emissions_without_hp_entry.name: total_emissions_without_hp_entry.to_dict(),
                 total_investment_cost_per_simulated_period_only_hp_entry.name: total_investment_cost_per_simulated_period_only_hp_entry.to_dict(),
+                total_rest_investment_cost_per_simulated_period_only_hp_entry.name: total_rest_investment_cost_per_simulated_period_only_hp_entry.to_dict(),
                 total_device_co2_footprint_per_simulated_period_only_hp_entry.name: total_device_co2_footprint_per_simulated_period_only_hp_entry.to_dict(),
                 total_maintenance_cost_only_hp_entry.name: total_maintenance_cost_only_hp_entry.to_dict(),
                 total_cost_only_hp_entry.name: total_cost_only_hp_entry.to_dict(),

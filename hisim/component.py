@@ -461,9 +461,9 @@ class OpexCostDataClass:
     co2_footprint_in_kg: float
     total_consumption_in_kwh: float
     loadtype: lt.LoadTypes
+    consumption_for_space_heating_in_kwh: float = 0.0
+    consumption_for_domestic_hot_water_in_kwh: float = 0.0
     kpi_tag: Optional[KpiTagEnumClass] = None
-    consumption_for_space_heating_in_kwh: Optional[float] = None
-    consumption_for_domestic_hot_water_in_kwh: Optional[float] = None
 
     @classmethod
     def get_default_opex_cost_data_class(cls) -> OpexCostDataClass:

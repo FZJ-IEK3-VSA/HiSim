@@ -20,7 +20,7 @@ from hisim.components import (
     heat_distribution_system,
     generic_pv_system,
 )
-from hisim import utils, loadtypes
+from hisim import utils
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
@@ -131,16 +131,20 @@ def test_house(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
     my_oil_heater = generic_boiler.GenericBoiler(
-        config=my_oil_heater_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_oil_heater_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
-    my_oil_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-        minimal_thermal_power_in_watt=my_oil_heater_config.minimal_thermal_power_in_watt,
-        maximal_thermal_power_in_watt=my_oil_heater_config.maximal_thermal_power_in_watt,
-        with_domestic_hot_water_preparation=True,
+    my_oil_heater_controller_config = (
+        generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
+            minimal_thermal_power_in_watt=my_oil_heater_config.minimal_thermal_power_in_watt,
+            maximal_thermal_power_in_watt=my_oil_heater_config.maximal_thermal_power_in_watt,
+            with_domestic_hot_water_preparation=True,
+        )
     )
     my_oil_heater_controller = generic_boiler.GenericBoilerController(
-        my_simulation_parameters=my_simulation_parameters, config=my_oil_heater_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_oil_heater_controller_config,
     )
 
     # Build Heat Water Storage
@@ -172,7 +176,11 @@ def test_house(
     )
 
     # Build heating Meter
-    my_heating_meter_config = heating_meter.HeatingMeterConfig.get_heating_meter_default_config(fuel_loadtype=my_oil_heater_config.energy_carrier, heating_value_of_fuel_in_kwh_per_liter=my_oil_heater.heating_value_of_fuel_in_kwh_per_liter, fuel_density_in_kg_per_m3=my_oil_heater.fuel_density_in_kg_per_m3)
+    my_heating_meter_config = heating_meter.HeatingMeterConfig.get_heating_meter_default_config(
+        fuel_loadtype=my_oil_heater_config.energy_carrier,
+        heating_value_of_fuel_in_kwh_per_liter=my_oil_heater.heating_value_of_fuel_in_kwh_per_liter,
+        fuel_density_in_kg_per_m3=my_oil_heater.fuel_density_in_kg_per_m3,
+    )
     my_heating_meter = heating_meter.HeatingMeter(
         my_simulation_parameters=my_simulation_parameters,
         config=my_heating_meter_config,
@@ -214,17 +222,27 @@ def test_house(
         f"Total {my_oil_heater.energy_carrier.value} consumption (energy)"
     ].get("value")
 
-    opex_costs_for_Heating_in_euro = jsondata["Heating Meter"]["OPEX - Energy costs"].get("value")
+    opex_costs_for_heating_in_euro = jsondata["Heating Meter"]["OPEX - Energy costs"].get("value")
 
-    co2_footprint_due_to_Heating_use_in_kg = jsondata["Heating Meter"]["OPEX - CO2 Footprint"].get("value")
+    co2_footprint_due_to_heating_use_in_kg = jsondata["Heating Meter"]["OPEX - CO2 Footprint"].get("value")
 
     log.information(
-        f"Total {my_heating_meter_config.fuel_loadtype.value} consumption [kWh] " + str(oil_consumption_in_kilowatt_hour)
+        f"Total {my_heating_meter_config.fuel_loadtype.value} consumption [kWh] "
+        + str(oil_consumption_in_kilowatt_hour)
     )
 
-    log.information(f"Total {my_heating_meter_config.fuel_loadtype.value} consumption measured by heating meter [kWh] " + str(heat_consumption_in_kilowatt_hour))
-    log.information(f"Opex costs for total {my_heating_meter_config.fuel_loadtype.value} consumption [€] " + str(opex_costs_for_Heating_in_euro))
-    log.information(f"CO2 footprint for total {my_heating_meter_config.fuel_loadtype.value} consumption [kg] " + str(co2_footprint_due_to_Heating_use_in_kg))
+    log.information(
+        f"Total {my_heating_meter_config.fuel_loadtype.value} consumption measured by heating meter [kWh] "
+        + str(heat_consumption_in_kilowatt_hour)
+    )
+    log.information(
+        f"Opex costs for total {my_heating_meter_config.fuel_loadtype.value} consumption [€] "
+        + str(opex_costs_for_heating_in_euro)
+    )
+    log.information(
+        f"CO2 footprint for total {my_heating_meter_config.fuel_loadtype.value} consumption [kg] "
+        + str(co2_footprint_due_to_heating_use_in_kg)
+    )
 
     # test and compare with relative error of 5%
     np.testing.assert_allclose(

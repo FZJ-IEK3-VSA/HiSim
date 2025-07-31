@@ -57,7 +57,7 @@ class GasMeterConfig(cp.ConfigBase):
         return GasMeterConfig(
             building_name=building_name,
             name="GasMeter",
-            total_energy_from_grid_in_kwh=None,
+            total_energy_from_grid_in_kwh=0.0,
             gas_loadtype=lt.LoadTypes.GAS,
             # capex and device emissions are calculated in get_cost_capex function by default
             device_co2_footprint_in_kg=None,

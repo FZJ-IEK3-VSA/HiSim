@@ -246,7 +246,7 @@ def setup_function(
         maintenance_costs_in_euro_per_year=my_config.maintenance_cost_as_percentage_of_investment_pv_district
         * my_config.investment_costs_in_euro_pv_district,
         subsidy_as_percentage_of_investment_costs=0.0,
-        lifetime_in_years=my_config.lifetime_in_years_in_years_pv_district,
+        lifetime_in_years=my_config.lifetime_pv_district,
         predictive=my_config.predictive_pv_district,
         predictive_control=my_config.predictive_control_pv_district,
         prediction_horizon=my_config.prediction_horizon_pv_district,

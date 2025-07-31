@@ -2,7 +2,9 @@
 
 import os
 from typing import List, Dict, Union
+from dataclasses import asdict
 import pandas as pd
+
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim.component_wrapper import ComponentWrapper
@@ -84,6 +86,13 @@ def opex_calculation(
                     all_outputs=all_outputs,
                     postprocessing_results=postprocessing_results,
                 )
+                # filter out none type values
+                if any(v is None for v in asdict(opex).values()):
+                    log.debug(
+                        f"Component {component_unwrapped.component_name} has None opex value and will therefore be skipped."
+                    )
+                    log.debug(str(opex))
+                    continue
 
                 energy_consumption = round(opex.total_consumption_in_kwh, 2)
                 co2 = round(opex.co2_footprint_in_kg, 2)
@@ -151,7 +160,7 @@ def opex_calculation(
                     [] * len(headline),
                     prepare_row_for_writing_to_table(
                         row_name=f"{building_object}_Total", dict_with_values=totals_per_building["all_components"]
-                    )
+                    ),
                 ]
             )
             # Add meter values at the end
@@ -287,6 +296,13 @@ def capex_calculation(
                 capex: CapexCostDataClass = component_unwrapped.get_cost_capex(
                     config=component_unwrapped.config, simulation_parameters=simulation_parameters
                 )
+                # filter out none type values
+                if any(v is None for v in asdict(capex).values()):
+                    log.debug(
+                        f"Component {component_unwrapped.component_name} has None capex value and will therefore be skipped."
+                    )
+                    log.debug(str(capex))
+                    continue
 
                 if capex.lifetime_in_years <= 0:
                     log.warning(f"Invalid lifetime in {component_unwrapped.component_name}, skipping entry.")
@@ -358,7 +374,7 @@ def capex_calculation(
                     [] * len(headline),
                     prepare_row_for_writing_to_table(
                         row_name=f"{building_object}_Total", dict_with_values=totals_per_building["all_components"]
-                    )
+                    ),
                 ]
             )
 

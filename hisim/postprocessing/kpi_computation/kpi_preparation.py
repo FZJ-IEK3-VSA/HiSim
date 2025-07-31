@@ -792,11 +792,6 @@ class KpiPreparation:
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
-        value = (total_maintenance_cost_per_simulated_period
-            + total_investment_cost_per_simulated_period
-            + gas_costs_in_euro
-            + electricity_costs_in_euro
-            + heating_costs_in_euro)
 
         total_cost_entry = KpiEntry(
             name="Total costs for simulated period",

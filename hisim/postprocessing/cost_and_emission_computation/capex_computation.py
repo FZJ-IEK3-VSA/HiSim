@@ -9,6 +9,7 @@ from hisim import log
 from hisim.loadtypes import ComponentType, Units
 from hisim.units import Quantity
 
+
 class CapexComputationHelperFunctions:
     """Helper functions for capex and emission computation."""
 
@@ -23,17 +24,14 @@ class CapexComputationHelperFunctions:
     ) -> CapexCostDataClass:
         """Compute capex costs and emissions for a given component type."""
         list_of_config_capex_variables = [
-                config.investment_costs_in_euro,
-                config.device_co2_footprint_in_kg,
-                config.lifetime_in_years,
-                config.maintenance_costs_in_euro_per_year,
-                config.subsidy_as_percentage_of_investment_costs
-            ]
+            config.investment_costs_in_euro,
+            config.device_co2_footprint_in_kg,
+            config.lifetime_in_years,
+            config.maintenance_costs_in_euro_per_year,
+            config.subsidy_as_percentage_of_investment_costs,
+        ]
         # if config capex values are None, use values from EmissionFactorsAndCostsForDevicesConfig
-        if all(
-            v is None
-            for v in list_of_config_capex_variables
-        ):
+        if all(v is None for v in list_of_config_capex_variables):
             log.debug(
                 f"Using EmissionFactorsAndCostsForDevicesConfig for {config.get_main_classname()} capex calculation."
             )
@@ -102,16 +100,11 @@ class CapexComputationHelperFunctions:
         else:
             log.debug(f"Using config values for {config.get_main_classname()} capex calculation.")
             # Use values from config
-            if all(
-                isinstance(v, (float, int))
-                for v in list_of_config_capex_variables
-            ):
+            if all(isinstance(v, (float, int)) for v in list_of_config_capex_variables):
                 capex_investment_cost_in_euro = config.investment_costs_in_euro
                 device_co2_footprint_in_kg = config.device_co2_footprint_in_kg
                 technical_lifetime_in_years = config.lifetime_in_years
-                maintenance_costs_in_euro = (
-                    config.maintenance_costs_in_euro_per_year
-                )
+                maintenance_costs_in_euro = config.maintenance_costs_in_euro_per_year
                 subsidy_as_percentage_of_investment_costs = config.subsidy_as_percentage_of_investment_costs
 
             elif all(isinstance(v, Quantity) for v in list_of_config_capex_variables):
@@ -119,9 +112,7 @@ class CapexComputationHelperFunctions:
                 capex_investment_cost_in_euro = config.investment_costs_in_euro.value
                 device_co2_footprint_in_kg = config.device_co2_footprint_in_kg.value
                 technical_lifetime_in_years = config.lifetime_in_years.value
-                maintenance_costs_in_euro = (
-                    config.maintenance_costs_in_euro_per_year.value
-                )
+                maintenance_costs_in_euro = config.maintenance_costs_in_euro_per_year.value
                 subsidy_as_percentage_of_investment_costs = config.subsidy_as_percentage_of_investment_costs.value
             else:
                 raise ValueError("Config values have wrong type: ", [type(v) for v in list_of_config_capex_variables])
@@ -150,7 +141,6 @@ class CapexComputationHelperFunctions:
         )
         return capex_cost_data_class
 
-
     @staticmethod
     def overwrite_config_values_with_new_capex_values(config: Any, capex_cost_data_class: CapexCostDataClass):
         """Overwrite config values with new capex values and return."""
@@ -159,5 +149,7 @@ class CapexComputationHelperFunctions:
         config.device_co2_footprint_in_kg = capex_cost_data_class.device_co2_footprint_in_kg
         config.lifetime_in_years = capex_cost_data_class.lifetime_in_years
         config.maintenance_costs_in_euro_per_year = capex_cost_data_class.maintenance_costs_in_euro
-        config.subsidy_as_percentage_of_investment_costs = capex_cost_data_class.subsidy_as_percentage_of_investment_costs
+        config.subsidy_as_percentage_of_investment_costs = (
+            capex_cost_data_class.subsidy_as_percentage_of_investment_costs
+        )
         return config

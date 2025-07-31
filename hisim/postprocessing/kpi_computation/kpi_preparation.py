@@ -596,9 +596,9 @@ class KpiPreparation:
                     gas_co2_in_kg = kpi_entry["value"]
 
             elif kpi_entry["tag"] == KpiTagEnumClass.HEATING_METER.value:
-                if kpi_name == "Opex costs of heat consumption from grid":
+                if kpi_name == "OPEX - Energy costs":
                     heating_costs_in_euro = kpi_entry["value"]
-                if kpi_name == "CO2 footprint of heat consumption from grid":
+                if kpi_name == "OPEX - CO2 Footprint":
                     heating_co2_in_kg = kpi_entry["value"]
 
         # get CAPEX and OPEX costs for simulated period

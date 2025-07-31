@@ -21,6 +21,7 @@ from hisim.components import (
     heat_distribution_system,
     electricity_meter,
     generic_boiler,
+    heating_meter,
 )
 
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
@@ -313,6 +314,19 @@ def setup_function(
     )
     # Add to simulator
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
+
+    # Build Heating Meter
+    my_heating_meter_config = heating_meter.HeatingMeterConfig.get_heating_meter_default_config(
+        fuel_loadtype=lt.LoadTypes.PELLETS,
+        heating_value_of_fuel_in_kwh_per_liter=my_pellet_heater.heating_value_of_fuel_in_kwh_per_liter,
+        fuel_density_in_kg_per_m3=my_pellet_heater.fuel_density_in_kg_per_m3,
+    )
+    my_heating_meter = heating_meter.HeatingMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_heating_meter_config,
+    )
+    # Add to simulator
+    my_sim.add_component(my_heating_meter, connect_automatically=True)
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(

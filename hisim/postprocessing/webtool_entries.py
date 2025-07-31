@@ -2,14 +2,14 @@
 
 from dataclasses import dataclass, field, InitVar
 from typing import Dict, List, Optional
-
+import re
 import pandas as pd
 from dataclass_wizard import JSONWizard
 
 from hisim.component import ComponentOutput
 from hisim.loadtypes import OutputPostprocessingRules
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-import re
+
 
 @dataclass
 class ResultEntry(JSONWizard):
@@ -90,12 +90,12 @@ class WebtoolDict(JSONWizard):
                     computed_values_key = computed_values[0][idx_column + 1]
                     try:
                         computed_values_name, computed_values_unit = computed_values_key.split(" in ")
-                    except:
+                    except Exception as exc:
                         match = re.match(r"^(.*?)\s*\[(.*?)\]$", computed_values_key)
                         if match:
                             computed_values_name, computed_values_unit = match.groups()
                         else:
-                            raise ValueError(f"Key {computed_values_key} cannot be reformatted.")
+                            raise ValueError(f"Key {computed_values_key} cannot be reformatted.") from exc
                     # Create result entry
                     result_entry = ResultEntry(
                         name=computed_values_name, unit=computed_values_unit, description="", value=computed_values_item)

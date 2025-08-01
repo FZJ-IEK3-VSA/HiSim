@@ -376,7 +376,7 @@ class GasMeter(DynamicComponent):
                     break
 
         total_energy_from_grid_in_kwh_entry = KpiEntry(
-            name=f"Total {self.config.gas_loadtype.value} demand from grid",
+            name=f"Total gas demand from grid",
             unit="kWh",
             value=total_energy_from_grid_in_kwh,
             tag=KpiTagEnumClass.GAS_METER,
@@ -386,7 +386,7 @@ class GasMeter(DynamicComponent):
         # try to get opex costs
         opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
         opex_costs_in_euro_entry = KpiEntry(
-            name=f"Opex costs of {self.config.gas_loadtype.value} consumption from grid",
+            name=f"Opex costs of gas consumption from grid",
             unit="Euro",
             value=opex_costs.opex_energy_cost_in_euro,
             tag=KpiTagEnumClass.GAS_METER,
@@ -394,7 +394,7 @@ class GasMeter(DynamicComponent):
         )
         list_of_kpi_entries.append(opex_costs_in_euro_entry)
         co2_footprint_in_kg_entry = KpiEntry(
-            name=f"CO2 footprint of {self.config.gas_loadtype.value} consumption from grid",
+            name=f"CO2 footprint of gas consumption from grid",
             unit="kg",
             value=opex_costs.co2_footprint_in_kg,
             tag=KpiTagEnumClass.GAS_METER,

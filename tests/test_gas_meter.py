@@ -210,14 +210,14 @@ def test_house(
 
     jsondata = jsondata["BUI1"]
 
-    gas_consumption_in_kilowatt_hour = jsondata["Gas Meter"][f"Total gas demand from grid"].get("value")
+    gas_consumption_in_kilowatt_hour = jsondata["Gas Meter"]["Total gas demand from grid"].get("value")
     gas_consumption_of_boiler_in_kilowatt_hour = jsondata["Gas Boiler"][
         f"Total {my_gas_heater.energy_carrier.value} consumption (energy)"
     ].get("value")
 
-    opex_costs_for_gas_in_euro = jsondata["Gas Meter"][f"Opex costs of gas consumption from grid"].get("value")
+    opex_costs_for_gas_in_euro = jsondata["Gas Meter"]["Opex costs of gas consumption from grid"].get("value")
 
-    co2_footprint_due_to_gas_use_in_kg = jsondata["Gas Meter"][f"CO2 footprint of gas consumption from grid"].get("value")
+    co2_footprint_due_to_gas_use_in_kg = jsondata["Gas Meter"]["CO2 footprint of gas consumption from grid"].get("value")
 
     log.information(
         f"Total {my_gas_meter_config.gas_loadtype.value} consumption [kWh] " + str(gas_consumption_of_boiler_in_kilowatt_hour)

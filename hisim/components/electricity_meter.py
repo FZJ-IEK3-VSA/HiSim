@@ -251,7 +251,9 @@ class ElectricityMeter(DynamicComponent):
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
+        self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_electric_heater())
+        self.add_dynamic_default_connections(self.get_default_connections_from_solar_thermal_system())
 
     def get_default_connections_from_utsp_occupancy(
         self,
@@ -351,6 +353,46 @@ class ElectricityMeter(DynamicComponent):
         )
         return dynamic_connections
 
+    def get_default_connections_from_more_advanced_heat_pump(
+        self,
+    ):
+        """Get more advanced heat pump default connections."""
+
+        from hisim.components.more_advanced_heat_pump_hplib import (   # pylint: disable=import-outside-toplevel
+            MoreAdvancedHeatPumpHPLib,
+        )
+        dynamic_connections = []
+        more_advanced_heat_pump_class_name = MoreAdvancedHeatPumpHPLib.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=MoreAdvancedHeatPumpHPLib,
+                source_class_name=more_advanced_heat_pump_class_name,
+                source_component_field_name=MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.HEAT_PUMP_BUILDING,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                ],
+                source_weight=999,
+            )
+        )
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=MoreAdvancedHeatPumpHPLib,
+                source_class_name=more_advanced_heat_pump_class_name,
+                source_component_field_name=MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.HEAT_PUMP_DHW,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                ],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
     def get_default_connections_from_electric_heater(
         self,
     ):
@@ -385,6 +427,28 @@ class ElectricityMeter(DynamicComponent):
                     lt.ComponentType.ELECTRIC_HEATING_DHW,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 ],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_solar_thermal_system(
+        self,
+    ):
+        """Get solar thermal default connections."""
+
+        from hisim.components.solar_thermal_system import SolarThermalSystem  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        solar_thermal_class_name = SolarThermalSystem.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=SolarThermalSystem,
+                source_class_name=solar_thermal_class_name,
+                source_component_field_name=SolarThermalSystem.ElectricityConsumptionOutput,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.ComponentType.SOLAR_THERMAL_SYSTEM, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
                 source_weight=999,
             )
         )

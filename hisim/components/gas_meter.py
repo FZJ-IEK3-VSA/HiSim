@@ -158,7 +158,6 @@ class GasMeter(DynamicComponent):
         )
 
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_gas_heater())
-        # self.add_dynamic_default_connections(self.get_default_connections_from_generic_dhw_gas_heater())
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_heat_source())
 
     def get_default_connections_from_generic_gas_heater(

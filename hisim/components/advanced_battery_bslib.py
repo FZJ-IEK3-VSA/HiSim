@@ -21,6 +21,7 @@ from hisim.component import (
     DisplayConfig,
     CapexCostDataClass,
 )
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -366,10 +367,18 @@ class Battery(Component):
                     ) * (-1)
                     battery_losses_in_kwh = self.battery_config.charge_in_kwh - self.battery_config.discharge_in_kwh
 
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+            self.my_simulation_parameters.year
+        )
+        co2_per_unit = emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh
+        euro_per_unit = emissions_and_cost_factors.electricity_costs_in_euro_per_kwh
+        co2_per_simulated_period_in_kg = battery_losses_in_kwh * co2_per_unit
+        opex_energy_cost_per_simulated_period_in_euro = battery_losses_in_kwh * euro_per_unit
+
         opex_cost_data_class = OpexCostDataClass(
-            opex_energy_cost_in_euro=0,
+            opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
-            co2_footprint_in_kg=0,
+            co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             total_consumption_in_kwh=battery_losses_in_kwh,
             loadtype=LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.BATTERY,

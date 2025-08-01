@@ -81,6 +81,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         postprocessing_flag: Optional[List[Any]] = None,
         sankey_flow_direction: Optional[bool] = None,
         output_description: Optional[str] = None,
+        source_component_class: Optional[str] = None,
     ):
         """Defines a component output."""
         self.full_name: str = object_name + " # " + field_name
@@ -93,6 +94,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.postprocessing_flag: Optional[List[Any]] = postprocessing_flag
         self.sankey_flow_direction: Optional[bool] = sankey_flow_direction
         self.output_description: Optional[str] = output_description
+        self.source_component_class: Optional[str] = source_component_class
 
     def get_pretty_name(self) -> str:
         """Gets a pretty name for a component output."""

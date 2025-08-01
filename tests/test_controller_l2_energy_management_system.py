@@ -62,7 +62,7 @@ def test_house(
         )
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON)
-        my_simulation_parameters.logging_level = 4
+        my_simulation_parameters.logging_level = 3
     # this part is copied from hisim_main
     # Build Simulator
     normalized_path = os.path.normpath(PATH)
@@ -263,7 +263,7 @@ def test_house(
     loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
         source_output_name="LoadingPowerInputForBattery_",
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-        source_weight=4,
+        source_weight=5,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         output_description="Target electricity for Battery Control. ",
@@ -342,6 +342,7 @@ def test_house(
     print("occupancy total consumption ", residents_total_consumption_kpi_in_kilowatt_hour)
     print("sh hp total consumption ", space_heating_heatpump_total_consumption_kpi_in_kilowatt_hour)
     print("dhw hp total consumption ", domestic_hot_water_heatpump_total_consumption_kpi_in_kilowatt_hour)
+    print("sum of components' total consumptions ", sum_component_total_consumptions_in_kilowatt_hour)
     print("\n")
 
     # Get grid consumptions of components
@@ -354,6 +355,7 @@ def test_house(
     domestic_hot_water_heatpump_grid_consumption_kpi_in_kilowatt_hour = jsondata["Energy Management System"][
         "Domestic hot water heat pump electricity from grid"
     ].get("value")
+
     sum_component_grid_consumptions_in_kilowatt_hour = (
         residents_grid_consumption_kpi_in_kilowatt_hour
         + space_heating_heatpump_grid_consumption_kpi_in_kilowatt_hour
@@ -364,6 +366,7 @@ def test_house(
     print("occupancy grid consumption ", residents_grid_consumption_kpi_in_kilowatt_hour)
     print("sh hp grid consumption ", space_heating_heatpump_grid_consumption_kpi_in_kilowatt_hour)
     print("dhw hp grid consumption ", domestic_hot_water_heatpump_grid_consumption_kpi_in_kilowatt_hour)
+    print("sum of components' grid consumptions ", sum_component_grid_consumptions_in_kilowatt_hour)
     print("\n")
 
     # Get EMS output TotalElectricityConsumption
@@ -414,7 +417,7 @@ def test_house(
 
     # Test grid consumption
     print("ems grid consumption ", ems_grid_consumption_in_kilowatt_hour)
-    print("kpi grid consumption ", electricity_from_grid_kpi_in_kilowatt_hour)
+    print("em grid consumption ", electricity_from_grid_kpi_in_kilowatt_hour)
     print("sum of components' grid consumptions ", sum_component_grid_consumptions_in_kilowatt_hour)
     print("\n")
     np.testing.assert_allclose(
@@ -430,7 +433,7 @@ def test_house(
 
     # Test grid injection
     print("ems grid injection ", ems_grid_injection_in_kilowatt_hour)
-    print("kpi grid injection ", electricity_to_grid_kpi_in_kilowatt_hour)
+    print("em grid injection ", electricity_to_grid_kpi_in_kilowatt_hour)
     print("other kpi grid injection ", other_kpi_grid_injection_in_kilowatt_hour)
 
     print("\n")

@@ -242,6 +242,7 @@ def setup_function(
         my_simulation_parameters = SimulationParameters.one_week_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build heat Distribution System Controller
@@ -391,10 +392,31 @@ def setup_function(
         my_heat_pump.component_name,
         my_heat_pump.MassFlowOutputSH,
     )
-
+    # Connect Outputs to Electricity Meter manually because MoreAdvancedHeatPump has no dhw preparation
+    # which causes confusion with the default connections of the ElectricityMeter
     my_electricity_meter.add_component_input_and_connect(
         source_object_name=my_heat_pump.component_name,
-        source_component_output=my_heat_pump.ElectricalInputPowerTotal,
+        source_component_output=my_heat_pump.ElectricalInputPowerSH,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
+        source_weight=999,
+    )
+    my_electricity_meter.add_component_input_and_connect(
+        source_object_name=my_domnestic_hot_water_heatpump.component_name,
+        source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
+        source_weight=999,
+    )
+    my_electricity_meter.add_component_input_and_connect(
+        source_object_name=my_occupancy.component_name,
+        source_component_output=my_occupancy.ElectricalPowerConsumption,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[
@@ -414,6 +436,6 @@ def setup_function(
     my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
-    my_sim.add_component(my_electricity_meter, connect_automatically=True)
+    my_sim.add_component(my_electricity_meter, connect_automatically=False)
     for my_car in my_cars:
         my_sim.add_component(my_car)

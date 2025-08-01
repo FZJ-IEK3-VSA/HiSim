@@ -13,7 +13,7 @@ class KPIForRatingInOptimization(str, enum.Enum):
     # Costs
     # ------------------------------------------------------------
     ANNUALIZED_TOTAL_COSTS = "Annualized Total Costs [€]"
-    ANNUALIZED_ENERGY_GRID_COSTS = "Annualized Energy Grid Costs [€]"
+    ANNUALIZED_ENERGY_COSTS = "Annualized Energy Costs [€]"
     ANNUALIZED_MAINTENANCE_COSTS = "Annualized Maintenance Costs [€]"
     ANNUALIZED_INVESTMENT_COSTS = "Annualized Investment Costs [€]"
     ANNUALIZED_NET_INVESTMENT_COSTS = "Annualized Net Investment Costs [€]"
@@ -30,7 +30,7 @@ class KPIForRatingInOptimization(str, enum.Enum):
     INVESTMENT_COSTS = "Investment Costs [€]"
     INVESTMENT_COSTS_MINUS_SUBSIDIES = "Net Investment Costs [€]"
     TOTAL_COSTS = "Total Costs [€]"
-    ENERGY_GRID_COSTS = "Energy Grid Costs [€]"
+    ENERGY_COSTS = "Energy Costs [€]"
     MAINTENANCE_COSTS = "Maintenance Costs [€]"
     # CO2
     # ------------------------------------------------------------
@@ -47,12 +47,12 @@ class KPIConfig:
     self_sufficiency_rate_electricity_in_percent: float
     #: annual cost for investment and operation in the considered technology, given in euros
     annualized_total_costs_in_euro: float
-    #: annual cost for energy from grid (electricty, gas, heat) given in euros
-    annualized_energy_grid_costs_in_euro: float
+    #: annual cost for energy from grid or from onsite consumption (electricty, gas, heat) given in euros
+    annualized_energy_costs_in_euro: float
     #: annual cost for energy from grid (electricty) given in euros
-    annualized_electricity_grid_costs_in_euro: float
+    annualized_electricity_costs_in_euro: float
     #: annual cost for energy from grid (gas) given in euros
-    annualized_gas_grid_costs_in_euro: float
+    annualized_gas_costs_in_euro: float
     #: annual cost for energy from grid or onsite consumption (heat) given in euros
     annualized_heat_costs_in_euro: float
     #: annual cost for maintenance given in euros
@@ -74,8 +74,8 @@ class KPIConfig:
             return self.self_sufficiency_rate_electricity_in_percent
         if chosen_kpi == KPIForRatingInOptimization.ANNUALIZED_TOTAL_COSTS:
             return self.annualized_total_costs_in_euro
-        if chosen_kpi == KPIForRatingInOptimization.ANNUALIZED_ENERGY_GRID_COSTS:
-            return self.annualized_energy_grid_costs_in_euro
+        if chosen_kpi == KPIForRatingInOptimization.ANNUALIZED_ENERGY_COSTS:
+            return self.annualized_energy_costs_in_euro
         if chosen_kpi == KPIForRatingInOptimization.ANNUALIZED_MAINTENANCE_COSTS:
             return self.annualized_maintenance_costs_in_euro
         if chosen_kpi == KPIForRatingInOptimization.ANNUALIZED_INVESTMENT_COSTS:
@@ -84,4 +84,4 @@ class KPIConfig:
             return self.annualized_net_investment_costs_in_euro
         if chosen_kpi == KPIForRatingInOptimization.ANNUALIZED_TOTAL_CO2_EMISSION:
             return self.annualized_total_co2_emissions_in_kg
-        raise ValueError(f"Chosen KPI {self.chosen_kpi} not recognized.")
+        raise ValueError(f"Chosen KPI {chosen_kpi} not recognized.")

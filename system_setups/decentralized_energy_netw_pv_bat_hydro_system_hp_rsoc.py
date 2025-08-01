@@ -131,7 +131,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system(power_in_watt=pv_power)
     my_photovoltaic_system_config.time = time
     my_photovoltaic_system_config.co2_footprint = pv_co2_footprint
-    my_photovoltaic_system_config.cost = pv_cost
+    my_photovoltaic_system_config.investment_costs_in_euro = pv_cost
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters,
@@ -159,10 +159,11 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
             u_value_roof_in_watt_per_m2_per_kelvin=None,
             u_value_window_in_watt_per_m2_per_kelvin=None,
             u_value_door_in_watt_per_m2_per_kelvin=None,
-            co2_footprint=1,
-            cost=1,
-            maintenance_cost_as_percentage_of_investment=0.01,
-            lifetime=1,
+            device_co2_footprint_in_kg=1,
+            investment_costs_in_euro=1,
+            maintenance_costs_in_euro_per_year=0.01,
+            subsidy_as_percentage_of_investment_costs=0.0,
+            lifetime_in_years=1,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

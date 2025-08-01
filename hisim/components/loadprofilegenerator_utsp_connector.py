@@ -36,7 +36,7 @@ from utspclient.helpers.lpgpythonbindings import CalcOption, JsonReference
 from pylpg import lpg_execution
 
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
-
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 # Owned
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -1913,11 +1913,17 @@ class UtspLpgConnector(cp.Component):
                     power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
                     timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                 )
-
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+            self.my_simulation_parameters.year
+        )
+        co2_per_unit = emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh
+        euro_per_unit = emissions_and_cost_factors.electricity_costs_in_euro_per_kwh
+        co2_per_simulated_period_in_kg = consumption_in_kwh * co2_per_unit
+        opex_energy_cost_per_simulated_period_in_euro = consumption_in_kwh * euro_per_unit
         opex_cost_data_class = OpexCostDataClass(
-            opex_energy_cost_in_euro=0,
+            opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=0,
-            co2_footprint_in_kg=0,
+            co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             total_consumption_in_kwh=consumption_in_kwh,
             loadtype=lt.LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.RESIDENTS,

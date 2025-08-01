@@ -55,6 +55,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiEntry,
     KpiTagEnumClass,
 )
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
 __authors__ = "Frank Burkrad, Maximilian Hillen, Markus Blasberg, Katharina Rieck, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -69,9 +70,7 @@ __status__ = ""
 class BoilerType(Enum):
     """Set Boiler Types."""
 
-    CONVENTIONAL = (
-        1  # use only heat of combustion -> lower heating value of fuel is used
-    )
+    CONVENTIONAL = 1  # use only heat of combustion -> lower heating value of fuel is used
     CONDENSING = 2  # use also heat from waste gases (from water vapour) -> higher heating value of fuel is used
 
 
@@ -95,13 +94,15 @@ class GenericBoilerConfig(ConfigBase):
     eff_th_max: float
     temperature_delta_in_celsius: float
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
-    cost: float
+    investment_costs_in_euro: Optional[float]
     #: lifetime in years
-    lifetime: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
     #: energy consumption in kWh
     consumption_in_kilowatt_hour: float
 
@@ -122,12 +123,12 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             eff_th_min=0.60,
             eff_th_max=0.90,
-            co2_footprint=maximal_thermal_power_in_watt
-            * 1e-3
-            * 49.47,  # value from emission_factros_and_costs_devices.csv
-            cost=7416,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -141,21 +142,12 @@ class GenericBoilerConfig(ConfigBase):
 
         maximal_thermal_power_in_watt_sh = heating_load_of_building_in_watt
         maximal_thermal_power_in_watt_dhw = (
-            2500 * number_of_apartments_in_building
-            if number_of_apartments_in_building is not None
-            else 0
+            2500 * number_of_apartments_in_building if number_of_apartments_in_building is not None else 0
         )
 
-        maximal_thermal_power_in_watt = max(
-            maximal_thermal_power_in_watt_sh, maximal_thermal_power_in_watt_dhw
-        )
-        if (
-            maximal_thermal_power_in_watt_dhw > 0
-            and maximal_thermal_power_in_watt_sh > 0
-        ):
-            maximal_thermal_power_in_watt *= (
-                1.1  # add 10% when used for both SH and DHW
-            )
+        maximal_thermal_power_in_watt = max(maximal_thermal_power_in_watt_sh, maximal_thermal_power_in_watt_dhw)
+        if maximal_thermal_power_in_watt_dhw > 0 and maximal_thermal_power_in_watt_sh > 0:
+            maximal_thermal_power_in_watt *= 1.1  # add 10% when used for both SH and DHW
         return maximal_thermal_power_in_watt
 
     @classmethod
@@ -179,12 +171,12 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             eff_th_min=0.60,
             eff_th_max=0.90,
-            co2_footprint=maximal_thermal_power_in_watt
-            * 1e-3
-            * 49.47,  # value from emission_factros_and_costs_devices.csv
-            cost=7416,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -206,12 +198,12 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             eff_th_min=0.60,
             eff_th_max=0.90,
-            co2_footprint=maximal_thermal_power_in_watt
-            * 1e-3
-            * 19.4,  # value from emission_factros_and_costs_devices.csv
-            cost=5562,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -237,12 +229,12 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             eff_th_min=0.60,
             eff_th_max=0.90,
-            co2_footprint=maximal_thermal_power_in_watt
-            * 1e-3
-            * 19.4,  # value from emission_factros_and_costs_devices.csv
-            cost=5562,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -268,21 +260,16 @@ class GenericBoilerConfig(ConfigBase):
             boiler_type=BoilerType.CONVENTIONAL,
             energy_carrier=lt.LoadTypes.PELLETS,
             temperature_delta_in_celsius=20,
-            minimal_thermal_power_in_watt=1
-            / 12
-            * maximal_thermal_power_in_watt,
+            minimal_thermal_power_in_watt=1 / 12 * maximal_thermal_power_in_watt,
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             eff_th_min=0.60,
             eff_th_max=0.90,
-            # gas value from emission_factros_and_costs_devices.csv,
-            # factor pellet/gas from https://depv.de/p/Bessere-CO2-Bilanz-mit-Holzpellets-pWuQQ4VvuNQoYjUzRf778Z
-            co2_footprint=0.63 * 49.47,
-            # gas value from emission_factros_and_costs_devices.csv,
-            # factor pellet/gas from https://www.dein-heizungsbauer.de/ratgeber/bauen-sanieren/pelletheizung-kosten/
-            cost=3.33 * 7416,
-            lifetime=15,  # https://www.gebaeudeforum.de/fileadmin/gebaeudeforum/Downloads/Factsheet/Factsheet_65ProzentEE_07_Pelletkessel.pdf
-            # from https://www.dein-heizungsbauer.de/ratgeber/bauen-sanieren/pelletheizung-kosten/
-            maintenance_cost_as_percentage_of_investment=0.01,
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -308,17 +295,16 @@ class GenericBoilerConfig(ConfigBase):
             boiler_type=BoilerType.CONVENTIONAL,
             energy_carrier=lt.LoadTypes.WOOD_CHIPS,
             temperature_delta_in_celsius=20,
-            minimal_thermal_power_in_watt=1
-            / 12
-            * maximal_thermal_power_in_watt,
+            minimal_thermal_power_in_watt=1 / 12 * maximal_thermal_power_in_watt,
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             eff_th_min=0.60,
             eff_th_max=0.90,
-            co2_footprint=0.63
-            * 49.47,  # did not find value for wood chips, using same as for pellet heating
-            cost=21500,  # approximate value based on https://www.heizung.de/holzheizung/hackschnitzelheizung.html
-            lifetime=15,  # assume same as for pellet heater
-            maintenance_cost_as_percentage_of_investment=0.03,  # approximate value based on https://www.heizung.de/holzheizung/hackschnitzelheizung.html
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -344,12 +330,12 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             eff_th_min=0.60,
             eff_th_max=0.90,
-            co2_footprint=maximal_thermal_power_in_watt
-            * 1e-3
-            * 49.47,  # value from emission_factros_and_costs_devices.csv (same values as condensing gasboiler (assume H2-ready boiler))
-            cost=7416,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -384,9 +370,7 @@ class GenericBoiler(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericBoilerConfig,
-        my_display_config: DisplayConfig = DisplayConfig(
-            display_in_webtool=True
-        ),
+        my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
     ) -> None:
         """Construct all the neccessary attributes."""
         self.config = config
@@ -421,14 +405,12 @@ class GenericBoiler(Component):
         )
 
         # Space heating
-        self.water_input_temperature_sh_channel: ComponentInput = (
-            self.add_input(
-                self.component_name,
-                GenericBoiler.WaterInputTemperatureSh,
-                lt.LoadTypes.WATER,
-                lt.Units.CELSIUS,
-                True,
-            )
+        self.water_input_temperature_sh_channel: ComponentInput = self.add_input(
+            self.component_name,
+            GenericBoiler.WaterInputTemperatureSh,
+            lt.LoadTypes.WATER,
+            lt.Units.CELSIUS,
+            True,
         )
         self.water_output_mass_flow_sh_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -450,9 +432,7 @@ class GenericBoiler(Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.EnergyDemandSh} will follow.",
-            postprocessing_flag=[
-                lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL
-            ],
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.thermal_output_power_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -460,9 +440,7 @@ class GenericBoiler(Component):
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
             output_description=f"here a description for {self.ThermalPowerGenerationSh} will follow.",
-            postprocessing_flag=[
-                lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL
-            ],
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.thermal_output_energy_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -470,38 +448,30 @@ class GenericBoiler(Component):
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.ThermalOutputEnergySh} will follow.",
-            postprocessing_flag=[
-                lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL
-            ],
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         # DHW
-        self.water_input_temperature_dhw_channel: ComponentInput = (
-            self.add_input(
-                self.component_name,
-                GenericBoiler.WaterInputTemperatureDhw,
-                lt.LoadTypes.WARM_WATER,
-                lt.Units.CELSIUS,
-                False,
-            )
+        self.water_input_temperature_dhw_channel: ComponentInput = self.add_input(
+            self.component_name,
+            GenericBoiler.WaterInputTemperatureDhw,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.CELSIUS,
+            False,
         )
-        self.water_output_mass_flow_dhw_channel: ComponentOutput = (
-            self.add_output(
-                self.component_name,
-                GenericBoiler.WaterOutputMassFlowDhw,
-                lt.LoadTypes.WARM_WATER,
-                lt.Units.KG_PER_SEC,
-                output_description="Mass flow rate of warm water.",
-            )
+        self.water_output_mass_flow_dhw_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            GenericBoiler.WaterOutputMassFlowDhw,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
+            output_description="Mass flow rate of warm water.",
         )
-        self.water_output_temperature_dhw_channel: ComponentOutput = (
-            self.add_output(
-                self.component_name,
-                GenericBoiler.WaterOutputTemperatureDhw,
-                lt.LoadTypes.WARM_WATER,
-                lt.Units.CELSIUS,
-                output_description="Warm water output temperature",
-            )
+        self.water_output_temperature_dhw_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            GenericBoiler.WaterOutputTemperatureDhw,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.CELSIUS,
+            output_description="Warm water output temperature",
         )
         self.energy_demand_dhw_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -509,48 +479,32 @@ class GenericBoiler(Component):
             lt.LoadTypes.WARM_WATER,
             lt.Units.WATT_HOUR,
             output_description="Energy demand",
-            postprocessing_flag=[
-                lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL
-            ],
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
-        self.thermal_output_power_dhw_channel: ComponentOutput = (
-            self.add_output(
-                object_name=self.component_name,
-                field_name=self.ThermalOutputPowerDhw,
-                load_type=lt.LoadTypes.WARM_WATER,
-                unit=lt.Units.WATT,
-                output_description="Thermal power output",
-                postprocessing_flag=[
-                    lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL
-                ],
-            )
+        self.thermal_output_power_dhw_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalOutputPowerDhw,
+            load_type=lt.LoadTypes.WARM_WATER,
+            unit=lt.Units.WATT,
+            output_description="Thermal power output",
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
-        self.thermal_output_energy_dhw_channel: ComponentOutput = (
-            self.add_output(
-                object_name=self.component_name,
-                field_name=self.ThermalOutputEnergyDhw,
-                load_type=lt.LoadTypes.WARM_WATER,
-                unit=lt.Units.WATT_HOUR,
-                output_description="Thermal energy output",
-                postprocessing_flag=[
-                    lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL
-                ],
-            )
+        self.thermal_output_energy_dhw_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalOutputEnergyDhw,
+            load_type=lt.LoadTypes.WARM_WATER,
+            unit=lt.Units.WATT_HOUR,
+            output_description="Thermal energy output",
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         # Set important parameters
         self.build()
         self.fuel_consumption_in_liter: float = 0
         self.fuel_consumption_in_kg: float = 0
 
-        self.add_default_connections(
-            self.get_default_connections_from_controller_generic_boiler()
-        )
-        self.add_default_connections(
-            self.get_default_connections_from_simple_hot_water_storage()
-        )
-        self.add_default_connections(
-            self.get_default_connections_from_simple_dhw_storage()
-        )
+        self.add_default_connections(self.get_default_connections_from_controller_generic_boiler())
+        self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
+        self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
 
     def get_default_connections_from_controller_generic_boiler(
         self,
@@ -629,12 +583,8 @@ class GenericBoiler(Component):
         """
         # Get values from config
         self.energy_carrier = self.config.energy_carrier
-        self.minimal_thermal_power_in_watt = (
-            self.config.minimal_thermal_power_in_watt
-        )
-        self.maximal_thermal_power_in_watt = (
-            self.config.maximal_thermal_power_in_watt
-        )
+        self.minimal_thermal_power_in_watt = self.config.minimal_thermal_power_in_watt
+        self.maximal_thermal_power_in_watt = self.config.maximal_thermal_power_in_watt
         self.min_combustion_efficiency = self.config.eff_th_min
         self.max_combustion_efficiency = self.config.eff_th_max
         # self.temperature_delta_in_celsius = (
@@ -649,26 +599,21 @@ class GenericBoiler(Component):
 
         # Here use higher heating value for condesing boiler and lower heating value for conventional boiler
         if self.config.boiler_type == BoilerType.CONDENSING:
-            self.heating_value_of_fuel_in_joule_per_m3 = (
-                PhysicsConfig.get_properties_for_energy_carrier(
-                    energy_carrier=self.energy_carrier
-                ).higher_heating_value_in_joule_per_m3
-            )
+            self.heating_value_of_fuel_in_joule_per_m3 = PhysicsConfig.get_properties_for_energy_carrier(
+                energy_carrier=self.energy_carrier
+            ).higher_heating_value_in_joule_per_m3
         elif self.config.boiler_type == BoilerType.CONVENTIONAL:
-            self.heating_value_of_fuel_in_joule_per_m3 = (
-                PhysicsConfig.get_properties_for_energy_carrier(
-                    energy_carrier=self.energy_carrier
-                ).lower_heating_value_in_joule_per_m3
-            )
+            self.heating_value_of_fuel_in_joule_per_m3 = PhysicsConfig.get_properties_for_energy_carrier(
+                energy_carrier=self.energy_carrier
+            ).lower_heating_value_in_joule_per_m3
         else:
-            raise ValueError(
-                f"Boiler type {self.config.boiler_type} is not implemented."
-            )
+            raise ValueError(f"Boiler type {self.config.boiler_type} is not implemented.")
 
         # J = kWh/(3.6 * 1e6) and m3 = 1e3 l
-        self.heating_value_of_fuel_in_kwh_per_liter = (
-            self.heating_value_of_fuel_in_joule_per_m3 / (3.6 * 1e9)
-        )
+        self.heating_value_of_fuel_in_kwh_per_liter = self.heating_value_of_fuel_in_joule_per_m3 / (3.6 * 1e9)
+        self.fuel_density_in_kg_per_m3 = PhysicsConfig.get_properties_for_energy_carrier(
+            energy_carrier=self.config.energy_carrier
+        ).density_in_kg_per_m3
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -699,57 +644,34 @@ class GenericBoiler(Component):
         """Simulate the Generic Boiler."""
         control_signal = stsv.get_input_value(self.control_signal_channel)
         operating_mode = stsv.get_input_value(self.operating_mode_channel)
-        temperature_delta = stsv.get_input_value(
-            self.temperature_delta_channel
-        )
+        temperature_delta = stsv.get_input_value(self.temperature_delta_channel)
 
         if not 0 <= control_signal <= 1:
-            raise Exception(
-                f"Expected a control signal between 0 and 1, not {control_signal}"
-            )
+            raise Exception(f"Expected a control signal between 0 and 1, not {control_signal}")
 
         # Calculate combustion efficiency
-        delta_efficiency = (
-            self.max_combustion_efficiency - self.min_combustion_efficiency
-        )
+        delta_efficiency = self.max_combustion_efficiency - self.min_combustion_efficiency
 
-        if (
-            control_signal * self.maximal_thermal_power_in_watt
-            < self.minimal_thermal_power_in_watt
-        ):
+        if control_signal * self.maximal_thermal_power_in_watt < self.minimal_thermal_power_in_watt:
             maximum_power_used_in_watt = self.minimal_thermal_power_in_watt
             real_combustion_efficiency = self.min_combustion_efficiency
         else:
-            maximum_power_used_in_watt = (
-                control_signal * self.maximal_thermal_power_in_watt
-            )
-            real_combustion_efficiency = (
-                self.min_combustion_efficiency
-                + delta_efficiency * control_signal
-            )
+            maximum_power_used_in_watt = control_signal * self.maximal_thermal_power_in_watt
+            real_combustion_efficiency = self.min_combustion_efficiency + delta_efficiency * control_signal
 
         # energy consumption
         fuel_energy_consumption_in_watt_hour = (
-            maximum_power_used_in_watt
-            * self.my_simulation_parameters.seconds_per_timestep
-            / 3.6e3
+            maximum_power_used_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )
 
         # thermal power delivered from combustion
-        thermal_power_delivered_in_watt = (
-            maximum_power_used_in_watt * real_combustion_efficiency
-        )
+        thermal_power_delivered_in_watt = maximum_power_used_in_watt * real_combustion_efficiency
         thermal_energy_delivered_in_watt_hour = (
-            thermal_power_delivered_in_watt
-            * self.my_simulation_parameters.seconds_per_timestep
-            / 3.6e3
+            thermal_power_delivered_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )
         mass_flow_out_in_kg_per_second = (
             thermal_power_delivered_in_watt
-            / (
-                self.specific_heat_capacity_water_in_joule_per_kilogram_per_celsius
-                * temperature_delta
-            )
+            / (self.specific_heat_capacity_water_in_joule_per_kilogram_per_celsius * temperature_delta)
             if temperature_delta > 0
             else 0
         )
@@ -767,9 +689,8 @@ class GenericBoiler(Component):
                 self.energy_demand_sh_channel,
                 fuel_energy_consumption_in_watt_hour,
             )
-            water_output_temperature_in_celsius = (
-                temperature_delta
-                + stsv.get_input_value(self.water_input_temperature_sh_channel)
+            water_output_temperature_in_celsius = temperature_delta + stsv.get_input_value(
+                self.water_input_temperature_sh_channel
             )
             stsv.set_output_value(
                 self.water_output_temperature_sh_channel,
@@ -804,11 +725,8 @@ class GenericBoiler(Component):
                 fuel_energy_consumption_in_watt_hour,
             )
 
-            water_output_temperature_in_celsius = (
-                temperature_delta
-                + stsv.get_input_value(
-                    self.water_input_temperature_dhw_channel
-                )
+            water_output_temperature_in_celsius = temperature_delta + stsv.get_input_value(
+                self.water_input_temperature_dhw_channel
             )
             stsv.set_output_value(
                 self.water_output_temperature_dhw_channel,
@@ -864,35 +782,36 @@ class GenericBoiler(Component):
         simulation_parameters: SimulationParameters,
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        device_co2_footprint_per_simulated_period = (
-            config.co2_footprint / config.lifetime
-        ) * (simulation_parameters.duration.total_seconds() / seconds_per_year)
 
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-        )
         if config.energy_carrier == lt.LoadTypes.GAS:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.GAS_BOILER
+            kpi_tag = KpiTagEnumClass.GAS_BOILER
+            component_type = lt.ComponentType.GAS_HEATER
         elif config.energy_carrier == lt.LoadTypes.OIL:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.OIL_BOILER
+            kpi_tag = KpiTagEnumClass.OIL_BOILER
+            component_type = lt.ComponentType.OIL_HEATER
         elif config.energy_carrier == lt.LoadTypes.GREEN_HYDROGEN:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.HYDROGEN_BOILER
+            kpi_tag = KpiTagEnumClass.HYDROGEN_BOILER
+            component_type = lt.ComponentType.HYDROGEN_HEATER
         elif config.energy_carrier == lt.LoadTypes.PELLETS:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.PELLET_BOILER
+            kpi_tag = KpiTagEnumClass.PELLET_BOILER
+            component_type = lt.ComponentType.PELLET_HEATER
         elif config.energy_carrier == lt.LoadTypes.WOOD_CHIPS:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.WOOD_CHIP_BOILER
+            kpi_tag = KpiTagEnumClass.WOOD_CHIP_BOILER
+            component_type = lt.ComponentType.WOOD_CHIP_HEATER
         else:
-            capex_cost_data_class = (
-                CapexCostDataClass.get_default_capex_cost_data_class()
-            )
+            raise ValueError(f"Energy carrier {config.energy_carrier} for generic_boiler not implemented yet.")
+
+        unit = lt.Units.KILOWATT
+        size_of_energy_system = config.maximal_thermal_power_in_watt * 1e-3
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+            simulation_parameters=simulation_parameters,
+            component_type=component_type,
+            unit=unit,
+            size_of_energy_system=size_of_energy_system,
+            config=config,
+            kpi_tag=kpi_tag,
+        )
 
         return capex_cost_data_class
 
@@ -910,113 +829,66 @@ class GenericBoiler(Component):
                 and output.field_name == self.EnergyDemandSh
                 and output.unit == lt.Units.WATT_HOUR
             ):
-                sh_consumption_in_kilowatt_hour = round(
-                    sum(postprocessing_results.iloc[:, index]) * 1e-3, 1
-                )
+                sh_consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
             if (
                 output.component_name == self.component_name
                 and output.field_name == self.EnergyDemandDhw
                 and output.unit == lt.Units.WATT_HOUR
             ):
-                dhw_consumption_in_kwh = round(
-                    sum(postprocessing_results.iloc[:, index]) * 1e-3, 1
-                )
+                dhw_consumption_in_kwh = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
 
         assert sh_consumption_in_kilowatt_hour is not None
         assert dhw_consumption_in_kwh is not None
         self.config.consumption_in_kilowatt_hour = sh_consumption_in_kilowatt_hour + dhw_consumption_in_kwh
 
         self.fuel_consumption_in_liter = round(
-            self.config.consumption_in_kilowatt_hour
-            / self.heating_value_of_fuel_in_kwh_per_liter,
+            self.config.consumption_in_kilowatt_hour / self.heating_value_of_fuel_in_kwh_per_liter,
             1,
         )
         self.fuel_consumption_in_kg = round(
-            self.fuel_consumption_in_liter
-            * 1e-3
-            * PhysicsConfig.get_properties_for_energy_carrier(
-                energy_carrier=self.config.energy_carrier
-            ).density_in_kg_per_m3,
+            self.fuel_consumption_in_liter * 1e-3 * self.fuel_density_in_kg_per_m3,
             1,
         )
-        emissions_and_cost_factors = (
-            EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-                self.my_simulation_parameters.year
-            )
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+            self.my_simulation_parameters.year
         )
         if self.energy_carrier == lt.LoadTypes.GAS:
             kpi_tag = KpiTagEnumClass.GAS_BOILER
-            co2_per_unit = (
-                emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
-            )
-            euro_per_unit = (
-                emissions_and_cost_factors.gas_costs_in_euro_per_kwh
-            )
-            co2_per_simulated_period_in_kg = (
-                self.config.consumption_in_kilowatt_hour * co2_per_unit
-            )
-            opex_energy_cost_per_simulated_period_in_euro = (
-                self.config.consumption_in_kilowatt_hour * euro_per_unit
-            )
+            co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
+            euro_per_unit = emissions_and_cost_factors.gas_costs_in_euro_per_kwh
+            co2_per_simulated_period_in_kg = self.config.consumption_in_kilowatt_hour * co2_per_unit
+            opex_energy_cost_per_simulated_period_in_euro = self.config.consumption_in_kilowatt_hour * euro_per_unit
 
         elif self.energy_carrier == lt.LoadTypes.OIL:
             kpi_tag = KpiTagEnumClass.OIL_BOILER
             co2_per_unit = emissions_and_cost_factors.oil_footprint_in_kg_per_l
             euro_per_unit = emissions_and_cost_factors.oil_costs_in_euro_per_l
-            co2_per_simulated_period_in_kg = (
-                self.fuel_consumption_in_liter * co2_per_unit
-            )
-            opex_energy_cost_per_simulated_period_in_euro = (
-                self.fuel_consumption_in_liter * euro_per_unit
-            )
+            co2_per_simulated_period_in_kg = self.fuel_consumption_in_liter * co2_per_unit
+            opex_energy_cost_per_simulated_period_in_euro = self.fuel_consumption_in_liter * euro_per_unit
 
-        elif (
-            self.energy_carrier == lt.LoadTypes.GREEN_HYDROGEN
-        ):
+        elif self.energy_carrier == lt.LoadTypes.GREEN_HYDROGEN:
             kpi_tag = KpiTagEnumClass.HYDROGEN_BOILER
             co2_per_unit = emissions_and_cost_factors.green_hydrogen_gas_footprint_in_kg_per_kwh
             euro_per_unit = emissions_and_cost_factors.green_hydrogen_gas_costs_in_euro_per_kwh
-            co2_per_simulated_period_in_kg = (
-                self.config.consumption_in_kilowatt_hour * co2_per_unit
-            )
-            opex_energy_cost_per_simulated_period_in_euro = (
-                self.config.consumption_in_kilowatt_hour * euro_per_unit
-            )
+            co2_per_simulated_period_in_kg = self.config.consumption_in_kilowatt_hour * co2_per_unit
+            opex_energy_cost_per_simulated_period_in_euro = self.config.consumption_in_kilowatt_hour * euro_per_unit
 
         elif self.energy_carrier == lt.LoadTypes.PELLETS:
             kpi_tag = KpiTagEnumClass.PELLET_BOILER
-            co2_per_unit = (
-                emissions_and_cost_factors.pellet_footprint_in_kg_per_kwh
-            )
-            euro_per_unit = (
-                emissions_and_cost_factors.pellet_costs_in_euro_per_t
-            )
-            co2_per_simulated_period_in_kg = (
-                self.config.consumption_in_kilowatt_hour * co2_per_unit
-            )
-            opex_energy_cost_per_simulated_period_in_euro = (
-                self.fuel_consumption_in_kg / 1000 * euro_per_unit
-            )
+            co2_per_unit = emissions_and_cost_factors.pellet_footprint_in_kg_per_kwh
+            euro_per_unit = emissions_and_cost_factors.pellet_costs_in_euro_per_t
+            co2_per_simulated_period_in_kg = self.config.consumption_in_kilowatt_hour * co2_per_unit
+            opex_energy_cost_per_simulated_period_in_euro = self.fuel_consumption_in_kg / 1000 * euro_per_unit
 
         elif self.energy_carrier == lt.LoadTypes.WOOD_CHIPS:
             kpi_tag = KpiTagEnumClass.WOOD_CHIP_BOILER
-            co2_per_unit = (
-                emissions_and_cost_factors.wood_chip_footprint_in_kg_per_kwh
-            )
-            euro_per_unit = (
-                emissions_and_cost_factors.wood_chip_costs_in_euro_per_t
-            )
-            co2_per_simulated_period_in_kg = (
-                self.config.consumption_in_kilowatt_hour * co2_per_unit
-            )
-            opex_energy_cost_per_simulated_period_in_euro = (
-                self.fuel_consumption_in_kg / 1000 * euro_per_unit
-            )
+            co2_per_unit = emissions_and_cost_factors.wood_chip_footprint_in_kg_per_kwh
+            euro_per_unit = emissions_and_cost_factors.wood_chip_costs_in_euro_per_t
+            co2_per_simulated_period_in_kg = self.config.consumption_in_kilowatt_hour * co2_per_unit
+            opex_energy_cost_per_simulated_period_in_euro = self.fuel_consumption_in_kg / 1000 * euro_per_unit
 
         else:
-            raise ValueError(
-                f"Energy carrier {self.energy_carrier} not implemented for Generic boiler."
-            )
+            raise ValueError(f"Energy carrier {self.energy_carrier} not implemented for Generic boiler.")
 
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
@@ -1042,33 +914,27 @@ class GenericBoiler(Component):
             all_outputs=all_outputs,
             postprocessing_results=postprocessing_results,
         )
-        capex_dataclass = self.get_cost_capex(
-            self.config, self.my_simulation_parameters
-        )
+        capex_dataclass = self.get_cost_capex(self.config, self.my_simulation_parameters)
 
         # Energy related KPIs
         sh_thermal_energy_delivered_in_kilowatt_hour = None
         dhw_thermal_energy_delivered_in_kilowatt_hour = None
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
-                if (
-                    output.field_name == self.ThermalOutputEnergySh
-                    and output.unit == lt.Units.WATT_HOUR
-                ):
+                if output.field_name == self.ThermalOutputEnergySh and output.unit == lt.Units.WATT_HOUR:
                     sh_thermal_energy_delivered_in_kilowatt_hour = round(
                         sum(postprocessing_results.iloc[:, index]) * 1e-3, 1
                     )
-                if (
-                    output.field_name == self.ThermalOutputEnergyDhw
-                    and output.unit == lt.Units.WATT_HOUR
-                ):
+                if output.field_name == self.ThermalOutputEnergyDhw and output.unit == lt.Units.WATT_HOUR:
                     dhw_thermal_energy_delivered_in_kilowatt_hour = round(
                         sum(postprocessing_results.iloc[:, index]) * 1e-3, 1
                     )
 
         assert sh_thermal_energy_delivered_in_kilowatt_hour is not None
         assert dhw_thermal_energy_delivered_in_kilowatt_hour is not None
-        total_thermal_energy_delivered_in_kilowatt_hour = sh_thermal_energy_delivered_in_kilowatt_hour + dhw_thermal_energy_delivered_in_kilowatt_hour
+        total_thermal_energy_delivered_in_kilowatt_hour = (
+            sh_thermal_energy_delivered_in_kilowatt_hour + dhw_thermal_energy_delivered_in_kilowatt_hour
+        )
         thermal_energy_delivered_entry = KpiEntry(
             name="Total thermal energy delivered",
             unit="kWh",
@@ -1200,8 +1066,7 @@ class GenericBoiler(Component):
         total_co2_footprint = KpiEntry(
             name="Total CO2 Footprint (CAPEX for simulated period + OPEX)",
             unit="kg",
-            value=capex_dataclass.device_co2_footprint_for_simulated_period_in_kg
-            + opex_dataclass.co2_footprint_in_kg,
+            value=capex_dataclass.device_co2_footprint_for_simulated_period_in_kg + opex_dataclass.co2_footprint_in_kg,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )
@@ -1230,9 +1095,7 @@ class GenericBoilerControllerConfig(ConfigBase):
     minimum_resting_time_in_seconds: float
     dhw_hysteresis_offset: float
     with_domestic_hot_water_preparation: bool
-    secondary_mode: Optional[
-        bool
-    ]  # If used as secondary heat generator for DHW in hybrid mode
+    secondary_mode: Optional[bool]  # If used as secondary heat generator for DHW in hybrid mode
 
     @classmethod
     def get_default_modulating_generic_boiler_controller_config(
@@ -1392,15 +1255,11 @@ class GenericBoilerController(Component):
     """
 
     # Inputs
-    WaterTemperatureInputFromWaterStorage = (
-        "WaterTemperatureInputFromWaterStorage"
-    )
+    WaterTemperatureInputFromWaterStorage = "WaterTemperatureInputFromWaterStorage"
     WaterTemperatureInputFromDHWStorage = "WaterTemperatureInputFromDHWStorage"
 
     # set heating  flow temperature
-    HeatingFlowTemperatureFromHeatDistributionSystem = (
-        "HeatingFlowTemperatureFromHeatDistributionSystem"
-    )
+    HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
 
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
 
@@ -1431,40 +1290,32 @@ class GenericBoilerController(Component):
         self.warm_water_temperature_aim_in_celsius: float = 60.0
 
         self.minimum_runtime_in_timesteps = int(
-            self.config.minimum_runtime_in_seconds
-            / self.my_simulation_parameters.seconds_per_timestep
+            self.config.minimum_runtime_in_seconds / self.my_simulation_parameters.seconds_per_timestep
         )
         self.minimum_resting_time_in_timesteps = int(
-            self.config.minimum_resting_time_in_seconds
-            / self.my_simulation_parameters.seconds_per_timestep
+            self.config.minimum_resting_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
         )
 
-        self.state: GenericBoilerControllerState = (
-            GenericBoilerControllerState(0, 0, 0, 0)
-        )
+        self.state: GenericBoilerControllerState = GenericBoilerControllerState(0, 0, 0, 0)
 
         self.build()
 
         # input channel
-        self.water_temperature_space_heating_input_channel: ComponentInput = (
-            self.add_input(
-                self.component_name,
-                self.WaterTemperatureInputFromWaterStorage,
-                lt.LoadTypes.TEMPERATURE,
-                lt.Units.CELSIUS,
-                True,
-            )
+        self.water_temperature_space_heating_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.WaterTemperatureInputFromWaterStorage,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            True,
         )
 
         if self.config.with_domestic_hot_water_preparation:
-            self.water_temperature_dhw_input_channel: ComponentInput = (
-                self.add_input(
-                    self.component_name,
-                    self.WaterTemperatureInputFromDHWStorage,
-                    lt.LoadTypes.TEMPERATURE,
-                    lt.Units.CELSIUS,
-                    True,
-                )
+            self.water_temperature_dhw_input_channel: ComponentInput = self.add_input(
+                self.component_name,
+                self.WaterTemperatureInputFromDHWStorage,
+                lt.LoadTypes.TEMPERATURE,
+                lt.Units.CELSIUS,
+                True,
             )
 
         self.heating_flow_temperature_from_heat_distribution_system_channel: ComponentInput = self.add_input(
@@ -1474,24 +1325,20 @@ class GenericBoilerController(Component):
             lt.Units.CELSIUS,
             True,
         )
-        self.daily_avg_outside_temperature_input_channel: ComponentInput = (
-            self.add_input(
-                self.component_name,
-                self.DailyAverageOutsideTemperature,
-                lt.LoadTypes.TEMPERATURE,
-                lt.Units.CELSIUS,
-                True,
-            )
+        self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.DailyAverageOutsideTemperature,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            True,
         )
 
-        self.control_signal_to_generic_boiler_channel: ComponentOutput = (
-            self.add_output(
-                self.component_name,
-                self.ControlSignalToGenericBoiler,
-                lt.LoadTypes.ANY,
-                lt.Units.PERCENT,
-                output_description="Control signal for modulation of boiler.",
-            )
+        self.control_signal_to_generic_boiler_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.ControlSignalToGenericBoiler,
+            lt.LoadTypes.ANY,
+            lt.Units.PERCENT,
+            output_description="Control signal for modulation of boiler.",
         )
         self.operating_mode_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -1511,18 +1358,10 @@ class GenericBoilerController(Component):
         self.controller_mode: HeatingMode
         self.previous_controller_mode: HeatingMode
 
-        self.add_default_connections(
-            self.get_default_connections_from_weather()
-        )
-        self.add_default_connections(
-            self.get_default_connections_from_simple_hot_water_storage()
-        )
-        self.add_default_connections(
-            self.get_default_connections_from_dhw_storage()
-        )
-        self.add_default_connections(
-            self.get_default_connections_from_heat_distribution_controller()
-        )
+        self.add_default_connections(self.get_default_connections_from_weather())
+        self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
+        self.add_default_connections(self.get_default_connections_from_dhw_storage())
+        self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
 
     def get_default_connections_from_simple_hot_water_storage(
         self,
@@ -1638,10 +1477,8 @@ class GenericBoilerController(Component):
 
             water_temperature_input_from_dhw_water_storage_in_celsius = None
             if self.config.with_domestic_hot_water_preparation:
-                water_temperature_input_from_dhw_water_storage_in_celsius = (
-                    stsv.get_input_value(
-                        self.water_temperature_dhw_input_channel
-                    )
+                water_temperature_input_from_dhw_water_storage_in_celsius = stsv.get_input_value(
+                    self.water_temperature_dhw_input_channel
                 )
 
             heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
@@ -1657,25 +1494,21 @@ class GenericBoilerController(Component):
                 water_temperature_input_from_space_heating_water_storage_in_celsius,
                 water_temperature_input_from_dhw_water_storage_in_celsius,
                 heating_flow_temperature_from_heat_distribution_system,
-                timestep)
-
-            stsv.set_output_value(
-                self.control_signal_to_generic_boiler_channel, control_signal
-            )
-            stsv.set_output_value(
-                self.operating_mode_channel, self.controller_mode.value
-            )
-            stsv.set_output_value(
-                self.temperature_delta_channel, temperature_delta
+                timestep,
             )
 
-    def determine_operating_mode(self,
-                                 daily_avg_outside_temperature_in_celsius: float,
-                                 water_temperature_input_from_space_heating_water_storage_in_celsius: float,
-                                 water_temperature_input_from_dhw_water_storage_in_celsius: Optional[float],
-                                 heating_flow_temperature_from_heat_distribution_system: float,
-                                 timestep
-                                 ) -> Tuple[float, float]:
+            stsv.set_output_value(self.control_signal_to_generic_boiler_channel, control_signal)
+            stsv.set_output_value(self.operating_mode_channel, self.controller_mode.value)
+            stsv.set_output_value(self.temperature_delta_channel, temperature_delta)
+
+    def determine_operating_mode(
+        self,
+        daily_avg_outside_temperature_in_celsius: float,
+        water_temperature_input_from_space_heating_water_storage_in_celsius: float,
+        water_temperature_input_from_dhw_water_storage_in_celsius: Optional[float],
+        heating_flow_temperature_from_heat_distribution_system: float,
+        timestep,
+    ) -> Tuple[float, float]:
         """Determine which operating mode to use in dual-circuit system."""
 
         previous_controller_mode = self.controller_mode
@@ -1694,9 +1527,7 @@ class GenericBoilerController(Component):
         )
 
         # Enforce minimum run and idle times (if necessary overwrites previously set mode)
-        self.enforce_minimum_run_and_idle_times(
-            previous_controller_mode, timestep
-        )
+        self.enforce_minimum_run_and_idle_times(previous_controller_mode, timestep)
 
         if self.controller_mode == HeatingMode.SPACE_HEATING:
             # get a modulated control signal between 0 and 1
@@ -1712,13 +1543,8 @@ class GenericBoilerController(Component):
                 - water_temperature_input_from_space_heating_water_storage_in_celsius
             )
         elif self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
-            assert (
-                self.config.with_domestic_hot_water_preparation is not None
-            )
-            assert (
-                water_temperature_input_from_dhw_water_storage_in_celsius
-                is not None
-            )
+            assert self.config.with_domestic_hot_water_preparation is not None
+            assert water_temperature_input_from_dhw_water_storage_in_celsius is not None
             if self.config.is_modulating is True:
                 control_signal = self.modulate_power(
                     water_temperature_input_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius,
@@ -1728,10 +1554,7 @@ class GenericBoilerController(Component):
             else:
                 control_signal = 1
             temperature_delta = max(
-                (
-                    self.warm_water_temperature_aim_in_celsius
-                    + self.config.dhw_hysteresis_offset
-                )
+                (self.warm_water_temperature_aim_in_celsius + self.config.dhw_hysteresis_offset)
                 - water_temperature_input_from_dhw_water_storage_in_celsius,
                 0,
             )
@@ -1743,24 +1566,18 @@ class GenericBoilerController(Component):
 
         return control_signal, temperature_delta
 
-    def enforce_minimum_run_and_idle_times(
-        self, previous_controller_mode: HeatingMode, timestep: int
-    ) -> None:
+    def enforce_minimum_run_and_idle_times(self, previous_controller_mode: HeatingMode, timestep: int) -> None:
         """Enforces minimum run and idle times."""
         if (
             previous_controller_mode != HeatingMode.OFF
-            and self.state.activation_time_step
-            + self.minimum_runtime_in_timesteps
-            > timestep
+            and self.state.activation_time_step + self.minimum_runtime_in_timesteps > timestep
             and self.controller_mode == HeatingMode.OFF
         ):
             # mandatory on, minimum runtime not reached
             self.controller_mode = previous_controller_mode
         if (
             previous_controller_mode == HeatingMode.OFF
-            and self.state.deactivation_time_step
-            + self.minimum_resting_time_in_timesteps
-            > timestep
+            and self.state.deactivation_time_step + self.minimum_resting_time_in_timesteps > timestep
             and self.controller_mode != HeatingMode.OFF
         ):
             self.controller_mode = HeatingMode.OFF
@@ -1778,36 +1595,25 @@ class GenericBoilerController(Component):
         """
 
         minimal_percentage = float(
-            self.config.minimal_thermal_power_in_watt
-            / self.config.maximal_thermal_power_in_watt
+            self.config.minimal_thermal_power_in_watt / self.config.maximal_thermal_power_in_watt
         )
         if (
             water_temperature_input_in_celsius
-            < set_heating_flow_temperature_in_celsius
-            - self.config.set_temperature_difference_for_full_power
+            < set_heating_flow_temperature_in_celsius - self.config.set_temperature_difference_for_full_power
         ):
             percentage = 1.0
             return percentage
-        if (
-            water_temperature_input_in_celsius
-            < set_heating_flow_temperature_in_celsius
-        ):
+        if water_temperature_input_in_celsius < set_heating_flow_temperature_in_celsius:
             linear_fit = 1.0 - (
                 (
                     self.config.set_temperature_difference_for_full_power
-                    - (
-                        set_heating_flow_temperature_in_celsius
-                        - water_temperature_input_in_celsius
-                    )
+                    - (set_heating_flow_temperature_in_celsius - water_temperature_input_in_celsius)
                 )
                 / self.config.set_temperature_difference_for_full_power
             )
             percentage = float(max(minimal_percentage, linear_fit))
             return percentage  # type: ignore
-        if (
-            water_temperature_input_in_celsius
-            <= set_heating_flow_temperature_in_celsius
-        ):
+        if water_temperature_input_in_celsius <= set_heating_flow_temperature_in_celsius:
             percentage = minimal_percentage
             return percentage  # type: ignore
 
@@ -1819,9 +1625,7 @@ class GenericBoilerController(Component):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
-        opex_cost_data_class = (
-            OpexCostDataClass.get_default_opex_cost_data_class()
-        )
+        opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
         return opex_cost_data_class
 
     @staticmethod
@@ -1830,9 +1634,7 @@ class GenericBoilerController(Component):
         simulation_parameters: SimulationParameters,
     ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
-        capex_cost_data_class = (
-            CapexCostDataClass.get_default_capex_cost_data_class()
-        )
+        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class
 
     def get_component_kpi_entries(

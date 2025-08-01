@@ -49,6 +49,7 @@ class KpiTagEnumClass(Enum):
     GENERIC_HEAT_SOURCE = "Generic Heat Source"  # used in simple_heat_source.py
     GROUND_PROBE = "Ground Probe"
     ELECTRIC_HEATING = "Electric Heating"
+    ENERGY_MANAGEMENT_SYSTEM = "Energy Management System"
 
 
 @dataclass
@@ -60,6 +61,7 @@ class KpiEntry(JSONWizard):
     value: Optional[float]
     description: Optional[str] = None
     tag: Optional[KpiTagEnumClass] = None
+    name_of_source_component: Optional[str] = None
 
 
 class KpiHelperClass:

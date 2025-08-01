@@ -100,13 +100,15 @@ class BuildingConfig(cp.ConfigBase):
     set_cooling_temperature_in_celsius: float
     enable_opening_windows: bool
     #: CO2 footprint of investment in kg
-    co2_footprint:  Optional[float]
+    device_co2_footprint_in_kg:  Optional[float]
     #: cost for investment in Euro
-    cost:  Optional[float]
+    investment_costs_in_euro:  Optional[float]
     #: lifetime in years
-    lifetime:  Optional[float]
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment:  Optional[float]
+    lifetime_in_years:  Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year:  Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
 
     @classmethod
     def get_default_german_single_family_home(
@@ -141,10 +143,11 @@ class BuildingConfig(cp.ConfigBase):
             set_heating_temperature_in_celsius=set_heating_temperature_in_celsius,
             set_cooling_temperature_in_celsius=set_cooling_temperature_in_celsius,
             enable_opening_windows=False,
-            co2_footprint=None,  # todo: check value
-            cost=None,   # todo: check value
-            maintenance_cost_as_percentage_of_investment=None,  # noqa: E501 # todo: check value
-            lifetime=None,  # todo: check value
+            device_co2_footprint_in_kg=None,  # todo: check value
+            investment_costs_in_euro=None,   # todo: check value
+            maintenance_costs_in_euro_per_year=None,  # noqa: E501 # todo: check value
+            subsidy_as_percentage_of_investment_costs=None,
+            lifetime_in_years=None,  # todo: check value
         )
         return config
 
@@ -1293,8 +1296,8 @@ class Building(cp.Component):
     ) -> cp.OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
         if (
-                self.config.maintenance_cost_as_percentage_of_investment in [None, 0.0] or
-                self.config.cost in [None, 0.0]
+                self.config.maintenance_costs_in_euro_per_year in [None, 0.0] or
+                self.config.investment_costs_in_euro in [None, 0.0]
         ):
             opex_cost_data_class = cp.OpexCostDataClass.get_default_opex_cost_data_class()
         else:
@@ -1312,27 +1315,27 @@ class Building(cp.Component):
     def get_cost_capex(config: BuildingConfig, simulation_parameters: SimulationParameters) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         if (
-                config.lifetime in [None, 0.0] or
-                config.cost in [None, 0.0] or
-                config.co2_footprint in [None, 0.0]
+                config.lifetime_in_years in [None, 0.0] or
+                config.investment_costs_in_euro in [None, 0.0] or
+                config.device_co2_footprint_in_kg in [None, 0.0]
         ):
             capex_cost_data_class = cp.CapexCostDataClass.get_default_capex_cost_data_class()
         else:
-            assert config.lifetime is not None
-            assert config.cost is not None
-            assert config.co2_footprint is not None
+            assert config.lifetime_in_years is not None
+            assert config.investment_costs_in_euro is not None
+            assert config.device_co2_footprint_in_kg is not None
             seconds_per_year = 365 * 24 * 60 * 60
-            capex_per_simulated_period = ((config.cost / config.lifetime) *
+            capex_per_simulated_period = ((config.investment_costs_in_euro / config.lifetime_in_years) *
                                           (simulation_parameters.duration.total_seconds() / seconds_per_year)
                                           )
-            device_co2_footprint_per_simulated_period = ((config.co2_footprint / config.lifetime) *
+            device_co2_footprint_per_simulated_period = ((config.device_co2_footprint_in_kg / config.lifetime_in_years) *
                                                          (simulation_parameters.duration.total_seconds() /
                                                           seconds_per_year)
                                                          )
             capex_cost_data_class = cp.CapexCostDataClass(
-                capex_investment_cost_in_euro=config.cost,
-                device_co2_footprint_in_kg=config.co2_footprint,
-                lifetime_in_years=config.lifetime,
+                capex_investment_cost_in_euro=config.investment_costs_in_euro,
+                device_co2_footprint_in_kg=config.device_co2_footprint_in_kg,
+                lifetime_in_years=config.lifetime_in_years,
                 capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
                 device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
             )

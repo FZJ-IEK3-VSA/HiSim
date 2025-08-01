@@ -1,4 +1,5 @@
-""" Wraps components for use in the simulator. """
+"""Wraps components for use in the simulator."""
+
 # clean
 from typing import List, Dict, Any
 
@@ -8,7 +9,6 @@ from hisim import log
 
 
 class ComponentWrapper:
-
     """Wraps components for use."""
 
     def __init__(self, component: cp.Component, is_cachable: bool, connect_automatically: bool):
@@ -29,20 +29,60 @@ class ComponentWrapper:
         del self.component_inputs
         del self.component_outputs
 
-    def register_component_outputs(self, all_outputs: List[cp.ComponentOutput]) -> None:
+    def register_component_outputs(
+        self, all_outputs: List[cp.ComponentOutput], wrapped_components_so_far: List[Any]
+    ) -> None:
         """Registers component outputs in the global list of components."""
         log.information("Registering component outputs on " + self.my_component.component_name)
-        # register the output column
-        output_columns = self.my_component.get_outputs()
-        for col in output_columns:
-            col.global_index = len(all_outputs)  # noqa
-            for output in all_outputs:
-                if output.full_name == col.full_name:
-                    raise ValueError("trying to register the same key twice: " + col.full_name +
-                                     " -> check if more than one building is modelled")
-            all_outputs.append(col)
-            log.debug("Registered output " + col.full_name)
-            self.component_outputs.append(col)
+
+        # Collect classnames of already wrapped components once
+        wrapped_class_names_so_far = {component.my_component.get_classname() for component in wrapped_components_so_far}
+
+        # Filter dynamic outputs if present and remove those which do not have a corresponding source component
+        if hasattr(self.my_component, "my_component_outputs"):
+            dynamic_outputs = self.my_component.my_component_outputs
+            filtered_outputs = []
+            for dynamic_output in dynamic_outputs:
+                if (
+                    dynamic_output.source_component_class
+                    and dynamic_output.source_component_class not in wrapped_class_names_so_far
+                ):
+                    log.debug(
+                        f"Dynamic output {dynamic_output.source_output_field_name} cannot be registered because its source component "
+                        f"{dynamic_output.source_component_class} is not wrapped yet. "
+                        f"Wrapped components so far: {wrapped_class_names_so_far}. "
+                        "Therefore, this dynamic output will be skipped."
+                    )
+                    continue
+                filtered_outputs.append(dynamic_output)
+            # Return the filtered dynamic outputs to the component
+            self.my_component.my_component_outputs = filtered_outputs
+
+        # register and process the output column
+        outputs = self.my_component.get_outputs()
+        for output in outputs:
+            if (
+                output.source_component_class is not None
+                and output.source_component_class not in wrapped_class_names_so_far
+            ):
+                log.debug(
+                    f"Component output {output.full_name} cannot be registered because its source component "
+                    f"{output.source_component_class} is not wrapped yet. "
+                    f"Wrapped components so far: {wrapped_class_names_so_far}. "
+                    "Therefore, this output will be skipped."
+                )
+                continue  # skip this output, because the source component is not wrapped yet
+            if any(output.full_name == out.full_name for out in all_outputs):
+                raise ValueError(
+                    f"Trying to register the same key twice: {output.full_name}. "
+                    "Check if more than one building is being modeled."
+                )
+            # set the global index of the output column
+            output.global_index = len(all_outputs)  # noqa
+            # add the output column to the global list of outputs
+            all_outputs.append(output)
+            self.component_outputs.append(output)
+            log.debug("Registered output " + output.full_name)
 
     def register_component_inputs(self, global_column_dict: Dict[str, Any]) -> None:
         """Gets the inputs for the current component from the global column dict and puts them into component_inputs."""
@@ -135,5 +175,6 @@ class ComponentWrapper:
             if cinput.is_mandatory and cinput.source_output is None:
                 raise SystemError(
                     f"The ComponentInput {cinput.field_name} (cp: {cinput.component_name}, "
-                    f"unit: {cinput.unit}) is not connected to any ComponentOutput."
+                    f"unit: {cinput.unit}) is not connected to any ComponentOutput. "
+                    "You could run debug mode (logging_level=4) to check all inputs, outputs and connections."
                 )  #

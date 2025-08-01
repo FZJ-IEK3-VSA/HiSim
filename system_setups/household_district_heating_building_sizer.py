@@ -21,6 +21,7 @@ from hisim.components import (
     generic_district_heating,
     electricity_meter,
     simple_water_storage,
+    heating_meter,
 )
 from hisim.components.heat_distribution_system import PositionHotWaterStorageInSystemSetup
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
@@ -100,9 +101,9 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER
         )
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         # my_simulation_parameters.logging_level = 4
 
@@ -282,6 +283,7 @@ def setup_function(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX,
+            heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
@@ -291,6 +293,17 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
 
+    # Build Heating Meter
+    my_heating_meter_config = heating_meter.HeatingMeterConfig.get_heating_meter_default_config(
+        fuel_loadtype=lt.LoadTypes.DISTRICTHEATING
+    )
+    my_heating_meter = heating_meter.HeatingMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_heating_meter_config,
+    )
+    # Add to simulator
+    my_sim.add_component(my_heating_meter, connect_automatically=True)
+
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
@@ -298,7 +311,7 @@ def setup_function(
     )
 
     # use ems and battery only when PV is used
-    if share_of_maximum_pv_potential != 0:
+    if share_of_maximum_pv_potential != 0 and energy_system_config_.use_battery_and_ems:
 
         # Build EMS
         my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
@@ -322,7 +335,7 @@ def setup_function(
         loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
             source_output_name="LoadingPowerInputForBattery_",
             source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-            source_weight=4,
+            source_weight=5,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Battery Control. ",

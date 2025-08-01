@@ -58,10 +58,10 @@ class AirConditionerConfig(ConfigBase):
     cop_ref: float
     cooling_capacity_ref: float
     heating_capacity_ref: float
-    cost: float
-    lifetime: int
+    investment_costs_in_euro: float
+    lifetime_in_years: int
     co2_emissions_kg_co2_eq: float
-    maintenance_cost_as_percentage_of_investment: float
+    maintenance_costs_in_euro_per_year: float
 
     @classmethod
     def get_main_classname(cls):
@@ -356,15 +356,15 @@ class AirConditioner(cp.Component):
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
 
-        capex_per_period = (config.cost / config.lifetime) * duration_ratio
+        capex_per_period = (config.investment_costs_in_euro / config.lifetime) * duration_ratio
         co2_per_period = (
             config.co2_emissions_kg_co2_eq / config.lifetime
         ) * duration_ratio
 
         return CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
+            capex_investment_cost_in_euro=config.investment_costs_in_euro,
             device_co2_footprint_in_kg=config.co2_emissions_kg_co2_eq,
-            lifetime_in_years=config.lifetime,
+            lifetime_in_years=config.lifetime_in_years,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_period,
             device_co2_footprint_for_simulated_period_in_kg=co2_per_period,
             kpi_tag=KpiTagEnumClass.AIR_CONDITIONER,

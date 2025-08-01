@@ -1,4 +1,4 @@
-"""Test for electricity meter."""
+"""Test for heating meter."""
 
 # clean
 
@@ -6,7 +6,7 @@ import os
 import json
 from typing import Optional
 import pytest
-# import numpy as np
+import numpy as np
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -15,8 +15,7 @@ from hisim.components import (
     building,
     electricity_meter,
     heating_meter,
-    more_advanced_heat_pump_hplib,
-    generic_hot_water_storage_modular,
+    generic_boiler,
     simple_water_storage,
     heat_distribution_system,
     generic_pv_system,
@@ -28,7 +27,7 @@ from hisim import log
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../system_setups/household_for_test_gas_meter.py"
+PATH = "../system_setups/household_for_test_heating_meter.py"
 
 
 @utils.measure_execution_time
@@ -50,14 +49,12 @@ def test_house(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
 
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON)
-        my_simulation_parameters.logging_level = 3
+        my_simulation_parameters.logging_level = 4
 
     # this part is copied from hisim_main
     # Build Simulator
@@ -121,6 +118,7 @@ def test_house(
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
@@ -128,56 +126,48 @@ def test_house(
         my_simulation_parameters=my_simulation_parameters,
     )
 
+    # Oil boiler and controller
+    my_oil_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_oil_boiler_config(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+    )
+    my_oil_heater = generic_boiler.GenericBoiler(
+        config=my_oil_heater_config,
+        my_simulation_parameters=my_simulation_parameters,
+    )
+
+    my_oil_heater_controller_config = (
+        generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
+            minimal_thermal_power_in_watt=my_oil_heater_config.minimal_thermal_power_in_watt,
+            maximal_thermal_power_in_watt=my_oil_heater_config.maximal_thermal_power_in_watt,
+            with_domestic_hot_water_preparation=True,
+        )
+    )
+    my_oil_heater_controller = generic_boiler.GenericBoilerController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_oil_heater_controller_config,
+    )
+
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
+        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM,
     )
     my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Heat Pump Controller for space heating
-    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
-        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
+    # DHW storage
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
+        number_of_apartments=my_building_information.number_of_apartments
     )
 
-    my_heatpump_controller_space_heating = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
-            config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
-        )
+    my_dhw_storage = simple_water_storage.SimpleDHWStorage(
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    # Build Heat Pump Controller for dhw
-    my_heatpump_controller_dhw_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config()
-    )
-
-    my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
-        config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
-    )
-
-    # Build Heat Pump
-    my_heatpump_config = (
-        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_default_generic_advanced_hp_lib()
-    )
-    my_heatpump_config.with_domestic_hot_water_preparation = True
-
-    my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
-        config=my_heatpump_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
-
-    # Build DHW Storage
-
-    my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
-
-    my_dhw_storage = generic_hot_water_storage_modular.HotWaterStorage(
-        config=my_dhw_storage_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
+    my_sim.add_component(my_dhw_storage, connect_automatically=True)
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
@@ -185,19 +175,15 @@ def test_house(
         config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
 
-    # Build Gas Meter
+    # Build heating Meter
+    my_heating_meter_config = heating_meter.HeatingMeterConfig.get_heating_meter_default_config(
+        fuel_loadtype=my_oil_heater_config.energy_carrier,
+        heating_value_of_fuel_in_kwh_per_liter=my_oil_heater.heating_value_of_fuel_in_kwh_per_liter,
+        fuel_density_in_kg_per_m3=my_oil_heater.fuel_density_in_kg_per_m3,
+    )
     my_heating_meter = heating_meter.HeatingMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=heating_meter.HeatingMeterConfig.get_heating_meter_default_config(),
-    )
-
-    # =========================================================================================================================================================
-    # Connect some components
-
-    my_heatpump.connect_input(
-        my_heatpump.TemperatureInputPrimary,
-        my_weather.component_name,
-        my_weather.DailyAverageOutsideTemperatures,
+        config=my_heating_meter_config,
     )
 
     # =========================================================================================================================================================
@@ -210,10 +196,9 @@ def test_house(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
     my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(my_heatpump_controller_dhw, connect_automatically=True)
-    my_sim.add_component(my_heatpump_controller_space_heating, connect_automatically=True)
-    my_sim.add_component(my_heatpump, connect_automatically=True)
-    my_sim.add_component(my_dhw_storage, connect_automatically=True)
+    my_sim.add_component(my_oil_heater_controller, connect_automatically=True)
+    my_sim.add_component(my_oil_heater, connect_automatically=True)
+
     my_sim.add_component(my_electricity_meter, connect_automatically=True)
     my_sim.add_component(my_heating_meter, connect_automatically=True)
 
@@ -232,34 +217,36 @@ def test_house(
 
     jsondata = jsondata["BUI1"]
 
-    heat_consumption_in_kilowatt_hour = jsondata["Heating Meter"]["Total heat consumption from grid"].get("value")
-
-    heat_consumption_for_space_heating_in_kilowatt_hour = jsondata["Heat Distribution System"][
-        "Thermal output energy of heat distribution system"
+    heat_consumption_in_kilowatt_hour = jsondata["Heating Meter"]["Total energy consumption"].get("value")
+    oil_consumption_in_kilowatt_hour = jsondata["Oil Boiler"][
+        f"Total {my_oil_heater.energy_carrier.value} consumption (energy)"
     ].get("value")
-    # heat_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Residents"][
-    #     "Residents' total thermal dhw consumption"
-    # ].get("value")
 
-    opex_costs_for_heat_in_euro = jsondata["Heating Meter"]["Opex costs of heat consumption from grid"].get("value")
+    opex_costs_for_heating_in_euro = jsondata["Heating Meter"]["OPEX - Energy costs"].get("value")
 
-    co2_footprint_due_to_heat_use_in_kg = jsondata["Heating Meter"][
-        "CO2 footprint of heat consumption from grid"
-    ].get("value")
+    co2_footprint_due_to_heating_use_in_kg = jsondata["Heating Meter"]["OPEX - CO2 Footprint"].get("value")
 
     log.information(
-        "Heat consumption for space heating [kWh] " + str(heat_consumption_for_space_heating_in_kilowatt_hour)
+        f"Total {my_heating_meter_config.fuel_loadtype.value} consumption [kWh] "
+        + str(oil_consumption_in_kilowatt_hour)
     )
-    # log.information(
-    #     "Heat consumption for domestic hot water [kWh] " + str(heat_consumption_for_domestic_hot_water_in_kilowatt_hour)
-    # )
-    log.information("Total heat consumption measured by heating meter [kWh] " + str(heat_consumption_in_kilowatt_hour))
-    log.information("Opex costs for total gas consumption [€] " + str(opex_costs_for_heat_in_euro))
-    log.information("CO2 footprint for total heat consumption [kg] " + str(co2_footprint_due_to_heat_use_in_kg))
+
+    log.information(
+        f"Total {my_heating_meter_config.fuel_loadtype.value} consumption measured by heating meter [kWh] "
+        + str(heat_consumption_in_kilowatt_hour)
+    )
+    log.information(
+        f"Opex costs for total {my_heating_meter_config.fuel_loadtype.value} consumption [€] "
+        + str(opex_costs_for_heating_in_euro)
+    )
+    log.information(
+        f"CO2 footprint for total {my_heating_meter_config.fuel_loadtype.value} consumption [kg] "
+        + str(co2_footprint_due_to_heating_use_in_kg)
+    )
 
     # test and compare with relative error of 5%
-    # np.testing.assert_allclose(
-    #     heat_consumption_in_kilowatt_hour,
-    #     heat_consumption_for_space_heating_in_kilowatt_hour + heat_consumption_for_domestic_hot_water_in_kilowatt_hour,
-    #     rtol=0.05,
-    # )
+    np.testing.assert_allclose(
+        heat_consumption_in_kilowatt_hour,
+        oil_consumption_in_kilowatt_hour,
+        rtol=0.05,
+    )

@@ -1,4 +1,4 @@
-"""Test for electricity meter."""
+"""Test for gas meter."""
 
 # clean
 
@@ -51,7 +51,8 @@ def test_house(
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
 
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON)
         my_simulation_parameters.logging_level = 4
@@ -118,6 +119,7 @@ def test_house(
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
@@ -146,7 +148,7 @@ def test_house(
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
+        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER,
     )
     my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

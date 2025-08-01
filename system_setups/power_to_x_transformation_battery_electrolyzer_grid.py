@@ -133,11 +133,11 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         custom_battery_capacity_generic_in_kilowatt_hour=5000.0,
         charge_in_kwh=0.0,
         discharge_in_kwh=0.0,
-        co2_footprint=0.0,
-        cost=0.0,
-        lifetime=10.0,
+        device_co2_footprint_in_kg=0.0,
+        investment_costs_in_euro=0.0,
+        lifetime_in_years=10.0,
         lifetime_in_cycles=30000.0,
-        maintenance_cost_as_percentage_of_investment=0.04,
+        maintenance_costs_in_euro_per_year=0.04,
         )
     )
     """

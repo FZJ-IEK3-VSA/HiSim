@@ -291,6 +291,7 @@ def setup_function(
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
@@ -375,7 +376,7 @@ def setup_function(
     my_sim.add_component(my_gas_meter, connect_automatically=True)
 
     # use ems and battery only when PV is used
-    if share_of_maximum_pv_potential != 0:
+    if share_of_maximum_pv_potential != 0 and energy_system_config_.use_battery_and_ems:
 
         # Build EMS
         my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
@@ -399,7 +400,7 @@ def setup_function(
         loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
             source_output_name="LoadingPowerInputForBattery_",
             source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-            source_weight=4,
+            source_weight=5,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Battery Control. ",

@@ -275,6 +275,8 @@ class Battery(Component):
         ac_battery_power_used_for_charging_or_discharging_in_watt = results[0]
         dc_battery_power_used_for_charging_or_discharging_in_watt = results[1]
         state_of_charge = results[2]
+        if state_of_charge < 0:
+            log.warning("SOC of Battery cannot be negative. Check your configuration.")
         # get charging and discharging power
         if ac_battery_power_used_for_charging_or_discharging_in_watt > 0:
             charging_power_in_watt = ac_battery_power_used_for_charging_or_discharging_in_watt

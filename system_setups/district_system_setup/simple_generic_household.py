@@ -178,7 +178,7 @@ class GenericBuilding(cp.Component):
         # Build PV
         if pv_power_in_watt is None:
             my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-                rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
+                rooftop_area_in_m2=my_building_information.roof_area_in_m2,
                 share_of_maximum_pv_potential=share_of_maximum_pv_potential,
                 location=location,
                 building_name=building_name,

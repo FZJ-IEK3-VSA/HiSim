@@ -1151,34 +1151,55 @@ class PostProcessor:
                 # Get KPIs from ppdt
 
                 kpi_collection_dict = ppdt.kpi_collection_dict[building_object]
-
-                self_sufficiency_rate_in_percent = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Self-sufficiency rate according to solar htw berlin"
-                )
-                total_costs_in_euro = get_kpi_entries_for_building_sizer(
+                # Total costs
+                annualized_total_costs_in_euro = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Total costs for simulated period"
                 )
-                energy_costs_in_euro = get_kpi_entries_for_building_sizer(
+                # Investment costs
+                annualized_investment_costs_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Investment costs for equipment per simulated period"
+                )
+                annualized_net_investment_costs_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict,
+                    target_key="Investment costs for equipment per simulated period minus subsidies",
+                )
+                # Energy costs
+                total_annualized_energy_costs_in_euro = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Energy grid costs for simulated period"
                 )
-                maintenance_costs_in_euro = get_kpi_entries_for_building_sizer(
+                annualzed_energy_costs_electricity_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Costs of grid electricity for simulated period"
+                )
+                annualized_energy_costs_gas_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Costs of grid gas for simulated period"
+                )
+                annualized_energy_costs_heat_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Costs of grid heat for simulated period"
+                )
+                # Maintenance costs
+                annualized_maintenance_costs_in_euro = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Maintenance costs for simulated period"
                 )
-                investment_costs_in_euro = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Investment costs for equipment per simulated period minus subsidies"
-                )
-                total_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
+                # CO2 emissions
+                annualized_total_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Total CO2 emissions for simulated period"
                 )
-
+                # Other
+                self_sufficiency_rate_electricity_in_percent = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Self-sufficiency rate according to solar htw berlin"
+                )
                 # initialize json interface to pass kpi's to building_sizer
                 kpi_config = KPIConfig(
-                    self_sufficiency_rate_in_percent=self_sufficiency_rate_in_percent,
-                    total_costs_in_euro=total_costs_in_euro,
-                    total_co2_emissions_in_kg=total_co2_emissions_in_kg,
-                    energy_grid_costs_in_euro=energy_costs_in_euro,
-                    maintenance_costs_in_euro=maintenance_costs_in_euro,
-                    investment_costs_in_euro=investment_costs_in_euro,
+                    self_sufficiency_rate_electricity_in_percent=self_sufficiency_rate_electricity_in_percent,
+                    annualized_total_costs_in_euro=annualized_total_costs_in_euro,
+                    annualized_total_co2_emissions_in_kg=annualized_total_co2_emissions_in_kg,
+                    annualized_energy_grid_costs_in_euro=total_annualized_energy_costs_in_euro,
+                    annualized_electricity_grid_costs_in_euro=annualzed_energy_costs_electricity_in_euro,
+                    annualized_gas_grid_costs_in_euro=annualized_energy_costs_gas_in_euro,
+                    annualized_heat_costs_in_euro=annualized_energy_costs_heat_in_euro,
+                    annualized_maintenance_costs_in_euro=annualized_maintenance_costs_in_euro,
+                    annualized_investment_costs_in_euro=annualized_investment_costs_in_euro,
+                    annualized_net_investment_costs_in_euro=annualized_net_investment_costs_in_euro,
                 )
 
                 kpi_dict = kpi_config.to_dict()  # type: ignore

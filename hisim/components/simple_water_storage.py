@@ -138,20 +138,23 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
 
         # if the used heating system is a heat pump use formular
         if sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP:
-            volume_heating_water_storage_in_liter: float = (
-                max_thermal_power_in_watt_of_heating_system
-                * 1e-3
-                / (
-                    PhysicsConfig.get_properties_for_energy_carrier(
-                        energy_carrier=lt.LoadTypes.WATER
-                    ).specific_heat_capacity_in_watthour_per_kg_per_kelvin
-                    * temperature_difference_between_flow_and_return_in_celsius
-                )
-            ) * 1000  # 1m3 = 1000l
+            # volume_heating_water_storage_in_liter: float = (
+            #     max_thermal_power_in_watt_of_heating_system
+            #     * 1e-3
+            #     / (
+            #         PhysicsConfig.get_properties_for_energy_carrier(
+            #             energy_carrier=lt.LoadTypes.WATER
+            #         ).specific_heat_capacity_in_watthour_per_kg_per_kelvin
+            #         * temperature_difference_between_flow_and_return_in_celsius
+            #     )
+            # ) * 1000  # 1m3 = 1000l
+            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 50
+            # https://www.flexiheatuk.com/buffer-vessel-sizing-for-hydronic-heating-systems/#:~:text=20%2D25%20litres%20per%20kW,kW%20for%20heat%20pump%20systems
 
         # otherwise use approximation: 60l per kw thermal power
         elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM:
-            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 60
+            # volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 60
+            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 20
 
         # large storage for pellet heating to avoid frequent on-off
         elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_PELLET_HEATING:
@@ -159,7 +162,8 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
 
         # large storage even more important than for pellets, as on-off behavior should be avoided
         elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_WOOD_CHIP_HEATING:
-            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 100
+            # volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 100
+            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 50
 
         # or for gas heaters make hws smaller because gas heaters are a bigger inertia than heat pump
         elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER:

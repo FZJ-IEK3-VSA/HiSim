@@ -76,6 +76,7 @@ def setup_function(
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_pellet()
+        my_sim.my_module_config = my_config.to_dict()
         log.warning(
             f"Could not read the modular household config from path '{config_filename}'. Using the pellets household default config instead."
         )
@@ -118,8 +119,9 @@ def setup_function(
     if heating_system != HeatingSystems.PELLET_HEATING:
         raise ValueError("Heating system needs to be pellet heater for this system setup.")
 
-    heating_reference_temperature_in_celsius = -12.2
-    building_set_heating_temperature_in_celsius = 22.0
+    heating_reference_temperature_in_celsius = -7.0
+    building_set_heating_temperature_in_celsius = 20.0
+    building_set_cooling_temperature_in_celsius = 25.0
 
     # Set Weather
     weather_location = arche_type_config_.weather_location
@@ -176,6 +178,7 @@ def setup_function(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
         set_heating_temperature_in_celsius=building_set_heating_temperature_in_celsius,
+        set_cooling_temperature_in_celsius=building_set_cooling_temperature_in_celsius
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
@@ -248,9 +251,6 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    # Set sizing option for Hot water Storage
-    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_PELLET_HEATING
-
     # Build Pellets heater For Space Heating
     my_pellet_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_pellet_boiler_config(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
@@ -291,7 +291,7 @@ def setup_function(
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-        sizing_option=sizing_option,
+        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_PELLET_HEATING,
     )
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

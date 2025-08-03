@@ -74,6 +74,7 @@ def setup_function(
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_gas_solar_thermal()
+        my_sim.my_module_config = my_config.to_dict()
         log.warning(
             f"Could not read the modular household config from path '{config_filename}'. Using the gas and solar thermal household default config instead."
         )

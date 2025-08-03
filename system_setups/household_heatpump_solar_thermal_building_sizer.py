@@ -74,6 +74,7 @@ def setup_function(
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_heatpump_solar_thermal()
+        my_sim.my_module_config = my_config.to_dict()
         log.warning(
             f"Could not read the modular household config from path '{config_filename}'. Using the heatpump and solar thermal household default config instead."
         )
@@ -116,8 +117,9 @@ def setup_function(
         raise ValueError("Heating system needs to be heat pump solar thermal for this system setup.")
 
     heating_reference_temperature_in_celsius = -7.0
-    building_set_heating_temperature_in_celsius = 22.0
-    hp_controller_mode = 2  # mode 1 for heating/off and mode 2 for heating/cooling/off
+    building_set_heating_temperature_in_celsius = 20.0
+    building_set_cooling_temperature_in_celsius = 25.0
+    hp_controller_mode = 1  # hp controller mode 1 for only heating and off (2 would be heating, cooling, off)
 
     # Set Weather
     weather_location = arche_type_config_.weather_location
@@ -169,13 +171,12 @@ def setup_function(
 
     # =================================================================================================================================
     # Build Basic Components
-
-    # Building
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
         set_heating_temperature_in_celsius=building_set_heating_temperature_in_celsius,
+        set_cooling_temperature_in_celsius=building_set_cooling_temperature_in_celsius
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2

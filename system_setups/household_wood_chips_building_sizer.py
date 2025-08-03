@@ -76,6 +76,7 @@ def setup_function(
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_wood_chips()
+        my_sim.my_module_config = my_config.to_dict()
         log.warning(
             f"Could not read the modular household config from path '{config_filename}'. Using the woodchips household default config instead."
         )
@@ -88,7 +89,7 @@ def setup_function(
     if my_simulation_parameters is None:
         year = 2021
         seconds_per_timestep = 60 * 15
-        my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(year, seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year(year, seconds_per_timestep)
         # my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         if os.path.exists(cache_dir_path_simuparams):
@@ -119,8 +120,9 @@ def setup_function(
     if heating_system != HeatingSystems.WOOD_CHIP_HEATING:
         raise ValueError("Heating system needs to be wood chip heater for this system setup.")
 
-    heating_reference_temperature_in_celsius = -12.2
-    building_set_heating_temperature_in_celsius = 22.0
+    heating_reference_temperature_in_celsius = -7.0
+    building_set_heating_temperature_in_celsius = 20.0
+    building_set_cooling_temperature_in_celsius = 25.0
 
     # Set Weather
     weather_location = arche_type_config_.weather_location
@@ -177,6 +179,7 @@ def setup_function(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
         set_heating_temperature_in_celsius=building_set_heating_temperature_in_celsius,
+        set_cooling_temperature_in_celsius=building_set_cooling_temperature_in_celsius
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2

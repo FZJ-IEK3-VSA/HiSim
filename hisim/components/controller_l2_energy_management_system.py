@@ -9,7 +9,7 @@ The component with the lowest source weight is activated first.
 # clean
 from dataclasses import dataclass
 
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Optional
 from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -21,6 +21,7 @@ from hisim import utils
 from hisim.component import ComponentInput, ComponentOutput
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.components import (
     more_advanced_heat_pump_hplib,
     advanced_heat_pump_hplib,
@@ -66,13 +67,15 @@ class EMSConfig(cp.ConfigBase):
     # increase in SimpleHotWaterStorage set temperatures when PV surplus is available for heating
     space_heating_water_storage_temperature_offset_value: float
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
-    cost: float
-    #: lifetime of EMS in years
-    lifetime: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    investment_costs_in_euro: Optional[float]
+    #: lifetime in years
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
 
     @classmethod
     def get_default_config_ems(
@@ -89,10 +92,12 @@ class EMSConfig(cp.ConfigBase):
             building_indoor_temperature_offset_value=2,
             domestic_hot_water_storage_temperature_offset_value=10,
             space_heating_water_storage_temperature_offset_value=10,
-            co2_footprint=0,  # no idea yet
-            cost=0,  # no idea yet
-            lifetime=1,  # no idea yet
-            maintenance_cost_as_percentage_of_investment=0,  # no idea yet
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
         )
         return config
 
@@ -1143,19 +1148,21 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         config: EMSConfig, simulation_parameters: SimulationParameters
     ) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
+        component_type = lt.ComponentType.ENERGY_MANAGEMENT_SYSTEM
+        kpi_tag = (
+            KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM
         )
-        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
+        unit = lt.Units.ANY
+        size_of_energy_system = 1
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
         )
-        capex_cost_data_class = cp.CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
-        )
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
+
         return capex_cost_data_class

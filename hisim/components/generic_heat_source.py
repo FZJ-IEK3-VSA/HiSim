@@ -54,11 +54,11 @@ class HeatSourceConfig(cp.ConfigBase):
     #: efficiency of the fuel to heat conversion
     efficiency: float
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg: float
     #: cost for investment in Euro
-    cost: float
+    investment_costs_in_euro: float
     #: lifetime in years
-    lifetime: float
+    lifetime_in_years: float
     # boiler_type
     boiler_type: BoilerType
 
@@ -84,9 +84,9 @@ class HeatSourceConfig(cp.ConfigBase):
             thermal_power_in_watt=thermal_power_in_watt,
             water_vs_heating=lt.InandOutputType.HEATING,
             efficiency=1.0,
-            co2_footprint=0,
-            cost=0,
-            lifetime=1,
+            device_co2_footprint_in_kg=0,
+            investment_costs_in_euro=0,
+            lifetime_in_years=1,
             boiler_type=boiler_type,
         )
         return config
@@ -162,9 +162,9 @@ class HeatSourceConfig(cp.ConfigBase):
             water_vs_heating=lt.InandOutputType.WATER_HEATING,
             efficiency=efficiency,
             # costs, footprint and lifetime will be determined later in opex and capex ost calculation
-            co2_footprint=0,
-            cost=0,
-            lifetime=1,
+            device_co2_footprint_in_kg=0,
+            investment_costs_in_euro=0,
+            lifetime_in_years=1,
             boiler_type=boiler_type,
         )
         return config
@@ -347,16 +347,16 @@ class HeatSource(cp.Component):
     def get_cost_capex(config: HeatSourceConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
+        capex_per_simulated_period = (config.investment_costs_in_euro / config.lifetime) * (
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
         device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
         capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
+            capex_investment_cost_in_euro=config.investment_costs_in_euro,
+            device_co2_footprint_in_kg=config.device_co2_footprint_in_kg,
+            lifetime_in_years=config.lifetime_in_years,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
         )

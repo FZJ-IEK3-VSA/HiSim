@@ -23,7 +23,7 @@ from hisim.postprocessing import reportgenerator
 from hisim.postprocessing.chart_singleday import ChartSingleDay
 from hisim.postprocessing.kpi_computation.compute_kpis import KpiGenerator
 from hisim.postprocessing.generate_csv_for_housing_database import generate_csv_for_database
-from hisim.postprocessing.opex_and_capex_cost_calculation import (
+from hisim.postprocessing.cost_and_emission_computation.opex_and_capex_cost_calculation import (
     opex_calculation,
     capex_calculation,
 )
@@ -1130,6 +1130,8 @@ class PostProcessor:
         """Write KPIs to json file for building sizer."""
 
         def get_kpi_entries_for_building_sizer(data, target_key):
+            """Get kpi entries for building sizer."""
+            result = None
             for key1, value1 in data.items():
                 if key1 == target_key:
                     result = value1["value"]
@@ -1137,6 +1139,8 @@ class PostProcessor:
                     for key2, value2 in value1.items():
                         if key2 == target_key:
                             result = value2["value"]
+            if result is None:
+                raise KeyError(f"No key is matching the target key {target_key}.")
             return result
 
         kpi_dict = {}
@@ -1161,7 +1165,7 @@ class PostProcessor:
                     data=kpi_collection_dict, target_key="Maintenance costs for simulated period"
                 )
                 investment_costs_in_euro = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Investment costs for equipment per simulated period"
+                    data=kpi_collection_dict, target_key="Investment costs for equipment per simulated period minus subsidies"
                 )
                 total_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Total CO2 emissions for simulated period"

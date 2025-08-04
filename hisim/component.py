@@ -424,17 +424,11 @@ class Component:
 
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        investment = self.get_cost_capex(
-            config=self.config, simulation_parameters=self.my_simulation_parameters
-        ).capex_investment_cost_in_euro
 
-        # add maintenance costs per simulated period
-        maintenance_cost_per_simulated_period_in_euro: float = (
-            self.config.maintenance_cost_as_percentage_of_investment
-            * investment
-            * (self.my_simulation_parameters.duration.total_seconds() / seconds_per_year)
-        )
+        maintenance_cost_per_simulated_period_in_euro = self.get_cost_capex(
+            config=self.config, simulation_parameters=self.my_simulation_parameters
+        ).maintenance_cost_per_simulated_period_in_euro
+
         return maintenance_cost_per_simulated_period_in_euro
 
     def i_save_state(self) -> None:
@@ -467,9 +461,9 @@ class OpexCostDataClass:
     co2_footprint_in_kg: float
     total_consumption_in_kwh: float
     loadtype: lt.LoadTypes
+    consumption_for_space_heating_in_kwh: float = 0.0
+    consumption_for_domestic_hot_water_in_kwh: float = 0.0
     kpi_tag: Optional[KpiTagEnumClass] = None
-    consumption_for_space_heating_in_kwh: Optional[float] = None
-    consumption_for_domestic_hot_water_in_kwh: Optional[float] = None
 
     @classmethod
     def get_default_opex_cost_data_class(cls) -> OpexCostDataClass:
@@ -495,6 +489,9 @@ class CapexCostDataClass:
     lifetime_in_years: float
     capex_investment_cost_for_simulated_period_in_euro: float
     device_co2_footprint_for_simulated_period_in_kg: float
+    maintenance_costs_in_euro: float = 0.0
+    maintenance_cost_per_simulated_period_in_euro: float = 0.0
+    subsidy_as_percentage_of_investment_costs: float = 0.0
     kpi_tag: Optional[KpiTagEnumClass] = None
 
     @classmethod
@@ -506,6 +503,9 @@ class CapexCostDataClass:
             lifetime_in_years=1,
             capex_investment_cost_for_simulated_period_in_euro=0,
             device_co2_footprint_for_simulated_period_in_kg=0,
+            maintenance_costs_in_euro=0,
+            maintenance_cost_per_simulated_period_in_euro=0,
+            subsidy_as_percentage_of_investment_costs=0,
             kpi_tag=None,
         )
 

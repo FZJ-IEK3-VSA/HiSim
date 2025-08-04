@@ -152,6 +152,7 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+                    heating_system=hds_controller_config.heating_system,
                 )
             ),
             gas_heater_controller_config=(

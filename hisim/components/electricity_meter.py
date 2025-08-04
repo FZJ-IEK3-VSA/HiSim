@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -20,6 +20,7 @@ from hisim.dynamic_component import (
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
 
 @dataclass_json
@@ -34,6 +35,16 @@ class ElectricityMeterConfig(cp.ConfigBase):
 
     building_name: str
     name: str
+    #: CO2 footprint of investment in kg
+    device_co2_footprint_in_kg: Optional[float]
+    #: cost for investment in Euro
+    investment_costs_in_euro: Optional[float]
+    #: lifetime in years
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
 
     @classmethod
     def get_electricity_meter_default_config(
@@ -45,6 +56,12 @@ class ElectricityMeterConfig(cp.ConfigBase):
         return ElectricityMeterConfig(
             building_name=building_name,
             name=name,
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
         )
 
 
@@ -648,7 +665,23 @@ class ElectricityMeter(DynamicComponent):
     @staticmethod
     def get_cost_capex(config: ElectricityMeterConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
-        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+        component_type = lt.ComponentType.ELECTRICITY_METER
+        kpi_tag = (
+            KpiTagEnumClass.ELECTRICITY_METER
+        )
+        unit = lt.Units.ANY
+        size_of_energy_system = 1
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
+        )
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
+
         return capex_cost_data_class
 
     def get_component_kpi_entries(

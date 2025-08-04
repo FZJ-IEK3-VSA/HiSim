@@ -128,6 +128,9 @@ class Units(str, enum.Enum):
     # Distance
     METER = "m"
 
+    # Area
+    SQUARE_METER = "m2"
+
     # Energy
     WATT_HOUR = "Wh"
     KWH = "kWh"
@@ -136,7 +139,7 @@ class Units(str, enum.Enum):
 
     # Volume
     LITER = "L"
-    CUBICMETERS = "m^3"
+    CUBICMETERS = "m3"
 
     # Volume per time
     LITER_PER_TIMESTEP = "Liter per timestep"
@@ -220,6 +223,7 @@ class ComponentType(str, enum.Enum):
     ELECTRICITY_METER = "ElectricityMeter"
     GAS_METER = "GasMeter"
     ENERGY_MANAGEMENT_SYSTEM = "EnergyManagementSystem"
+    HEAT_DISTRIBUTION_SYSTEM = "HeatDistributionSystem"
 
     # different heat_pump types
     HEAT_PUMP_BUILDING = "HeatPumpBuilding"  # Heatpump for heating the house

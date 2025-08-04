@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 import datetime
-from typing import Any, List
+from typing import Any, List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -25,6 +25,8 @@ from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ConfigBase
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+
 
 __authors__ = "Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -63,10 +65,16 @@ class SolarThermalSystemConfig(ConfigBase):
     old_solar_pump: bool
 
     # techno-economic parameters
-    co2_footprint_kg_co2eq: float
-    investment_cost_eur: float
-    lifetime_y: float
-    maintenance_cost_eur_per_y: float
+    #: CO2 footprint of investment in kg
+    device_co2_footprint_in_kg: Optional[float]
+    #: cost for investment in Euro
+    investment_costs_in_euro: Optional[float]
+    #: lifetime in years
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
 
     # Weight of component, defines hierachy in control. The default is 1.
     source_weight: int
@@ -101,7 +109,46 @@ class SolarThermalSystemConfig(ConfigBase):
             a_1_w_m2_k=a_1_w_m2_k,  # W/(m2*K)
             a_2_w_m2_k=a_2_w_m2_k,  # W/(m2*K2)
             old_solar_pump=old_solar_pump,
-            co2_footprint_kg_co2eq=(
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
+            source_weight=source_weight,
+        )
+
+    @classmethod
+    def get_default_solar_thermal_system_manually_calculated_capex(
+        cls,
+        building_name: str = "BUI1",
+        coordinates: Coordinates = Coordinates(latitude=50.78, longitude=6.08),
+        azimuth: float = 180.0,
+        tilt: float = 30.0,
+        area_m2: float = 1.5,
+        eta_0: float = 0.78,
+        a_1_w_m2_k: float = 3.2,  # W/(m2*K)
+        a_2_w_m2_k: float = 0.015,  # W/(m2*K2)
+        old_solar_pump: bool = False,
+        source_weight: int = 1,
+    ) -> "SolarThermalSystemConfig":
+        """Gets a default SolarThermalSystem."""
+        return SolarThermalSystemConfig(
+            building_name=building_name,
+            coordinates=coordinates,
+            name="SolarThermalSystem",
+            azimuth=azimuth,
+            tilt=tilt,
+            area_m2=area_m2,  # m2
+            # These values are taken from the Excel sheet that can be downloaded from
+            # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters
+            # Values were determined by changing eta_0, a_1, and a_2 so that the curve
+            # fits with the typical flat plat curve
+            eta_0=eta_0,
+            a_1_w_m2_k=a_1_w_m2_k,  # W/(m2*K)
+            a_2_w_m2_k=a_2_w_m2_k,  # W/(m2*K2)
+            old_solar_pump=old_solar_pump,
+            device_co2_footprint_in_kg=(
                 area_m2 * (240.1 / 2.03)  # material solar collector
                 + area_m2 * (34.74 / 2.03)
                 + 108.28  # material external support
@@ -110,10 +157,11 @@ class SolarThermalSystemConfig(ConfigBase):
                 + area_m2 * (4.39 * 0.56 / 2.03)
             ),  # 56% (share of mass of solar collector+support/total, i.e., including storage)
             # of transport phase 1 https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1255
-            investment_cost_eur=area_m2 * 797,  # Flachkollektoren
+            investment_costs_in_euro=area_m2 * 797,  # Flachkollektoren
             # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
-            maintenance_cost_eur_per_y=100,  # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
-            lifetime_y=20,  # https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1712
+            maintenance_costs_in_euro_per_year=100,  # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
+            subsidy_as_percentage_of_investment_costs=0.3,  # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
+            lifetime_in_years=20,  # https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1712
             source_weight=source_weight,
         )
 
@@ -285,22 +333,21 @@ class SolarThermalSystem(Component):
         config: SolarThermalSystemConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.investment_cost_eur / config.lifetime_y) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        device_co2_footprint_per_simulated_period = (config.co2_footprint_kg_co2eq / config.lifetime_y) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
+        component_type = loadtypes.ComponentType.SOLAR_THERMAL_SYSTEM
+        kpi_tag = KpiTagEnumClass.SOLAR_THERMAL
+        unit = loadtypes.Units.SQUARE_METER
+        size_of_energy_system = config.area_m2
 
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.investment_cost_eur,
-            device_co2_footprint_in_kg=config.co2_footprint_kg_co2eq,
-            lifetime_in_years=config.lifetime_y,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.SOLAR_THERMAL,
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+            simulation_parameters=simulation_parameters,
+            component_type=component_type,
+            unit=unit,
+            size_of_energy_system=size_of_energy_system,
+            config=config,
+            kpi_tag=kpi_tag,
         )
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
+
         return capex_cost_data_class
 
     def get_cost_opex(
@@ -469,16 +516,6 @@ class SolarThermalSystem(Component):
         list_of_kpi_entries.append(total_co2_footprint)
         return list_of_kpi_entries
 
-    def calc_maintenance_cost(self) -> float:
-        """Calc maintenance_cost per simulated period as share of capex of component."""
-        seconds_per_year = 365 * 24 * 60 * 60
-
-        # add maintenance costs per simulated period
-        maintenance_cost_per_simulated_period_in_euro: float = self.config.maintenance_cost_eur_per_y * (
-            self.my_simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        return maintenance_cost_per_simulated_period_in_euro
-
     def get_default_connections_from_simple_hot_water_storage(
         self,
     ):
@@ -570,8 +607,7 @@ class SolarThermalSystem(Component):
             df = pd.read_csv(self.cache_filepath, sep=",", decimal=".")
             # Reconstruct list of DataFrames per timestep (if needed)
             self.precalc_data_for_all_timesteps_output = [
-                group_df.drop(columns="timestep")
-                for _, group_df in df.groupby("timestep", sort=True)
+                group_df.drop(columns="timestep") for _, group_df in df.groupby("timestep", sort=True)
             ]
 
             if len(self.precalc_data_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:

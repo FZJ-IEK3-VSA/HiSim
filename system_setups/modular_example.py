@@ -211,10 +211,11 @@ def setup_function(
         window_area_in_m2=None,
         door_u_value_in_watt_per_m2_per_kelvin=None,
         door_area_in_m2=None,
-        co2_footprint=1,
-        cost=1,
-        maintenance_cost_as_percentage_of_investment=0.01,
-        lifetime=1,
+        device_co2_footprint_in_kg=1,
+        investment_costs_in_euro=1,
+        maintenance_costs_in_euro_per_year=0.01,
+        subsidy_as_percentage_of_investment_costs=0.0,
+        lifetime_in_years=1,
     )
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)

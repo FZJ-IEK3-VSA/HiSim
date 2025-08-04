@@ -1,7 +1,7 @@
 {
     "energy_system_config_": {
         "heating_system": "GasHeating",
-        "heat_distribution_system": "HeatDistributionSystem Floorheating",
+        "heat_distribution_system": "Floorheating",
         "share_of_maximum_pv_potential": 1.0,
         "use_battery_and_ems": true
     },

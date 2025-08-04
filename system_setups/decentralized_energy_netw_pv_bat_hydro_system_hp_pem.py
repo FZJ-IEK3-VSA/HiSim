@@ -200,10 +200,6 @@ def setup_function(
             window_area_in_m2=None,
             door_u_value_in_watt_per_m2_per_kelvin=None,
             door_area_in_m2=None,
-            co2_footprint=1,
-            cost=1,
-            maintenance_cost_as_percentage_of_investment=0.01,
-            lifetime=1,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

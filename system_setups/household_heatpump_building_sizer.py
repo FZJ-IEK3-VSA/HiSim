@@ -28,7 +28,7 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.units import Quantity, Celsius, Watt
-from hisim.loadtypes import HeatingSystems
+from hisim.loadtypes import HeatingSystems, ComponentType
 from hisim.building_sizer_utils.interface_configs.modular_household_config import (
     read_in_configs,
     ModularHouseholdConfig,
@@ -125,6 +125,13 @@ def setup_function(
     building_set_cooling_temperature_in_celsius = 25.0
     hp_controller_mode = 1  # hp controller mode 1 for only heating and off (2 would be heating, cooling, off)
 
+    # Set heat distribution system
+    if energy_system_config_.heat_distribution_system == ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING:
+        my_hds_system = heat_distribution_system.HeatDistributionSystemType.FLOORHEATING
+    elif energy_system_config_.heat_distribution_system == ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR:
+        my_hds_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
+    else:
+        raise ValueError(f"Heat distrbution system not recognized: {energy_system_config_.heat_distribution_system}")
     # Set Weather
     weather_location = arche_type_config_.weather_location
 
@@ -240,8 +247,8 @@ def setup_function(
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        heating_system=my_hds_system
     )
-    # my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,

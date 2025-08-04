@@ -30,7 +30,7 @@ from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptio
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
-from hisim.loadtypes import HeatingSystems
+from hisim.loadtypes import HeatingSystems, ComponentType
 from hisim import log
 
 __authors__ = "Kristina Dabrock, Katharina Rieck"
@@ -119,6 +119,14 @@ def setup_function(
 
     heating_reference_temperature_in_celsius = -12.2
     building_set_heating_temperature_in_celsius = 22.0
+
+    # Set heat distribution system
+    if energy_system_config_.heat_distribution_system == ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING:
+        my_hds_system = heat_distribution_system.HeatDistributionSystemType.FLOORHEATING
+    elif energy_system_config_.heat_distribution_system == ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR:
+        my_hds_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
+    else:
+        raise ValueError(f"Heat distrbution system not recognized: {energy_system_config_.heat_distribution_system}")
 
     # Set Weather
     weather_location = arche_type_config_.weather_location
@@ -230,12 +238,13 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
-    # Heat Distribution Controller
+    # Build Heat Distribution Controller
     my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
         set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        heating_system=my_hds_system
     )
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(

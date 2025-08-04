@@ -255,6 +255,9 @@ Sources for capex techno-economic parameters:
         [31]: https://www.kfw.de/inlandsfoerderung/Unternehmen/Energie-Umwelt/F%C3%B6rderprodukte/Erneuerbare-Energien-Standard-(270)/
         [32]: hisim/components/simple_water_storage.py -> function get_scaled_hot_water_storage
         [33]: https://renewa.de/sanierung/gewerke/heizung/fussbodenheizung/foerderung
+        [34]: https://www.vattenfall.de/infowelt-energie/nachhaltig-heizen/fussbodenheizung-kosten-fuer-einbau-und-betrieb#
+        [35]: https://www.dein-heizungsbauer.de/ratgeber/bauen-sanieren/fussbodenheizung-oder-heizkoerper/#c3851
+        [36]: https://www.heizsparer.de/heizung/heizkorper/fussbodenheizung/fussbodenheizung-oder-heizkoerper
 """
 capex_techno_economic_parameters = {
     2024: {
@@ -355,6 +358,20 @@ capex_techno_economic_parameters = {
                 "co2_footprint_in_kg_per_m2": 92.4,  # kgCO2eq/m2, source: [24]
                 "subsidy_as_percentage_of_investment_costs": 0.3,  # Source: [30]
             },
+            ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING: {
+                "investment_costs_in_euro_per_m2": 75,  # Source: [34]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [23]
+                "technical_lifetime_in_years": 50,  # Source: [23]
+                "co2_footprint_in_kg_per_m2": 0,  # no idea, assume 0
+                "subsidy_as_percentage_of_investment_costs": 0.15,  # Source: [33]
+            },
+            ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR: {
+                "investment_costs_in_euro_per_m2": 75 * 0.75,  # Source: [34, 35]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [23]
+                "technical_lifetime_in_years": 30,  # Source: [36]
+                "co2_footprint_in_kg_per_m2": 0,  # no idea, assume 0
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
         },
         Units.ANY: {
             ComponentType.ELECTRICITY_METER: {
@@ -377,13 +394,6 @@ capex_techno_economic_parameters = {
                 "technical_lifetime_in_years": 20,  # no idea, assumption
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0.15,  # Source: [29]
-            },
-            ComponentType.HEAT_DISTRIBUTION_SYSTEM: {
-                "investment_costs_in_euro": 6500,  # Source: [20] (Factsheet_65ProzentEE_01_Luft-Wasser-Waermepumpe.pdf)
-                "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [23]
-                "technical_lifetime_in_years": 50,  # Source: [23]
-                "co2_footprint_in_kg": 0,  # no idea, assume 0
-                "subsidy_as_percentage_of_investment_costs": 0.15,  # Source: [33]
             },
         },
     }

@@ -424,8 +424,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 raise KeyError(
                     "HP modell with brine/water as heat source need config parameter massflow_nominal_primary_side_in_kg_per_s!"
                 )
-                    "HP modell with brine/water as heat source need config parameter massflow_nominal_primary_side_in_kg_per_s!"
-                )
+
             if self.electrical_input_power_brine_pump_in_watt == 0.0 :
                 raise KeyError(
                     "HP modell with brine/water as heat source need config parameter electrical_input_power_brine_pump_in_watt!"

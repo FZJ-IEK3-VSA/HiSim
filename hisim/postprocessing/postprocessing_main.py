@@ -237,7 +237,7 @@ class PostProcessor:
             occupancy_config = None
             for elem in ppdt.wrapped_components:
                 if isinstance(elem.my_component, building.Building):
-                    building_data = elem.my_component.my_building_information.buildingdata
+                    building_data = elem.my_component.my_building_information.buildingdata_ref
                     for building_object in building_objects_in_district_list:
                         if (
                             building_object in str(elem.my_component.component_name)

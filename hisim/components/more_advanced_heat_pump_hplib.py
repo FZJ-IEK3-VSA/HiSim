@@ -111,6 +111,8 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     minimum_thermal_output_power_in_watt: Quantity[float, Watt]
     position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
     with_domestic_hot_water_preparation: bool
+    passive_cooling_with_brine: bool
+    electrical_input_power_brine_pump_in_watt: Optional[float]
     massflow_nominal_secondary_side_in_kg_per_s: Quantity[float, KilogramPerSecond]
     massflow_nominal_primary_side_in_kg_per_s: Optional[float]
     specific_heat_capacity_of_primary_fluid: Optional[float]
@@ -156,6 +158,8 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             minimum_thermal_output_power_in_watt=Quantity(1800, Watt),
             position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
             with_domestic_hot_water_preparation=False,
+            passive_cooling_with_brine=False,
+            electrical_input_power_brine_pump_in_watt=None,
             massflow_nominal_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
             massflow_nominal_primary_side_in_kg_per_s=0,
             specific_heat_capacity_of_primary_fluid=0,
@@ -197,6 +201,8 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             minimum_thermal_output_power_in_watt=Quantity(1800, Watt),
             position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
             with_domestic_hot_water_preparation=False,
+            passive_cooling_with_brine=False,
+            electrical_input_power_brine_pump_in_watt=None,
             massflow_nominal_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
             massflow_nominal_primary_side_in_kg_per_s=0,
             specific_heat_capacity_of_primary_fluid=0,
@@ -308,6 +314,12 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         self.with_domestic_hot_water_preparation = config.with_domestic_hot_water_preparation
 
+        self.passive_cooling_with_brine = config.passive_cooling_with_brine
+
+        self.electrical_input_power_brine_pump_in_watt = config.electrical_input_power_brine_pump_in_watt
+        if self.electrical_input_power_brine_pump_in_watt is None:
+            self.electrical_input_power_brine_pump_in_watt = 0.0
+
         self.position_hot_water_storage_in_system = config.position_hot_water_storage_in_system
 
         # self.m_dot_ref = float(
@@ -383,6 +395,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
         if self.parameters["Group"].iloc[0] == 1.0 or self.parameters["Group"].iloc[0] == 4.0:
             if self.fluid_primary_side.lower() != "air":
                 raise KeyError("HP modell does not fit to heat source in config!")
+            if self.passive_cooling_with_brine:
+                raise KeyError("HP modell with air as heat source does not support passive cooling with brine!")
+            if self.electrical_input_power_brine_pump_in_watt != 0.0:
+                raise KeyError("HP modell with air as heat source does not support electrical input power for brine pump!")
+
         if self.parameters["Group"].iloc[0] == 2.0 or self.parameters["Group"].iloc[0] == 5.0:
             if self.fluid_primary_side.lower() != "brine":
                 raise KeyError("HP modell does not fit to heat source in config!")
@@ -395,12 +412,23 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     "HP modell with brine/water as heat source need config parameter specific_heat_capacity_of_primary_fluid! "
                     "--> connection with information class of heat source"
                 )
+            if self.electrical_input_power_brine_pump_in_watt == 0.0:
+                raise KeyError(
+                    "HP modell with brine/water as heat source need config parameter electrical_input_power_brine_pump_in_watt!"
+                )
+
         if self.parameters["Group"].iloc[0] == 3.0 or self.parameters["Group"].iloc[0] == 6.0:
             if self.fluid_primary_side.lower() != "water":
                 raise KeyError("HP modell does not fit to heat source in config!")
             if self.massflow_nominal_primary_side_in_kg_per_s is None:
                 raise KeyError(
                     "HP modell with brine/water as heat source need config parameter massflow_nominal_primary_side_in_kg_per_s!"
+                )
+                    "HP modell with brine/water as heat source need config parameter massflow_nominal_primary_side_in_kg_per_s!"
+                )
+            if self.electrical_input_power_brine_pump_in_watt == 0.0 :
+                raise KeyError(
+                    "HP modell with brine/water as heat source need config parameter electrical_input_power_brine_pump_in_watt!"
                 )
 
         # Define component inputs
@@ -469,10 +497,14 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 mandatory=True,
             )
 
-        if self.position_hot_water_storage_in_system in [
-            PositionHotWaterStorageInSystemSetup.SERIE,
-            PositionHotWaterStorageInSystemSetup.NO_STORAGE,
-        ]:
+        if (
+            self.position_hot_water_storage_in_system
+            in [
+                PositionHotWaterStorageInSystemSetup.SERIE,
+                PositionHotWaterStorageInSystemSetup.NO_STORAGE,
+            ]
+            or self.passive_cooling_with_brine
+        ):
             self.set_temperature_hp_sh: ComponentInput = self.add_input(
                 self.component_name,
                 self.SetHeatingTemperatureSpaceHeating,
@@ -971,10 +1003,14 @@ class MoreAdvancedHeatPumpHPLib(Component):
         time_on_cooling = self.state.time_on_cooling
         time_off = self.state.time_off
 
-        if self.position_hot_water_storage_in_system in [
-            PositionHotWaterStorageInSystemSetup.SERIE,
-            PositionHotWaterStorageInSystemSetup.NO_STORAGE,
-        ]:
+        if (
+            self.position_hot_water_storage_in_system
+            in [
+                PositionHotWaterStorageInSystemSetup.SERIE,
+                PositionHotWaterStorageInSystemSetup.NO_STORAGE,
+            ]
+            or self.passive_cooling_with_brine
+        ):
             set_temperature_hp_sh = stsv.get_input_value(self.set_temperature_hp_sh)
 
         if self.with_domestic_hot_water_preparation:
@@ -1008,9 +1044,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
             # Overwrite on_off to realize minimum time of or time off
             if on_off_previous == 1 and time_on_heating < time_on_min:
-                on_off = 1
+                if on_off == 0:
+                    on_off = 1
             elif on_off_previous == 2 and time_on_heating < time_on_min:
-                on_off = 2
+                if on_off == 0:
+                    on_off = 2
             elif on_off_previous == -1 and time_on_cooling < time_on_min:
                 on_off = -1
             elif on_off_previous == 0 and time_off < time_off_min:
@@ -1039,6 +1077,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 p_el_sh = results["P_el"]
                 p_el_dhw = 0.0
                 p_el_cooling = 0.0
+                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
                 cop = results["COP"]
                 eer = results["EER"]
                 t_out_sh = results["T_out"]
@@ -1096,6 +1135,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 p_th_dhw = 0.0
                 p_el_dhw = 0.0
                 p_el_cooling = 0.0
+                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
                 m_dot_dhw = 0.0
                 time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
                 time_on_cooling = 0
@@ -1117,6 +1157,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 p_th_sh = 0.0
                 p_el_sh = 0.0
                 p_el_cooling = 0.0
+                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
                 cop = results["COP"]
                 eer = results["EER"]
                 t_out_sh = t_in_secondary_sh
@@ -1175,36 +1216,74 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 p_th_sh = 0.0
                 p_el_sh = 0.0
                 p_el_cooling = 0.0
+                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
                 m_dot_sh = 0.0
                 time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
                 time_on_cooling = 0
                 time_off = 0
 
         elif on_off == -1:
-            # Calulate outputs for cooling mode
-            self.heatpump.delta_t = 5
-            results = self.get_cached_results_or_run_hplib_simulation(
-                t_in_primary=t_in_primary,
-                t_in_secondary=t_in_secondary_sh,
-                t_amb=t_amb,
-                mode=2,
-                operation_mode="cooling_building",
-                p_th_min=self.minimum_thermal_output_power,
-            )
-            p_th_sh = results["P_th"]
-            p_th_dhw = 0.0
-            p_el_sh = results["P_el"]
-            p_el_dhw = 0.0
-            p_el_cooling = p_el_sh
-            cop = results["COP"]
-            eer = results["EER"]
-            t_out_sh = results["T_out"]
-            t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
-            m_dot_sh = results["m_dot"]
-            m_dot_dhw = 0.0
-            time_on_cooling = time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
-            time_on_heating = 0
-            time_off = 0
+            if self.passive_cooling_with_brine:
+                # passiv cooling with brine
+                cop = 0
+                eer = 1
+
+                m_dot_sh = self.m_dot_ref
+
+                self.heatpump.delta_t = min(t_in_secondary_sh - set_temperature_hp_sh, 5)
+
+                if self.heatpump.delta_t == 0:
+                    self.heatpump.delta_t = 0.00000001
+
+                p_th_sh = -(
+                    m_dot_sh
+                    * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+                    * self.heatpump.delta_t
+                )
+
+                t_out_sh = t_in_secondary_sh + (
+                    p_th_sh / (m_dot_sh * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius)
+                )
+
+                self.heatpump.delta_t = t_out_sh - t_in_secondary_sh
+
+                p_th_dhw = 0.0
+                p_el_dhw = 0.0
+                p_el_sh = 0.0
+                p_el_cooling = 0.0
+                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
+                t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
+                m_dot_dhw = 0.0
+                time_on_cooling = time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
+                time_on_heating = 0
+                time_off = 0
+
+            else:
+                # Calulate outputs for cooling mode, aktive cooling with hp
+                self.heatpump.delta_t = 5
+                results = self.get_cached_results_or_run_hplib_simulation(
+                    t_in_primary=t_in_primary,
+                    t_in_secondary=t_in_secondary_sh,
+                    t_amb=t_amb,
+                    mode=2,
+                    operation_mode="cooling_building",
+                    p_th_min=self.minimum_thermal_output_power,
+                )
+                p_th_sh = results["P_th"]
+                p_th_dhw = 0.0
+                p_el_sh = 0.0
+                p_el_dhw = 0.0
+                p_el_cooling = results["P_el"]
+                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
+                cop = results["COP"]
+                eer = results["EER"]
+                t_out_sh = results["T_out"]
+                t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
+                m_dot_sh = results["m_dot"]
+                m_dot_dhw = 0.0
+                time_on_cooling = time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
+                time_on_heating = 0
+                time_off = 0
 
         elif on_off == 0:
             # Calulate outputs for off mode
@@ -1213,6 +1292,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             p_el_sh = 0.0
             p_el_dhw = 0.0
             p_el_cooling = 0.0
+            p_el_brine_pump = 0.0
             # None values or nans will cause troubles in post processing, that is why there are not used here
             # cop = None
             # t_out = None
@@ -1230,9 +1310,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
             raise ValueError("Unknown mode for Advanced HPLib On_Off.")
 
         p_th_tot_in_watt = p_th_dhw + p_th_sh
-        p_el_tot_in_watt = p_el_dhw + p_el_sh + p_el_cooling
+        p_el_tot_in_watt = p_el_dhw + p_el_sh + p_el_cooling + p_el_brine_pump
 
-        thermal_power_from_environment = (p_th_dhw + p_th_sh) - (p_el_dhw + p_el_sh)
+        thermal_power_from_environment = p_th_tot_in_watt - p_el_tot_in_watt
 
         thermal_energy_hp_tot_in_watt_hour = (
             p_th_tot_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600
@@ -1247,23 +1327,23 @@ class MoreAdvancedHeatPumpHPLib(Component):
         electrical_energy_hp_dhw_in_watt_hour = p_el_dhw * self.my_simulation_parameters.seconds_per_timestep / 3600
 
         cumulative_hp_thermal_energy_tot_in_watt_hour = (
-            self.state.cumulative_thermal_energy_tot_in_watt_hour + thermal_energy_hp_tot_in_watt_hour
+            self.state.cumulative_thermal_energy_tot_in_watt_hour + abs(thermal_energy_hp_tot_in_watt_hour)
         )
         cumulative_hp_thermal_energy_sh_in_watt_hour = (
-            self.state.cumulative_thermal_energy_sh_in_watt_hour + thermal_energy_hp_sh_in_watt_hour
+            self.state.cumulative_thermal_energy_sh_in_watt_hour + abs(thermal_energy_hp_sh_in_watt_hour)
         )
         cumulative_hp_thermal_energy_dhw_in_watt_hour = (
-            self.state.cumulative_thermal_energy_dhw_in_watt_hour + thermal_energy_hp_dhw_in_watt_hour
+            self.state.cumulative_thermal_energy_dhw_in_watt_hour + abs(thermal_energy_hp_dhw_in_watt_hour)
         )
 
         cumulative_hp_electrical_energy_tot_in_watt_hour = (
-            self.state.cumulative_electrical_energy_tot_in_watt_hour + electrical_energy_hp_tot_in_watt_hour
+            self.state.cumulative_electrical_energy_tot_in_watt_hour + abs(electrical_energy_hp_tot_in_watt_hour)
         )
         cumulative_hp_electrical_energy_sh_in_watt_hour = (
-            self.state.cumulative_electrical_energy_sh_in_watt_hour + electrical_energy_hp_sh_in_watt_hour
+            self.state.cumulative_electrical_energy_sh_in_watt_hour + abs(electrical_energy_hp_sh_in_watt_hour)
         )
         cumulative_hp_electrical_energy_dhw_in_watt_hour = (
-            self.state.cumulative_electrical_energy_dhw_in_watt_hour + electrical_energy_hp_dhw_in_watt_hour
+            self.state.cumulative_electrical_energy_dhw_in_watt_hour + abs(electrical_energy_hp_dhw_in_watt_hour)
         )
 
         # Counter for switching in sh mode

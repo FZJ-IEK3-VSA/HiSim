@@ -1188,6 +1188,28 @@ class PostProcessor:
                 self_sufficiency_rate_electricity_in_percent = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Self-sufficiency rate according to solar htw berlin"
                 )
+                annualized_purchased_energy_consumption_in_kwh = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Purchased energy consumption for simulated period"
+                )
+                annualized_electricity_to_grid_in_kwh = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Total energy to grid"
+                )
+                annualized_electricity_from_grid_in_kwh = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Total energy from grid"
+                )
+                minimum_indoor_temperature_in_celsius = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Minimum building indoor air temperature reached"
+                )
+                maximum_indoor_temperature_in_celsius = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Maximum building indoor air temperature reached"
+                )
+                deviation_from_minimum_indoor_temperature_in_celsius_hour = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius"
+                )
+                deviation_from_maximum_indoor_temperature_in_celsius_hour = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius"
+                )
+
                 # initialize json interface to pass kpi's to building_sizer
                 kpi_config = KPIConfig(
                     self_sufficiency_rate_electricity_in_percent=self_sufficiency_rate_electricity_in_percent,
@@ -1200,6 +1222,13 @@ class PostProcessor:
                     annualized_maintenance_costs_in_euro=annualized_maintenance_costs_in_euro,
                     annualized_investment_costs_in_euro=annualized_investment_costs_in_euro,
                     annualized_net_investment_costs_in_euro=annualized_net_investment_costs_in_euro,
+                    annualized_purchased_energy_consumption_in_kwh=annualized_purchased_energy_consumption_in_kwh,
+                    annualized_electricity_to_grid_in_kwh=annualized_electricity_to_grid_in_kwh,
+                    annualized_electricity_from_grid_in_kwh=annualized_electricity_from_grid_in_kwh,
+                    minimum_indoor_temperature_in_celsius=minimum_indoor_temperature_in_celsius,
+                    maximum_indoor_temperature_in_celsius=maximum_indoor_temperature_in_celsius,
+                    deviation_from_max_indoor_temperature=deviation_from_maximum_indoor_temperature_in_celsius_hour,
+                    deviation_from_min_indoor_temperature=deviation_from_minimum_indoor_temperature_in_celsius_hour
                 )
 
                 kpi_dict = kpi_config.to_dict()  # type: ignore

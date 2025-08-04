@@ -577,10 +577,13 @@ class KpiPreparation:
         # get costs and emissions from electricity meter and gas meter
         electricity_costs_in_euro: float = 0
         electricity_co2_in_kg: float = 0
+        electricity_from_grid_in_kwh: float = 0
         gas_costs_in_euro: float = 0
         gas_co2_in_kg: float = 0
+        gas_from_grid_in_kwh: float = 0
         heating_costs_in_euro: float = 0
         heating_co2_in_kg: float = 0
+        energy_consumption_kwh: float = 0
 
         for kpi_name, kpi_entry in self.kpi_collection_dict_unsorted[building_object].items():
             if kpi_entry["tag"] == KpiTagEnumClass.ELECTRICITY_METER.value:
@@ -588,18 +591,24 @@ class KpiPreparation:
                     electricity_costs_in_euro = kpi_entry["value"]
                 if kpi_name == "CO2 footprint of electricity consumption from grid":
                     electricity_co2_in_kg = kpi_entry["value"]
+                if kpi_name == "Total energy from grid":
+                    electricity_from_grid_in_kwh = kpi_entry["value"]
 
             elif kpi_entry["tag"] == KpiTagEnumClass.GAS_METER.value:
                 if kpi_name == "Opex costs of gas consumption from grid":
                     gas_costs_in_euro = kpi_entry["value"]
                 if kpi_name == "CO2 footprint of gas consumption from grid":
                     gas_co2_in_kg = kpi_entry["value"]
+                if kpi_name == "Total gas demand from grid":
+                    gas_from_grid_in_kwh = kpi_entry["value"]
 
             elif kpi_entry["tag"] == KpiTagEnumClass.HEATING_METER.value:
                 if kpi_name == "OPEX - Energy costs":
                     heating_costs_in_euro = kpi_entry["value"]
                 if kpi_name == "OPEX - CO2 Footprint":
                     heating_co2_in_kg = kpi_entry["value"]
+                if kpi_name == "Total energy consumption":
+                    energy_consumption_kwh = kpi_entry["value"]
 
         # get CAPEX and OPEX costs for simulated period
         capex_results_path = os.path.join(
@@ -824,6 +833,16 @@ class KpiPreparation:
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
+        total_energy_consumption_entry = KpiEntry(
+            name="Purchased energy consumption for simulated period",
+            unit="kWh",
+            value=gas_from_grid_in_kwh
+            + electricity_from_grid_in_kwh
+            + energy_consumption_kwh,
+            tag=(
+                KpiTagEnumClass.GENERAL
+            ),
+        )
 
         total_cost_entry = KpiEntry(
             name="Total costs for simulated period",
@@ -997,6 +1016,7 @@ class KpiPreparation:
                 total_rest_investment_cost_per_simulated_period_entry.name: total_rest_investment_cost_per_simulated_period_entry.to_dict(),
                 total_device_co2_footprint_per_simulated_period_entry.name: total_device_co2_footprint_per_simulated_period_entry.to_dict(),
                 total_energy_cost_entry.name: total_energy_cost_entry.to_dict(),
+                total_energy_consumption_entry.name: total_energy_consumption_entry.to_dict(),
                 total_maintenance_cost_entry.name: total_maintenance_cost_entry.to_dict(),
                 total_cost_entry.name: total_cost_entry.to_dict(),
                 total_emissions_entry.name: total_emissions_entry.to_dict(),

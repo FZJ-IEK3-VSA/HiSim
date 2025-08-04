@@ -11,6 +11,7 @@ from hisim import log
 
 """
 Sources for opex techno-economic parameters:
+Sources for opex techno-economic parameters:
         [1]: https://de.statista.com/statistik/daten/studie/914784/umfrage/entwicklung-der-strompreise-in-deutschland-verivox-verbraucherpreisindex/
         [2]: https://echtsolar.de/einspeiseverguetung/  (average of monthly injection revenue)
         [3]: https://de.statista.com/statistik/daten/studie/779/umfrage/durchschnittspreis-fuer-dieselkraftstoff-seit-dem-jahr-1950/

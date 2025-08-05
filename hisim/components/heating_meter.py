@@ -283,8 +283,8 @@ class HeatingMeter(DynamicComponent):
 
         if self.config.fuel_loadtype in [lt.LoadTypes.HEATING, lt.LoadTypes.COOLING]:
 
-            opex_cost_per_simulated_period_in_euro = 0
-            co2_per_simulated_period_in_kg = 0
+            opex_cost_per_simulated_period_in_euro = 0.0
+            co2_per_simulated_period_in_kg = 0.0
 
         elif self.config.fuel_loadtype == lt.LoadTypes.OIL:
 

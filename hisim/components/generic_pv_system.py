@@ -31,6 +31,8 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiTagEnumClass,
     KpiEntry,
 )
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+
 
 __authors__ = "Vitor Hugo Bellotto Zago, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -103,13 +105,15 @@ class PVSystemConfig(ConfigBase):
     load_module_data: bool
     source_weight: int
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
-    cost: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    investment_costs_in_euro: Optional[float]
     #: lifetime in years
-    lifetime: float
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
     predictive: bool
     predictive_control: bool
     prediction_horizon: Optional[int]
@@ -146,14 +150,12 @@ class PVSystemConfig(ConfigBase):
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             source_weight=source_weight,
             location=location,
-            co2_footprint=power_in_watt
-            * 1e-3
-            * 330.51,  # value from emission_factors_and_costs_devices.csv
-            cost=power_in_watt
-            * 1e-3
-            * 794.41,  # value from emission_factors_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise  # noqa: E501
-            lifetime=25,  # value from emission_factros_and_costs_devices.csv
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             predictive=False,
             predictive_control=False,
             prediction_horizon=None,
@@ -210,17 +212,15 @@ class PVSystemConfig(ConfigBase):
         # get area and power of module
         if (
             module_name == "Hanwha HSL60P6-PA-4-250T [2013]"
-            and module_database
-            == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE
+            and module_database == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE
         ):
             module_area_in_m2 = 1.65
-            module_power_in_watt = 250.
+            module_power_in_watt = 250.0
             # this is equal to an efficiency of 15,15%
 
         elif (
             module_name == "Trina Solar TSM-435NE09RC.05"
-            and module_database
-            == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
+            and module_database == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
         ):
             module_area_in_m2 = 1.98
             module_power_in_watt = 435.16
@@ -239,17 +239,13 @@ class PVSystemConfig(ConfigBase):
         # obstacles like chimneys etc. see p.18 in following paper:
         # https://www.mdpi.com/1996-1073/15/15/5536 (Stanley's work)
         limiting_factor_for_rooftop = 0.6
-        effective_rooftop_area_in_m2 = (
-            rooftop_area_in_m2 * limiting_factor_for_rooftop
-        )
+        effective_rooftop_area_in_m2 = rooftop_area_in_m2 * limiting_factor_for_rooftop
 
         total_pv_power_in_watt = (
-            effective_rooftop_area_in_m2
-            / module_area_in_m2
-            * module_power_in_watt
+            effective_rooftop_area_in_m2 / module_area_in_m2 * module_power_in_watt
         ) * share_of_maximum_pv_potential
 
-        return total_pv_power_in_watt
+        return round(total_pv_power_in_watt, 2)
 
 
 class PVSystem(cp.Component):
@@ -310,9 +306,7 @@ class PVSystem(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: PVSystemConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(
-            display_in_webtool=True
-        ),
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
     ) -> None:
         """Initialize the class."""
         self.my_simulation_parameters = my_simulation_parameters
@@ -327,14 +321,9 @@ class PVSystem(cp.Component):
         self.coordinates: Any
         self.data_length: int = self.my_simulation_parameters.timesteps
         self.temperature_model_parameters = (
-            pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["pvsyst"][
-                "freestanding"
-            ]
-            if self.pvconfig.module_database
-            == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
-            else pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"][
-                "open_rack_glass_glass"
-            ]
+            pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["pvsyst"]["freestanding"]
+            if self.pvconfig.module_database == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
+            else pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"]["open_rack_glass_glass"]
         )
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -433,9 +422,7 @@ class PVSystem(cp.Component):
             output_description=f"Here a description for PV {self.ElectricityEnergyOutput} will follow.",
         )
 
-        self.add_default_connections(
-            self.get_default_connections_from_weather()
-        )
+        self.add_default_connections(self.get_default_connections_from_weather())
 
     @staticmethod
     def get_default_config(
@@ -461,14 +448,11 @@ class PVSystem(cp.Component):
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             load_module_data=False,
             source_weight=source_weight,
-            co2_footprint=power_in_watt
-            * 1e-3
-            * 130.7,  # value from emission_factros_and_costs_devices.csv
-            cost=power_in_watt
-            * 1e-3
-            * 535.81,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
-            lifetime=25,  # value from emission_factros_and_costs_devices.csv
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
+            lifetime_in_years=None,
             prediction_horizon=None,
             predictive=False,
             predictive_control=False,
@@ -476,26 +460,25 @@ class PVSystem(cp.Component):
         return config
 
     @staticmethod
-    def get_cost_capex(
-        config: PVSystemConfig, simulation_parameters: SimulationParameters
-    ) -> CapexCostDataClass:
+    def get_cost_capex(config: PVSystemConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        device_co2_footprint_per_simulated_period = (
-            config.co2_footprint / config.lifetime
-        ) * (simulation_parameters.duration.total_seconds() / seconds_per_year)
+        component_type = lt.ComponentType.PV
+        kpi_tag = KpiTagEnumClass.ROOFTOP_PV
+        unit = lt.Units.KILOWATT
+        size_of_energy_system = config.power_in_watt * 1e-3
 
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,  # noqa: E501
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,  # noqa: E501
-            kpi_tag=KpiTagEnumClass.ROOFTOP_PV,
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+            simulation_parameters=simulation_parameters,
+            component_type=component_type,
+            unit=unit,
+            size_of_energy_system=size_of_energy_system,
+            config=config,
+            kpi_tag=kpi_tag,
         )
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(
+            config=config, capex_cost_data_class=capex_cost_data_class
+        )
+
         return capex_cost_data_class
 
     def get_cost_opex(
@@ -505,11 +488,22 @@ class PVSystem(cp.Component):
     ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
         """Calculate OPEX costs, consisting of maintenance costs for PV."""
+        production_in_kwh: float = 0.0
+        for index, output in enumerate(all_outputs):
+            if (
+                output.component_name == self.config.name
+                and output.load_type == lt.LoadTypes.ELECTRICITY
+                and output.field_name == self.ElectricityEnergyOutput
+                and output.unit == lt.Units.WATT_HOUR
+            ):
+                production_in_kwh = sum(postprocessing_results.iloc[:, index]) * 1e-3
+
+        # for production use negative value (co2 and revenue is handled by electricity meter)
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
-            consumption_in_kwh=0,
+            total_consumption_in_kwh=(-1) * production_in_kwh,
             loadtype=lt.LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.ROOFTOP_PV,
         )
@@ -568,11 +562,7 @@ class PVSystem(cp.Component):
                 Weather.GlobalHorizontalIrradiance,
             )
         )
-        connections.append(
-            cp.ComponentConnection(
-                PVSystem.Azimuth, weather_classname, Weather.Azimuth
-            )
-        )
+        connections.append(cp.ComponentConnection(PVSystem.Azimuth, weather_classname, Weather.Azimuth))
         connections.append(
             cp.ComponentConnection(
                 PVSystem.ApparentZenith,
@@ -580,11 +570,7 @@ class PVSystem(cp.Component):
                 Weather.ApparentZenith,
             )
         )
-        connections.append(
-            cp.ComponentConnection(
-                PVSystem.WindSpeed, weather_classname, Weather.WindSpeed
-            )
-        )
+        connections.append(cp.ComponentConnection(PVSystem.WindSpeed, weather_classname, Weather.WindSpeed))
         return connections
 
     def i_simulate(
@@ -599,13 +585,11 @@ class PVSystem(cp.Component):
         # the right length
         if (
             hasattr(self, "ac_power_ratios_for_all_timesteps_output")
-            and len(self.ac_power_ratios_for_all_timesteps_output)
-            == self.data_length
+            and len(self.ac_power_ratios_for_all_timesteps_output) == self.data_length
         ):
             stsv.set_output_value(
                 self.electricity_output_channel,
-                self.ac_power_ratios_for_all_timesteps_output[timestep]
-                * self.pvconfig.power_in_watt,
+                self.ac_power_ratios_for_all_timesteps_output[timestep] * self.pvconfig.power_in_watt,
             )
             stsv.set_output_value(
                 self.electricity_energy_output_channel,
@@ -624,19 +608,11 @@ class PVSystem(cp.Component):
             azimuth = stsv.get_input_value(self.azimuth_channel)
             temperature = stsv.get_input_value(self.t_out_channel)
             wind_speed = stsv.get_input_value(self.wind_speed_channel)
-            apparent_zenith = stsv.get_input_value(
-                self.apparent_zenith_channel
-            )
+            apparent_zenith = stsv.get_input_value(self.apparent_zenith_channel)
 
-            if (
-                self.config.module_database
-                == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
-            ):
+            if self.config.module_database == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE:
                 simulate_fct = self.simulate_cec
-            elif (
-                self.config.module_database
-                == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE
-            ):
+            elif self.config.module_database == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE:
                 simulate_fct = self.simulate_sandia
             else:
                 raise KeyError(
@@ -665,20 +641,14 @@ class PVSystem(cp.Component):
             #   Weather.Weather_Temperature_Forecast_24h
             # )
 
-            stsv.set_output_value(
-                self.electricity_output_channel, ac_power_in_watt
-            )
+            stsv.set_output_value(self.electricity_output_channel, ac_power_in_watt)
             stsv.set_output_value(
                 self.electricity_energy_output_channel,
-                ac_power_in_watt
-                * self.my_simulation_parameters.seconds_per_timestep
-                / 3600,
+                ac_power_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600,
             )
 
             # cache results at the end of the simulation
-            self.ac_power_ratios_for_all_timesteps_data[timestep] = (
-                ac_power_ratio
-            )
+            self.ac_power_ratios_for_all_timesteps_data[timestep] = ac_power_ratio
 
             if timestep + 1 == self.data_length:
                 dict_with_results = {
@@ -692,28 +662,16 @@ class PVSystem(cp.Component):
                     ],
                 )
 
-                database.to_csv(
-                    self.cache_filepath, sep=",", decimal=".", index=False
-                )
+                database.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)
 
-        if (
-            self.pvconfig.predictive_control
-            and self.pvconfig.prediction_horizon is not None
-        ):
+        if self.pvconfig.predictive_control and self.pvconfig.prediction_horizon is not None:
             last_forecast_timestep = int(
-                timestep
-                + self.pvconfig.prediction_horizon
-                / self.my_simulation_parameters.seconds_per_timestep
+                timestep + self.pvconfig.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep
             )
-            if last_forecast_timestep > len(
-                self.ac_power_ratios_for_all_timesteps_output
-            ):
-                last_forecast_timestep = len(
-                    self.ac_power_ratios_for_all_timesteps_output
-                )
+            if last_forecast_timestep > len(self.ac_power_ratios_for_all_timesteps_output):
+                last_forecast_timestep = len(self.ac_power_ratios_for_all_timesteps_output)
             pvforecast = [
-                self.ac_power_ratios_for_all_timesteps_output[t]
-                * self.pvconfig.power_in_watt
+                self.ac_power_ratios_for_all_timesteps_output[t] * self.pvconfig.power_in_watt
                 for t in range(timestep, last_forecast_timestep)
             ]
             self.simulation_repository.set_dynamic_entry(
@@ -749,9 +707,7 @@ class PVSystem(cp.Component):
                     SingletonSimRepository().delete_entry(
                         key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST  # noqa: E501
                     )
-                    SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST
-                    )
+                    SingletonSimRepository().delete_entry(key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST)
 
     def i_save_state(self) -> None:
         """Saves the state."""
@@ -765,9 +721,7 @@ class PVSystem(cp.Component):
         """Write to the report."""
         return self.pvconfig.get_string_dict()
 
-    def i_doublecheck(
-        self, timestep: int, stsv: cp.SingleTimeStepValues
-    ) -> None:
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         """Doublechecks."""
         pass
 
@@ -779,14 +733,11 @@ class PVSystem(cp.Component):
 
         if file_exists:
             log.information("Get PV results from cache.")
-            self.ac_power_ratios_for_all_timesteps_output = pd.read_csv(
-                self.cache_filepath, sep=",", decimal="."
-            )["output_power"].tolist()
+            self.ac_power_ratios_for_all_timesteps_output = pd.read_csv(self.cache_filepath, sep=",", decimal=".")[
+                "output_power"
+            ].tolist()
 
-            if (
-                len(self.ac_power_ratios_for_all_timesteps_output)
-                != self.my_simulation_parameters.timesteps
-            ):
+            if len(self.ac_power_ratios_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:
                 raise Exception(
                     "Reading the cached PV values seems to have failed. "
                     + "Expected "
@@ -795,12 +746,8 @@ class PVSystem(cp.Component):
                     + str(len(self.ac_power_ratios_for_all_timesteps_output))
                 )
         else:
-            if SingletonSimRepository().exist_entry(
-                key=SingletonDictKeyEnum.LOCATION
-            ):
-                SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.LOCATION
-                )
+            if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):
+                SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
             else:
                 raise KeyError(
                     """The key weather_location was not found in the singleton
@@ -841,31 +788,21 @@ class PVSystem(cp.Component):
                 ghi = SingletonSimRepository().get_entry(
                     key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST  # noqa: E501
                 )
-                azimuth = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST
-                )
+                azimuth = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST)
                 apparent_zenith = SingletonSimRepository().get_entry(
                     key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST  # noqa: E501
                 )
                 temperature = SingletonSimRepository().get_entry(
                     key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST  # noqa: E501
                 )
-                wind_speed = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST
-                )
+                wind_speed = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST)
 
                 x_simplephotovoltaic = []
                 for i in range(self.my_simulation_parameters.timesteps):
                     # calculate outputs
-                    if (
-                        self.pvconfig.module_database
-                        == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
-                    ):
+                    if self.pvconfig.module_database == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE:
                         simulate_fct = self.simulate_cec
-                    elif (
-                        self.pvconfig.module_database
-                        == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE
-                    ):
+                    elif self.pvconfig.module_database == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE:
                         simulate_fct = self.simulate_sandia
                     ac_power_ratio = simulate_fct(
                         dni_extra=dni_extra[i],
@@ -883,9 +820,7 @@ class PVSystem(cp.Component):
                     # append lists
                     x_simplephotovoltaic.append(ac_power_ratio)
 
-                self.ac_power_ratios_for_all_timesteps_output = (
-                    x_simplephotovoltaic
-                )
+                self.ac_power_ratios_for_all_timesteps_output = x_simplephotovoltaic
 
                 # cache predictive control results
                 dict_with_results = {
@@ -899,22 +834,17 @@ class PVSystem(cp.Component):
                     ],
                 )
 
-                database.to_csv(
-                    self.cache_filepath, sep=",", decimal=".", index=False
-                )
+                database.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)
 
             else:
                 # create empty result lists as a preparation for caching
                 # in i_simulate
 
-                self.ac_power_ratios_for_all_timesteps_data = [
-                    0
-                ] * self.my_simulation_parameters.timesteps
+                self.ac_power_ratios_for_all_timesteps_data = [0] * self.my_simulation_parameters.timesteps
 
         if self.pvconfig.predictive:
             pv_forecast_yearly = [
-                self.ac_power_ratios_for_all_timesteps_output[t]
-                * self.pvconfig.power_in_watt
+                self.ac_power_ratios_for_all_timesteps_output[t] * self.pvconfig.power_in_watt
                 for t in range(self.my_simulation_parameters.timesteps)
             ]
             SingletonSimRepository().set_entry(
@@ -926,39 +856,22 @@ class PVSystem(cp.Component):
         """Interpolates."""
         lastday = pd.Series(
             pd_database[-1],
-            index=[
-                pd.to_datetime(
-                    datetime.datetime(year, 12, 31, 22, 59), utc=True
-                ).tz_convert("Europe/Berlin")
-            ],
+            index=[pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert("Europe/Berlin")],
         )
 
         pd_database = pd_database.append(lastday)
         pd_database = pd_database.sort_index()
-        return (
-            pd_database.resample("1T")
-            .asfreq()
-            .interpolate(method="linear")
-            .tolist()
-        )
+        return pd_database.resample("1T").asfreq().interpolate(method="linear").tolist()
 
-    def get_modules_from_database(
-        self, module_database: Any, load_module_data: bool, module_name: str
-    ) -> Any:
+    def get_modules_from_database(self, module_database: Any, load_module_data: bool, module_name: str) -> Any:
         """Get modules from pvlib module database."""
 
         # get modules from pvlib database online
         # (TODO: test if this works, it has not been fully tested yet)
         if load_module_data is True:
-            if (
-                module_database
-                == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE
-            ):
+            if module_database == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE:
                 modules = pvlib.pvsystem.retrieve_sam(name="SandiaMod")
-            elif (
-                module_database
-                == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
-            ):
+            elif module_database == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE:
                 modules = pvlib.pvsystem.retrieve_sam(name="CECMod")
             else:
                 raise KeyError(
@@ -971,25 +884,13 @@ class PVSystem(cp.Component):
 
         # get modules from input data csv files
         else:
-            if (
-                module_database
-                == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE
-            ):
+            if module_database == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE:
                 modules = pd.read_csv(
-                    os.path.join(
-                        utils.HISIMPATH["photovoltaic"]["sandia_modules_new"]
-                    ),
+                    os.path.join(utils.HISIMPATH["photovoltaic"]["sandia_modules_new"]),
                 )
 
-            elif (
-                module_database
-                == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
-            ):
-                modules = pd.read_csv(
-                    os.path.join(
-                        utils.HISIMPATH["photovoltaic"]["cec_modules"]
-                    )
-                )
+            elif module_database == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE:
+                modules = pd.read_csv(os.path.join(utils.HISIMPATH["photovoltaic"]["cec_modules"]))
             else:
                 raise KeyError(
                     f"""The module database {module_database} is not integrated
@@ -1001,9 +902,7 @@ class PVSystem(cp.Component):
 
             # transform column object types to numeric types
             for column in module.columns:
-                module.loc[:, column] = pd.to_numeric(
-                    module.loc[:, column], errors="coerce"
-                )
+                module.loc[:, column] = pd.to_numeric(module.loc[:, column], errors="coerce")
 
             # transform module dataframe to dict
             if len(module) != 1:
@@ -1035,10 +934,7 @@ class PVSystem(cp.Component):
                 # see docs: https://pvlib-python.readthedocs.io/en/v0.9.0/generated/pvlib.pvsystem.retrieve_sam.html  # noqa: E501
                 inverters = pvlib.pvsystem.retrieve_sam("CECInverter")
                 inverter = inverters[inverter_name]
-            elif (
-                inverter_database
-                == PVLibModuleAndInverterEnum.ANTON_DRIESSE_INVERTER_DATABASE
-            ):
+            elif inverter_database == PVLibModuleAndInverterEnum.ANTON_DRIESSE_INVERTER_DATABASE:
                 inverters = pvlib.pvsystem.retrieve_sam("ADRInverter")
                 inverter = inverters[inverter_name]
             else:
@@ -1050,14 +946,9 @@ class PVSystem(cp.Component):
         # get inverters from input data csv files
         else:
             # this is the old csv file used in hisim
-            if (
-                inverter_database
-                == PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE
-            ):
+            if inverter_database == PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE:
                 inverters = pd.read_csv(
-                    os.path.join(
-                        utils.HISIMPATH["photovoltaic"]["sandia_inverters"]
-                    ),
+                    os.path.join(utils.HISIMPATH["photovoltaic"]["sandia_inverters"]),
                     index_col=0,
                 )
                 # choose inverter from inverters database
@@ -1066,23 +957,16 @@ class PVSystem(cp.Component):
                 inverter = pd.to_numeric(inverter, errors="coerce")
 
             # this would be the new one, but not tested yet
-            elif (
-                inverter_database
-                == PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE
-            ):
+            elif inverter_database == PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE:
                 inverters = pd.read_csv(
-                    os.path.join(
-                        utils.HISIMPATH["photovoltaic"]["cec_inverters"]
-                    ),
+                    os.path.join(utils.HISIMPATH["photovoltaic"]["cec_inverters"]),
                 )
                 # choose inverter from inverters database
                 inverter = inverters.loc[inverters["Name"] == inverter_name]
 
                 # transform column object types to numeric types
                 for column in inverter.columns:
-                    inverter.loc[:, column] = pd.to_numeric(
-                        inverter.loc[:, column], errors="coerce"
-                    )
+                    inverter.loc[:, column] = pd.to_numeric(inverter.loc[:, column], errors="coerce")
 
                 # transform inverter dataframe to dict
                 if len(inverter) != 1:
@@ -1333,16 +1217,12 @@ class PVSystem(cp.Component):
         )
 
         # Calculate peak load of single module [W]
-        module_peak_load_in_watt = (
-            self.module["I_mp_ref"] * self.module["V_mp_ref"]
-        )
+        module_peak_load_in_watt = self.module["I_mp_ref"] * self.module["V_mp_ref"]
         ac_power_ratio: float
 
         if self.pvconfig.integrate_inverter:
             # calculate load after inverter
-            inverter_load_in_watt = pvlib.inverter.sandia(
-                inverter=self.inverter, v_dc=mp["v_mp"], p_dc=mp["p_mp"]
-            )
+            inverter_load_in_watt = pvlib.inverter.sandia(inverter=self.inverter, v_dc=mp["v_mp"], p_dc=mp["p_mp"])
             # if inverter load is nan, make it zero otherwise ac_power_ratio
             # will be nan also
             if math.isnan(inverter_load_in_watt):
@@ -1386,17 +1266,11 @@ class PVSystem(cp.Component):
         )
 
         # calculate ground diffuse with specified albedo
-        poa_ground_diffuse = pvlib.irradiance.get_ground_diffuse(
-            surface_tilt, ghi, albedo=albedo
-        )
+        poa_ground_diffuse = pvlib.irradiance.get_ground_diffuse(surface_tilt, ghi, albedo=albedo)
         # calculate angle of incidence
-        aoi = pvlib.irradiance.aoi(
-            surface_tilt, surface_azimuth, apparent_zenith, azimuth
-        )
+        aoi = pvlib.irradiance.aoi(surface_tilt, surface_azimuth, apparent_zenith, azimuth)
         # calculate plane of array irradiance
-        poa_irrad = pvlib.irradiance.poa_components(
-            aoi, np.float64(dni), poa_sky_diffuse, poa_ground_diffuse
-        )
+        poa_irrad = pvlib.irradiance.poa_components(aoi, np.float64(dni), poa_sky_diffuse, poa_ground_diffuse)
         # calculate pv cell and module temperature
 
         return poa_irrad, airmass, aoi

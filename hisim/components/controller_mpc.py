@@ -411,7 +411,7 @@ class MpcController(cp.Component):
         self.optimal_cost = self.mpcconfig.optimal_cost
         self.revenues = self.mpcconfig.revenues
         self.air_conditioning_electricity = self.mpcconfig.air_conditioning_electricity
-        self.cost_optimal_temperature_set_point = self.mpcconfig.cost_optimal_temperature_set_point
+        self.cost_optimal_temperature_set_point = self.mpcconfig.investment_costs_in_euro_optimal_temperature_set_point
         self.pv2load = self.mpcconfig.pv2load
         self.electricity_from_grid = self.mpcconfig.electricity_from_grid
         self.electricity_to_grid = self.mpcconfig.electricity_to_grid
@@ -515,8 +515,8 @@ class MpcController(cp.Component):
             """
 
             """ getting cop_coef and eer_coef from the air conditioner omponenent to be used in the cost optimization"""
-            self.cop_coef = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.COPCOEFFICIENTHEATING)
-            self.eer_coef = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.EERCOEFFICIENTCOOLING)
+            self.cop_coef = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.COEFFICIENT_OF_PERFORMANCE_HEATING)
+            self.eer_coef = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.ENERGY_EFFICIENY_RATIO_COOLING)
 
     def statespace(self):
         """State Space Model of the 5R1C network, Used as a prediction model to the building behavior in the MPC."""

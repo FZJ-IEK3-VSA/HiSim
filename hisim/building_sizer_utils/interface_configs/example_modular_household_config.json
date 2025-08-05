@@ -1,7 +1,8 @@
 {
     "energy_system_config_": {
         "heating_system": "GasHeating",
-        "share_of_maximum_pv_potential": 1.0
+        "share_of_maximum_pv_potential": 1.0,
+        "use_battery_and_ems": true
     },
     "archetype_config_": {
         "building_name": "BUI1",

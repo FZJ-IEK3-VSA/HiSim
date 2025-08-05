@@ -1,4 +1,4 @@
-"""  Basic district system setup. """
+"""Basic district system setup."""
 
 # clean
 
@@ -59,8 +59,8 @@ class DistrictConfig:
     share_of_maximum_pv_potential_pv_district: float
     source_weight_pv_district: float
     location_pv_district: str
+    investment_costs_in_euro_pv_district: float
     co2_footprint_pv_district: float
-    cost_pv_district: float
     maintenance_cost_as_percentage_of_investment_pv_district: float
     lifetime_pv_district: float
     predictive_pv_district: bool
@@ -109,7 +109,7 @@ class DistrictConfig:
             source_weight_pv_district=999,
             location_pv_district=location_district,
             co2_footprint_pv_district=15000 * 1e-3 * 330.51,
-            cost_pv_district=15000 * 1e-3 * 794.41,
+            investment_costs_in_euro_pv_district=15000 * 1e-3 * 794.41,
             maintenance_cost_as_percentage_of_investment_pv_district=0.01,
             lifetime_pv_district=25,
             predictive_pv_district=False,
@@ -241,17 +241,20 @@ def setup_function(
         share_of_maximum_pv_potential=my_config.share_of_maximum_pv_potential_pv_district,
         source_weight=my_config.source_weight_pv_district,
         location=my_config.location_pv_district,
-        co2_footprint=my_config.co2_footprint_pv_district,
-        cost=my_config.cost_pv_district,
-        maintenance_cost_as_percentage_of_investment=my_config.maintenance_cost_as_percentage_of_investment_pv_district,
-        lifetime=my_config.lifetime_pv_district,
+        device_co2_footprint_in_kg=my_config.co2_footprint_pv_district,
+        investment_costs_in_euro=my_config.investment_costs_in_euro_pv_district,
+        maintenance_costs_in_euro_per_year=my_config.maintenance_cost_as_percentage_of_investment_pv_district
+        * my_config.investment_costs_in_euro_pv_district,
+        subsidy_as_percentage_of_investment_costs=0.0,
+        lifetime_in_years=my_config.lifetime_pv_district,
         predictive=my_config.predictive_pv_district,
         predictive_control=my_config.predictive_control_pv_district,
         prediction_horizon=my_config.prediction_horizon_pv_district,
     )
 
     my_photovoltaic_system_district = generic_pv_system.PVSystem(
-        config=my_photovoltaic_system_district_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_photovoltaic_system_district_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     my_sim.add_component(my_photovoltaic_system_district, connect_automatically=True)
@@ -259,7 +262,13 @@ def setup_function(
     # Build electricity grid of district
 
     my_electricity_meter_district_config = electricity_meter.ElectricityMeterConfig(
-        building_name=my_config.district_name, name="ElectricityMeter",
+        building_name=my_config.district_name,
+        name="ElectricityMeter",
+        device_co2_footprint_in_kg=None,
+        investment_costs_in_euro=None,
+        lifetime_in_years=None,
+        maintenance_costs_in_euro_per_year=None,
+        subsidy_as_percentage_of_investment_costs=None,
     )
 
     my_electricity_meter_district = electricity_meter.ElectricityMeter(
@@ -287,7 +296,8 @@ def setup_function(
         )
 
         my_ems_district = controller_l2_district_energy_management_system.L2GenericDistrictEnergyManagementSystem(
-            config=my_ems_district_config, my_simulation_parameters=my_simulation_parameters,
+            config=my_ems_district_config,
+            my_simulation_parameters=my_simulation_parameters,
         )
 
         my_ems_district.add_component_input_and_connect(
@@ -346,6 +356,9 @@ def setup_function(
                 source_component_output=my_photovoltaic_system_district.ElectricityOutput,
                 source_load_type=loadtypes.LoadTypes.ELECTRICITY,
                 source_unit=loadtypes.Units.WATT,
-                source_tags=[loadtypes.ComponentType.PV, loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,],
+                source_tags=[
+                    loadtypes.ComponentType.PV,
+                    loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,
+                ],
                 source_weight=999,
             )

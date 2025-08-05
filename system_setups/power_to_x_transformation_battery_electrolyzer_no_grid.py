@@ -1,4 +1,4 @@
-""" RES (renewable energy sources) to buffer battery to electrolyzer. """
+"""RES (renewable energy sources) to buffer battery to electrolyzer."""
 
 # clean
 
@@ -117,7 +117,8 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     csv_loader = CSVLoader(my_csv_loader, my_simulation_parameters=my_simulation_parameters)
 
     my_transformer = Transformer(
-        my_simulation_parameters=my_simulation_parameters, config=TransformerConfig.get_default_transformer(),
+        my_simulation_parameters=my_simulation_parameters,
+        config=TransformerConfig.get_default_transformer(),
     )
     # Setup the battery
     """
@@ -131,11 +132,11 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         custom_battery_capacity_generic_in_kilowatt_hour=5000.0,
         charge_in_kwh=0.0,
         discharge_in_kwh=0.0,
-        co2_footprint=0.0,
-        cost=0.0,
-        lifetime=10.0,
+        device_co2_footprint_in_kg=0.0,
+        investment_costs_in_euro=0.0,
+        lifetime_in_years=10.0,
         lifetime_in_cycles=30000.0,
-        maintenance_cost_as_percentage_of_investment=0.04,
+        maintenance_costs_in_euro_per_year=0.04,
         )
     )
     """
@@ -161,7 +162,9 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_transformer.connect_input(my_transformer.TransformerInput, csv_loader.component_name, csv_loader.Output1)
 
     my_ptx_controller.connect_input(
-        my_ptx_controller.RESLoad, my_transformer.component_name, my_transformer.TransformerOutput,
+        my_ptx_controller.RESLoad,
+        my_transformer.component_name,
+        my_transformer.TransformerOutput,
     )
     """
     my_ptx_controller.connect_input(
@@ -177,7 +180,9 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     )
     """
     my_electrolyzer_controller.connect_input(
-        my_electrolyzer_controller.ProvidedLoad, my_ptx_controller.component_name, my_ptx_controller.PowerToSystem,
+        my_electrolyzer_controller.ProvidedLoad,
+        my_ptx_controller.component_name,
+        my_ptx_controller.PowerToSystem,
     )
 
     my_electrolyzer.connect_input(
@@ -187,7 +192,9 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     )
 
     my_electrolyzer.connect_input(
-        my_electrolyzer.InputState, my_electrolyzer_controller.component_name, my_electrolyzer_controller.CurrentMode,
+        my_electrolyzer.InputState,
+        my_electrolyzer_controller.component_name,
+        my_electrolyzer_controller.CurrentMode,
     )
 
     # =================================================================================================================================

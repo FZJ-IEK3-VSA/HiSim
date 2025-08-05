@@ -2,14 +2,11 @@
 # clean
 import warnings
 import importlib
-import os
+from pathlib import Path
 import sys
 from datetime import datetime
 from typing import Optional
-from pathlib import Path
-
 from dotenv import load_dotenv
-
 import hisim.simulator as sim
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
@@ -23,58 +20,51 @@ def main(
     my_module_config: Optional[str] = None,
 ) -> None:
     """Core function."""
-    # filter warnings due to pvlib, pvlib generates warnings during simulation within pvlib package
+    # Suppress warnings (e.g., from pvlib)
     warnings.filterwarnings("ignore")
-    # before starting, delete old logging files if path and logging files exist
-    logging_default_path = log.LOGGING_PATH
-    if os.path.exists(logging_default_path) and os.listdir(logging_default_path) != []:
-        for file in os.listdir(logging_default_path):
-            if os.path.exists(os.path.join(logging_default_path, file)):
-                try:
-                    os.remove(os.path.join(logging_default_path, file))
-                except Exception:
-                    log.information(
-                        "Logging default file could not be removed. This can occur when more than one simulation run simultaneously."
-                    )
 
+    # Delete old log files
+    logging_default_path = Path(log.LOGGING_DEFAULT_PATH)
+    if logging_default_path.exists() and logging_default_path.is_dir():
+        for file in logging_default_path.iterdir():
+            try:
+                file.unlink()
+            except Exception:
+                log.information("Logging default file could not be removed. This can occur when more than one simulation run simultaneously.")
+
+    # Logging simulation start
     function_in_module = "setup_function"
     log.information("#################################")
-    log.information("starting simulation of " + path_to_module)
+    log.information(f"Starting simulation of {path_to_module}")
     starttime = datetime.now()
     starting_date_time_str = starttime.strftime("%d-%b-%Y %H:%M:%S")
-    log.information("Start @ " + starting_date_time_str + " ")
-    log.profile(path_to_module + " " + function_in_module + "Start @ " + starting_date_time_str)
+    log.information(f"Start @ {starting_date_time_str}")
+    log.profile(f"{path_to_module} {function_in_module} Start @ {starting_date_time_str}")
     log.information("#################################")
-    normalized_path = os.path.normpath(path_to_module)
-    path_in_list = normalized_path.split(os.sep)
-    module_filename = path_in_list[-1]
-    if len(path_in_list) >= 1:
-        if Path(path_to_module).is_absolute():
-            path_to_be_added = os.path.join(os.path.abspath(os.sep), *path_in_list[:-1])
-        else:
-            path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
-        if os.path.isdir(path_to_be_added):
-            #  Add current path to PYTHONPATH
-            sys.path.append(path_to_be_added)
-        else:
-            raise ValueError(
-                f"Directory location of module location is nonexistent!\nDirectory entered: {path_to_be_added}"
-            )
-    if module_filename.endswith(".py"):
-        module_full_filename = module_filename
-        module_filename = module_filename[:-3]
-    else:
-        module_full_filename = f"{module_filename}.py"
-    filepath = os.path.join(path_to_be_added, module_full_filename)
-    if os.path.isfile(filepath):
-        # Get setup function to executable
-        targetmodule = importlib.import_module(module_filename)
-    else:
-        raise ValueError(f"Python script {module_filename}.py could not be found")
 
-    # Create a Simulator object based on setup function
+    # Normalize module path and resolve absolute path
+    path_obj = Path(path_to_module).with_suffix(".py").resolve()
+
+    # Get module name (filename without suffix)
+    module_filename = path_obj.stem
+
+    # Add parent directory to PYTHONPATH
+    module_dir = path_obj.parent
+    if module_dir.exists():
+        sys.path.append(str(module_dir))
+    else:
+        raise ValueError(f"Directory of module does not exist: {module_dir}")
+
+    # Final check and import
+    if not path_obj.is_file():
+        raise ValueError(f"Python script {module_filename}.py could not be found at {path_obj}")
+
+    # Make setup function executable
+    targetmodule = importlib.import_module(module_filename)
+
+    # Initialize simulator based on setup function
     my_sim: sim.Simulator = sim.Simulator(
-        module_directory=path_to_be_added,
+        module_directory=str(module_dir),
         module_filename=module_filename,
         setup_function=function_in_module,
         my_simulation_parameters=my_simulation_parameters,

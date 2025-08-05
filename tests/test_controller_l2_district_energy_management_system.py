@@ -114,7 +114,7 @@ def test_house(
     # Build PV
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
         building_name=building_name,
-        rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
+        rooftop_area_in_m2=my_building_information.roof_area_in_m2,
         share_of_maximum_pv_potential=1.0,
         module_name="Hanwha HSL60P6-PA-4-250T [2013]",
         module_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
@@ -179,6 +179,7 @@ def test_house(
             building_name=building_name,
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(

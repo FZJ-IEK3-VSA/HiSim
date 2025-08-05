@@ -161,7 +161,7 @@ def run_cluster_house(
 
     # Build PV
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-        rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
+        rooftop_area_in_m2=my_building_information.roof_area_in_m2,
         share_of_maximum_pv_potential=1,
         location=weather_location,
     )
@@ -259,6 +259,7 @@ def run_cluster_house(
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
         absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+        heating_system=my_hds_controller_information.hds_controller_config.heating_system,
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config, my_simulation_parameters=my_simulation_parameters,
@@ -292,7 +293,7 @@ def run_cluster_house(
     loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
         source_output_name="LoadingPowerInputForBattery_",
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-        source_weight=4,
+        source_weight=5,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         output_description="Target electricity for Battery Control. ",
@@ -342,12 +343,12 @@ def run_cluster_house(
             {yearly_results["variable"][i]: [yearly_results["value"][i]] for i in range(len(yearly_results))}
         )
         for j in range(len(opex_df)):
-            opex_consumptions_dict.update({opex_df.index[j]: [opex_df["Consumption in kWh"].iloc[j]]})
+            opex_consumptions_dict.update({opex_df.index[j]: [opex_df["Total energy consumption [kWh]"].iloc[j]]})
     else:
         for i in range(len(yearly_results)):
             yearly_result_dict[yearly_results["variable"][i]].append(yearly_results["value"][i])
 
         for j in range(len(opex_df)):
-            opex_consumptions_dict[opex_df.index[j]].append(opex_df["Consumption in kWh"].iloc[j])
+            opex_consumptions_dict[opex_df.index[j]].append(opex_df["Total energy consumption [kWh]"].iloc[j])
 
     return yearly_result_dict, opex_consumptions_dict

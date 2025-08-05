@@ -2061,7 +2061,7 @@ class KpiGenerator(JSONWizard):
         for column in self.results.columns:
             if all(
                 x in column.split(sep=" ")
-                for x in [wrapped_occupancy_component.my_component.component_name, UtspLpgConnector.ElectricityOutput]
+                for x in [wrapped_occupancy_component.my_component.component_name, UtspLpgConnector.ElectricalPowerConsumption]
             ):
 
                 occupancy_total_electricity_consumption_in_watt_series = self.results[column]

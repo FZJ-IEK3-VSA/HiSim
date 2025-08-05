@@ -141,7 +141,7 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
                 predictive=False,
             ),
             pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-                rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2, location=weather_location
+                rooftop_area_in_m2=my_building_information.roof_area_in_m2, location=weather_location
             )
             if options.photovoltaic
             else None,
@@ -152,12 +152,13 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+                    heating_system=hds_controller_config.heating_system,
                 )
             ),
             gas_heater_controller_config=(
                 generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
                     minimal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt / 12,
-                    maximal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                    maximal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt,
                 )
             ),
             gas_heater_config=generic_boiler.GenericBoilerConfig.get_scaled_condensing_gas_boiler_config(
@@ -227,7 +228,8 @@ def setup_function(
     """
     # Heat Distribution System Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        config=my_config.hds_controller_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_config.hds_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Occupancy
@@ -252,7 +254,8 @@ def setup_function(
 
     # Gas Heater Controller
     my_gas_heater_controller = generic_boiler.GenericBoilerController(
-        my_simulation_parameters=my_simulation_parameters, config=my_config.gas_heater_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.gas_heater_controller_config,
     )
 
     # Gas heater
@@ -289,7 +292,8 @@ def setup_function(
         my_display_config=DisplayConfig.show("Warmwasserspeicher"),
     )
     my_domestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters, config=my_dhw_heatpump_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
     my_domestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
         config=my_dhw_heatpump_config,
@@ -341,7 +345,8 @@ def setup_function(
             # Build EMS
             my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
             my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-                my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config,
+                my_simulation_parameters=my_simulation_parameters,
+                config=my_electricity_controller_config,
             )
 
             # Build Battery
@@ -349,7 +354,8 @@ def setup_function(
                 total_pv_power_in_watt_peak=my_config.pv_config.power_in_watt
             )
             my_advanced_battery = advanced_battery_bslib.Battery(
-                my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config,
+                my_simulation_parameters=my_simulation_parameters,
+                config=my_advanced_battery_config,
             )
 
             # -----------------------------------------------------------------------------------------------------------------

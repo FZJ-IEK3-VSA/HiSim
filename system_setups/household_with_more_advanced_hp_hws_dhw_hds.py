@@ -1,4 +1,4 @@
-"""  Basic household new system setup. """
+"""Basic household new system setup."""
 
 # clean
 
@@ -102,7 +102,8 @@ def setup_function(
     )
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        my_simulation_parameters=my_simulation_parameters, config=my_heat_distribution_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_controller_config,
     )
     my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
         config=my_heat_distribution_controller_config
@@ -149,17 +150,22 @@ def setup_function(
     my_heatpump_config.with_domestic_hot_water_preparation = with_domestic_hot_water_preparation
 
     my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
-        config=my_heatpump_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_heatpump_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
-    my_heat_distribution_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
-        absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+    my_heat_distribution_config = (
+        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            heating_system=my_hds_controller_information.hds_controller_config.heating_system,
+        )
     )
 
     my_heat_distribution = heat_distribution_system.HeatDistribution(
-        config=my_heat_distribution_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Water Storage
@@ -170,14 +176,16 @@ def setup_function(
     )
 
     my_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
-        config=my_hot_water_storage_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_hot_water_storage_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build DHW Storage
     my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
 
     my_dhw_storage = generic_hot_water_storage_modular.HotWaterStorage(
-        config=my_dhw_storage_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_storage_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # =================================================================================================================================
@@ -206,7 +214,9 @@ def setup_function(
     # Verknüpfung mit Luft als Umgebungswärmeqzuelle
     if my_heatpump.parameters["Group"].iloc[0] == 1.0 or my_heatpump.parameters["Group"].iloc[0] == 4.0:
         my_heatpump.connect_input(
-            my_heatpump.TemperatureInputPrimary, my_weather.component_name, my_weather.DailyAverageOutsideTemperatures,
+            my_heatpump.TemperatureInputPrimary,
+            my_weather.component_name,
+            my_weather.DailyAverageOutsideTemperatures,
         )
     else:
         raise KeyError(
@@ -244,14 +254,16 @@ def setup_function(
 
     my_dhw_storage.connect_only_predefined_connections(my_occupancy)
     my_dhw_storage.connect_input(
-        my_dhw_storage.ThermalPowerDelivered, my_heatpump.component_name, my_heatpump.ThermalOutputPowerDHW,
+        my_dhw_storage.ThermalPowerDelivered,
+        my_heatpump.component_name,
+        my_heatpump.ThermalOutputPowerDHW,
     )
 
     ################################
 
     my_electricity_meter.add_component_input_and_connect(
         source_object_name=my_occupancy.component_name,
-        source_component_output=my_occupancy.ElectricityOutput,
+        source_component_output=my_occupancy.ElectricalPowerConsumption,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
@@ -263,7 +275,9 @@ def setup_function(
         source_component_output=my_heatpump.ElectricalInputPowerTotal,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,],
+        source_tags=[
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
         source_weight=999,
     )
 

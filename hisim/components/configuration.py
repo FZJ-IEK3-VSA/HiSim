@@ -2,11 +2,436 @@
 
 # clean
 
-from typing import Any
+from typing import Any, Optional
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
-from hisim.loadtypes import LoadTypes
+from hisim.loadtypes import LoadTypes, ComponentType, Units
 from hisim.component import ConfigBase
+from hisim import log
+
+"""
+Sources for opex techno-economic parameters:
+Sources for opex techno-economic parameters:
+        [1]: https://de.statista.com/statistik/daten/studie/914784/umfrage/entwicklung-der-strompreise-in-deutschland-verivox-verbraucherpreisindex/
+        [2]: https://echtsolar.de/einspeiseverguetung/  (average of monthly injection revenue)
+        [3]: https://de.statista.com/statistik/daten/studie/779/umfrage/durchschnittspreis-fuer-dieselkraftstoff-seit-dem-jahr-1950/
+        [4]: https://de.statista.com/statistik/daten/studie/168286/umfrage/entwicklung-der-gaspreise-fuer-haushaltskunden-seit-2006/
+        [5]: https://de.statista.com/statistik/daten/studie/38897/umfrage/co2-emissionsfaktor-fuer-den-strommix-in-deutschland-seit-1990/
+        [6]: https://www.destatis.de/DE/Themen/Wirtschaft/Preise/Erdgas-Strom-DurchschnittsPreise/_inhalt.html#421258
+        [7]: https://de.statista.com/statistik/daten/studie/250114/umfrage/preis-fuer-fernwaerme-nach-anschlusswert-in-deutschland/
+        [8]: https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://www.bafa.de/SharedDocs/Downloads/DE/Energie/
+             eew_infoblatt_co2_faktoren_2022.pdf%3F__blob%3DpublicationFile%26v%3D6&ved=2ahUKEwjai6GzsP2MAxW6RPEDHbV2G-cQFnoECFkQAQ&usg=AOvVaw1U3FERIjm5HLPDAuuO5ig0
+        [9]: https://www.umweltbundesamt.de/themen/co2-emissionen-pro-kilowattstunde-strom-2024
+        [10]: https://www-genesis.destatis.de/datenbank/online/statistic/61243/table/61243-0002
+        [11]: https://www.bafa.de/SharedDocs/Downloads/DE/Energie/eew_infoblatt_co2_faktoren_2025.pdf?__blob=publicationFile&v=3
+        [12]: https://de.statista.com/statistik/daten/studie/2633/umfrage/entwicklung-des-verbraucherpreises-fuer-leichtes-heizoel-seit-1960/
+        [13]: https://de.statista.com/statistik/daten/studie/214738/umfrage/preisentwicklung-fuer-holzpellets-in-deutschland/
+        [14]: https://www.umweltbundesamt.de/sites/default/files/medien/479/publikationen/
+              factsheet_ansatz_zur_neubewertung_von_co2-emissionen_aus_der_holzverbrennung_0.pdf
+        [15]: https://mediathek.fnr.de/energiepreisentwicklung.html
+        [16]: https://de.statista.com/statistik/daten/studie/250114/umfrage/preis-fuer-fernwaerme-nach-anschlusswert-in-deutschland/
+        [17]: https://doi.org/10.1016/j.enbuild.2022.112480 (Knosala et al. 2022)
+"""
+opex_techno_economic_parameters = {
+    2018: {
+        "electricity_costs_in_euro_per_kwh": 0.27825,  # EUR/kWh  # Source: [1]
+        "electricity_footprint_in_kg_per_kwh": 0.473,  # kgCO2eq/kWh  # Source: [5]
+        "electricity_to_grid_revenue_in_euro_per_kwh": 0.1205,  # EUR/kWh  # Source: [2]
+        "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.0033,  # EUR/kWh
+        "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.02,  # kgCO2eq/kWh
+        "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
+        "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
+        "gas_costs_in_euro_per_kwh": 0.0664,  # EUR/kWh  # Source: [4]
+        "gas_footprint_in_kg_per_kwh": 0.24,  # kgCO2eq/kWh
+        "oil_costs_in_euro_per_l": 1.159835766,  # EUR/l
+        "oil_footprint_in_kg_per_l": 3.2,  # kgCO2eq/l
+        "diesel_costs_in_euro_per_l": 128.90,  # EUR/l  # Source: [3]
+        "diesel_footprint_in_kg_per_l": 2.0,  # kgCO2eq/l
+        "pellet_costs_in_euro_per_t": 247,  # EUR/t # Source: [13]
+        "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8]
+        "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
+        "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
+        "district_heating_costs_in_euro_per_kwh": 0.07672,  # EUR/kWh Source : [16]
+        "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+        "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
+    },
+    2019: {
+        "electricity_costs_in_euro_per_kwh": 0.295,  # EUR/kWh  # Source: [1]
+        "electricity_footprint_in_kg_per_kwh": 0.411,  # kgCO2eq/kWh  # Source: [5]
+        "electricity_to_grid_revenue_in_euro_per_kwh": 0.1072,  # EUR/kWh  # Source: [2]
+        "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.0033,  # EUR/kWh
+        "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.02,  # kgCO2eq/kWh
+        "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
+        "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
+        "gas_costs_in_euro_per_kwh": 0.0728,  # EUR/kWh  # Source: [4]
+        "gas_footprint_in_kg_per_kwh": 0.24,  # kgCO2eq/kWh
+        "oil_costs_in_euro_per_l": 1.159835766,  # EUR/l
+        "oil_footprint_in_kg_per_l": 3.2,  # kgCO2eq/l
+        "diesel_costs_in_euro_per_l": 1.2670,  # EUR/l  # Source: [3]
+        "diesel_footprint_in_kg_per_l": 2.0,  # kgCO2eq/l
+        "pellet_costs_in_euro_per_t": 251,  # EUR/t # Source: [13]
+        "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8]
+        "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
+        "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
+        "district_heating_costs_in_euro_per_kwh": 0.07904,  # EUR/kWh Source : [16]
+        "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+        "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
+    },
+    2020: {
+        "electricity_costs_in_euro_per_kwh": 0.3005,  # EUR/kWh  # Source: [1]
+        "electricity_footprint_in_kg_per_kwh": 0.369,  # kgCO2eq/kWh  # Source: [5]
+        "electricity_to_grid_revenue_in_euro_per_kwh": 0.0838,  # EUR/kWh  # Source: [2]
+        "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.0033,  # EUR/kWh
+        "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.02,  # kgCO2eq/kWh
+        "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
+        "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
+        "gas_costs_in_euro_per_kwh": 0.0699,  # EUR/kWh  # Source: [4]
+        "gas_footprint_in_kg_per_kwh": 0.24,  # kgCO2eq/kWh
+        "oil_costs_in_euro_per_l": 1.159835766,  # EUR/l
+        "oil_footprint_in_kg_per_l": 3.2,  # kgCO2eq/l
+        "diesel_costs_in_euro_per_l": 1.1240,  # EUR/l  # Source: [3]
+        "diesel_footprint_in_kg_per_l": 2.0,  # kgCO2eq/l
+        "pellet_costs_in_euro_per_t": 237,  # EUR/t # Source: [13]
+        "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8]
+        "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
+        "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
+        "district_heating_costs_in_euro_per_kwh": 0.07656,  # EUR/kWh Source : [16]
+        "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+        "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
+    },
+    2021: {
+        "electricity_costs_in_euro_per_kwh": 0.3005,  # EUR/kWh  # Source: [1]
+        "electricity_footprint_in_kg_per_kwh": 0.410,  # kgCO2eq/kWh  # Source: [5]
+        "electricity_to_grid_revenue_in_euro_per_kwh": 0.0753,  # EUR/kWh  # Source: [2]
+        "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.0033,  # EUR/kWh
+        "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.02,  # kgCO2eq/kWh
+        "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
+        "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
+        "gas_costs_in_euro_per_kwh": 0.0745,  # EUR/kWh  # Source: [4]
+        "gas_footprint_in_kg_per_kwh": 0.24,  # kgCO2eq/kWh
+        "oil_costs_in_euro_per_l": 1.159835766,  # EUR/l
+        "oil_footprint_in_kg_per_l": 3.2,  # kgCO2eq/l
+        "diesel_costs_in_euro_per_l": 1.399,  # EUR/l  # Source: [3]
+        "diesel_footprint_in_kg_per_l": 2.0,  # kgCO2eq/l
+        "pellet_costs_in_euro_per_t": 241,  # EUR/t # Source: [13]
+        "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8]
+        "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
+        "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
+        "district_heating_costs_in_euro_per_kwh": 0.08277,  # EUR/kWh Source : [16]
+        "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+        "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
+    },
+    2022: {
+        "electricity_costs_in_euro_per_kwh": 0.43025,  # EUR/kWh  # Source: [1]
+        "electricity_footprint_in_kg_per_kwh": 0.434,  # kgCO2eq/kWh  # Source: [5]
+        "electricity_to_grid_revenue_in_euro_per_kwh": 0.0723,  # EUR/kWh  # Source: [2]
+        "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.0033,  # EUR/kWh
+        "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.02,  # kgCO2eq/kWh
+        "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
+        "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
+        "gas_costs_in_euro_per_kwh": 0.0951,  # EUR/kWh  # Source: [4]
+        "gas_footprint_in_kg_per_kwh": 0.24,  # kgCO2eq/kWh
+        "oil_costs_in_euro_per_l": 1.159835766,  # EUR/l
+        "oil_footprint_in_kg_per_l": 3.2,  # kgCO2eq/l
+        "diesel_costs_in_euro_per_l": 1.96,  # EUR/l  # Source: [3]
+        "diesel_footprint_in_kg_per_l": 2.0,  # kgCO2eq/l
+        "pellet_costs_in_euro_per_t": 519,  # EUR/t # Source: [13]
+        "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8]
+        "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
+        "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
+        "district_heating_costs_in_euro_per_kwh": 0.11945,  # EUR/kWh Source : [16]
+        "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+        "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
+    },
+    2023: {
+        "electricity_costs_in_euro_per_kwh": 0.4175,  # EUR/kWh  # Source: [6]
+        "electricity_footprint_in_kg_per_kwh": 0.380,  # kgCO2eq/kWh  # Source: [5]
+        "electricity_to_grid_revenue_in_euro_per_kwh": 0.0733,  # EUR/kWh  # Source: [2]
+        "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.147,  # EUR/kWh  # Source: [7]
+        "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.1823,  # kgCO2eq/kWh
+        "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
+        "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
+        "gas_costs_in_euro_per_kwh": 0.1141,  # EUR/kWh  # Source: [6]
+        "gas_footprint_in_kg_per_kwh": 0.247,  # kgCO2eq/kWh
+        "oil_costs_in_euro_per_l": 1.159835766,  # EUR/l
+        "oil_footprint_in_kg_per_l": 3.2,  # kgCO2eq/l
+        "diesel_costs_in_euro_per_l": 1.73,  # EUR/l  # Source: [3]
+        "diesel_footprint_in_kg_per_l": 2.0,  # kgCO2eq/l
+        "pellet_costs_in_euro_per_t": 390,  # EUR/t # Source: [13]
+        "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8]
+        "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
+        "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
+        "district_heating_costs_in_euro_per_kwh": 0.15034,  # EUR/kWh Source : [16]
+        "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+        "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
+    },
+    2024: {
+        "electricity_costs_in_euro_per_kwh": 0.4113,  # EUR/kWh  # Source: [10]
+        "electricity_footprint_in_kg_per_kwh": 0.363,  # kgCO2eq/kWh  # Source: [9]
+        "electricity_to_grid_revenue_in_euro_per_kwh": 0.0692,  # EUR/kWh  # Source: [2] average of 2024 values
+        "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.142,  # EUR/kWh  # Source: [7] 160 kW connection
+        "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.28,  # kgCO2eq/kWh # Source: [11] assuming its for 2024
+        "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
+        "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
+        "gas_costs_in_euro_per_kwh": 0.10335,  # EUR/kWh  # Source: [6] average of both half years
+        "gas_footprint_in_kg_per_kwh": 0.247,  # kgCO2eq/kWh
+        "oil_costs_in_euro_per_l": 0.9941,  # EUR/l # Source: [12]
+        "oil_footprint_in_kg_per_l": 3.2,  # kgCO2eq/l
+        "diesel_costs_in_euro_per_l": 1.6649,  # EUR/l  # Source: [3]
+        "diesel_footprint_in_kg_per_l": 2.0,  # kgCO2eq/l
+        "pellet_costs_in_euro_per_t": 289,  # EUR/t # Source: [13]
+        "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8]
+        "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: [15]
+        "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
+        "district_heating_costs_in_euro_per_kwh": 0.14757,  # EUR/kWh Source : [16]
+        "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+        "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
+    },
+}
+
+
+@dataclass_json
+@dataclass
+class EmissionFactorsAndCostsForFuelsConfig:
+    """Emission factors and costs for fuels config class."""
+
+    electricity_costs_in_euro_per_kwh: float  # EUR/kWh
+    electricity_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
+    electricity_to_grid_revenue_in_euro_per_kwh: float  # EUR/kWh
+    contracting_heating_costs_hot_water_in_euro_per_kwh: float  # EUR/kWh
+    contracting_heating_footprint_hot_water_in_kg_per_kwh: float  # kgCO2eq/kWh
+    contracting_heating_costs_cold_water_in_euro_per_kwh: float
+    contracting_heating_footprint_cold_water_in_kg_per_kwh: float
+    gas_costs_in_euro_per_kwh: float  # EUR/kWh
+    gas_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
+    oil_costs_in_euro_per_l: float  # EUR/l
+    oil_footprint_in_kg_per_l: float  # kgCO2eq/l
+    diesel_costs_in_euro_per_l: float  # EUR/l
+    diesel_footprint_in_kg_per_l: float  # kgCO2eq/l
+    pellet_costs_in_euro_per_t: float  # EUR/t
+    pellet_footprint_in_kg_per_kwh: float  # kgCo2eq/kWh
+    wood_chip_costs_in_euro_per_t: float  # EUR/t
+    wood_chip_footprint_in_kg_per_kwh: float  # kgCo2eq/kWh
+    district_heating_costs_in_euro_per_kwh: float  # EUR/kWh
+    district_heating_footprint_in_kg_per_kwh: float  # kgCo2eq/kWh
+    green_hydrogen_gas_costs_in_euro_per_kwh: float  # EUR/kWh
+    green_hydrogen_gas_footprint_in_kg_per_kwh: float  # kgCo2eq/kWh
+
+    @classmethod
+    def get_values_for_year(
+        cls, year: int
+    ) -> "EmissionFactorsAndCostsForFuelsConfig":  # pylint: disable=too-many-return-statements
+        """Get emission factors and fuel costs for certain year."""
+
+        if year not in opex_techno_economic_parameters:
+            raise KeyError(f"No Emission and cost factors implemented yet for the year {year}.")
+
+        return EmissionFactorsAndCostsForFuelsConfig(**opex_techno_economic_parameters[year])
+
+
+"""
+Sources for capex techno-economic parameters:
+        [18]: http://dx.doi.org/10.1016/j.enbuild.2017.04.079
+        [19]: /hisim/modular_household/emission_factors_and_costs_devices.csv
+        (values are taken from WHY-project: https://cordis.europa.eu/project/id/891943/results but no concrete source was found)
+        [20]: https://www.gebaeudeforum.de/service/downloads/ -> search for "Wärmeerzeugung im Bestand mit EE", January 2024
+        [21]: https://  doi.org/10.3390/su13041938
+        [22]: https://www.duh.de/fileadmin/user_upload/download/Projektinformation/Energieeffizienz/Wärmepumpen/300623_Waermepumpen_Faktenpapier_Neuauflage_Digital.pdf
+        [23]: VDI2067-1
+        [24]: https://doi.org/10.1016/j.renene.2023.01.117
+        [25]: https://solarenergie.de/stromspeicher/preise
+        [26]: https://www.ostrom.de/en/post/how-much-does-a-smart-meter-cost-in-2025
+        [27]: https://mcsmeters.com/collections/gas-meters
+        [28]: https://www.gasag.de/magazin/energiesparen/energiemanagementsystem-privathaushalt/
+        [29]: https://www.adac.de/rund-ums-haus/energie/spartipps/energiemanagementsystem-zuhause/
+        [30]: https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
+        [31]: https://www.finanztip.de/photovoltaik/pv-anlage-finanzieren/
+        [31]: https://www.kfw.de/inlandsfoerderung/Unternehmen/Energie-Umwelt/F%C3%B6rderprodukte/Erneuerbare-Energien-Standard-(270)/
+        [32]: hisim/components/simple_water_storage.py -> function get_scaled_hot_water_storage
+        [33]: https://renewa.de/sanierung/gewerke/heizung/fussbodenheizung/foerderung
+"""
+capex_techno_economic_parameters = {
+    2024: {
+        Units.KILOWATT: {
+            ComponentType.HEAT_PUMP: {
+                "investment_costs_in_euro_per_kw": 1600,  # Source: [22]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.015,  # Source: [20]
+                "technical_lifetime_in_years": 18,  # Source: [20]
+                "co2_footprint_in_kg_per_kw": 165.84,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0.3,  # Source: [20]
+            },
+            ComponentType.GAS_HEATER: {
+                "investment_costs_in_euro_per_kw": 0.36 * 1600,  # 36% of heat pump costs, Source: [20]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
+                "technical_lifetime_in_years": 18,  # Source: [20]
+                "co2_footprint_in_kg_per_kw": 49.47,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
+            ComponentType.OIL_HEATER: {
+                "investment_costs_in_euro_per_kw": 0.75 * 0.36 * 1600,  # 75% of gas heater costs, Source: [19]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.03,  # Source: [23]
+                "technical_lifetime_in_years": 18,  # assume same as gas heater based on [19]
+                "co2_footprint_in_kg_per_kw": 19.4,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
+            ComponentType.PELLET_HEATER: {
+                "investment_costs_in_euro_per_kw": 0.96 * 1600,  # 96% of heat pump costs, Source: [20]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.047,  # Source: [20]
+                "technical_lifetime_in_years": 18,  # Source: [20]
+                "co2_footprint_in_kg_per_kw": 49.47,  # assume similar to gas heater based on [19]
+                "subsidy_as_percentage_of_investment_costs": 0.3,
+            },
+            ComponentType.WOOD_CHIP_HEATER: {
+                "investment_costs_in_euro_per_kw": 0.96 * 1600,  # 96% of heat pump costs, Source: [20]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.047,  # Source: [20]
+                "technical_lifetime_in_years": 18,  # Source: [20]
+                "co2_footprint_in_kg_per_kw": 49.47,  # assume similar to gas heater based on [19]
+                "subsidy_as_percentage_of_investment_costs": 0.3,
+            },
+            ComponentType.DISTRICT_HEATING: {
+                "investment_costs_in_euro_per_kw": 0.636 * 1600,  # 63.6% of heat pump costs, Source: [20]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.026,  # Source: [20]
+                "technical_lifetime_in_years": 20,  # Source: [20]
+                "co2_footprint_in_kg_per_kw": 35.09,  # Source: [19], biomass district heating
+                "subsidy_as_percentage_of_investment_costs": 0.3,
+            },
+            ComponentType.ELECTRIC_HEATER: {
+                "investment_costs_in_euro_per_kw": 0.196 * 1600,  # 19.6% of heat pump costs, Source: [20]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
+                "technical_lifetime_in_years": 22,  # Source: [20]
+                "co2_footprint_in_kg_per_kw": 1.21,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0,  # Source: [20]
+            },
+            ComponentType.HYDROGEN_HEATER: {
+                "investment_costs_in_euro_per_kw": 0.36
+                * 1600,  # 36% of heat pump costs, Source: [20], same as gas heater
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
+                "technical_lifetime_in_years": 18,  # Source: [20]
+                "co2_footprint_in_kg_per_kw": 49.47,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0.3,  # green hydrogen, source: [20]
+            },
+            ComponentType.PV: {
+                "investment_costs_in_euro_per_kw": 794.41,  # Source: [19]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [25]
+                "technical_lifetime_in_years": 25,  # Source: [19]
+                "co2_footprint_in_kg_per_kw": 330.51,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0,
+                # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
+                # that's why we assume 0% subsidy here, source: [31,32]
+            },
+        },
+        Units.KWH: {
+            ComponentType.BATTERY: {
+                "investment_costs_in_euro_per_kwh": 546,  # Source: [21]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.032,  # Source: [20]
+                "technical_lifetime_in_years": 10,  # Source: [19]
+                "co2_footprint_in_kg_per_kwh": 130.7,  # Source: [19]
+                "subsidy_as_percentage_of_investment_costs": 0,
+                # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
+                # that's why we assume 0% subsidy here, source: [31,32]
+            },
+        },
+        Units.LITER: {
+            ComponentType.THERMAL_ENERGY_STORAGE: {
+                "investment_costs_in_euro_per_liter": 14.51,  # EUR/liter, Source: [19]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
+                "technical_lifetime_in_years": 20,  # Source: [20]
+                "co2_footprint_in_kg_per_liter": 29.79
+                / 50,  # Source: [19] ([19] is in kg/kW, and we assume 1kW approx. = 50l, based on [32])
+                "subsidy_as_percentage_of_investment_costs": 0.15,
+            },
+        },
+        Units.SQUARE_METER: {
+            ComponentType.SOLAR_THERMAL_SYSTEM: {
+                "investment_costs_in_euro_per_m2": 797,  # Source: [30]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
+                "technical_lifetime_in_years": 20,
+                "co2_footprint_in_kg_per_m2": 92.4,  # kgCO2eq/m2, source: [24]
+                "subsidy_as_percentage_of_investment_costs": 0.3,  # Source: [30]
+            },
+        },
+        Units.ANY: {
+            ComponentType.ELECTRICITY_METER: {
+                "investment_costs_in_euro": 100,  # EUR, Source: [26]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.3,  # Source: [26]
+                "technical_lifetime_in_years": 20,  # no idea, assumption
+                "co2_footprint_in_kg": 0,  # no idea, assume 0
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
+            ComponentType.GAS_METER: {
+                "investment_costs_in_euro": 200,  # EUR, Source: [27]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.15,  # assume around 30€ per year
+                "technical_lifetime_in_years": 20,  # no idea, assumption
+                "co2_footprint_in_kg": 0,  # no idea, assume 0
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
+            ComponentType.ENERGY_MANAGEMENT_SYSTEM: {
+                "investment_costs_in_euro": 3500,  # EUR/kW, Source: [28]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.028,  # Source: [28]
+                "technical_lifetime_in_years": 20,  # no idea, assumption
+                "co2_footprint_in_kg": 0,  # no idea, assume 0
+                "subsidy_as_percentage_of_investment_costs": 0.15,  # Source: [29]
+            },
+            ComponentType.HEAT_DISTRIBUTION_SYSTEM: {
+                "investment_costs_in_euro": 6500,  # Source: [20] (Factsheet_65ProzentEE_01_Luft-Wasser-Waermepumpe.pdf)
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [23]
+                "technical_lifetime_in_years": 50,  # Source: [23]
+                "co2_footprint_in_kg": 0,  # no idea, assume 0
+                "subsidy_as_percentage_of_investment_costs": 0.15,  # Source: [33]
+            },
+        },
+    }
+}
+
+
+@dataclass_json
+@dataclass
+class EmissionFactorsAndCostsForDevicesConfig:
+    """Emission factors and costs for devices config class."""
+
+    technical_lifetime_in_years: float
+    maintenance_costs_as_percentage_of_investment_per_year: float
+    subsidy_as_percentage_of_investment_costs: float
+    investment_costs_in_euro_per_kw: Optional[float] = None
+    investment_costs_in_euro_per_kwh: Optional[float] = None
+    investment_costs_in_euro_per_liter: Optional[float] = None
+    investment_costs_in_euro_per_m2: Optional[float] = None
+    investment_costs_in_euro: Optional[float] = None
+    co2_footprint_in_kg_per_kw: Optional[float] = None
+    co2_footprint_in_kg_per_kwh: Optional[float] = None
+    co2_footprint_in_kg_per_liter: Optional[float] = None
+    co2_footprint_in_kg_per_m2: Optional[float] = None
+    co2_footprint_in_kg: Optional[float] = None
+
+    @classmethod
+    def get_values_for_year(
+        cls, year: int, unit: Units, device: ComponentType
+    ) -> "EmissionFactorsAndCostsForDevicesConfig":
+        """Get emission factors and costs for a given year and device."""
+
+        if year not in capex_techno_economic_parameters:
+            log.debug(
+                f"No specfic capex and emission data available for year {year}. "
+                f"Use data from year {next(iter(capex_techno_economic_parameters))}"
+            )
+            year = next(iter(capex_techno_economic_parameters))
+
+        if unit not in capex_techno_economic_parameters[year]:
+            raise KeyError(f"No data available for unit '{unit}' in year {year}.")
+
+        if device not in capex_techno_economic_parameters[year][unit]:
+            raise KeyError(f"No data available for device '{device}' in unit '{unit}' for year {year}.")
+
+        capex_techno_economic_values = cls(**capex_techno_economic_parameters[year][unit][device])
+
+        return capex_techno_economic_values
 
 
 @dataclass_json
@@ -24,7 +449,10 @@ class WarmWaterStorageConfig(ConfigBase):
     slice_height_minimum: float  # [m]
 
     @classmethod
-    def get_default_config(cls, building_name: str = "BUI1",) -> Any:
+    def get_default_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default config."""
         return WarmWaterStorageConfig(
             building_name=building_name,
@@ -210,7 +638,10 @@ class ExtendedControllerConfig(ConfigBase):
     maximum_autarky: bool
 
     @classmethod
-    def get_default_config(cls, building_name: str = "BUI1",) -> Any:
+    def get_default_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default ExtendedControllerConfig."""
         return ExtendedControllerConfig(
             building_name=building_name,
@@ -262,9 +693,7 @@ class PhysicsConfig:
         """
 
         self.specific_volume_in_m3_per_kg = 1 / self.density_in_kg_per_m3
-        self.lower_heating_value_in_joule_per_kg = (
-            self.lower_heating_value_in_joule_per_m3 / self.density_in_kg_per_m3
-        )
+        self.lower_heating_value_in_joule_per_kg = self.lower_heating_value_in_joule_per_m3 / self.density_in_kg_per_m3
         self.higher_heating_value_in_joule_per_kg = (
             self.higher_heating_value_in_joule_per_m3 / self.density_in_kg_per_m3
         )
@@ -283,7 +712,7 @@ class PhysicsConfig:
                 higher_heating_value_in_joule_per_m3=39.819 * 1e6,
                 specific_heat_capacity_in_joule_per_kg_per_kelvin=2190,
             )
-        if energy_carrier == LoadTypes.HYDROGEN:
+        if energy_carrier == LoadTypes.GREEN_HYDROGEN:
             return PhysicsConfig(
                 density_in_kg_per_m3=0.08989,
                 lower_heating_value_in_joule_per_m3=10.783 * 1e6,
@@ -306,6 +735,18 @@ class PhysicsConfig:
                 lower_heating_value_in_joule_per_m3=11.7 * 1e9,
                 higher_heating_value_in_joule_per_m3=11.7 * 1e9,
                 specific_heat_capacity_in_joule_per_kg_per_kelvin=2500,
+            )
+        if energy_carrier == LoadTypes.WOOD_CHIPS:
+            # density here = bulk density (Schüttdichte)
+            # source density and heating value: https://www.umweltbundesamt.de/sites/default/files/medien/479/publikationen/
+            # factsheet_ansatz_zur_neubewertung_von_co2-emissionen_aus_der_holzverbrennung_0.pdf
+            # source heat capacity: https://www.schweizer-fn.de/stoff/wkapazitaet/wkapazitaet_baustoff_erde.php
+            # higher heating value of wood chips unknown -> set to lower heating value
+            return PhysicsConfig(
+                density_in_kg_per_m3=250,  # approximate value based on different wood types
+                lower_heating_value_in_joule_per_m3=15.6 * 1e9,
+                higher_heating_value_in_joule_per_m3=15.6 * 1e9,
+                specific_heat_capacity_in_joule_per_kg_per_kelvin=2000,  # estimated based on values for different woods
             )
         if energy_carrier == LoadTypes.WATER:
             return PhysicsConfig(
@@ -332,156 +773,3 @@ class PhysicsConfig:
     # natural_gas_specific_volume = 1 / hydrogen_density_in_kg_per_m3  # [m^3/kg]
     # natural_gas_specific_fuel_value_per_m_3 = 35.894 * 10**6  # [J/m³]
     # natural_gas_specific_fuel_value_per_kg = natural_gas_specific_fuel_value_per_m_3 / natural_gas_density  # [J/kg]
-
-
-@dataclass_json
-@dataclass
-class EmissionFactorsAndCostsForFuelsConfig:
-    """Emission factors and costs for fuels config class."""
-
-    electricity_costs_in_euro_per_kwh: float  # EUR/kWh
-    electricity_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
-    electricity_to_grid_revenue_in_euro_per_kwh: float  # EUR/kWh
-    contracting_heating_costs_hot_water_in_euro_per_kwh: float  # EUR/kWh
-    contracting_heating_footprint_hot_water_in_kg_per_kwh: float  # kgCO2eq/kWh
-    contracting_heating_costs_cold_water_in_euro_per_kwh: float
-    contracting_heating_footprint_cold_water_in_kg_per_kwh: float
-    gas_costs_in_euro_per_kwh: float  # EUR/kWh
-    gas_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
-    oil_costs_in_euro_per_l: float  # EUR/l
-    oil_footprint_in_kg_per_l: float  # kgCO2eq/l
-    diesel_costs_in_euro_per_l: float  # EUR/l
-    diesel_footprint_in_kg_per_l: float  # kgCO2eq/l
-
-    @classmethod
-    def get_default(cls) -> "EmissionFactorsAndCostsForFuelsConfig":
-        """These are old values copied from file emission_factors_and_costs_fuels.csv so far."""
-        # Todo: values copied from file emission_factors_and_costs_fuels.csv so far; Use only one location for data!
-        # Todo: check Literature for values
-        return EmissionFactorsAndCostsForFuelsConfig(
-            electricity_costs_in_euro_per_kwh=0.2525,  # EUR/kWh
-            electricity_footprint_in_kg_per_kwh=0.44,  # kgCO2eq/kWh
-            electricity_to_grid_revenue_in_euro_per_kwh=0.2525,  # EUR/kWh  # Todo: Change Value!!!
-            contracting_heating_costs_hot_water_in_euro_per_kwh=0.0033,  # EUR/kWh
-            contracting_heating_footprint_hot_water_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
-            contracting_heating_costs_cold_water_in_euro_per_kwh=0,
-            contracting_heating_footprint_cold_water_in_kg_per_kwh=0,
-            gas_costs_in_euro_per_kwh=0.0861,  # EUR/kWh
-            gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
-            oil_costs_in_euro_per_l=1.159835766,  # EUR/l
-            oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
-            diesel_costs_in_euro_per_l=1.617572993,  # EUR/l
-            diesel_footprint_in_kg_per_l=2.6649,  # kgCO2eq/l
-        )
-
-    @classmethod
-    def get_values_for_year(cls, year: int) -> "EmissionFactorsAndCostsForFuelsConfig":
-        """Get emission factors and fuel costs for certain year.
-
-        Sources:
-        [1]: https://de.statista.com/statistik/daten/studie/914784/umfrage/entwicklung-der-strompreise-in-deutschland-verivox-verbraucherpreisindex/
-        [2]: https://echtsolar.de/einspeiseverguetung/  (average of monthly injection revenue)
-        [3]: https://de.statista.com/statistik/daten/studie/779/umfrage/durchschnittspreis-fuer-dieselkraftstoff-seit-dem-jahr-1950/
-        [4]: https://de.statista.com/statistik/daten/studie/168286/umfrage/entwicklung-der-gaspreise-fuer-haushaltskunden-seit-2006/
-        [5]: https://de.statista.com/statistik/daten/studie/38897/umfrage/co2-emissionsfaktor-fuer-den-strommix-in-deutschland-seit-1990/
-        [6]: https://www.destatis.de/DE/Themen/Wirtschaft/Preise/Erdgas-Strom-DurchschnittsPreise/_inhalt.html#421258
-        [7]: https://de.statista.com/statistik/daten/studie/250114/umfrage/preis-fuer-fernwaerme-nach-anschlusswert-in-deutschland/
-        """
-        if year == 2018:
-            return EmissionFactorsAndCostsForFuelsConfig(
-                electricity_costs_in_euro_per_kwh=0.27825,  # EUR/kWh  # Source: [1]
-                electricity_footprint_in_kg_per_kwh=0.473,  # kgCO2eq/kWh  # Source: [5]
-                electricity_to_grid_revenue_in_euro_per_kwh=0.1205,  # EUR/kWh  # Source: [2]
-                contracting_heating_costs_hot_water_in_euro_per_kwh=0.0033,  # EUR/kWh
-                contracting_heating_footprint_hot_water_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
-                contracting_heating_costs_cold_water_in_euro_per_kwh=0,
-                contracting_heating_footprint_cold_water_in_kg_per_kwh=0,
-                gas_costs_in_euro_per_kwh=0.0664,  # EUR/kWh  # Source: [4]
-                gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
-                oil_costs_in_euro_per_l=1.159835766,  # EUR/l
-                oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
-                diesel_costs_in_euro_per_l=128.90,  # EUR/l  # Source: [3]
-                diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
-            )
-        if year == 2019:
-            return EmissionFactorsAndCostsForFuelsConfig(
-                electricity_costs_in_euro_per_kwh=0.295,  # EUR/kWh  # Source: [1]
-                electricity_footprint_in_kg_per_kwh=0.411,  # kgCO2eq/kWh  # Source: [5]
-                electricity_to_grid_revenue_in_euro_per_kwh=0.1072,  # EUR/kWh  # Source: [2]
-                contracting_heating_costs_hot_water_in_euro_per_kwh=0.0033,  # EUR/kWh
-                contracting_heating_footprint_hot_water_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
-                contracting_heating_costs_cold_water_in_euro_per_kwh=0,
-                contracting_heating_footprint_cold_water_in_kg_per_kwh=0,
-                gas_costs_in_euro_per_kwh=0.0728,  # EUR/kWh  # Source: [4]
-                gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
-                oil_costs_in_euro_per_l=1.159835766,  # EUR/l
-                oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
-                diesel_costs_in_euro_per_l=1.2670,  # EUR/l  # Source: [3]
-                diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
-            )
-        if year == 2020:
-            return EmissionFactorsAndCostsForFuelsConfig(
-                electricity_costs_in_euro_per_kwh=0.3005,  # EUR/kWh  # Source: [1]
-                electricity_footprint_in_kg_per_kwh=0.369,  # kgCO2eq/kWh  # Source: [5]
-                electricity_to_grid_revenue_in_euro_per_kwh=0.0838,  # EUR/kWh  # Source: [2]
-                contracting_heating_costs_hot_water_in_euro_per_kwh=0.0033,  # EUR/kWh
-                contracting_heating_footprint_hot_water_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
-                contracting_heating_costs_cold_water_in_euro_per_kwh=0,
-                contracting_heating_footprint_cold_water_in_kg_per_kwh=0,
-                gas_costs_in_euro_per_kwh=0.0699,  # EUR/kWh  # Source: [4]
-                gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
-                oil_costs_in_euro_per_l=1.159835766,  # EUR/l
-                oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
-                diesel_costs_in_euro_per_l=1.1240,  # EUR/l  # Source: [3]
-                diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
-            )
-        if year == 2021:
-            return EmissionFactorsAndCostsForFuelsConfig(
-                electricity_costs_in_euro_per_kwh=0.3005,  # EUR/kWh  # Source: [1]
-                electricity_footprint_in_kg_per_kwh=0.410,  # kgCO2eq/kWh  # Source: [5]
-                electricity_to_grid_revenue_in_euro_per_kwh=0.0753,  # EUR/kWh  # Source: [2]
-                contracting_heating_costs_hot_water_in_euro_per_kwh=0.0033,  # EUR/kWh
-                contracting_heating_footprint_hot_water_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
-                contracting_heating_costs_cold_water_in_euro_per_kwh=0,
-                contracting_heating_footprint_cold_water_in_kg_per_kwh=0,
-                gas_costs_in_euro_per_kwh=0.0745,  # EUR/kWh  # Source: [4]
-                gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
-                oil_costs_in_euro_per_l=1.159835766,  # EUR/l
-                oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
-                diesel_costs_in_euro_per_l=1.399,  # EUR/l  # Source: [3]
-                diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
-            )
-        if year == 2022:
-            return EmissionFactorsAndCostsForFuelsConfig(
-                electricity_costs_in_euro_per_kwh=0.43025,  # EUR/kWh  # Source: [1]
-                electricity_footprint_in_kg_per_kwh=0.434,  # kgCO2eq/kWh  # Source: [5]
-                electricity_to_grid_revenue_in_euro_per_kwh=0.0723,  # EUR/kWh  # Source: [2]
-                contracting_heating_costs_hot_water_in_euro_per_kwh=0.0033,  # EUR/kWh
-                contracting_heating_footprint_hot_water_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
-                contracting_heating_costs_cold_water_in_euro_per_kwh=0,
-                contracting_heating_footprint_cold_water_in_kg_per_kwh=0,
-                gas_costs_in_euro_per_kwh=0.0951,  # EUR/kWh  # Source: [4]
-                gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
-                oil_costs_in_euro_per_l=1.159835766,  # EUR/l
-                oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
-                diesel_costs_in_euro_per_l=1.96,  # EUR/l  # Source: [3]
-                diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
-            )
-        if year == 2023:
-            return EmissionFactorsAndCostsForFuelsConfig(
-                electricity_costs_in_euro_per_kwh=0.4175,  # EUR/kWh  # Source: [6]
-                electricity_footprint_in_kg_per_kwh=0.380,  # kgCO2eq/kWh  # Source: [5]
-                electricity_to_grid_revenue_in_euro_per_kwh=0.0733,  # EUR/kWh  # Source: [2]
-                contracting_heating_costs_hot_water_in_euro_per_kwh=0.147,  # EUR/kWh  # Source: [7]
-                contracting_heating_footprint_hot_water_in_kg_per_kwh=0.1823,  # kgCO2eq/kWh
-                contracting_heating_costs_cold_water_in_euro_per_kwh=0,
-                contracting_heating_footprint_cold_water_in_kg_per_kwh=0,
-                gas_costs_in_euro_per_kwh=0.1141,  # EUR/kWh  # Source: [6]
-                gas_footprint_in_kg_per_kwh=0.247,  # kgCO2eq/kWh
-                oil_costs_in_euro_per_l=1.159835766,  # EUR/l
-                oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
-                diesel_costs_in_euro_per_l=1.73,  # EUR/l  # Source: [3]
-                diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
-            )
-
-        raise KeyError(f"No Emission and cost factors implemented yet for the year {year}.")

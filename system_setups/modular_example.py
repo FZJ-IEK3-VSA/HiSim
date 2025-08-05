@@ -52,7 +52,9 @@ def cleanup_old_lpg_requests():
             os.remove(full_file_path)
 
 
-def get_heating_reference_temperature_and_season_from_location(location: str,) -> Tuple[float, List[int]]:
+def get_heating_reference_temperature_and_season_from_location(
+    location: str,
+) -> Tuple[float, List[int]]:
     """Reads in temperature of coldest day for sizing of heating system and heating season for control of the heating system.
 
     Both relies on the location.
@@ -179,9 +181,10 @@ def setup_function(
     my_sim.add_component(my_weather)
 
     # Build building
-    (reference_temperature, heating_season,) = get_heating_reference_temperature_and_season_from_location(
-        location=location
-    )
+    (
+        reference_temperature,
+        heating_season,
+    ) = get_heating_reference_temperature_and_season_from_location(location=location)
 
     my_building_config = building.BuildingConfig(
         name="Building_1",
@@ -198,6 +201,21 @@ def setup_function(
         set_cooling_temperature_in_celsius=24.0,
         enable_opening_windows=False,
         max_thermal_building_demand_in_watt=None,
+        floor_u_value_in_watt_per_m2_per_kelvin=None,
+        floor_area_in_m2=None,
+        facade_u_value_in_watt_per_m2_per_kelvin=None,
+        facade_area_in_m2=None,
+        roof_u_value_in_watt_per_m2_per_kelvin=None,
+        roof_area_in_m2=None,
+        window_u_value_in_watt_per_m2_per_kelvin=None,
+        window_area_in_m2=None,
+        door_u_value_in_watt_per_m2_per_kelvin=None,
+        door_area_in_m2=None,
+        device_co2_footprint_in_kg=1,
+        investment_costs_in_euro=1,
+        maintenance_costs_in_euro_per_year=0.01,
+        subsidy_as_percentage_of_investment_costs=0.0,
+        lifetime_in_years=1,
     )
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
@@ -232,7 +250,8 @@ def setup_function(
         )
 
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
-            config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters,
+            config=my_occupancy_config,
+            my_simulation_parameters=my_simulation_parameters,
         )
 
     else:
@@ -242,7 +261,8 @@ def setup_function(
         )
 
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
-            config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters,
+            config=my_occupancy_config,
+            my_simulation_parameters=my_simulation_parameters,
         )
 
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
@@ -305,7 +325,8 @@ def setup_function(
     ):
         my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
         my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config,
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_electricity_controller_config,
         )
 
         my_electricity_controller.add_component_inputs_and_connect(
@@ -343,7 +364,8 @@ def setup_function(
     # use clever controller if smart devices are included and do not use it if it is false
     if smart_devices_included and controllable and utsp_connected:
         component_connections.configure_smart_controller_for_smart_devices(
-            my_electricity_controller=my_electricity_controller, my_smart_devices=my_smart_devices,
+            my_electricity_controller=my_electricity_controller,
+            my_smart_devices=my_smart_devices,
         )
 
     # """WATERHEATING"""
@@ -379,7 +401,11 @@ def setup_function(
             lt.HeatingSystems.HEAT_PUMP,
             lt.HeatingSystems.ELECTRIC_HEATING,
         ]:
-            (_, my_buffer, count,) = component_connections.configure_heating_with_buffer_electric(
+            (
+                _,
+                my_buffer,
+                count,
+            ) = component_connections.configure_heating_with_buffer_electric(
                 my_sim=my_sim,
                 my_simulation_parameters=my_simulation_parameters,
                 my_building=my_building,
@@ -393,7 +419,11 @@ def setup_function(
                 count=count,
             )
         else:
-            (_, my_buffer, count,) = component_connections.configure_heating_with_buffer(
+            (
+                _,
+                my_buffer,
+                count,
+            ) = component_connections.configure_heating_with_buffer(
                 my_sim=my_sim,
                 my_simulation_parameters=my_simulation_parameters,
                 my_building=my_building,
@@ -529,6 +559,9 @@ def needs_ems(  # pylint: disable=R0911
     if heating_system_installed in [
         lt.HeatingSystems.HEAT_PUMP,
         lt.HeatingSystems.ELECTRIC_HEATING,
-    ] or water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING,]:
+    ] or water_heating_system_installed in [
+        lt.HeatingSystems.HEAT_PUMP,
+        lt.HeatingSystems.ELECTRIC_HEATING,
+    ]:
         return True
     return False

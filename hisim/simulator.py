@@ -82,7 +82,7 @@ class Simulator:
 
         # set the wrapper
         wrap = ComponentWrapper(component, is_cachable, connect_automatically=connect_automatically)
-        wrap.register_component_outputs(self.all_outputs)
+        wrap.register_component_outputs(self.all_outputs, wrapped_components_so_far=self.wrapped_components)
         self.wrapped_components.append(wrap)
         if component.component_name in self.config_dictionary:
             raise ValueError("duplicate component name : " + component.component_name)
@@ -321,18 +321,35 @@ class Simulator:
             colum_names.append(column_name)
             log.debug("Output column: " + column_name)
         self.results_data_frame = pd.DataFrame(data=all_result_lines, columns=colum_names)
-        # todo: fix this constant
-        df_index = pd.date_range("2021-01-01 00:00:00", periods=len(self.results_data_frame), freq="T")
+        df_index = pd.date_range(
+            start=self._simulation_parameters.start_date,
+            end=self._simulation_parameters.end_date,
+            freq=f"{self._simulation_parameters.seconds_per_timestep}S",
+        )[:-1]
         self.results_data_frame.index = df_index
         end_counter = time.perf_counter()
         execution_time = end_counter - start_counter
         log.information(f"Simulation took {execution_time:1.2f}s.")
-        (
-            results_merged_cumulative,
-            results_merged_monthly,
-            results_merged_daily,
-            results_merged_hourly,
-        ) = self.get_std_results(self.results_data_frame)
+
+        if (
+                postprocessingoptions.PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS in self._simulation_parameters.post_processing_options or
+                postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in self._simulation_parameters.post_processing_options or
+                postprocessingoptions.PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL in self._simulation_parameters.post_processing_options or
+                postprocessingoptions.PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL in self._simulation_parameters.post_processing_options or
+                postprocessingoptions.PostProcessingOptions.EXPORT_MONTHLY_RESULTS in self._simulation_parameters.post_processing_options
+        ):
+            log.information("Preparing std results for post processing")
+            (
+                results_merged_cumulative,
+                results_merged_monthly,
+                results_merged_daily,
+                results_merged_hourly,
+            ) = self.get_std_results(self.results_data_frame)
+        else:
+            results_merged_cumulative = None
+            results_merged_monthly = None
+            results_merged_daily = None
+            results_merged_hourly = None
 
         ppdt = PostProcessingDataTransfer(
             results=self.results_data_frame,
@@ -385,81 +402,59 @@ class Simulator:
         log.information(simulation_status)
         return datetime.datetime.now()
 
+    @utils.measure_execution_time
     def get_std_results(
         self, results_data_frame: pd.DataFrame
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Converts results into a pretty dataframe for post processing."""
-        pd_timeline = pd.date_range(
-            start=self._simulation_parameters.start_date,
-            end=self._simulation_parameters.end_date,
-            freq=f"{self._simulation_parameters.seconds_per_timestep}S",
-        )[:-1]
-        n_columns = results_data_frame.shape[1]
 
-        results_data_frame.index = pd_timeline
-        results_merged_monthly = pd.DataFrame()
-        results_merged_daily = pd.DataFrame()
-        results_merged_hourly = pd.DataFrame()
-        results_merged_cumulative = pd.DataFrame()
-        for i_column in range(n_columns):
-            temp_df = pd.DataFrame(
-                results_data_frame.values[:, i_column],
-                index=pd_timeline,
-                columns=[results_data_frame.columns[i_column]],
-            )
+        units_mean = {
+            Units.CELSIUS,
+            Units.KELVIN,
+            Units.ANY,
+            Units.METER_PER_SECOND,
+            Units.DEGREES,
+            Units.WATT,
+            Units.KILOWATT,
+            Units.WATT_PER_SQUARE_METER,
+            Units.KG_PER_SEC,
+            Units.PERCENT,
+            Units.PASCAL,
+        }
 
-            if self.all_outputs[i_column].unit in (
-                Units.CELSIUS,
-                Units.KELVIN,
-                Units.ANY,
-                Units.METER_PER_SECOND,
-                Units.DEGREES,
-                Units.WATT,
-                Units.KILOWATT,
-                Units.WATT_PER_SQUARE_METER,
-                Units.KG_PER_SEC,
-                Units.PERCENT,
-                Units.PASCAL
-            ):
-                temp_df_monthly = temp_df.resample("M").mean()
-                temp_df_daily = temp_df.resample("D").mean()
-                temp_df_cumulative = temp_df.mean()
+        monthly_frames = []
+        daily_frames = []
+        cumulative_data = {}
+        hourly_frames = []
+
+        use_hourly_resample = self._simulation_parameters.seconds_per_timestep != 3600
+
+        for i, column_name in enumerate(results_data_frame.columns):
+            log.debug(f"Processing column {i + 1}/{len(results_data_frame.columns)} - {column_name}")
+            col_data = results_data_frame.iloc[:, i]
+            unit = self.all_outputs[i].unit
+
+            if unit in units_mean:
+                monthly = col_data.resample("M").mean()
+                daily = col_data.resample("D").mean()
+                hourly = col_data.resample("60T").mean() if use_hourly_resample else col_data
+                cumulative = col_data.mean()
             else:
-                temp_df_monthly = temp_df.resample("M").sum()
-                temp_df_daily = temp_df.resample("D").sum()
-                temp_df_cumulative = temp_df.sum()
+                monthly = col_data.resample("M").sum()
+                daily = col_data.resample("D").sum()
+                hourly = col_data.resample("60T").sum() if use_hourly_resample else col_data
+                cumulative = col_data.sum()
 
-            # monthly results
-            results_merged_monthly[temp_df_monthly.columns[0]] = temp_df_monthly.values[:, 0]
-            results_merged_monthly.index = temp_df_monthly.index
-            # daily results
-            results_merged_daily[temp_df_daily.columns[0]] = temp_df_daily.values[:, 0]
-            results_merged_daily.index = temp_df_daily.index
+            monthly_frames.append(monthly.rename(column_name))
+            daily_frames.append(daily.rename(column_name))
+            hourly_frames.append(hourly.rename(column_name))
+            cumulative_data[column_name] = cumulative
 
-            # cumulative results
-            results_merged_cumulative[temp_df_monthly.columns[0]] = temp_df_cumulative.values
-
-            if self._simulation_parameters.seconds_per_timestep != 3600:
-                if self.all_outputs[i_column].unit in (
-                    Units.CELSIUS,
-                    Units.KELVIN,
-                    Units.ANY,
-                    Units.METER_PER_SECOND,
-                    Units.DEGREES,
-                    Units.WATT,
-                    Units.KILOWATT,
-                    Units.WATT_PER_SQUARE_METER,
-                    Units.KG_PER_SEC,
-                    Units.PERCENT,
-                ):
-                    temp_df_hourly = temp_df.resample("60T").mean()  # .interpolate(method="linear")
-                else:
-                    temp_df_hourly = temp_df.resample("60T").sum()
-
-                results_merged_hourly[temp_df_hourly.columns[0]] = temp_df_hourly.values[:, 0]
-                results_merged_hourly.index = temp_df_hourly.index
-            else:
-                results_merged_hourly[temp_df.columns[0]] = temp_df.values[:, 0]
+        # Combine at once to avoid per-column index assignment
+        results_merged_monthly = pd.concat(monthly_frames, axis=1)
+        results_merged_daily = pd.concat(daily_frames, axis=1)
+        results_merged_hourly = pd.concat(hourly_frames, axis=1)
+        results_merged_cumulative = pd.DataFrame([cumulative_data])
 
         return (
             results_merged_cumulative,

@@ -4,12 +4,14 @@
 # Owned
 # import importlib
 from dataclasses import dataclass
-from typing import List, Any, Optional
+import logging
+from typing import List, Any, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
 
-from hisim.loadtypes import LoadTypes, Units
+from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
+from hisim.loadtypes import LoadTypes, Units, ComponentType
 from hisim.component import (
     Component,
     ComponentConnection,
@@ -21,14 +23,25 @@ from hisim.component import (
     DisplayConfig,
     CapexCostDataClass,
 )
-from hisim.components.heat_distribution_system import HeatDistributionController, HeatDistribution
+from hisim.components.heat_distribution_system import (
+    HeatDistributionController,
+    HeatDistribution,
+)
 from hisim.components.weather import Weather
 from hisim.components.simple_water_storage import SimpleDHWStorage
-from hisim.components.configuration import PhysicsConfig
+from hisim.components.configuration import (
+    EmissionFactorsAndCostsForFuelsConfig,
+    PhysicsConfig,
+)
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
+from hisim.postprocessing.kpi_computation.kpi_structure import (
+    KpiEntry,
+    KpiTagEnumClass,
+)
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
-__authors__ = "Katharina Rieck"
+
+__authors__ = "Katharina Rieck, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = ""
@@ -40,61 +53,88 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class DistrictHeatingForSHConfig(ConfigBase):
+class DistrictHeatingConfig(ConfigBase):
     """Configuration of the District Heating class."""
 
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""
-        return DistrictHeatingForSH.get_full_classname()
+        return DistrictHeating.get_full_classname()
 
     building_name: str
     name: str
+    # Maximum thermal power that can be delivered
+    connected_load_w: float
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
-    cost: float
+    investment_costs_in_euro: Optional[float]
     #: lifetime in years
-    lifetime: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
-    #: consumption of the car in kWh or l
-    consumption_in_kilowatt_hour: float
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
+    with_domestic_hot_water_preparation: bool
 
     @classmethod
-    def get_default_district_heating_config(cls, building_name: str = "BUI1",) -> Any:
+    def get_default_district_heating_config(
+        cls,
+        building_name: str = "BUI1",
+        with_domestic_hot_water_preparation=False,
+    ) -> Any:
         """Get a default district heating."""
-        config = DistrictHeatingForSHConfig(
+        config = DistrictHeatingConfig(
             building_name=building_name,
-            name="DistrictHeatingForSH",
-            co2_footprint=0,
-            cost=0,  # value from emission_factros_and_costs_devices.csv
-            lifetime=1,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0,  # source: VDI2067-1
-            consumption_in_kilowatt_hour=0,
+            name="DistrictHeating",
+            connected_load_w=20000,
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
+            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
         )
         return config
 
 
-class DistrictHeatingForSH(Component):
+class DistrictHeating(Component):
     """District Heating class."""
 
-    # Input
-    DeltaTemperatureNeeded = "DeltaTemperatureNeeded"  # how much water temperature needs to be increased
-    WaterInputTemperature = "WaterInputTemperature"
-    WaterInputMassFlowRateFromHeatDistributionSystem = "WaterInputMassFlowRateFromHeatDistributionSystem"
+    # Inputs
+    HeatingMode = "HeatingMode"
+
+    # Inputs for space heating
+    DeltaTemperatureNeeded = "DeltaTemperatureNeededSh"  # how much water temperature needs to be increased
+    WaterInputTemperatureSh = "WaterInputTemperatureSh"
+    WaterInputMassFlowRateFromHeatDistributionSystem = (
+        "WaterInputMassFlowRateFromHeatDistributionSystem"
+    )
+
+    # Inputs for DHW
+    WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
+    WaterInputMassFlowRateFromWarmWaterStorage = (
+        "WaterInputMassFlowRateFromWarmWaterStorage"
+    )
 
     # Output
-    WaterOutputTemperature = "WaterOutputTemperature"
-    ThermalOutputPower = "ThermalOutputPower"
-    WaterOutputMassFlowRate = "WaterOutputMassFlowRate"
+    WaterOutputShTemperature = "WaterOutputShTemperature"
+    ThermalOutputShPower = "ThermalOutputShPower"
+    ThermalOutputShEnergy = "ThermalOutputShEnergy"
+    WaterOutputShMassFlowRate = "WaterOutputShMassFlowRate"
+    WaterOutputDhwTemperature = "WaterOutputDhwTemperature"
+    ThermalOutputDhwPower = "ThermalOutputDhwPower"
+    ThermalOutputDhwEnergy = "ThermalOutputDhwEnergy"
+    WaterOutputDhwMassFlowRate = "WaterOutputDhwMassFlowRate"
 
-    # @utils.graph_call_path_factory(max_depth=2, memory_flag=True, file_name="call_path")
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: DistrictHeatingForSHConfig,
-        my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
+        config: DistrictHeatingConfig,
+        my_display_config: DisplayConfig = DisplayConfig(
+            display_in_webtool=True
+        ),
     ) -> None:
         """Construct all the neccessary attributes."""
         self.district_heating_config = config
@@ -108,60 +148,159 @@ class DistrictHeatingForSH(Component):
             my_display_config=my_display_config,
         )
         # Inputs
-        self.delta_temperature_channel: ComponentInput = self.add_input(
-            self.component_name, DistrictHeatingForSH.DeltaTemperatureNeeded, LoadTypes.TEMPERATURE, Units.CELSIUS, True,
-        )
-        self.water_input_temperature_channel: ComponentInput = self.add_input(
-            self.component_name, DistrictHeatingForSH.WaterInputTemperature, LoadTypes.WATER, Units.CELSIUS, True,
-        )
-        self.water_input_mass_flow_rate_channel: ComponentInput = self.add_input(
+        self.heating_mode_channel: ComponentInput = self.add_input(
             self.component_name,
-            DistrictHeatingForSH.WaterInputMassFlowRateFromHeatDistributionSystem,
+            DistrictHeating.HeatingMode,
+            LoadTypes.ANY,
+            Units.ANY,
+            True,
+        )
+        self.delta_temperature_channel: ComponentInput = self.add_input(
+            self.component_name,
+            DistrictHeating.DeltaTemperatureNeeded,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            True,
+        )
+        self.water_input_temperature_sh_channel: ComponentInput = (
+            self.add_input(
+                self.component_name,
+                DistrictHeating.WaterInputTemperatureSh,
+                LoadTypes.WATER,
+                Units.CELSIUS,
+                True,
+            )
+        )
+        self.water_input_mass_flow_rate_sh_channel: ComponentInput = self.add_input(
+            self.component_name,
+            DistrictHeating.WaterInputMassFlowRateFromHeatDistributionSystem,
             LoadTypes.WATER,
             Units.KG_PER_SEC,
             True,
         )
+        if self.config.with_domestic_hot_water_preparation:
+            self.water_input_temperature_dhw_channel: ComponentInput = (
+                self.add_input(
+                    self.component_name,
+                    DistrictHeating.WaterInputTemperatureDhw,
+                    LoadTypes.WATER,
+                    Units.CELSIUS,
+                    True,
+                )
+            )
+            self.water_input_mass_flow_rate_dhw_channel: ComponentInput = (
+                self.add_input(
+                    self.component_name,
+                    DistrictHeating.WaterInputMassFlowRateFromWarmWaterStorage,
+                    LoadTypes.WATER,
+                    Units.KG_PER_SEC,
+                    True,
+                )
+            )
 
-        # Outputs
-        self.water_mass_flow_output_channel: ComponentOutput = self.add_output(
-            self.component_name,
-            DistrictHeatingForSH.WaterOutputMassFlowRate,
-            LoadTypes.WATER,
-            Units.KG_PER_SEC,
-            output_description=f"here a description for {self.WaterOutputMassFlowRate} will follow.",
+        # Outputs Space Heating
+        self.water_mass_flow_sh_output_channel: ComponentOutput = (
+            self.add_output(
+                self.component_name,
+                DistrictHeating.WaterOutputShMassFlowRate,
+                LoadTypes.WATER,
+                Units.KG_PER_SEC,
+                output_description="Water mass flow rate for space heating.",
+            )
         )
-        self.water_output_temperature_channel: ComponentOutput = self.add_output(
+        self.water_output_temperature_sh_channel: ComponentOutput = self.add_output(
             self.component_name,
-            DistrictHeatingForSH.WaterOutputTemperature,
+            DistrictHeating.WaterOutputShTemperature,
             LoadTypes.WATER,
             Units.CELSIUS,
-            output_description=f"here a description for {self.WaterOutputTemperature} will follow.",
+            output_description="Water output temperature for space heating.",
         )
-        self.thermal_output_power_channel: ComponentOutput = self.add_output(
+        self.thermal_output_power_sh_channel: ComponentOutput = (
+            self.add_output(
+                object_name=self.component_name,
+                field_name=self.ThermalOutputShPower,
+                load_type=LoadTypes.HEATING,
+                unit=Units.WATT,
+                output_description="Thermal power output for space heating",
+            )
+        )
+        self.thermal_output_energy_sh_channel: ComponentOutput = (
+            self.add_output(
+                object_name=self.component_name,
+                field_name=self.ThermalOutputShEnergy,
+                load_type=LoadTypes.HEATING,
+                unit=Units.WATT_HOUR,
+                output_description="Thermal energy output for space heating",
+            )
+        )
+
+        # Outputs DHW
+        self.water_mass_flow_dhw_output_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            DistrictHeating.WaterOutputDhwMassFlowRate,
+            LoadTypes.WATER,
+            Units.KG_PER_SEC,
+            output_description="Water mass flow rate for domestic hot water.",
+        )
+        self.water_output_temperature_dhw_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            DistrictHeating.WaterOutputDhwTemperature,
+            LoadTypes.WATER,
+            Units.CELSIUS,
+            output_description="Water output temperature for domestic hot water.",
+        )
+        self.thermal_output_power_dhw_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.ThermalOutputPower,
-            load_type=LoadTypes.HEATING,
+            field_name=self.ThermalOutputDhwPower,
+            load_type=LoadTypes.WARM_WATER,
             unit=Units.WATT,
-            output_description=f"here a description for {self.ThermalOutputPower} will follow.",
+            output_description="Thermal power output for domestic hot water.",
         )
+        self.thermal_output_energy_dhw_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalOutputDhwEnergy,
+            load_type=LoadTypes.WARM_WATER,
+            unit=Units.WATT_HOUR,
+            output_description="Thermal energy output for domestic hot water.",
+        )
+        self.add_default_connections(
+            self.get_default_connections_from_district_heating_controller()
+        )
+        self.add_default_connections(
+            self.get_default_connections_from_heat_distribution_system()
+        )
+        if self.config.with_domestic_hot_water_preparation:
+            self.add_default_connections(
+                self.get_default_connections_from_simple_dhw_storage()
+            )
 
-        self.add_default_connections(self.get_default_connections_from_district_heating_controller())
-        self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
-
-    def get_default_connections_from_district_heating_controller(self,):
+    def get_default_connections_from_district_heating_controller(
+        self,
+    ):
         """Get Controller District Heating default connections."""
         # use importlib for importing the other component in order to avoid circular-import errors
-        component_class = DistrictHeatingControllerForSH
+        component_class = DistrictHeatingController
         connections = []
-        l1_controller_classname = component_class.get_classname()
+        controller_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-                DistrictHeatingForSH.DeltaTemperatureNeeded, l1_controller_classname, component_class.DeltaTemperatureNeeded,
+                DistrictHeating.HeatingMode,
+                controller_classname,
+                component_class.OperatingMode,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                DistrictHeating.DeltaTemperatureNeeded,
+                controller_classname,
+                component_class.DeltaTemperatureNeeded,
             )
         )
         return connections
 
-    def get_default_connections_from_heat_distribution_system(self,):
+    def get_default_connections_from_heat_distribution_system(
+        self,
+    ):
         """Get heat distribution system default connections."""
 
         component_class = HeatDistribution
@@ -169,549 +308,23 @@ class DistrictHeatingForSH(Component):
         hws_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-                DistrictHeatingForSH.WaterInputTemperature, hws_classname, component_class.WaterTemperatureOutput,
+                DistrictHeating.WaterInputTemperatureSh,
+                hws_classname,
+                component_class.WaterTemperatureOutput,
             )
         )
         connections.append(
             ComponentConnection(
-                DistrictHeatingForSH.WaterInputMassFlowRateFromHeatDistributionSystem,
+                DistrictHeating.WaterInputMassFlowRateFromHeatDistributionSystem,
                 hws_classname,
                 component_class.WaterMassFlowHDS,
             )
         )
         return connections
 
-    def i_prepare_simulation(self) -> None:
-        """Prepare the simulation."""
-        pass
-
-    def write_to_report(self) -> List[str]:
-        """Write a report."""
-        return self.district_heating_config.get_string_dict()
-
-    def i_save_state(self) -> None:
-        """Save the current state."""
-        pass
-
-    def i_restore_state(self) -> None:
-        """Restore the previous state."""
-        pass
-
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
-        """Doublecheck."""
-        pass
-
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulate the district heating."""
-        # get inputs
-        delta_temperature_needed_in_celsius = stsv.get_input_value(self.delta_temperature_channel)
-        water_input_mass_flow_rate_in_kg_per_s = stsv.get_input_value(self.water_input_mass_flow_rate_channel)
-        water_input_temperature_in_celsius = stsv.get_input_value(self.water_input_temperature_channel)
-        # check values
-        if delta_temperature_needed_in_celsius < 0:
-            raise ValueError(
-                f"Delta temperature is {delta_temperature_needed_in_celsius} °C"
-                "but it should not be negative because district heating cannot provide cooling. "
-                "Please check your district heating controller."
-            )
-
-        # calculate output temperature
-        water_output_temperature_in_celsius = water_input_temperature_in_celsius + delta_temperature_needed_in_celsius
-
-        # calculate thermal power delivered Q = m * cw * dT
-        thermal_power_delivered_in_watt = (
-            water_input_mass_flow_rate_in_kg_per_s
-            * PhysicsConfig.get_properties_for_energy_carrier(
-                energy_carrier=LoadTypes.WATER
-            ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-            * delta_temperature_needed_in_celsius
-        )
-        stsv.set_output_value(self.thermal_output_power_channel, thermal_power_delivered_in_watt)
-        stsv.set_output_value(self.water_output_temperature_channel, water_output_temperature_in_celsius)
-        # use as water flow the same mass flow as heat distribution system
-        stsv.set_output_value(self.water_mass_flow_output_channel, water_input_mass_flow_rate_in_kg_per_s)
-
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
-        """Calculate OPEX costs, consisting of electricity costs and revenues."""
-        for index, output in enumerate(all_outputs):
-            if (
-                output.component_name == self.component_name
-                and output.load_type == LoadTypes.HEATING
-                and output.field_name == self.ThermalOutputPower
-                and output.unit == Units.WATT
-            ):
-                self.config.consumption_in_kwh = round(
-                    sum(postprocessing_results.iloc[:, index])
-                    * self.my_simulation_parameters.seconds_per_timestep
-                    / 3.6e6,
-                    1,
-                )
-
-        # TODO: most opex values need to be implemented still
-        opex_cost_data_class = OpexCostDataClass(
-            opex_energy_cost_in_euro=0,
-            opex_maintenance_cost_in_euro=0,
-            co2_footprint_in_kg=0,
-            consumption_in_kwh=self.config.consumption_in_kwh,
-            loadtype=LoadTypes.DISTRICTHEATING,
-            kpi_tag=KpiTagEnumClass.DISTRICT_HEATING_SPACE_HEATING,
-        )
-
-        return opex_cost_data_class
-
-    @staticmethod
-    def get_cost_capex(
-        config: DistrictHeatingForSHConfig, simulation_parameters: SimulationParameters
-    ) -> CapexCostDataClass:  # pylint: disable=unused-argument
-        """Returns investment cost, CO2 emissions and lifetime."""
-        # TODO: capex values need to be implemented still
-        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
-        return capex_cost_data_class
-
-    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
-        """Calculates KPIs for the respective component and return all KPI entries as list."""
-        list_of_kpi_entries: List[KpiEntry] = []
-        opex_dataclass = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
-        my_kpi_entry = KpiEntry(
-            name=f"{opex_dataclass.loadtype.value} consumption for space heating",
-            unit="kWh",
-            value=opex_dataclass.consumption_in_kwh,
-            tag=opex_dataclass.kpi_tag,
-            description=self.component_name,
-        )
-        list_of_kpi_entries.append(my_kpi_entry)
-        for index, output in enumerate(all_outputs):
-            if output.component_name == self.component_name:
-                if output.field_name == self.ThermalOutputPower and output.load_type == LoadTypes.HEATING and output.unit == Units.WATT:
-                    # take only output values for heating
-                    thermal_output_power_values_in_watt = postprocessing_results.iloc[:, index].loc[
-                        postprocessing_results.iloc[:, index] > 0.0
-                    ]
-                    # get energy from power
-                    thermal_output_energy_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=thermal_output_power_values_in_watt,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
-                    )
-                    thermal_output_energy_entry = KpiEntry(
-                        name="Thermal output energy for space heating",
-                        unit="kWh",
-                        value=thermal_output_energy_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.DISTRICT_HEATING_SPACE_HEATING,
-                        description=self.component_name,
-                    )
-                    list_of_kpi_entries.append(thermal_output_energy_entry)
-
-        return list_of_kpi_entries
-
-
-@dataclass_json
-@dataclass
-class DistrictHeatingControllerForSHConfig(ConfigBase):
-    """District Heating Controller Config Class."""
-
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return DistrictHeatingControllerForSH.get_full_classname()
-
-    building_name: str
-    name: str
-    set_heating_threshold_outside_temperature_in_celsius: Optional[float]
-
-    @classmethod
-    def get_default_district_heating_controller_config(
-        cls, building_name: str = "BUI1",
-    ) -> Any:
-        """Gets a default district heating controller."""
-        return DistrictHeatingControllerForSHConfig(
-            building_name=building_name,
-            name="DistrictHeatingControllerForSH",
-            set_heating_threshold_outside_temperature_in_celsius=16.0,
-        )
-
-
-class DistrictHeatingControllerForSH(Component):
-    """District Heating Controller."""
-
-    # Inputs
-    WaterTemperatureInputFromHeatDistributionSystem = "WaterTemperatureInputFromHeatDistributionSystem"
-    # set heating  flow temperature
-    HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
-
-    DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
-
-    # Outputs
-    DeltaTemperatureNeeded = "DeltaTemperatureNeeded"
-
-    def __init__(
+    def get_default_connections_from_simple_dhw_storage(
         self,
-        my_simulation_parameters: SimulationParameters,
-        config: DistrictHeatingControllerForSHConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
-    ) -> None:
-        """Construct all the neccessary attributes."""
-        self.district_heating_controller_config = config
-        self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
-        component_name = self.get_component_name()
-        super().__init__(
-            name=component_name,
-            my_simulation_parameters=my_simulation_parameters,
-            my_config=config,
-            my_display_config=my_display_config,
-        )
-
-        self.build()
-
-        # input channel
-        self.water_temperature_input_channel: ComponentInput = self.add_input(
-            self.component_name,
-            self.WaterTemperatureInputFromHeatDistributionSystem,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
-            True,
-        )
-        self.heating_flow_temperature_from_heat_distribution_system_channel: ComponentInput = self.add_input(
-            self.component_name,
-            self.HeatingFlowTemperatureFromHeatDistributionSystem,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
-            True,
-        )
-        self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
-            self.component_name, self.DailyAverageOutsideTemperature, LoadTypes.TEMPERATURE, Units.CELSIUS, True,
-        )
-
-        self.delta_temperature_to_district_heating_channel: ComponentOutput = self.add_output(
-            self.component_name,
-            self.DeltaTemperatureNeeded,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
-            output_description=f"here a description for {self.DeltaTemperatureNeeded} will follow.",
-        )
-
-        self.controller_mode: Any
-        self.previous_controller_mode: Any
-
-        self.add_default_connections(self.get_default_connections_from_weather())
-        self.add_default_connections(self.get_default_connections_from_heat_distribution())
-        self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
-
-    def get_default_connections_from_heat_distribution(self,):
-        """Get heat ditribution default connections."""
-
-        connections = []
-        source_classname = HeatDistribution.get_classname()
-        connections.append(
-            ComponentConnection(
-                DistrictHeatingControllerForSH.WaterTemperatureInputFromHeatDistributionSystem,
-                source_classname,
-                HeatDistribution.WaterTemperatureOutput,
-            )
-        )
-        return connections
-
-    def get_default_connections_from_weather(self,):
-        """Get simple_water_storage default connections."""
-
-        connections = []
-        weather_classname = Weather.get_classname()
-        connections.append(
-            ComponentConnection(
-                DistrictHeatingControllerForSH.DailyAverageOutsideTemperature,
-                weather_classname,
-                Weather.DailyAverageOutsideTemperatures,
-            )
-        )
-        return connections
-
-    def get_default_connections_from_heat_distribution_controller(self,):
-        """Get heat distribution controller default connections."""
-
-        connections = []
-        hds_controller_classname = HeatDistributionController.get_classname()
-        connections.append(
-            ComponentConnection(
-                DistrictHeatingControllerForSH.HeatingFlowTemperatureFromHeatDistributionSystem,
-                hds_controller_classname,
-                HeatDistributionController.HeatingFlowTemperature,
-            )
-        )
-        return connections
-
-    def build(self,) -> None:
-        """Build function.
-
-        The function sets important constants and parameters for the calculations.
-        """
-        # Sth
-        self.controller_mode = "off"
-        self.previous_controller_mode = self.controller_mode
-
-    def i_prepare_simulation(self) -> None:
-        """Prepare the simulation."""
-        pass
-
-    def i_save_state(self) -> None:
-        """Save the current state."""
-        self.previous_controller_mode = self.controller_mode
-
-    def i_restore_state(self) -> None:
-        """Restore the previous state."""
-        self.controller_mode = self.previous_controller_mode
-
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
-        """Doublecheck."""
-        pass
-
-    def write_to_report(self,) -> List[str]:
-        """Write important variables to report."""
-        return self.district_heating_controller_config.get_string_dict()
-
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulate the district heating comtroller."""
-
-        if force_convergence:
-            pass
-        else:
-            # Retrieves inputs
-            water_temperature_input_from_heat_distibution_in_celsius = stsv.get_input_value(
-                self.water_temperature_input_channel
-            )
-
-            heating_flow_temperature_from_heat_distribution_in_celsius = stsv.get_input_value(
-                self.heating_flow_temperature_from_heat_distribution_system_channel
-            )
-
-            daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
-                self.daily_avg_outside_temperature_input_channel
-            )
-
-            # turning district heating off when the average daily outside temperature is above a certain threshold (if threshold is set in the config)
-            summer_heating_mode = self.summer_heating_condition(
-                daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                set_heating_threshold_temperature_in_celsius=self.district_heating_controller_config.set_heating_threshold_outside_temperature_in_celsius,
-            )
-
-            # on/off controller
-            self.conditions_on_off(
-                water_temperature_input_in_celsius=water_temperature_input_from_heat_distibution_in_celsius,
-                set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_in_celsius,
-                summer_heating_mode=summer_heating_mode,
-            )
-
-            if self.controller_mode == "heating":
-                # delta temperature should not be negative because district heating cannot provide cooling
-                delta_temperature_in_celsius = max(
-                    heating_flow_temperature_from_heat_distribution_in_celsius
-                    - water_temperature_input_from_heat_distibution_in_celsius,
-                    0,
-                )
-            elif self.controller_mode == "off":
-                delta_temperature_in_celsius = 0
-            else:
-                raise ValueError("District Heating Controller control_signal unknown.")
-
-            stsv.set_output_value(self.delta_temperature_to_district_heating_channel, delta_temperature_in_celsius)
-
-    def conditions_on_off(
-        self,
-        water_temperature_input_in_celsius: float,
-        set_heating_flow_temperature_in_celsius: float,
-        summer_heating_mode: str,
-    ) -> None:
-        """Set conditions for the district heating controller mode."""
-
-        if self.controller_mode == "heating":
-            if (
-                water_temperature_input_in_celsius > (set_heating_flow_temperature_in_celsius + 0.5)
-                or summer_heating_mode == "off"
-            ):  # + 1:
-                self.controller_mode = "off"
-                return
-
-        elif self.controller_mode == "off":
-            # district heating is only turned on if the water temperature is below the flow temperature
-            # and if the avg daily outside temperature is cold enough (summer mode on)
-            if (
-                water_temperature_input_in_celsius < (set_heating_flow_temperature_in_celsius - 1.0)
-                and summer_heating_mode == "on"
-            ):  # - 1:
-                self.controller_mode = "heating"
-                return
-
-        else:
-            raise ValueError("unknown mode")
-
-    def summer_heating_condition(
-        self,
-        daily_average_outside_temperature_in_celsius: float,
-        set_heating_threshold_temperature_in_celsius: Optional[float],
-    ) -> str:
-        """Set conditions for the district heating."""
-
-        # if no heating threshold is set, the gas_heater is always on
-        if set_heating_threshold_temperature_in_celsius is None:
-            heating_mode = "on"
-
-        # it is too hot for heating
-        elif daily_average_outside_temperature_in_celsius > set_heating_threshold_temperature_in_celsius:
-            heating_mode = "off"
-
-        # it is cold enough for heating
-        elif daily_average_outside_temperature_in_celsius < set_heating_threshold_temperature_in_celsius:
-            heating_mode = "on"
-
-        else:
-            raise ValueError(
-                f"daily average temperature {daily_average_outside_temperature_in_celsius}°C"
-                f"or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
-            )
-        return heating_mode
-
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
-        """Calculate OPEX costs, consisting of electricity costs and revenues."""
-        opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
-        return opex_cost_data_class
-
-    @staticmethod
-    def get_cost_capex(
-        config: DistrictHeatingControllerForSHConfig, simulation_parameters: SimulationParameters
-    ) -> CapexCostDataClass:  # pylint: disable=unused-argument
-        """Returns investment cost, CO2 emissions and lifetime."""
-        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
-        return capex_cost_data_class
-
-    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
-        """Calculates KPIs for the respective component and return all KPI entries as list."""
-        return []
-
-
-@dataclass_json
-@dataclass
-class DistrictHeatingForDHWConfig(ConfigBase):
-    """Configuration of the District Heating class."""
-
-    @classmethod
-    def get_main_classname(cls):
-        """Return the full class name of the base class."""
-        return DistrictHeatingForDHW.get_full_classname()
-
-    building_name: str
-    name: str
-    #: CO2 footprint of investment in kg
-    co2_footprint: float
-    #: cost for investment in Euro
-    cost: float
-    #: lifetime in years
-    lifetime: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
-    #: consumption of the car in kWh or l
-    consumption_in_kilowatt_hour: float
-
-    @classmethod
-    def get_default_district_dhw_heating_config(cls, building_name: str = "BUI1",) -> Any:
-        """Get a default district heating for dhw."""
-        config = DistrictHeatingForDHWConfig(
-            building_name=building_name,
-            name="DistrictHeatingForDHW",
-            co2_footprint=0,
-            cost=0,  # value from emission_factros_and_costs_devices.csv
-            lifetime=1,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0,  # source: VDI2067-1
-            consumption_in_kilowatt_hour=0,
-        )
-        return config
-
-
-class DistrictHeatingForDHW(Component):
-    """District Heating for DHW class."""
-
-    # Input
-    DeltaTemperatureNeeded = "DeltaTemperatureNeeded"  # how much water temperature needs to be increased
-    WaterInputTemperature = "WaterInputTemperature"
-    WaterInputMassFlowRateFromWarmWaterStorage = "WaterInputMassFlowRateFromWarmWaterStorage"
-    # Output
-    WaterOutputTemperature = "WaterOutputTemperature"
-    ThermalOutputPower = "ThermalOutputPower"
-    WaterOutputMassFlowRate = "WaterOutputMassFlowRate"
-
-    # @utils.graph_call_path_factory(max_depth=2, memory_flag=True, file_name="call_path")
-    def __init__(
-        self,
-        my_simulation_parameters: SimulationParameters,
-        config: DistrictHeatingForDHWConfig,
-        my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
-    ) -> None:
-        """Construct all the neccessary attributes."""
-        self.district_heating_config = config
-        self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
-        component_name = self.get_component_name()
-        super().__init__(
-            name=component_name,
-            my_simulation_parameters=my_simulation_parameters,
-            my_config=config,
-            my_display_config=my_display_config,
-        )
-
-        # Inputs
-        self.delta_temperature_channel: ComponentInput = self.add_input(
-            self.component_name, self.DeltaTemperatureNeeded, LoadTypes.TEMPERATURE, Units.CELSIUS, True,
-        )
-        self.water_input_temperature_channel: ComponentInput = self.add_input(
-            self.component_name, self.WaterInputTemperature, LoadTypes.WATER, Units.CELSIUS, True,
-        )
-        self.water_input_mass_flow_rate_channel: ComponentInput = self.add_input(
-            self.component_name,
-            self.WaterInputMassFlowRateFromWarmWaterStorage,
-            LoadTypes.WATER,
-            Units.KG_PER_SEC,
-            True,
-        )
-        # Outputs
-        self.water_mass_flow_output_channel: ComponentOutput = self.add_output(
-            self.component_name,
-            self.WaterOutputMassFlowRate,
-            LoadTypes.WATER,
-            Units.KG_PER_SEC,
-            output_description=f"here a description for {self.WaterOutputMassFlowRate} will follow.",
-        )
-        self.water_output_temperature_channel: ComponentOutput = self.add_output(
-            self.component_name,
-            self.WaterOutputTemperature,
-            LoadTypes.WATER,
-            Units.CELSIUS,
-            output_description=f"here a description for {self.WaterOutputTemperature} will follow.",
-        )
-        self.thermal_output_power_channel: ComponentOutput = self.add_output(
-            object_name=self.component_name,
-            field_name=self.ThermalOutputPower,
-            load_type=LoadTypes.HEATING,
-            unit=Units.WATT,
-            output_description=f"here a description for {self.ThermalOutputPower} will follow.",
-        )
-
-        self.add_default_connections(self.get_default_connections_from_dhw_district_heating_controller())
-        self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
-
-    def get_default_connections_from_dhw_district_heating_controller(self,):
-        """Get Controller District Heating default connections."""
-        # use importlib for importing the other component in order to avoid circular-import errors
-        component_class = DistrictHeatingControllerForDHW
-        connections = []
-        l1_controller_classname = component_class.get_classname()
-        connections.append(
-            ComponentConnection(
-                DistrictHeatingForDHW.DeltaTemperatureNeeded,
-                l1_controller_classname,
-                component_class.DeltaTemperatureNeeded,
-            )
-        )
-        return connections
-
-    def get_default_connections_from_simple_dhw_storage(self,):
+    ):
         """Get simple dhw storage default connections."""
 
         component_class = SimpleDHWStorage
@@ -719,14 +332,14 @@ class DistrictHeatingForDHW(Component):
         hws_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-                DistrictHeatingForDHW.WaterInputTemperature,
+                DistrictHeating.WaterInputTemperatureDhw,
                 hws_classname,
                 component_class.WaterTemperatureToHeatGenerator,
             )
         )
         connections.append(
             ComponentConnection(
-                DistrictHeatingForDHW.WaterInputMassFlowRateFromWarmWaterStorage,
+                DistrictHeating.WaterInputMassFlowRateFromWarmWaterStorage,
                 hws_classname,
                 component_class.WaterMassFlowRateOfDHW,
             )
@@ -753,145 +366,495 @@ class DistrictHeatingForDHW(Component):
         """Doublecheck."""
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+    def i_simulate(
+        self,
+        timestep: int,
+        stsv: SingleTimeStepValues,
+        force_convergence: bool,
+    ) -> None:
         """Simulate the district heating."""
-        # get inputs
-        delta_temperature_needed_in_celsius = stsv.get_input_value(self.delta_temperature_channel)
-        water_input_mass_flow_rate_in_kg_per_s = stsv.get_input_value(self.water_input_mass_flow_rate_channel)
-        water_input_temperature_in_celsius = stsv.get_input_value(self.water_input_temperature_channel)
-        # check values
-        if delta_temperature_needed_in_celsius < 0:
+        if force_convergence:
+            return
+
+        # Retrieve inputs
+        heating_mode = HeatingMode(
+            stsv.get_input_value(self.heating_mode_channel)
+        )
+
+        if heating_mode == HeatingMode.SPACE_HEATING:
+            # Get relevant inputs
+            delta_temperature_needed_in_celsius = stsv.get_input_value(
+                self.delta_temperature_channel
+            )
+            self._check_delta_temperature(delta_temperature_needed_in_celsius, timestep)
+
+            water_input_temperature_deg_c = stsv.get_input_value(
+                self.water_input_temperature_sh_channel
+            )
+            water_mass_flow_rate_in_kg_per_s = stsv.get_input_value(
+                self.water_input_mass_flow_rate_sh_channel
+            )
+
+            # Calculate
+            (
+                thermal_power_delivered_w,
+                thermal_energy_delivered_in_watt_hour,
+                water_output_temperature_deg_c,
+            ) = self._calculate_space_heating_outputs(
+                water_mass_flow_rate_in_kg_per_s,
+                delta_temperature_needed_in_celsius,
+                water_input_temperature_deg_c,
+            )
+
+            # Set outputs
+            stsv.set_output_value(
+                self.thermal_output_power_sh_channel, thermal_power_delivered_w
+            )
+            stsv.set_output_value(
+                self.thermal_output_energy_sh_channel,
+                thermal_energy_delivered_in_watt_hour,
+            )
+            stsv.set_output_value(
+                self.water_output_temperature_sh_channel,
+                water_output_temperature_deg_c,
+            )
+            stsv.set_output_value(
+                self.water_mass_flow_sh_output_channel,
+                water_mass_flow_rate_in_kg_per_s,
+            )
+
+            stsv.set_output_value(self.thermal_output_power_dhw_channel, 0)
+            stsv.set_output_value(self.thermal_output_energy_dhw_channel, 0)
+            current_dhw_water_temperature_deg_c = stsv.get_input_value(
+                self.water_input_temperature_dhw_channel
+            )
+            stsv.set_output_value(
+                self.water_output_temperature_dhw_channel,
+                current_dhw_water_temperature_deg_c,
+            )
+            stsv.set_output_value(self.water_mass_flow_dhw_output_channel, 0)
+
+        elif heating_mode == HeatingMode.DOMESTIC_HOT_WATER:
+            # Get relevant inputs
+            delta_temperature_needed_in_celsius = stsv.get_input_value(
+                self.delta_temperature_channel
+            )
+            self._check_delta_temperature(delta_temperature_needed_in_celsius, timestep)
+
+            water_input_temperature_deg_c = stsv.get_input_value(
+                self.water_input_temperature_dhw_channel
+            )
+
+            # Calculate
+            (
+                thermal_power_delivered_w,
+                thermal_energy_delivered_in_watt_hour,
+                water_output_temperature_deg_c,
+                water_mass_flow_rate_in_kg_per_s
+            ) = self._calculate_dhw_outputs(
+                water_input_temperature_deg_c,
+                delta_temperature_needed_in_celsius,
+            )
+
+            # Set outputs
+            stsv.set_output_value(
+                self.thermal_output_power_dhw_channel,
+                thermal_power_delivered_w,
+            )
+            stsv.set_output_value(
+                self.thermal_output_energy_dhw_channel,
+                thermal_energy_delivered_in_watt_hour,
+            )
+            stsv.set_output_value(
+                self.water_output_temperature_dhw_channel,
+                water_output_temperature_deg_c,
+            )
+            stsv.set_output_value(
+                self.water_mass_flow_dhw_output_channel,
+                water_mass_flow_rate_in_kg_per_s,
+            )
+
+            stsv.set_output_value(self.thermal_output_power_sh_channel, 0)
+            stsv.set_output_value(self.thermal_output_energy_sh_channel, 0)
+            current_sh_water_temperature_deg_c = stsv.get_input_value(
+                self.water_input_temperature_sh_channel
+            )
+            stsv.set_output_value(
+                self.water_output_temperature_sh_channel,
+                current_sh_water_temperature_deg_c,
+            )
+            stsv.set_output_value(self.water_mass_flow_sh_output_channel, 0)
+
+        elif heating_mode == HeatingMode.OFF:
+            stsv.set_output_value(self.thermal_output_power_dhw_channel, 0)
+            stsv.set_output_value(self.thermal_output_energy_dhw_channel, 0)
+            current_dhw_water_temperature_deg_c = stsv.get_input_value(
+                self.water_input_temperature_dhw_channel
+            )
+            stsv.set_output_value(
+                self.water_output_temperature_dhw_channel,
+                current_dhw_water_temperature_deg_c,
+            )
+            stsv.set_output_value(self.water_mass_flow_dhw_output_channel, 0)
+
+            stsv.set_output_value(self.thermal_output_power_sh_channel, 0)
+            stsv.set_output_value(self.thermal_output_energy_sh_channel, 0)
+            current_sh_water_temperature_deg_c = stsv.get_input_value(
+                self.water_input_temperature_sh_channel
+            )
+            stsv.set_output_value(
+                self.water_output_temperature_sh_channel,
+                current_sh_water_temperature_deg_c,
+            )
+            stsv.set_output_value(self.water_mass_flow_sh_output_channel, 0)
+        else:
+            raise ValueError("Unknown heating mode")
+
+    def _check_delta_temperature(self, delta_temperature: float, timestep: int):
+        if delta_temperature < 0:
             raise ValueError(
-                f"Delta temperature is {delta_temperature_needed_in_celsius} °C"
+                f"Delta temperature is {delta_temperature} °C"
                 "but it should not be negative because district heating cannot provide cooling. "
                 "Please check your district heating controller."
             )
+        if delta_temperature > 100:
+            raise ValueError(
+                f"Delta temperature is {delta_temperature} °C in timestep {timestep}."
+                "This is way too high. "
+            )
 
-        # calculate output temperature
-        water_output_temperature_in_celsius = water_input_temperature_in_celsius + delta_temperature_needed_in_celsius
-
-        # calculate thermal power delivered Q = m * cw * dT
-        thermal_power_delivered_in_watt = (
-            water_input_mass_flow_rate_in_kg_per_s
+    def _calculate_space_heating_outputs(self, water_mass_flow_rate_in_kg_per_s: float,
+                                         delta_temperature_needed_in_celsius: float,
+                                         water_input_temperature_deg_c: float) -> Tuple[float, float, float]:
+        thermal_power_delivered_w = (
+            water_mass_flow_rate_in_kg_per_s
             * PhysicsConfig.get_properties_for_energy_carrier(
                 energy_carrier=LoadTypes.WATER
             ).specific_heat_capacity_in_joule_per_kg_per_kelvin
             * delta_temperature_needed_in_celsius
         )
-        stsv.set_output_value(self.thermal_output_power_channel, thermal_power_delivered_in_watt)
-        stsv.set_output_value(self.water_output_temperature_channel, water_output_temperature_in_celsius)
-        # use as water flow the same mass flow as heat distribution system
-        stsv.set_output_value(self.water_mass_flow_output_channel, water_input_mass_flow_rate_in_kg_per_s)
 
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
+        if thermal_power_delivered_w > self.config.connected_load_w:
+            # make sure that not more power is delivered than available
+            logging.warning(
+                "The needed thermal power for space heating is higher than the maximum connected load."
+            )
+            thermal_power_delivered_w = self.config.connected_load_w
+            delta_temperature_achieved = thermal_power_delivered_w / (
+                water_mass_flow_rate_in_kg_per_s
+                * PhysicsConfig.get_properties_for_energy_carrier(
+                    energy_carrier=LoadTypes.WATER
+                ).specific_heat_capacity_in_joule_per_kg_per_kelvin
+            )
+            water_output_temperature_deg_c = (
+                water_input_temperature_deg_c + delta_temperature_achieved
+            )
+        else:
+            water_output_temperature_deg_c = (
+                water_input_temperature_deg_c
+                + delta_temperature_needed_in_celsius
+            )
+
+        thermal_energy_delivered_in_watt_hour = (
+            thermal_power_delivered_w
+            * self.my_simulation_parameters.seconds_per_timestep
+            / 3.6e3
+        )
+        return thermal_power_delivered_w, thermal_energy_delivered_in_watt_hour, water_output_temperature_deg_c
+
+    def _calculate_dhw_outputs(self, water_input_temperature_deg_c: float, delta_temperature_needed_in_celsius: float):
+        water_target_temperature_deg_c = (
+            water_input_temperature_deg_c
+            + delta_temperature_needed_in_celsius
+        )
+
+        # calculate thermal power delivered Q = m * cw * dT
+        if delta_temperature_needed_in_celsius > 0:
+            thermal_power_delivered_w = self.config.connected_load_w
+            water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_w / (
+            PhysicsConfig.get_properties_for_energy_carrier(
+                energy_carrier=LoadTypes.WATER
+            ).specific_heat_capacity_in_joule_per_kg_per_kelvin
+            * delta_temperature_needed_in_celsius
+        )
+        else:
+            thermal_power_delivered_w = 0
+            water_mass_flow_rate_in_kg_per_s = 0
+
+        water_target_temperature_deg_c = (
+            water_input_temperature_deg_c
+            + delta_temperature_needed_in_celsius
+        )
+        thermal_energy_delivered_in_watt_hour = (
+            thermal_power_delivered_w
+            * self.my_simulation_parameters.seconds_per_timestep
+            / 3.6e3
+        )
+        return thermal_power_delivered_w, thermal_energy_delivered_in_watt_hour, water_target_temperature_deg_c, water_mass_flow_rate_in_kg_per_s
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
+        sh_consumption_in_kwh = None
+        dhw_consumption_in_kwh = None
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == self.component_name
                 and output.load_type == LoadTypes.HEATING
-                and output.field_name == self.ThermalOutputPower
+                and output.field_name == self.ThermalOutputShPower
                 and output.unit == Units.WATT
             ):
-                self.config.consumption_in_kwh = round(
+                sh_consumption_in_kwh = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
                     1,
                 )
+            if (
+                output.component_name == self.component_name
+                and output.load_type == LoadTypes.WARM_WATER
+                and output.field_name == self.ThermalOutputDhwPower
+                and output.unit == Units.WATT
+            ):
+                dhw_consumption_in_kwh = round(
+                    sum(postprocessing_results.iloc[:, index])
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
+        assert sh_consumption_in_kwh is not None
+        assert dhw_consumption_in_kwh is not None
+        total_consumption_in_kwh = sh_consumption_in_kwh + dhw_consumption_in_kwh
 
-        # TODO: most opex values need to be implemented still
+        emissions_and_cost_factors = (
+            EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+                self.my_simulation_parameters.year
+            )
+        )
+        co2_per_unit = (
+            emissions_and_cost_factors.district_heating_footprint_in_kg_per_kwh
+        )
+        euro_per_unit = (
+            emissions_and_cost_factors.district_heating_costs_in_euro_per_kwh
+        )
+        co2_per_simulated_period_in_kg = total_consumption_in_kwh * co2_per_unit
+        opex_energy_cost_per_simulated_period_in_euro = (
+            total_consumption_in_kwh * euro_per_unit
+        )
+
         opex_cost_data_class = OpexCostDataClass(
-            opex_energy_cost_in_euro=0,
-            opex_maintenance_cost_in_euro=0,
-            co2_footprint_in_kg=0,
-            consumption_in_kwh=self.config.consumption_in_kwh,
+            opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=co2_per_simulated_period_in_kg,
+            total_consumption_in_kwh=total_consumption_in_kwh,
+            consumption_for_domestic_hot_water_in_kwh=dhw_consumption_in_kwh,
+            consumption_for_space_heating_in_kwh=sh_consumption_in_kwh,
             loadtype=LoadTypes.DISTRICTHEATING,
-            kpi_tag=KpiTagEnumClass.DISTRICT_HEATING_DOMESTIC_HOT_WATER,
+            kpi_tag=KpiTagEnumClass.DISTRICT_HEATING,
         )
 
         return opex_cost_data_class
 
     @staticmethod
     def get_cost_capex(
-        config: DistrictHeatingForDHWConfig, simulation_parameters: SimulationParameters
-    ) -> CapexCostDataClass:  # pylint: disable=unused-argument
+        config: DistrictHeatingConfig,
+        simulation_parameters: SimulationParameters,
+    ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        # TODO: capex values need to be implemented still
-        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+        component_type = ComponentType.DISTRICT_HEATING
+        kpi_tag = (
+            KpiTagEnumClass.DISTRICT_HEATING
+        )
+        unit = Units.KILOWATT
+        size_of_energy_system = config.connected_load_w * 1e-3
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
+        )
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
+
         return capex_cost_data_class
 
-    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
+
         list_of_kpi_entries: List[KpiEntry] = []
-        opex_dataclass = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
-        my_kpi_entry = KpiEntry(
-            name=f"{opex_dataclass.loadtype.value} consumption for DHW",
+        opex_dataclass = self.get_cost_opex(
+            all_outputs=all_outputs,
+            postprocessing_results=postprocessing_results,
+        )
+        capex_dataclass = self.get_cost_capex(
+            self.config, self.my_simulation_parameters
+        )
+
+        # Energy related KPIs
+        energy_consumption = KpiEntry(
+            name="Total energy consumption",
             unit="kWh",
-            value=opex_dataclass.consumption_in_kwh,
+            value=opex_dataclass.total_consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )
-        list_of_kpi_entries.append(my_kpi_entry)
-        for index, output in enumerate(all_outputs):
-            if output.component_name == self.component_name:
-                if output.field_name == self.ThermalOutputPower and output.load_type == LoadTypes.HEATING and output.unit == Units.WATT:
-                    # take only output values for heating
-                    thermal_output_power_values_in_watt = postprocessing_results.iloc[:, index].loc[
-                        postprocessing_results.iloc[:, index] > 0.0
-                    ]
-                    # get energy from power
-                    thermal_output_energy_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=thermal_output_power_values_in_watt,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
-                    )
-                    thermal_output_energy_entry = KpiEntry(
-                        name="Thermal output energy for DHW",
-                        unit="kWh",
-                        value=thermal_output_energy_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.DISTRICT_HEATING_DOMESTIC_HOT_WATER,
-                        description=self.component_name,
-                    )
-                    list_of_kpi_entries.append(thermal_output_energy_entry)
+        list_of_kpi_entries.append(energy_consumption)
 
+        sh_energy_consumption = KpiEntry(
+            name="Energy consumption for space heating",
+            unit="kWh",
+            value=opex_dataclass.consumption_for_space_heating_in_kwh,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(sh_energy_consumption)
+
+        dhw_energy_consumption = KpiEntry(
+            name="Energy consumption for domestic hot water",
+            unit="kWh",
+            value=opex_dataclass.consumption_for_domestic_hot_water_in_kwh,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(dhw_energy_consumption)
+
+        # Economic and environmental KPIs
+        capex = KpiEntry(
+            name="CAPEX - Investment cost",
+            unit="EUR",
+            value=capex_dataclass.capex_investment_cost_in_euro,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(capex)
+
+        co2_footprint_capex = KpiEntry(
+            name="CAPEX - CO2 Footprint",
+            unit="kg",
+            value=capex_dataclass.device_co2_footprint_in_kg,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(co2_footprint_capex)
+
+        opex = KpiEntry(
+            name="OPEX - Energy costs",
+            unit="EUR",
+            value=opex_dataclass.opex_energy_cost_in_euro,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(opex)
+
+        maintenance_costs = KpiEntry(
+            name="OPEX - Maintenance costs",
+            unit="EUR",
+            value=opex_dataclass.opex_maintenance_cost_in_euro,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(maintenance_costs)
+
+        co2_footprint = KpiEntry(
+            name="OPEX - CO2 Footprint",
+            unit="kg",
+            value=opex_dataclass.co2_footprint_in_kg,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(co2_footprint)
+
+        total_costs = KpiEntry(
+            name="Total Costs (CAPEX for simulated period + OPEX fuel and maintenance)",
+            unit="EUR",
+            value=capex_dataclass.capex_investment_cost_for_simulated_period_in_euro
+            + opex_dataclass.opex_energy_cost_in_euro
+            + opex_dataclass.opex_maintenance_cost_in_euro,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(total_costs)
+
+        total_co2_footprint = KpiEntry(
+            name="Total CO2 Footprint (CAPEX for simulated period + OPEX)",
+            unit="kg",
+            value=capex_dataclass.device_co2_footprint_for_simulated_period_in_kg
+            + opex_dataclass.co2_footprint_in_kg,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(total_co2_footprint)
         return list_of_kpi_entries
 
 
 @dataclass_json
 @dataclass
-class DistrictHeatingControllerForDHWConfig(ConfigBase):
-    """District Heating Controller for DHW Config Class."""
+class DistrictHeatingControllerConfig(ConfigBase):
+    """District Heating Controller Config Class."""
 
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return DistrictHeatingControllerForDHW.get_full_classname()
+        return DistrictHeatingController.get_full_classname()
 
     building_name: str
     name: str
+    set_heating_threshold_outside_temperature_in_celsius: Optional[float]
+    with_domestic_hot_water_preparation: bool
+    offset: float  # overheating of dhw storage
 
     @classmethod
-    def get_default_district_heating_dhw_controller_config(
-        cls, building_name: str = "BUI1",
+    def get_default_district_heating_controller_config(
+        cls,
+        building_name: str = "BUI1",
+        with_domestic_hot_water_preparation=False,
     ) -> Any:
         """Gets a default district heating controller."""
-        return DistrictHeatingControllerForDHWConfig(
-            building_name=building_name, name="DistrictHeatingControllerForDHW",
+        return DistrictHeatingControllerConfig(
+            building_name=building_name,
+            name="DistrictHeatingController",
+            set_heating_threshold_outside_temperature_in_celsius=16.0,
+            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
+            offset=15,
         )
 
 
-class DistrictHeatingControllerForDHW(Component):
-    """District Heating Controller for DHW."""
+class DistrictHeatingController(Component):
+    """District Heating Controller."""
 
     # Inputs
-    WaterTemperatureInputFromWarmWaterStorage = "WaterTemperatureInputFromWarmWaterStorage"
+    WaterTemperatureInputFromHeatDistributionSystem = (
+        "WaterTemperatureInputFromHeatDistributionSystem"
+    )
+    # set heating  flow temperature
+    HeatingFlowTemperatureFromHeatDistributionSystem = (
+        "HeatingFlowTemperatureFromHeatDistributionSystem"
+    )
+
+    DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
+
+    # Relevant when used for dhw as well
+    WaterTemperatureInputFromWarmWaterStorage = (
+        "WaterTemperatureInputFromWarmWaterStorage"
+    )
 
     # Outputs
     DeltaTemperatureNeeded = "DeltaTemperatureNeeded"
+    OperatingMode = "HeatingMode"
 
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: DistrictHeatingControllerForDHWConfig,
+        config: DistrictHeatingControllerConfig,
         my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
@@ -909,14 +872,43 @@ class DistrictHeatingControllerForDHW(Component):
         self.build()
 
         # input channel
-        self.water_temperature_input_channel: ComponentInput = self.add_input(
+        self.water_temperature_input_channel_sh: ComponentInput = (
+            self.add_input(
+                self.component_name,
+                self.WaterTemperatureInputFromHeatDistributionSystem,
+                LoadTypes.TEMPERATURE,
+                Units.CELSIUS,
+                True,
+            )
+        )
+        self.heating_flow_temperature_from_heat_distribution_system_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.WaterTemperatureInputFromWarmWaterStorage,
+            self.HeatingFlowTemperatureFromHeatDistributionSystem,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             True,
         )
-        # output channel
+
+        if self.config.with_domestic_hot_water_preparation:
+            self.water_temperature_input_channel_dhw: ComponentInput = (
+                self.add_input(
+                    self.component_name,
+                    self.WaterTemperatureInputFromWarmWaterStorage,
+                    LoadTypes.TEMPERATURE,
+                    Units.CELSIUS,
+                    True,
+                )
+            )
+        self.daily_avg_outside_temperature_input_channel: ComponentInput = (
+            self.add_input(
+                self.component_name,
+                self.DailyAverageOutsideTemperature,
+                LoadTypes.TEMPERATURE,
+                Units.CELSIUS,
+                True,
+            )
+        )
+
         self.delta_temperature_to_district_heating_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.DeltaTemperatureNeeded,
@@ -925,36 +917,109 @@ class DistrictHeatingControllerForDHW(Component):
             output_description=f"here a description for {self.DeltaTemperatureNeeded} will follow.",
         )
 
-        self.controller_mode: Any
-        self.previous_controller_mode: Any
+        self.controller_mode: HeatingMode
+        self.previous_controller_mode: HeatingMode
 
-        self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
+        self.heating_mode_output_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.OperatingMode,
+            LoadTypes.ANY,
+            Units.ANY,
+            output_description="Operating mode of district heating.",
+        )
 
-    def get_default_connections_from_simple_dhw_storage(self,):
+        self.add_default_connections(
+            self.get_default_connections_from_weather()
+        )
+        self.add_default_connections(
+            self.get_default_connections_from_heat_distribution()
+        )
+        self.add_default_connections(
+            self.get_default_connections_from_heat_distribution_controller()
+        )
+
+        if self.config.with_domestic_hot_water_preparation:
+            self.add_default_connections(
+                self.get_default_connections_from_simple_dhw_storage()
+            )
+
+    def get_default_connections_from_simple_dhw_storage(
+        self,
+    ):
         """Get simple_water_storage default connections."""
 
         connections = []
         storage_classname = SimpleDHWStorage.get_classname()
         connections.append(
             ComponentConnection(
-                DistrictHeatingControllerForDHW.WaterTemperatureInputFromWarmWaterStorage,
+                DistrictHeatingController.WaterTemperatureInputFromWarmWaterStorage,
                 storage_classname,
                 SimpleDHWStorage.WaterTemperatureToHeatGenerator,
             )
         )
         return connections
 
-    def build(self,) -> None:
+    def get_default_connections_from_heat_distribution(
+        self,
+    ):
+        """Get heat ditribution default connections."""
+
+        connections = []
+        source_classname = HeatDistribution.get_classname()
+        connections.append(
+            ComponentConnection(
+                DistrictHeatingController.WaterTemperatureInputFromHeatDistributionSystem,
+                source_classname,
+                HeatDistribution.WaterTemperatureOutput,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_weather(
+        self,
+    ):
+        """Get simple_water_storage default connections."""
+
+        connections = []
+        weather_classname = Weather.get_classname()
+        connections.append(
+            ComponentConnection(
+                DistrictHeatingController.DailyAverageOutsideTemperature,
+                weather_classname,
+                Weather.DailyAverageOutsideTemperatures,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_heat_distribution_controller(
+        self,
+    ):
+        """Get heat distribution controller default connections."""
+
+        connections = []
+        hds_controller_classname = HeatDistributionController.get_classname()
+        connections.append(
+            ComponentConnection(
+                DistrictHeatingController.HeatingFlowTemperatureFromHeatDistributionSystem,
+                hds_controller_classname,
+                HeatDistributionController.HeatingFlowTemperature,
+            )
+        )
+        return connections
+
+    def build(
+        self,
+    ) -> None:
         """Build function.
 
         The function sets important constants and parameters for the calculations.
         """
         # Sth
-        self.controller_mode = "off"
-        self.previous_controller_mode = self.controller_mode
         # warm water should aim for 55°C, should be 60°C when leaving heat generator, see source below
         # https://www.umweltbundesamt.de/umwelttipps-fuer-den-alltag/heizen-bauen/warmwasser#undefined
         self.warm_water_temperature_aim_in_celsius: float = 60.0
+        self.controller_mode = HeatingMode.OFF
+        self.previous_controller_mode = self.controller_mode
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -972,73 +1037,134 @@ class DistrictHeatingControllerForDHW(Component):
         """Doublecheck."""
         pass
 
-    def write_to_report(self,) -> List[str]:
+    def write_to_report(
+        self,
+    ) -> List[str]:
         """Write important variables to report."""
         return self.district_heating_controller_config.get_string_dict()
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+    def i_simulate(
+        self,
+        timestep: int,
+        stsv: SingleTimeStepValues,
+        force_convergence: bool,
+    ) -> None:
         """Simulate the district heating comtroller."""
 
         if force_convergence:
-            pass
-        else:
-            # Retrieves inputs
-            water_temperature_input_from_warm_water_storage_in_celsius = stsv.get_input_value(
-                self.water_temperature_input_channel
-            )
+            return
 
-            # on/off controller
-            self.conditions_on_off(
-                water_temperature_input_in_celsius=water_temperature_input_from_warm_water_storage_in_celsius,
-                set_heating_flow_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
-            )
+        # Retrieves inputs
+        water_temperature_input_from_heat_distibution_in_celsius = (
+            stsv.get_input_value(self.water_temperature_input_channel_sh)
+        )
 
-            if self.controller_mode == "heating":
-                # delta temperature should not be negative because district heating cannot provide cooling
-                delta_temperature_in_celsius = max(
-                    self.warm_water_temperature_aim_in_celsius
-                    - water_temperature_input_from_warm_water_storage_in_celsius,
-                    0,
+        heating_flow_temperature_from_heat_distribution_in_celsius = stsv.get_input_value(
+            self.heating_flow_temperature_from_heat_distribution_system_channel
+        )
+        water_temperature_input_from_warm_water_storage_in_celsius = None
+        if self.config.with_domestic_hot_water_preparation:
+            water_temperature_input_from_warm_water_storage_in_celsius = (
+                stsv.get_input_value(
+                    self.water_temperature_input_channel_dhw
                 )
-            elif self.controller_mode == "off":
-                delta_temperature_in_celsius = 0
-            else:
-                raise ValueError("District Heating Controller control_signal unknown.")
+            )
 
-            stsv.set_output_value(self.delta_temperature_to_district_heating_channel, delta_temperature_in_celsius)
+        daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
+            self.daily_avg_outside_temperature_input_channel
+        )
 
-    def conditions_on_off(
-        self, water_temperature_input_in_celsius: float, set_heating_flow_temperature_in_celsius: float,
-    ) -> None:
-        """Set conditions for the district heating controller mode."""
+        # Determine which operating mode to use in dual-circuit system
+        delta_temperature_in_celsius = self.determine_operating_mode(
+            daily_avg_outside_temperature_in_celsius,
+            water_temperature_input_from_heat_distibution_in_celsius,
+            heating_flow_temperature_from_heat_distribution_in_celsius,
+            water_temperature_input_from_warm_water_storage_in_celsius,
+        )
 
-        if self.controller_mode == "heating":
-            if water_temperature_input_in_celsius > (set_heating_flow_temperature_in_celsius):
-                self.controller_mode = "off"
-                return
+        stsv.set_output_value(
+            self.delta_temperature_to_district_heating_channel,
+            delta_temperature_in_celsius,
+        )
+        stsv.set_output_value(
+            self.heating_mode_output_channel, self.controller_mode.value
+        )
 
-        elif self.controller_mode == "off":
-            # district heating is only turned on if the water temperature is below the flow temperature
-            if water_temperature_input_in_celsius < (set_heating_flow_temperature_in_celsius - 10.0):
-                self.controller_mode = "heating"
-                return
+    def determine_operating_mode(self,
+                                 daily_avg_outside_temperature_in_celsius: float,
+                                 sh_current_temperature_deg_c: float,
+                                 sh_set_temperature_deg_c: float,
+                                 dhw_current_temperature_deg_c: Optional[float]) -> float:
+        """Determine operating mode."""
 
+        self.controller_mode = DiverterValve.determine_operating_mode(
+            with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
+            current_controller_mode=self.controller_mode,
+            daily_average_outside_temperature=daily_avg_outside_temperature_in_celsius,
+            water_temperature_input_sh_in_celsius=sh_current_temperature_deg_c,
+            water_temperature_input_dhw_in_celsius=dhw_current_temperature_deg_c
+            if self.config.with_domestic_hot_water_preparation
+            else None,
+            set_temperatures=SetTemperatureConfig(
+                set_temperature_space_heating=sh_set_temperature_deg_c,
+                set_temperature_dhw=self.warm_water_temperature_aim_in_celsius,
+                hysteresis_dhw_offset=self.config.offset,
+                outside_temperature_threshold=self.district_heating_controller_config.set_heating_threshold_outside_temperature_in_celsius
+            )
+        )
+
+        if self.controller_mode == HeatingMode.SPACE_HEATING:
+            # delta temperature should not be negative because district heating cannot provide cooling
+            delta_temperature_in_celsius = float(max(
+                sh_set_temperature_deg_c
+                - sh_current_temperature_deg_c,
+                0.,
+            ))
+        elif self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
+            # delta temperature should not be negative because district heating cannot provide cooling
+            assert dhw_current_temperature_deg_c is not None
+            delta_temperature_in_celsius = (
+                float(max(
+                    self.warm_water_temperature_aim_in_celsius
+                    - dhw_current_temperature_deg_c,
+                    0.,
+                )
+                + self.config.offset
+            ))
+        elif self.controller_mode == HeatingMode.OFF:
+            delta_temperature_in_celsius = 0.
         else:
-            raise ValueError("unknown mode")
+            raise ValueError(
+                "District Heating Controller control_signal unknown."
+            )
+        return delta_temperature_in_celsius
 
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
-        opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
+        opex_cost_data_class = (
+            OpexCostDataClass.get_default_opex_cost_data_class()
+        )
         return opex_cost_data_class
 
     @staticmethod
     def get_cost_capex(
-        config: DistrictHeatingControllerForDHWConfig, simulation_parameters: SimulationParameters
+        config: DistrictHeatingControllerConfig,
+        simulation_parameters: SimulationParameters,
     ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
-        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+        capex_cost_data_class = (
+            CapexCostDataClass.get_default_capex_cost_data_class()
+        )
         return capex_cost_data_class
 
-    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         return []

@@ -16,14 +16,19 @@ class KpiTagEnumClass(Enum):
     COSTS = "Costs"
     EMISSIONS = "Emissions"
     BUILDING = "Building"
+    AIR_CONDITIONER = "Air Conditioner"
     BATTERY = "Battery"
     HEAT_DISTRIBUTION_SYSTEM = "Heat Distribution System"
     HEATPUMP_SPACE_HEATING = "Heat Pump For Space Heating"
     HEATPUMP_DOMESTIC_HOT_WATER = "Heat Pump For Domestic Hot Water"
     HEATPUMP_SPACE_HEATING_AND_DOMESTIC_HOT_WATER = "Heat Pump For SH and DHW"
     RESIDENTS = "Residents"
-    GAS_HEATER_SPACE_HEATING = "Gas Heater For Space Heating"
-    GAS_HEATER_DOMESTIC_HOT_WATER = "Gas Heater For Domestic Hot Water"
+    GAS_BOILER = "Gas Boiler"
+    OIL_BOILER = "Oil Boiler"
+    PELLET_BOILER = "Pellet Boiler"
+    WOOD_CHIP_BOILER = "Wood Chip Boiler"
+    HYDROGEN_BOILER = "Hydrogen Boiler"
+    DISTRICT_HEATING = "District Heating"
     GAS_METER = "Gas Meter"
     HEATING_METER = "Heating Meter"
     ELECTRICITY_METER = "Electricity Meter"
@@ -41,16 +46,10 @@ class KpiTagEnumClass(Enum):
     COSTS_DISTRICT_GRID = "Costs Of District Grid"
     EMISSIONS_DISTRICT_GRID = "Emissions Of District Grid"
     CONTRACTING = "Contracting"
-    OIL_HEATER_SPACE_HEATING = "Oil Heater For Space Heating"
-    OIL_HEATER_DOMESTIC_HOT_WATER = "Oil Heater For Domestic Hot Water"
-    DISTRICT_HEATING_SPACE_HEATING = "District Heating For Space Heating"
-    DISTRICT_HEATING_DOMESTIC_HOT_WATER = "District Heating For Domestic Hot Water"
-    PELLETS_SPACE_HEATING = "Pellet Heating For Space Heating"
-    PELLETS_HEATING_DOMESTIC_HOT_WATER = "Pellet Heating For Domestic Hot Water"
-    HYDROGEN_SPACE_HEATING = "Hydrogen Heating For Space Heating"
-    HYDROGEN_HEATING_DOMESTIC_HOT_WATER = "Hydrogen Heating For Domestic Hot Water"
     GENERIC_HEAT_SOURCE = "Generic Heat Source"  # used in simple_heat_source.py
     GROUND_PROBE = "Ground Probe"
+    ELECTRIC_HEATING = "Electric Heating"
+    ENERGY_MANAGEMENT_SYSTEM = "Energy Management System"
 
 
 @dataclass
@@ -62,6 +61,7 @@ class KpiEntry(JSONWizard):
     value: Optional[float]
     description: Optional[str] = None
     tag: Optional[KpiTagEnumClass] = None
+    name_of_source_component: Optional[str] = None
 
 
 class KpiHelperClass:

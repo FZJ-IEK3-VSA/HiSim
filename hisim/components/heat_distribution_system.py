@@ -19,7 +19,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
-
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -70,23 +70,27 @@ class HeatDistributionConfig(cp.ConfigBase):
 
     building_name: str
     name: str
+    heating_system: Union[HeatDistributionSystemType, int]
     water_mass_flow_rate_in_kg_per_second: float
     absolute_conditioned_floor_area_in_m2: float
     position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
-    cost: float
+    investment_costs_in_euro: Optional[float]
     #: lifetime in years
-    lifetime: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
 
     @classmethod
     def get_default_heatdistributionsystem_config(
         cls,
         water_mass_flow_rate_in_kg_per_second: float,
         absolute_conditioned_floor_area_in_m2: float,
+        heating_system: Union[HeatDistributionSystemType, int],
         name: str = "HeatDistributionSystem",
         building_name: str = "BUI1",
         position_hot_water_storage_in_system: Union[
@@ -97,13 +101,15 @@ class HeatDistributionConfig(cp.ConfigBase):
         config = HeatDistributionConfig(
             building_name=building_name,
             name=name,
-            water_mass_flow_rate_in_kg_per_second=water_mass_flow_rate_in_kg_per_second,
+            heating_system=heating_system,
+            water_mass_flow_rate_in_kg_per_second=round(water_mass_flow_rate_in_kg_per_second, 2),
             absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
             position_hot_water_storage_in_system=position_hot_water_storage_in_system,
-            co2_footprint=0,  # Todo: check value
-            cost=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in system_setups instead
-            lifetime=50,  # SOURCE: VDI2067-1
-            maintenance_cost_as_percentage_of_investment=0.01,  # SOURCE: VDI2067-1
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
         )
         return config
 
@@ -138,6 +144,7 @@ class HeatDistribution(cp.Component):
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     ResidenceTemperatureIndoorAir = "ResidenceTemperatureIndoorAir"
     WaterMassFlowInput = "WaterMassFlowInput"
+    ThermalPowerReceived = "ThermalPowerReceived"  # Relevant for district heating with DWH
 
     # Outputs
     WaterTemperatureInlet = "WaterTemperatureInlet"
@@ -217,6 +224,12 @@ class HeatDistribution(cp.Component):
             self.water_mass_flow_rate_hp_in_kg_per_second_channel: cp.ComponentInput = self.add_input(
                 self.component_name, self.WaterMassFlowInput, lt.LoadTypes.WATER, lt.Units.KG_PER_SEC, True,
             )
+        if self.position_hot_water_storage_in_system in [
+            PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX
+        ]:
+            self.thermal_power_received_heating_system_w_input_channel : cp.ComponentInput = self.add_input(
+                self.component_name, self.ThermalPowerReceived, lt.LoadTypes.WARM_WATER, lt.Units.WATT, True,
+            )
 
         # Outputs
         self.water_temperature_inlet_channel: cp.ComponentOutput = self.add_output(
@@ -258,6 +271,7 @@ class HeatDistribution(cp.Component):
         self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
         self.add_default_connections(self.get_default_connections_from_building())
         self.add_default_connections(self.get_default_connections_from_district_heating())
+        self.add_default_connections(self.get_default_connections_from_electric_heating())
         if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
             self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
 
@@ -314,13 +328,40 @@ class HeatDistribution(cp.Component):
         # for district heating as heating source no
         component_module_name = "hisim.components.generic_district_heating"
         component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "DistrictHeatingForSH")
+        component_class = getattr(component_module, "DistrictHeating")
 
         connections = []
         classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
-                HeatDistribution.WaterTemperatureInput, classname, component_class.WaterOutputTemperature,
+                HeatDistribution.WaterTemperatureInput, classname, component_class.WaterOutputShTemperature,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                HeatDistribution.ThermalPowerReceived, classname, component_class.ThermalOutputShPower,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_electric_heating(self,):
+        """Get electric heating default connections."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        # for district heating as heating source no
+        component_module_name = "hisim.components.generic_electric_heating"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "ElectricHeating")
+
+        connections = []
+        classname = component_class.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                HeatDistribution.WaterTemperatureInput, classname, component_class.WaterOutputShTemperature,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                HeatDistribution.ThermalPowerReceived, classname, component_class.ThermalOutputShPower,
             )
         )
         return connections
@@ -388,8 +429,14 @@ class HeatDistribution(cp.Component):
             )
         else:
             water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
+            thermal_power_received_heating_system_w = None
+            if self.position_hot_water_storage_in_system in [
+                PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX
+            ]:
+                thermal_power_received_heating_system_w = stsv.get_input_value(self.thermal_power_received_heating_system_w_input_channel)
+
             # if state_controller == 1:
-            if state_controller in (1, -1):
+            if state_controller in (1, -1) and (thermal_power_received_heating_system_w is None or thermal_power_received_heating_system_w != 0):
                 (
                     water_temperature_output_in_celsius,
                     thermal_power_delivered_in_watt,
@@ -400,10 +447,15 @@ class HeatDistribution(cp.Component):
                     residence_temperature_in_celsius=residence_temperature_input_in_celsius,
                 )
 
-            elif state_controller == 0:
+            elif state_controller == 0 or (thermal_power_received_heating_system_w is not None and thermal_power_received_heating_system_w == 0):
                 thermal_power_delivered_in_watt = 0.0
-                water_temperature_output_in_celsius = water_temperature_input_in_celsius
-
+                # keep temperature almost as is, as no heating/cooling occurs,
+                # but introduce small change of temperature to account for heat loss and gain
+                # between heat distribution system and building
+                water_temperature_output_in_celsius = (
+                    water_temperature_input_in_celsius
+                    + 0.01 * (residence_temperature_input_in_celsius - water_temperature_input_in_celsius)
+                )
             else:
                 raise ValueError("unknown hds controller mode")
 
@@ -560,22 +612,27 @@ class HeatDistribution(cp.Component):
         config: HeatDistributionConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
+        # consider costs of changing heat distribution system to floor heating
+        if config.heating_system in [HeatDistributionSystemType.FLOORHEATING, 2]:
+            component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM
+            kpi_tag = (
+                KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM
+            )
+            unit = lt.Units.ANY
+            size_of_energy_system = 1
 
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
-        )
+            capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+            simulation_parameters=simulation_parameters,
+            component_type=component_type,
+            unit=unit,
+            size_of_energy_system=size_of_energy_system,
+            config=config,
+            kpi_tag=kpi_tag
+            )
+        else:
+            capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
         return capex_cost_data_class
 
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
@@ -585,7 +642,7 @@ class HeatDistribution(cp.Component):
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
-            consumption_in_kwh=0,
+            total_consumption_in_kwh=0,
             loadtype=lt.LoadTypes.ANY,
             kpi_tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
         )
@@ -781,7 +838,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
-            heating_load_of_building_in_watt=heating_load_of_building_in_watt,
+            heating_load_of_building_in_watt=round(heating_load_of_building_in_watt, 2),
         )
 
 

@@ -60,14 +60,16 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
     const_source: Optional[SimpleHeatSourceType]
     fluid_type: FluidMediaType
     mass_fraction_of_fluid_mixed_in_water: float
+    massflow_nominal_in_kg_per_s: Optional[float]
+    use_external_massflow_as_signal_input_for_nominal_massflow: bool
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg: float
     #: cost for investment in Euro
-    cost: float
+    investment_costs_in_euro: float
     #: lifetime in years
-    lifetime: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    lifetime_in_years: float
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: float
 
     @classmethod
     def get_main_classname(cls):
@@ -88,10 +90,12 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             temperature_out_in_celsius=None,
             fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
             mass_fraction_of_fluid_mixed_in_water=0.20,
-            co2_footprint=100,  # Todo: check value
-            cost=2000,  # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
-            lifetime=25,
-            maintenance_cost_as_percentage_of_investment=10,  # from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
+            massflow_nominal_in_kg_per_s=0.5,
+            use_external_massflow_as_signal_input_for_nominal_massflow=False,
+            device_co2_footprint_in_kg=100,  # Todo: check value
+            investment_costs_in_euro=2000,  # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
+            lifetime_in_years=25,
+            maintenance_costs_in_euro_per_year=10,  # from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
         )
         return config
 
@@ -109,11 +113,13 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             temperature_out_in_celsius=5,
             fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
             mass_fraction_of_fluid_mixed_in_water=0.20,
-            co2_footprint=100,  # Todo: check value
-            cost=2000,
+            massflow_nominal_in_kg_per_s=0.5,
+            use_external_massflow_as_signal_input_for_nominal_massflow=False,
+            device_co2_footprint_in_kg=100,  # Todo: check value
+            investment_costs_in_euro=2000,
             # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
-            lifetime=25,  # value from emission_factors_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=10,
+            lifetime_in_years=25,  # value from emission_factors_and_costs_devices.csv
+            maintenance_costs_in_euro_per_year=10,
             # from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
         )
         return config
@@ -132,11 +138,13 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             temperature_out_in_celsius=None,
             fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
             mass_fraction_of_fluid_mixed_in_water=0.20,
-            co2_footprint=100,  # Todo: check value
-            cost=2000,
+            massflow_nominal_in_kg_per_s=0.5,
+            use_external_massflow_as_signal_input_for_nominal_massflow=False,
+            device_co2_footprint_in_kg=100,  # Todo: check value
+            investment_costs_in_euro=2000,
             # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
-            lifetime=25,  # value from emission_factors_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=10,
+            lifetime_in_years=25,  # value from emission_factors_and_costs_devices.csv
+            maintenance_costs_in_euro_per_year=10,
             # from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
         )
         return config
@@ -165,6 +173,7 @@ class SimpleHeatSource(cp.Component):
     # Outputs
     ThermalPowerDelivered = "ThermalPowerDelivered"
     TemperatureOutput = "TemperatureOutput"
+    MassFlowOutput = "MassFlowOutput"
 
     def __init__(
         self,
@@ -186,6 +195,12 @@ class SimpleHeatSource(cp.Component):
 
         if self.config.const_source is None:  # type: ignore
             raise ValueError("const_source is not set.")
+
+        if (self.config.use_external_massflow_as_signal_input_for_nominal_massflow and
+                self.config.massflow_nominal_in_kg_per_s is None):
+            raise ValueError(
+                "use_external_massflow_as_signal_input is True, so massflow_nominal_in_kg_per_s can't be None."
+            )
 
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER:  # type: ignore
             self.power_th_in_watt = self.config.power_th_in_watt
@@ -248,6 +263,13 @@ class SimpleHeatSource(cp.Component):
             load_type=lt.LoadTypes.TEMPERATURE,
             unit=lt.Units.CELSIUS,
             output_description="Temperature Output",
+        )
+        self.massflow_output_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.MassFlowOutput,
+            load_type=lt.LoadTypes.VOLUME,
+            unit=lt.Units.KG_PER_SEC,
+            output_description="Massflow Output",
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -315,6 +337,10 @@ class SimpleHeatSource(cp.Component):
         massflow_in_kg_per_sec = stsv.get_input_value(
             self.massflow_input_channel
         )
+
+        if self.config.use_external_massflow_as_signal_input_for_nominal_massflow and massflow_in_kg_per_sec != 0:
+            massflow_in_kg_per_sec = self.config.massflow_nominal_in_kg_per_s
+
         temperature_input_in_celsius = stsv.get_input_value(
             self.temperature_input_channel
         )
@@ -328,7 +354,7 @@ class SimpleHeatSource(cp.Component):
             temperature_output = self.temperature_out_in_celsius
 
             thermal_power_in_watt = (massflow_in_kg_per_sec * self.cp_f *
-                                     (temperature_output - temperature_input_in_celsius))
+                                     (temperature_output - temperature_input_in_celsius))  # type: ignore
 
         elif self.config.const_source == SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE:
             """From hplib: Calculate the soil temperature by the average Temperature of the day.
@@ -349,6 +375,7 @@ class SimpleHeatSource(cp.Component):
         else:
             raise KeyError("Unknown heat source type")
 
+        stsv.set_output_value(self.massflow_output_channel, massflow_in_kg_per_sec)  # type: ignore
         stsv.set_output_value(self.thermal_power_delivered_channel, thermal_power_in_watt)  # type: ignore
         stsv.set_output_value(self.temperature_output_channel, temperature_output)
 
@@ -359,16 +386,16 @@ class SimpleHeatSource(cp.Component):
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
+        capex_per_simulated_period = (config.investment_costs_in_euro / config.lifetime) * (
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
         device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
         capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
+            capex_investment_cost_in_euro=config.investment_costs_in_euro,
+            device_co2_footprint_in_kg=config.device_co2_footprint_in_kg,
+            lifetime_in_years=config.lifetime_in_years,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
             kpi_tag=KpiTagEnumClass.GENERIC_HEAT_SOURCE
@@ -386,7 +413,7 @@ class SimpleHeatSource(cp.Component):
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
-            consumption_in_kwh=0,
+            total_consumption_in_kwh=0,
             loadtype=lt.LoadTypes.ANY,
             kpi_tag=KpiTagEnumClass.GENERIC_HEAT_SOURCE
         )

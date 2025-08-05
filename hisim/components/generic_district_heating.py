@@ -82,12 +82,13 @@ class DistrictHeatingConfig(ConfigBase):
         cls,
         building_name: str = "BUI1",
         with_domestic_hot_water_preparation=False,
+        connected_load_w: float = 20000
     ) -> Any:
         """Get a default district heating."""
         config = DistrictHeatingConfig(
             building_name=building_name,
             name="DistrictHeating",
-            connected_load_w=20000,
+            connected_load_w=connected_load_w,
             # capex and device emissions are calculated in get_cost_capex function by default
             device_co2_footprint_in_kg=None,
             investment_costs_in_euro=None,

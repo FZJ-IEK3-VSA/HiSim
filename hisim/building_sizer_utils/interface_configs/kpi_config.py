@@ -20,6 +20,7 @@ class KPIForRatingInOptimization(str, enum.Enum):
     # CO2
     # ------------------------------------------------------------
     ANNUALIZED_TOTAL_CO2_EMISSION = "Annualized Total CO2 Emissions [kg]"
+    ANNUALIZED_ENERGY_CO2_EMISSION = "Annualized Energy CO2 Emissions [kg]"
     # Other
     # ------------------------------------------------------------
     SELFSUFFICIENCY_ELECTRICITY = "Self-sufficiency rate [%]"
@@ -70,6 +71,11 @@ class KPIConfig:
     annualized_net_investment_costs_in_euro: float
     #: annual C02 emmissions due to the construction and operation of the considered technology, given in kg
     annualized_total_co2_emissions_in_kg: float
+    #: annual C02 emmissions due to operation of the considered technology, given in kg
+    annualized_energy_co2_emissions_in_kg: float
+    annualized_electricity_co2_emissions_in_kg: float
+    annualized_gas_co2_emissions_in_kg: float
+    annualized_heat_co2_emissions_in_kg: float
     #: annual energy consumption
     annualized_purchased_energy_consumption_in_kwh: float
     #: annual electricity to grid
@@ -103,6 +109,8 @@ class KPIConfig:
             return self.annualized_net_investment_costs_in_euro
         if chosen_kpi == KPIForRatingInOptimization.ANNUALIZED_TOTAL_CO2_EMISSION:
             return self.annualized_total_co2_emissions_in_kg
+        if chosen_kpi == KPIForRatingInOptimization.ANNUALIZED_ENERGY_CO2_EMISSION:
+            return self.annualized_energy_co2_emissions_in_kg
         if chosen_kpi == KPIForRatingInOptimization.ANNUALIZED_PURCHASED_ENERGY_CONSUMPTION:
             return self.annualized_purchased_energy_consumption_in_kwh
         raise ValueError(f"Chosen KPI {chosen_kpi} not recognized.")

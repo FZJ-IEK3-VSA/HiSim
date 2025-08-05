@@ -1184,6 +1184,18 @@ class PostProcessor:
                 annualized_total_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Total CO2 emissions for simulated period"
                 )
+                # CO2 emissions from energy consumption
+                annualized_electricity_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="CO2 footprint of grid electricity for simulated period"
+                )
+                annualized_gas_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="CO2 footprint of grid gas for simulated period"
+                )
+                annualized_heat_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="CO2 footprint of grid heat consumption for simulated period"
+                )
+                annualized_energy_co2_emissions_in_kg = annualized_electricity_co2_emissions_in_kg + annualized_gas_co2_emissions_in_kg + annualized_heat_co2_emissions_in_kg
+
                 # Other
                 self_sufficiency_rate_electricity_in_percent = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Self-sufficiency rate according to solar htw berlin"
@@ -1215,6 +1227,10 @@ class PostProcessor:
                     self_sufficiency_rate_electricity_in_percent=self_sufficiency_rate_electricity_in_percent,
                     annualized_total_costs_in_euro=annualized_total_costs_in_euro,
                     annualized_total_co2_emissions_in_kg=annualized_total_co2_emissions_in_kg,
+                    annualized_energy_co2_emissions_in_kg=annualized_energy_co2_emissions_in_kg,
+                    annualized_electricity_co2_emissions_in_kg=annualized_electricity_co2_emissions_in_kg,
+                    annualized_gas_co2_emissions_in_kg=annualized_gas_co2_emissions_in_kg,
+                    annualized_heat_co2_emissions_in_kg=annualized_heat_co2_emissions_in_kg,
                     annualized_energy_costs_in_euro=total_annualized_energy_costs_in_euro,
                     annualized_electricity_costs_in_euro=annualzed_energy_costs_electricity_in_euro,
                     annualized_gas_costs_in_euro=annualized_energy_costs_gas_in_euro,

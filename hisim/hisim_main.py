@@ -24,7 +24,7 @@ def main(
     warnings.filterwarnings("ignore")
 
     # Delete old log files
-    logging_default_path = Path(log.LOGGING_DEFAULT_PATH)
+    logging_default_path = Path(log.LOGGING_PATH)
     if logging_default_path.exists() and logging_default_path.is_dir():
         for file in logging_default_path.iterdir():
             try:

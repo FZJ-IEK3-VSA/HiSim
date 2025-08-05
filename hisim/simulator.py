@@ -204,7 +204,7 @@ class Simulator:
                     f"Using result directory:  {self._simulation_parameters.result_directory}"
                     + " which is set by the simulator."
                 )
-        
+
         if not os.path.isdir(self._simulation_parameters.result_directory):
             os.makedirs(self._simulation_parameters.result_directory, exist_ok=True)
 
@@ -213,7 +213,6 @@ class Simulator:
             self._simulation_parameters.result_directory, "Detailed_Iteration_Log.txt"
         )
         log.initialize_properly(self._simulation_parameters.result_directory)
-
 
     # @profile
     # @utils.measure_execution_time

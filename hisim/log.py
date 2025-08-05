@@ -8,7 +8,7 @@ LOGGING_PATH: str = r"../logs/"
 # for storing logs that are written before the filepath exists
 PRE = True
 PRE_LOGS = ""
-PRO_PROFILE = ""
+PRE_PROFILE = ""
 
 
 class LogPrio(IntEnum):
@@ -37,42 +37,42 @@ class LogPrio(IntEnum):
 
 # The logging_message_path can not be set in the function head because then it
 # would always use the LOGGING_PATH at definition time, not at runtime.
-def error(message: str, logging_message_path: str = None) -> None:
+def error(message: str, logging_message_path: str | None = None) -> None:
     """Log an error message."""
     if logging_message_path is None:
         logging_message_path = LOGGING_PATH
     log(LogPrio.ERROR, message, logging_message_path)
 
 
-def warning(message: str, logging_message_path: str = None) -> None:
+def warning(message: str, logging_message_path: str | None = None) -> None:
     """Log a warning message."""
     if logging_message_path is None:
         logging_message_path = LOGGING_PATH
     log(LogPrio.WARNING, message, logging_message_path)
 
 
-def information(message: str, logging_message_path: str = None) -> None:
+def information(message: str, logging_message_path: str | None = None) -> None:
     """Log a information message."""
     if logging_message_path is None:
         logging_message_path = LOGGING_PATH
     log(LogPrio.INFORMATION, message, logging_message_path)
 
 
-def trace(message: str, logging_message_path: str = None) -> None:
+def trace(message: str, logging_message_path: str | None = None) -> None:
     """Log a trace message."""
     if logging_message_path is None:
         logging_message_path = LOGGING_PATH
     log(LogPrio.TRACE, message, logging_message_path)
 
 
-def debug(message: str, logging_message_path: str = None) -> None:
+def debug(message: str, logging_message_path: str | None = None) -> None:
     """Log a debug message."""
     if logging_message_path is None:
         logging_message_path = LOGGING_PATH
     log(LogPrio.DEBUG, message, logging_message_path)
 
 
-def profile(message: str, logging_message_path: str = None) -> None:
+def profile(message: str, logging_message_path: str | None = None) -> None:
     """Log a profile message."""
     log(LogPrio.PROFILE, message, logging_message_path)
     if logging_message_path is None:
@@ -80,7 +80,7 @@ def profile(message: str, logging_message_path: str = None) -> None:
     log_profile_file(message, logging_message_path)
 
 
-def log(prio: int, message: str, logging_message_path: str = None) -> None:
+def log(prio: int, message: str, logging_message_path: str | None = None) -> None:
     """Write and print a log message."""
     if logging_message_path is None:
         logging_message_path = LOGGING_PATH
@@ -98,11 +98,11 @@ def log(prio: int, message: str, logging_message_path: str = None) -> None:
               "This might happen when too many simultaneous simulations are running.")
 
     if PRE:
-        global PRE_LOGS
+        global PRE_LOGS  # pylint: disable=global-statement
         PRE_LOGS += message + "\n"
 
 
-def log_profile_file(message: str, logging_message_path: str = None) -> None:
+def log_profile_file(message: str, logging_message_path: str | None = None) -> None:
     """Write log message to logfile."""
     if logging_message_path is None:
         logging_message_path = LOGGING_PATH
@@ -118,13 +118,13 @@ def log_profile_file(message: str, logging_message_path: str = None) -> None:
               "This might happen when too many simultaneous simulations are running.")
 
     if PRE:
-        global PRE_PROFILE
+        global PRE_PROFILE  # pylint: disable=global-statement
         PRE_PROFILE += message + "\n"
 
 
 def initialize_properly(logging_path) -> None:
     """Create actual logging path and file and move pre logs there."""
-    global PRE_LOGS, PRE_PROFILE, PRE, LOGGING_PATH
+    global PRE_LOGS, PRE_PROFILE, PRE, LOGGING_PATH  # pylint: disable=global-statement
     if not PRE:
         print("WARNING! Logging seems to be already initialized.")
     LOGGING_PATH = logging_path  # set actual logging path

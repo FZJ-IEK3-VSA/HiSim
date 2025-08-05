@@ -93,6 +93,8 @@ class HeatingMeter(DynamicComponent):
         )
         # check if component has valid gas loadtype
         if self.config.fuel_loadtype not in [
+            lt.LoadTypes.HEATING,
+            lt.LoadTypes.COOLING,
             lt.LoadTypes.OIL,
             lt.LoadTypes.PELLETS,
             lt.LoadTypes.WOOD_CHIPS,
@@ -279,7 +281,12 @@ class HeatingMeter(DynamicComponent):
             )
             fuel_consumption_in_kg = round(fuel_consumption_in_liter * 1e-3 * self.config.fuel_density_in_kg_per_m3, 1)
 
-        if self.config.fuel_loadtype == lt.LoadTypes.OIL:
+        if self.config.fuel_loadtype in [lt.LoadTypes.HEATING, lt.LoadTypes.COOLING]:
+
+            opex_cost_per_simulated_period_in_euro = None
+            co2_per_simulated_period_in_kg = None
+
+        elif self.config.fuel_loadtype == lt.LoadTypes.OIL:
 
             co2_per_unit = emissions_and_cost_factors.oil_costs_in_euro_per_l
             euro_per_unit = emissions_and_cost_factors.oil_footprint_in_kg_per_l

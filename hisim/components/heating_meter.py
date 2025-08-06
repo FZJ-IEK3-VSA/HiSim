@@ -67,8 +67,14 @@ class HeatingMeter(DynamicComponent):
     """Heating meter class."""
 
     # Outputs
+    HeatAvailableInWatt = "HeatAvailableInWatt"
+    HeatConsumptionInWatt = "HeatConsumptionInWatt"
+    HeatProductionInWatt = "HeatProductionInWatt"
+    HeatAvailable = "HeatAvailable"
     HeatConsumption = "HeatConsumption"
+    HeatProduction = "HeatProduction"
     CumulativeConsumption = "CumulativeConsumption"
+    CumulativeProduction = "CumulativeProduction"
 
     def __init__(
         self,
@@ -111,8 +117,44 @@ class HeatingMeter(DynamicComponent):
 
         self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         # Component has states
-        self.state = HeatingMeterState(cumulative_consumption_in_watt_hour=0)
+        self.state = HeatingMeterState(cumulative_consumption_in_watt_hour=0, cumulative_production_in_watt_hour=0)
         self.previous_state = self.state.self_copy()
+
+        self.heat_available_in_watt_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatAvailableInWatt,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.HeatAvailableInWatt} will follow.",
+        )
+
+        self.heat_consumption_in_watt_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatConsumptionInWatt,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.HeatConsumptionInWatt} will follow.",
+        )
+
+        self.heat_production_in_watt_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatProductionInWatt,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.HeatProductionInWatt} will follow.",
+        )
+
+        self.heat_available_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatAvailable,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT_HOUR,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.HeatAvailable} will follow.",
+        )
 
         self.heat_consumption_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -132,8 +174,52 @@ class HeatingMeter(DynamicComponent):
             output_description=f"here a description for {self.CumulativeConsumption} will follow.",
         )
 
+        self.cumulative_heat_production_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CumulativeProduction,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT_HOUR,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.CumulativeProduction} will follow.",
+        )
+
+        self.heat_production_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatProduction,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT_HOUR,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.HeatProduction} will follow.",
+        )
+
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_district_heating())
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_boiler())
+        self.add_dynamic_default_connections(self.get_default_connections_from_heat_distribution_system())
+        self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
+
+        def get_default_connections_from_heat_distribution_system(
+                self,
+        ):
+            """Get gas heater default connections."""
+
+            from hisim.components.heat_distribution_system import (  # pylint: disable=import-outside-toplevel
+                HeatDistribution,
+            )
+
+            dynamic_connections = []
+            heat_distribution_class_name = HeatDistribution.get_classname()
+            dynamic_connections.append(
+                DynamicComponentConnection(
+                    source_component_class=HeatDistribution,
+                    source_class_name=heat_distribution_class_name,
+                    source_component_field_name=HeatDistribution.ThermalPowerDelivered,
+                    source_load_type=lt.LoadTypes.HEATING,
+                    source_unit=lt.Units.WATT,
+                    source_tags=[lt.InandOutputType.HEAT_CONSUMPTION],
+                    source_weight=999,
+                )
+            )
+            return dynamic_connections
 
     def get_default_connections_from_generic_district_heating(
         self,
@@ -209,6 +295,30 @@ class HeatingMeter(DynamicComponent):
         )
         return dynamic_connections
 
+    def get_default_connections_from_more_advanced_heat_pump(
+            self,
+    ):
+        """Get gas heater default connections."""
+
+        from hisim.components.more_advanced_heat_pump_hplib import (  # pylint: disable=import-outside-toplevel
+            MoreAdvancedHeatPumpHPLib,
+        )
+
+        dynamic_connections = []
+        hp_class_name = MoreAdvancedHeatPumpHPLib.get_classname()
+        dynamic_connections.append(
+            DynamicComponentConnection(
+                source_component_class=MoreAdvancedHeatPumpHPLib,
+                source_class_name=hp_class_name,
+                source_component_field_name=MoreAdvancedHeatPumpHPLib.ThermalOutputPowerTotal,
+                source_load_type=lt.LoadTypes.HEATING,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.InandOutputType.HEAT_DELIVERED],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
     def write_to_report(self):
         """Writes relevant information to report."""
         return self.config.get_string_dict()
@@ -233,29 +343,80 @@ class HeatingMeter(DynamicComponent):
         """Simulate the grid energy balancer."""
 
         if timestep == 0:
+            self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_DELIVERED])
             self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_CONSUMPTION])
 
-        # get sum of consumptions of all inputs
-        consumption_uncontrolled_in_watt_hour = sum(
-            [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
-        )
+            # get sum of production and consumption for all inputs for each iteration
+            production_in_watt = (
+                sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
+            )
 
-        # calculate cumulative consumption
-        cumulative_consumption_in_watt_hour = (
-            self.state.cumulative_consumption_in_watt_hour + consumption_uncontrolled_in_watt_hour
-        )
+            consumption_uncontrolled_in_watt = (
+                sum([stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs])
+            )
 
-        # set outputs
+            # Production of Heat positve sign
+            # Consumption of Heat negative sign
+            difference_between_production_and_consumption_in_watt = (
+                    production_in_watt - consumption_uncontrolled_in_watt
+            )
 
-        stsv.set_output_value(
-            self.heat_consumption_channel,
-            consumption_uncontrolled_in_watt_hour,
-        )
-        stsv.set_output_value(
-            self.cumulative_heat_consumption_channel,
-            cumulative_consumption_in_watt_hour,
-        )
-        self.state.cumulative_consumption_in_watt_hour = cumulative_consumption_in_watt_hour
+            # transform watt to watthour
+            production_in_watt_hour = production_in_watt * self.seconds_per_timestep / 3600
+            consumption_uncontrolled_in_watt_hour = consumption_uncontrolled_in_watt * self.seconds_per_timestep / 3600
+            difference_between_production_and_consumption_in_watt_hour = (
+                    production_in_watt_hour - consumption_uncontrolled_in_watt_hour
+            )
+
+            # calculate cumulative production and consumption
+            cumulative_production_in_watt_hour = self.state.cumulative_production_in_watt_hour + production_in_watt_hour
+            cumulative_consumption_in_watt_hour = (
+                    self.state.cumulative_consumption_in_watt_hour + consumption_uncontrolled_in_watt_hour
+            )
+
+            # set outputs
+            stsv.set_output_value(
+                self.heat_available_in_watt_channel,
+                difference_between_production_and_consumption_in_watt,
+            )
+
+            stsv.set_output_value(
+                self.heat_consumption_in_watt_channel,
+                consumption_uncontrolled_in_watt,
+            )
+
+            stsv.set_output_value(
+                self.heat_production_in_watt_channel,
+                production_in_watt,
+            )
+
+            stsv.set_output_value(
+                self.heat_available_channel,
+                difference_between_production_and_consumption_in_watt_hour,
+            )
+
+            stsv.set_output_value(
+                self.heat_consumption_channel,
+                consumption_uncontrolled_in_watt_hour,
+            )
+
+            stsv.set_output_value(
+                self.heat_production_channel,
+                production_in_watt_hour,
+            )
+
+            stsv.set_output_value(
+                self.cumulative_heat_consumption_channel,
+                cumulative_consumption_in_watt_hour,
+            )
+
+            stsv.set_output_value(
+                self.cumulative_heat_production_channel,
+                cumulative_production_in_watt_hour,
+            )
+
+            self.state.cumulative_production_in_watt_hour = cumulative_production_in_watt_hour
+            self.state.cumulative_consumption_in_watt_hour = cumulative_consumption_in_watt_hour
 
     def get_cost_opex(
         self,

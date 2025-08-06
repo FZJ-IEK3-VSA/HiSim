@@ -302,7 +302,6 @@ def setup_function(
         config=my_fuel_meter_config,
     )
 
-
     # Add to simulator
     my_sim.add_component(my_fuel_meter, connect_automatically=True)
 

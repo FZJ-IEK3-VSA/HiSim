@@ -553,6 +553,7 @@ class HeatingMeter(DynamicComponent):
 class HeatingMeterState:
     """HeatingMeterState class."""
 
+    cumulative_production_in_watt_hour: float
     cumulative_consumption_in_watt_hour: float
 
     def self_copy(
@@ -560,5 +561,6 @@ class HeatingMeterState:
     ):
         """Copy the GasMeterState."""
         return HeatingMeterState(
+            self.cumulative_production_in_watt_hour,
             self.cumulative_consumption_in_watt_hour,
         )

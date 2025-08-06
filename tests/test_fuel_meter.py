@@ -14,7 +14,7 @@ from hisim.components import weather
 from hisim.components import (
     building,
     electricity_meter,
-    heating_meter,
+    fuel_meter,
     generic_boiler,
     simple_water_storage,
     heat_distribution_system,
@@ -27,7 +27,7 @@ from hisim import log
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../system_setups/household_for_test_heating_meter.py"
+PATH = "../system_setups/household_for_test_fuel_meter.py"
 
 
 @utils.measure_execution_time
@@ -66,7 +66,7 @@ def test_house(
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
         my_simulation_parameters=my_simulation_parameters,
-        module_filename="household_for_test_heating_meter",
+        module_filename="household_for_test_fuel_meter",
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
     # Set some parameters
@@ -176,14 +176,14 @@ def test_house(
     )
 
     # Build heating Meter
-    my_fuel_meter_config = heating_meter.HeatingMeterConfig.get_heating_meter_default_config(
+    my_fuel_meter_config = fuel_meter.FuelMeterConfig.get_fuel_meter_default_config(
         fuel_loadtype=my_oil_heater_config.energy_carrier,
         heating_value_of_fuel_in_kwh_per_liter=my_oil_heater.heating_value_of_fuel_in_kwh_per_liter,
         fuel_density_in_kg_per_m3=my_oil_heater.fuel_density_in_kg_per_m3,
     )
-    my_heating_meter = heating_meter.HeatingMeter(
+    my_fuel_meter = fuel_meter.FuelMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=my_heating_meter_config,
+        config=my_fuel_meter_config,
     )
 
     # =========================================================================================================================================================
@@ -200,7 +200,7 @@ def test_house(
     my_sim.add_component(my_oil_heater, connect_automatically=True)
 
     my_sim.add_component(my_electricity_meter, connect_automatically=True)
-    my_sim.add_component(my_heating_meter, connect_automatically=True)
+    my_sim.add_component(my_fuel_meter, connect_automatically=True)
 
     my_sim.run_all_timesteps()
 
@@ -217,30 +217,30 @@ def test_house(
 
     jsondata = jsondata["BUI1"]
 
-    heat_consumption_in_kilowatt_hour = jsondata["Heating Meter"]["Total energy consumption"].get("value")
+    heat_consumption_in_kilowatt_hour = jsondata["Fuel Meter"]["Total energy consumption"].get("value")
     oil_consumption_in_kilowatt_hour = jsondata["Oil Boiler"][
         f"Total {my_oil_heater.energy_carrier.value} consumption (energy)"
     ].get("value")
 
-    opex_costs_for_heating_in_euro = jsondata["Heating Meter"]["OPEX - Energy costs"].get("value")
+    opex_costs_for_heating_in_euro = jsondata["Fuel Meter"]["OPEX - Energy costs"].get("value")
 
-    co2_footprint_due_to_heating_use_in_kg = jsondata["Heating Meter"]["OPEX - CO2 Footprint"].get("value")
+    co2_footprint_due_to_heating_use_in_kg = jsondata["Fuel Meter"]["OPEX - CO2 Footprint"].get("value")
 
     log.information(
-        f"Total {my_heating_meter_config.fuel_loadtype.value} consumption [kWh] "
+        f"Total {my_fuel_meter_config.fuel_loadtype.value} consumption [kWh] "
         + str(oil_consumption_in_kilowatt_hour)
     )
 
     log.information(
-        f"Total {my_heating_meter_config.fuel_loadtype.value} consumption measured by heating meter [kWh] "
+        f"Total {my_fuel_meter_config.fuel_loadtype.value} consumption measured by fuel meter [kWh] "
         + str(heat_consumption_in_kilowatt_hour)
     )
     log.information(
-        f"Opex costs for total {my_heating_meter_config.fuel_loadtype.value} consumption [€] "
+        f"Opex costs for total {my_fuel_meter_config.fuel_loadtype.value} consumption [€] "
         + str(opex_costs_for_heating_in_euro)
     )
     log.information(
-        f"CO2 footprint for total {my_heating_meter_config.fuel_loadtype.value} consumption [kg] "
+        f"CO2 footprint for total {my_fuel_meter_config.fuel_loadtype.value} consumption [kg] "
         + str(co2_footprint_due_to_heating_use_in_kg)
     )
 

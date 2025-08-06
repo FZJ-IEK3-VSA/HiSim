@@ -59,7 +59,7 @@ class HeatingMeterConfig(cp.ConfigBase):
             name="HeatingMeter",
             fuel_loadtype=fuel_loadtype,
             heating_value_of_fuel_in_kwh_per_liter=heating_value_of_fuel_in_kwh_per_liter,
-            fuel_density_in_kg_per_m3=fuel_density_in_kg_per_m3
+            fuel_density_in_kg_per_m3=fuel_density_in_kg_per_m3,
         )
 
 
@@ -197,29 +197,29 @@ class HeatingMeter(DynamicComponent):
         self.add_dynamic_default_connections(self.get_default_connections_from_heat_distribution_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
 
-        def get_default_connections_from_heat_distribution_system(
-                self,
-        ):
-            """Get gas heater default connections."""
+    def get_default_connections_from_heat_distribution_system(
+        self,
+    ):
+        """Get gas heater default connections."""
 
-            from hisim.components.heat_distribution_system import (  # pylint: disable=import-outside-toplevel
-                HeatDistribution,
-            )
+        from hisim.components.heat_distribution_system import (  # pylint: disable=import-outside-toplevel
+            HeatDistribution,
+        )
 
-            dynamic_connections = []
-            heat_distribution_class_name = HeatDistribution.get_classname()
-            dynamic_connections.append(
-                DynamicComponentConnection(
-                    source_component_class=HeatDistribution,
-                    source_class_name=heat_distribution_class_name,
-                    source_component_field_name=HeatDistribution.ThermalPowerDelivered,
-                    source_load_type=lt.LoadTypes.HEATING,
-                    source_unit=lt.Units.WATT,
-                    source_tags=[lt.InandOutputType.HEAT_CONSUMPTION],
-                    source_weight=999,
-                )
+        dynamic_connections = []
+        heat_distribution_class_name = HeatDistribution.get_classname()
+        dynamic_connections.append(
+            DynamicComponentConnection(
+                source_component_class=HeatDistribution,
+                source_class_name=heat_distribution_class_name,
+                source_component_field_name=HeatDistribution.ThermalPowerDelivered,
+                source_load_type=lt.LoadTypes.HEATING,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.InandOutputType.HEAT_CONSUMPTION],
+                source_weight=999,
             )
-            return dynamic_connections
+        )
+        return dynamic_connections
 
     def get_default_connections_from_generic_district_heating(
         self,
@@ -296,7 +296,7 @@ class HeatingMeter(DynamicComponent):
         return dynamic_connections
 
     def get_default_connections_from_more_advanced_heat_pump(
-            self,
+        self,
     ):
         """Get gas heater default connections."""
 
@@ -347,31 +347,29 @@ class HeatingMeter(DynamicComponent):
             self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_CONSUMPTION])
 
             # get sum of production and consumption for all inputs for each iteration
-            production_in_watt = (
-                sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
-            )
+            production_in_watt = sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
 
-            consumption_uncontrolled_in_watt = (
-                sum([stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs])
+            consumption_uncontrolled_in_watt = sum(
+                [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
             )
 
             # Production of Heat positve sign
             # Consumption of Heat negative sign
             difference_between_production_and_consumption_in_watt = (
-                    production_in_watt - consumption_uncontrolled_in_watt
+                production_in_watt - consumption_uncontrolled_in_watt
             )
 
             # transform watt to watthour
             production_in_watt_hour = production_in_watt * self.seconds_per_timestep / 3600
             consumption_uncontrolled_in_watt_hour = consumption_uncontrolled_in_watt * self.seconds_per_timestep / 3600
             difference_between_production_and_consumption_in_watt_hour = (
-                    production_in_watt_hour - consumption_uncontrolled_in_watt_hour
+                production_in_watt_hour - consumption_uncontrolled_in_watt_hour
             )
 
             # calculate cumulative production and consumption
             cumulative_production_in_watt_hour = self.state.cumulative_production_in_watt_hour + production_in_watt_hour
             cumulative_consumption_in_watt_hour = (
-                    self.state.cumulative_consumption_in_watt_hour + consumption_uncontrolled_in_watt_hour
+                self.state.cumulative_consumption_in_watt_hour + consumption_uncontrolled_in_watt_hour
             )
 
             # set outputs
@@ -441,6 +439,9 @@ class HeatingMeter(DynamicComponent):
                 total_heat_consumed_in_kwh / self.config.heating_value_of_fuel_in_kwh_per_liter, 1
             )
             fuel_consumption_in_kg = round(fuel_consumption_in_liter * 1e-3 * self.config.fuel_density_in_kg_per_m3, 1)
+        else:
+            fuel_consumption_in_liter = 0.0
+            fuel_consumption_in_kg = 0.0
 
         if self.config.fuel_loadtype in [lt.LoadTypes.HEATING, lt.LoadTypes.COOLING]:
 

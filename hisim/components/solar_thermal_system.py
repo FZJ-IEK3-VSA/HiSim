@@ -51,7 +51,6 @@ class SolarThermalSystemConfig(ConfigBase):
     building_name: str
     name: str
     coordinates: Coordinates
-    year: int
 
     # Module configuration
     azimuth: float
@@ -85,7 +84,6 @@ class SolarThermalSystemConfig(ConfigBase):
         cls,
         building_name: str = "BUI1",
         coordinates: Coordinates = Coordinates(latitude=50.78, longitude=6.08),
-        year: int = 2024,
         azimuth: float = 180.0,
         tilt: float = 30.0,
         area_m2: float = 1.5,
@@ -100,7 +98,6 @@ class SolarThermalSystemConfig(ConfigBase):
             building_name=building_name,
             coordinates=coordinates,
             name="SolarThermalSystem",
-            year=year,
             azimuth=azimuth,
             tilt=tilt,
             area_m2=area_m2,  # m2
@@ -126,7 +123,6 @@ class SolarThermalSystemConfig(ConfigBase):
         cls,
         building_name: str = "BUI1",
         coordinates: Coordinates = Coordinates(latitude=50.78, longitude=6.08),
-        year: int = 2024,
         azimuth: float = 180.0,
         tilt: float = 30.0,
         area_m2: float = 1.5,
@@ -141,7 +137,6 @@ class SolarThermalSystemConfig(ConfigBase):
             building_name=building_name,
             coordinates=coordinates,
             name="SolarThermalSystem",
-            year=year,
             azimuth=azimuth,
             tilt=tilt,
             area_m2=area_m2,  # m2

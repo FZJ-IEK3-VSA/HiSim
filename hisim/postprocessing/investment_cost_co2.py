@@ -2,6 +2,7 @@
 
 Functions from this file are called in Postprocessing option compute_kpis.
 """
+
 # clean
 from typing import List, Tuple
 import pandas as pd
@@ -33,7 +34,9 @@ def read_in_component_costs() -> pd.DataFrame:
     return price_frame
 
 
-def compute_investment_cost(components: List[ComponentWrapper],) -> Tuple[float, float]:
+def compute_investment_cost(
+    components: List[ComponentWrapper],
+) -> Tuple[float, float]:
     """Iterates over all components and computes annual investment cost and annual C02 footprint respectively.
 
     :param components: List of all configured components in the HiSIM system setup.

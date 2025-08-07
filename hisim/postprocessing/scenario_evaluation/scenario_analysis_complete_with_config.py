@@ -1,4 +1,5 @@
 """Data Collection for Scenario Comparison."""
+
 # clean
 import time
 import os
@@ -18,7 +19,6 @@ from hisim import log
 @dataclass_json
 @dataclass
 class ScenarioAnalysisConfig(ConfigBase):
-
     """Configuration for running a scenario analysis."""
 
     building_name: str
@@ -69,7 +69,6 @@ class ScenarioAnalysisConfig(ConfigBase):
 
 
 class ScenarioAnalysisWithConfig:
-
     """ScenarioAnalysis class which executes result data collection, processing and plotting."""
 
     def __init__(self, scenario_analysis_config: ScenarioAnalysisConfig) -> None:

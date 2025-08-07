@@ -1206,7 +1206,11 @@ class PostProcessor:
                 annualized_heating_fuels_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="CO2 footprint of other heating fuels for simulated period"
                 )
-                annualized_energy_co2_emissions_in_kg = annualized_electricity_co2_emissions_in_kg + annualized_gas_co2_emissions_in_kg + annualized_heating_fuels_co2_emissions_in_kg
+                annualized_energy_co2_emissions_in_kg = (
+                    annualized_electricity_co2_emissions_in_kg
+                    + annualized_gas_co2_emissions_in_kg
+                    + annualized_heating_fuels_co2_emissions_in_kg
+                )
 
                 # Other
                 self_sufficiency_rate_electricity_in_percent = get_kpi_entries_for_building_sizer(
@@ -1231,10 +1235,12 @@ class PostProcessor:
                     data=kpi_collection_dict, target_key="Maximum building indoor air temperature reached"
                 )
                 deviation_from_minimum_indoor_temperature_in_celsius_hour = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius"
+                    data=kpi_collection_dict,
+                    target_key="Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius",
                 )
                 deviation_from_maximum_indoor_temperature_in_celsius_hour = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius"
+                    data=kpi_collection_dict,
+                    target_key="Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius",
                 )
 
                 # initialize json interface to pass kpi's to building_sizer
@@ -1243,26 +1249,42 @@ class PostProcessor:
                     self_sufficiency_rate_all_energy_in_percent=self_sufficiency_rate_all_energy_in_percent,
                     annualized_total_costs_in_euro_per_m2=annualized_total_costs_in_euro / conditioned_floor_area_in_m2,
                     total_upfront_net_investment_costs_in_euro=total_upfront_net_investment_costs_in_euro,
-                    annualized_total_co2_emissions_in_kg_per_m2=annualized_total_co2_emissions_in_kg / conditioned_floor_area_in_m2,
-                    annualized_co2_emissions_for_devices_in_kg_per_m2=annualized_co2_emissions_from_devices_in_kg / conditioned_floor_area_in_m2,
-                    annualized_energy_co2_emissions_in_kg_per_m2=annualized_energy_co2_emissions_in_kg / conditioned_floor_area_in_m2,
-                    annualized_electricity_co2_emissions_in_kg_per_m2=annualized_electricity_co2_emissions_in_kg / conditioned_floor_area_in_m2,
-                    annualized_gas_co2_emissions_in_kg_per_m2=annualized_gas_co2_emissions_in_kg / conditioned_floor_area_in_m2,
-                    annualized_heat_co2_emissions_in_kg_per_m2=annualized_heating_fuels_co2_emissions_in_kg / conditioned_floor_area_in_m2,
-                    annualized_energy_costs_in_euro_per_m2=total_annualized_energy_costs_in_euro / conditioned_floor_area_in_m2,
-                    annualized_electricity_costs_in_euro_per_m2=annualzed_energy_costs_electricity_in_euro / conditioned_floor_area_in_m2,
-                    annualized_gas_costs_in_euro_per_m2=annualized_energy_costs_gas_in_euro / conditioned_floor_area_in_m2,
-                    annualized_heat_costs_in_euro_per_m2=annualized_energy_costs_heating_fuels_in_euro / conditioned_floor_area_in_m2,
-                    annualized_maintenance_costs_in_euro_per_m2=annualized_maintenance_costs_in_euro / conditioned_floor_area_in_m2,
-                    annualized_investment_costs_in_euro_per_m2=annualized_investment_costs_in_euro / conditioned_floor_area_in_m2,
-                    annualized_net_investment_costs_in_euro_per_m2=annualized_net_investment_costs_in_euro / conditioned_floor_area_in_m2,
-                    annualized_purchased_energy_consumption_in_kwh_per_m2=annualized_purchased_energy_consumption_in_kwh / conditioned_floor_area_in_m2,
-                    annualized_electricity_to_grid_in_kwh_per_m2=annualized_electricity_to_grid_in_kwh / conditioned_floor_area_in_m2,
-                    annualized_electricity_from_grid_in_kwh_per_m2=annualized_electricity_from_grid_in_kwh / conditioned_floor_area_in_m2,
+                    annualized_total_co2_emissions_in_kg_per_m2=annualized_total_co2_emissions_in_kg
+                    / conditioned_floor_area_in_m2,
+                    annualized_co2_emissions_for_devices_in_kg_per_m2=annualized_co2_emissions_from_devices_in_kg
+                    / conditioned_floor_area_in_m2,
+                    annualized_energy_co2_emissions_in_kg_per_m2=annualized_energy_co2_emissions_in_kg
+                    / conditioned_floor_area_in_m2,
+                    annualized_electricity_co2_emissions_in_kg_per_m2=annualized_electricity_co2_emissions_in_kg
+                    / conditioned_floor_area_in_m2,
+                    annualized_gas_co2_emissions_in_kg_per_m2=annualized_gas_co2_emissions_in_kg
+                    / conditioned_floor_area_in_m2,
+                    annualized_heat_co2_emissions_in_kg_per_m2=annualized_heating_fuels_co2_emissions_in_kg
+                    / conditioned_floor_area_in_m2,
+                    annualized_energy_costs_in_euro_per_m2=total_annualized_energy_costs_in_euro
+                    / conditioned_floor_area_in_m2,
+                    annualized_electricity_costs_in_euro_per_m2=annualzed_energy_costs_electricity_in_euro
+                    / conditioned_floor_area_in_m2,
+                    annualized_gas_costs_in_euro_per_m2=annualized_energy_costs_gas_in_euro
+                    / conditioned_floor_area_in_m2,
+                    annualized_heat_costs_in_euro_per_m2=annualized_energy_costs_heating_fuels_in_euro
+                    / conditioned_floor_area_in_m2,
+                    annualized_maintenance_costs_in_euro_per_m2=annualized_maintenance_costs_in_euro
+                    / conditioned_floor_area_in_m2,
+                    annualized_investment_costs_in_euro_per_m2=annualized_investment_costs_in_euro
+                    / conditioned_floor_area_in_m2,
+                    annualized_net_investment_costs_in_euro_per_m2=annualized_net_investment_costs_in_euro
+                    / conditioned_floor_area_in_m2,
+                    annualized_purchased_energy_consumption_in_kwh_per_m2=annualized_purchased_energy_consumption_in_kwh
+                    / conditioned_floor_area_in_m2,
+                    annualized_electricity_to_grid_in_kwh_per_m2=annualized_electricity_to_grid_in_kwh
+                    / conditioned_floor_area_in_m2,
+                    annualized_electricity_from_grid_in_kwh_per_m2=annualized_electricity_from_grid_in_kwh
+                    / conditioned_floor_area_in_m2,
                     minimum_indoor_temperature_in_celsius=minimum_indoor_temperature_in_celsius,
                     maximum_indoor_temperature_in_celsius=maximum_indoor_temperature_in_celsius,
                     deviation_from_max_indoor_temperature_in_celsius_hour=deviation_from_maximum_indoor_temperature_in_celsius_hour,
-                    deviation_from_min_indoor_temperature_in_celsius_hour=deviation_from_minimum_indoor_temperature_in_celsius_hour
+                    deviation_from_min_indoor_temperature_in_celsius_hour=deviation_from_minimum_indoor_temperature_in_celsius_hour,
                 )
 
                 kpi_dict = kpi_config.to_dict()  # type: ignore

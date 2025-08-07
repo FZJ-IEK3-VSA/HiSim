@@ -20,7 +20,6 @@ from hisim import log
 
 
 class ScenarioChartGeneration:
-
     """ScenarioChartGeneration class."""
 
     def __init__(
@@ -348,7 +347,8 @@ class ScenarioChartGeneration:
         x_data_transformed = np.asarray(x_data, dtype="datetime64[D]")
 
         color, edgecolor = self.set_plot_colors_according_to_data_processing_mode(
-            number_of_scenarios=len(x_and_y_plot_data.columns[1:]), data_processing_mode=self.data_processing_mode,
+            number_of_scenarios=len(x_and_y_plot_data.columns[1:]),
+            data_processing_mode=self.data_processing_mode,
         )
         del edgecolor
         # make one line for each scenario
@@ -816,35 +816,43 @@ class ScenarioChartGeneration:
         # y-ticks
         y_tick_labels, y_axis_unit, y_tick_locations = self.set_axis_scale(a_x=a_x, x_or_y="y", unit=y_axis_unit)
         plt.yticks(
-            ticks=y_tick_locations, labels=y_tick_labels, fontsize=self.hisim_chartbase.fontsize_ticks,
+            ticks=y_tick_locations,
+            labels=y_tick_labels,
+            fontsize=self.hisim_chartbase.fontsize_ticks,
         )
 
         # y-label
         if y_axis_label != "" and y_axis_unit != "":
             plt.ylabel(
-                ylabel=f"{y_axis_label} \n [{y_axis_unit}]", fontsize=self.hisim_chartbase.fontsize_label,
+                ylabel=f"{y_axis_label} \n [{y_axis_unit}]",
+                fontsize=self.hisim_chartbase.fontsize_label,
             )
         elif y_axis_label != "" and y_axis_unit == "":
             plt.ylabel(
-                ylabel=f"{y_axis_label}", fontsize=self.hisim_chartbase.fontsize_label,
+                ylabel=f"{y_axis_label}",
+                fontsize=self.hisim_chartbase.fontsize_label,
             )
         else:
             plt.ylabel(
-                ylabel=f"[{y_axis_unit}]", fontsize=self.hisim_chartbase.fontsize_label,
+                ylabel=f"[{y_axis_unit}]",
+                fontsize=self.hisim_chartbase.fontsize_label,
             )
 
         # x-label
         if x_axis_label != "" and x_axis_unit != "":
             plt.xlabel(
-                xlabel=f"{x_axis_label} \n [{x_axis_unit}]", fontsize=self.hisim_chartbase.fontsize_label,
+                xlabel=f"{x_axis_label} \n [{x_axis_unit}]",
+                fontsize=self.hisim_chartbase.fontsize_label,
             )
         elif x_axis_label != "" and x_axis_unit == "":
             plt.xlabel(
-                xlabel=f"{x_axis_label}", fontsize=self.hisim_chartbase.fontsize_label,
+                xlabel=f"{x_axis_label}",
+                fontsize=self.hisim_chartbase.fontsize_label,
             )
         elif x_axis_label == "" and x_axis_unit != "":
             plt.xlabel(
-                xlabel=f"[{x_axis_unit}]", fontsize=self.hisim_chartbase.fontsize_label,
+                xlabel=f"[{x_axis_unit}]",
+                fontsize=self.hisim_chartbase.fontsize_label,
             )
         else:
             pass
@@ -869,11 +877,14 @@ class ScenarioChartGeneration:
             if legend_labels is None:
                 plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
             else:
-                plt.legend(legend_labels,)
+                plt.legend(
+                    legend_labels,
+                )
 
         # save and close
         fig.savefig(
-            os.path.join(self.plot_path_complete, f"{plot_type_name}.png"), bbox_inches="tight",
+            os.path.join(self.plot_path_complete, f"{plot_type_name}.png"),
+            bbox_inches="tight",
         )
         plt.close()
 

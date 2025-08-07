@@ -1,4 +1,5 @@
-""" Module for generating reports. """
+"""Module for generating reports."""
+
 # clean
 import copy
 import time
@@ -16,7 +17,6 @@ from hisim import utils
 
 
 class MyDocTemplate(BaseDocTemplate):
-
     """MyDocTemplate class."""
 
     def __init__(self, filename, **kw):
@@ -48,7 +48,6 @@ class MyDocTemplate(BaseDocTemplate):
 
 
 class ReportGenerator:
-
     """Class for generating reports."""
 
     def __init__(self, dirpath: str) -> None:
@@ -67,7 +66,12 @@ class ReportGenerator:
     def open(self):
         """Open a file."""
         self.doc = MyDocTemplate(
-            self.filepath, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18,
+            self.filepath,
+            pagesize=letter,
+            rightMargin=72,
+            leftMargin=72,
+            topMargin=72,
+            bottomMargin=18,
         )
 
         self.styles = getSampleStyleSheet()

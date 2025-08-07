@@ -33,7 +33,7 @@ class KPIForRatingInOptimization(str, enum.Enum):
     MAX_BUILDING_INDOOR_TEMP = "Maximum Indoor Temperature [°C]"
     DEV_FROM_MIN_BUILDING_INDOOR_TEMP = "Devation From Minimum Indoor Temperature [°C*h]"
     DEV_FROM_MAX_BUILDING_INDOOR_TEMP = "Devation From Maximum Indoor Temperature [°C*h]"
-    
+
 
 # pylint: disable=too-many-return-statements
 @dataclass_json
@@ -84,7 +84,6 @@ class KPIConfig:
     maximum_indoor_temperature_in_celsius: float
     deviation_from_min_indoor_temperature_in_celsius_hour: float
     deviation_from_max_indoor_temperature_in_celsius_hour: float
-
 
     def get_kpi_for_rating(self, chosen_kpi: KPIForRatingInOptimization) -> float:
         """Weights all kpis to get one value evaluating the performance of one building configuration.

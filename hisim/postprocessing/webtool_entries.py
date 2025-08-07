@@ -81,10 +81,14 @@ class WebtoolDict(JSONWizard):
                 if "total" in computed_values_row[0].lower():
                     # Skip rows with total values.
                     continue
-                selected_computed_values_row = computed_values_row[-3:]  # this is adapted according to length of categories
+                selected_computed_values_row = computed_values_row[
+                    -3:
+                ]  # this is adapted according to length of categories
                 for idx_column, computed_values_item in enumerate(selected_computed_values_row):
                     if len(selected_computed_values_row) != len(categories):
-                        raise ValueError(f"Index and value length mismatch: {len(selected_computed_values_row)} vs {len(categories)}.")
+                        raise ValueError(
+                            f"Index and value length mismatch: {len(selected_computed_values_row)} vs {len(categories)}."
+                        )
                     # Get component name
                     this_component = computed_values_row[0]
                     # Skip components that should not be displayed
@@ -102,7 +106,8 @@ class WebtoolDict(JSONWizard):
                             raise ValueError(f"Key {computed_values_key} cannot be reformatted.") from exc
                     # Create result entry
                     result_entry = ResultEntry(
-                        name=computed_values_name, unit=computed_values_unit, description="", value=computed_values_item)
+                        name=computed_values_name, unit=computed_values_unit, description="", value=computed_values_item
+                    )
 
                     # Save to dict
                     self.components[this_component][categories[idx_column]].update({computed_values_name: result_entry})
@@ -119,9 +124,9 @@ class WebtoolDict(JSONWizard):
         # Get bools that tells if the components should be displayed in webtool
         component_display_in_webtool_dict: Dict[str, bool] = {}
         for component in post_processing_data_transfer.wrapped_components:
-            component_display_in_webtool_dict[
-                component.my_component.component_name
-            ] = component.my_component.my_display_config.display_in_webtool
+            component_display_in_webtool_dict[component.my_component.component_name] = (
+                component.my_component.my_display_config.display_in_webtool
+            )
 
         # Read data from PostProcessingDataTransfer and save to results
         data: pd.DataFrame = post_processing_data_transfer.results_cumulative

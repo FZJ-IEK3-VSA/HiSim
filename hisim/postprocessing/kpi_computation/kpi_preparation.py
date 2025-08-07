@@ -569,6 +569,27 @@ class KpiPreparation:
             {ratio_in_percent_entry.name: ratio_in_percent_entry.to_dict()}
         )
 
+    def get_total_energy_self_sufficiency(self,
+                                          self_sufficency_rate_for_electricity_in_percent: float,
+                                          total_electricity_consumption_in_kwh: float,
+                                          gas_demand_from_grid_in_kwh: float,
+                                          total_gas_consumption_in_kwh: float,
+                                          heat_consumption_in_kwh: float):
+        """Calculate self-sufficiency including all energy consumptions for all loadtypes.
+
+        Please note that the heating meter has a self-sufficiency of 0% (all energy is pruchased).
+        """
+        total_energy_consumption_in_kwh = total_electricity_consumption_in_kwh + total_gas_consumption_in_kwh + heat_consumption_in_kwh
+        self_sufficiency_gas_in_percent = (1 - gas_demand_from_grid_in_kwh / total_gas_consumption_in_kwh) * 100 if total_gas_consumption_in_kwh != 0 else 0
+        self_suffciency_heat_in_percent = 0
+        total_self_sufficient_energy_consumption_in_kwh = (
+            self_sufficency_rate_for_electricity_in_percent * total_electricity_consumption_in_kwh
+            + self_sufficiency_gas_in_percent * total_gas_consumption_in_kwh
+            + self_suffciency_heat_in_percent * heat_consumption_in_kwh
+        )
+        total_energy_self_sufficiency_in_percent = total_self_sufficient_energy_consumption_in_kwh / total_energy_consumption_in_kwh
+        return round(total_energy_self_sufficiency_in_percent, 2)
+
     def read_opex_and_capex_costs_from_results(self, building_object: str) -> None:
         """Get CAPEX and OPEX costs for simulated period.
 
@@ -581,6 +602,7 @@ class KpiPreparation:
         gas_costs_in_euro: float = 0
         gas_co2_in_kg: float = 0
         gas_from_grid_in_kwh: float = 0
+        total_gas_consumption_in_kwh: float = 0
         heating_costs_in_euro: float = 0
         heating_co2_in_kg: float = 0
         energy_consumption_kwh: float = 0
@@ -601,6 +623,8 @@ class KpiPreparation:
                     gas_co2_in_kg = kpi_entry["value"]
                 if kpi_name == "Total gas demand from grid":
                     gas_from_grid_in_kwh = kpi_entry["value"]
+                if kpi_name == "Total gas consumption":
+                    total_gas_consumption_in_kwh = kpi_entry["value"]
 
             elif kpi_entry["tag"] == KpiTagEnumClass.HEATING_METER.value:
                 if kpi_name == "OPEX - Energy costs":
@@ -610,6 +634,14 @@ class KpiPreparation:
                 if kpi_name == "Total energy consumption":
                     energy_consumption_kwh = kpi_entry["value"]
 
+        # calculate total energy self-suffciency for gas, heat and electricity
+        total_energy_self_sufficiency_in_percent = self.get_total_energy_self_sufficiency(
+            self_sufficency_rate_for_electricity_in_percent=self.kpi_collection_dict_unsorted[building_object]["Self-sufficiency rate according to solar htw berlin"]["value"],
+            total_electricity_consumption_in_kwh=self.kpi_collection_dict_unsorted[building_object]["Total electricity consumption"]["value"],
+            gas_demand_from_grid_in_kwh=gas_from_grid_in_kwh,
+            total_gas_consumption_in_kwh=total_gas_consumption_in_kwh,
+            heat_consumption_in_kwh=energy_consumption_kwh
+        )
         # get CAPEX and OPEX costs for simulated period
         capex_results_path = os.path.join(
             self.simulation_parameters.result_directory, "investment_cost_co2_footprint.csv"
@@ -658,6 +690,9 @@ class KpiPreparation:
                 total_rest_investment_cost_per_simulated_period = capex_df["Rest-Investment for simulated period [EUR]"].loc[
                     building_object + "_Total"
                 ]
+                total_rest_investment_cost_upfront = capex_df["Rest-Investment [EUR]"].loc[
+                    building_object + "_Total"
+                ]
                 total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
                     building_object + "_Total"
                 ]
@@ -686,6 +721,9 @@ class KpiPreparation:
                 total_rest_investment_cost_per_simulated_period = capex_df["Rest-Investment for simulated period [EUR]"].loc[
                     "Total"
                 ]
+                total_rest_investment_cost_upfront = capex_df["Rest-Investment [EUR]"].loc[
+                    "Total"
+                ]
                 total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
                     "Total"
                 ]
@@ -711,6 +749,7 @@ class KpiPreparation:
             log.warning("CAPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_CAPEX")
             total_investment_cost_per_simulated_period = 0
             total_rest_investment_cost_per_simulated_period = 0
+            total_rest_investment_cost_upfront = 0
             total_device_co2_footprint_per_simulated_period = 0
             total_investment_cost_per_simulated_period_without_hp = 0
             total_rest_investment_cost_per_simulated_period_without_hp = 0
@@ -780,6 +819,14 @@ class KpiPreparation:
                 else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
             ),
         )
+        total_energy_self_sufficiency_entry = KpiEntry(
+            name="Total energy self-suffiency rate",
+            unit="%",
+            value=total_energy_self_sufficiency_in_percent,
+            tag=(
+                KpiTagEnumClass.GENERAL
+            ),
+        )
         total_investment_cost_per_simulated_period_entry = KpiEntry(
             name="Investment costs for equipment per simulated period",
             unit="EUR",
@@ -794,6 +841,16 @@ class KpiPreparation:
             name="Investment costs for equipment per simulated period minus subsidies",
             unit="EUR",
             value=total_rest_investment_cost_per_simulated_period,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if not any(word in building_object for word in DistrictNames)
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
+        )
+        total_rest_investment_cost_upfront_entry = KpiEntry(
+            name="Investment costs upfront for equipment period minus subsidies",
+            unit="EUR",
+            value=total_rest_investment_cost_upfront,
             tag=(
                 KpiTagEnumClass.COSTS
                 if not any(word in building_object for word in DistrictNames)
@@ -1014,9 +1071,11 @@ class KpiPreparation:
                 total_heat_co2_emissions_entry.name: total_heat_co2_emissions_entry.to_dict(),
                 total_investment_cost_per_simulated_period_entry.name: total_investment_cost_per_simulated_period_entry.to_dict(),
                 total_rest_investment_cost_per_simulated_period_entry.name: total_rest_investment_cost_per_simulated_period_entry.to_dict(),
+                total_rest_investment_cost_upfront_entry.name: total_rest_investment_cost_upfront_entry.to_dict(),
                 total_device_co2_footprint_per_simulated_period_entry.name: total_device_co2_footprint_per_simulated_period_entry.to_dict(),
                 total_energy_cost_entry.name: total_energy_cost_entry.to_dict(),
                 total_energy_consumption_entry.name: total_energy_consumption_entry.to_dict(),
+                total_energy_self_sufficiency_entry.name: total_energy_self_sufficiency_entry.to_dict(),
                 total_maintenance_cost_entry.name: total_maintenance_cost_entry.to_dict(),
                 total_cost_entry.name: total_cost_entry.to_dict(),
                 total_emissions_entry.name: total_emissions_entry.to_dict(),

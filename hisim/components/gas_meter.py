@@ -368,12 +368,14 @@ class GasMeter(DynamicComponent):
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         total_energy_from_grid_in_kwh: Optional[float] = None
+        total_energy_consumption_in_kwh: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.load_type == self.config.gas_loadtype and output.unit == lt.Units.WATT_HOUR:
                 if output.field_name == self.GasFromGrid:
                     total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
-                    break
+                elif output.field_name == self.GasConsumption:
+                    total_energy_consumption_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
 
         total_energy_from_grid_in_kwh_entry = KpiEntry(
             name="Total gas demand from grid",
@@ -383,6 +385,15 @@ class GasMeter(DynamicComponent):
             description=self.component_name,
         )
         list_of_kpi_entries.append(total_energy_from_grid_in_kwh_entry)
+        total_energy_consumption_in_kwh_entry = KpiEntry(
+            name="Total gas consumption",
+            unit="kWh",
+            value=total_energy_consumption_in_kwh,
+            tag=KpiTagEnumClass.GAS_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(total_energy_consumption_in_kwh_entry)
+
         # try to get opex costs
         opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
         opex_costs_in_euro_entry = KpiEntry(

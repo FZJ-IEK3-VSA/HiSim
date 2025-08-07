@@ -21,7 +21,7 @@ from hisim.components import (
     generic_district_heating,
     electricity_meter,
     simple_water_storage,
-    heating_meter,
+    fuel_meter,
 )
 from hisim.components.heat_distribution_system import PositionHotWaterStorageInSystemSetup
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
@@ -306,15 +306,16 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
 
     # Build Heating Meter
-    my_heating_meter_config = heating_meter.HeatingMeterConfig.get_heating_meter_default_config(
+    my_fuel_meter_config = fuel_meter.FuelMeterConfig.get_fuel_meter_default_config(
         fuel_loadtype=lt.LoadTypes.DISTRICTHEATING
     )
-    my_heating_meter = heating_meter.HeatingMeter(
+    my_fuel_meter = fuel_meter.FuelMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=my_heating_meter_config,
+        config=my_fuel_meter_config,
     )
+
     # Add to simulator
-    my_sim.add_component(my_heating_meter, connect_automatically=True)
+    my_sim.add_component(my_fuel_meter, connect_automatically=True)
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(

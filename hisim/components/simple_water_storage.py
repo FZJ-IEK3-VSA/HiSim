@@ -116,44 +116,25 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         max_thermal_power_in_watt_of_heating_system: float,
         name: str = "SimpleHotWaterStorage",
         building_name: str = "BUI1",
-        temperature_difference_between_flow_and_return_in_celsius: float = 7.0,
         sizing_option: HotWaterStorageSizingEnum = HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM,
     ) -> "SimpleHotWaterStorageConfig":
         """Gets a default storage with scaling according to heating load of the building_name.
 
         The information for scaling the buffer storage is taken from the heating system guidelines from Buderus:
         https://www.baunetzwissen.de/heizung/fachwissen/speicher/dimensionierung-von-pufferspeichern-161296
+        Or from here:
+        https://www.flexiheatuk.com/buffer-vessel-sizing-for-hydronic-heating-systems/#:~:text=20%2D25%20litres%20per%20kW,kW%20for%20heat%20pump%20systems
 
-        - If the heating system is a heat pump -> use formular:
-        buffer storage size [m3] =
-        (max. thermal power of heat pump [kW]* bridging time [h])
-        /
-        (spec. heat capacity water [Wh/(kg*K)]* temperature difference flow-return [K])
-        with bridging time = 1h
-        You can also check the paper:
-        https://www.sciencedirect.com/science/article/pii/S2352152X2201533X?via%3Dihub.
-
-        - If the heating system is something else (e.g. gasheater, ...), use approximation: 60 l per kW thermal power.
         """
 
         # if the used heating system is a heat pump use formular
         if sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP:
-            # volume_heating_water_storage_in_liter: float = (
-            #     max_thermal_power_in_watt_of_heating_system
-            #     * 1e-3
-            #     / (
-            #         PhysicsConfig.get_properties_for_energy_carrier(
-            #             energy_carrier=lt.LoadTypes.WATER
-            #         ).specific_heat_capacity_in_watthour_per_kg_per_kelvin
-            #         * temperature_difference_between_flow_and_return_in_celsius
-            #     )
-            # ) * 1000  # 1m3 = 1000l
+
             volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 50
             # https://www.flexiheatuk.com/buffer-vessel-sizing-for-hydronic-heating-systems/#:~:text=20%2D25%20litres%20per%20kW,kW%20for%20heat%20pump%20systems
 
         # otherwise use approximation: 60l per kw thermal power
         elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM:
-            # volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 60
             volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 20
 
         # large storage for pellet heating to avoid frequent on-off
@@ -162,7 +143,6 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
 
         # large storage even more important than for pellets, as on-off behavior should be avoided
         elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_WOOD_CHIP_HEATING:
-            # volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 100
             volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 50
 
         # or for gas heaters make hws smaller because gas heaters are a bigger inertia than heat pump

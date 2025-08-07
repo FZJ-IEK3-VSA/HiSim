@@ -31,6 +31,7 @@ class KpiTagEnumClass(Enum):
     DISTRICT_HEATING = "District Heating"
     GAS_METER = "Gas Meter"
     HEATING_METER = "Heating Meter"
+    FUEL_METER = "Fuel Meter"
     ELECTRICITY_METER = "Electricity Meter"
     CAR = "Car"
     CAR_BATTERY = "Car Battery"

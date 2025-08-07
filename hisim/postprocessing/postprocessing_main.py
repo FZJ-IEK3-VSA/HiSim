@@ -1181,8 +1181,8 @@ class PostProcessor:
                 annualized_energy_costs_gas_in_euro = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Costs of grid gas for simulated period"
                 )
-                annualized_energy_costs_heat_in_euro = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Costs of grid heat for simulated period"
+                annualized_energy_costs_heating_fuels_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Costs of other heating fuels for simulated period"
                 )
                 # Maintenance costs
                 annualized_maintenance_costs_in_euro = get_kpi_entries_for_building_sizer(
@@ -1203,10 +1203,10 @@ class PostProcessor:
                 annualized_gas_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="CO2 footprint of grid gas for simulated period"
                 )
-                annualized_heat_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="CO2 footprint of grid heat consumption for simulated period"
+                annualized_heating_fuels_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="CO2 footprint of other heating fuels for simulated period"
                 )
-                annualized_energy_co2_emissions_in_kg = annualized_electricity_co2_emissions_in_kg + annualized_gas_co2_emissions_in_kg + annualized_heat_co2_emissions_in_kg
+                annualized_energy_co2_emissions_in_kg = annualized_electricity_co2_emissions_in_kg + annualized_gas_co2_emissions_in_kg + annualized_heating_fuels_co2_emissions_in_kg
 
                 # Other
                 self_sufficiency_rate_electricity_in_percent = get_kpi_entries_for_building_sizer(
@@ -1248,11 +1248,11 @@ class PostProcessor:
                     annualized_energy_co2_emissions_in_kg_per_m2=annualized_energy_co2_emissions_in_kg / conditioned_floor_area_in_m2,
                     annualized_electricity_co2_emissions_in_kg_per_m2=annualized_electricity_co2_emissions_in_kg / conditioned_floor_area_in_m2,
                     annualized_gas_co2_emissions_in_kg_per_m2=annualized_gas_co2_emissions_in_kg / conditioned_floor_area_in_m2,
-                    annualized_heat_co2_emissions_in_kg_per_m2=annualized_heat_co2_emissions_in_kg / conditioned_floor_area_in_m2,
+                    annualized_heat_co2_emissions_in_kg_per_m2=annualized_heating_fuels_co2_emissions_in_kg / conditioned_floor_area_in_m2,
                     annualized_energy_costs_in_euro_per_m2=total_annualized_energy_costs_in_euro / conditioned_floor_area_in_m2,
                     annualized_electricity_costs_in_euro_per_m2=annualzed_energy_costs_electricity_in_euro / conditioned_floor_area_in_m2,
                     annualized_gas_costs_in_euro_per_m2=annualized_energy_costs_gas_in_euro / conditioned_floor_area_in_m2,
-                    annualized_heat_costs_in_euro_per_m2=annualized_energy_costs_heat_in_euro / conditioned_floor_area_in_m2,
+                    annualized_heat_costs_in_euro_per_m2=annualized_energy_costs_heating_fuels_in_euro / conditioned_floor_area_in_m2,
                     annualized_maintenance_costs_in_euro_per_m2=annualized_maintenance_costs_in_euro / conditioned_floor_area_in_m2,
                     annualized_investment_costs_in_euro_per_m2=annualized_investment_costs_in_euro / conditioned_floor_area_in_m2,
                     annualized_net_investment_costs_in_euro_per_m2=annualized_net_investment_costs_in_euro / conditioned_floor_area_in_m2,

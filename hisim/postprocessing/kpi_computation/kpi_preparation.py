@@ -574,18 +574,18 @@ class KpiPreparation:
                                           total_electricity_consumption_in_kwh: float,
                                           gas_demand_from_grid_in_kwh: float,
                                           total_gas_consumption_in_kwh: float,
-                                          heat_consumption_in_kwh: float):
+                                          other_fuel_consumption_in_kwh: float):
         """Calculate self-sufficiency including all energy consumptions for all loadtypes.
 
-        Please note that the heating meter has a self-sufficiency of 0% (all energy is pruchased).
+        Please note that the fuel meter has a self-sufficiency of 0% (all energy is pruchased).
         """
-        total_energy_consumption_in_kwh = total_electricity_consumption_in_kwh + total_gas_consumption_in_kwh + heat_consumption_in_kwh
+        total_energy_consumption_in_kwh = total_electricity_consumption_in_kwh + total_gas_consumption_in_kwh + other_fuel_consumption_in_kwh
         self_sufficiency_gas_in_percent = (1 - gas_demand_from_grid_in_kwh / total_gas_consumption_in_kwh) * 100 if total_gas_consumption_in_kwh != 0 else 0
-        self_suffciency_heat_in_percent = 0
+        self_suffciency_other_fuels_in_percent = 0
         total_self_sufficient_energy_consumption_in_kwh = (
             self_sufficency_rate_for_electricity_in_percent * total_electricity_consumption_in_kwh
             + self_sufficiency_gas_in_percent * total_gas_consumption_in_kwh
-            + self_suffciency_heat_in_percent * heat_consumption_in_kwh
+            + self_suffciency_other_fuels_in_percent * other_fuel_consumption_in_kwh
         )
         total_energy_self_sufficiency_in_percent = total_self_sufficient_energy_consumption_in_kwh / total_energy_consumption_in_kwh
         return round(total_energy_self_sufficiency_in_percent, 2)
@@ -603,9 +603,9 @@ class KpiPreparation:
         gas_co2_in_kg: float = 0
         gas_from_grid_in_kwh: float = 0
         total_gas_consumption_in_kwh: float = 0
-        heating_costs_in_euro: float = 0
-        heating_co2_in_kg: float = 0
-        energy_consumption_kwh: float = 0
+        other_fuel_costs_in_euro: float = 0
+        other_fuel_co2_in_kg: float = 0
+        other_fuel_energy_consumption_kwh: float = 0
 
         for kpi_name, kpi_entry in self.kpi_collection_dict_unsorted[building_object].items():
             if kpi_entry["tag"] == KpiTagEnumClass.ELECTRICITY_METER.value:
@@ -626,13 +626,13 @@ class KpiPreparation:
                 if kpi_name == "Total gas consumption":
                     total_gas_consumption_in_kwh = kpi_entry["value"]
 
-            elif kpi_entry["tag"] == KpiTagEnumClass.HEATING_METER.value:
+            elif kpi_entry["tag"] == KpiTagEnumClass.FUEL_METER.value:
                 if kpi_name == "OPEX - Energy costs":
-                    heating_costs_in_euro = kpi_entry["value"]
+                    other_fuel_costs_in_euro = kpi_entry["value"]
                 if kpi_name == "OPEX - CO2 Footprint":
-                    heating_co2_in_kg = kpi_entry["value"]
+                    other_fuel_co2_in_kg = kpi_entry["value"]
                 if kpi_name == "Total energy consumption":
-                    energy_consumption_kwh = kpi_entry["value"]
+                    other_fuel_energy_consumption_kwh = kpi_entry["value"]
 
         # calculate total energy self-suffciency for gas, heat and electricity
         total_energy_self_sufficiency_in_percent = self.get_total_energy_self_sufficiency(
@@ -640,7 +640,7 @@ class KpiPreparation:
             total_electricity_consumption_in_kwh=self.kpi_collection_dict_unsorted[building_object]["Total electricity consumption"]["value"],
             gas_demand_from_grid_in_kwh=gas_from_grid_in_kwh,
             total_gas_consumption_in_kwh=total_gas_consumption_in_kwh,
-            heat_consumption_in_kwh=energy_consumption_kwh
+            other_fuel_consumption_in_kwh=other_fuel_energy_consumption_kwh
         )
         # get CAPEX and OPEX costs for simulated period
         capex_results_path = os.path.join(
@@ -799,10 +799,10 @@ class KpiPreparation:
                 else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
             ),
         )
-        total_heat_costs_entry = KpiEntry(
-            name="Costs of grid heat for simulated period",
+        total_other_fuel_heat_costs_entry = KpiEntry(
+            name="Costs of other heating fuels for simulated period",
             unit="EUR",
-            value=heating_costs_in_euro,
+            value=other_fuel_costs_in_euro,
             tag=(
                 KpiTagEnumClass.COSTS
                 if not any(word in building_object for word in DistrictNames)
@@ -810,9 +810,9 @@ class KpiPreparation:
             ),
         )
         total_heat_co2_emissions_entry = KpiEntry(
-            name="CO2 footprint of grid heat consumption for simulated period",
+            name="CO2 footprint of other heating fuels for simulated period",
             unit="kg",
-            value=heating_co2_in_kg,
+            value=other_fuel_co2_in_kg,
             tag=(
                 KpiTagEnumClass.EMISSIONS
                 if not any(word in building_object for word in DistrictNames)
@@ -883,7 +883,7 @@ class KpiPreparation:
             unit="EUR",
             value=gas_costs_in_euro
             + electricity_costs_in_euro
-            + heating_costs_in_euro,
+            + other_fuel_costs_in_euro,
             tag=(
                 KpiTagEnumClass.COSTS
                 if not any(word in building_object for word in DistrictNames)
@@ -895,7 +895,7 @@ class KpiPreparation:
             unit="kWh",
             value=gas_from_grid_in_kwh
             + electricity_from_grid_in_kwh
-            + energy_consumption_kwh,
+            + other_fuel_energy_consumption_kwh,
             tag=(
                 KpiTagEnumClass.GENERAL
             ),
@@ -908,7 +908,7 @@ class KpiPreparation:
             + total_rest_investment_cost_per_simulated_period
             + gas_costs_in_euro
             + electricity_costs_in_euro
-            + heating_costs_in_euro,
+            + other_fuel_costs_in_euro,
             tag=(
                 KpiTagEnumClass.COSTS
                 if not any(word in building_object for word in DistrictNames)
@@ -921,7 +921,7 @@ class KpiPreparation:
             value=total_device_co2_footprint_per_simulated_period
             + gas_co2_in_kg
             + electricity_co2_in_kg
-            + heating_co2_in_kg,
+            + other_fuel_co2_in_kg,
             tag=(
                 KpiTagEnumClass.EMISSIONS
                 if not any(word in building_object for word in DistrictNames)
@@ -976,7 +976,7 @@ class KpiPreparation:
             + total_rest_investment_cost_per_simulated_period_without_hp
             + gas_costs_in_euro
             + electricity_costs_in_euro
-            + heating_costs_in_euro,
+            + other_fuel_costs_in_euro,
             tag=(
                 KpiTagEnumClass.COSTS
                 if not any(word in building_object for word in DistrictNames)
@@ -989,7 +989,7 @@ class KpiPreparation:
             value=total_device_co2_footprint_per_simulated_period_without_hp
             + gas_co2_in_kg
             + electricity_co2_in_kg
-            + heating_co2_in_kg,
+            + other_fuel_co2_in_kg,
             tag=(
                 KpiTagEnumClass.EMISSIONS
                 if not any(word in building_object for word in DistrictNames)
@@ -1067,7 +1067,7 @@ class KpiPreparation:
                 total_electricity_co2_footprint_entry.name: total_electricity_co2_footprint_entry.to_dict(),
                 total_gas_costs_entry.name: total_gas_costs_entry.to_dict(),
                 total_gas_co2_emissions_entry.name: total_gas_co2_emissions_entry.to_dict(),
-                total_heat_costs_entry.name: total_heat_costs_entry.to_dict(),
+                total_other_fuel_heat_costs_entry.name: total_other_fuel_heat_costs_entry.to_dict(),
                 total_heat_co2_emissions_entry.name: total_heat_co2_emissions_entry.to_dict(),
                 total_investment_cost_per_simulated_period_entry.name: total_investment_cost_per_simulated_period_entry.to_dict(),
                 total_rest_investment_cost_per_simulated_period_entry.name: total_rest_investment_cost_per_simulated_period_entry.to_dict(),

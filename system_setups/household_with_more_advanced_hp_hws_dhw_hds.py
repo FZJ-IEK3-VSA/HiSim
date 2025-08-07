@@ -172,7 +172,6 @@ def setup_function(
     my_hot_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_heatpump_config.set_thermal_output_power_in_watt.value,
         sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
-        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
     )
 
     my_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(

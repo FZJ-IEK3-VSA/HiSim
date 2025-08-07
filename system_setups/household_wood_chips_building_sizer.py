@@ -301,7 +301,6 @@ def setup_function(
     # Build Heat Water Storage; buffer storage is important for wood chip heating, as it cannot modulate
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         sizing_option=sizing_option,
     )
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(

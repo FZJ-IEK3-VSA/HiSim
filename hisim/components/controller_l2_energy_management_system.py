@@ -1,4 +1,4 @@
-""" Iterative Energy Surplus Controller.
+"""Iterative Energy Surplus Controller.
 
 It received the electricity consumption
 of all components and the PV production. According to the balance it
@@ -9,7 +9,7 @@ The component with the lowest source weight is activated first.
 # clean
 from dataclasses import dataclass
 
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Optional
 from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -21,12 +21,16 @@ from hisim import utils
 from hisim.component import ComponentInput, ComponentOutput
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.components import (
     more_advanced_heat_pump_hplib,
     advanced_heat_pump_hplib,
     generic_heat_pump_modular,
     loadprofilegenerator_utsp_connector,
+    generic_electric_heating,
+    solar_thermal_system,
 )
+
 
 __authors__ = "Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -62,6 +66,16 @@ class EMSConfig(cp.ConfigBase):
     domestic_hot_water_storage_temperature_offset_value: float
     # increase in SimpleHotWaterStorage set temperatures when PV surplus is available for heating
     space_heating_water_storage_temperature_offset_value: float
+    #: CO2 footprint of investment in kg
+    device_co2_footprint_in_kg: Optional[float]
+    #: cost for investment in Euro
+    investment_costs_in_euro: Optional[float]
+    #: lifetime in years
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
 
     @classmethod
     def get_default_config_ems(
@@ -78,6 +92,12 @@ class EMSConfig(cp.ConfigBase):
             building_indoor_temperature_offset_value=2,
             domestic_hot_water_storage_temperature_offset_value=10,
             space_heating_water_storage_temperature_offset_value=10,
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
         )
         return config
 
@@ -283,10 +303,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
-        #  self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
+        self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
+        self.add_dynamic_default_connections(self.get_default_connections_from_electric_heater())
+        self.add_dynamic_default_connections(self.get_default_connections_from_solar_thermal_system())
 
     def get_default_connections_from_pv_system(
         self,
@@ -324,12 +346,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
 
         dynamic_connections = []
-        self.occupancy_class_name = UtspLpgConnector.get_classname()
+        occupancy_class_name = UtspLpgConnector.get_classname()
         dynamic_connections.append(
             dynamic_component.DynamicComponentConnection(
                 source_component_class=UtspLpgConnector,
-                source_class_name=self.occupancy_class_name,
-                source_component_field_name=UtspLpgConnector.ElectricityOutput,
+                source_class_name=occupancy_class_name,
+                source_component_field_name=UtspLpgConnector.ElectricalPowerConsumption,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
@@ -337,11 +359,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             )
         )
         self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOf{self.occupancy_class_name}_",
+            source_output_name=f"ElectricityToOrFromGridOf{occupancy_class_name}_",
             source_tags=[
                 lt.ComponentType.RESIDENTS,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
+            source_component_class=occupancy_class_name,
             source_weight=1,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
@@ -349,68 +372,70 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
         return dynamic_connections
 
-    # def get_default_connections_from_more_advanced_heat_pump(
-    #     self,
-    # ):
-    #     """Get advanced heat pump default connections."""
-    #
-    #     from hisim.components.more_advanced_heat_pump_hplib import (   # pylint: disable=import-outside-toplevel
-    #         MoreAdvancedHeatPumpHPLib,
-    #     )
-    #
-    #     dynamic_connections = []
-    #     self.more_advanced_heat_pump_class_name = MoreAdvancedHeatPumpHPLib.get_classname()
-    #     dynamic_connections.append(
-    #         dynamic_component.DynamicComponentConnection(
-    #             source_component_class=MoreAdvancedHeatPumpHPLib,
-    #             source_class_name=self.more_advanced_heat_pump_class_name,
-    #             source_component_field_name=MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH,
-    #             source_load_type=lt.LoadTypes.ELECTRICITY,
-    #             source_unit=lt.Units.WATT,
-    #             source_tags=[
-    #                 lt.ComponentType.HEAT_PUMP_BUILDING,
-    #                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
-    #             ],
-    #             source_weight=2,
-    #         )
-    #     )
-    #     dynamic_connections.append(
-    #         dynamic_component.DynamicComponentConnection(
-    #             source_component_class=MoreAdvancedHeatPumpHPLib,
-    #             source_class_name=self.more_advanced_heat_pump_class_name,
-    #             source_component_field_name=MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW,
-    #             source_load_type=lt.LoadTypes.ELECTRICITY,
-    #             source_unit=lt.Units.WATT,
-    #             source_tags=[
-    #                 lt.ComponentType.HEAT_PUMP_DHW,
-    #                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
-    #             ],
-    #             source_weight=3,
-    #         )
-    #     )
-    #     self.add_component_output(
-    #         source_output_name=f"ElectricityToOrFromGridOfSH{self.more_advanced_heat_pump_class_name}_",
-    #         source_tags=[
-    #             lt.ComponentType.HEAT_PUMP_BUILDING,
-    #             lt.InandOutputType.ELECTRICITY_TARGET,
-    #         ],
-    #         source_weight=2,
-    #         source_load_type=lt.LoadTypes.ELECTRICITY,
-    #         source_unit=lt.Units.WATT,
-    #         output_description="Target electricity for Heating Heat Pump. ",
-    #     )
-    #     self.add_component_output(
-    #         source_output_name=f"ElectricityToOrFromGridOfDHW{self.more_advanced_heat_pump_class_name}_",
-    #         source_tags=[
-    #             lt.ComponentType.HEAT_PUMP_DHW,
-    #             lt.InandOutputType.ELECTRICITY_TARGET,
-    #         ],
-    #         source_weight=3,
-    #         source_load_type=lt.LoadTypes.ELECTRICITY,
-    #         source_unit=lt.Units.WATT,
-    #         output_description="Target electricity for Heating Heat Pump. ",
-    #     )
-    #     return dynamic_connections
+    def get_default_connections_from_more_advanced_heat_pump(
+        self,
+    ):
+        """Get advanced heat pump default connections."""
+
+        from hisim.components.more_advanced_heat_pump_hplib import (  # pylint: disable=import-outside-toplevel
+            MoreAdvancedHeatPumpHPLib,
+        )
+
+        dynamic_connections = []
+        more_advanced_heat_pump_class_name = MoreAdvancedHeatPumpHPLib.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=MoreAdvancedHeatPumpHPLib,
+                source_class_name=more_advanced_heat_pump_class_name,
+                source_component_field_name=MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.HEAT_PUMP_BUILDING,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                ],
+                source_weight=2,
+            )
+        )
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=MoreAdvancedHeatPumpHPLib,
+                source_class_name=more_advanced_heat_pump_class_name,
+                source_component_field_name=MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.HEAT_PUMP_DHW,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                ],
+                source_weight=3,
+            )
+        )
+        self.add_component_output(
+            source_output_name=f"ElectricityToOrFromGridOfSH{more_advanced_heat_pump_class_name}_",
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP_BUILDING,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_component_class=more_advanced_heat_pump_class_name,
+            source_weight=2,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Heating Heat Pump. ",
+        )
+        self.add_component_output(
+            source_output_name=f"ElectricityToOrFromGridOfDHW{more_advanced_heat_pump_class_name}_",
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP_DHW,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_component_class=more_advanced_heat_pump_class_name,
+            source_weight=3,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Heating Heat Pump. ",
+        )
+        return dynamic_connections
 
     def get_default_connections_from_advanced_heat_pump(
         self,
@@ -420,11 +445,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
-        self.advanced_heat_pump_class_name = HeatPumpHplib.get_classname()
+        advanced_heat_pump_class_name = HeatPumpHplib.get_classname()
         dynamic_connections.append(
             dynamic_component.DynamicComponentConnection(
                 source_component_class=HeatPumpHplib,
-                source_class_name=self.advanced_heat_pump_class_name,
+                source_class_name=advanced_heat_pump_class_name,
                 source_component_field_name=HeatPumpHplib.ElectricalInputPower,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
@@ -436,11 +461,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             )
         )
         self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOf{self.advanced_heat_pump_class_name}_",
+            source_output_name=f"ElectricityToOrFromGridOf{advanced_heat_pump_class_name}_",
             source_tags=[
                 lt.ComponentType.HEAT_PUMP_BUILDING,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
+            source_component_class=advanced_heat_pump_class_name,
             source_weight=2,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
@@ -458,11 +484,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
 
         dynamic_connections = []
-        self.dhw_heat_pump_class_name = ModularHeatPump.get_classname()
+        dhw_heatpump_class_name = ModularHeatPump.get_classname()
         dynamic_connections.append(
             dynamic_component.DynamicComponentConnection(
                 source_component_class=ModularHeatPump,
-                source_class_name=self.dhw_heat_pump_class_name,
+                source_class_name=dhw_heatpump_class_name,
                 source_component_field_name=ModularHeatPump.ElectricityOutput,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
@@ -472,15 +498,80 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
 
         self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOf{self.dhw_heat_pump_class_name}_",
+            source_output_name=f"ElectricityToOrFromGridOf{dhw_heatpump_class_name}_",
             source_tags=[
                 lt.ComponentType.HEAT_PUMP_DHW,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
+            source_component_class=dhw_heatpump_class_name,
             source_weight=3,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for dhw heat pump.",
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_electric_heater(
+        self,
+    ):
+        """Get electric heater default connections."""
+
+        from hisim.components.generic_electric_heating import ElectricHeating  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        electric_heater_class_name = ElectricHeating.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=ElectricHeating,
+                source_class_name=electric_heater_class_name,
+                source_component_field_name=ElectricHeating.ElectricOutputShPower,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.ELECTRIC_HEATING_SH,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                ],
+                source_weight=2,
+            )
+        )
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=ElectricHeating,
+                source_class_name=electric_heater_class_name,
+                source_component_field_name=ElectricHeating.ElectricOutputDhwPower,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.ELECTRIC_HEATING_DHW,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                ],
+                source_weight=3,
+            )
+        )
+
+        self.add_component_output(
+            source_output_name=f"ElectricityToOrFromGridOfSH{electric_heater_class_name}_",
+            source_tags=[
+                lt.ComponentType.ELECTRIC_HEATING_SH,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_component_class=electric_heater_class_name,
+            source_weight=2,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for electric heater space heating.",
+        )
+        self.add_component_output(
+            source_output_name=f"ElectricityToOrFromGridOfDHW{electric_heater_class_name}_",
+            source_tags=[
+                lt.ComponentType.ELECTRIC_HEATING_DHW,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_component_class=electric_heater_class_name,
+            source_weight=3,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for electric heater domestic hot water.",
         )
         return dynamic_connections
 
@@ -501,8 +592,46 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+                source_weight=5,
+            )
+        )
+
+        return dynamic_connections
+
+    def get_default_connections_from_solar_thermal_system(
+        self,
+    ):
+        """Get solar thermal default connections."""
+
+        from hisim.components.solar_thermal_system import SolarThermalSystem  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        solar_thermal_class_name = SolarThermalSystem.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=SolarThermalSystem,
+                source_class_name=solar_thermal_class_name,
+                source_component_field_name=SolarThermalSystem.ElectricityConsumptionOutput,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.SOLAR_THERMAL_SYSTEM,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                ],
                 source_weight=4,
             )
+        )
+        self.add_component_output(
+            source_output_name=f"ElectricityToOrFromGridOf{solar_thermal_class_name}_",
+            source_tags=[
+                lt.ComponentType.SOLAR_THERMAL_SYSTEM,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_component_class=solar_thermal_class_name,
+            source_weight=4,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for solar thermal domestic hot water.",
         )
 
         return dynamic_connections
@@ -552,6 +681,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         consumption_ems_controlled_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
         )
+
         return (
             inputs_sorted,
             component_types_sorted,
@@ -618,6 +748,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             lt.ComponentType.HEAT_PUMP_DHW,
             lt.ComponentType.HEAT_PUMP,
             lt.ComponentType.HEAT_PUMP_BUILDING,
+            lt.ComponentType.ELECTRIC_HEATING_SH,
+            lt.ComponentType.ELECTRIC_HEATING_DHW,
+            lt.ComponentType.SOLAR_THERMAL_SYSTEM,
         ]:
             # if surplus electricity is available, a part of the component's consumption can be covered onsite
             if available_surplus_electricity_in_watt > 0:
@@ -706,6 +839,13 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         outputs_sorted: List[ComponentOutput],
     ) -> float:
         """Evaluates available surplus electricity component by component, iteratively, and sends updated signals back."""
+        if len(outputs_sorted) < len(inputs_sorted) or len(component_types_sorted) < len(inputs_sorted):
+            raise ValueError(
+                "Lengths of inputs, component types, and outputs must match."
+                f" Got {len(inputs_sorted)}, {len(component_types_sorted)}, and {len(outputs_sorted)}."
+                "Make sure all inputs have the same source weight as the corresponding output. "
+                "Please check all your default and manual connections."
+            )
 
         for index, single_input_sorted in enumerate(inputs_sorted):
             single_component_type_sorted = component_types_sorted[index]
@@ -808,12 +948,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         more_advanced_heat_pump_class_name = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib.get_classname()
         dhw_heat_pump_class_name = generic_heat_pump_modular.ModularHeatPump.get_classname()
         occupancy_class_name = loadprofilegenerator_utsp_connector.UtspLpgConnector.get_classname()
+        electric_heater_class_name = generic_electric_heating.ElectricHeating.get_classname()
+        solar_thermal_system_class_name = solar_thermal_system.SolarThermalSystem.get_classname()
 
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
 
-                if dhw_heat_pump_class_name in output.field_name:
+                if dhw_heat_pump_class_name in output.field_name and output.unit == lt.Units.WATT:
                     dhw_hp_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
                         postprocessing_results.iloc[:, index] < 0.0
                     ]
@@ -829,9 +971,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                         value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
                         tag=KpiTagEnumClass.EMS,
                         description=self.component_name,
+                        name_of_source_component=dhw_heat_pump_class_name,
                     )
                     list_of_kpi_entries.append(dhw_heatpump_electricity_from_grid_entry)
-                elif more_advanced_heat_pump_class_name in output.field_name:
+
+                elif more_advanced_heat_pump_class_name in output.field_name and output.unit == lt.Units.WATT:
                     if "SH" in output.field_name:
                         sh_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
                             postprocessing_results.iloc[:, index] < 0.0
@@ -849,8 +993,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                             value=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
                             tag=KpiTagEnumClass.EMS,
                             description=self.component_name,
+                            name_of_source_component=more_advanced_heat_pump_class_name,
                         )
                         list_of_kpi_entries.append(sh_heatpump_electricity_from_grid_entry)
+
                     elif "DHW" in output.field_name:
                         dhw_hp_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
                             postprocessing_results.iloc[:, index] < 0.0
@@ -867,11 +1013,13 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                             value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
                             tag=KpiTagEnumClass.EMS,
                             description=self.component_name,
+                            name_of_source_component=more_advanced_heat_pump_class_name,
                         )
                         list_of_kpi_entries.append(dhw_heatpump_electricity_from_grid_entry)
                     else:
                         log.warning(f"No DHW oder SH named in output {output.field_name} of {output.component_name}")
-                elif advanced_heat_pump_class_name in output.field_name:
+
+                elif advanced_heat_pump_class_name in output.field_name and output.unit == lt.Units.WATT:
                     sh_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
                         postprocessing_results.iloc[:, index] < 0.0
                     ]
@@ -888,9 +1036,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                         value=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
                         tag=KpiTagEnumClass.EMS,
                         description=self.component_name,
+                        name_of_source_component=advanced_heat_pump_class_name,
                     )
                     list_of_kpi_entries.append(sh_heatpump_electricity_from_grid_entry)
-                elif occupancy_class_name in output.field_name:
+
+                elif occupancy_class_name in output.field_name and output.unit == lt.Units.WATT:
                     occupancy_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
                         postprocessing_results.iloc[:, index] < 0.0
                     ]
@@ -907,8 +1057,72 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                         value=occupancy_electricity_from_grid_in_kilowatt_hour,
                         tag=KpiTagEnumClass.EMS,
                         description=self.component_name,
+                        name_of_source_component=occupancy_class_name,
                     )
                     list_of_kpi_entries.append(occupancy_electricity_from_grid_entry)
+
+                elif electric_heater_class_name in output.field_name and output.unit == lt.Units.WATT:
+                    if "SH" in output.field_name:
+                        sh_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
+                            postprocessing_results.iloc[:, index] < 0.0
+                        ]
+                        sh_heater_electricity_from_grid_in_kilowatt_hour = abs(
+                            KpiHelperClass.compute_total_energy_from_power_timeseries(
+                                power_timeseries_in_watt=sh_electricity_from_grid_in_watt_series,
+                                timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            )
+                        )
+                        # make kpi entry
+                        sh_heater_electricity_from_grid_entry = KpiEntry(
+                            name="Space heating electric heater electricity from grid",
+                            unit="kWh",
+                            value=sh_heater_electricity_from_grid_in_kilowatt_hour,
+                            tag=KpiTagEnumClass.EMS,
+                            description=self.component_name,
+                            name_of_source_component=electric_heater_class_name,
+                        )
+                        list_of_kpi_entries.append(sh_heater_electricity_from_grid_entry)
+                    elif "DHW" in output.field_name:
+                        dhw_heater_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
+                            postprocessing_results.iloc[:, index] < 0.0
+                        ]
+                        dhw_heater_electricity_from_grid_in_kilowatt_hour = abs(
+                            KpiHelperClass.compute_total_energy_from_power_timeseries(
+                                power_timeseries_in_watt=dhw_heater_electricity_from_grid_in_watt_series,
+                                timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            )
+                        )
+                        dhw_heater_electricity_from_grid_entry = KpiEntry(
+                            name="Domestic hot water electric heater electricity from grid",
+                            unit="kWh",
+                            value=dhw_heater_electricity_from_grid_in_kilowatt_hour,
+                            tag=KpiTagEnumClass.EMS,
+                            description=self.component_name,
+                            name_of_source_component=electric_heater_class_name,
+                        )
+                        list_of_kpi_entries.append(dhw_heater_electricity_from_grid_entry)
+                    else:
+                        log.warning(f"No DHW oder SH named in output {output.field_name} of {output.component_name}")
+
+                elif solar_thermal_system_class_name in output.field_name and output.unit == lt.Units.WATT:
+                    dhw_st_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] < 0.0
+                    ]
+                    dhw_st_electricity_from_grid_in_kilowatt_hour = abs(
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=dhw_st_electricity_from_grid_in_watt_series,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+                    dhw_st_electricity_from_grid_entry = KpiEntry(
+                        name="Domestic hot water solar thermal system electricity from grid",
+                        unit="kWh",
+                        value=dhw_st_electricity_from_grid_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.EMS,
+                        description=self.component_name,
+                        name_of_source_component=solar_thermal_system_class_name,
+                    )
+                    list_of_kpi_entries.append(dhw_st_electricity_from_grid_entry)
 
         return list_of_kpi_entries
 
@@ -918,11 +1132,37 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         postprocessing_results: pd.DataFrame,
     ) -> cp.OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
-        opex_cost_data_class = cp.OpexCostDataClass.get_default_opex_cost_data_class()
+        # opex energy costs and co2 emissions are covered by electricity meter
+        opex_cost_data_class = cp.OpexCostDataClass(
+            opex_energy_cost_in_euro=0,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=0,
+            total_consumption_in_kwh=0,
+            loadtype=lt.LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
+        )
         return opex_cost_data_class
 
     @staticmethod
-    def get_cost_capex(config: EMSConfig, simulation_parameters: SimulationParameters) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
+    def get_cost_capex(
+        config: EMSConfig, simulation_parameters: SimulationParameters
+    ) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
-        capex_cost_data_class = cp.CapexCostDataClass.get_default_capex_cost_data_class()
+        component_type = lt.ComponentType.ENERGY_MANAGEMENT_SYSTEM
+        kpi_tag = (
+            KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM
+        )
+        unit = lt.Units.ANY
+        size_of_energy_system = 1
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
+        )
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
+
         return capex_cost_data_class

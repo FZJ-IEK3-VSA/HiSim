@@ -81,13 +81,13 @@ class WindturbineConfig(ConfigBase):
 
     source_weight: int
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg: float
     #: cost for investment in Euro
-    cost: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    investment_costs_in_euro: float
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: float
     #: lifetime in years
-    lifetime: float
+    lifetime_in_years: float
     predictive: bool
     predictive_control: bool
     prediction_horizon: Optional[int]
@@ -119,10 +119,10 @@ class WindturbineConfig(ConfigBase):
             measuring_height_roughness_length=0,
             hellman_exp=0,  # This parameter is only used if the parameter `wind_speed_model` is 'hellman'.
             source_weight=999,
-            co2_footprint=0,
-            cost=0,
-            maintenance_cost_as_percentage_of_investment=0,
-            lifetime=0,
+            device_co2_footprint_in_kg=0,
+            investment_costs_in_euro=0,
+            maintenance_costs_in_euro_per_year=0,
+            lifetime_in_years=0,
             predictive=False,
             predictive_control=False,
             prediction_horizon=None,
@@ -368,7 +368,7 @@ class Windturbine(cp.Component):
     def get_cost_capex(config: WindturbineConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
+        capex_per_simulated_period = (config.investment_costs_in_euro / config.lifetime) * (
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
         device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
@@ -376,9 +376,9 @@ class Windturbine(cp.Component):
         )
 
         capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
+            capex_investment_cost_in_euro=config.investment_costs_in_euro,
+            device_co2_footprint_in_kg=config.device_co2_footprint_in_kg,
+            lifetime_in_years=config.lifetime_in_years,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
             kpi_tag=KpiTagEnumClass.WINDTURBINE
@@ -396,7 +396,7 @@ class Windturbine(cp.Component):
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
-            consumption_in_kwh=0,
+            total_consumption_in_kwh=0,
             loadtype=lt.LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.WINDTURBINE
         )

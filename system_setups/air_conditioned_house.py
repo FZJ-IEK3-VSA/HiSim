@@ -18,9 +18,7 @@ from hisim.components import air_conditioner
 
 
 __authors__ = "Marwa Alfouly, Sebastian Dickler, Kristina Dabrock"
-__copyright__ = (
-    "Copyright 2025, HiSim - Household Infrastructure and Building Simulator"
-)
+__copyright__ = "Copyright 2025, HiSim - Household Infrastructure and Building Simulator"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
 __version__ = "0.1"
@@ -85,34 +83,20 @@ def setup_function(
 
     if my_simulation_parameters is None:
         # my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(year, seconds_per_timestep)
-        my_simulation_parameters = (
-            SimulationParameters.full_year_with_only_plots(
-                year, seconds_per_timestep
-            )
-        )
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(year, seconds_per_timestep)
         my_simulation_parameters.enable_plots_only()
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_KPIS
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_CAPEX
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_OPEX
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.GENERATE_PDF_REPORT
-        )
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     """Building (1/2)"""
-    heating_reference_temperatures = pd.read_csv(
-        utils.HISIMPATH["housing_reference_temperatures"]
-    )
-    heating_reference_temperature = heating_reference_temperatures.set_index(
-        "Location"
-    ).loc["ES", "HeatingReferenceTemperature"]
+    heating_reference_temperatures = pd.read_csv(utils.HISIMPATH["housing_reference_temperatures"])
+    heating_reference_temperature = heating_reference_temperatures.set_index("Location").loc[
+        "ES", "HeatingReferenceTemperature"
+    ]
     my_building_config = building.BuildingConfig(
         building_name="BUI1",
         name="Building",
@@ -127,23 +111,28 @@ def setup_function(
         number_of_apartments=None,
         enable_opening_windows=False,
         max_thermal_building_demand_in_watt=None,
-        u_value_facade_in_watt_per_m2_per_kelvin=None,
-        u_value_roof_in_watt_per_m2_per_kelvin=None,
-        u_value_window_in_watt_per_m2_per_kelvin=None,
-        u_value_door_in_watt_per_m2_per_kelvin=None,
+        floor_u_value_in_watt_per_m2_per_kelvin=None,
+        floor_area_in_m2=None,
+        facade_u_value_in_watt_per_m2_per_kelvin=None,
+        facade_area_in_m2=None,
+        roof_u_value_in_watt_per_m2_per_kelvin=None,
+        roof_area_in_m2=None,
+        window_u_value_in_watt_per_m2_per_kelvin=None,
+        window_area_in_m2=None,
+        door_u_value_in_watt_per_m2_per_kelvin=None,
+        door_area_in_m2=None,
         predictive=False,
-        co2_footprint=None,
-        cost=None,
-        maintenance_cost_as_percentage_of_investment=None,
-        lifetime=None,
+        device_co2_footprint_in_kg=None,
+        investment_costs_in_euro=None,
+        maintenance_costs_in_euro_per_year=None,
+        subsidy_as_percentage_of_investment_costs=None,
+        lifetime_in_years=None,
     )
     my_building = building.Building(
         config=my_building_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_building_information = building.BuildingInformation(
-        config=my_building_config
-    )
+    my_building_information = building.BuildingInformation(config=my_building_config)
 
     """ Occupancy Profile """
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
@@ -155,9 +144,7 @@ def setup_function(
     my_sim.add_component(my_occupancy)
 
     """Weather"""
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.SEVILLE
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.SEVILLE)
 
     my_weather = weather.Weather(
         config=my_weather_config,
@@ -184,10 +171,11 @@ def setup_function(
         inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
         source_weight=-1,
         name="PVSystem",
-        co2_footprint=pv_co2_footprint,
-        cost=pv_cost,
-        maintenance_cost_as_percentage_of_investment=0.01,
-        lifetime=25,
+        device_co2_footprint_in_kg=pv_co2_footprint,
+        investment_costs_in_euro=pv_cost,
+        maintenance_costs_in_euro_per_year=0.01 * pv_cost,
+        subsidy_as_percentage_of_investment_costs=0.0,
+        lifetime_in_years=25,
         share_of_maximum_pv_potential=1.0,
         predictive=False,
         predictive_control=False,
@@ -201,11 +189,9 @@ def setup_function(
     my_sim.add_component(my_photovoltaic_system)
 
     """Air Conditioner"""
-    my_air_conditioner_config = (
-        air_conditioner.AirConditionerConfig.get_scaled_air_conditioner_config(
-            my_building_information.max_thermal_building_demand_in_watt,
-            my_building_information.heating_reference_temperature_in_celsius,
-        )
+    my_air_conditioner_config = air_conditioner.AirConditionerConfig.get_scaled_air_conditioner_config(
+        my_building_information.max_thermal_building_demand_in_watt,
+        my_building_information.heating_reference_temperature_in_celsius,
     )
     my_air_conditioner = air_conditioner.AirConditioner(
         config=my_air_conditioner_config,
@@ -223,12 +209,12 @@ def setup_function(
     my_sim.add_component(my_building, connect_automatically=True)
 
     """Air conditioner on-off controller"""
-    my_air_conditioner_controller_config = air_conditioner.AirConditionerControllerConfig.get_default_air_conditioner_controller_config()
+    my_air_conditioner_controller_config = (
+        air_conditioner.AirConditionerControllerConfig.get_default_air_conditioner_controller_config()
+    )
     my_air_conditioner_controller = air_conditioner.AirConditionerController(
         config=my_air_conditioner_controller_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    my_sim.add_component(
-        my_air_conditioner_controller, connect_automatically=True
-    )
+    my_sim.add_component(my_air_conditioner_controller, connect_automatically=True)

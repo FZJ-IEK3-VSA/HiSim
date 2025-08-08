@@ -61,13 +61,13 @@ class GenericGasHeaterConfig(ConfigBase):
     temperature_delta_in_celsius: float  # [°C]
     maximal_power_in_watt: float  # [W]
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg: float
     #: cost for investment in Euro
-    cost: float
+    investment_costs_in_euro: float
     #: lifetime in years
-    lifetime: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    lifetime_in_years: float
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: float
     #: consumption of the car in kWh or l
     consumption_in_kilowatt_hour: float
 
@@ -92,10 +92,10 @@ class GenericGasHeaterConfig(ConfigBase):
             maximal_mass_flow_in_kilogram_per_second=maximal_power_in_watt
             / (4180 * 25),  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
             maximal_temperature_in_celsius=80,  # [°C])
-            co2_footprint=maximal_power_in_watt * 1e-3 * 49.47,  # value from emission_factros_and_costs_devices.csv
-            cost=7416,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            device_co2_footprint_in_kg=maximal_power_in_watt * 1e-3 * 49.47,  # value from emission_factros_and_costs_devices.csv
+            investment_costs_in_euro=7416,  # value from emission_factros_and_costs_devices.csv
+            lifetime_in_years=20,  # value from emission_factros_and_costs_devices.csv
+            maintenance_costs_in_euro_per_year=0.03 * 7416,  # source: VDI2067-1
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -122,10 +122,10 @@ class GenericGasHeaterConfig(ConfigBase):
             maximal_mass_flow_in_kilogram_per_second=maximal_power_in_watt
             / (4180 * 25),  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
             maximal_temperature_in_celsius=80,  # [°C])
-            co2_footprint=maximal_power_in_watt * 1e-3 * 49.47,  # value from emission_factros_and_costs_devices.csv
-            cost=7416,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            device_co2_footprint_in_kg=maximal_power_in_watt * 1e-3 * 49.47,  # value from emission_factros_and_costs_devices.csv
+            investment_costs_in_euro=7416,  # value from emission_factros_and_costs_devices.csv
+            lifetime_in_years=20,  # value from emission_factros_and_costs_devices.csv
+            maintenance_costs_in_euro_per_year=0.03 * 7416,  # source: VDI2067-1
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -320,7 +320,7 @@ class GasHeater(Component):
     def get_cost_capex(config: GenericGasHeaterConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
+        capex_per_simulated_period = (config.investment_costs_in_euro / config.lifetime) * (
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
         device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
@@ -328,12 +328,12 @@ class GasHeater(Component):
         )
 
         capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
+            capex_investment_cost_in_euro=config.investment_costs_in_euro,
+            device_co2_footprint_in_kg=config.device_co2_footprint_in_kg
+            lifetime_in_years=config.lifetime_in_years,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.GAS_HEATER_SPACE_HEATING
+            kpi_tag=KpiTagEnumClass.GAS_BOILER
         )
         return capex_cost_data_class
 
@@ -358,9 +358,9 @@ class GasHeater(Component):
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=self.config.consumption_in_kilowatt_hour,
+            total_consumption_in_kwh=self.config.consumption_in_kilowatt_hour,
             loadtype=lt.LoadTypes.GAS,
-            kpi_tag=KpiTagEnumClass.GAS_HEATER_SPACE_HEATING
+            kpi_tag=KpiTagEnumClass.GAS_BOILER
         )
 
         return opex_cost_data_class
@@ -385,7 +385,7 @@ class GasHeater(Component):
             name="Gas consumption for space heating",
             unit="kWh",
             value=total_gas_consumption_in_kilowatt_hour,
-            tag=KpiTagEnumClass.GAS_HEATER_SPACE_HEATING,
+            tag=KpiTagEnumClass.GAS_BOILER,
             description=self.component_name,
         )
         list_of_kpi_entries.append(my_kpi_entry)

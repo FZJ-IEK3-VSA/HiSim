@@ -29,7 +29,7 @@ from hisim.component import (
 )
 from hisim.components import weather, simple_water_storage, heat_distribution_system
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
-from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules
+from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules, ComponentType
 from hisim.units import (
     Quantity,
     Watt,
@@ -38,8 +38,10 @@ from hisim.units import (
     Kilogram,
     Euro,
     Years,
+    Unitless
 )
-
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 
@@ -74,13 +76,15 @@ class HeatPumpHplibConfig(ConfigBase):
     minimum_running_time_in_seconds: Optional[Quantity[int, Seconds]]
     minimum_idle_time_in_seconds: Optional[Quantity[int, Seconds]]
     #: CO2 footprint of investment in kg
-    co2_footprint: Quantity[float, Kilogram]
+    device_co2_footprint_in_kg: Optional[Quantity[float, Kilogram]]
     #: cost for investment in Euro
-    cost: Quantity[float, Euro]
+    investment_costs_in_euro: Optional[Quantity[float, Euro]]
     #: lifetime in years
-    lifetime: Quantity[float, Years]
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    lifetime_in_years: Optional[Quantity[float, Years]]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[Quantity[float, Euro]]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[Quantity[float, Unitless]]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(
@@ -105,12 +109,12 @@ class HeatPumpHplibConfig(ConfigBase):
             cycling_mode=True,
             minimum_running_time_in_seconds=Quantity(3600, Seconds),
             minimum_idle_time_in_seconds=Quantity(3600, Seconds),
-            # value from emission_factors_and_costs_devices.csv
-            co2_footprint=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 165.84, Kilogram),
-            # value from emission_factors_and_costs_devices.csv
-            cost=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 1513.74, Euro),
-            lifetime=Quantity(10, Years),  # value from emission_factors_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None
         )
 
     @classmethod
@@ -136,13 +140,12 @@ class HeatPumpHplibConfig(ConfigBase):
             cycling_mode=True,
             minimum_running_time_in_seconds=Quantity(3600, Seconds),
             minimum_idle_time_in_seconds=Quantity(3600, Seconds),
-            # value from emission_factros_and_costs_devices.csv
-            co2_footprint=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 165.84, Kilogram),
-            # value from emission_factros_and_costs_devices.csv
-            cost=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 1513.74, Euro),
-            # value from emission_factros_and_costs_devices.csv
-            lifetime=Quantity(10, Years),
-            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None
         )
 
 
@@ -602,21 +605,22 @@ class HeatPumpHplib(Component):
     @staticmethod
     def get_cost_capex(config: HeatPumpHplibConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost.value / config.lifetime.value) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
+        # set variables
+        component_type = ComponentType.HEAT_PUMP
+        kpi_tag = KpiTagEnumClass.HEATPUMP_SPACE_HEATING
+        unit = Units.KILOWATT
+        size_of_energy_system = config.set_thermal_output_power_in_watt.value * 1e-3
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
         )
-        device_co2_footprint_per_simulated_period = (config.co2_footprint.value / config.lifetime.value) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost.value,
-            device_co2_footprint_in_kg=config.co2_footprint.value,
-            lifetime_in_years=config.lifetime.value,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING
-        )
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
+
         return capex_cost_data_class
 
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
@@ -638,15 +642,23 @@ class HeatPumpHplib(Component):
                     / 3.6e6,
                     1,
                 )
-        opex_cost_data_class = OpexCostDataClass(
-            opex_energy_cost_in_euro=0,
-            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
-            co2_footprint_in_kg=0,
-            consumption_in_kwh=self.config.consumption_in_kwh,
-            loadtype=LoadTypes.ELECTRICITY,
-            kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+            self.my_simulation_parameters.year
         )
+        co2_per_unit = emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh
+        euro_per_unit = emissions_and_cost_factors.electricity_costs_in_euro_per_kwh
+        co2_per_simulated_period_in_kg = self.config.consumption_in_kwh * co2_per_unit
+        opex_energy_cost_per_simulated_period_in_euro = self.config.consumption_in_kwh * euro_per_unit
 
+        opex_cost_data_class = OpexCostDataClass(
+            opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=co2_per_simulated_period_in_kg,
+            total_consumption_in_kwh=self.config.consumption_in_kwh,
+            consumption_for_space_heating_in_kwh=self.config.consumption_in_kwh,
+            loadtype=LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
         return opex_cost_data_class
 
     def get_cached_results_or_run_hplib_simulation(

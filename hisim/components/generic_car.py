@@ -150,13 +150,13 @@ class CarConfig(cp.ConfigBase):
     #: consumption per kilometer driven, either in kWh/km or l/km
     consumption_per_km: float
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg: float
     #: cost for investment in Euro
-    cost: float
+    investment_costs_in_euro: float
     #: lifetime of car in years
-    lifetime: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    lifetime_in_years: float
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: float
     #: consumption of the car in kWh or l
 
     @classmethod
@@ -177,10 +177,10 @@ class CarConfig(cp.ConfigBase):
             source_weight=1,
             fuel=lt.LoadTypes.DIESEL,
             consumption_per_km=0.06,
-            co2_footprint=9139.3,
-            cost=32035.0,
-            lifetime=18,
-            maintenance_cost_as_percentage_of_investment=0.02,
+            device_co2_footprint_in_kg=9139.3,
+            investment_costs_in_euro=32035.0,
+            lifetime_in_years=18,
+            maintenance_costs_in_euro_per_year=0.02 * 32035.0,
         )
         return config
 
@@ -196,10 +196,10 @@ class CarConfig(cp.ConfigBase):
             source_weight=1,
             fuel=lt.LoadTypes.ELECTRICITY,
             consumption_per_km=0.15,
-            co2_footprint=8899.4,
-            cost=44498.0,
-            maintenance_cost_as_percentage_of_investment=0.02,
-            lifetime=18,
+            device_co2_footprint_in_kg=8899.4,
+            investment_costs_in_euro=44498.0,
+            maintenance_costs_in_euro_per_year=0.02 * 44498.0,
+            lifetime_in_years=18,
         )
         return config
 
@@ -374,7 +374,7 @@ class Car(cp.Component):
             opex_energy_cost_in_euro=energy_costs_in_euro,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=consumption_in_kwh,
+            total_consumption_in_kwh=consumption_in_kwh,
             loadtype=self.config.fuel,
             kpi_tag=KpiTagEnumClass.CAR
         )
@@ -456,7 +456,7 @@ class Car(cp.Component):
     def get_cost_capex(config: CarConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
+        capex_per_simulated_period = (config.investment_costs_in_euro / config.lifetime) * (
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
         device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
@@ -464,9 +464,9 @@ class Car(cp.Component):
         )
 
         capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
+            capex_investment_cost_in_euro=config.investment_costs_in_euro,
+            device_co2_footprint_in_kg=config.device_co2_footprint_in_kg,
+            lifetime_in_years=config.lifetime_in_years,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
             kpi_tag=KpiTagEnumClass.CAR,

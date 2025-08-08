@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -20,6 +20,7 @@ from hisim.dynamic_component import (
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
 
 @dataclass_json
@@ -34,6 +35,16 @@ class ElectricityMeterConfig(cp.ConfigBase):
 
     building_name: str
     name: str
+    #: CO2 footprint of investment in kg
+    device_co2_footprint_in_kg: Optional[float]
+    #: cost for investment in Euro
+    investment_costs_in_euro: Optional[float]
+    #: lifetime in years
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
 
     @classmethod
     def get_electricity_meter_default_config(
@@ -45,6 +56,12 @@ class ElectricityMeterConfig(cp.ConfigBase):
         return ElectricityMeterConfig(
             building_name=building_name,
             name=name,
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
         )
 
 
@@ -251,6 +268,9 @@ class ElectricityMeter(DynamicComponent):
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
+        self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
+        self.add_dynamic_default_connections(self.get_default_connections_from_electric_heater())
+        self.add_dynamic_default_connections(self.get_default_connections_from_solar_thermal_system())
 
     def get_default_connections_from_utsp_occupancy(
         self,
@@ -267,7 +287,7 @@ class ElectricityMeter(DynamicComponent):
             dynamic_component.DynamicComponentConnection(
                 source_component_class=UtspLpgConnector,
                 source_class_name=occupancy_class_name,
-                source_component_field_name=UtspLpgConnector.ElectricityOutput,
+                source_component_field_name=UtspLpgConnector.ElectricalPowerConsumption,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
@@ -345,6 +365,107 @@ class ElectricityMeter(DynamicComponent):
                     lt.ComponentType.HEAT_PUMP_BUILDING,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 ],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_more_advanced_heat_pump(
+        self,
+    ):
+        """Get more advanced heat pump default connections."""
+
+        from hisim.components.more_advanced_heat_pump_hplib import (   # pylint: disable=import-outside-toplevel
+            MoreAdvancedHeatPumpHPLib,
+        )
+        dynamic_connections = []
+        more_advanced_heat_pump_class_name = MoreAdvancedHeatPumpHPLib.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=MoreAdvancedHeatPumpHPLib,
+                source_class_name=more_advanced_heat_pump_class_name,
+                source_component_field_name=MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.HEAT_PUMP_BUILDING,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                ],
+                source_weight=999,
+            )
+        )
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=MoreAdvancedHeatPumpHPLib,
+                source_class_name=more_advanced_heat_pump_class_name,
+                source_component_field_name=MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.HEAT_PUMP_DHW,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                ],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_electric_heater(
+        self,
+    ):
+        """Get electric heater default connections."""
+
+        from hisim.components.generic_electric_heating import ElectricHeating  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        electric_boiler_class_name = ElectricHeating.get_classname()
+        dynamic_connections.append(
+            DynamicComponentConnection(
+                source_component_class=ElectricHeating,
+                source_class_name=electric_boiler_class_name,
+                source_component_field_name=ElectricHeating.ElectricOutputShPower,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.ELECTRIC_HEATING_SH,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                ],
+                source_weight=999,
+            )
+        )
+        dynamic_connections.append(
+            DynamicComponentConnection(
+                source_component_class=ElectricHeating,
+                source_class_name=electric_boiler_class_name,
+                source_component_field_name=ElectricHeating.ElectricOutputDhwPower,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.ELECTRIC_HEATING_DHW,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                ],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_solar_thermal_system(
+        self,
+    ):
+        """Get solar thermal default connections."""
+
+        from hisim.components.solar_thermal_system import SolarThermalSystem  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        solar_thermal_class_name = SolarThermalSystem.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=SolarThermalSystem,
+                source_class_name=solar_thermal_class_name,
+                source_component_field_name=SolarThermalSystem.ElectricityConsumptionOutput,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.ComponentType.SOLAR_THERMAL_SYSTEM, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
                 source_weight=999,
             )
         )
@@ -534,7 +655,7 @@ class ElectricityMeter(DynamicComponent):
             opex_energy_cost_in_euro=opex_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=total_energy_from_grid_in_kwh,
+            total_consumption_in_kwh=total_energy_from_grid_in_kwh,
             loadtype=lt.LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.ELECTRICITY_METER
         )
@@ -544,7 +665,23 @@ class ElectricityMeter(DynamicComponent):
     @staticmethod
     def get_cost_capex(config: ElectricityMeterConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
-        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+        component_type = lt.ComponentType.ELECTRICITY_METER
+        kpi_tag = (
+            KpiTagEnumClass.ELECTRICITY_METER
+        )
+        unit = lt.Units.ANY
+        size_of_energy_system = 1
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
+        )
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
+
         return capex_cost_data_class
 
     def get_component_kpi_entries(

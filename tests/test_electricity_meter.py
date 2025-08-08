@@ -150,7 +150,7 @@ def test_house(
 
     my_electricity_meter.add_component_input_and_connect(
         source_object_name=my_occupancy.component_name,
-        source_component_output=my_occupancy.ElectricityOutput,
+        source_component_output=my_occupancy.ElectricalPowerConsumption,
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
         source_unit=loadtypes.Units.WATT,
         source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],

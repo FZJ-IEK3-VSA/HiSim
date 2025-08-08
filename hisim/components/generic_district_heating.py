@@ -4,14 +4,14 @@
 # Owned
 # import importlib
 from dataclasses import dataclass
-import enum
 import logging
 from typing import List, Any, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
 
-from hisim.loadtypes import LoadTypes, Units
+from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
+from hisim.loadtypes import LoadTypes, Units, ComponentType
 from hisim.component import (
     Component,
     ComponentConnection,
@@ -38,6 +38,8 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiEntry,
     KpiTagEnumClass,
 )
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+
 
 __authors__ = "Katharina Rieck, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -47,14 +49,6 @@ __version__ = ""
 __maintainer__ = "Katharina Rieck"
 __email__ = "k.rieck@fz-juelich.de"
 __status__ = ""
-
-
-class HeatingMode(enum.Enum):
-    """Heating mode of the district heating component."""
-
-    OFF = 0
-    SPACE_HEATING = 1
-    DOMESTIC_HOT_WATER = 2
 
 
 @dataclass_json
@@ -72,13 +66,15 @@ class DistrictHeatingConfig(ConfigBase):
     # Maximum thermal power that can be delivered
     connected_load_w: float
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
-    cost: float
+    investment_costs_in_euro: Optional[float]
     #: lifetime in years
-    lifetime: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
     with_domestic_hot_water_preparation: bool
 
     @classmethod
@@ -92,12 +88,12 @@ class DistrictHeatingConfig(ConfigBase):
             building_name=building_name,
             name="DistrictHeating",
             connected_load_w=20000,
-            # source: https://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?
-            # lang=de&uuid=dcd5e23a-9bec-40b6-b07c-1642fe696a2e Production and transport
-            co2_footprint=4.780735,
-            cost=7500,  # approximate value based on https://www.co2online.de/modernisieren-und-bauen/heizung/fernwaerme/
-            lifetime=30,  # source: https://www.oekobaudat.de/OEKOBAU.DAT/datasetdetail/process.xhtml?lang=de&uuid=dcd5e23a-9bec-40b6-b07c-1642fe696a2e
-            maintenance_cost_as_percentage_of_investment=0,  # source: VDI2067
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
         )
         return config
@@ -290,7 +286,7 @@ class DistrictHeating(Component):
             ComponentConnection(
                 DistrictHeating.HeatingMode,
                 controller_classname,
-                component_class.HeatingMode,
+                component_class.OperatingMode,
             )
         )
         connections.append(
@@ -537,7 +533,6 @@ class DistrictHeating(Component):
             ).specific_heat_capacity_in_joule_per_kg_per_kelvin
             * delta_temperature_needed_in_celsius
         )
-        print(thermal_power_delivered_w)
 
         if thermal_power_delivered_w > self.config.connected_load_w:
             # make sure that not more power is delivered than available
@@ -603,6 +598,8 @@ class DistrictHeating(Component):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
+        sh_consumption_in_kwh = None
+        dhw_consumption_in_kwh = None
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == self.component_name
@@ -610,13 +607,27 @@ class DistrictHeating(Component):
                 and output.field_name == self.ThermalOutputShPower
                 and output.unit == Units.WATT
             ):
-                consumption_in_kwh = round(
+                sh_consumption_in_kwh = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
                     1,
                 )
-        assert consumption_in_kwh is not None
+            if (
+                output.component_name == self.component_name
+                and output.load_type == LoadTypes.WARM_WATER
+                and output.field_name == self.ThermalOutputDhwPower
+                and output.unit == Units.WATT
+            ):
+                dhw_consumption_in_kwh = round(
+                    sum(postprocessing_results.iloc[:, index])
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
+        assert sh_consumption_in_kwh is not None
+        assert dhw_consumption_in_kwh is not None
+        total_consumption_in_kwh = sh_consumption_in_kwh + dhw_consumption_in_kwh
 
         emissions_and_cost_factors = (
             EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
@@ -629,16 +640,18 @@ class DistrictHeating(Component):
         euro_per_unit = (
             emissions_and_cost_factors.district_heating_costs_in_euro_per_kwh
         )
-        co2_per_simulated_period_in_kg = consumption_in_kwh * co2_per_unit
+        co2_per_simulated_period_in_kg = total_consumption_in_kwh * co2_per_unit
         opex_energy_cost_per_simulated_period_in_euro = (
-            consumption_in_kwh * euro_per_unit
+            total_consumption_in_kwh * euro_per_unit
         )
 
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=consumption_in_kwh,
+            total_consumption_in_kwh=total_consumption_in_kwh,
+            consumption_for_domestic_hot_water_in_kwh=dhw_consumption_in_kwh,
+            consumption_for_space_heating_in_kwh=sh_consumption_in_kwh,
             loadtype=LoadTypes.DISTRICTHEATING,
             kpi_tag=KpiTagEnumClass.DISTRICT_HEATING,
         )
@@ -651,25 +664,22 @@ class DistrictHeating(Component):
         simulation_parameters: SimulationParameters,
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        device_co2_footprint_per_simulated_period = (
-            config.co2_footprint / config.lifetime
-        ) * (simulation_parameters.duration.total_seconds() / seconds_per_year)
-
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-        )
-
-        capex_cost_data_class.kpi_tag = (
+        component_type = ComponentType.DISTRICT_HEATING
+        kpi_tag = (
             KpiTagEnumClass.DISTRICT_HEATING
         )
+        unit = Units.KILOWATT
+        size_of_energy_system = config.connected_load_w * 1e-3
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
+        )
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
 
         return capex_cost_data_class
 
@@ -691,13 +701,31 @@ class DistrictHeating(Component):
 
         # Energy related KPIs
         energy_consumption = KpiEntry(
-            name="Energy consumption for space heating",
+            name="Total energy consumption",
             unit="kWh",
-            value=opex_dataclass.consumption_in_kwh,
+            value=opex_dataclass.total_consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )
         list_of_kpi_entries.append(energy_consumption)
+
+        sh_energy_consumption = KpiEntry(
+            name="Energy consumption for space heating",
+            unit="kWh",
+            value=opex_dataclass.consumption_for_space_heating_in_kwh,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(sh_energy_consumption)
+
+        dhw_energy_consumption = KpiEntry(
+            name="Energy consumption for domestic hot water",
+            unit="kWh",
+            value=opex_dataclass.consumption_for_domestic_hot_water_in_kwh,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(dhw_energy_consumption)
 
         # Economic and environmental KPIs
         capex = KpiEntry(
@@ -781,7 +809,7 @@ class DistrictHeatingControllerConfig(ConfigBase):
     building_name: str
     name: str
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
-    with_domestic_hot_water_preparation: float
+    with_domestic_hot_water_preparation: bool
     offset: float  # overheating of dhw storage
 
     @classmethod
@@ -821,7 +849,7 @@ class DistrictHeatingController(Component):
 
     # Outputs
     DeltaTemperatureNeeded = "DeltaTemperatureNeeded"
-    HeatingMode = "HeatingMode"
+    OperatingMode = "HeatingMode"
 
     def __init__(
         self,
@@ -894,10 +922,10 @@ class DistrictHeatingController(Component):
 
         self.heating_mode_output_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.HeatingMode,
+            self.OperatingMode,
             LoadTypes.ANY,
             Units.ANY,
-            output_description="Heating mode of district heating.",
+            output_description="Operating mode of district heating.",
         )
 
         self.add_default_connections(
@@ -1034,6 +1062,7 @@ class DistrictHeatingController(Component):
         heating_flow_temperature_from_heat_distribution_in_celsius = stsv.get_input_value(
             self.heating_flow_temperature_from_heat_distribution_system_channel
         )
+        water_temperature_input_from_warm_water_storage_in_celsius = None
         if self.config.with_domestic_hot_water_preparation:
             water_temperature_input_from_warm_water_storage_in_celsius = (
                 stsv.get_input_value(
@@ -1045,48 +1074,13 @@ class DistrictHeatingController(Component):
             self.daily_avg_outside_temperature_input_channel
         )
 
-        # turning district heating off when the average daily outside temperature is above a certain threshold (if threshold is set in the config)
-        summer_heating_mode = self.summer_heating_condition(
-            daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-            set_heating_threshold_temperature_in_celsius=self.district_heating_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+        # Determine which operating mode to use in dual-circuit system
+        delta_temperature_in_celsius = self.determine_operating_mode(
+            daily_avg_outside_temperature_in_celsius,
+            water_temperature_input_from_heat_distibution_in_celsius,
+            heating_flow_temperature_from_heat_distribution_in_celsius,
+            water_temperature_input_from_warm_water_storage_in_celsius,
         )
-
-        # on/off controller
-        self.determine_operating_mode(
-            water_temperature_input_sh_in_celsius=water_temperature_input_from_heat_distibution_in_celsius,
-            set_heating_flow_temperature_sh_in_celsius=heating_flow_temperature_from_heat_distribution_in_celsius,
-            water_temperature_input_dhw_in_celsius=water_temperature_input_from_warm_water_storage_in_celsius
-            if self.config.with_domestic_hot_water_preparation
-            else None,
-            set_heating_flow_temperature_dhw_in_celsius=self.warm_water_temperature_aim_in_celsius
-            if self.config.with_domestic_hot_water_preparation
-            else None,
-            summer_heating_mode=summer_heating_mode,
-        )
-
-        if self.controller_mode == HeatingMode.SPACE_HEATING:
-            # delta temperature should not be negative because district heating cannot provide cooling
-            delta_temperature_in_celsius = max(
-                heating_flow_temperature_from_heat_distribution_in_celsius
-                - water_temperature_input_from_heat_distibution_in_celsius,
-                0,
-            )
-        elif self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
-            # delta temperature should not be negative because district heating cannot provide cooling
-            delta_temperature_in_celsius = (
-                max(
-                    self.warm_water_temperature_aim_in_celsius
-                    - water_temperature_input_from_warm_water_storage_in_celsius,
-                    0,
-                )
-                + self.config.offset
-            )
-        elif self.controller_mode == HeatingMode.OFF:
-            delta_temperature_in_celsius = 0
-        else:
-            raise ValueError(
-                "District Heating Controller control_signal unknown."
-            )
 
         stsv.set_output_value(
             self.delta_temperature_to_district_heating_channel,
@@ -1096,97 +1090,54 @@ class DistrictHeatingController(Component):
             self.heating_mode_output_channel, self.controller_mode.value
         )
 
-    def determine_operating_mode(
-        self,
-        water_temperature_input_sh_in_celsius: float,
-        set_heating_flow_temperature_sh_in_celsius: float,
-        water_temperature_input_dhw_in_celsius: Optional[float],
-        set_heating_flow_temperature_dhw_in_celsius: Optional[float],
-        summer_heating_mode: str,
-    ) -> None:
-        """Set conditions for the district heating controller mode."""
+    def determine_operating_mode(self,
+                                 daily_avg_outside_temperature_in_celsius: float,
+                                 sh_current_temperature_deg_c: float,
+                                 sh_set_temperature_deg_c: float,
+                                 dhw_current_temperature_deg_c: Optional[float]) -> float:
+        """Determine operating mode."""
 
-        def dhw_heating_needed(
-            controller_mode,
-            current_water_temperature,
-            target_water_temperature,
-        ):
-            if not self.config.with_domestic_hot_water_preparation:
-                return False
-
-            assert water_temperature_input_dhw_in_celsius is not None
-            assert set_heating_flow_temperature_dhw_in_celsius is not None
-
-            if current_water_temperature < target_water_temperature:
-                return True
-
-            if (
-                controller_mode == HeatingMode.DOMESTIC_HOT_WATER
-                and current_water_temperature
-                < target_water_temperature + self.config.offset
-            ):
-                return True
-
-            return False
-
-        def space_heating_needed(
-            current_water_temperature, target_water_temperature
-        ):
-            if summer_heating_mode == "off":
-                return False
-            if current_water_temperature >= target_water_temperature:
-                return False
-            return True
-
-        needs_space_heating = space_heating_needed(
-            water_temperature_input_sh_in_celsius,
-            set_heating_flow_temperature_sh_in_celsius,
-        )
-        needs_dhw_heating = dhw_heating_needed(
-            self.controller_mode,
-            water_temperature_input_dhw_in_celsius,
-            set_heating_flow_temperature_dhw_in_celsius,
+        self.controller_mode = DiverterValve.determine_operating_mode(
+            with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
+            current_controller_mode=self.controller_mode,
+            daily_average_outside_temperature=daily_avg_outside_temperature_in_celsius,
+            water_temperature_input_sh_in_celsius=sh_current_temperature_deg_c,
+            water_temperature_input_dhw_in_celsius=dhw_current_temperature_deg_c
+            if self.config.with_domestic_hot_water_preparation
+            else None,
+            set_temperatures=SetTemperatureConfig(
+                set_temperature_space_heating=sh_set_temperature_deg_c,
+                set_temperature_dhw=self.warm_water_temperature_aim_in_celsius,
+                hysteresis_dhw_offset=self.config.offset,
+                outside_temperature_threshold=self.district_heating_controller_config.set_heating_threshold_outside_temperature_in_celsius
+            )
         )
 
-        if needs_dhw_heating:
-            # DHW has higher priority
-            self.controller_mode = HeatingMode.DOMESTIC_HOT_WATER
-        elif needs_space_heating:
-            self.controller_mode = HeatingMode.SPACE_HEATING
-        else:
-            self.controller_mode = HeatingMode.OFF
-
-    def summer_heating_condition(
-        self,
-        daily_average_outside_temperature_in_celsius: float,
-        set_heating_threshold_temperature_in_celsius: Optional[float],
-    ) -> str:
-        """Set conditions for the district heating."""
-
-        # if no heating threshold is set, the gas_heater is always on
-        if set_heating_threshold_temperature_in_celsius is None:
-            heating_mode = "on"
-
-        # it is too hot for heating
-        elif (
-            daily_average_outside_temperature_in_celsius
-            > set_heating_threshold_temperature_in_celsius
-        ):
-            heating_mode = "off"
-
-        # it is cold enough for heating
-        elif (
-            daily_average_outside_temperature_in_celsius
-            < set_heating_threshold_temperature_in_celsius
-        ):
-            heating_mode = "on"
-
+        if self.controller_mode == HeatingMode.SPACE_HEATING:
+            # delta temperature should not be negative because district heating cannot provide cooling
+            delta_temperature_in_celsius = float(max(
+                sh_set_temperature_deg_c
+                - sh_current_temperature_deg_c,
+                0.,
+            ))
+        elif self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
+            # delta temperature should not be negative because district heating cannot provide cooling
+            assert dhw_current_temperature_deg_c is not None
+            delta_temperature_in_celsius = (
+                float(max(
+                    self.warm_water_temperature_aim_in_celsius
+                    - dhw_current_temperature_deg_c,
+                    0.,
+                )
+                + self.config.offset
+            ))
+        elif self.controller_mode == HeatingMode.OFF:
+            delta_temperature_in_celsius = 0.
         else:
             raise ValueError(
-                f"daily average temperature {daily_average_outside_temperature_in_celsius}°C"
-                f"or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
+                "District Heating Controller control_signal unknown."
             )
-        return heating_mode
+        return delta_temperature_in_celsius
 
     def get_cost_opex(
         self,

@@ -38,7 +38,7 @@ from hisim.component import (
 )
 from hisim.components import weather, simple_water_storage, heat_distribution_system
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
-from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules
+from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules, ComponentType
 from hisim.units import (
     Quantity,
     Watt,
@@ -48,11 +48,16 @@ from hisim.units import (
     Euro,
     Years,
     KilogramPerSecond,
+    Unitless
 )
-from hisim.components.configuration import PhysicsConfig
+from hisim.components.configuration import (
+    PhysicsConfig,
+    EmissionFactorsAndCostsForFuelsConfig,
+)
 
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -106,17 +111,21 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     minimum_thermal_output_power_in_watt: Quantity[float, Watt]
     position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
     with_domestic_hot_water_preparation: bool
+    passive_cooling_with_brine: bool
+    electrical_input_power_brine_pump_in_watt: Optional[float]
     massflow_nominal_secondary_side_in_kg_per_s: Quantity[float, KilogramPerSecond]
     massflow_nominal_primary_side_in_kg_per_s: Optional[float]
     specific_heat_capacity_of_primary_fluid: Optional[float]
     #: CO2 footprint of investment in kg
-    co2_footprint: Quantity[float, Kilogram]
+    device_co2_footprint_in_kg: Optional[Quantity[float, Kilogram]]
     #: cost for investment in Euro
-    cost: Quantity[float, Euro]
+    investment_costs_in_euro: Optional[Quantity[float, Euro]]
     #: lifetime in years
-    lifetime: Quantity[float, Years]
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    lifetime_in_years: Optional[Quantity[float, Years]]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[Quantity[float, Euro]]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[Quantity[float, Unitless]]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(
@@ -149,15 +158,17 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             minimum_thermal_output_power_in_watt=Quantity(1800, Watt),
             position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
             with_domestic_hot_water_preparation=False,
+            passive_cooling_with_brine=False,
+            electrical_input_power_brine_pump_in_watt=None,
             massflow_nominal_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
             massflow_nominal_primary_side_in_kg_per_s=0,
             specific_heat_capacity_of_primary_fluid=0,
-            # value from emission_factors_and_costs_devices.csv
-            co2_footprint=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 165.84, Kilogram),
-            # value from emission_factors_and_costs_devices.csv
-            cost=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 1513.74, Euro),
-            lifetime=Quantity(10, Years),  # value from emission_factors_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
         )
 
     @classmethod
@@ -190,16 +201,17 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             minimum_thermal_output_power_in_watt=Quantity(1800, Watt),
             position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
             with_domestic_hot_water_preparation=False,
+            passive_cooling_with_brine=False,
+            electrical_input_power_brine_pump_in_watt=None,
             massflow_nominal_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
             massflow_nominal_primary_side_in_kg_per_s=0,
             specific_heat_capacity_of_primary_fluid=0,
-            # value from emission_factros_and_costs_devices.csv
-            co2_footprint=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 165.84, Kilogram),
-            # value from emission_factros_and_costs_devices.csv
-            cost=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 1513.74, Euro),
-            # value from emission_factros_and_costs_devices.csv
-            lifetime=Quantity(10, Years),
-            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
         )
 
 
@@ -263,7 +275,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
     CounterSwitchToSH = "CounterSwitchToSH"  # Counter of switching to SH != onOff Switch!
     CounterSwitchToDHW = "CounterSwitchToDHW"  # Counter of switching to DHW != onOff Switch!
     CounterOnOff = "CounterOnOff"  # Counter of starting the hp
-    DeltaTHeatpumpSecondarySide = "DeltaTHeatpumpSecondarySide"  # Temperature difference between input and output of HP secondary side
+    DeltaTHeatpumpSecondarySide = (
+        "DeltaTHeatpumpSecondarySide"  # Temperature difference between input and output of HP secondary side
+    )
     DeltaTHeatpumpPrimarySide = "DeltaTHeatpumpPrimarySide"
 
     def __init__(
@@ -300,6 +314,12 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         self.with_domestic_hot_water_preparation = config.with_domestic_hot_water_preparation
 
+        self.passive_cooling_with_brine = config.passive_cooling_with_brine
+
+        self.electrical_input_power_brine_pump_in_watt = config.electrical_input_power_brine_pump_in_watt
+        if self.electrical_input_power_brine_pump_in_watt is None:
+            self.electrical_input_power_brine_pump_in_watt = 0.0
+
         self.position_hot_water_storage_in_system = config.position_hot_water_storage_in_system
 
         # self.m_dot_ref = float(
@@ -314,10 +334,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             PositionHotWaterStorageInSystemSetup.SERIE,
             PositionHotWaterStorageInSystemSetup.NO_STORAGE,
         ]:
-            if (
-                self.m_dot_ref is None
-                or self.m_dot_ref == 0
-            ):
+            if self.m_dot_ref is None or self.m_dot_ref == 0:
                 raise ValueError(
                     """If system setup is without parallel hot water storage, nominal massflow and minimum
                     thermal power of the heat pump must be given an integer value due to constant massflow
@@ -369,27 +386,49 @@ class MoreAdvancedHeatPumpHPLib(Component):
         self.heatpump.delta_t = 5
 
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
-            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(
+                energy_carrier=LoadTypes.WATER
+            ).specific_heat_capacity_in_joule_per_kg_per_kelvin
         )
 
         # protect erros for Water/Water Heatpumps
         if self.parameters["Group"].iloc[0] == 1.0 or self.parameters["Group"].iloc[0] == 4.0:
             if self.fluid_primary_side.lower() != "air":
                 raise KeyError("HP modell does not fit to heat source in config!")
+            if self.passive_cooling_with_brine:
+                raise KeyError("HP modell with air as heat source does not support passive cooling with brine!")
+            if self.electrical_input_power_brine_pump_in_watt != 0.0:
+                raise KeyError("HP modell with air as heat source does not support electrical input power for brine pump!")
+
         if self.parameters["Group"].iloc[0] == 2.0 or self.parameters["Group"].iloc[0] == 5.0:
             if self.fluid_primary_side.lower() != "brine":
                 raise KeyError("HP modell does not fit to heat source in config!")
             if self.massflow_nominal_primary_side_in_kg_per_s == 0:
-                raise KeyError("HP modell with brine/water as heat source need config parameter massflow_nominal_primary_side_in_kg_per_s!")
+                raise KeyError(
+                    "HP modell with brine/water as heat source need config parameter massflow_nominal_primary_side_in_kg_per_s!"
+                )
             if self.specific_heat_capacity_of_primary_fluid == 0:
-                raise KeyError("HP modell with brine/water as heat source need config parameter specific_heat_capacity_of_primary_fluid! "
-                               "--> connection with information class of heat source")
+                raise KeyError(
+                    "HP modell with brine/water as heat source need config parameter specific_heat_capacity_of_primary_fluid! "
+                    "--> connection with information class of heat source"
+                )
+            if self.electrical_input_power_brine_pump_in_watt == 0.0:
+                raise KeyError(
+                    "HP modell with brine/water as heat source need config parameter electrical_input_power_brine_pump_in_watt!"
+                )
+
         if self.parameters["Group"].iloc[0] == 3.0 or self.parameters["Group"].iloc[0] == 6.0:
             if self.fluid_primary_side.lower() != "water":
                 raise KeyError("HP modell does not fit to heat source in config!")
             if self.massflow_nominal_primary_side_in_kg_per_s is None:
                 raise KeyError(
-                    "HP modell with brine/water as heat source need config parameter massflow_nominal_primary_side_in_kg_per_s!")
+                    "HP modell with brine/water as heat source need config parameter massflow_nominal_primary_side_in_kg_per_s!"
+                )
+
+            if self.electrical_input_power_brine_pump_in_watt == 0.0 :
+                raise KeyError(
+                    "HP modell with brine/water as heat source need config parameter electrical_input_power_brine_pump_in_watt!"
+                )
 
         # Define component inputs
         self.on_off_switch_sh: ComponentInput = self.add_input(
@@ -457,12 +496,20 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 mandatory=True,
             )
 
-        if self.position_hot_water_storage_in_system in [
-            PositionHotWaterStorageInSystemSetup.SERIE,
-            PositionHotWaterStorageInSystemSetup.NO_STORAGE,
-        ]:
+        if (
+            self.position_hot_water_storage_in_system
+            in [
+                PositionHotWaterStorageInSystemSetup.SERIE,
+                PositionHotWaterStorageInSystemSetup.NO_STORAGE,
+            ]
+            or self.passive_cooling_with_brine
+        ):
             self.set_temperature_hp_sh: ComponentInput = self.add_input(
-                self.component_name, self.SetHeatingTemperatureSpaceHeating, LoadTypes.TEMPERATURE, Units.CELSIUS, True,
+                self.component_name,
+                self.SetHeatingTemperatureSpaceHeating,
+                LoadTypes.TEMPERATURE,
+                Units.CELSIUS,
+                True,
             )
 
         # Define component outputs
@@ -801,9 +848,12 @@ class MoreAdvancedHeatPumpHPLib(Component):
         if self.with_domestic_hot_water_preparation:
             self.add_default_connections(self.get_default_connections_from_heat_pump_controller_dhw())
             self.add_default_connections(self.get_default_connections_from_dhw_storage())
+            self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
             # self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
 
-    def get_default_connections_from_heat_pump_controller_space_heating(self,):
+    def get_default_connections_from_heat_pump_controller_space_heating(
+        self,
+    ):
         """Get default connections."""
         connections = []
         hpc_classname = MoreAdvancedHeatPumpHPLibControllerSpaceHeating.get_classname()
@@ -816,7 +866,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
         )
         return connections
 
-    def get_default_connections_from_heat_pump_controller_dhw(self,):
+    def get_default_connections_from_heat_pump_controller_dhw(
+        self,
+    ):
         """Get default connections."""
         connections = []
         hpc_dhw_classname = MoreAdvancedHeatPumpHPLibControllerDHW.get_classname()
@@ -843,7 +895,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
         )
         return connections
 
-    def get_default_connections_from_weather(self,):
+    def get_default_connections_from_weather(
+        self,
+    ):
         """Get default connections."""
         connections = []
         weather_classname = weather.Weather.get_classname()
@@ -856,7 +910,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(self,):
+    def get_default_connections_from_simple_hot_water_storage(
+        self,
+    ):
         """Get simple hot water storage default connections."""
         # use importlib for importing the other component in order to avoid circular-import errors
         component_module_name = "hisim.components.simple_water_storage"
@@ -873,7 +929,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
         )
         return connections
 
-    def get_default_connections_from_dhw_storage(self,):
+    def get_default_connections_from_dhw_storage(
+        self,
+    ):
         """Get simple hot water storage default connections."""
         # use importlib for importing the other component in order to avoid circular-import errors
         component_module_name = "hisim.components.generic_hot_water_storage_modular"
@@ -883,29 +941,31 @@ class MoreAdvancedHeatPumpHPLib(Component):
         dhw_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-                MoreAdvancedHeatPumpHPLib.TemperatureInputSecondary_DHW, dhw_classname, component_class.TemperatureMean,
+                MoreAdvancedHeatPumpHPLib.TemperatureInputSecondary_DHW,
+                dhw_classname,
+                component_class.TemperatureMean,
             )
         )
         return connections
 
-    # def get_default_connections_from_simple_dhw_storage(
-    #         self,
-    # ):
-    #     """Get simple dhw water storage default connections."""
-    #     # use importlib for importing the other component in order to avoid circular-import errors
-    #     component_module_name = "hisim.components.simple_dhw_storage"
-    #     component_module = importlib.import_module(name=component_module_name)
-    #     component_class = getattr(component_module, "SimpleDHWStorage")
-    #     connections = []
-    #     dhw_classname = component_class.get_classname()
-    #     connections.append(
-    #         ComponentConnection(
-    #             MoreAdvancedHeatPumpHPLib.TemperatureInputSecondary_DHW,
-    #             dhw_classname,
-    #             component_class.WaterTemperatureToHeatGenerator,
-    #         )
-    #     )
-    #     return connections
+    def get_default_connections_from_simple_dhw_storage(
+        self,
+    ):
+        """Get simple dhw water storage default connections."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.simple_water_storage"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "SimpleDHWStorage")
+        connections = []
+        dhw_classname = component_class.get_classname()
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.TemperatureInputSecondary_DHW,
+                dhw_classname,
+                component_class.WaterTemperatureToHeatGenerator,
+            )
+        )
+        return connections
 
     def write_to_report(self):
         """Write configuration to the report."""
@@ -942,10 +1002,14 @@ class MoreAdvancedHeatPumpHPLib(Component):
         time_on_cooling = self.state.time_on_cooling
         time_off = self.state.time_off
 
-        if self.position_hot_water_storage_in_system in [
-            PositionHotWaterStorageInSystemSetup.SERIE,
-            PositionHotWaterStorageInSystemSetup.NO_STORAGE,
-        ]:
+        if (
+            self.position_hot_water_storage_in_system
+            in [
+                PositionHotWaterStorageInSystemSetup.SERIE,
+                PositionHotWaterStorageInSystemSetup.NO_STORAGE,
+            ]
+            or self.passive_cooling_with_brine
+        ):
             set_temperature_hp_sh = stsv.get_input_value(self.set_temperature_hp_sh)
 
         if self.with_domestic_hot_water_preparation:
@@ -979,9 +1043,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
             # Overwrite on_off to realize minimum time of or time off
             if on_off_previous == 1 and time_on_heating < time_on_min:
-                on_off = 1
+                if on_off == 0:
+                    on_off = 1
             elif on_off_previous == 2 and time_on_heating < time_on_min:
-                on_off = 2
+                if on_off == 0:
+                    on_off = 2
             elif on_off_previous == -1 and time_on_cooling < time_on_min:
                 on_off = -1
             elif on_off_previous == 0 and time_off < time_off_min:
@@ -1002,7 +1068,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     t_amb=t_amb,
                     mode=1,
                     operation_mode="heating_building",
-                    p_th_min=self.minimum_thermal_output_power
+                    p_th_min=self.minimum_thermal_output_power,
                 )
 
                 p_th_sh = results["P_th"]
@@ -1010,6 +1076,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 p_el_sh = results["P_el"]
                 p_el_dhw = 0.0
                 p_el_cooling = 0.0
+                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
                 cop = results["COP"]
                 eer = results["EER"]
                 t_out_sh = results["T_out"]
@@ -1034,7 +1101,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     t_amb=t_amb,
                     mode=1,
                     operation_mode="heating_building",
-                    p_th_min=self.minimum_thermal_output_power
+                    p_th_min=self.minimum_thermal_output_power,
                 )
 
                 cop = results["COP"]
@@ -1067,6 +1134,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 p_th_dhw = 0.0
                 p_el_dhw = 0.0
                 p_el_cooling = 0.0
+                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
                 m_dot_dhw = 0.0
                 time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
                 time_on_cooling = 0
@@ -1082,12 +1150,13 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     t_amb=t_amb,
                     mode=1,
                     operation_mode="heating_dhw",
-                    p_th_min=self.minimum_thermal_output_power
+                    p_th_min=self.minimum_thermal_output_power,
                 )
 
                 p_th_sh = 0.0
                 p_el_sh = 0.0
                 p_el_cooling = 0.0
+                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
                 cop = results["COP"]
                 eer = results["EER"]
                 t_out_sh = t_in_secondary_sh
@@ -1115,7 +1184,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     t_amb=t_amb,
                     mode=1,
                     operation_mode="heating_dhw",
-                    p_th_min=self.minimum_thermal_output_power
+                    p_th_min=self.minimum_thermal_output_power,
                 )
 
                 cop = results["COP"]
@@ -1146,36 +1215,74 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 p_th_sh = 0.0
                 p_el_sh = 0.0
                 p_el_cooling = 0.0
+                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
                 m_dot_sh = 0.0
                 time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
                 time_on_cooling = 0
                 time_off = 0
 
         elif on_off == -1:
-            # Calulate outputs for cooling mode
-            self.heatpump.delta_t = 5
-            results = self.get_cached_results_or_run_hplib_simulation(
-                t_in_primary=t_in_primary,
-                t_in_secondary=t_in_secondary_sh,
-                t_amb=t_amb,
-                mode=2,
-                operation_mode="cooling_building",
-                p_th_min=self.minimum_thermal_output_power
-            )
-            p_th_sh = results["P_th"]
-            p_th_dhw = 0.0
-            p_el_sh = results["P_el"]
-            p_el_dhw = 0.0
-            p_el_cooling = p_el_sh
-            cop = results["COP"]
-            eer = results["EER"]
-            t_out_sh = results["T_out"]
-            t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
-            m_dot_sh = results["m_dot"]
-            m_dot_dhw = 0.0
-            time_on_cooling = time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
-            time_on_heating = 0
-            time_off = 0
+            if self.passive_cooling_with_brine:
+                # passiv cooling with brine
+                cop = 0
+                eer = 1
+
+                m_dot_sh = self.m_dot_ref
+
+                self.heatpump.delta_t = min(t_in_secondary_sh - set_temperature_hp_sh, 5)
+
+                if self.heatpump.delta_t == 0:
+                    self.heatpump.delta_t = 0.00000001
+
+                p_th_sh = -(
+                    m_dot_sh
+                    * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+                    * self.heatpump.delta_t
+                )
+
+                t_out_sh = t_in_secondary_sh + (
+                    p_th_sh / (m_dot_sh * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius)
+                )
+
+                self.heatpump.delta_t = t_out_sh - t_in_secondary_sh
+
+                p_th_dhw = 0.0
+                p_el_dhw = 0.0
+                p_el_sh = 0.0
+                p_el_cooling = 0.0
+                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
+                t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
+                m_dot_dhw = 0.0
+                time_on_cooling = time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
+                time_on_heating = 0
+                time_off = 0
+
+            else:
+                # Calulate outputs for cooling mode, aktive cooling with hp
+                self.heatpump.delta_t = 5
+                results = self.get_cached_results_or_run_hplib_simulation(
+                    t_in_primary=t_in_primary,
+                    t_in_secondary=t_in_secondary_sh,
+                    t_amb=t_amb,
+                    mode=2,
+                    operation_mode="cooling_building",
+                    p_th_min=self.minimum_thermal_output_power,
+                )
+                p_th_sh = results["P_th"]
+                p_th_dhw = 0.0
+                p_el_sh = 0.0
+                p_el_dhw = 0.0
+                p_el_cooling = results["P_el"]
+                p_el_brine_pump = self.electrical_input_power_brine_pump_in_watt
+                cop = results["COP"]
+                eer = results["EER"]
+                t_out_sh = results["T_out"]
+                t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
+                m_dot_sh = results["m_dot"]
+                m_dot_dhw = 0.0
+                time_on_cooling = time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
+                time_on_heating = 0
+                time_off = 0
 
         elif on_off == 0:
             # Calulate outputs for off mode
@@ -1184,6 +1291,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             p_el_sh = 0.0
             p_el_dhw = 0.0
             p_el_cooling = 0.0
+            p_el_brine_pump = 0.0
             # None values or nans will cause troubles in post processing, that is why there are not used here
             # cop = None
             # t_out = None
@@ -1201,9 +1309,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
             raise ValueError("Unknown mode for Advanced HPLib On_Off.")
 
         p_th_tot_in_watt = p_th_dhw + p_th_sh
-        p_el_tot_in_watt = p_el_dhw + p_el_sh + p_el_cooling
+        p_el_tot_in_watt = p_el_dhw + p_el_sh + p_el_cooling + p_el_brine_pump
 
-        thermal_power_from_environment = (p_th_dhw + p_th_sh) - (p_el_dhw + p_el_sh)
+        thermal_power_from_environment = p_th_tot_in_watt - p_el_tot_in_watt
 
         thermal_energy_hp_tot_in_watt_hour = (
             p_th_tot_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600
@@ -1218,23 +1326,23 @@ class MoreAdvancedHeatPumpHPLib(Component):
         electrical_energy_hp_dhw_in_watt_hour = p_el_dhw * self.my_simulation_parameters.seconds_per_timestep / 3600
 
         cumulative_hp_thermal_energy_tot_in_watt_hour = (
-            self.state.cumulative_thermal_energy_tot_in_watt_hour + thermal_energy_hp_tot_in_watt_hour
+            self.state.cumulative_thermal_energy_tot_in_watt_hour + abs(thermal_energy_hp_tot_in_watt_hour)
         )
         cumulative_hp_thermal_energy_sh_in_watt_hour = (
-            self.state.cumulative_thermal_energy_sh_in_watt_hour + thermal_energy_hp_sh_in_watt_hour
+            self.state.cumulative_thermal_energy_sh_in_watt_hour + abs(thermal_energy_hp_sh_in_watt_hour)
         )
         cumulative_hp_thermal_energy_dhw_in_watt_hour = (
-            self.state.cumulative_thermal_energy_dhw_in_watt_hour + thermal_energy_hp_dhw_in_watt_hour
+            self.state.cumulative_thermal_energy_dhw_in_watt_hour + abs(thermal_energy_hp_dhw_in_watt_hour)
         )
 
         cumulative_hp_electrical_energy_tot_in_watt_hour = (
-            self.state.cumulative_electrical_energy_tot_in_watt_hour + electrical_energy_hp_tot_in_watt_hour
+            self.state.cumulative_electrical_energy_tot_in_watt_hour + abs(electrical_energy_hp_tot_in_watt_hour)
         )
         cumulative_hp_electrical_energy_sh_in_watt_hour = (
-            self.state.cumulative_electrical_energy_sh_in_watt_hour + electrical_energy_hp_sh_in_watt_hour
+            self.state.cumulative_electrical_energy_sh_in_watt_hour + abs(electrical_energy_hp_sh_in_watt_hour)
         )
         cumulative_hp_electrical_energy_dhw_in_watt_hour = (
-            self.state.cumulative_electrical_energy_dhw_in_watt_hour + electrical_energy_hp_dhw_in_watt_hour
+            self.state.cumulative_electrical_energy_dhw_in_watt_hour + abs(electrical_energy_hp_dhw_in_watt_hour)
         )
 
         # Counter for switching in sh mode
@@ -1270,9 +1378,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 temperature_difference_primary_side = 0.0
                 m_dot_water_primary = 0.0
             else:
-                temperature_difference_primary_side = (thermal_power_from_environment /
-                                                       (m_dot_water_primary *
-                                                       specific_heat_capacity_of_primary_fluid))
+                temperature_difference_primary_side = thermal_power_from_environment / (
+                    m_dot_water_primary * specific_heat_capacity_of_primary_fluid
+                )
 
             t_out_primary = t_in_primary - temperature_difference_primary_side
 
@@ -1356,31 +1464,37 @@ class MoreAdvancedHeatPumpHPLib(Component):
         config: MoreAdvancedHeatPumpHPLibConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost.value / config.lifetime.value) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        device_co2_footprint_per_simulated_period = (config.co2_footprint.value / config.lifetime.value) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
+        # set variables
+        component_type = ComponentType.HEAT_PUMP
+        kpi_tag = KpiTagEnumClass.HEATPUMP_SPACE_HEATING_AND_DOMESTIC_HOT_WATER
+        unit = Units.KILOWATT
+        size_of_energy_system = config.set_thermal_output_power_in_watt.value * 1e-3
 
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost.value,
-            device_co2_footprint_in_kg=config.co2_footprint.value,
-            lifetime_in_years=config.lifetime.value,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING_AND_DOMESTIC_HOT_WATER,
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
         )
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
+
         return capex_cost_data_class
 
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of maintenance costs.
 
         No electricity costs for components except for Electricity Meter,
         because part of electricity consumption is feed by PV
         """
-        consumption_in_kwh: float
+        total_consumption_in_kwh: float
+        sh_consumption_in_kwh: float
+        dhw_consumption_in_kwh: float
 
         for index, output in enumerate(all_outputs):
             if (
@@ -1388,17 +1502,49 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 and output.load_type == LoadTypes.ELECTRICITY
                 and output.field_name == self.ElectricalInputPowerTotal
             ):
-                consumption_in_kwh = round(
+                total_consumption_in_kwh = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
                     1,
                 )
+            if (
+                output.component_name == self.component_name
+                and output.load_type == LoadTypes.ELECTRICITY
+                and output.field_name == self.ElectricalInputPowerSH
+            ):
+                sh_consumption_in_kwh = round(
+                    sum(postprocessing_results.iloc[:, index])
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
+            if (
+                output.component_name == self.component_name
+                and output.load_type == LoadTypes.ELECTRICITY
+                and output.field_name == self.ElectricalInputPowerDHW
+            ):
+                dhw_consumption_in_kwh = round(
+                    sum(postprocessing_results.iloc[:, index])
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+            self.my_simulation_parameters.year
+        )
+        co2_per_unit = emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh
+        euro_per_unit = emissions_and_cost_factors.electricity_costs_in_euro_per_kwh
+        co2_per_simulated_period_in_kg = total_consumption_in_kwh * co2_per_unit
+        opex_energy_cost_per_simulated_period_in_euro = total_consumption_in_kwh * euro_per_unit
+
         opex_cost_data_class = OpexCostDataClass(
-            opex_energy_cost_in_euro=0,
+            opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
-            co2_footprint_in_kg=0,
-            consumption_in_kwh=consumption_in_kwh,
+            co2_footprint_in_kg=co2_per_simulated_period_in_kg,
+            total_consumption_in_kwh=total_consumption_in_kwh,
+            consumption_for_domestic_hot_water_in_kwh=dhw_consumption_in_kwh,
+            consumption_for_space_heating_in_kwh=sh_consumption_in_kwh,
             loadtype=LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING_AND_DOMESTIC_HOT_WATER,
         )
@@ -1416,7 +1562,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
         t_amb = round(t_amb, 1)
 
         my_data_class = CalculationRequest(
-            t_in_primary=t_in_primary, t_in_secondary=t_in_secondary, t_amb=t_amb, mode=mode, operation_mode=operation_mode
+            t_in_primary=t_in_primary,
+            t_in_secondary=t_in_secondary,
+            t_amb=t_amb,
+            mode=mode,
+            operation_mode=operation_mode,
         )
         my_json_key = my_data_class.get_key()
         my_hash_key = hashlib.sha256(my_json_key.encode("utf-8")).hexdigest()
@@ -1424,13 +1574,19 @@ class MoreAdvancedHeatPumpHPLib(Component):
         if my_hash_key in self.calculation_cache:
             results = self.calculation_cache[my_hash_key]
         else:
-            results = self.heatpump.simulate(t_in_primary=t_in_primary, t_in_secondary=t_in_secondary, t_amb=t_amb, mode=mode, p_th_min=p_th_min)
+            results = self.heatpump.simulate(
+                t_in_primary=t_in_primary, t_in_secondary=t_in_secondary, t_amb=t_amb, mode=mode, p_th_min=p_th_min
+            )
 
             self.calculation_cache[my_hash_key] = results
 
         return results
 
-    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
 
         output_heating_energy_in_kilowatt_hour: float = 0.0
@@ -1478,29 +1634,37 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     )
                 elif output.field_name == self.ThermalOutputPowerDHW:
                     dhw_heat_pump_heating_power_output_in_watt_series = postprocessing_results.iloc[:, index]
-                    dhw_heat_pump_heating_energy_output_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=dhw_heat_pump_heating_power_output_in_watt_series,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    dhw_heat_pump_heating_energy_output_in_kilowatt_hour = (
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=dhw_heat_pump_heating_power_output_in_watt_series,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
                     )
 
                 elif output.field_name == self.ElectricalInputPowerSH:
                     # get electrical energie values for heating
-                    electrical_energy_for_heating_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    electrical_energy_for_heating_in_kilowatt_hour = (
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=postprocessing_results.iloc[:, index],
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
                     )
                 elif output.field_name == self.ElectricalInputPowerDHW:
                     dhw_heat_pump_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
-                    dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=dhw_heat_pump_total_electricity_consumption_in_watt_series,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour = (
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=dhw_heat_pump_total_electricity_consumption_in_watt_series,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
                     )
 
                 elif output.field_name == self.ElectricalInputPowerForCooling:
                     # get electrical energie values for cooling
-                    electrical_energy_for_cooling_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    electrical_energy_for_cooling_in_kilowatt_hour = (
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=postprocessing_results.iloc[:, index],
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
                     )
 
                 elif output.field_name == self.TimeOnHeating:
@@ -1801,7 +1965,9 @@ class MoreAdvancedHeatPumpHPLibState:
     delta_t_secondary_side: float
     delta_t_primary_side: float
 
-    def self_copy(self,):
+    def self_copy(
+        self,
+    ):
         """Copy the Heat Pump State."""
         return MoreAdvancedHeatPumpHPLibState(
             self.time_on_heating,
@@ -1835,7 +2001,17 @@ class CalculationRequest(JSONWizard):
     def get_key(self):
         """Get key of class with important parameters."""
 
-        return str(self.t_in_primary) + " " + str(self.t_in_secondary) + " " + str(self.t_amb) + " " + str(self.mode) + " " + str(self.operation_mode)
+        return (
+            str(self.t_in_primary)
+            + " "
+            + str(self.t_in_secondary)
+            + " "
+            + str(self.t_amb)
+            + " "
+            + str(self.mode)
+            + " "
+            + str(self.operation_mode)
+        )
 
 
 @dataclass_json
@@ -1938,7 +2114,11 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
         )
 
         self.water_temperature_input_channel: ComponentInput = self.add_input(
-            self.component_name, self.WaterTemperatureInput, LoadTypes.TEMPERATURE, Units.CELSIUS, True,
+            self.component_name,
+            self.WaterTemperatureInput,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            True,
         )
 
         self.heating_flow_temperature_from_heat_distribution_system_channel: ComponentInput = self.add_input(
@@ -1949,7 +2129,11 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
             True,
         )
         self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
-            self.component_name, self.DailyAverageOutsideTemperature, LoadTypes.TEMPERATURE, Units.CELSIUS, True,
+            self.component_name,
+            self.DailyAverageOutsideTemperature,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            True,
         )
 
         self.simple_hot_water_storage_temperature_modifier_channel: ComponentInput = self.add_input(
@@ -1975,7 +2159,9 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
 
-    def get_default_connections_from_heat_distribution_controller(self,):
+    def get_default_connections_from_heat_distribution_controller(
+        self,
+    ):
         """Get default connections."""
         connections = []
         hdsc_classname = heat_distribution_system.HeatDistributionController.get_classname()
@@ -1988,7 +2174,9 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
         )
         return connections
 
-    def get_default_connections_from_weather(self,):
+    def get_default_connections_from_weather(
+        self,
+    ):
         """Get default connections."""
         connections = []
         weather_classname = weather.Weather.get_classname()
@@ -2001,7 +2189,9 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(self,):
+    def get_default_connections_from_simple_hot_water_storage(
+        self,
+    ):
         """Get simple hot water storage default connections."""
         connections = []
         hws_classname = simple_water_storage.SimpleHotWaterStorage.get_classname()
@@ -2297,7 +2487,9 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class
 
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame) -> OpexCostDataClass:  # pylint: disable=unused-argument
+    def get_cost_opex(
+        self, all_outputs: List, postprocessing_results: pd.DataFrame
+    ) -> OpexCostDataClass:  # pylint: disable=unused-argument
         """Calculate OPEX costs, consisting of maintenance costs for Heat Distribution System."""
         opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
 
@@ -2332,7 +2524,9 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
 
     @classmethod
     def get_default_dhw_controller_config(
-        cls, name: str = "HeatPumpControllerDHW", building_name: str = "BUI1",
+        cls,
+        name: str = "HeatPumpControllerDHW",
+        building_name: str = "BUI1",
     ) -> "MoreAdvancedHeatPumpHPLibControllerDHWConfig":
         """Gets a default Generic Heat Pump Controller."""
         return MoreAdvancedHeatPumpHPLibControllerDHWConfig(
@@ -2391,7 +2585,11 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         self.build()
 
         self.water_temperature_input_channel: ComponentInput = self.add_input(
-            self.component_name, self.WaterTemperatureInputFromDHWStorage, LoadTypes.TEMPERATURE, Units.CELSIUS, True,
+            self.component_name,
+            self.WaterTemperatureInputFromDHWStorage,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            True,
         )
 
         self.storage_temperature_modifier_channel: ComponentInput = self.add_input(
@@ -2427,9 +2625,11 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         )
 
         self.add_default_connections(self.get_default_connections_from_dhw_storage())
-        # self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
+        self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
 
-    def get_default_connections_from_dhw_storage(self,):
+    def get_default_connections_from_dhw_storage(
+        self,
+    ):
         """Get simple hot water storage default connections."""
         # use importlib for importing the other component in order to avoid circular-import errors
         component_module_name = "hisim.components.generic_hot_water_storage_modular"
@@ -2446,26 +2646,28 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         )
         return connections
 
-    # def get_default_connections_from_simple_dhw_storage(
-    #         self,
-    # ):
-    #     """Get simple dhw water storage default connections."""
-    #     # use importlib for importing the other component in order to avoid circular-import errors
-    #     component_module_name = "hisim.components.simple_dhw_storage"
-    #     component_module = importlib.import_module(name=component_module_name)
-    #     component_class = getattr(component_module, "SimpleDHWStorage")
-    #     connections = []
-    #     dhw_classname = component_class.get_classname()
-    #     connections.append(
-    #         ComponentConnection(
-    #             MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage,
-    #             dhw_classname,
-    #             component_class.WaterTemperatureToHeatGenerator,
-    #         )
-    #     )
-    #     return connections
+    def get_default_connections_from_simple_dhw_storage(
+        self,
+    ):
+        """Get simple dhw water storage default connections."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.simple_water_storage"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "SimpleDHWStorage")
+        connections = []
+        dhw_classname = component_class.get_classname()
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage,
+                dhw_classname,
+                component_class.WaterTemperatureToHeatGenerator,
+            )
+        )
+        return connections
 
-    def build(self,) -> None:
+    def build(
+        self,
+    ) -> None:
         """Build function.
 
         The function sets important constants and parameters for the calculations.
@@ -2551,7 +2753,8 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
 
         stsv.set_output_value(self.state_dhw_channel, self.state_dhw)
         stsv.set_output_value(
-            self.thermalpower_dhw_is_constant_channel, self.thermalpower_dhw_is_constant,
+            self.thermalpower_dhw_is_constant_channel,
+            self.thermalpower_dhw_is_constant,
         )
 
         if self.thermalpower_dhw_is_constant is True:
@@ -2565,7 +2768,9 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class
 
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame) -> OpexCostDataClass:  # pylint: disable=unused-argument
+    def get_cost_opex(
+        self, all_outputs: List, postprocessing_results: pd.DataFrame
+    ) -> OpexCostDataClass:  # pylint: disable=unused-argument
         """Calculate OPEX costs, consisting of maintenance costs for Heat Distribution System."""
         opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
 

@@ -224,6 +224,8 @@ This project has received funding from the European Union’s Horizon 2020 resea
 
 <a href="https://www.why-h2020.eu/"><img src="whylogo.jpg" alt="WHY Logo" width="200px" style="float:right"></a>
 
-This project furthermore recieves funding by the FFG through the project "[AI4CarbonFreeHeating](https://www.4wardenergy.at/de/referenzen/ai4carbonfreeheating)".
+This project has received funding from the FFG under the topic “Digital Technologies”, an initiative of the Federal Ministry for Climate Action, Environment, Energy, Mobility, Innovation and Technology (BMK), through the project "[AI4CarbonFreeHeating](https://www.4wardenergy.at/de/referenzen/ai4carbonfreeheating)" 
 
 <a href="https://www.4wardenergy.at/de/referenzen/ai4carbonfreeheating"><img src="AI4CFH-Logo-S.jpg" alt="AI4CFH Logo" width="200px" style="float:right"></a>
+<img src="BMK_Logo_srgb.svg" alt="BMK Logo" width="200px" style="float:right">
+<img src="FFG_Logo_EN_RGB_1000px.png" alt="FFG Logo" width="200px" style="float:right">

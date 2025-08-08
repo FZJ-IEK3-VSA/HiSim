@@ -208,7 +208,7 @@ class Rsoc(cp.Component):
         self.soec_hydrogen_flow_rate: ComponentOutput = self.add_output(
             self.rsocconfig.name,
             Rsoc.SOECCurrentHydrogenFlowRate,
-            lt.LoadTypes.HYDROGEN,
+            lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG_PER_SEC,
             output_description="Current hydrogen flow rate",
         )
@@ -217,7 +217,7 @@ class Rsoc(cp.Component):
         self.sofc_hydrogen_flow_rate: ComponentOutput = self.add_output(
             self.rsocconfig.name,
             Rsoc.SOFCCurrentHydrogenFlowRate,
-            lt.LoadTypes.HYDROGEN,
+            lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG_PER_SEC,
             output_description="Current hydrogen flow rate",
         )
@@ -234,7 +234,7 @@ class Rsoc(cp.Component):
         self.total_h2_produced: ComponentOutput = self.add_output(
             self.rsocconfig.name,
             Rsoc.SOECTotalHydrogenProduced,
-            lt.LoadTypes.HYDROGEN,
+            lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG,
             output_description="Total hydrogen produced",
         )
@@ -258,7 +258,7 @@ class Rsoc(cp.Component):
         self.total_h2_consumed: ComponentOutput = self.add_output(
             self.rsocconfig.name,
             Rsoc.SOFCTotalHydrogenConsumed,
-            lt.LoadTypes.HYDROGEN,
+            lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG,
             output_description="Total hydrogen consumed",
         )

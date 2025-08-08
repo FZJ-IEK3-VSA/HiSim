@@ -29,6 +29,7 @@ from hisim.components import (
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -63,13 +64,15 @@ class StorageConfig(cp.ConfigBase):
     #: power of heat source in kW
     power: float
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    device_co2_footprint_in_kg:  Optional[float]
     #: cost for investment in Euro
-    cost: float
+    investment_costs_in_euro:  Optional[float]
     #: lifetime in years
-    lifetime: float
-    # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment: float
+    lifetime_in_years:  Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year:  Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
 
     @classmethod
     def get_main_classname(cls):
@@ -97,10 +100,11 @@ class StorageConfig(cp.ConfigBase):
             u_value=0.36,
             energy_full_cycle=None,
             power=0,
-            co2_footprint=0,  # Todo: check value
-            cost=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # SOURCE: VDI2067-1
-            maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: VDI2067-1
+            device_co2_footprint_in_kg=0,  # Todo: check value
+            investment_costs_in_euro=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
+            lifetime_in_years=20,  # SOURCE: VDI2067-1
+            maintenance_costs_in_euro_per_year=0.02 * volume * 14.51,  # SOURCE: VDI2067-1
+            subsidy_as_percentage_of_investment_costs=0,
         )
         return config
 
@@ -127,10 +131,11 @@ class StorageConfig(cp.ConfigBase):
             u_value=0.36,
             energy_full_cycle=None,
             power=0,
-            co2_footprint=0,  # Todo: check value
-            cost=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # SOURCE: VDI2067-1
-            maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: VDI2067-1
+            device_co2_footprint_in_kg=0,  # Todo: check value
+            investment_costs_in_euro=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
+            lifetime_in_years=20,  # SOURCE: VDI2067-1
+            maintenance_costs_in_euro_per_year=0.02 * volume * 14.51,  # SOURCE: VDI2067-1
+            subsidy_as_percentage_of_investment_costs=0,
         )
         return config
 
@@ -156,10 +161,11 @@ class StorageConfig(cp.ConfigBase):
             u_value=0.36,
             energy_full_cycle=None,
             power=power,
-            co2_footprint=100,  # Todo: check value
-            cost=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
-            lifetime=100,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: VDI2067-1
+            device_co2_footprint_in_kg=100,  # Todo: check value
+            investment_costs_in_euro=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
+            lifetime_in_years=100,  # value from emission_factros_and_costs_devices.csv
+            maintenance_costs_in_euro_per_year=0.02 * volume * 14.51,  # SOURCE: VDI2067-1
+            subsidy_as_percentage_of_investment_costs=0,
         )
         return config
 
@@ -552,22 +558,20 @@ class HotWaterStorage(cp.Component):
     @staticmethod
     def get_cost_capex(config: StorageConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.cost / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
-        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
-        )
+        kpi_tag = KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER
+        component_type = lt.ComponentType.THERMAL_ENERGY_STORAGE
+        unit = lt.Units.LITER
+        size_of_energy_system = config.volume
 
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.cost,
-            device_co2_footprint_in_kg=config.co2_footprint,
-            lifetime_in_years=config.lifetime,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
         )
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
         return capex_cost_data_class
 
     def get_cost_opex(
@@ -581,7 +585,7 @@ class HotWaterStorage(cp.Component):
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
-            consumption_in_kwh=0,
+            total_consumption_in_kwh=0,
             loadtype=lt.LoadTypes.ANY,
             kpi_tag=KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER
         )

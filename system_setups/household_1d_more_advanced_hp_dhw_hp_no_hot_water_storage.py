@@ -1,4 +1,4 @@
-"""  Household system setup with more advanced heat pump, dhw heat pump and diesel car. """
+"""Household system setup with more advanced heat pump, dhw heat pump and diesel car."""
 
 # clean
 
@@ -134,6 +134,7 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                     position_hot_water_storage_in_system=heat_distribution_system.PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR,
+                    heating_system=hds_controller_config.heating_system,
                 )
             ),
             hp_controller_config=more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
@@ -193,7 +194,8 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
 
 
 def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None,
+    my_sim: Any,
+    my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
     """System setup with advanced hp and diesel car.
 
@@ -241,11 +243,13 @@ def setup_function(
         my_simulation_parameters = SimulationParameters.one_week_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build heat Distribution System Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        config=my_config.hds_controller_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_config.hds_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Occupancy
@@ -262,7 +266,8 @@ def setup_function(
 
     # Build Building
     my_building = building.Building(
-        config=my_config.building_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_config.building_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
@@ -275,7 +280,8 @@ def setup_function(
     my_heat_pump_controller_config.name = "HeatPumpHplibController"
 
     my_heat_pump_controller = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
-        config=my_heat_pump_controller_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump
@@ -283,7 +289,8 @@ def setup_function(
     my_heat_pump_config.name = "HeatPumpHPLib"
 
     my_heat_pump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
-        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build DHW
@@ -310,7 +317,8 @@ def setup_function(
     )
 
     my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters, config=my_dhw_heatpump_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
@@ -338,7 +346,8 @@ def setup_function(
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
-        my_simulation_parameters=my_simulation_parameters, config=my_config.electricity_meter_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.electricity_meter_config,
     )
 
     my_heat_pump.connect_only_predefined_connections(my_heat_pump_controller, my_weather)
@@ -346,7 +355,9 @@ def setup_function(
     # Verknüpfung mit Luft als Umgebungswärmequelle
     if my_heat_pump.parameters["Group"].iloc[0] == 1.0 or my_heat_pump.parameters["Group"].iloc[0] == 4.0:
         my_heat_pump.connect_input(
-            my_heat_pump.TemperatureInputPrimary, my_weather.component_name, my_weather.DailyAverageOutsideTemperatures,
+            my_heat_pump.TemperatureInputPrimary,
+            my_weather.component_name,
+            my_weather.DailyAverageOutsideTemperatures,
         )
     else:
         raise KeyError("Water/Water HP or Brine/Water HP will follow.")
@@ -372,19 +383,46 @@ def setup_function(
     )
 
     my_heat_distribution.connect_input(
-        my_heat_distribution.WaterTemperatureInput, my_heat_pump.component_name, my_heat_pump.TemperatureOutputSH,
+        my_heat_distribution.WaterTemperatureInput,
+        my_heat_pump.component_name,
+        my_heat_pump.TemperatureOutputSH,
     )
 
     my_heat_distribution.connect_input(
-        my_heat_distribution.WaterMassFlowInput, my_heat_pump.component_name, my_heat_pump.MassFlowOutputSH,
+        my_heat_distribution.WaterMassFlowInput,
+        my_heat_pump.component_name,
+        my_heat_pump.MassFlowOutputSH,
     )
-
+    # Connect Outputs to Electricity Meter manually because MoreAdvancedHeatPump has no dhw preparation
+    # which causes confusion with the default connections of the ElectricityMeter
     my_electricity_meter.add_component_input_and_connect(
         source_object_name=my_heat_pump.component_name,
-        source_component_output=my_heat_pump.ElectricalInputPowerTotal,
+        source_component_output=my_heat_pump.ElectricalInputPowerSH,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,],
+        source_tags=[
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
+        source_weight=999,
+    )
+    my_electricity_meter.add_component_input_and_connect(
+        source_object_name=my_domnestic_hot_water_heatpump.component_name,
+        source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
+        source_weight=999,
+    )
+    my_electricity_meter.add_component_input_and_connect(
+        source_object_name=my_occupancy.component_name,
+        source_component_output=my_occupancy.ElectricalPowerConsumption,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
         source_weight=999,
     )
     # =================================================================================================================================
@@ -399,6 +437,6 @@ def setup_function(
     my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
-    my_sim.add_component(my_electricity_meter, connect_automatically=True)
+    my_sim.add_component(my_electricity_meter, connect_automatically=False)
     for my_car in my_cars:
         my_sim.add_component(my_car)

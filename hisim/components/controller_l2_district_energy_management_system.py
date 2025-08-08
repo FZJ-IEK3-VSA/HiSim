@@ -84,8 +84,8 @@ class EMSDistrictConfig(cp.ConfigBase):
             strategy=strategy,
             limit_to_shave=0,
             building_indoor_temperature_offset_value=2,
-            domestic_hot_water_storage_temperature_offset_value=20,
-            space_heating_water_storage_temperature_offset_value=25,
+            domestic_hot_water_storage_temperature_offset_value=10,
+            space_heating_water_storage_temperature_offset_value=10,
         )
         return config
 
@@ -436,7 +436,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             dynamic_component.DynamicComponentConnection(
                 source_component_class=UtspLpgConnector,
                 source_class_name=self.occupancy_class_name,
-                source_component_field_name=UtspLpgConnector.ElectricityOutput,
+                source_component_field_name=UtspLpgConnector.ElectricalPowerConsumption,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],

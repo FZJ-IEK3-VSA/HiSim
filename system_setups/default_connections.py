@@ -1,4 +1,5 @@
 """Default Connections Module."""
+
 # clean
 
 from typing import Optional, Any
@@ -76,7 +77,8 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # Build PV
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
     my_photovoltaic_system = generic_pv_system.PVSystem(
-        config=my_photovoltaic_system_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_photovoltaic_system_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_photovoltaic_system)
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
@@ -122,13 +124,16 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_component_output=my_photovoltaic_system.ElectricityOutput,
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
         source_unit=loadtypes.Units.WATT,
-        source_tags=[loadtypes.ComponentType.PV, loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,],
+        source_tags=[
+            loadtypes.ComponentType.PV,
+            loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,
+        ],
         source_weight=999,
     )
 
     my_electricity_meter.add_component_input_and_connect(
         source_object_name=my_occupancy.component_name,
-        source_component_output=my_occupancy.ElectricityOutput,
+        source_component_output=my_occupancy.ElectricalPowerConsumption,
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
         source_unit=loadtypes.Units.WATT,
         source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
@@ -150,5 +155,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     # depending on type of heating device, hard to define default connections
     my_building.connect_input(
-        my_building.ThermalPowerDelivered, my_heat_pump.component_name, my_heat_pump.ThermalPowerDelivered,
+        my_building.ThermalPowerDelivered,
+        my_heat_pump.component_name,
+        my_heat_pump.ThermalPowerDelivered,
     )

@@ -31,6 +31,8 @@ Sources for opex techno-economic parameters:
         [15]: https://mediathek.fnr.de/energiepreisentwicklung.html
         [16]: https://de.statista.com/statistik/daten/studie/250114/umfrage/preis-fuer-fernwaerme-nach-anschlusswert-in-deutschland/
         [17]: https://doi.org/10.1016/j.enbuild.2022.112480 (Knosala et al. 2022)
+        [18]: https://doi.org/10.1016/j.enbuild.2024.114814
+        [19]: https://op.europa.eu/en/publication-detail/-/publication/380090c3-a2dc-11ee-b164-01aa75ed71a1/language-en
 """
 opex_techno_economic_parameters = {
     2018: {
@@ -192,6 +194,29 @@ opex_techno_economic_parameters = {
         "district_heating_costs_in_euro_per_kwh": 0.14757,  # EUR/kWh Source : [16]
         "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
         "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+        "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
+    },
+    2050: {
+        "electricity_costs_in_euro_per_kwh": 0.75 * 0.4133,  # EUR/kWh  # Source: [18] (cheaper than in 2024)
+        "electricity_footprint_in_kg_per_kwh": 0.0,  # kgCO2eq/kWh  # Source: own assumption, carbon free
+        "electricity_to_grid_revenue_in_euro_per_kwh": 0.0692,  # EUR/kWh  # Source: own assumption, same as 2024
+        "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.142,  # EUR/kWh  # Source: own assumption, same as 2024
+        "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.28,  # kgCO2eq/kWh # Source: own assumption, carbon free
+        "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
+        "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
+        "gas_costs_in_euro_per_kwh": 3 * 0.10335,  # EUR/kWh  # Source: [18] (more expensive than in 2024)
+        "gas_footprint_in_kg_per_kwh": 0.247,  # kgCO2eq/kWh, same as 2024
+        "oil_costs_in_euro_per_l": 2 * 0.9941,  # EUR/l # Source: [19] (more expensive than in 2024)
+        "oil_footprint_in_kg_per_l": 3.2,  # kgCO2eq/l, same as 2024
+        "diesel_costs_in_euro_per_l": 2 * 1.6649,  # EUR/l  # Source: own assumption (more expensive than in 2024)
+        "diesel_footprint_in_kg_per_l": 2.0,  # kgCO2eq/l, same as 2024
+        "pellet_costs_in_euro_per_t": 289,  # EUR/t # Source: own assumption, same as 2024
+        "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8], same as 2024
+        "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: own assumption, same as 2024
+        "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14], same as 2024
+        "district_heating_costs_in_euro_per_kwh": 0.14757,  # EUR/kWh Source : own assumption, same as 2024
+        "district_heating_footprint_in_kg_per_kwh": 0.0,  # kgCo2eq/kWh Source : own assumption, carbon free
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.2,  # EUR/kWh  # Source: [17] using value of 2050
         "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
     },
 }

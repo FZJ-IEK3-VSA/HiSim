@@ -246,6 +246,7 @@ class Simulator:
             + " outputs."
         )
         all_result_lines = []
+        log.information("Starting simulation for year " + str(self._simulation_parameters.year))
         log.information("Starting simulation for " + str(self._simulation_parameters.timesteps) + " timesteps")
         lastmessage = datetime.datetime.now()
         last_step: int = 0

@@ -202,9 +202,20 @@ def setup_function(
     my_occupancy_config.household = lpg_households
     my_occupancy_config.cache_dir_path = cache_dir_path_utsp
 
-    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
-    )
+    if my_simulation_parameters.year > 2025:
+        
+        my_occ_simulation_parameters = my_simulation_parameters
+        my_occ_simulation_parameters.year = 2021
+        my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+            config=my_occupancy_config, my_simulation_parameters=my_occ_simulation_parameters
+        )
+        print(f"Use lpg profiles from standard year {my_occ_simulation_parameters.year} because future years cause error during utc conversion.")
+        my_simulation_parameters.year = year
+    else:
+        my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+            config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+        )
+
     # Add to simulator
     my_sim.add_component(my_occupancy)
 

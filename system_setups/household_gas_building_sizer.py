@@ -87,7 +87,7 @@ def setup_function(
 
     # Set Simulation Parameters
     if my_simulation_parameters is None:
-        year = 2021
+        year = 2050
         seconds_per_timestep = 60 * 15
         my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
@@ -112,7 +112,7 @@ def setup_function(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================
-    # Set System Parameters
+    # Set System Parameter
 
     # Set heating systems for space heating and domestic hot water
     heating_system = energy_system_config_.heating_system
@@ -203,10 +203,20 @@ def setup_function(
     my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG
     my_occupancy_config.household = lpg_households
     my_occupancy_config.cache_dir_path = cache_dir_path_utsp
+    if my_simulation_parameters.year > 2025:
+        
+        my_occ_simulation_parameters = my_simulation_parameters
+        my_occ_simulation_parameters.year = 2021
+        my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+            config=my_occupancy_config, my_simulation_parameters=my_occ_simulation_parameters
+        )
+        print(f"Use lpg profiles from standard year {my_occ_simulation_parameters.year} because future years cause error during utc conversion.")
+        my_simulation_parameters.year = year
+    else:
+        my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+            config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+        )
 
-    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
-    )
     # Add to simulator
     my_sim.add_component(my_occupancy)
 

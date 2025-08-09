@@ -409,7 +409,7 @@ capex_techno_economic_parameters = {
             },
             ComponentType.GAS_METER: {
                 "investment_costs_in_euro": 200,  # EUR, Source: [27]
-                "maintenance_costs_as_percentage_of_investment_per_year": 0.15,  # assume around 30€ per year
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.15,  # assume around 30€ per year, check on verivox
                 "technical_lifetime_in_years": 20,  # no idea, assumption
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0,

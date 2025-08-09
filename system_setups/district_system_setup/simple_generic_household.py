@@ -297,10 +297,12 @@ class GenericBuilding(cp.Component):
         my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
 
         # Build Heat Water Storage
-        my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-            max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-            sizing_option=sizing_option,
-            building_name=building_name,
+        my_simple_heat_water_storage_config = (
+            simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+                max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
+                sizing_option=sizing_option,
+                building_name=building_name,
+            )
         )
         my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
             config=my_simple_heat_water_storage_config,

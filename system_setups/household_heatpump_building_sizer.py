@@ -187,7 +187,7 @@ def setup_function(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
         set_heating_temperature_in_celsius=building_set_heating_temperature_in_celsius,
-        set_cooling_temperature_in_celsius=building_set_cooling_temperature_in_celsius
+        set_cooling_temperature_in_celsius=building_set_cooling_temperature_in_celsius,
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
@@ -206,13 +206,15 @@ def setup_function(
     my_occupancy_config.cache_dir_path = cache_dir_path_utsp
 
     if my_simulation_parameters.year > 2025:
-        
+
         my_occ_simulation_parameters = my_simulation_parameters
         my_occ_simulation_parameters.year = 2021
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
             config=my_occupancy_config, my_simulation_parameters=my_occ_simulation_parameters
         )
-        print(f"Use lpg profiles from standard year {my_occ_simulation_parameters.year} because future years cause error during utc conversion.")
+        print(
+            f"Use lpg profiles from standard year {my_occ_simulation_parameters.year} because future years cause error during utc conversion."
+        )
         my_simulation_parameters.year = year
     else:
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
@@ -258,7 +260,7 @@ def setup_function(
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-        heating_system=my_hds_system
+        heating_system=my_hds_system,
     )
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(

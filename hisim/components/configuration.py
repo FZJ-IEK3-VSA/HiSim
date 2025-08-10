@@ -35,6 +35,7 @@ Sources for opex techno-economic parameters:
         [19]: https://op.europa.eu/en/publication-detail/-/publication/380090c3-a2dc-11ee-b164-01aa75ed71a1/language-en
         [20]: https://sonnstrom.de/photovoltaikanlage-und-waermepumpe-stromzaehler/
         [21]: https://www.verivox.de/
+        [22]: https://ariadneprojekt.de/publikation/analyse-heizkosten-und-treibhausgasemissionen-in-bestandswohngebauden/
 """
 opex_techno_economic_parameters = {
     2018: {
@@ -306,7 +307,7 @@ capex_techno_economic_parameters = {
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.OIL_HEATER: {
-                "investment_costs_in_euro_per_kw": 0.75 * 0.36 * 1600  (1 + 0.8),  # 75% of gas heater costs, Source: [19] + 80% of investment costs for oil tank, Source: [37]
+                "investment_costs_in_euro_per_kw": 0.75 * 0.36 * 1600 * (1 + 0.8),  # 75% of gas heater costs, Source: [19] + 80% of investment costs for oil tank, Source: [37]
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.05,  # Source: [37]
                 "technical_lifetime_in_years": 18,  # assume same as gas heater based on [19]
                 "co2_footprint_in_kg_per_kw": 19.4,  # Source: [19]

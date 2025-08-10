@@ -177,49 +177,49 @@ opex_techno_economic_parameters = {
         "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
     },
     2024: {
-        "electricity_costs_in_euro_per_kwh": 0.4113,  # EUR/kWh  # Source: [10]
-        "electricity_footprint_in_kg_per_kwh": 0.363,  # kgCO2eq/kWh  # Source: [9]
+        "electricity_costs_in_euro_per_kwh": 0.3125,  # EUR/kWh  # Source: [22], normal costs + CO2-price of 2024
+        "electricity_footprint_in_kg_per_kwh": 0.338,  # kgCO2eq/kWh  # Source: [22]
         "electricity_to_grid_revenue_in_euro_per_kwh": 0.0692,  # EUR/kWh  # Source: [2] average of 2024 values
         "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.142,  # EUR/kWh  # Source: [7] 160 kW connection
         "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.28,  # kgCO2eq/kWh # Source: [11] assuming its for 2024
         "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
         "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
-        "gas_costs_in_euro_per_kwh": 0.10335,  # EUR/kWh  # Source: [6] average of both half years
-        "gas_footprint_in_kg_per_kwh": 0.247,  # kgCO2eq/kWh
-        "oil_costs_in_euro_per_l": 0.9941,  # EUR/l # Source: [12]
-        "oil_footprint_in_kg_per_l": 3.2,  # kgCO2eq/l
+        "gas_costs_in_euro_per_kwh": 0.1166,  # EUR/kWh  # Source: [22], normal costs + CO2-price of 2024
+        "gas_footprint_in_kg_per_kwh": 0.24,  # kgCO2eq/kWh # Source: [22]
+        "oil_costs_in_euro_per_l": 1.13,  # EUR/l # Source: [22,11], normal costs + CO2-price of 2024
+        "oil_footprint_in_kg_per_l": 3.14,  # kgCO2eq/l # Source: [22],
         "diesel_costs_in_euro_per_l": 1.6649,  # EUR/l  # Source: [3]
         "diesel_footprint_in_kg_per_l": 2.0,  # kgCO2eq/l
-        "pellet_costs_in_euro_per_t": 289,  # EUR/t # Source: [13]
-        "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8]
+        "pellet_costs_in_euro_per_t": 278.55,  # EUR/t # Source: [22,11], normal costs + CO2-price of 2024
+        "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [22]
         "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: [15]
         "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
-        "district_heating_costs_in_euro_per_kwh": 0.14757,  # EUR/kWh Source : [16]
-        "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
+        "district_heating_costs_in_euro_per_kwh": 0.121,  # EUR/kWh # Source: [22], normal costs + CO2-price of 2024
+        "district_heating_footprint_in_kg_per_kwh": 0.169,  # kgCo2eq/kWh # Source: [22]
         "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
         "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
     },
     2050: {
-        "electricity_costs_in_euro_per_kwh": 0.75 * 0.4133,  # EUR/kWh  # Source: [18] (cheaper than in 2024)
-        "electricity_footprint_in_kg_per_kwh": 0.0,  # kgCO2eq/kWh  # Source: own assumption, carbon free
+        "electricity_costs_in_euro_per_kwh": 0.2810, # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
+        "electricity_footprint_in_kg_per_kwh": 0.0,  # kgCO2eq/kWh  # Source: [22], carbon free in 2050
         "electricity_to_grid_revenue_in_euro_per_kwh": 0.0692,  # EUR/kWh  # Source: own assumption, same as 2024
         "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.142,  # EUR/kWh  # Source: own assumption, same as 2024
         "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.28,  # kgCO2eq/kWh # Source: own assumption, carbon free
         "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
         "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
-        "gas_costs_in_euro_per_kwh": 3 * 0.10335,  # EUR/kWh  # Source: [18] (more expensive than in 2024)
-        "gas_footprint_in_kg_per_kwh": 0.247,  # kgCO2eq/kWh, same as 2024
-        "oil_costs_in_euro_per_l": 2 * 0.9941,  # EUR/l # Source: [19] (more expensive than in 2024)
-        "oil_footprint_in_kg_per_l": 3.2,  # kgCO2eq/l, same as 2024
+        "gas_costs_in_euro_per_kwh": 0.3, # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
+        "gas_footprint_in_kg_per_kwh": 0.24,  # kgCO2eq/kWh # Source: [22]
+        "oil_costs_in_euro_per_l": 3.34,  # Source: [22,11], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
+        "oil_footprint_in_kg_per_l": 3.14,  # kgCO2eq/l # Source: [22]
         "diesel_costs_in_euro_per_l": 2 * 1.6649,  # EUR/l  # Source: own assumption (more expensive than in 2024)
         "diesel_footprint_in_kg_per_l": 2.0,  # kgCO2eq/l, same as 2024
-        "pellet_costs_in_euro_per_t": 289,  # EUR/t # Source: own assumption, same as 2024
-        "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8], same as 2024
+        "pellet_costs_in_euro_per_t": 434.07,  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
+        "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [22]
         "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: own assumption, same as 2024
         "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14], same as 2024
-        "district_heating_costs_in_euro_per_kwh": 0.14757,  # EUR/kWh Source : own assumption, same as 2024
-        "district_heating_footprint_in_kg_per_kwh": 0.0,  # kgCo2eq/kWh Source : own assumption, carbon free
-        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.2,  # EUR/kWh  # Source: [17] using value of 2050
+        "district_heating_costs_in_euro_per_kwh": 0.1410,  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
+        "district_heating_footprint_in_kg_per_kwh": 0.0,  # kgCO2eq/kWh  # Source: [22], carbon free in 2050
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.1790,  # EUR/kWh  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
         "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
     },
 }

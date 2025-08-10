@@ -1447,29 +1447,29 @@ class KpiPreparation:
             value=overall_maintenance_cost_per_simulated_period_only_hp_district,
             tag=KpiTagEnumClass.COSTS,
         )
+        entries = [
+            total_investment_cost_for_equipment_per_simulated_period_all_single_buildings_entry,
+            total_investment_cost_per_simulated_period_without_hp_all_single_buildings_entry,
+            total_investment_cost_per_simulated_period_only_hp_all_single_buildings_entry,
+            total_maintenance_cost_per_simulated_period_all_single_buildings_entry,
+            total_maintenance_cost_per_simulated_period_without_hp_all_single_buildings_entry,
+            total_maintenance_cost_per_simulated_period_only_hp_all_single_buildings_entry,
+            total_investment_cost_for_equipment_per_simulated_period_district_entry,
+            total_investment_cost_per_simulated_period_without_hp_district_entry,
+            total_investment_cost_per_simulated_period_only_hp_district_entry,
+            total_maintenance_cost_per_simulated_period_district_entry,
+            total_maintenance_cost_per_simulated_period_without_hp_district_entry,
+            total_maintenance_cost_per_simulated_period_only_hp_district_entry,
+            overall_investment_cost_for_equipment_per_simulated_period_district_entry,
+            overall_investment_cost_per_simulated_period_without_hp_district_entry,
+            overall_investment_cost_per_simulated_period_only_hp_district_entry,
+            overall_maintenance_cost_per_simulated_period_district_entry,
+            overall_maintenance_cost_per_simulated_period_without_hp_district_entry,
+            overall_maintenance_cost_per_simulated_period_only_hp_district_entry,
+        ]
 
-        self.kpi_collection_dict_unsorted[district_name].update(
-            {
-                total_investment_cost_for_equipment_per_simulated_period_all_single_buildings_entry.name: total_investment_cost_for_equipment_per_simulated_period_all_single_buildings_entry.to_dict(),
-                total_investment_cost_per_simulated_period_without_hp_all_single_buildings_entry.name: total_investment_cost_per_simulated_period_without_hp_all_single_buildings_entry.to_dict(),
-                total_investment_cost_per_simulated_period_only_hp_all_single_buildings_entry.name: total_investment_cost_per_simulated_period_only_hp_all_single_buildings_entry.to_dict(),
-                total_maintenance_cost_per_simulated_period_all_single_buildings_entry.name: total_maintenance_cost_per_simulated_period_all_single_buildings_entry.to_dict(),
-                total_maintenance_cost_per_simulated_period_without_hp_all_single_buildings_entry.name: total_maintenance_cost_per_simulated_period_without_hp_all_single_buildings_entry.to_dict(),
-                total_maintenance_cost_per_simulated_period_only_hp_all_single_buildings_entry.name: total_maintenance_cost_per_simulated_period_only_hp_all_single_buildings_entry.to_dict(),
-                total_investment_cost_for_equipment_per_simulated_period_district_entry.name: total_investment_cost_for_equipment_per_simulated_period_district_entry.to_dict(),
-                total_investment_cost_per_simulated_period_without_hp_district_entry.name: total_investment_cost_per_simulated_period_without_hp_district_entry.to_dict(),
-                total_investment_cost_per_simulated_period_only_hp_district_entry.name: total_investment_cost_per_simulated_period_only_hp_district_entry.to_dict(),
-                total_maintenance_cost_per_simulated_period_district_entry.name: total_maintenance_cost_per_simulated_period_district_entry.to_dict(),
-                total_maintenance_cost_per_simulated_period_without_hp_district_entry.name: total_maintenance_cost_per_simulated_period_without_hp_district_entry.to_dict(),
-                total_maintenance_cost_per_simulated_period_only_hp_district_entry.name: total_maintenance_cost_per_simulated_period_only_hp_district_entry.to_dict(),
-                overall_investment_cost_for_equipment_per_simulated_period_district_entry.name: overall_investment_cost_for_equipment_per_simulated_period_district_entry.to_dict(),
-                overall_investment_cost_per_simulated_period_without_hp_district_entry.name: overall_investment_cost_per_simulated_period_without_hp_district_entry.to_dict(),
-                overall_investment_cost_per_simulated_period_only_hp_district_entry.name: overall_investment_cost_per_simulated_period_only_hp_district_entry.to_dict(),
-                overall_maintenance_cost_per_simulated_period_district_entry.name: overall_maintenance_cost_per_simulated_period_district_entry.to_dict(),
-                overall_maintenance_cost_per_simulated_period_without_hp_district_entry.name: overall_maintenance_cost_per_simulated_period_without_hp_district_entry.to_dict(),
-                overall_maintenance_cost_per_simulated_period_only_hp_district_entry.name: overall_maintenance_cost_per_simulated_period_only_hp_district_entry.to_dict(),
-            }
-        )
+        result_dict = {e.name: e.to_dict() for e in entries}
+        self.kpi_collection_dict_unsorted[district_name].update(result_dict)
 
     def create_overall_district_emissions_collection(self, district_name):
         """Overall kpis for districts."""

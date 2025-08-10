@@ -200,14 +200,14 @@ opex_techno_economic_parameters = {
         "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
     },
     2050: {
-        "electricity_costs_in_euro_per_kwh": 0.2810, # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
+        "electricity_costs_in_euro_per_kwh": 0.2810,  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
         "electricity_footprint_in_kg_per_kwh": 0.0,  # kgCO2eq/kWh  # Source: [22], carbon free in 2050
         "electricity_to_grid_revenue_in_euro_per_kwh": 0.0692,  # EUR/kWh  # Source: own assumption, same as 2024
         "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.142,  # EUR/kWh  # Source: own assumption, same as 2024
         "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.28,  # kgCO2eq/kWh # Source: own assumption, carbon free
         "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
         "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
-        "gas_costs_in_euro_per_kwh": 0.3, # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
+        "gas_costs_in_euro_per_kwh": 0.3,  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
         "gas_footprint_in_kg_per_kwh": 0.24,  # kgCO2eq/kWh # Source: [22]
         "oil_costs_in_euro_per_l": 3.34,  # Source: [22,11], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
         "oil_footprint_in_kg_per_l": 3.14,  # kgCO2eq/l # Source: [22]
@@ -307,21 +307,24 @@ capex_techno_economic_parameters = {
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.OIL_HEATER: {
-                "investment_costs_in_euro_per_kw": 0.75 * 0.36 * 1600 * (1 + 0.8),  # 75% of gas heater costs, Source: [19] + 80% of investment costs for oil tank, Source: [37]
+                # 75% of gas heater costs, Source: [19] + 80% of investment costs for oil tank, Source: [37]
+                "investment_costs_in_euro_per_kw": 0.75 * 0.36 * 1600 * (1 + 0.8),
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.05,  # Source: [37]
                 "technical_lifetime_in_years": 18,  # assume same as gas heater based on [19]
                 "co2_footprint_in_kg_per_kw": 19.4,  # Source: [19]
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.PELLET_HEATER: {
-                "investment_costs_in_euro_per_kw": 0.96 * 1600 * (1 + 0.19),  # 96% of heat pump costs, Source: [20] + 19% of investment costs for pellet storage, Source: [20]
+                # 96% of heat pump costs, Source: [20] + 19% of investment costs for pellet storage, Source: [20]
+                "investment_costs_in_euro_per_kw": 0.96 * 1600 * (1 + 0.19),
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.047,  # Source: [20]
                 "technical_lifetime_in_years": 18,  # Source: [20]
                 "co2_footprint_in_kg_per_kw": 49.47,  # assume similar to gas heater based on [19]
                 "subsidy_as_percentage_of_investment_costs": 0.3,
             },
             ComponentType.WOOD_CHIP_HEATER: {
-                "investment_costs_in_euro_per_kw":0.96 * 1600 * (1 + 0.19),  # 96% of heat pump costs, Source: [20] + 19% of investment costs for pellet storage, Source: [20]
+                # 96% of heat pump costs, Source: [20] + 19% of investment costs for pellet storage, Source: [20]
+                "investment_costs_in_euro_per_kw":0.96 * 1600 * (1 + 0.19),
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.047,  # Source: [20]
                 "technical_lifetime_in_years": 18,  # Source: [20]
                 "co2_footprint_in_kg_per_kw": 49.47,  # assume similar to gas heater based on [19]

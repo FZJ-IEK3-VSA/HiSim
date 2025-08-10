@@ -33,6 +33,8 @@ Sources for opex techno-economic parameters:
         [17]: https://doi.org/10.1016/j.enbuild.2022.112480 (Knosala et al. 2022)
         [18]: https://doi.org/10.1016/j.enbuild.2024.114814
         [19]: https://op.europa.eu/en/publication-detail/-/publication/380090c3-a2dc-11ee-b164-01aa75ed71a1/language-en
+        [20]: https://sonnstrom.de/photovoltaikanlage-und-waermepumpe-stromzaehler/
+        [21]: https://www.verivox.de/
 """
 opex_techno_economic_parameters = {
     2018: {
@@ -284,6 +286,7 @@ Sources for capex techno-economic parameters:
         [34]: https://www.vattenfall.de/infowelt-energie/nachhaltig-heizen/fussbodenheizung-kosten-fuer-einbau-und-betrieb#
         [35]: https://www.dein-heizungsbauer.de/ratgeber/bauen-sanieren/fussbodenheizung-oder-heizkoerper/#c3851
         [36]: https://www.heizsparer.de/heizung/heizkorper/fussbodenheizung/fussbodenheizung-oder-heizkoerper
+        [37]: https://www.co2online.de/modernisieren-und-bauen/heizung/oelheizung-laufende-kosten/
 """
 capex_techno_economic_parameters = {
     2024: {
@@ -303,21 +306,21 @@ capex_techno_economic_parameters = {
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.OIL_HEATER: {
-                "investment_costs_in_euro_per_kw": 0.75 * 0.36 * 1600,  # 75% of gas heater costs, Source: [19]
-                "maintenance_costs_as_percentage_of_investment_per_year": 0.03,  # Source: [23]
+                "investment_costs_in_euro_per_kw": 0.75 * 0.36 * 1600  (1 + 0.8),  # 75% of gas heater costs, Source: [19] + 80% of investment costs for oil tank, Source: [37]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.05,  # Source: [37]
                 "technical_lifetime_in_years": 18,  # assume same as gas heater based on [19]
                 "co2_footprint_in_kg_per_kw": 19.4,  # Source: [19]
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.PELLET_HEATER: {
-                "investment_costs_in_euro_per_kw": 0.96 * 1600,  # 96% of heat pump costs, Source: [20]
+                "investment_costs_in_euro_per_kw": 0.96 * 1600 * (1 + 0.19),  # 96% of heat pump costs, Source: [20] + 19% of investment costs for pellet storage, Source: [20]
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.047,  # Source: [20]
                 "technical_lifetime_in_years": 18,  # Source: [20]
                 "co2_footprint_in_kg_per_kw": 49.47,  # assume similar to gas heater based on [19]
                 "subsidy_as_percentage_of_investment_costs": 0.3,
             },
             ComponentType.WOOD_CHIP_HEATER: {
-                "investment_costs_in_euro_per_kw": 0.96 * 1600,  # 96% of heat pump costs, Source: [20]
+                "investment_costs_in_euro_per_kw":0.96 * 1600 * (1 + 0.19),  # 96% of heat pump costs, Source: [20] + 19% of investment costs for pellet storage, Source: [20]
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.047,  # Source: [20]
                 "technical_lifetime_in_years": 18,  # Source: [20]
                 "co2_footprint_in_kg_per_kw": 49.47,  # assume similar to gas heater based on [19]
@@ -402,7 +405,7 @@ capex_techno_economic_parameters = {
         Units.ANY: {
             ComponentType.ELECTRICITY_METER: {
                 "investment_costs_in_euro": 100,  # EUR, Source: [26]
-                "maintenance_costs_as_percentage_of_investment_per_year": 0.3,  # Source: [26]
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.2,  # assume 20€ per month, check on verivox
                 "technical_lifetime_in_years": 20,  # no idea, assumption
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0,

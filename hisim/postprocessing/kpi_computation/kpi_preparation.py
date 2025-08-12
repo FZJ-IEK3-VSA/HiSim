@@ -1597,7 +1597,7 @@ class KpiPreparation:
             total_co2_emissions_per_simulated_period_only_hp_district_entry,
             overall_co2_emissions_for_equipment_per_simulated_period_district_entry,
             overall_co2_emissions_per_simulated_period_without_hp_district_entry,
-            overall_co2_emissions_per_simulated_period_only_hp_district_entry 
+            overall_co2_emissions_per_simulated_period_only_hp_district_entry
         ]
         result_dict = {e.name: e.to_dict() for e in entries}
         self.kpi_collection_dict_unsorted[district_name].update(result_dict)

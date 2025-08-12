@@ -324,7 +324,7 @@ capex_techno_economic_parameters = {
             },
             ComponentType.WOOD_CHIP_HEATER: {
                 # 96% of heat pump costs, Source: [20] + 19% of investment costs for pellet storage, Source: [20]
-                "investment_costs_in_euro_per_kw":0.96 * 1600 * (1 + 0.19),
+                "investment_costs_in_euro_per_kw": 0.96 * 1600 * (1 + 0.19),
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.047,  # Source: [20]
                 "technical_lifetime_in_years": 18,  # Source: [20]
                 "co2_footprint_in_kg_per_kw": 49.47,  # assume similar to gas heater based on [19]

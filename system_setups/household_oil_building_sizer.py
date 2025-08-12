@@ -86,10 +86,10 @@ def setup_function(
     energy_system_config_ = my_config.energy_system_config_
 
     # Set Simulation Parameters
+    default_year = 2021
     if my_simulation_parameters is None:
-        year = 2021
         seconds_per_timestep = 60 * 15
-        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year(year=default_year, seconds_per_timestep=seconds_per_timestep)
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         if os.path.exists(cache_dir_path_simuparams):
             my_simulation_parameters.cache_dir_path = cache_dir_path_simuparams
@@ -108,7 +108,8 @@ def setup_function(
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.logging_level = 3
-
+    else:
+        simu_params_year = my_simulation_parameters.year
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================
@@ -207,14 +208,14 @@ def setup_function(
     if my_simulation_parameters.year > 2025:
 
         my_occ_simulation_parameters = my_simulation_parameters
-        my_occ_simulation_parameters.year = 2021
+        my_occ_simulation_parameters.year = default_year
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
             config=my_occupancy_config, my_simulation_parameters=my_occ_simulation_parameters
         )
         print(
             f"Use lpg profiles from standard year {my_occ_simulation_parameters.year} because future years cause error during utc conversion."
         )
-        my_simulation_parameters.year = year
+        my_simulation_parameters.year = simu_params_year
     else:
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
             config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters

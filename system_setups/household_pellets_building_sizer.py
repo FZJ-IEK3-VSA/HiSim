@@ -215,6 +215,7 @@ def setup_function(
             f"Use lpg profiles from standard year {my_occ_simulation_parameters.year} because future years cause error during utc conversion."
         )
         my_simulation_parameters.year = simu_params_year
+    else:
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
             config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
         )

@@ -346,7 +346,7 @@ def setup_function(
     # Build Gas Meter
     my_gas_meter = gas_meter.GasMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=gas_meter.GasMeterConfig.get_gas_meter_default_config(),
+        config=gas_meter.GasMeterConfig.get_gas_meter_default_config(gas_loadtype=lt.LoadTypes.GREEN_HYDROGEN),
     )
     my_sim.add_component(my_gas_meter, connect_automatically=True)
 

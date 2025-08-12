@@ -338,7 +338,7 @@ def setup_function(
 
     # Build Heating Meter
     my_fuel_meter_config = fuel_meter.FuelMeterConfig.get_fuel_meter_default_config(
-        fuel_loadtype=lt.LoadTypes.PELLETS,
+        fuel_loadtype=lt.LoadTypes.OIL,
         heating_value_of_fuel_in_kwh_per_liter=my_oil_heater.heating_value_of_fuel_in_kwh_per_liter,
         fuel_density_in_kg_per_m3=my_oil_heater.fuel_density_in_kg_per_m3,
     )

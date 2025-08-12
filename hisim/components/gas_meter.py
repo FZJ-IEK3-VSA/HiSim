@@ -52,13 +52,14 @@ class GasMeterConfig(cp.ConfigBase):
     def get_gas_meter_default_config(
         cls,
         building_name: str = "BUI1",
+        gas_loadtype: lt.LoadTypes = lt.LoadTypes.GAS
     ) -> Any:
         """Gets a default GasMeter."""
         return GasMeterConfig(
             building_name=building_name,
             name="GasMeter",
             total_energy_from_grid_in_kwh=0.0,
-            gas_loadtype=lt.LoadTypes.GAS,
+            gas_loadtype=gas_loadtype,
             # capex and device emissions are calculated in get_cost_capex function by default
             device_co2_footprint_in_kg=None,
             investment_costs_in_euro=None,

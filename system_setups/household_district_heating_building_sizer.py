@@ -287,7 +287,7 @@ def setup_function(
 
     # Build district heating For Space Heating and DHW
     my_district_heating_sh_config = generic_district_heating.DistrictHeatingConfig.get_default_district_heating_config(
-        with_domestic_hot_water_preparation=True, connected_load_w=20000 * number_of_apartments
+        with_domestic_hot_water_preparation=True, connected_load_w=my_building_information.max_thermal_building_demand_in_watt,
     )
     my_district_heating = generic_district_heating.DistrictHeating(
         config=my_district_heating_sh_config, my_simulation_parameters=my_simulation_parameters

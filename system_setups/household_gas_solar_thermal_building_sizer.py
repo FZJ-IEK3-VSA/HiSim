@@ -118,8 +118,9 @@ def setup_function(
     if heating_system != HeatingSystems.GAS_SOLAR_THERMAL:
         raise ValueError("Heating system needs to be gas solar thermal for this system setup.")
 
-    heating_reference_temperature_in_celsius = -12.2
-    building_set_heating_temperature_in_celsius = 22.0
+    heating_reference_temperature_in_celsius = -7.0
+    building_set_heating_temperature_in_celsius = 20.0
+    building_set_cooling_temperature_in_celsius = 25.0
 
     # Set heat distribution system
     if energy_system_config_.heat_distribution_system == ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING:
@@ -186,6 +187,7 @@ def setup_function(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
         set_heating_temperature_in_celsius=building_set_heating_temperature_in_celsius,
+        set_cooling_temperature_in_celsius=building_set_cooling_temperature_in_celsius,
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2

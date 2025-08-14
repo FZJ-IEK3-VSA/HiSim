@@ -29,7 +29,6 @@ from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptio
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
-from hisim.units import Quantity, Celsius, Watt
 from hisim.loadtypes import HeatingSystems
 from hisim import log
 
@@ -268,8 +267,8 @@ def setup_function(
 
     # Build Heat Pump
     my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
-        heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
     my_heatpump_config.with_domestic_hot_water_preparation = True
 

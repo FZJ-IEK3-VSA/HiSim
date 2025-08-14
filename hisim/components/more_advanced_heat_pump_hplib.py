@@ -39,17 +39,6 @@ from hisim.component import (
 from hisim.components import weather, simple_water_storage, heat_distribution_system
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules, ComponentType
-from hisim.units import (
-    Quantity,
-    Watt,
-    Celsius,
-    Seconds,
-    Kilogram,
-    Euro,
-    Years,
-    KilogramPerSecond,
-    Unitless
-)
 from hisim.components.configuration import (
     PhysicsConfig,
     EmissionFactorsAndCostsForFuelsConfig,
@@ -102,41 +91,39 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     model: str
     fluid_primary_side: str
     group_id: int
-    heating_reference_temperature_in_celsius: Quantity[float, Celsius]  # before t_in
-    flow_temperature_in_celsius: Quantity[float, Celsius]  # before t_out_val
-    set_thermal_output_power_in_watt: Quantity[float, Watt]  # before p_th_set
+    heating_reference_temperature_in_celsius: float  # before t_in
+    flow_temperature_in_celsius: float  # before t_out_val
+    set_thermal_output_power_in_watt: float  # before p_th_set
     cycling_mode: bool
-    minimum_running_time_in_seconds: Optional[Quantity[int, Seconds]]
-    minimum_idle_time_in_seconds: Optional[Quantity[int, Seconds]]
-    minimum_thermal_output_power_in_watt: Quantity[float, Watt]
+    minimum_running_time_in_seconds: Optional[int]
+    minimum_idle_time_in_seconds: Optional[int]
+    minimum_thermal_output_power_in_watt: float
     position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
     with_domestic_hot_water_preparation: bool
     passive_cooling_with_brine: bool
     electrical_input_power_brine_pump_in_watt: Optional[float]
-    massflow_nominal_secondary_side_in_kg_per_s: Quantity[float, KilogramPerSecond]
+    massflow_nominal_secondary_side_in_kg_per_s: float
     massflow_nominal_primary_side_in_kg_per_s: Optional[float]
     specific_heat_capacity_of_primary_fluid: Optional[float]
     #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: Optional[Quantity[float, Kilogram]]
+    device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
-    investment_costs_in_euro: Optional[Quantity[float, Euro]]
+    investment_costs_in_euro: Optional[float]
     #: lifetime in years
-    lifetime_in_years: Optional[Quantity[float, Years]]
+    lifetime_in_years: Optional[float]
     # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: Optional[Quantity[float, Euro]]
+    maintenance_costs_in_euro_per_year: Optional[float]
     # subsidies as percentage of investment costs
-    subsidy_as_percentage_of_investment_costs: Optional[Quantity[float, Unitless]]
+    subsidy_as_percentage_of_investment_costs: Optional[float]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(
         cls,
         building_name: str = "BUI1",
         name: str = "MoreAdvancedHeatPumpHPLib",
-        set_thermal_output_power_in_watt: Quantity[float, Watt] = Quantity(8000, Watt),
-        heating_reference_temperature_in_celsius: Quantity[float, Celsius] = Quantity(-7.0, Celsius),
-        massflow_nominal_secondary_side_in_kg_per_s: Quantity[float, KilogramPerSecond] = Quantity(
-            0.333, KilogramPerSecond
-        ),
+        set_thermal_output_power_in_watt: float = 8000,
+        heating_reference_temperature_in_celsius: float = -7.0,
+        massflow_nominal_secondary_side_in_kg_per_s: float = 0.333,
     ) -> "MoreAdvancedHeatPumpHPLibConfig":
         """Gets a default HPLib Heat Pump.
 
@@ -150,12 +137,12 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             fluid_primary_side="air",
             group_id=1,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            flow_temperature_in_celsius=Quantity(52, Celsius),
+            flow_temperature_in_celsius=52,
             set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
             cycling_mode=True,
-            minimum_running_time_in_seconds=Quantity(3600, Seconds),
-            minimum_idle_time_in_seconds=Quantity(3600, Seconds),
-            minimum_thermal_output_power_in_watt=Quantity(1800, Watt),
+            minimum_running_time_in_seconds=3600,
+            minimum_idle_time_in_seconds=3600,
+            minimum_thermal_output_power_in_watt=1800,
             position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
             with_domestic_hot_water_preparation=False,
             passive_cooling_with_brine=False,
@@ -174,17 +161,15 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     @classmethod
     def get_scaled_advanced_hp_lib(
         cls,
-        heating_load_of_building_in_watt: Quantity[float, Watt],
+        heating_load_of_building_in_watt: float,
         name: str = "MoreAdvancedHeatPumpHPLib",
         building_name: str = "BUI1",
-        heating_reference_temperature_in_celsius: Quantity[float, Celsius] = Quantity(-7.0, Celsius),
-        massflow_nominal_secondary_side_in_kg_per_s: Quantity[float, KilogramPerSecond] = Quantity(
-            0.333, KilogramPerSecond
-        ),
+        heating_reference_temperature_in_celsius: float = -7.0,
+        massflow_nominal_secondary_side_in_kg_per_s: float = 0.333,
     ) -> "MoreAdvancedHeatPumpHPLibConfig":
         """Gets a default heat pump with scaling according to heating load of the building."""
 
-        set_thermal_output_power_in_watt: Quantity[float, Watt] = heating_load_of_building_in_watt
+        set_thermal_output_power_in_watt: float = heating_load_of_building_in_watt
 
         return MoreAdvancedHeatPumpHPLibConfig(
             building_name=building_name,
@@ -193,12 +178,12 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             fluid_primary_side="air",
             group_id=1,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            flow_temperature_in_celsius=Quantity(52, Celsius),
+            flow_temperature_in_celsius=52,
             set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
             cycling_mode=True,
-            minimum_running_time_in_seconds=Quantity(3600, Seconds),
-            minimum_idle_time_in_seconds=Quantity(3600, Seconds),
-            minimum_thermal_output_power_in_watt=Quantity(1800, Watt),
+            minimum_running_time_in_seconds=3600,
+            minimum_idle_time_in_seconds=3600,
+            minimum_thermal_output_power_in_watt=1800,
             position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
             with_domestic_hot_water_preparation=False,
             passive_cooling_with_brine=False,

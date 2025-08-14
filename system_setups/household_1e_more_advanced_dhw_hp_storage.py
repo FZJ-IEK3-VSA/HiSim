@@ -22,7 +22,6 @@ from hisim.components import generic_car
 from hisim.components import electricity_meter
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim import utils
-from hisim.units import Quantity, Watt, Celsius, Seconds
 import hisim.loadtypes as lt
 
 
@@ -77,9 +76,7 @@ class HouseholdMoreAdvancedHPDieselCarDHWStorageConfig(SystemSetupConfigBase):
 
         household_config = cls.get_scaled_default(building_config)
         household_config.hp_config.with_domestic_hot_water_preparation = True
-        household_config.hp_config.set_thermal_output_power_in_watt = Quantity(
-            6000, Watt  # default value leads to switching on-off very often
-        )
+        household_config.hp_config.set_thermal_output_power_in_watt = 6000
         household_config.dhw_storage_config.volume_heating_water_storage_in_liter = (
             100  # default(volume = 230) leads to an error
         )
@@ -137,12 +134,8 @@ class HouseholdMoreAdvancedHPDieselCarDHWStorageConfig(SystemSetupConfigBase):
                 heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
             ),
             hp_config=more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-                heating_load_of_building_in_watt=Quantity(
-                    my_building_information.max_thermal_building_demand_in_watt, Watt
-                ),
-                heating_reference_temperature_in_celsius=Quantity(
-                    my_building_information.heating_reference_temperature_in_celsius, Celsius
-                ),
+                heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+                heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius
             ),
             simple_hot_water_storage_config=simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
                 max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
@@ -158,12 +151,9 @@ class HouseholdMoreAdvancedHPDieselCarDHWStorageConfig(SystemSetupConfigBase):
         # adjust HeatPump
         household_config.hp_config.group_id = 1  # use modulating heatpump as default
         household_config.sh_controller_config.mode = 2  # use heating and cooling as default
-        household_config.hp_config.minimum_idle_time_in_seconds = Quantity(
-            900, Seconds  # default value leads to switching on-off very often
-        )
-        household_config.hp_config.minimum_running_time_in_seconds = Quantity(
-            900, Seconds  # default value leads to switching on-off very often
-        )
+        household_config.hp_config.minimum_idle_time_in_seconds = 900
+        household_config.hp_config.minimum_running_time_in_seconds = 900
+
         household_config.hp_config.with_domestic_hot_water_preparation = True
 
         # set same heating threshold
@@ -174,7 +164,7 @@ class HouseholdMoreAdvancedHPDieselCarDHWStorageConfig(SystemSetupConfigBase):
             set_heating_threshold_outside_temperature_in_celsius
         )
 
-        household_config.hp_config.flow_temperature_in_celsius = Quantity(21, Celsius)  # Todo: check value
+        household_config.hp_config.flow_temperature_in_celsius = 21
 
         return household_config
 

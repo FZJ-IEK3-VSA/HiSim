@@ -289,11 +289,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         self.group_id = config.group_id
 
-        self.t_in = int(config.heating_reference_temperature_in_celsius.value)
+        self.t_in = int(config.heating_reference_temperature_in_celsius)
 
-        self.t_out_val = int(config.flow_temperature_in_celsius.value)
+        self.t_out_val = int(config.flow_temperature_in_celsius)
 
-        self.p_th_set = int(config.set_thermal_output_power_in_watt.value)
+        self.p_th_set = int(config.set_thermal_output_power_in_watt)
 
         self.cycling_mode = config.cycling_mode
 
@@ -313,7 +313,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         #     else config.massflow_nominal_secondary_side_in_kg_per_s
         # )
 
-        self.m_dot_ref = config.massflow_nominal_secondary_side_in_kg_per_s.value
+        self.m_dot_ref = config.massflow_nominal_secondary_side_in_kg_per_s
 
         if self.position_hot_water_storage_in_system in [
             PositionHotWaterStorageInSystemSetup.SERIE,
@@ -332,18 +332,18 @@ class MoreAdvancedHeatPumpHPLib(Component):
         self.specific_heat_capacity_of_primary_fluid = config.specific_heat_capacity_of_primary_fluid
 
         self.minimum_running_time_in_seconds = (
-            config.minimum_running_time_in_seconds.value
+            config.minimum_running_time_in_seconds
             if config.minimum_running_time_in_seconds
             else config.minimum_running_time_in_seconds
         )
 
         self.minimum_idle_time_in_seconds = (
-            config.minimum_idle_time_in_seconds.value
+            config.minimum_idle_time_in_seconds
             if config.minimum_idle_time_in_seconds
             else config.minimum_idle_time_in_seconds
         )
 
-        self.minimum_thermal_output_power = config.minimum_thermal_output_power_in_watt.value
+        self.minimum_thermal_output_power = config.minimum_thermal_output_power_in_watt
 
         # Component has states
         self.state = MoreAdvancedHeatPumpHPLibState(

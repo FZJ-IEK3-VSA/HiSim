@@ -160,8 +160,8 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
         # adjust HeatPump
         household_config.hp_config.group_id = 1  # use modulating heatpump as default
         household_config.hp_controller_config.mode = 2  # use heating and cooling as default
-        household_config.hp_config.minimum_idle_time_in_seconds =900
-        household_config.hp_config.minimum_running_time_in_seconds=900
+        household_config.hp_config.minimum_idle_time_in_seconds = 900
+        household_config.hp_config.minimum_running_time_in_seconds = 900
         household_config.hp_config.with_domestic_hot_water_preparation = False
         household_config.hp_config.position_hot_water_storage_in_system = (
             more_advanced_heat_pump_hplib.PositionHotWaterStorageInSystemSetup.NO_STORAGE

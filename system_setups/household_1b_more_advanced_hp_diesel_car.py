@@ -77,7 +77,7 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
 
         household_config = cls.get_scaled_default(building_config)
         household_config.hp_config.with_domestic_hot_water_preparation = True
-        household_config.hp_config.set_thermal_output_power_in_watt = 6000 # default value leads to switching on-off very often
+        household_config.hp_config.set_thermal_output_power_in_watt = 6000  # default value leads to switching on-off very often
         household_config.dhw_storage_config.volume = 250  # default(volume = 230) leads to an error
 
         return household_config

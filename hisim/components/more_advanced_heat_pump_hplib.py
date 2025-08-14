@@ -1453,7 +1453,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         component_type = ComponentType.HEAT_PUMP
         kpi_tag = KpiTagEnumClass.HEATPUMP_SPACE_HEATING_AND_DOMESTIC_HOT_WATER
         unit = Units.KILOWATT
-        size_of_energy_system = config.set_thermal_output_power_in_watt.value * 1e-3
+        size_of_energy_system = config.set_thermal_output_power_in_watt * 1e-3
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
         simulation_parameters=simulation_parameters,

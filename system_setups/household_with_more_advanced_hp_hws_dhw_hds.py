@@ -13,7 +13,6 @@ from hisim.components import simple_water_storage
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import heat_distribution_system
 from hisim import loadtypes as lt
-from hisim.units import Quantity, Celsius, Watt
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -142,11 +141,11 @@ def setup_function(
 
     # Build Heat Pump
     my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
-        heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
     my_heatpump_config.group_id = group_id
-    my_heatpump_config.flow_temperature_in_celsius = Quantity(float(flow_temperature_in_celsius), Celsius)
+    my_heatpump_config.flow_temperature_in_celsius = float(flow_temperature_in_celsius)
     my_heatpump_config.with_domestic_hot_water_preparation = with_domestic_hot_water_preparation
 
     my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(

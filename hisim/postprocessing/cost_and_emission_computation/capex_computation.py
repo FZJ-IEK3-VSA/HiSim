@@ -37,7 +37,7 @@ class CapexComputationHelperFunctions:
             )
             # Get capex costs and CO2 footprint from EmissionFactorsAndCostsForDevicesConfig
             emissions_and_cost_factors_for_devices = EmissionFactorsAndCostsForDevicesConfig.get_values_for_year(
-                year=simulation_parameters.year, unit=unit, device=component_type
+                year=simulation_parameters.year, device=component_type
             )
             # Dependend on unit of the energy system size, get respective capex and emissions value
             if unit == Units.KILOWATT:

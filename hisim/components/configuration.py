@@ -229,49 +229,49 @@ opex_techno_economic_parameters = {
     },
     "AT": {
         2025: {
-            "electricity_costs_in_euro_per_kwh": 0.085, # [18]
-            "electricity_footprint_in_kg_per_kwh": 0.167, # [19]
-            "electricity_to_grid_revenue_in_euro_per_kwh": 0.06305, # [20] mean of values 
+            "electricity_costs_in_euro_per_kwh": 0.085, # [23]
+            "electricity_footprint_in_kg_per_kwh": 0.167, # [24]
+            "electricity_to_grid_revenue_in_euro_per_kwh": 0.06305, # [25] mean of values 
             "contracting_heating_costs_hot_water_in_euro_per_kwh": 0,  # 
             "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0,  # 
             "contracting_heating_costs_cold_water_in_euro_per_kwh": 0, #
             "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0, #
-            "gas_costs_in_euro_per_kwh": 0.04, # [18]
-            "gas_footprint_in_kg_per_kwh": 0.249, # [19]
-            "oil_costs_in_euro_per_l": 0.714,  # # [18]
-            "oil_footprint_in_kg_per_l": 0.352,  # [19]
-            "diesel_costs_in_euro_per_l": 0.714,  # [18]
-            "diesel_footprint_in_kg_per_l": 0.332, # [19] 
-            "pellet_costs_in_euro_per_t": 94, # [18] 
-            "pellet_footprint_in_kg_per_kwh": 0.026, # [19]
-            "wood_chip_costs_in_euro_per_t": 86, # [18]
-            "wood_chip_footprint_in_kg_per_kwh": 0.019, # [19]
-            "district_heating_costs_in_euro_per_kwh": 0.075, # [18]
-            "district_heating_footprint_in_kg_per_kwh": 0.179, # [19] district heating average
-            "green_hydrogen_gas_costs_in_euro_per_kwh": 200, # [18] hydrogen (not clear if green) 
+            "gas_costs_in_euro_per_kwh": 0.04, # [23]
+            "gas_footprint_in_kg_per_kwh": 0.249, # [24]
+            "oil_costs_in_euro_per_l": 0.714,  # # [23]
+            "oil_footprint_in_kg_per_l": 0.352,  # [24]
+            "diesel_costs_in_euro_per_l": 0.714,  # [23]
+            "diesel_footprint_in_kg_per_l": 0.332, # [24] 
+            "pellet_costs_in_euro_per_t": 94, # [23] 
+            "pellet_footprint_in_kg_per_kwh": 0.026, # [24]
+            "wood_chip_costs_in_euro_per_t": 86, # [23]
+            "wood_chip_footprint_in_kg_per_kwh": 0.019, # [24]
+            "district_heating_costs_in_euro_per_kwh": 0.075, # [23]
+            "district_heating_footprint_in_kg_per_kwh": 0.179, # [24] district heating average
+            "green_hydrogen_gas_costs_in_euro_per_kwh": 200, # [23] hydrogen (not clear if green) 
             "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,
         }, 
         2040: {
-            "electricity_costs_in_euro_per_kwh": 0.085, # [18]
-            "electricity_footprint_in_kg_per_kwh": 0.007, # [19]
+            "electricity_costs_in_euro_per_kwh": 0.085, # [23]
+            "electricity_footprint_in_kg_per_kwh": 0.007, # [24]
             "electricity_to_grid_revenue_in_euro_per_kwh": 0.06305, # no data on future development, taking 2024 value
             "contracting_heating_costs_hot_water_in_euro_per_kwh": 0,  # 
             "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0,  # 
             "contracting_heating_costs_cold_water_in_euro_per_kwh": 0, #
             "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0, #
-            "gas_costs_in_euro_per_kwh": 0.04, # [18]
-            "gas_footprint_in_kg_per_kwh": 0.249,  # [19]
-            "oil_costs_in_euro_per_l": 0.714,  # # [18]
-            "oil_footprint_in_kg_per_l": 0.352,  # [19]
-            "diesel_costs_in_euro_per_l": 0.714,  # [18]
-            "diesel_footprint_in_kg_per_l": 0.332, # [19] 
-            "pellet_costs_in_euro_per_t": 94, # [18] 
-            "pellet_footprint_in_kg_per_kwh": 0.026, # [19]
-            "wood_chip_costs_in_euro_per_t": 86, # [18]
-            "wood_chip_footprint_in_kg_per_kwh": 0.019, # [19]
-            "district_heating_costs_in_euro_per_kwh": 0.075, # [18]
-            "district_heating_footprint_in_kg_per_kwh": 0.179, # [19]
-            "green_hydrogen_gas_costs_in_euro_per_kwh": 100, # [18] hydrogen (not clear if green) 
+            "gas_costs_in_euro_per_kwh": 0.04, # [23]
+            "gas_footprint_in_kg_per_kwh": 0.249,  # [24]
+            "oil_costs_in_euro_per_l": 0.714,  # # [23]
+            "oil_footprint_in_kg_per_l": 0.352,  # [24]
+            "diesel_costs_in_euro_per_l": 0.714,  # [23]
+            "diesel_footprint_in_kg_per_l": 0.332, # [24] 
+            "pellet_costs_in_euro_per_t": 94, # [23] 
+            "pellet_footprint_in_kg_per_kwh": 0.026, # [24]
+            "wood_chip_costs_in_euro_per_t": 86, # [23]
+            "wood_chip_footprint_in_kg_per_kwh": 0.019, # [24]
+            "district_heating_costs_in_euro_per_kwh": 0.075, # [23]
+            "district_heating_footprint_in_kg_per_kwh": 0.179, # [24]
+            "green_hydrogen_gas_costs_in_euro_per_kwh": 100, # [23] hydrogen (not clear if green) 
             "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,
         }
     }

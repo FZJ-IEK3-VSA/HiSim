@@ -1,4 +1,5 @@
 """Data Collection for Scenario Comparison."""
+
 # clean
 import glob
 import datetime
@@ -19,7 +20,6 @@ from hisim.postprocessing.scenario_evaluation.result_data_processing import (
 
 
 class ResultDataCollection:
-
     """ResultDataCollection class which collects and concatenate the result data from the system_setups/results."""
 
     def __init__(
@@ -37,7 +37,13 @@ class ResultDataCollection:
         """Initialize the class."""
         result_folder = folder_from_which_data_will_be_collected
         self.result_data_folder = os.path.join(
-            os.getcwd(), os.pardir, os.pardir, os.pardir, "system_setups", "scenario_comparison", "data",
+            os.getcwd(),
+            os.pardir,
+            os.pardir,
+            os.pardir,
+            "system_setups",
+            "scenario_comparison",
+            "data",
         )
         if not os.path.exists(self.result_data_folder):
             os.makedirs(self.result_data_folder)
@@ -97,11 +103,13 @@ class ResultDataCollection:
             raise ValueError("list_with_csv_files is empty")
 
         all_csv_files = self.import_data_from_file(
-            paths_to_check=list_with_csv_files, analyze_yearly_or_hourly_data=time_resolution_of_data_set,
+            paths_to_check=list_with_csv_files,
+            analyze_yearly_or_hourly_data=time_resolution_of_data_set,
         )
 
         dict_of_csv_data = self.make_dictionaries_with_simulation_duration_keys(
-            simulation_duration_to_check=simulation_duration_to_check, all_csv_files=all_csv_files,
+            simulation_duration_to_check=simulation_duration_to_check,
+            all_csv_files=all_csv_files,
         )
 
         (
@@ -141,7 +149,8 @@ class ResultDataCollection:
             result_path=result_path, folder_or_filename="result_data_for_scenario_evaluation"
         )
         print(
-            "len of list with all paths to containing result data ", len(list_with_all_paths_to_check),
+            "len of list with all paths to containing result data ",
+            len(list_with_all_paths_to_check),
         )
         if len(list_with_all_paths_to_check) == 0:
             raise ValueError(
@@ -149,7 +158,8 @@ class ResultDataCollection:
             )
         if len(list_with_all_paths_to_check) < 20:
             print(
-                "list with all paths to containing result data ", list_with_all_paths_to_check,
+                "list with all paths to containing result data ",
+                list_with_all_paths_to_check,
             )
         # check if duplicates are existing and ask for deletion
         list_with_result_data_folders = self.go_through_all_scenario_data_folders_and_check_if_module_configs_are_double_somewhere(
@@ -158,7 +168,8 @@ class ResultDataCollection:
         )
 
         print(
-            "len of list with all paths after double checking for duplicates ", len(list_with_result_data_folders),
+            "len of list with all paths after double checking for duplicates ",
+            len(list_with_result_data_folders),
         )
         return list_with_result_data_folders
 
@@ -167,7 +178,11 @@ class ResultDataCollection:
         list_of_unfinished_folders = []
         file_name = os.path.join(self.result_data_folder, "failed_simualtions.txt")
         mode = "a" if os.path.exists(file_name) else "w"
-        with open(file_name, mode, encoding="utf-8",) as file:
+        with open(
+            file_name,
+            mode,
+            encoding="utf-8",
+        ) as file:
             file.write(str(datetime.datetime.now()) + "\n")
             file.write("Failed simulations found in the following folders: \n")
             list_with_all_potential_finsihed_flag_files = self.get_list_of_all_relevant_folders_or_files(
@@ -369,7 +384,9 @@ class ResultDataCollection:
         return all_csv_files
 
     def make_dictionaries_with_simulation_duration_keys(
-        self, simulation_duration_to_check: str, all_csv_files: List[str],
+        self,
+        simulation_duration_to_check: str,
+        all_csv_files: List[str],
     ) -> Dict:
         """Make dictionaries containing csv files of hourly or yearly data and according to the simulation duration of the data."""
 
@@ -460,9 +477,9 @@ class ResultDataCollection:
             dict_with_temperature_data["Output"][
                 "difference_between_set_heating_and_min_indoor_temperature_in_celsius"
             ].append(list_building_diff_min_indoor_and_set_heating_temperature_in_celsius[house_index])
-            dict_with_temperature_data["Output"]["temperature_deviation_below_set_heating_temperature_in_celsius_hour"].append(
-                list_building_temp_deviation_below_set_heating_in_celsius_hour[house_index]
-            )
+            dict_with_temperature_data["Output"][
+                "temperature_deviation_below_set_heating_temperature_in_celsius_hour"
+            ].append(list_building_temp_deviation_below_set_heating_in_celsius_hour[house_index])
             dict_with_temperature_data["Output"]["building_set_cooling_temperature_in_celsius"].append(
                 list_building_set_cooling_temperature_in_celsius[house_index]
             )
@@ -472,9 +489,9 @@ class ResultDataCollection:
             dict_with_temperature_data["Output"][
                 "difference_between_set_cooling_and_max_indoor_temperature_in_celsius"
             ].append(list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius[house_index])
-            dict_with_temperature_data["Output"]["temperature_deviation_above_set_cooling_temperature_in_celsius_hour"].append(
-                list_building_temp_deviation_above_set_cooling_in_celsius_hour[house_index]
-            )
+            dict_with_temperature_data["Output"][
+                "temperature_deviation_above_set_cooling_temperature_in_celsius_hour"
+            ].append(list_building_temp_deviation_above_set_cooling_in_celsius_hour[house_index])
 
         # merge the two dictionaries
         dict_with_input_data.update(dict_with_temperature_data)
@@ -494,7 +511,12 @@ class ResultDataCollection:
             columns=multi_index_columns,
         )
 
-        appended_dataframe.to_csv(os.path.join(self.result_data_folder, "building_indoor_temperature_analysis.csv",))
+        appended_dataframe.to_csv(
+            os.path.join(
+                self.result_data_folder,
+                "building_indoor_temperature_analysis.csv",
+            )
+        )
 
         del appended_dataframe
         del dict_with_all_data
@@ -671,15 +693,22 @@ class ResultDataCollection:
 
         if parameter_key is not None:
             path_for_file = os.path.join(
-                result_data_folder, f"data_different_{parameter_key}s", f"{simulation_duration_key}_days",
+                result_data_folder,
+                f"data_different_{parameter_key}s",
+                f"{simulation_duration_key}_days",
             )
         else:
-            path_for_file = os.path.join(result_data_folder, "data_all_parameters", f"{simulation_duration_key}_days",)
+            path_for_file = os.path.join(
+                result_data_folder,
+                "data_all_parameters",
+                f"{simulation_duration_key}_days",
+            )
         if os.path.exists(path_for_file) is False:
             os.makedirs(path_for_file)
 
         filename = os.path.join(
-            path_for_file, f"result_df_{kind_of_data_set}_{scenario_analysis_config_name}.{data_format_type}",
+            path_for_file,
+            f"result_df_{kind_of_data_set}_{scenario_analysis_config_name}.{data_format_type}",
         )
         return filename
 
@@ -790,7 +819,19 @@ class ResultDataCollection:
         list_with_result_data_folders: List[str],
         default_config_dict: Dict[str, Any],
         parameter_key: Optional[str],
-    ) -> Tuple[List[Any], List[Any], List[Any], List[Any], List[Any], List[Any], List[Any], List[Any], List[Any], List[Any], List[Any]]:
+    ) -> Tuple[
+        List[Any],
+        List[Any],
+        List[Any],
+        List[Any],
+        List[Any],
+        List[Any],
+        List[Any],
+        List[Any],
+        List[Any],
+        List[Any],
+        List[Any],
+    ]:
         """Order result files according to different parameters."""
 
         list_with_module_configs: List = []

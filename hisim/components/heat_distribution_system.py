@@ -614,23 +614,25 @@ class HeatDistribution(cp.Component):
         """Returns investment cost, CO2 emissions and lifetime."""
         # consider costs of changing heat distribution system to floor heating
         if config.heating_system in [HeatDistributionSystemType.FLOORHEATING, 2]:
-            component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM
-            kpi_tag = (
-                KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM
-            )
-            unit = lt.Units.ANY
-            size_of_energy_system = 1
+            component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING
+        elif config.heating_system in [HeatDistributionSystemType.RADIATOR, 1]:
+            component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR
+        else:
+            capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+            return capex_cost_data_class  # or proceed as needed
 
-            capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        kpi_tag = KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM
+        unit = lt.Units.SQUARE_METER
+        size_of_energy_system = config.absolute_conditioned_floor_area_in_m2
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
             simulation_parameters=simulation_parameters,
             component_type=component_type,
             unit=unit,
             size_of_energy_system=size_of_energy_system,
             config=config,
-            kpi_tag=kpi_tag
-            )
-        else:
-            capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+            kpi_tag=kpi_tag,
+        )
 
         config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
         return capex_cost_data_class

@@ -13,7 +13,6 @@ from hisim.system_setup_configuration import SystemSetupConfigBase
 
 @dataclass
 class ModularHouseholdOptions:
-
     """Set options for the system setup."""
 
     pass
@@ -22,7 +21,6 @@ class ModularHouseholdOptions:
 @dataclass_json
 @dataclass
 class ModularHouseholdConfig(SystemSetupConfigBase):
-
     """Modular Household Config class."""
 
     # configuration of the technological equipment of the household
@@ -83,7 +81,9 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
     @classmethod
     def get_default_config_for_household_wood_chips(cls):
         """Get default ModularHouseholdConfig."""
-        energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_wood_chip_heating()
+        energy_system_config_ = (
+            system_config.EnergySystemConfig.get_default_config_for_energy_system_wood_chip_heating()
+        )
         archetype_config_ = archetype_config.ArcheTypeConfig()
         household_config = ModularHouseholdConfig(
             energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
@@ -113,7 +113,9 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
     @classmethod
     def get_default_config_for_household_gas_solar_thermal(cls):
         """Get default ModularHouseholdConfig."""
-        energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_gas_solar_thermal()
+        energy_system_config_ = (
+            system_config.EnergySystemConfig.get_default_config_for_energy_system_gas_solar_thermal()
+        )
         archetype_config_ = archetype_config.ArcheTypeConfig()
         household_config = ModularHouseholdConfig(
             energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
@@ -123,7 +125,9 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
     @classmethod
     def get_default_config_for_household_heatpump_solar_thermal(cls):
         """Get default ModularHouseholdConfig."""
-        energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_heatpump_solar_thermal()
+        energy_system_config_ = (
+            system_config.EnergySystemConfig.get_default_config_for_energy_system_heatpump_solar_thermal()
+        )
         archetype_config_ = archetype_config.ArcheTypeConfig()
         household_config = ModularHouseholdConfig(
             energy_system_config_=energy_system_config_, archetype_config_=archetype_config_

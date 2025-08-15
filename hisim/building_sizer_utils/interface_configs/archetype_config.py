@@ -10,7 +10,6 @@ from dataclasses_json import dataclass_json
 @dataclass_json
 @dataclass
 class ArcheTypeConfig:
-
     """Archetype config class.
 
     Defines the system config for the modular household.

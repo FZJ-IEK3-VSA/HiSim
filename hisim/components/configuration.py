@@ -10,7 +10,6 @@ from hisim.component import ConfigBase
 from hisim import log
 
 """
-
 Sources for opex techno-economic parameters:
         [1]: https://de.statista.com/statistik/daten/studie/914784/umfrage/entwicklung-der-strompreise-in-deutschland-verivox-verbraucherpreisindex/
         [2]: https://echtsolar.de/einspeiseverguetung/  (average of monthly injection revenue)
@@ -46,10 +45,6 @@ opex_techno_economic_parameters = {
             "electricity_costs_in_euro_per_kwh": 0.27825,  # EUR/kWh  # Source: [1]
             "electricity_footprint_in_kg_per_kwh": 0.473,  # kgCO2eq/kWh  # Source: [5]
             "electricity_to_grid_revenue_in_euro_per_kwh": 0.1205,  # EUR/kWh  # Source: [2]
-            "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.0033,  # EUR/kWh
-            "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.02,  # kgCO2eq/kWh
-            "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
-            "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
             "gas_costs_in_euro_per_kwh": 0.0664,  # EUR/kWh  # Source: [4]
             "gas_footprint_in_kg_per_kwh": 0.24,  # kgCO2eq/kWh
             "oil_costs_in_euro_per_l": 1.159835766,  # EUR/l
@@ -69,10 +64,6 @@ opex_techno_economic_parameters = {
             "electricity_costs_in_euro_per_kwh": 0.295,  # EUR/kWh  # Source: [1]
             "electricity_footprint_in_kg_per_kwh": 0.411,  # kgCO2eq/kWh  # Source: [5]
             "electricity_to_grid_revenue_in_euro_per_kwh": 0.1072,  # EUR/kWh  # Source: [2]
-            "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.0033,  # EUR/kWh
-            "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.02,  # kgCO2eq/kWh
-            "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
-            "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
             "gas_costs_in_euro_per_kwh": 0.0728,  # EUR/kWh  # Source: [4]
             "gas_footprint_in_kg_per_kwh": 0.24,  # kgCO2eq/kWh
             "oil_costs_in_euro_per_l": 1.159835766,  # EUR/l
@@ -92,10 +83,6 @@ opex_techno_economic_parameters = {
             "electricity_costs_in_euro_per_kwh": 0.3005,  # EUR/kWh  # Source: [1]
             "electricity_footprint_in_kg_per_kwh": 0.369,  # kgCO2eq/kWh  # Source: [5]
             "electricity_to_grid_revenue_in_euro_per_kwh": 0.0838,  # EUR/kWh  # Source: [2]
-            "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.0033,  # EUR/kWh
-            "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.02,  # kgCO2eq/kWh
-            "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
-            "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
             "gas_costs_in_euro_per_kwh": 0.0699,  # EUR/kWh  # Source: [4]
             "gas_footprint_in_kg_per_kwh": 0.24,  # kgCO2eq/kWh
             "oil_costs_in_euro_per_l": 1.159835766,  # EUR/l
@@ -115,10 +102,6 @@ opex_techno_economic_parameters = {
             "electricity_costs_in_euro_per_kwh": 0.3005,  # EUR/kWh  # Source: [1]
             "electricity_footprint_in_kg_per_kwh": 0.410,  # kgCO2eq/kWh  # Source: [5]
             "electricity_to_grid_revenue_in_euro_per_kwh": 0.0753,  # EUR/kWh  # Source: [2]
-            "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.0033,  # EUR/kWh
-            "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.02,  # kgCO2eq/kWh
-            "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
-            "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
             "gas_costs_in_euro_per_kwh": 0.0745,  # EUR/kWh  # Source: [4]
             "gas_footprint_in_kg_per_kwh": 0.24,  # kgCO2eq/kWh
             "oil_costs_in_euro_per_l": 1.159835766,  # EUR/l
@@ -138,10 +121,6 @@ opex_techno_economic_parameters = {
             "electricity_costs_in_euro_per_kwh": 0.43025,  # EUR/kWh  # Source: [1]
             "electricity_footprint_in_kg_per_kwh": 0.434,  # kgCO2eq/kWh  # Source: [5]
             "electricity_to_grid_revenue_in_euro_per_kwh": 0.0723,  # EUR/kWh  # Source: [2]
-            "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.0033,  # EUR/kWh
-            "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.02,  # kgCO2eq/kWh
-            "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
-            "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
             "gas_costs_in_euro_per_kwh": 0.0951,  # EUR/kWh  # Source: [4]
             "gas_footprint_in_kg_per_kwh": 0.24,  # kgCO2eq/kWh
             "oil_costs_in_euro_per_l": 1.159835766,  # EUR/l
@@ -161,10 +140,6 @@ opex_techno_economic_parameters = {
             "electricity_costs_in_euro_per_kwh": 0.4175,  # EUR/kWh  # Source: [6]
             "electricity_footprint_in_kg_per_kwh": 0.380,  # kgCO2eq/kWh  # Source: [5]
             "electricity_to_grid_revenue_in_euro_per_kwh": 0.0733,  # EUR/kWh  # Source: [2]
-            "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.147,  # EUR/kWh  # Source: [7]
-            "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.1823,  # kgCO2eq/kWh
-            "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
-            "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
             "gas_costs_in_euro_per_kwh": 0.1141,  # EUR/kWh  # Source: [6]
             "gas_footprint_in_kg_per_kwh": 0.247,  # kgCO2eq/kWh
             "oil_costs_in_euro_per_l": 1.159835766,  # EUR/l
@@ -184,10 +159,6 @@ opex_techno_economic_parameters = {
             "electricity_costs_in_euro_per_kwh": 0.3125,  # EUR/kWh  # Source: [22], normal costs + CO2-price of 2024
             "electricity_footprint_in_kg_per_kwh": 0.338,  # kgCO2eq/kWh  # Source: [22]
             "electricity_to_grid_revenue_in_euro_per_kwh": 0.0692,  # EUR/kWh  # Source: [2] average of 2024 values
-            "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.142,  # EUR/kWh  # Source: [7] 160 kW connection
-            "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.28,  # kgCO2eq/kWh # Source: [11] assuming its for 2024
-            "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
-            "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
             "gas_costs_in_euro_per_kwh": 0.1166,  # EUR/kWh  # Source: [22], normal costs + CO2-price of 2024
             "gas_footprint_in_kg_per_kwh": 0.24,  # kgCO2eq/kWh # Source: [22]
             "oil_costs_in_euro_per_l": 1.13,  # EUR/l # Source: [22,11], normal costs + CO2-price of 2024
@@ -207,10 +178,6 @@ opex_techno_economic_parameters = {
             "electricity_costs_in_euro_per_kwh": 0.2810,  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
             "electricity_footprint_in_kg_per_kwh": 0.0,  # kgCO2eq/kWh  # Source: [22], carbon free in 2050
             "electricity_to_grid_revenue_in_euro_per_kwh": 0.0692,  # EUR/kWh  # Source: own assumption, same as 2024
-            "contracting_heating_costs_hot_water_in_euro_per_kwh": 0.142,  # EUR/kWh  # Source: own assumption, same as 2024
-            "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0.28,  # kgCO2eq/kWh # Source: own assumption, carbon free
-            "contracting_heating_costs_cold_water_in_euro_per_kwh": 0,
-            "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0,
             "gas_costs_in_euro_per_kwh": 0.3,  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
             "gas_footprint_in_kg_per_kwh": 0.24,  # kgCO2eq/kWh # Source: [22]
             "oil_costs_in_euro_per_l": 3.34,  # Source: [22,11], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
@@ -232,10 +199,6 @@ opex_techno_economic_parameters = {
             "electricity_costs_in_euro_per_kwh": 0.085, # [23]
             "electricity_footprint_in_kg_per_kwh": 0.167, # [24]
             "electricity_to_grid_revenue_in_euro_per_kwh": 0.06305, # [25] mean of values 
-            "contracting_heating_costs_hot_water_in_euro_per_kwh": 0,  # 
-            "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0,  # 
-            "contracting_heating_costs_cold_water_in_euro_per_kwh": 0, #
-            "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0, #
             "gas_costs_in_euro_per_kwh": 0.04, # [23]
             "gas_footprint_in_kg_per_kwh": 0.249, # [24]
             "oil_costs_in_euro_per_l": 0.714,  # # [23]
@@ -255,10 +218,6 @@ opex_techno_economic_parameters = {
             "electricity_costs_in_euro_per_kwh": 0.085, # [23]
             "electricity_footprint_in_kg_per_kwh": 0.007, # [24]
             "electricity_to_grid_revenue_in_euro_per_kwh": 0.06305, # no data on future development, taking 2024 value
-            "contracting_heating_costs_hot_water_in_euro_per_kwh": 0,  # 
-            "contracting_heating_footprint_hot_water_in_kg_per_kwh": 0,  # 
-            "contracting_heating_costs_cold_water_in_euro_per_kwh": 0, #
-            "contracting_heating_footprint_cold_water_in_kg_per_kwh": 0, #
             "gas_costs_in_euro_per_kwh": 0.04, # [23]
             "gas_footprint_in_kg_per_kwh": 0.249,  # [24]
             "oil_costs_in_euro_per_l": 0.714,  # # [23]
@@ -286,10 +245,6 @@ class EmissionFactorsAndCostsForFuelsConfig:
     electricity_costs_in_euro_per_kwh: float  # EUR/kWh
     electricity_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
     electricity_to_grid_revenue_in_euro_per_kwh: float  # EUR/kWh
-    contracting_heating_costs_hot_water_in_euro_per_kwh: float  # EUR/kWh
-    contracting_heating_footprint_hot_water_in_kg_per_kwh: float  # kgCO2eq/kWh
-    contracting_heating_costs_cold_water_in_euro_per_kwh: float
-    contracting_heating_footprint_cold_water_in_kg_per_kwh: float
     gas_costs_in_euro_per_kwh: float  # EUR/kWh
     gas_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
     oil_costs_in_euro_per_l: float  # EUR/l

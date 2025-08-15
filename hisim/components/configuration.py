@@ -11,7 +11,6 @@ from hisim import log
 
 """
 Sources for opex techno-economic parameters:
-Sources for opex techno-economic parameters:
         [1]: https://de.statista.com/statistik/daten/studie/914784/umfrage/entwicklung-der-strompreise-in-deutschland-verivox-verbraucherpreisindex/
         [2]: https://echtsolar.de/einspeiseverguetung/  (average of monthly injection revenue)
         [3]: https://de.statista.com/statistik/daten/studie/779/umfrage/durchschnittspreis-fuer-dieselkraftstoff-seit-dem-jahr-1950/
@@ -359,7 +358,7 @@ capex_techno_economic_parameters = {
                 "co2_footprint_in_kg_per_kw": 330.51,  # Source: [19]
                 "subsidy_as_percentage_of_investment_costs": 0,
                 # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
-                # that's why we assume 0% subsidy here, source: [31,32]
+                # that's why we assume 0% subsidy here, source: [31]
             },
         },
         Units.KWH: {
@@ -370,7 +369,7 @@ capex_techno_economic_parameters = {
                 "co2_footprint_in_kg_per_kwh": 130.7,  # Source: [19]
                 "subsidy_as_percentage_of_investment_costs": 0,
                 # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
-                # that's why we assume 0% subsidy here, source: [31,32]
+                # that's why we assume 0% subsidy here, source: [31]
             },
         },
         Units.LITER: {
@@ -409,14 +408,14 @@ capex_techno_economic_parameters = {
         Units.ANY: {
             ComponentType.ELECTRICITY_METER: {
                 "investment_costs_in_euro": 100,  # EUR, Source: [26]
-                "maintenance_costs_as_percentage_of_investment_per_year": 0.2,  # assume 20€ per month, check on verivox
+                "maintenance_costs_as_percentage_of_investment_per_year": 2.4,  # assume 20€ per month, check on verivox, meaning 240€/year
                 "technical_lifetime_in_years": 20,  # no idea, assumption
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.GAS_METER: {
                 "investment_costs_in_euro": 200,  # EUR, Source: [27]
-                "maintenance_costs_as_percentage_of_investment_per_year": 0.15,  # assume around 30€ per year, check on verivox
+                "maintenance_costs_as_percentage_of_investment_per_year": 1.8,  # assume around 30€ per year, check on verivox, meaning 360€/year
                 "technical_lifetime_in_years": 20,  # no idea, assumption
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0,

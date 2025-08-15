@@ -262,14 +262,17 @@ class EmissionFactorsAndCostsForFuelsConfig:
 
     @classmethod
     def get_values_for_year(
-        cls, year: int
+        cls, year: int, country: str = "DE"
     ) -> "EmissionFactorsAndCostsForFuelsConfig":  # pylint: disable=too-many-return-statements
         """Get emission factors and fuel costs for certain year."""
 
-        if year not in opex_techno_economic_parameters:
-            raise KeyError(f"No Emission and cost factors implemented yet for the year {year}.")
+        if country not in opex_techno_economic_parameters:
+            raise KeyError(f"No Emission and cost factors implemented yet for the country '{country}'.")
 
-        return EmissionFactorsAndCostsForFuelsConfig(**opex_techno_economic_parameters[year])
+        if year not in opex_techno_economic_parameters[country]:
+            raise KeyError(f"No Emission and cost factors implemented yet for the year {year} in {country}.")
+
+        return EmissionFactorsAndCostsForFuelsConfig(**opex_techno_economic_parameters[country][year])
 
 
 """

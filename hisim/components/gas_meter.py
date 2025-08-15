@@ -52,13 +52,14 @@ class GasMeterConfig(cp.ConfigBase):
     def get_gas_meter_default_config(
         cls,
         building_name: str = "BUI1",
+        gas_loadtype: lt.LoadTypes = lt.LoadTypes.GAS
     ) -> Any:
         """Gets a default GasMeter."""
         return GasMeterConfig(
             building_name=building_name,
             name="GasMeter",
             total_energy_from_grid_in_kwh=0.0,
-            gas_loadtype=lt.LoadTypes.GAS,
+            gas_loadtype=gas_loadtype,
             # capex and device emissions are calculated in get_cost_capex function by default
             device_co2_footprint_in_kg=None,
             investment_costs_in_euro=None,
@@ -368,25 +369,36 @@ class GasMeter(DynamicComponent):
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         total_energy_from_grid_in_kwh: Optional[float] = None
+        total_energy_consumption_in_kwh: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.load_type == self.config.gas_loadtype and output.unit == lt.Units.WATT_HOUR:
                 if output.field_name == self.GasFromGrid:
                     total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
-                    break
+                elif output.field_name == self.GasConsumption:
+                    total_energy_consumption_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
 
         total_energy_from_grid_in_kwh_entry = KpiEntry(
-            name=f"Total {self.config.gas_loadtype.value} demand from grid",
+            name="Total gas demand from grid",
             unit="kWh",
             value=total_energy_from_grid_in_kwh,
             tag=KpiTagEnumClass.GAS_METER,
             description=self.component_name,
         )
         list_of_kpi_entries.append(total_energy_from_grid_in_kwh_entry)
+        total_energy_consumption_in_kwh_entry = KpiEntry(
+            name="Total gas consumption",
+            unit="kWh",
+            value=total_energy_consumption_in_kwh,
+            tag=KpiTagEnumClass.GAS_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(total_energy_consumption_in_kwh_entry)
+
         # try to get opex costs
         opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
         opex_costs_in_euro_entry = KpiEntry(
-            name=f"Opex costs of {self.config.gas_loadtype.value} consumption from grid",
+            name="Opex costs of gas consumption from grid",
             unit="Euro",
             value=opex_costs.opex_energy_cost_in_euro,
             tag=KpiTagEnumClass.GAS_METER,
@@ -394,7 +406,7 @@ class GasMeter(DynamicComponent):
         )
         list_of_kpi_entries.append(opex_costs_in_euro_entry)
         co2_footprint_in_kg_entry = KpiEntry(
-            name=f"CO2 footprint of {self.config.gas_loadtype.value} consumption from grid",
+            name="CO2 footprint of gas consumption from grid",
             unit="kg",
             value=opex_costs.co2_footprint_in_kg,
             tag=KpiTagEnumClass.GAS_METER,

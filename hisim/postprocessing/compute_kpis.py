@@ -33,7 +33,6 @@ from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataT
 
 
 class KpiTagEnumClass(Enum):
-
     """Determine KPI tags as enums."""
 
     GENERAL = "General"
@@ -48,7 +47,6 @@ class KpiTagEnumClass(Enum):
 
 @dataclass
 class KpiEntry(JSONWizard):
-
     """Class for storing one kpi entry."""
 
     name: str
@@ -60,7 +58,6 @@ class KpiEntry(JSONWizard):
 
 @dataclass
 class KpiGenerator(JSONWizard):
-
     """Class for generating and calculating key performance indicators."""
 
     post_processing_data_transfer: InitVar[PostProcessingDataTransfer]
@@ -480,14 +477,20 @@ class KpiGenerator(JSONWizard):
 
         for column in self.results.columns:
 
-            if all(x in column.split(sep=" ") for x in [wrapped_electricity_meter_component.my_component.component_name]):
+            if all(
+                x in column.split(sep=" ") for x in [wrapped_electricity_meter_component.my_component.component_name]
+            ):
                 for string in column.split(sep=" "):
 
-                    if "ElectricityToGrid" in string.split(sep="_") :
-                        total_energy_to_grid_in_kwh = (self.results[column].loc[self.results[column] > 0.0]).sum() / 1000
+                    if "ElectricityToGrid" in string.split(sep="_"):
+                        total_energy_to_grid_in_kwh = (
+                            self.results[column].loc[self.results[column] > 0.0]
+                        ).sum() / 1000
 
-                    if "ElectricityFromGrid" in string.split(sep="_") :
-                        total_energy_from_grid_in_kwh = (self.results[column].loc[self.results[column] > 0.0]).sum() / 1000
+                    if "ElectricityFromGrid" in string.split(sep="_"):
+                        total_energy_from_grid_in_kwh = (
+                            self.results[column].loc[self.results[column] > 0.0]
+                        ).sum() / 1000
 
         if total_energy_from_grid_in_kwh is None and total_energy_to_grid_in_kwh is None:
             log.warning(
@@ -547,7 +550,8 @@ class KpiGenerator(JSONWizard):
         return relative_electricity_demand_from_grid_in_percent
 
     def compute_autarky_according_to_solar_htw_berlin(
-        self, relative_electricty_demand_in_percent: Optional[float],
+        self,
+        relative_electricty_demand_in_percent: Optional[float],
     ) -> None:
         """Return the autarky rate according to solar htw berlin.
 
@@ -658,7 +662,12 @@ class KpiGenerator(JSONWizard):
         return (float(column["Cost"].iloc[0]), float(column["Footprint"].iloc[0]))
 
     def compute_cost_of_fuel_type(
-        self, results: pd.DataFrame, all_outputs: List, timeresolution: int, price_frame: pd.DataFrame, fuel: LoadTypes,
+        self,
+        results: pd.DataFrame,
+        all_outputs: List,
+        timeresolution: int,
+        price_frame: pd.DataFrame,
+        fuel: LoadTypes,
     ) -> Tuple[float, float]:
         """Computes the cost of the fuel type."""
         fuel_consumption = pd.Series(dtype=pd.Float64Dtype())  # type: pd.Series[float]
@@ -704,9 +713,10 @@ class KpiGenerator(JSONWizard):
 
         price_frame = self.read_in_fuel_costs()
 
-        (electricity_price_consumption, electricity_price_injection,) = self.search_electricity_prices_in_results(
-            all_outputs=self.all_outputs, results=self.results
-        )
+        (
+            electricity_price_consumption,
+            electricity_price_injection,
+        ) = self.search_electricity_prices_in_results(all_outputs=self.all_outputs, results=self.results)
         # Electricity Price
         electricity_price_constant, co2_price_constant = self.get_euro_and_co2(
             fuel_costs=price_frame, fuel=LoadTypes.ELECTRICITY
@@ -877,7 +887,9 @@ class KpiGenerator(JSONWizard):
             }
         )
 
-    def get_building_kpis(self,) -> float:
+    def get_building_kpis(
+        self,
+    ) -> float:
         """Check building kpi values.
 
         Check for all timesteps and count the
@@ -924,7 +936,10 @@ class KpiGenerator(JSONWizard):
             tag=KpiTagEnumClass.BUILDING,
         )
         scaled_rooftop_area_in_m2_entry = KpiEntry(
-            name="Rooftop area", unit="m2", value=scaled_rooftop_area_in_m2, tag=KpiTagEnumClass.BUILDING,
+            name="Rooftop area",
+            unit="m2",
+            value=scaled_rooftop_area_in_m2,
+            tag=KpiTagEnumClass.BUILDING,
         )
         specific_heating_load_in_watt_per_m2_entry = KpiEntry(
             name="Specific heating load",
@@ -1185,9 +1200,11 @@ class KpiGenerator(JSONWizard):
             if all(x in column.split(sep=" ") for x in [Building.HeatDemandAccordingToTabula]):
                 heat_demand_values_in_watt = results[column]
                 # get energy from power
-                energy_demand_calculated_based_on_tabula_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
-                    power_timeseries_in_watt=heat_demand_values_in_watt,
-                    timeresolution=self.simulation_parameters.seconds_per_timestep,
+                energy_demand_calculated_based_on_tabula_in_kilowatt_hour = (
+                    self.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=heat_demand_values_in_watt,
+                        timeresolution=self.simulation_parameters.seconds_per_timestep,
+                    )
                 )
                 specific_heat_demand_calculated_with_tabula_method_in_kilowatthour_per_m2 = (
                     energy_demand_calculated_based_on_tabula_in_kilowatt_hour / building_conditioned_floor_area_in_m2
@@ -1542,7 +1559,9 @@ class KpiGenerator(JSONWizard):
         )
 
     def get_heat_pump_cooling_and_heating_times(
-        self, results: pd.DataFrame, component_name: str,
+        self,
+        results: pd.DataFrame,
+        component_name: str,
     ) -> Tuple[float, float]:
         """Get heating and cooling times of heat pump."""
         heating_time_in_hours = 0.0
@@ -1622,7 +1641,8 @@ class KpiGenerator(JSONWizard):
                 )
                 # get heating and cooling hours
                 (heating_time_in_hours, cooling_time_in_hours) = self.get_heat_pump_cooling_and_heating_times(
-                    results=self.results, component_name=wrapped_component.my_component.component_name,
+                    results=self.results,
+                    component_name=wrapped_component.my_component.component_name,
                 )
 
                 # get flow and return temperatures
@@ -1937,9 +1957,11 @@ class KpiGenerator(JSONWizard):
                 ]
             ):
                 dhw_heat_pump_total_electricity_consumption_in_watt_series = self.results[column]
-                dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
-                    power_timeseries_in_watt=dhw_heat_pump_total_electricity_consumption_in_watt_series,
-                    timeresolution=self.simulation_parameters.seconds_per_timestep,
+                dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour = (
+                    self.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=dhw_heat_pump_total_electricity_consumption_in_watt_series,
+                        timeresolution=self.simulation_parameters.seconds_per_timestep,
+                    )
                 )
             if all(
                 x in column.split(sep=" ")
@@ -2061,13 +2083,18 @@ class KpiGenerator(JSONWizard):
         for column in self.results.columns:
             if all(
                 x in column.split(sep=" ")
-                for x in [wrapped_occupancy_component.my_component.component_name, UtspLpgConnector.ElectricalPowerConsumption]
+                for x in [
+                    wrapped_occupancy_component.my_component.component_name,
+                    UtspLpgConnector.ElectricalPowerConsumption,
+                ]
             ):
 
                 occupancy_total_electricity_consumption_in_watt_series = self.results[column]
-                occupancy_total_electricity_consumption_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
-                    power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
-                    timeresolution=self.simulation_parameters.seconds_per_timestep,
+                occupancy_total_electricity_consumption_in_kilowatt_hour = (
+                    self.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
+                        timeresolution=self.simulation_parameters.seconds_per_timestep,
+                    )
                 )
         # calculate some more occupancy kpis if possible
         if (
@@ -2150,7 +2177,10 @@ class KpiGenerator(JSONWizard):
         occupancy_electricity_from_grid_in_kilowatt_hour = None
 
         for wrapped_component in self.wrapped_components:
-            if isinstance(wrapped_component.my_component, (L2GenericEnergyManagementSystem, L2GenericDistrictEnergyManagementSystem)):
+            if isinstance(
+                wrapped_component.my_component,
+                (L2GenericEnergyManagementSystem, L2GenericDistrictEnergyManagementSystem),
+            ):
                 wrapped_ems_component = wrapped_component
                 break
         if not wrapped_ems_component:

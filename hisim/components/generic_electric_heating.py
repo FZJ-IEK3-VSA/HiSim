@@ -83,12 +83,13 @@ class ElectricHeatingConfig(ConfigBase):
         cls,
         building_name: str = "BUI1",
         with_domestic_hot_water_preparation=False,
+        connected_load_w: float = 40000
     ) -> Any:
         """Get a default Electric heating."""
         config = ElectricHeatingConfig(
             building_name=building_name,
             name="ElectricHeating",
-            connected_load_w=40000,
+            connected_load_w=connected_load_w,
             efficiency=1.0,  # 100% efficiency
             # capex and device emissions are calculated in get_cost_capex function by default
             device_co2_footprint_in_kg=None,

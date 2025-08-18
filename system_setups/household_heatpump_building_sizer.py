@@ -22,7 +22,6 @@ from hisim.components import (
     heat_distribution_system,
     electricity_meter,
 )
-
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions

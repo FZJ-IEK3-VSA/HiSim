@@ -24,7 +24,7 @@ def main(
     warnings.filterwarnings("ignore")
 
     # Delete old log files
-    logging_default_path = Path(log.LOGGING_DEFAULT_PATH)
+    logging_default_path = Path(log.LOGGING_PATH)
     if logging_default_path.exists() and logging_default_path.is_dir():
         for file in logging_default_path.iterdir():
             try:
@@ -88,13 +88,6 @@ def main(
     log.profile("duration: " + str((endtime - starttime).total_seconds()))
     log.information("#################################")
     log.information("")
-
-    # At the end put new logging files into result directory
-    try:
-        my_sim.put_log_files_into_result_path()
-    # sometimes when running many simulations at once this leads to errors, so ignore
-    except Exception:
-        pass
 
 
 if __name__ == "__main__":

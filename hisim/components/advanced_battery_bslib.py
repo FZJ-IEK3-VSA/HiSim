@@ -173,6 +173,7 @@ class Battery(Component):
             my_config=config,
             my_display_config=my_display_config,
         )
+        self.negative_soa_warning: bool = True
 
         self.source_weight = self.battery_config.source_weight
 
@@ -279,8 +280,11 @@ class Battery(Component):
         ac_battery_power_used_for_charging_or_discharging_in_watt = results[0]
         dc_battery_power_used_for_charging_or_discharging_in_watt = results[1]
         state_of_charge = results[2]
-        if state_of_charge < 0:
+
+        if state_of_charge < 0 and self.negative_soa_warning:
             log.warning("SOC of Battery cannot be negative. Check your configuration.")
+            self.negative_soa_warning = False  # make sure that the warning comes only once, otherwise too much logging
+
         # get charging and discharging power
         if ac_battery_power_used_for_charging_or_discharging_in_watt > 0:
             charging_power_in_watt = ac_battery_power_used_for_charging_or_discharging_in_watt

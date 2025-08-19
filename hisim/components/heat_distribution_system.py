@@ -144,7 +144,6 @@ class HeatDistribution(cp.Component):
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     ResidenceTemperatureIndoorAir = "ResidenceTemperatureIndoorAir"
     WaterMassFlowInput = "WaterMassFlowInput"
-    ThermalPowerReceived = "ThermalPowerReceived"  # Relevant for district heating with DWH
 
     # Outputs
     WaterTemperatureInlet = "WaterTemperatureInlet"
@@ -223,12 +222,6 @@ class HeatDistribution(cp.Component):
             # just important for heating system without parallel bufferstorage
             self.water_mass_flow_rate_hp_in_kg_per_second_channel: cp.ComponentInput = self.add_input(
                 self.component_name, self.WaterMassFlowInput, lt.LoadTypes.WATER, lt.Units.KG_PER_SEC, True,
-            )
-        if self.position_hot_water_storage_in_system in [
-            PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX
-        ]:
-            self.thermal_power_received_heating_system_w_input_channel : cp.ComponentInput = self.add_input(
-                self.component_name, self.ThermalPowerReceived, lt.LoadTypes.WARM_WATER, lt.Units.WATT, True,
             )
 
         # Outputs
@@ -337,11 +330,6 @@ class HeatDistribution(cp.Component):
                 HeatDistribution.WaterTemperatureInput, classname, component_class.WaterOutputShTemperature,
             )
         )
-        connections.append(
-            cp.ComponentConnection(
-                HeatDistribution.ThermalPowerReceived, classname, component_class.ThermalOutputShPower,
-            )
-        )
         return connections
 
     def get_default_connections_from_electric_heating(self,):
@@ -357,11 +345,6 @@ class HeatDistribution(cp.Component):
         connections.append(
             cp.ComponentConnection(
                 HeatDistribution.WaterTemperatureInput, classname, component_class.WaterOutputShTemperature,
-            )
-        )
-        connections.append(
-            cp.ComponentConnection(
-                HeatDistribution.ThermalPowerReceived, classname, component_class.ThermalOutputShPower,
             )
         )
         return connections
@@ -429,14 +412,8 @@ class HeatDistribution(cp.Component):
             )
         else:
             water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
-            thermal_power_received_heating_system_w = None
-            if self.position_hot_water_storage_in_system in [
-                PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX
-            ]:
-                thermal_power_received_heating_system_w = stsv.get_input_value(self.thermal_power_received_heating_system_w_input_channel)
 
-            # if state_controller == 1:
-            if state_controller in (1, -1) and (thermal_power_received_heating_system_w is None or thermal_power_received_heating_system_w != 0):
+            if state_controller in (1, -1):
                 (
                     water_temperature_output_in_celsius,
                     thermal_power_delivered_in_watt,
@@ -447,7 +424,7 @@ class HeatDistribution(cp.Component):
                     residence_temperature_in_celsius=residence_temperature_input_in_celsius,
                 )
 
-            elif state_controller == 0 or (thermal_power_received_heating_system_w is not None and thermal_power_received_heating_system_w == 0):
+            elif state_controller == 0:
                 thermal_power_delivered_in_watt = 0.0
                 # keep temperature almost as is, as no heating/cooling occurs,
                 # but introduce small change of temperature to account for heat loss and gain
@@ -475,6 +452,7 @@ class HeatDistribution(cp.Component):
             #    water_temperature_input_in_celsius-water_temperature_output_in_celsius
             self.state.water_input_temperature_in_celsius - self.state.water_output_temperature_in_celsius,
         )
+
         stsv.set_output_value(
             self.thermal_power_delivered_channel,
             self.state.thermal_power_delivered_in_watt,
@@ -601,7 +579,6 @@ class HeatDistribution(cp.Component):
             raise ValueError(
                 f"Theoretical thermal demand has unacceptable value here {theoretical_thermal_buiding_demand_in_watt}."
             )
-
         return (
             water_temperature_output_in_celsius,
             thermal_power_delivered_effective_in_watt,
@@ -819,6 +796,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
     set_heating_temperature_for_building_in_celsius: float
     set_cooling_temperature_for_building_in_celsius: float
     heating_load_of_building_in_watt: float
+    specific_heating_load_of_building_in_watt_per_m2: Optional[float]
 
     @classmethod
     def get_default_heat_distribution_controller_config(
@@ -826,6 +804,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         heating_load_of_building_in_watt: float,
         set_heating_temperature_for_building_in_celsius: float,
         set_cooling_temperature_for_building_in_celsius: float,
+        set_heating_threshold_outside_temperature_in_celsius: float=16.0,
         heating_reference_temperature_in_celsius: float = -7.0,
         heating_system: Union[HeatDistributionSystemType, int] = HeatDistributionSystemType.FLOORHEATING,
         building_name: str = "BUI1",
@@ -836,11 +815,43 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
             building_name=building_name,
             name="HeatDistributionController",
             heating_system=heating_system,
-            set_heating_threshold_outside_temperature_in_celsius=16.0,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
             heating_load_of_building_in_watt=round(heating_load_of_building_in_watt, 2),
+            specific_heating_load_of_building_in_watt_per_m2=None,
+        )
+
+    @classmethod
+    def get_heat_distribution_controller_config_based_on_building_efficiency(
+        cls,
+        heating_load_of_building_in_watt: float,
+        set_heating_temperature_for_building_in_celsius: float,
+        set_cooling_temperature_for_building_in_celsius: float,
+        specific_heating_load_of_building_in_watt_per_m2: float,
+        set_heating_threshold_outside_temperature_in_celsius: float=16.0,
+        heating_reference_temperature_in_celsius: float = -7.0,
+        heating_system: Union[HeatDistributionSystemType, int] = HeatDistributionSystemType.FLOORHEATING,
+        building_name: str = "BUI1",
+    ) -> "HeatDistributionControllerConfig":
+        """Gets a default HeatDistribution Controller."""
+        # avoid that inefficient building cool out in summer time (in the mornings and evenings)
+        if 50 < specific_heating_load_of_building_in_watt_per_m2 <= 80.0:
+            set_heating_threshold_outside_temperature_in_celsius = 18.0
+        elif 80 < specific_heating_load_of_building_in_watt_per_m2:
+            set_heating_threshold_outside_temperature_in_celsius = 20.0
+
+        return HeatDistributionControllerConfig(
+            building_name=building_name,
+            name="HeatDistributionController",
+            heating_system=heating_system,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
+            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
+            heating_load_of_building_in_watt=round(heating_load_of_building_in_watt, 2),
+            specific_heating_load_of_building_in_watt_per_m2=specific_heating_load_of_building_in_watt_per_m2,
         )
 
 

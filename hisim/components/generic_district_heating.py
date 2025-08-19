@@ -107,13 +107,14 @@ class DistrictHeating(Component):
     HeatingMode = "HeatingMode"
 
     # Inputs for space heating
-    DeltaTemperatureNeeded = "DeltaTemperatureNeededSh"  # how much water temperature needs to be increased
+    DeltaTemperatureNeededForSH = "DeltaTemperatureNeededForSH"  # how much water temperature needs to be increased
     WaterInputTemperatureSh = "WaterInputTemperatureSh"
     WaterInputMassFlowRateFromHeatDistributionSystem = (
         "WaterInputMassFlowRateFromHeatDistributionSystem"
     )
 
     # Inputs for DHW
+    DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
     WaterInputMassFlowRateFromWarmWaterStorage = (
         "WaterInputMassFlowRateFromWarmWaterStorage"
@@ -156,9 +157,16 @@ class DistrictHeating(Component):
             Units.ANY,
             True,
         )
-        self.delta_temperature_channel: ComponentInput = self.add_input(
+        self.delta_temperature_for_dhw_channel: ComponentInput = self.add_input(
             self.component_name,
-            DistrictHeating.DeltaTemperatureNeeded,
+            DistrictHeating.DeltaTemperatureNeededForDHW,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            True,
+        )
+        self.delta_temperature_for_sh_channel: ComponentInput = self.add_input(
+            self.component_name,
+            DistrictHeating.DeltaTemperatureNeededForSH,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             True,
@@ -292,9 +300,16 @@ class DistrictHeating(Component):
         )
         connections.append(
             ComponentConnection(
-                DistrictHeating.DeltaTemperatureNeeded,
+                DistrictHeating.DeltaTemperatureNeededForDHW,
                 controller_classname,
-                component_class.DeltaTemperatureNeeded,
+                component_class.DeltaTemperatureNeededForDHW,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                DistrictHeating.DeltaTemperatureNeededForSH,
+                controller_classname,
+                component_class.DeltaTemperatureNeededForSH,
             )
         )
         return connections
@@ -384,15 +399,15 @@ class DistrictHeating(Component):
 
         if heating_mode == HeatingMode.SPACE_HEATING:
             # Get relevant inputs
-            delta_temperature_needed_in_celsius = stsv.get_input_value(
-                self.delta_temperature_channel
+            delta_temperature_needed_for_sh_in_celsius = stsv.get_input_value(
+                self.delta_temperature_for_sh_channel
             )
-            self._check_delta_temperature(delta_temperature_needed_in_celsius, timestep)
+            self._check_delta_temperature(delta_temperature_needed_for_sh_in_celsius, timestep)
 
-            water_input_temperature_deg_c = stsv.get_input_value(
+            water_input_temperature_for_sh_deg_c = stsv.get_input_value(
                 self.water_input_temperature_sh_channel
             )
-            water_mass_flow_rate_in_kg_per_s = stsv.get_input_value(
+            water_mass_flow_rate_for_sh_in_kg_per_s = stsv.get_input_value(
                 self.water_input_mass_flow_rate_sh_channel
             )
 
@@ -402,9 +417,10 @@ class DistrictHeating(Component):
                 thermal_energy_delivered_in_watt_hour,
                 water_output_temperature_deg_c,
             ) = self._calculate_space_heating_outputs(
-                water_mass_flow_rate_in_kg_per_s,
-                delta_temperature_needed_in_celsius,
-                water_input_temperature_deg_c,
+                water_mass_flow_rate_for_sh_in_kg_per_s,
+                delta_temperature_needed_for_sh_in_celsius,
+                water_input_temperature_for_sh_deg_c,
+                available_load_in_w=self.config.connected_load_w
             )
 
             # Set outputs
@@ -421,7 +437,7 @@ class DistrictHeating(Component):
             )
             stsv.set_output_value(
                 self.water_mass_flow_sh_output_channel,
-                water_mass_flow_rate_in_kg_per_s,
+                water_mass_flow_rate_for_sh_in_kg_per_s,
             )
 
             stsv.set_output_value(self.thermal_output_power_dhw_channel, 0)
@@ -437,12 +453,12 @@ class DistrictHeating(Component):
 
         elif heating_mode == HeatingMode.DOMESTIC_HOT_WATER:
             # Get relevant inputs
-            delta_temperature_needed_in_celsius = stsv.get_input_value(
-                self.delta_temperature_channel
+            delta_temperature_needed_for_dhw_in_celsius = stsv.get_input_value(
+                self.delta_temperature_for_dhw_channel
             )
-            self._check_delta_temperature(delta_temperature_needed_in_celsius, timestep)
+            self._check_delta_temperature(delta_temperature_needed_for_dhw_in_celsius, timestep)
 
-            water_input_temperature_deg_c = stsv.get_input_value(
+            water_input_temperature_for_dhw_deg_c = stsv.get_input_value(
                 self.water_input_temperature_dhw_channel
             )
 
@@ -453,8 +469,8 @@ class DistrictHeating(Component):
                 water_output_temperature_deg_c,
                 water_mass_flow_rate_in_kg_per_s
             ) = self._calculate_dhw_outputs(
-                water_input_temperature_deg_c,
-                delta_temperature_needed_in_celsius,
+                water_input_temperature_for_dhw_deg_c,
+                delta_temperature_needed_for_dhw_in_celsius,
             )
 
             # Set outputs
@@ -485,6 +501,91 @@ class DistrictHeating(Component):
                 current_sh_water_temperature_deg_c,
             )
             stsv.set_output_value(self.water_mass_flow_sh_output_channel, 0)
+
+        elif heating_mode == HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL:
+            # Get relevant inputs
+            delta_temperature_needed_for_dhw_in_celsius = stsv.get_input_value(
+                self.delta_temperature_for_dhw_channel
+            )
+            self._check_delta_temperature(delta_temperature_needed_for_dhw_in_celsius, timestep)
+
+            delta_temperature_needed_for_sh_in_celsius = stsv.get_input_value(
+                self.delta_temperature_for_sh_channel
+            )
+            self._check_delta_temperature(delta_temperature_needed_for_sh_in_celsius, timestep)
+
+            water_input_temperature_for_sh_deg_c = stsv.get_input_value(
+                self.water_input_temperature_sh_channel
+            )
+            water_mass_flow_rate_for_sh_in_kg_per_s = stsv.get_input_value(
+                self.water_input_mass_flow_rate_sh_channel
+            )
+
+            water_input_temperature_for_dhw_deg_c = stsv.get_input_value(
+                self.water_input_temperature_dhw_channel
+            )
+
+            # Calculate first for dhw
+            (
+                thermal_power_delivered_for_dhw_w,
+                thermal_energy_delivered_for_dhw_in_watt_hour,
+                water_output_temperature_for_dhw_deg_c,
+                water_mass_flow_rate_for_dhw_in_kg_per_s
+            ) = self._calculate_dhw_outputs(
+                water_input_temperature_for_dhw_deg_c,
+                delta_temperature_needed_for_dhw_in_celsius,
+            )
+
+            # Set outputs
+            stsv.set_output_value(
+                self.thermal_output_power_dhw_channel,
+                thermal_power_delivered_for_dhw_w,
+            )
+            stsv.set_output_value(
+                self.thermal_output_energy_dhw_channel,
+                thermal_energy_delivered_for_dhw_in_watt_hour,
+            )
+            stsv.set_output_value(
+                self.water_output_temperature_dhw_channel,
+                water_output_temperature_for_dhw_deg_c,
+            )
+            stsv.set_output_value(
+                self.water_mass_flow_dhw_output_channel,
+                water_mass_flow_rate_for_dhw_in_kg_per_s
+            )
+            # Now calculate for space heating
+            # Calculate
+            # raise value error if thermal power delivered of both are higher than maximal load
+            if self.config.connected_load_w - thermal_power_delivered_for_dhw_w <=0:
+                raise ValueError(f"Thermal load for DHW {thermal_power_delivered_for_dhw_w}W is equal or higher than maximal connected load {self.config.connected_load_w}. ")
+            (
+                thermal_power_delivered_for_sh_w,
+                thermal_energy_delivered_for_sh_in_watt_hour,
+                water_output_temperature_for_sh_deg_c,
+            ) = self._calculate_space_heating_outputs(
+                water_mass_flow_rate_for_sh_in_kg_per_s,
+                delta_temperature_needed_for_sh_in_celsius,
+                water_input_temperature_for_sh_deg_c,
+                available_load_in_w=self.config.connected_load_w - thermal_power_delivered_for_dhw_w
+            )
+            
+
+            # Set outputs
+            stsv.set_output_value(
+                self.thermal_output_power_sh_channel, thermal_power_delivered_for_sh_w
+            )
+            stsv.set_output_value(
+                self.thermal_output_energy_sh_channel,
+                thermal_energy_delivered_for_sh_in_watt_hour,
+            )
+            stsv.set_output_value(
+                self.water_output_temperature_sh_channel,
+                water_output_temperature_for_sh_deg_c,
+            )
+            stsv.set_output_value(
+                self.water_mass_flow_sh_output_channel,
+                water_mass_flow_rate_for_sh_in_kg_per_s,
+            )
 
         elif heating_mode == HeatingMode.OFF:
             stsv.set_output_value(self.thermal_output_power_dhw_channel, 0)
@@ -526,7 +627,8 @@ class DistrictHeating(Component):
 
     def _calculate_space_heating_outputs(self, water_mass_flow_rate_in_kg_per_s: float,
                                          delta_temperature_needed_in_celsius: float,
-                                         water_input_temperature_deg_c: float) -> Tuple[float, float, float]:
+                                         water_input_temperature_deg_c: float,
+                                         available_load_in_w: float) -> Tuple[float, float, float]:
         thermal_power_delivered_w = (
             water_mass_flow_rate_in_kg_per_s
             * PhysicsConfig.get_properties_for_energy_carrier(
@@ -535,12 +637,12 @@ class DistrictHeating(Component):
             * delta_temperature_needed_in_celsius
         )
 
-        if thermal_power_delivered_w > self.config.connected_load_w:
+        if thermal_power_delivered_w > available_load_in_w:
             # make sure that not more power is delivered than available
-            logging.warning(
+            logging.debug(
                 "The needed thermal power for space heating is higher than the maximum connected load."
             )
-            thermal_power_delivered_w = self.config.connected_load_w
+            thermal_power_delivered_w = available_load_in_w
             delta_temperature_achieved = thermal_power_delivered_w / (
                 water_mass_flow_rate_in_kg_per_s
                 * PhysicsConfig.get_properties_for_energy_carrier(
@@ -571,7 +673,11 @@ class DistrictHeating(Component):
 
         # calculate thermal power delivered Q = m * cw * dT
         if delta_temperature_needed_in_celsius > 0:
-            thermal_power_delivered_w = self.config.connected_load_w
+            # regulate thermal output power based on deltaT needed
+            thermal_power_delivered_w = min(
+                self.config.connected_load_w * delta_temperature_needed_in_celsius / 100.0,
+                self.config.connected_load_w
+            )  
             water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_w / (
             PhysicsConfig.get_properties_for_energy_carrier(
                 energy_carrier=LoadTypes.WATER
@@ -811,21 +917,25 @@ class DistrictHeatingControllerConfig(ConfigBase):
     name: str
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
     with_domestic_hot_water_preparation: bool
-    offset: float  # overheating of dhw storage
+    hysteresis_water_temperature_offset: float
+    parallel_space_heating_and_dhw_option: bool
 
     @classmethod
     def get_default_district_heating_controller_config(
         cls,
         building_name: str = "BUI1",
         with_domestic_hot_water_preparation=False,
+        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
+        parallel_space_heating_and_dhw_option: bool = False,
     ) -> Any:
         """Gets a default district heating controller."""
         return DistrictHeatingControllerConfig(
             building_name=building_name,
             name="DistrictHeatingController",
-            set_heating_threshold_outside_temperature_in_celsius=16.0,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-            offset=15,
+            hysteresis_water_temperature_offset=15,
+            parallel_space_heating_and_dhw_option=parallel_space_heating_and_dhw_option,
         )
 
 
@@ -849,7 +959,8 @@ class DistrictHeatingController(Component):
     )
 
     # Outputs
-    DeltaTemperatureNeeded = "DeltaTemperatureNeeded"
+    DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
+    DeltaTemperatureNeededForSH = "DeltaTemperatureNeededForSH"
     OperatingMode = "HeatingMode"
 
     def __init__(
@@ -910,12 +1021,19 @@ class DistrictHeatingController(Component):
             )
         )
 
-        self.delta_temperature_to_district_heating_channel: ComponentOutput = self.add_output(
+        self.delta_temperature_for_dhw_to_district_heating_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.DeltaTemperatureNeeded,
+            self.DeltaTemperatureNeededForDHW,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
-            output_description=f"here a description for {self.DeltaTemperatureNeeded} will follow.",
+            output_description=f"here a description for {self.DeltaTemperatureNeededForDHW} will follow.",
+        )
+        self.delta_temperature_for_sh_to_district_heating_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.DeltaTemperatureNeededForSH,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            output_description=f"here a description for {self.DeltaTemperatureNeededForSH} will follow.",
         )
 
         self.controller_mode: HeatingMode
@@ -1076,16 +1194,19 @@ class DistrictHeatingController(Component):
         )
 
         # Determine which operating mode to use in dual-circuit system
-        delta_temperature_in_celsius = self.determine_operating_mode(
+        delta_temperature_for_dhw_in_celsius, delta_temperature_for_space_heating_in_celsius = self.determine_operating_mode(
             daily_avg_outside_temperature_in_celsius,
             water_temperature_input_from_heat_distibution_in_celsius,
             heating_flow_temperature_from_heat_distribution_in_celsius,
             water_temperature_input_from_warm_water_storage_in_celsius,
         )
-
         stsv.set_output_value(
-            self.delta_temperature_to_district_heating_channel,
-            delta_temperature_in_celsius,
+            self.delta_temperature_for_dhw_to_district_heating_channel,
+            delta_temperature_for_dhw_in_celsius,
+        )
+        stsv.set_output_value(
+            self.delta_temperature_for_sh_to_district_heating_channel,
+            delta_temperature_for_space_heating_in_celsius,
         )
         stsv.set_output_value(
             self.heating_mode_output_channel, self.controller_mode.value
@@ -1095,7 +1216,7 @@ class DistrictHeatingController(Component):
                                  daily_avg_outside_temperature_in_celsius: float,
                                  sh_current_temperature_deg_c: float,
                                  sh_set_temperature_deg_c: float,
-                                 dhw_current_temperature_deg_c: Optional[float]) -> float:
+                                 dhw_current_temperature_deg_c: Optional[float]) -> Tuple[float, float]:
         """Determine operating mode."""
 
         self.controller_mode = DiverterValve.determine_operating_mode(
@@ -1109,36 +1230,55 @@ class DistrictHeatingController(Component):
             set_temperatures=SetTemperatureConfig(
                 set_temperature_space_heating=sh_set_temperature_deg_c,
                 set_temperature_dhw=self.warm_water_temperature_aim_in_celsius,
-                hysteresis_dhw_offset=self.config.offset,
+                hysteresis_water_temperature_offset=self.config.hysteresis_water_temperature_offset,
                 outside_temperature_threshold=self.district_heating_controller_config.set_heating_threshold_outside_temperature_in_celsius
-            )
+            ),
+            parallel_space_heating_and_dhw_option=self.config.parallel_space_heating_and_dhw_option
         )
 
         if self.controller_mode == HeatingMode.SPACE_HEATING:
             # delta temperature should not be negative because district heating cannot provide cooling
-            delta_temperature_in_celsius = float(max(
+            delta_temperature_for_space_heating_in_celsius = float(max(
                 sh_set_temperature_deg_c
                 - sh_current_temperature_deg_c,
-                0.,
+                0.0,
             ))
+            delta_temperature_for_dhw_in_celsius = 0.0
         elif self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
             # delta temperature should not be negative because district heating cannot provide cooling
             assert dhw_current_temperature_deg_c is not None
-            delta_temperature_in_celsius = (
+            delta_temperature_for_dhw_in_celsius = (
                 float(max(
                     self.warm_water_temperature_aim_in_celsius
                     - dhw_current_temperature_deg_c,
-                    0.,
+                    0.0,
                 )
-                + self.config.offset
+                + self.config.hysteresis_water_temperature_offset
             ))
+            delta_temperature_for_space_heating_in_celsius = 0.0
         elif self.controller_mode == HeatingMode.OFF:
-            delta_temperature_in_celsius = 0.
+            delta_temperature_for_dhw_in_celsius = 0.0
+            delta_temperature_for_space_heating_in_celsius = 0.0
+        elif self.controller_mode == HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL:
+            assert dhw_current_temperature_deg_c is not None
+            delta_temperature_for_dhw_in_celsius = (
+                float(max(
+                    self.warm_water_temperature_aim_in_celsius
+                    - dhw_current_temperature_deg_c,
+                    0.0,
+                )
+                + self.config.hysteresis_water_temperature_offset
+            ))
+            delta_temperature_for_space_heating_in_celsius = float(max(
+                sh_set_temperature_deg_c
+                - sh_current_temperature_deg_c,
+                0.0,
+            ))
         else:
             raise ValueError(
                 "District Heating Controller control_signal unknown."
             )
-        return delta_temperature_in_celsius
+        return delta_temperature_for_dhw_in_celsius, delta_temperature_for_space_heating_in_celsius
 
     def get_cost_opex(
         self,

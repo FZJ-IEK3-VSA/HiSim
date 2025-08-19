@@ -1521,7 +1521,7 @@ class GenericBoilerController(Component):
             set_temperatures=SetTemperatureConfig(
                 set_temperature_space_heating=heating_flow_temperature_from_heat_distribution_system,
                 set_temperature_dhw=self.warm_water_temperature_aim_in_celsius,
-                hysteresis_dhw_offset=self.config.dhw_hysteresis_offset,
+                hysteresis_water_temperature_offset=self.config.dhw_hysteresis_offset,
                 outside_temperature_threshold=self.config.set_heating_threshold_outside_temperature_in_celsius,
             ),
         )

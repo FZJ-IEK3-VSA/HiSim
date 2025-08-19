@@ -11,6 +11,7 @@ class HeatingMode(enum.Enum):
     OFF = 0
     SPACE_HEATING = 1
     DOMESTIC_HOT_WATER = 2
+    SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL = 3
 
 
 @dataclass
@@ -19,7 +20,7 @@ class SetTemperatureConfig:
 
     set_temperature_space_heating: float
     set_temperature_dhw: Optional[float]
-    hysteresis_dhw_offset: Optional[float]
+    hysteresis_water_temperature_offset: Optional[float]
     outside_temperature_threshold: Optional[float]
 
 
@@ -38,6 +39,7 @@ class DiverterValve:
         water_temperature_input_sh_in_celsius: float,
         water_temperature_input_dhw_in_celsius: Optional[float],
         set_temperatures: SetTemperatureConfig,
+        parallel_space_heating_and_dhw_option: bool = False
     ) -> HeatingMode:
         """Set conditions for the district heating controller mode."""
 
@@ -53,7 +55,7 @@ class DiverterValve:
             assert set_temperatures.set_temperature_dhw is not None
 
             if actual_water_temperature < (
-                set_water_temperature - set_temperatures.hysteresis_dhw_offset
+                set_water_temperature - set_temperatures.hysteresis_water_temperature_offset
             ):
                 return True
 
@@ -76,7 +78,7 @@ class DiverterValve:
                 == "off"
             ):
                 return False
-            if current_water_temperature >= target_water_temperature:
+            if current_water_temperature >= target_water_temperature + set_temperatures.hysteresis_water_temperature_offset:
                 return False
             return True
 
@@ -89,13 +91,23 @@ class DiverterValve:
             water_temperature_input_dhw_in_celsius,
             set_temperatures.set_temperature_dhw,
         )
+        if parallel_space_heating_and_dhw_option is False:
+            if needs_dhw_heating:
+                # DHW has higher priority
+                return HeatingMode.DOMESTIC_HOT_WATER
+            if needs_space_heating:
+                return HeatingMode.SPACE_HEATING
+            return HeatingMode.OFF
+        else:
+            if needs_dhw_heating and needs_space_heating:
+                # DHW has higher priority
+                return HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL
+            if needs_dhw_heating and not needs_space_heating:
+                return HeatingMode.DOMESTIC_HOT_WATER
+            if needs_space_heating and not needs_dhw_heating:
+                return HeatingMode.SPACE_HEATING     
+            return HeatingMode.OFF
 
-        if needs_dhw_heating:
-            # DHW has higher priority
-            return HeatingMode.DOMESTIC_HOT_WATER
-        if needs_space_heating:
-            return HeatingMode.SPACE_HEATING
-        return HeatingMode.OFF
 
     @staticmethod
     def determine_summer_heating_mode(

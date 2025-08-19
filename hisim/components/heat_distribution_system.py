@@ -791,7 +791,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
     building_name: str
     name: str
     heating_system: Union[HeatDistributionSystemType, int]
-    set_heating_threshold_outside_temperature_in_celsius: Optional[float]
+    set_heating_threshold_outside_temperature_in_celsius: float
     heating_reference_temperature_in_celsius: float
     set_heating_temperature_for_building_in_celsius: float
     set_cooling_temperature_for_building_in_celsius: float
@@ -804,7 +804,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         heating_load_of_building_in_watt: float,
         set_heating_temperature_for_building_in_celsius: float,
         set_cooling_temperature_for_building_in_celsius: float,
-        set_heating_threshold_outside_temperature_in_celsius: float=16.0,
+        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         heating_reference_temperature_in_celsius: float = -7.0,
         heating_system: Union[HeatDistributionSystemType, int] = HeatDistributionSystemType.FLOORHEATING,
         building_name: str = "BUI1",
@@ -830,7 +830,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         set_heating_temperature_for_building_in_celsius: float,
         set_cooling_temperature_for_building_in_celsius: float,
         specific_heating_load_of_building_in_watt_per_m2: float,
-        set_heating_threshold_outside_temperature_in_celsius: float=16.0,
+        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         heating_reference_temperature_in_celsius: float = -7.0,
         heating_system: Union[HeatDistributionSystemType, int] = HeatDistributionSystemType.FLOORHEATING,
         building_name: str = "BUI1",
@@ -1012,7 +1012,7 @@ class HeatDistributionController(cp.Component):
 
     def build(
         self,
-        set_heating_threshold_temperature_in_celsius: Optional[float],
+        set_heating_threshold_temperature_in_celsius: float,
         heating_reference_temperature_in_celsius: float,
         heat_distribution_system_type: Union[HeatDistributionSystemType, int],
         max_flow_temperature_in_celsius: float,
@@ -1084,16 +1084,11 @@ class HeatDistributionController(cp.Component):
                 theoretical_thermal_building_demand_in_watt=theoretical_thermal_building_demand_in_watt,
             )
 
-            # no heating threshold for the heat distribution system
-            if self.hsd_controller_config.set_heating_threshold_outside_temperature_in_celsius is None:
-                summer_heating_mode = "on"
-
             # turning heat distributon system off when the average daily outside temperature is above a certain threshold
-            else:
-                summer_heating_mode = self.summer_heating_condition(
-                    daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                    set_heating_threshold_temperature_in_celsius=self.hsd_controller_config.set_heating_threshold_outside_temperature_in_celsius,
-                )
+            summer_heating_mode = self.summer_heating_condition(
+                daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+                set_heating_threshold_temperature_in_celsius=self.hsd_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+            )
 
             if self.controller_heat_distribution_mode == "heating":
                 if summer_heating_mode == "on":
@@ -1291,7 +1286,7 @@ class HeatDistributionControllerInformation:
 
     def build(
         self,
-        set_heating_threshold_temperature_in_celsius: Optional[float],
+        set_heating_threshold_temperature_in_celsius: float,
         heating_reference_temperature_in_celsius: float,
         heat_distribution_system_type: Union[HeatDistributionSystemType, int],
         set_heating_temperature_for_building_in_celsius: float,

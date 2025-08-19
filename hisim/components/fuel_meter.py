@@ -268,7 +268,7 @@ class FuelMeter(DynamicComponent):
                     total_heat_consumed_in_kwh = sum(postprocessing_results.iloc[:, index]) * 1e-3
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-            self.my_simulation_parameters.year
+            self.my_simulation_parameters.year, self.my_simulation_parameters.country
         )
         if (
             self.config.heating_value_of_fuel_in_kwh_per_liter is not None

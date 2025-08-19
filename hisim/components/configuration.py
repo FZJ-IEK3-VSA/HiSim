@@ -5,7 +5,7 @@
 from typing import Any, Optional
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
-from hisim.loadtypes import LoadTypes, ComponentType, Units
+from hisim.loadtypes import LoadTypes, ComponentType
 from hisim.component import ConfigBase
 from hisim import log
 
@@ -195,7 +195,7 @@ opex_techno_economic_parameters = {
         },
     },
     "AT": {
-        2025: {
+        2024: {
             "electricity_costs_in_euro_per_kwh": 0.085, # [23]
             "electricity_footprint_in_kg_per_kwh": 0.167, # [24]
             "electricity_to_grid_revenue_in_euro_per_kwh": 0.06305, # [25] mean of values 
@@ -262,7 +262,7 @@ class EmissionFactorsAndCostsForFuelsConfig:
 
     @classmethod
     def get_values_for_year(
-        cls, year: int, country: str = "DE"
+        cls, year: int, country: str
     ) -> "EmissionFactorsAndCostsForFuelsConfig":  # pylint: disable=too-many-return-statements
         """Get emission factors and fuel costs for certain year."""
 
@@ -447,8 +447,9 @@ capex_techno_economic_parameters = {
                 "subsidy_as_percentage_of_investment_costs": 0.15,  # Source: [29]
             },
         },
-    "AT": {
-        2025: {
+    },
+    "AT": { # some values for Germany + 11% https://de.statista.com/statistik/daten/studie/1127741/umfrage/preisniveauindex-in-den-dach-laendern/)
+        2024: {
             # CAPEX per kW
             ComponentType.HEAT_PUMP: {
                 "investment_costs_in_euro_per_kw": 3000,  # Source: [38]
@@ -507,6 +508,15 @@ capex_techno_economic_parameters = {
                 "co2_footprint_in_kg_per_kwh": 150,  # Source: [41]
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
+            # CAPEX per liter
+            ComponentType.THERMAL_ENERGY_STORAGE: {
+                "investment_costs_in_euro_per_liter": 14.51 + 14.51*0.11,  # Source: [19] Germany + 11%
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
+                "technical_lifetime_in_years": 20, # Source: [20]
+                "co2_footprint_in_kg_per_liter": 29.79
+                / 50,  # Source: [19] ([19] is in kg/kW, and we assume 1kW approx. = 50l, based on [32])
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
             # CAPEX per m2
             ComponentType.SOLAR_THERMAL_SYSTEM: {
                 "investment_costs_in_euro_per_m2": 680, # Source: [46]
@@ -517,7 +527,7 @@ capex_techno_economic_parameters = {
             },
 
             ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING: {
-                "investment_costs_in_euro_per_m2": 75 + (75*0.11),  # Source: [34] Germany + 11% (https://de.statista.com/statistik/daten/studie/1127741/umfrage/preisniveauindex-in-den-dach-laendern/)
+                "investment_costs_in_euro_per_m2": 75 + (75*0.11),  # Source: [34] Germany + 11% 
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [23]
                 "technical_lifetime_in_years": 50,  # Source: [23]
                 "co2_footprint_in_kg_per_m2": 0,  # no idea, assume 0
@@ -553,7 +563,6 @@ capex_techno_economic_parameters = {
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
         }
-        }
     }
 }
 
@@ -579,7 +588,7 @@ class EmissionFactorsAndCostsForDevicesConfig:
 
     @classmethod
     def get_values_for_year(
-        cls, year: int, device: ComponentType, country: str = "DE"
+        cls, year: int, device: ComponentType, country: str
     ) -> "EmissionFactorsAndCostsForDevicesConfig":
         """Get emission factors and costs for a given year and device."""
 

@@ -35,6 +35,7 @@ class SimulationParameters(JSONWizard):
         start_date: datetime.datetime,
         end_date: datetime.datetime,
         seconds_per_timestep: int,
+        country: str = 'DE',
         result_directory: str = "",
         post_processing_options: Optional[List[int]] = None,
         logging_level: int = log.LogPrio.INFORMATION,
@@ -51,6 +52,7 @@ class SimulationParameters(JSONWizard):
         total_seconds = self.duration.total_seconds()
         self.timesteps: int = int(total_seconds / seconds_per_timestep)
         self.year: int = int(start_date.year)
+        self.country: str = country
         if post_processing_options is None:
             post_processing_options = []
         self.post_processing_options: List[int] = post_processing_options

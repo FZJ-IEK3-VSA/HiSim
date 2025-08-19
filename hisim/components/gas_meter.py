@@ -340,7 +340,7 @@ class GasMeter(DynamicComponent):
                     total_energy_from_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-            self.my_simulation_parameters.year
+            self.my_simulation_parameters.year, self.my_simulation_parameters.country
         )
         if self.config.gas_loadtype == lt.LoadTypes.GAS:
             co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh

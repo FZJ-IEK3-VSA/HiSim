@@ -926,7 +926,7 @@ class ElectricHeatingControllerConfig(ConfigBase):
 
     building_name: str
     name: str
-    set_heating_threshold_outside_temperature_in_celsius: Optional[float]
+    set_heating_threshold_outside_temperature_in_celsius: float
     with_domestic_hot_water_preparation: bool
     hysteresis_water_temperature_offset: float
     parallel_space_heating_and_dhw_option: bool

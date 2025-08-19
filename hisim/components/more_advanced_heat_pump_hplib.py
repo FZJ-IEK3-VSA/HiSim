@@ -2041,14 +2041,16 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
         building_name: str = "BUI1",
         upper_temperature_offset_for_state_conditions_in_celsius: float = 5.0,
         lower_temperature_offset_for_state_conditions_in_celsius: float = 5.0,
+        set_heating_threshold_outside_temperature_in_celsius=16.0,
+        set_cooling_threshold_outside_temperature_in_celsius=20.0,
     ) -> "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig":
         """Gets a default Generic Heat Pump Controller."""
         return MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(
             building_name=building_name,
             name=name,
             mode=1,
-            set_heating_threshold_outside_temperature_in_celsius=16.0,
-            set_cooling_threshold_outside_temperature_in_celsius=20.0,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
+            set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_in_celsius,
             upper_temperature_offset_for_state_conditions_in_celsius=upper_temperature_offset_for_state_conditions_in_celsius,
             lower_temperature_offset_for_state_conditions_in_celsius=lower_temperature_offset_for_state_conditions_in_celsius,
             heat_distribution_system_type=heat_distribution_system_type,

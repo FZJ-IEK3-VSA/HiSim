@@ -824,7 +824,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         )
 
     @classmethod
-    def get_heat_distribution_controller_config_based_on_building_efficiency(
+    def get_config_based_on_building_efficiency(
         cls,
         heating_load_of_building_in_watt: float,
         set_heating_temperature_for_building_in_celsius: float,

@@ -264,7 +264,6 @@ class HeatDistribution(cp.Component):
         self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
         self.add_default_connections(self.get_default_connections_from_building())
         self.add_default_connections(self.get_default_connections_from_district_heating())
-        self.add_default_connections(self.get_default_connections_from_electric_heating())
         if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
             self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
 
@@ -322,23 +321,6 @@ class HeatDistribution(cp.Component):
         component_module_name = "hisim.components.generic_district_heating"
         component_module = importlib.import_module(name=component_module_name)
         component_class = getattr(component_module, "DistrictHeating")
-
-        connections = []
-        classname = component_class.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                HeatDistribution.WaterTemperatureInput, classname, component_class.WaterOutputShTemperature,
-            )
-        )
-        return connections
-
-    def get_default_connections_from_electric_heating(self,):
-        """Get electric heating default connections."""
-        # use importlib for importing the other component in order to avoid circular-import errors
-        # for district heating as heating source no
-        component_module_name = "hisim.components.generic_electric_heating"
-        component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "ElectricHeating")
 
         connections = []
         classname = component_class.get_classname()
@@ -823,6 +805,22 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
             specific_heating_load_of_building_in_watt_per_m2=None,
         )
 
+    @staticmethod
+    def set_heating_threshold_temperature_based_on_building_efficiency(
+        specific_heating_load_of_building_in_watt_per_m2: float,
+        set_heating_threshold_outside_temperature_in_celsius: float = 16.0
+    ):
+        """Set heating threshold outside temperature based on building efficiency."""
+        # avoid that inefficient building cool out in summer time (in the mornings and evenings)
+        if 50 < specific_heating_load_of_building_in_watt_per_m2 <= 80.0:
+            set_heating_threshold_outside_temperature_in_celsius = 18.0
+        elif 80 < specific_heating_load_of_building_in_watt_per_m2:
+            set_heating_threshold_outside_temperature_in_celsius = 20.0
+        else:
+            pass
+        return set_heating_threshold_outside_temperature_in_celsius
+        
+
     @classmethod
     def get_config_based_on_building_efficiency(
         cls,
@@ -837,10 +835,10 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
     ) -> "HeatDistributionControllerConfig":
         """Gets a default HeatDistribution Controller."""
         # avoid that inefficient building cool out in summer time (in the mornings and evenings)
-        if 50 < specific_heating_load_of_building_in_watt_per_m2 <= 80.0:
-            set_heating_threshold_outside_temperature_in_celsius = 18.0
-        elif 80 < specific_heating_load_of_building_in_watt_per_m2:
-            set_heating_threshold_outside_temperature_in_celsius = 20.0
+        set_heating_threshold_outside_temperature_in_celsius = HeatDistributionControllerConfig.set_heating_threshold_temperature_based_on_building_efficiency(
+            specific_heating_load_of_building_in_watt_per_m2=specific_heating_load_of_building_in_watt_per_m2,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius
+        )
 
         return HeatDistributionControllerConfig(
             building_name=building_name,

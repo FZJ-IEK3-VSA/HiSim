@@ -337,7 +337,7 @@ capex_techno_economic_parameters = {
                 "subsidy_as_percentage_of_investment_costs": 0.3,
             },
             ComponentType.ELECTRIC_HEATER: {
-                "investment_costs_in_euro_per_kw": 0.196 * 1600,  # 19.6% of heat pump costs, Source: [20]
+                "investment_costs_in_euro_per_kw": 0.196 * 1600,  # 19.6% of heat pump costs, tankless dhw heater (Durchlauferhitzer) included, Source: [20]
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
                 "technical_lifetime_in_years": 22,  # Source: [20]
                 "co2_footprint_in_kg_per_kw": 1.21,  # Source: [19]

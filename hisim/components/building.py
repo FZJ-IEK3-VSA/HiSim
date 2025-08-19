@@ -539,6 +539,7 @@ class Building(cp.Component):
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_default_connections(self.get_default_connections_from_hds())
+        self.add_default_connections(self.get_default_connections_from_electric_heater())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
 
     def get_default_connections_from_weather(
@@ -646,6 +647,26 @@ class Building(cp.Component):
                 Building.ThermalPowerDelivered,
                 hds_classname,
                 component_class.ThermalPowerDelivered,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_electric_heater(
+        self,
+    ):
+        """Get electric heating default connections."""
+
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_electric_heating"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "ElectricHeating")
+        connections = []
+        hds_classname = component_class.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                Building.ThermalPowerDelivered,
+                hds_classname,
+                component_class.ThermalOutputShPower,
             )
         )
         return connections

@@ -57,7 +57,7 @@ opex_techno_economic_parameters = {
             "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
             "district_heating_costs_in_euro_per_kwh": 0.07672,  # EUR/kWh Source : [16]
             "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
-            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # Source: [17] using value of 2020 and assuming it is almost constant for several years
             "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
         },
         2019: {
@@ -76,7 +76,7 @@ opex_techno_economic_parameters = {
             "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
             "district_heating_costs_in_euro_per_kwh": 0.07904,  # EUR/kWh Source : [16]
             "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
-            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # Source: [17] using value of 2020 and assuming it is almost constant for several years
             "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
         },
         2020: {
@@ -95,7 +95,7 @@ opex_techno_economic_parameters = {
             "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
             "district_heating_costs_in_euro_per_kwh": 0.07656,  # EUR/kWh Source : [16]
             "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
-            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # Source: [17] using value of 2020 and assuming it is almost constant for several years
             "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
         },
         2021: {
@@ -114,7 +114,7 @@ opex_techno_economic_parameters = {
             "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
             "district_heating_costs_in_euro_per_kwh": 0.08277,  # EUR/kWh Source : [16]
             "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
-            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # Source: [17] using value of 2020 and assuming it is almost constant for several years
             "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
         },
         2022: {
@@ -133,7 +133,7 @@ opex_techno_economic_parameters = {
             "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
             "district_heating_costs_in_euro_per_kwh": 0.11945,  # EUR/kWh Source : [16]
             "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
-            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # Source: [17] using value of 2020 and assuming it is almost constant for several years
             "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
         },
         2023: {
@@ -152,7 +152,7 @@ opex_techno_economic_parameters = {
             "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
             "district_heating_costs_in_euro_per_kwh": 0.15034,  # EUR/kWh Source : [16]
             "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
-            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # Source: [17] using value of 2020 and assuming it is almost constant for several years
             "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
         },
         2024: {
@@ -171,7 +171,7 @@ opex_techno_economic_parameters = {
             "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
             "district_heating_costs_in_euro_per_kwh": 0.121,  # EUR/kWh # Source: [22], normal costs + CO2-price of 2024
             "district_heating_footprint_in_kg_per_kwh": 0.169,  # kgCo2eq/kWh # Source: [22]
-            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # Source: [17] using value of 2020 and assuming it is almost constant for several years
             "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
         },
         2050: {
@@ -190,7 +190,7 @@ opex_techno_economic_parameters = {
             "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14], same as 2024
             "district_heating_costs_in_euro_per_kwh": 0.1410,  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
             "district_heating_footprint_in_kg_per_kwh": 0.0,  # kgCO2eq/kWh  # Source: [22], carbon free in 2050
-            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.1790,  # EUR/kWh  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
+            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.1790,  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
             "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
         },
     },
@@ -282,7 +282,7 @@ Sources for capex techno-economic parameters:
         (values are taken from WHY-project: https://cordis.europa.eu/project/id/891943/results but no concrete source was found)
         [20]: https://www.gebaeudeforum.de/service/downloads/ -> search for "Wärmeerzeugung im Bestand mit EE", January 2024
         [21]: https://  doi.org/10.3390/su13041938
-        [22]: https://www.duh.de/fileadmin/user_upload/download/Projektinformation/Energieeffizienz/Wärmepumpen/300623_Waermepumpen_Faktenpapier_Neuauflage_Digital.pdf
+        [22]: https://www.duh.de/fileadmin/user_upload/download/Projektinformation/Energieeffizienz/Wärmepumpen/300623_Waermepumpen_Faktenpapier_Neuauflage_Digital.pdf  #noqa
         [23]: VDI2067-1
         [24]: https://doi.org/10.1016/j.renene.2023.01.117
         [25]: https://solarenergie.de/stromspeicher/preise
@@ -302,7 +302,7 @@ Sources for capex techno-economic parameters:
         [38]: https://www.vaillant.at/privatanwender/tipps-und-wissen/heiztechnologien/warmepumpen/kosten-warmepumpe/#anschaffungskosten
         [39]: https://www.co2online.de/modernisieren-und-bauen/heizung/heizungsarten-im-vergleich/
         [40]: https://www.thermondo.de/info/rat/waermepumpe/lebensdauer-einer-waermepumpe/
-        [41]: https://bl-api.webcloud7.ch/politik-und-behorden/direktionen/bau-und-umweltschutzdirektion/umweltschutz-energie/energie/publikationen/dokumente-publikationen/oekobilanz-waermeerzeugungssysteme-2012.pdf
+        [41]: https://bl-api.webcloud7.ch/politik-und-behorden/direktionen/bau-und-umweltschutzdirektion/umweltschutz-energie/energie/publikationen/dokumente-publikationen/oekobilanz-waermeerzeugungssysteme-2012.pdf  #noqa
         [42]: https://www.thermondo.de/info/rat/vergleich/lebensdauer-heizung/
         [43]: https://www.energiesparverband.at/fileadmin/esv/Broschueren/Infoblatt-Fernwaerme.pdf
         [44]: https://www.umweltbundesamt.de/themen/klima-energie/erneuerbare-energien/photovoltaik

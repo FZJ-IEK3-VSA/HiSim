@@ -88,7 +88,9 @@ def setup_function(
     default_year = 2021
     if my_simulation_parameters is None:
         seconds_per_timestep = 60 * 15
-        my_simulation_parameters = SimulationParameters.full_year(year=default_year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year(
+            year=default_year, seconds_per_timestep=seconds_per_timestep
+        )
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         if os.path.exists(cache_dir_path_simuparams):
             my_simulation_parameters.cache_dir_path = cache_dir_path_simuparams
@@ -262,7 +264,8 @@ def setup_function(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         heating_system=my_hds_system,
-        specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt / my_building_information.scaled_conditioned_floor_area_in_m2
+        specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt
+        / my_building_information.scaled_conditioned_floor_area_in_m2,
     )
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
@@ -276,22 +279,22 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build district heating controller
-    my_district_heating_controller_sh_config = (
-        generic_district_heating.DistrictHeatingControllerConfig.get_default_district_heating_controller_config(
-            with_domestic_hot_water_preparation=True,
-            set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
-            parallel_space_heating_and_dhw_option=True
-        )
+    my_district_heating_controller_sh_config = generic_district_heating.DistrictHeatingControllerConfig.get_default_district_heating_controller_config(
+        with_domestic_hot_water_preparation=True,
+        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
+        parallel_space_heating_and_dhw_option=True,
     )
 
     my_district_heating_controller = generic_district_heating.DistrictHeatingController(
-        my_simulation_parameters=my_simulation_parameters, config=my_district_heating_controller_sh_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_district_heating_controller_sh_config,
     )
     my_sim.add_component(my_district_heating_controller, connect_automatically=True)
 
     # Build district heating For Space Heating and DHW
     my_district_heating_sh_config = generic_district_heating.DistrictHeatingConfig.get_default_district_heating_config(
-        with_domestic_hot_water_preparation=True, connected_load_w=my_building_information.max_thermal_building_demand_in_watt,
+        with_domestic_hot_water_preparation=True,
+        connected_load_w=my_building_information.max_thermal_building_demand_in_watt,
     )
 
     my_district_heating = generic_district_heating.DistrictHeating(

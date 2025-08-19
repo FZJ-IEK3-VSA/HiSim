@@ -89,7 +89,9 @@ def setup_function(
     default_year = 2021
     if my_simulation_parameters is None:
         seconds_per_timestep = 60 * 15
-        my_simulation_parameters = SimulationParameters.full_year(year=default_year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year(
+            year=default_year, seconds_per_timestep=seconds_per_timestep
+        )
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         if os.path.exists(cache_dir_path_simuparams):
             my_simulation_parameters.cache_dir_path = cache_dir_path_simuparams
@@ -260,7 +262,8 @@ def setup_function(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         heating_system=my_hds_system,
-        specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt / my_building_information.scaled_conditioned_floor_area_in_m2
+        specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt
+        / my_building_information.scaled_conditioned_floor_area_in_m2,
     )
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
@@ -285,13 +288,11 @@ def setup_function(
     my_sim.add_component(my_gas_heater, connect_automatically=True)
 
     # Build Gas Heater Controller
-    my_gas_heater_controller_config = (
-        generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-            minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt,
-            with_domestic_hot_water_preparation=True,
-            set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
-        )
+    my_gas_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
+        minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt,
+        maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt,
+        with_domestic_hot_water_preparation=True,
+        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
     )
     my_gas_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters,

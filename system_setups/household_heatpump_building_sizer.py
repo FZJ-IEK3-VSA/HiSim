@@ -22,12 +22,10 @@ from hisim.components import (
     heat_distribution_system,
     electricity_meter,
 )
-
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
-from hisim.units import Quantity, Celsius, Watt
 from hisim.loadtypes import HeatingSystems, ComponentType
 from hisim.building_sizer_utils.interface_configs.modular_household_config import (
     read_in_configs,
@@ -78,7 +76,6 @@ def setup_function(
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_heatpump()
-        my_sim.my_module_config = my_config.to_dict()
         log.warning(
             f"Could not read the modular household config from path '{config_filename}'. Using the heatpump household default config instead."
         )
@@ -297,8 +294,8 @@ def setup_function(
 
     # Build Heat Pump (for dhw and space heating)
     my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
-        heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
     my_heatpump_config.with_domestic_hot_water_preparation = True
 

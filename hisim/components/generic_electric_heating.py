@@ -961,7 +961,7 @@ class ElectricHeatingController(Component):
 
     def determine_operating_mode(
         self, daily_avg_outside_temperature_in_celsius: float, dhw_current_temperature_deg_c: Optional[float]
-    ) -> Tuple[float, float]:
+    ) -> float:
         """Determine operating mode."""
 
         self.controller_mode = DiverterValve.determine_operating_mode(

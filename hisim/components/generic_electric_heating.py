@@ -392,10 +392,10 @@ class ElectricHeating(Component):
                 thermal_power_sh_delivered_in_watt = 0.0
                 thermal_energy_sh_delivered_in_watthour = 0.0
             # dhw outputs
-            thermal_power_dhw_delivered_w = 0
-            thermal_energy_dhw_delivered_in_watt_hour = 0
-            water_mass_flow_rate_for_dhw_in_kg_per_s = 0
-            water_output_temperature_for_dhw_deg_c = 0
+            thermal_power_dhw_delivered_w = 0.0
+            thermal_energy_dhw_delivered_in_watt_hour = 0.0
+            water_mass_flow_rate_for_dhw_in_kg_per_s = 0.0
+            water_output_temperature_for_dhw_deg_c = 0.0
 
         elif heating_mode == HeatingMode.DOMESTIC_HOT_WATER:
             # Get relevant inputs
@@ -415,8 +415,8 @@ class ElectricHeating(Component):
                 delta_temperature_needed_for_dhw_in_celsius,
             )
             # set sh outputs
-            thermal_power_sh_delivered_in_watt = 0
-            thermal_energy_sh_delivered_in_watthour = 0
+            thermal_power_sh_delivered_in_watt = 0.0
+            thermal_energy_sh_delivered_in_watthour = 0.0
 
         elif heating_mode == HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL:
             # Get relevant inputs
@@ -455,13 +455,13 @@ class ElectricHeating(Component):
                 thermal_energy_sh_delivered_in_watthour = 0.0
 
         elif heating_mode == HeatingMode.OFF:
-            thermal_power_dhw_delivered_w = 0
-            thermal_energy_dhw_delivered_in_watt_hour = 0
-            thermal_power_dhw_delivered_w = 0
-            water_mass_flow_rate_for_dhw_in_kg_per_s = 0
+            thermal_power_dhw_delivered_w = 0.0
+            thermal_energy_dhw_delivered_in_watt_hour = 0.0
+            thermal_power_dhw_delivered_w = 0.0
+            water_mass_flow_rate_for_dhw_in_kg_per_s = 0.0
             water_output_temperature_for_dhw_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
-            thermal_power_sh_delivered_in_watt = 0
-            thermal_energy_sh_delivered_in_watthour = 0
+            thermal_power_sh_delivered_in_watt = 0.0
+            thermal_energy_sh_delivered_in_watthour = 0.0
 
         else:
             raise ValueError("Unknown heating mode")

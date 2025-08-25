@@ -60,8 +60,8 @@ class ElectricHeatingConfig(ConfigBase):
 
     building_name: str
     name: str
-    # # Maximum electric power that can be delivered fo dhw
-    electric_power_tankless_dhw_heater_w: float
+    # # Maximum electric power that can be delivered
+    maximum_electric_power_w: float
     # Efficiency for electric to thermal power conversion
     efficiency: float
     #: CO2 footprint of investment in kg
@@ -78,13 +78,13 @@ class ElectricHeatingConfig(ConfigBase):
 
     @classmethod
     def get_default_electric_heating_config(
-        cls, building_name: str = "BUI1", with_domestic_hot_water_preparation=False, electric_power_tankless_dhw_heater_w: float = 40000
+        cls, building_name: str = "BUI1", with_domestic_hot_water_preparation=False, maximum_electric_power_w: float = 40000
     ) -> Any:
         """Get a default Electric heating."""
         config = ElectricHeatingConfig(
             building_name=building_name,
             name="ElectricHeating",
-            electric_power_tankless_dhw_heater_w=electric_power_tankless_dhw_heater_w,
+            maximum_electric_power_w=maximum_electric_power_w,
             efficiency=1.0,  # 100% efficiency
             # capex and device emissions are calculated in get_cost_capex function by default
             device_co2_footprint_in_kg=None,
@@ -438,18 +438,21 @@ class ElectricHeating(Component):
 
             # Now calculate for space heating
             # Calculate
-            if self.config.electric_power_tankless_dhw_heater_w - thermal_power_dhw_delivered_w <= 0:
+            if self.config.maximum_electric_power_w - thermal_power_dhw_delivered_w <= 0:
                 raise ValueError(
-                    f"Electric load for DHW {thermal_power_dhw_delivered_w}W is equal or higher than maximal electric load {self.config.electric_power_tankless_dhw_heater_w}. "
+                    f"Electric load for DHW {thermal_power_dhw_delivered_w}W is equal or higher than maximal electric load {self.config.maximum_electric_power_w}. "
                 )
             theoretical_thermal_building_in_watt = stsv.get_input_value(self.theoretical_thermal_building_power_channel)
             theoretical_thermal_building_energy_in_watthour = stsv.get_input_value(
                 self.theoretical_thermal_building_energy_channel
             )
+            available_electric_load_in_watt = self.config.maximum_electric_power_w - thermal_power_dhw_delivered_w
 
             if theoretical_thermal_building_in_watt >= 0:
-                thermal_power_sh_delivered_in_watt = theoretical_thermal_building_in_watt
-                thermal_energy_sh_delivered_in_watthour = theoretical_thermal_building_energy_in_watthour
+                if theoretical_thermal_building_in_watt > available_electric_load_in_watt:
+                    logging.debug("The needed thermal power for space heating is higher than the maximum connected load.")
+                thermal_power_sh_delivered_in_watt = min(theoretical_thermal_building_in_watt, available_electric_load_in_watt)
+                thermal_energy_sh_delivered_in_watthour = min(theoretical_thermal_building_energy_in_watthour, available_electric_load_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3)
             else:
                 thermal_power_sh_delivered_in_watt = 0.0
                 thermal_energy_sh_delivered_in_watthour = 0.0
@@ -502,7 +505,7 @@ class ElectricHeating(Component):
         if delta_temperature_needed_in_celsius > 0:
             # regulate thermal output power based on deltaT needed
             thermal_power_delivered_w = min(
-                self.config.electric_power_tankless_dhw_heater_w * delta_temperature_needed_in_celsius / 100.0, self.config.electric_power_tankless_dhw_heater_w
+                self.config.maximum_electric_power_w * delta_temperature_needed_in_celsius / 100.0, self.config.maximum_electric_power_w
             )
             water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_w / (
                 PhysicsConfig.get_properties_for_energy_carrier(
@@ -595,7 +598,7 @@ class ElectricHeating(Component):
         component_type = ComponentType.ELECTRIC_HEATER
         kpi_tag = KpiTagEnumClass.ELECTRIC_HEATING
         unit = Units.KILOWATT
-        size_of_energy_system = config.electric_power_tankless_dhw_heater_w * 1e-3
+        size_of_energy_system = config.maximum_electric_power_w * 1e-3
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
             simulation_parameters=simulation_parameters,

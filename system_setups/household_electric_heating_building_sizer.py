@@ -259,7 +259,7 @@ def setup_function(
     # Build electric heating For Space Heating and DHW
     my_electric_heating_sh_config = generic_electric_heating.ElectricHeatingConfig.get_default_electric_heating_config(
         with_domestic_hot_water_preparation=True,
-        electric_power_tankless_dhw_heater_w=30000 * number_of_apartments,  # 30kW per household for dhw
+        maximum_electric_power_w=my_building_information.max_thermal_building_demand_in_watt,
     )
     my_electric_heating = generic_electric_heating.ElectricHeating(
         config=my_electric_heating_sh_config, my_simulation_parameters=my_simulation_parameters

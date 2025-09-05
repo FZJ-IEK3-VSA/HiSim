@@ -21,12 +21,11 @@ from hisim.components import (
     electricity_meter,
     simple_water_storage,
 )
-from hisim.components.heat_distribution_system import PositionHotWaterStorageInSystemSetup
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
-from hisim.loadtypes import HeatingSystems, ComponentType
+from hisim.loadtypes import HeatingSystems
 from hisim.building_sizer_utils.interface_configs.modular_household_config import (
     read_in_configs,
     ModularHouseholdConfig,
@@ -248,7 +247,8 @@ def setup_function(
     # Build electric heating controller
     my_electric_heating_controller_sh_config = generic_electric_heating.ElectricHeatingControllerConfig.get_electric_heating_config_based_on_building_efficiency(
         with_domestic_hot_water_preparation=True,
-        specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt / my_building_information.scaled_conditioned_floor_area_in_m2,
+        specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt
+        / my_building_information.scaled_conditioned_floor_area_in_m2,
         parallel_space_heating_and_dhw_option=True,
     )
     my_electric_heating_controller = generic_electric_heating.ElectricHeatingController(

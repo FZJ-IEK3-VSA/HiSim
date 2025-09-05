@@ -154,7 +154,7 @@ class ResultDataCollection:
         )
         if len(list_with_all_paths_to_check) == 0:
             raise ValueError(
-                "Result paths for scenario evaluation could not be found. Please check your result folder paths."
+                f"Result paths for scenario evaluation could not be found {result_path}. Please check your result folder paths."
             )
         if len(list_with_all_paths_to_check) < 20:
             print(

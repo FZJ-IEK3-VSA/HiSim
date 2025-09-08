@@ -35,9 +35,19 @@ Sources for opex techno-economic parameters:
         [20]: https://sonnstrom.de/photovoltaikanlage-und-waermepumpe-stromzaehler/
         [21]: https://www.verivox.de/
         [22]: https://ariadneprojekt.de/publikation/analyse-heizkosten-und-treibhausgasemissionen-in-bestandswohngebauden/
-        [23]: https://www.klimafonds.gv.at/wp-content/uploads/2024/09/Studie-transform.industry.pdf
+        [23]: https://www.e-control.at/konsumenten/strom/strompreis/was-kostet-eine-kwh
         [24]: https://www.umweltbundesamt.at/fileadmin/site/publikationen/rep0888.pdf
         [25]: https://www.oem-ag.at/fileadmin/user_upload/Dokumente/marktpreis/Marktpreise_2024.pdf
+        [26]: https://www.e-control.at/preismonitor
+        [27]: https://www.heizoel24.at/heizoelpreise
+        [28]: https://de.statista.com/statistik/daten/studie/796450/umfrage/durchschnittlicher-preis-fuer-einen-liter-diesel-in-oesterreich/
+        [29]: https://www.propellets.at/aktuelle-pelletpreise
+        [30]: https://www.biomasseverband.at/energietraegervergleich/
+        [31]: https://waermepreise.at/tarifuebersicht/#/?seite=19&kunde=1&art=1
+        [32]: https://www.erdgasautos.at/wasserstoff/tanken/
+        [33]: https://www.squarevest.ag/blog/strompreisentwicklung-prognose
+        [34]: https://kostenlos.com/wp-content/uploads/gas/BMWK-Wirtschaftslichkeitsberechnung-zum-Gaspreis-Prognose-bis-2042.png
+        [35]: https://trading.de/prognosen/oelpreis/
 """
 opex_techno_economic_parameters = {
     "DE": {
@@ -195,42 +205,42 @@ opex_techno_economic_parameters = {
         },
     },
     "AT": {
-        2024: {
-            "electricity_costs_in_euro_per_kwh": 0.085, # [23]
-            "electricity_footprint_in_kg_per_kwh": 0.167, # [24]
-            "electricity_to_grid_revenue_in_euro_per_kwh": 0.06305, # [25] mean of values 
-            "gas_costs_in_euro_per_kwh": 0.04, # [23]
-            "gas_footprint_in_kg_per_kwh": 0.249, # [24]
-            "oil_costs_in_euro_per_l": 0.714,  # # [23]
-            "oil_footprint_in_kg_per_l": 0.352,  # [24]
-            "diesel_costs_in_euro_per_l": 0.714,  # [23]
-            "diesel_footprint_in_kg_per_l": 0.332, # [24] 
-            "pellet_costs_in_euro_per_t": 94, # [23] 
-            "pellet_footprint_in_kg_per_kwh": 0.026, # [24]
-            "wood_chip_costs_in_euro_per_t": 86, # [23]
-            "wood_chip_footprint_in_kg_per_kwh": 0.019, # [24]
-            "district_heating_costs_in_euro_per_kwh": 0.075, # [23]
-            "district_heating_footprint_in_kg_per_kwh": 0.179, # [24] district heating average
-            "green_hydrogen_gas_costs_in_euro_per_kwh": 200, # [23] hydrogen (not clear if green) 
-            "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,
-        }, 
-        2040: {
-            "electricity_costs_in_euro_per_kwh": 0.085, # [23]
-            "electricity_footprint_in_kg_per_kwh": 0.007, # [24]
-            "electricity_to_grid_revenue_in_euro_per_kwh": 0.06305, # no data on future development, taking 2024 value
-            "gas_costs_in_euro_per_kwh": 0.04, # [23]
+        2025: {
+            "electricity_costs_in_euro_per_kwh": 0.292,  # [23]
+            "electricity_footprint_in_kg_per_kwh": 0.167,  # [24]
+            "electricity_to_grid_revenue_in_euro_per_kwh": 0.06305,  # [25] mean of values
+            "gas_costs_in_euro_per_kwh": 0.1065,  # average from [26]
             "gas_footprint_in_kg_per_kwh": 0.249,  # [24]
-            "oil_costs_in_euro_per_l": 0.714,  # # [23]
+            "oil_costs_in_euro_per_l": 1.089,  # [27]
             "oil_footprint_in_kg_per_l": 0.352,  # [24]
-            "diesel_costs_in_euro_per_l": 0.714,  # [23]
-            "diesel_footprint_in_kg_per_l": 0.332, # [24] 
-            "pellet_costs_in_euro_per_t": 94, # [23] 
-            "pellet_footprint_in_kg_per_kwh": 0.026, # [24]
-            "wood_chip_costs_in_euro_per_t": 86, # [23]
-            "wood_chip_footprint_in_kg_per_kwh": 0.019, # [24]
-            "district_heating_costs_in_euro_per_kwh": 0.075, # [23]
-            "district_heating_footprint_in_kg_per_kwh": 0.179, # [24]
-            "green_hydrogen_gas_costs_in_euro_per_kwh": 100, # [23] hydrogen (not clear if green) 
+            "diesel_costs_in_euro_per_l": 1.54,  # average of 2025 values (up until September) [28]
+            "diesel_footprint_in_kg_per_l": 0.332,  # [24]
+            "pellet_costs_in_euro_per_t": 297.98,  # [29]
+            "pellet_footprint_in_kg_per_kwh": 0.026,  # [24]
+            "wood_chip_costs_in_euro_per_t": 307.02,  # [30]
+            "wood_chip_footprint_in_kg_per_kwh": 0.019,  # [24]
+            "district_heating_costs_in_euro_per_kwh": 0.1,  # average estimated based on [31]
+            "district_heating_footprint_in_kg_per_kwh": 0.179,  # [24] district heating average
+            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.39,  # average value from [32]
+            "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,
+        },
+        2040: {
+            "electricity_costs_in_euro_per_kwh": 0.32,  # [33]
+            "electricity_footprint_in_kg_per_kwh": 0.007,  # [24]
+            "electricity_to_grid_revenue_in_euro_per_kwh": 0.06305,  # same as for 2025, no data on future development found
+            "gas_costs_in_euro_per_kwh": 0.16,  # [34]
+            "gas_footprint_in_kg_per_kwh": 0.249,  # [24]
+            "oil_costs_in_euro_per_l": 1.5,  # very rough average based on [35]
+            "oil_footprint_in_kg_per_l": 0.352,  # [24]
+            "diesel_costs_in_euro_per_l": 1.54,  # assume same value as 2025
+            "diesel_footprint_in_kg_per_l": 0.332,  # [24]
+            "pellet_costs_in_euro_per_t": 297.98,  # assume same value as 2025
+            "pellet_footprint_in_kg_per_kwh": 0.026,  # [24]
+            "wood_chip_costs_in_euro_per_t": 307.02,  # assume same value as 2025
+            "wood_chip_footprint_in_kg_per_kwh": 0.019,  # [24]
+            "district_heating_costs_in_euro_per_kwh": 0.1,  # assume same value as 2025
+            "district_heating_footprint_in_kg_per_kwh": 0.179,  # [24]
+            "green_hydrogen_gas_costs_in_euro_per_kwh": 0.39,  # assume same value as 2025
             "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,
         }
     }
@@ -448,49 +458,49 @@ capex_techno_economic_parameters = {
             },
         },
     },
-    "AT": { # some values for Germany + 11% https://de.statista.com/statistik/daten/studie/1127741/umfrage/preisniveauindex-in-den-dach-laendern/)
-        2024: {
+    "AT": {  # some values for Germany + 11% https://de.statista.com/statistik/daten/studie/1127741/umfrage/preisniveauindex-in-den-dach-laendern/)
+        2025: {
             # CAPEX per kW
             ComponentType.HEAT_PUMP: {
                 "investment_costs_in_euro_per_kw": 3000,  # Source: [38]
-                "maintenance_costs_as_percentage_of_investment_per_year": 150/(3000*10),  # assuming a 10 kW device, Source: [39]
-                "technical_lifetime_in_years": 17,  # Source: [40] 
-                "co2_footprint_in_kg_per_kw": 130, # Source: [41]
+                "maintenance_costs_as_percentage_of_investment_per_year": 150 / (3000 * 10),  # assuming a 10 kW device, Source: [39]
+                "technical_lifetime_in_years": 17,  # Source: [40]
+                "co2_footprint_in_kg_per_kw": 130,  # Source: [41]
                 "subsidy_as_percentage_of_investment_costs": 0
             },
             ComponentType.GAS_HEATER: {
-                "investment_costs_in_euro_per_kw": 600, # 400-800
-                "maintenance_costs_as_percentage_of_investment_per_year": 200/(600*10),  # assuming a 10 kW device, Source: [39]
+                "investment_costs_in_euro_per_kw": 600,  # 400-800
+                "maintenance_costs_as_percentage_of_investment_per_year": 200 / (600 * 10),  # assuming a 10 kW device, Source: [39]
                 "technical_lifetime_in_years": 17,  # Source: [42]
                 "co2_footprint_in_kg_per_kw": 50,  # Source: [41]
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.OIL_HEATER: {
-                "investment_costs_in_euro_per_kw": 750, # 500-900
-                "maintenance_costs_as_percentage_of_investment_per_year": 175/(750*10), # assuming a 10 kW device, Source: [37]
-                "technical_lifetime_in_years": 20, # Source: [42]
-                "co2_footprint_in_kg_per_kw": 60, # Source: [41]
+                "investment_costs_in_euro_per_kw": 750,  # 500-900
+                "maintenance_costs_as_percentage_of_investment_per_year": 175 / (750 * 10),  # assuming a 10 kW device, Source: [37]
+                "technical_lifetime_in_years": 20,  # Source: [42]
+                "co2_footprint_in_kg_per_kw": 60,  # Source: [41]
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.PELLET_HEATER: {
                 "investment_costs_in_euro_per_kw": 1200,
-                "maintenance_costs_as_percentage_of_investment_per_year": 400/(2000*10), # assuming a 10 kW device, Source: [37]
-                "technical_lifetime_in_years": 18, # Source: [42]
-                "co2_footprint_in_kg_per_kw": 110, # Source: [41]
+                "maintenance_costs_as_percentage_of_investment_per_year": 400 / (2000 * 10),  # assuming a 10 kW device, Source: [37]
+                "technical_lifetime_in_years": 18,  # Source: [42]
+                "co2_footprint_in_kg_per_kw": 110,  # Source: [41]
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.WOOD_CHIP_HEATER: {
                 "investment_costs_in_euro_per_kw": 2000,
-                "maintenance_costs_as_percentage_of_investment_per_year": 400/(2000*10), # assuming a 10 kW device, Source: [37]
+                "maintenance_costs_as_percentage_of_investment_per_year": 400 / (2000 * 10),  # assuming a 10 kW device, Source: [37]
                 "technical_lifetime_in_years": 25,
-                "co2_footprint_in_kg_per_kw": 120, # Source: [41]
+                "co2_footprint_in_kg_per_kw": 120,  # Source: [41]
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.DISTRICT_HEATING: {
-                "investment_costs_in_euro_per_kw": 40000/15,  # assuming a connected load of 15 kW , Source: [20]
+                "investment_costs_in_euro_per_kw": 40000 / 15,  # assuming a connected load of 15 kW , Source: [20]
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [37]
                 "technical_lifetime_in_years": 30,  # Source: [43]
-                "co2_footprint_in_kg_per_kw": 100,  # Source: [41], 
+                "co2_footprint_in_kg_per_kw": 100,  # Source: [41]
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.PV: {
@@ -503,38 +513,38 @@ capex_techno_economic_parameters = {
             # CAPEX per kWh
             ComponentType.BATTERY: {
                 "investment_costs_in_euro_per_kwh": 450,
-                "maintenance_costs_as_percentage_of_investment_per_year": 100/(450*10), # assuming a 10 kWh device, Source: [41]
+                "maintenance_costs_as_percentage_of_investment_per_year": 100 / (450 * 10),  # assuming a 10 kWh device, Source: [41]
                 "technical_lifetime_in_years": 15,  # Source: [45]
                 "co2_footprint_in_kg_per_kwh": 150,  # Source: [41]
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             # CAPEX per liter
             ComponentType.THERMAL_ENERGY_STORAGE: {
-                "investment_costs_in_euro_per_liter": 14.51 + 14.51*0.11,  # Source: [19] Germany + 11%
+                "investment_costs_in_euro_per_liter": 14.51 + (14.51 * 0.11),  # Source: [19] Germany + 11%
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
-                "technical_lifetime_in_years": 20, # Source: [20]
+                "technical_lifetime_in_years": 20,  # Source: [20]
                 "co2_footprint_in_kg_per_liter": 29.79
                 / 50,  # Source: [19] ([19] is in kg/kW, and we assume 1kW approx. = 50l, based on [32])
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             # CAPEX per m2
             ComponentType.SOLAR_THERMAL_SYSTEM: {
-                "investment_costs_in_euro_per_m2": 680, # Source: [46]
-                "maintenance_costs_as_percentage_of_investment_per_year": 90/(680*10), # assuming a 10 m2 device,  Source: [20]
-                "technical_lifetime_in_years": 23, # Source: [47]
-                "co2_footprint_in_kg_per_m2": 100, # Source: [41]
+                "investment_costs_in_euro_per_m2": 680,  # Source: [46]
+                "maintenance_costs_as_percentage_of_investment_per_year": 90 / (680 * 10),  # assuming a 10 m2 device,  Source: [20]
+                "technical_lifetime_in_years": 23,  # Source: [47]
+                "co2_footprint_in_kg_per_m2": 100,  # Source: [41]
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
 
             ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING: {
-                "investment_costs_in_euro_per_m2": 75 + (75*0.11),  # Source: [34] Germany + 11% 
+                "investment_costs_in_euro_per_m2": 75 + (75 * 0.11),  # Source: [34] Germany + 11%
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [23]
                 "technical_lifetime_in_years": 50,  # Source: [23]
                 "co2_footprint_in_kg_per_m2": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR: {
-                "investment_costs_in_euro_per_m2": 75 * 0.75 + (75*0.75*0.11),  # Source: [34, 35] Germany + 11%
+                "investment_costs_in_euro_per_m2": 75 * 0.75 + (75 * 0.75 * 0.11),  # Source: [34, 35] Germany + 11%
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [23]
                 "technical_lifetime_in_years": 30,  # Source: [36]
                 "co2_footprint_in_kg_per_m2": 0,  # no idea, assume 0
@@ -542,21 +552,21 @@ capex_techno_economic_parameters = {
             },
             # CAPEX per device
             ComponentType.ELECTRICITY_METER: {
-                "investment_costs_in_euro": 100 + (100*0.11),  # Source: [26] Germany + 11%
+                "investment_costs_in_euro": 100 + (100 * 0.11),  # Source: [26] Germany + 11%
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.2,  # assume 20€ per month, check on verivox
                 "technical_lifetime_in_years": 20,  # no idea, assumption
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.GAS_METER: {
-                "investment_costs_in_euro": 200 + (200*0.11),  # Source: [27] Germany + 11%
+                "investment_costs_in_euro": 200 + (200 * 0.11),  # Source: [27] Germany + 11%
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.15,  # assume around 30€ per year, check on verivox
                 "technical_lifetime_in_years": 20,  # no idea, assumption
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.ENERGY_MANAGEMENT_SYSTEM: {
-                "investment_costs_in_euro": 3500 + (3500*0.11),  # Source: [28] Germany + 11%
+                "investment_costs_in_euro": 3500 + (3500 * 0.11),  # Source: [28] Germany + 11%
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.028,  # Source: [28]
                 "technical_lifetime_in_years": 20,  # no idea, assumption
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
@@ -595,14 +605,12 @@ class EmissionFactorsAndCostsForDevicesConfig:
         if country not in capex_techno_economic_parameters:
             raise KeyError(f"No data available for country '{country}'.")
 
-
         if year not in capex_techno_economic_parameters[country]:
             log.warning(
                 f"No capex and emission data available for year {year}. "
                 f"Using data from year {next(iter(capex_techno_economic_parameters[country]))}"
             )
             year = next(iter(capex_techno_economic_parameters[country]))
-
 
         if device not in capex_techno_economic_parameters[country][year]:
             raise KeyError(f"No data available for device '{device}' in country '{country}' for year {year}.")

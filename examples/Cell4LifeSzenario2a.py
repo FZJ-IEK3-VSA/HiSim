@@ -539,6 +539,8 @@ def InputParameter():
     maxbatterystateofcharge_fuelcell_turnonUnit = "%"
 
     maxbatterystateofcharge_let_fuelcell_staysturnedon = 90 #Maximum battery state of charge; if that threshold is exceeded, then the fuel cell will be turned off
+    # [ ] Ursprünglich war das bei 90 % --> Test für Robert, ob dies noch einen Unterschied ökonomisch machen würde, wenn kein Strom in der Batterie von de Fuel Cell zwischengespeichert werden würde
+    maxbatterystateofcharge_let_fuelcell_staysturnedon = 0.1 #Maximum battery state of charge; if that threshold is exceeded, then the fuel cell will be turned off
     maxbatterystateofcharge_let_fuelcell_staysturnedonUnit = "%"
     #FOLLOWING FACTORS Electrolyzer:
     #****

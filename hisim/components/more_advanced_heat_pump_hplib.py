@@ -217,7 +217,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
     MaxThermalPowerValueForDHW = "MaxThermalPowerValueForDHW"  # max. Leistungswert
     TemperatureInputPrimary = "TemperatureInputPrimary"  # °C
     TemperatureInputSecondary_SH = "TemperatureInputSecondarySpaceHeating"  # °C
-    TemperatureInputSecondary_DHW = "TemperatureInputSecondaryDWH"  # °C
+    TemperatureInputSecondary_DHW = "TemperatureInputSecondaryDHW"  # °C
     TemperatureAmbient = "TemperatureAmbient"  # °C
     SetHeatingTemperatureSpaceHeating = "SetHeatingTemperatureSpaceHeating"
 

@@ -2534,7 +2534,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
 
     # Inputs
     WaterTemperatureInputFromDHWStorage = "WaterTemperatureInputFromDHWStorage"
-    DWHStorageTemperatureModifier = "StorageTemperatureModifier"
+    DHWStorageTemperatureModifier = "StorageTemperatureModifier"
 
     # Outputs
     State_dhw = "StateDHW"
@@ -2579,7 +2579,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
 
         self.storage_temperature_modifier_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.DWHStorageTemperatureModifier,
+            self.DHWStorageTemperatureModifier,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             mandatory=False,

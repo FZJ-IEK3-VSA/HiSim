@@ -71,7 +71,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year + 1, 1, 1),
             seconds_per_timestep,
-            "",
         )
 
     def enable_all_options(self) -> None:
@@ -95,7 +94,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year + 1, 1, 1),
             seconds_per_timestep,
-            "",
         )
         pars.enable_all_options()
         return pars
@@ -107,7 +105,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year + 1, 1, 1),
             seconds_per_timestep,
-            "",
         )
         pars.enable_plots_only()
         return pars
@@ -119,7 +116,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 31),
             seconds_per_timestep,
-            "",
         )
         pars.enable_all_options()
         return pars
@@ -131,7 +127,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 31),
             seconds_per_timestep,
-            "",
         )
         pars.enable_plots_only()
         return pars
@@ -143,7 +138,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 3, 1),
             datetime.datetime(year, 5, 31),
             seconds_per_timestep,
-            "",
         )
 
     @classmethod
@@ -153,7 +147,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 6, 1),
             datetime.datetime(year, 8, 31),
             seconds_per_timestep,
-            "",
         )
         pars.enable_plots_only()
         return pars
@@ -165,7 +158,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 8),
             seconds_per_timestep,
-            "",
         )
 
     @classmethod
@@ -175,7 +167,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 8),
             seconds_per_timestep,
-            "",
         )
 
         pars.enable_plots_only()
@@ -188,7 +179,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 2),
             seconds_per_timestep,
-            "",
         )
 
     @classmethod
@@ -198,7 +188,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 2),
             seconds_per_timestep,
-            "",
         )
         pars.enable_all_options()
         return pars
@@ -210,7 +199,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 2),
             seconds_per_timestep,
-            "",
         )
         pars.enable_plots_only()
         return pars

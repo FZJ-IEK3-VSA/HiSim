@@ -215,6 +215,8 @@ class SimulationParameters(JSONWizard):
             + str(self.year)
             + "###"
             + str(self.timesteps)
+            + "###"
+            + str(self.country)
         )
 
     def get_unique_key_as_list(self) -> List[str]:
@@ -225,6 +227,7 @@ class SimulationParameters(JSONWizard):
         lines.append(f"Simulation year: {self.year}")
         lines.append(f"Seconds per timestep: {self.seconds_per_timestep}")
         lines.append(f"Total number of timesteps: {self.timesteps}")
+        lines.append(f"Country: {self.country}")
         return lines
 
 

@@ -580,7 +580,7 @@ class ElectricHeating(Component):
         total_consumption_in_kwh = sh_consumption_in_kwh + dhw_consumption_in_kwh
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-            self.my_simulation_parameters.year
+            self.my_simulation_parameters.year, self.my_simulation_parameters.country
         )
         co2_per_unit = emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh
         euro_per_unit = emissions_and_cost_factors.electricity_costs_in_euro_per_kwh

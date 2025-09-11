@@ -662,11 +662,17 @@ class DistrictHeating(Component):
         assert dhw_consumption_in_kwh is not None
         total_consumption_in_kwh = sh_consumption_in_kwh + dhw_consumption_in_kwh
 
-        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-            self.my_simulation_parameters.year
+        emissions_and_cost_factors = (
+            EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+                self.my_simulation_parameters.year, self.my_simulation_parameters.country
+            )
         )
-        co2_per_unit = emissions_and_cost_factors.district_heating_footprint_in_kg_per_kwh
-        euro_per_unit = emissions_and_cost_factors.district_heating_costs_in_euro_per_kwh
+        co2_per_unit = (
+            emissions_and_cost_factors.district_heating_footprint_in_kg_per_kwh
+        )
+        euro_per_unit = (
+            emissions_and_cost_factors.district_heating_costs_in_euro_per_kwh
+        )
         co2_per_simulated_period_in_kg = total_consumption_in_kwh * co2_per_unit
         opex_energy_cost_per_simulated_period_in_euro = total_consumption_in_kwh * euro_per_unit
 

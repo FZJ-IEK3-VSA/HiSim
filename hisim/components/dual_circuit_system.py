@@ -89,22 +89,22 @@ class DiverterValve:
             water_temperature_input_dhw_in_celsius,
             set_temperatures.set_temperature_dhw,
         )
-        if parallel_space_heating_and_dhw_option is False:
-            if needs_dhw_heating:
-                # DHW has higher priority
-                return HeatingMode.DOMESTIC_HOT_WATER
-            if needs_space_heating:
-                return HeatingMode.SPACE_HEATING
-            return HeatingMode.OFF
+        mode = HeatingMode.OFF
 
-        if needs_dhw_heating and needs_space_heating:
-            # DHW has higher priority
-            return HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL
-        if needs_dhw_heating and not needs_space_heating:
-            return HeatingMode.DOMESTIC_HOT_WATER
-        if needs_space_heating and not needs_dhw_heating:
-            return HeatingMode.SPACE_HEATING
-        return HeatingMode.OFF
+        if not parallel_space_heating_and_dhw_option:
+            if needs_dhw_heating:
+                mode = HeatingMode.DOMESTIC_HOT_WATER  # DHW has priority
+            elif needs_space_heating:
+                mode = HeatingMode.SPACE_HEATING
+        else:
+            if needs_dhw_heating and needs_space_heating:
+                mode = HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL
+            elif needs_dhw_heating:
+                mode = HeatingMode.DOMESTIC_HOT_WATER
+            elif needs_space_heating:
+                mode = HeatingMode.SPACE_HEATING
+
+        return mode
 
     @staticmethod
     def determine_summer_heating_mode(

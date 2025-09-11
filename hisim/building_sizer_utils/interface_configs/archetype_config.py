@@ -34,7 +34,7 @@ class ArcheTypeConfig:
     supply_level: str = "central_heating"
     building_density_within_buffer_area_of_100m_radius: float = 0.09
     nearest_neighbor_distance_m: float = 20.0
-    construction_year: int =  1964
+    construction_year: int = 1964
     coordinates_latitude: float = 50.77664
     coordinates_longitude: float = 6.0834
 

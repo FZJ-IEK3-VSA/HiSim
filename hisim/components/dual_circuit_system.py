@@ -1,4 +1,4 @@
-""" Helper classes for dual-circuit system. """
+"""Helper classes for dual-circuit system."""
 
 from dataclasses import dataclass
 import enum
@@ -39,7 +39,7 @@ class DiverterValve:
         water_temperature_input_sh_in_celsius: float,
         water_temperature_input_dhw_in_celsius: Optional[float],
         set_temperatures: SetTemperatureConfig,
-        parallel_space_heating_and_dhw_option: bool = False
+        parallel_space_heating_and_dhw_option: bool = False,
     ) -> HeatingMode:
         """Set conditions for the district heating controller mode."""
 
@@ -59,17 +59,12 @@ class DiverterValve:
             ):
                 return True
 
-            if (
-                controller_mode == HeatingMode.DOMESTIC_HOT_WATER
-                and actual_water_temperature < set_water_temperature
-            ):
+            if controller_mode == HeatingMode.DOMESTIC_HOT_WATER and actual_water_temperature < set_water_temperature:
                 return True
 
             return False
 
-        def space_heating_needed(
-            current_water_temperature, target_water_temperature
-        ):
+        def space_heating_needed(current_water_temperature, target_water_temperature):
             if (
                 DiverterValve.determine_summer_heating_mode(
                     daily_average_outside_temperature,
@@ -78,7 +73,10 @@ class DiverterValve:
                 == "off"
             ):
                 return False
-            if current_water_temperature >= target_water_temperature + set_temperatures.hysteresis_water_temperature_offset:
+            if (
+                current_water_temperature
+                >= target_water_temperature + set_temperatures.hysteresis_water_temperature_offset
+            ):
                 return False
             return True
 
@@ -98,16 +96,15 @@ class DiverterValve:
             if needs_space_heating:
                 return HeatingMode.SPACE_HEATING
             return HeatingMode.OFF
-        else:
-            if needs_dhw_heating and needs_space_heating:
-                # DHW has higher priority
-                return HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL
-            if needs_dhw_heating and not needs_space_heating:
-                return HeatingMode.DOMESTIC_HOT_WATER
-            if needs_space_heating and not needs_dhw_heating:
-                return HeatingMode.SPACE_HEATING     
-            return HeatingMode.OFF
 
+        if needs_dhw_heating and needs_space_heating:
+            # DHW has higher priority
+            return HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL
+        if needs_dhw_heating and not needs_space_heating:
+            return HeatingMode.DOMESTIC_HOT_WATER
+        if needs_space_heating and not needs_dhw_heating:
+            return HeatingMode.SPACE_HEATING
+        return HeatingMode.OFF
 
     @staticmethod
     def determine_summer_heating_mode(
@@ -125,17 +122,11 @@ class DiverterValve:
             heating_mode = "on"
 
         # it is too hot for heating
-        elif (
-            daily_average_outside_temperature_in_celsius
-            > set_heating_threshold_temperature_in_celsius
-        ):
+        elif daily_average_outside_temperature_in_celsius > set_heating_threshold_temperature_in_celsius:
             heating_mode = "off"
 
         # it is cold enough for heating
-        elif (
-            daily_average_outside_temperature_in_celsius
-            < set_heating_threshold_temperature_in_celsius
-        ):
+        elif daily_average_outside_temperature_in_celsius < set_heating_threshold_temperature_in_celsius:
             heating_mode = "on"
 
         else:

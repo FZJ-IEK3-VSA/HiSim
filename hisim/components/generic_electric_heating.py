@@ -78,7 +78,10 @@ class ElectricHeatingConfig(ConfigBase):
 
     @classmethod
     def get_default_electric_heating_config(
-        cls, building_name: str = "BUI1", with_domestic_hot_water_preparation=False, maximum_electric_power_w: float = 40000
+        cls,
+        building_name: str = "BUI1",
+        with_domestic_hot_water_preparation=False,
+        maximum_electric_power_w: float = 40000,
     ) -> Any:
         """Get a default Electric heating."""
         config = ElectricHeatingConfig(
@@ -450,9 +453,16 @@ class ElectricHeating(Component):
 
             if theoretical_thermal_building_in_watt >= 0:
                 if theoretical_thermal_building_in_watt > available_electric_load_in_watt:
-                    logging.debug("The needed thermal power for space heating is higher than the maximum connected load.")
-                thermal_power_sh_delivered_in_watt = min(theoretical_thermal_building_in_watt, available_electric_load_in_watt)
-                thermal_energy_sh_delivered_in_watthour = min(theoretical_thermal_building_energy_in_watthour, available_electric_load_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3)
+                    logging.debug(
+                        "The needed thermal power for space heating is higher than the maximum connected load."
+                    )
+                thermal_power_sh_delivered_in_watt = min(
+                    theoretical_thermal_building_in_watt, available_electric_load_in_watt
+                )
+                thermal_energy_sh_delivered_in_watthour = min(
+                    theoretical_thermal_building_energy_in_watthour,
+                    available_electric_load_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3,
+                )
             else:
                 thermal_power_sh_delivered_in_watt = 0.0
                 thermal_energy_sh_delivered_in_watthour = 0.0
@@ -505,7 +515,8 @@ class ElectricHeating(Component):
         if delta_temperature_needed_in_celsius > 0:
             # regulate thermal output power based on deltaT needed
             thermal_power_delivered_w = min(
-                self.config.maximum_electric_power_w * delta_temperature_needed_in_celsius / 100.0, self.config.maximum_electric_power_w
+                self.config.maximum_electric_power_w * delta_temperature_needed_in_celsius / 100.0,
+                self.config.maximum_electric_power_w,
             )
             water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_w / (
                 PhysicsConfig.get_properties_for_energy_carrier(
@@ -756,7 +767,7 @@ class ElectricHeatingControllerConfig(ConfigBase):
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
             hysteresis_water_temperature_offset=15,
             parallel_space_heating_and_dhw_option=parallel_space_heating_and_dhw_option,
-            specific_heating_load_of_building_in_watt_per_m2=None
+            specific_heating_load_of_building_in_watt_per_m2=None,
         )
 
     @classmethod
@@ -771,7 +782,7 @@ class ElectricHeatingControllerConfig(ConfigBase):
         """Gets a default electric heating controller."""
         set_heating_threshold_outside_temperature_in_celsius = HeatDistributionControllerConfig.set_heating_threshold_temperature_based_on_building_efficiency(
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
-            specific_heating_load_of_building_in_watt_per_m2=specific_heating_load_of_building_in_watt_per_m2
+            specific_heating_load_of_building_in_watt_per_m2=specific_heating_load_of_building_in_watt_per_m2,
         )
         return ElectricHeatingControllerConfig(
             building_name=building_name,
@@ -780,7 +791,7 @@ class ElectricHeatingControllerConfig(ConfigBase):
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
             hysteresis_water_temperature_offset=15,
             parallel_space_heating_and_dhw_option=parallel_space_heating_and_dhw_option,
-            specific_heating_load_of_building_in_watt_per_m2=specific_heating_load_of_building_in_watt_per_m2
+            specific_heating_load_of_building_in_watt_per_m2=specific_heating_load_of_building_in_watt_per_m2,
         )
 
 

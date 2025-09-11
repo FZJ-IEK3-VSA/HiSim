@@ -194,10 +194,10 @@ opex_techno_economic_parameters = {
             "oil_footprint_in_kg_per_l": 3.14,  # kgCO2eq/l # Source: [22]
             "diesel_costs_in_euro_per_l": 2 * 1.6649,  # EUR/l  # Source: own assumption (more expensive than in 2024)
             "diesel_footprint_in_kg_per_l": 2.0,  # kgCO2eq/l, same as 2024
-            "pellet_costs_in_euro_per_t": 434.07,  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
-            "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [22]
+            "pellet_costs_in_euro_per_t": 366.30,  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
+            "pellet_footprint_in_kg_per_kwh": 0.0,  # kgCo2eq/kWh # assume carbon free
             "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: own assumption, same as 2024
-            "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14], same as 2024
+            "wood_chip_footprint_in_kg_per_kwh": 0.0,  # kgCo2eq/kWh # assume carbon free
             "district_heating_costs_in_euro_per_kwh": 0.1410,  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
             "district_heating_footprint_in_kg_per_kwh": 0.0,  # kgCO2eq/kWh  # Source: [22], carbon free in 2050
             "green_hydrogen_gas_costs_in_euro_per_kwh": 0.1790,  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
@@ -370,7 +370,7 @@ capex_techno_economic_parameters = {
                 "subsidy_as_percentage_of_investment_costs": 0.3,
             },
             ComponentType.ELECTRIC_HEATER: {
-                "investment_costs_in_euro_per_kw": 0.196 * 1600,  # 19.6% of heat pump costs, Source: [20]
+                "investment_costs_in_euro_per_kw": 0.196 * 1600,  # 19.6% of heat pump costs, tankless dhw heater (Durchlauferhitzer) included, Source: [20]
                 "maintenance_costs_as_percentage_of_investment_per_year": 0.01,  # Source: [20]
                 "technical_lifetime_in_years": 22,  # Source: [20]
                 "co2_footprint_in_kg_per_kw": 1.21,  # Source: [19]
@@ -391,7 +391,7 @@ capex_techno_economic_parameters = {
                 "co2_footprint_in_kg_per_kw": 330.51,  # Source: [19]
                 "subsidy_as_percentage_of_investment_costs": 0,
                 # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
-                # that's why we assume 0% subsidy here, source: [31,32]
+                # that's why we assume 0% subsidy here, source: [31]
             },
             # CAPEX per kWh
             ComponentType.BATTERY: {
@@ -401,7 +401,7 @@ capex_techno_economic_parameters = {
                 "co2_footprint_in_kg_per_kwh": 130.7,  # Source: [19]
                 "subsidy_as_percentage_of_investment_costs": 0,
                 # there is a cheaper KfW loan for PV and batteries but it depends on several factors (bank, risk class etc.),
-                # that's why we assume 0% subsidy here, source: [31,32]
+                # that's why we assume 0% subsidy here, source: [31]
             },
             # CAPEX per liter
             ComponentType.THERMAL_ENERGY_STORAGE: {
@@ -437,14 +437,14 @@ capex_techno_economic_parameters = {
             # CAPEX per device
             ComponentType.ELECTRICITY_METER: {
                 "investment_costs_in_euro": 100,  # EUR, Source: [26]
-                "maintenance_costs_as_percentage_of_investment_per_year": 0.2,  # assume 20€ per month, check on verivox
+                "maintenance_costs_as_percentage_of_investment_per_year": 2.4,  # assume 20€ per month, check on verivox, meaning 240€/year
                 "technical_lifetime_in_years": 20,  # no idea, assumption
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.GAS_METER: {
                 "investment_costs_in_euro": 200,  # EUR, Source: [27]
-                "maintenance_costs_as_percentage_of_investment_per_year": 0.15,  # assume around 30€ per year, check on verivox
+                "maintenance_costs_as_percentage_of_investment_per_year": 1.8,  # assume around 30€ per year, check on verivox, meaning 360€/year
                 "technical_lifetime_in_years": 20,  # no idea, assumption
                 "co2_footprint_in_kg": 0,  # no idea, assume 0
                 "subsidy_as_percentage_of_investment_costs": 0,

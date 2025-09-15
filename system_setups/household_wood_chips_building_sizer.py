@@ -89,7 +89,9 @@ def setup_function(
     default_year = 2021
     if my_simulation_parameters is None:
         seconds_per_timestep = 60 * 15
-        my_simulation_parameters = SimulationParameters.full_year(year=default_year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year(
+            year=default_year, seconds_per_timestep=seconds_per_timestep
+        )
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         if os.path.exists(cache_dir_path_simuparams):
             my_simulation_parameters.cache_dir_path = cache_dir_path_simuparams
@@ -254,12 +256,14 @@ def setup_function(
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
     # Build Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
+    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_config_based_on_building_efficiency(
         set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         heating_system=my_hds_system,
+        specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt
+        / my_building_information.scaled_conditioned_floor_area_in_m2,
     )
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
@@ -287,12 +291,11 @@ def setup_function(
 
     # Build Wood Chip Heater Controller
     # Wood chip boiler cannot modulate and it has long run/idle times, so use specific config
-    my_wood_chip_heater_controller_config = (
-        generic_boiler.GenericBoilerControllerConfig.get_default_wood_chip_controller_config(
-            minimal_thermal_power_in_watt=my_wood_chip_heater_config.minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=my_wood_chip_heater_config.maximal_thermal_power_in_watt,
-            with_domestic_hot_water_preparation=True,
-        )
+    my_wood_chip_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_wood_chip_controller_config(
+        minimal_thermal_power_in_watt=my_wood_chip_heater_config.minimal_thermal_power_in_watt,
+        maximal_thermal_power_in_watt=my_wood_chip_heater_config.maximal_thermal_power_in_watt,
+        with_domestic_hot_water_preparation=True,
+        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
     )
     my_wood_chip_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters,

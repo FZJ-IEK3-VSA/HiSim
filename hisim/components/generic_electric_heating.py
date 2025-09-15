@@ -5,7 +5,7 @@
 # import importlib
 from dataclasses import dataclass
 import logging
-from typing import List, Any, Optional, Tuple
+from typing import List, Any, Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -23,11 +23,9 @@ from hisim.component import (
     DisplayConfig,
     CapexCostDataClass,
 )
-from hisim.components.heat_distribution_system import (
-    HeatDistributionController,
-    HeatDistribution,
-)
+from hisim.components.building import Building
 from hisim.components.weather import Weather
+from hisim.components.heat_distribution_system import HeatDistributionControllerConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.configuration import (
     EmissionFactorsAndCostsForFuelsConfig,
@@ -63,7 +61,7 @@ class ElectricHeatingConfig(ConfigBase):
     building_name: str
     name: str
     # # Maximum electric power that can be delivered
-    connected_load_w: float
+    maximum_electric_power_w: float
     # Efficiency for electric to thermal power conversion
     efficiency: float
     #: CO2 footprint of investment in kg
@@ -83,13 +81,13 @@ class ElectricHeatingConfig(ConfigBase):
         cls,
         building_name: str = "BUI1",
         with_domestic_hot_water_preparation=False,
-        connected_load_w: float = 40000
+        maximum_electric_power_w: float = 40000,
     ) -> Any:
         """Get a default Electric heating."""
         config = ElectricHeatingConfig(
             building_name=building_name,
             name="ElectricHeating",
-            connected_load_w=connected_load_w,
+            maximum_electric_power_w=maximum_electric_power_w,
             efficiency=1.0,  # 100% efficiency
             # capex and device emissions are calculated in get_cost_capex function by default
             device_co2_footprint_in_kg=None,
@@ -112,19 +110,18 @@ class ElectricHeating(Component):
     HeatingMode = "HeatingMode"
 
     # Inputs for space heating
-    DeltaTemperatureNeeded = "DeltaTemperatureNeededSh"  # how much water temperature needs to be increased
-    WaterInputTemperatureSh = "WaterInputTemperatureSh"
-    WaterInputMassFlowRateFromHeatDistributionSystem = "WaterInputMassFlowRateFromHeatDistributionSystem"
+    TheoreticalHeatingDemand = "TheoreticalHeatingDemand"
+    TheoreticalHeatingEnergyDemand = "TheoreticalHeatingEnergyDemand"
 
     # Inputs for DHW
+    DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
     WaterInputTemperatureDhw = "WaterInputTemperatureDhw"
     WaterInputMassFlowRateFromWarmWaterStorage = "WaterInputMassFlowRateFromWarmWaterStorage"
 
     # Output
-    WaterOutputShTemperature = "WaterOutputShTemperature"
     ThermalOutputShPower = "ThermalOutputShPower"
     ThermalOutputShEnergy = "ThermalOutputShEnergy"
-    WaterOutputShMassFlowRate = "WaterOutputShMassFlowRate"
+
     WaterOutputDhwTemperature = "WaterOutputDhwTemperature"
     ThermalOutputDhwPower = "ThermalOutputDhwPower"
     ThermalOutputDhwEnergy = "ThermalOutputDhwEnergy"
@@ -159,27 +156,28 @@ class ElectricHeating(Component):
             Units.ANY,
             True,
         )
-        self.delta_temperature_channel: ComponentInput = self.add_input(
+        self.delta_temperature_for_dhw_channel: ComponentInput = self.add_input(
             self.component_name,
-            ElectricHeating.DeltaTemperatureNeeded,
+            ElectricHeating.DeltaTemperatureNeededForDHW,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             True,
         )
-        self.water_input_temperature_sh_channel: ComponentInput = self.add_input(
+        self.theoretical_thermal_building_power_channel: ComponentInput = self.add_input(
             self.component_name,
-            ElectricHeating.WaterInputTemperatureSh,
-            LoadTypes.WATER,
-            Units.CELSIUS,
+            self.TheoreticalHeatingDemand,
+            LoadTypes.HEATING,
+            Units.WATT,
             True,
         )
-        self.water_input_mass_flow_rate_sh_channel: ComponentInput = self.add_input(
+        self.theoretical_thermal_building_energy_channel: ComponentInput = self.add_input(
             self.component_name,
-            ElectricHeating.WaterInputMassFlowRateFromHeatDistributionSystem,
-            LoadTypes.WATER,
-            Units.KG_PER_SEC,
+            self.TheoreticalHeatingEnergyDemand,
+            LoadTypes.HEATING,
+            Units.WATT_HOUR,
             True,
         )
+
         if self.config.with_domestic_hot_water_preparation:
             self.water_input_temperature_dhw_channel: ComponentInput = self.add_input(
                 self.component_name,
@@ -197,20 +195,6 @@ class ElectricHeating(Component):
             )
 
         # Outputs Space Heating
-        self.water_mass_flow_sh_output_channel: ComponentOutput = self.add_output(
-            self.component_name,
-            ElectricHeating.WaterOutputShMassFlowRate,
-            LoadTypes.WATER,
-            Units.KG_PER_SEC,
-            output_description="Water mass flow rate for space heating.",
-        )
-        self.water_output_temperature_sh_channel: ComponentOutput = self.add_output(
-            self.component_name,
-            ElectricHeating.WaterOutputShTemperature,
-            LoadTypes.WATER,
-            Units.CELSIUS,
-            output_description="Water output temperature for space heating.",
-        )
         self.thermal_output_power_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ThermalOutputShPower,
@@ -287,7 +271,7 @@ class ElectricHeating(Component):
         )
 
         self.add_default_connections(self.get_default_connections_from_electric_heating_controller())
-        self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
+        self.add_default_connections(self.get_default_connections_from_building())
         if self.config.with_domestic_hot_water_preparation:
             self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
 
@@ -308,33 +292,34 @@ class ElectricHeating(Component):
         )
         connections.append(
             ComponentConnection(
-                ElectricHeating.DeltaTemperatureNeeded,
+                ElectricHeating.DeltaTemperatureNeededForDHW,
                 controller_classname,
-                component_class.DeltaTemperatureNeeded,
+                component_class.DeltaTemperatureNeededForDHW,
             )
         )
+
         return connections
 
-    def get_default_connections_from_heat_distribution_system(
+    def get_default_connections_from_building(
         self,
     ):
-        """Get heat distribution system default connections."""
+        """Get building default connections."""
 
-        component_class = HeatDistribution
+        component_class = Building
         connections = []
         hws_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-                ElectricHeating.WaterInputTemperatureSh,
+                ElectricHeating.TheoreticalHeatingDemand,
                 hws_classname,
-                component_class.WaterTemperatureOutput,
+                component_class.TheoreticalHeatingDemand,
             )
         )
         connections.append(
             ComponentConnection(
-                ElectricHeating.WaterInputMassFlowRateFromHeatDistributionSystem,
+                ElectricHeating.TheoreticalHeatingEnergyDemand,
                 hws_classname,
-                component_class.WaterMassFlowHDS,
+                component_class.TheoreticalHeatingEnergyDemand,
             )
         )
         return connections
@@ -398,137 +383,118 @@ class ElectricHeating(Component):
 
         if heating_mode == HeatingMode.SPACE_HEATING:
             # Get relevant inputs
-            delta_temperature_needed_in_celsius = stsv.get_input_value(self.delta_temperature_channel)
-            self._check_delta_temperature(delta_temperature_needed_in_celsius, timestep)
-
-            water_input_temperature_deg_c = stsv.get_input_value(self.water_input_temperature_sh_channel)
-            water_mass_flow_rate_in_kg_per_s = stsv.get_input_value(self.water_input_mass_flow_rate_sh_channel)
-
-            # Calculate
-            (
-                thermal_power_delivered_w,
-                thermal_energy_delivered_in_watt_hour,
-                water_output_temperature_deg_c,
-            ) = self._calculate_space_heating_outputs(
-                water_mass_flow_rate_in_kg_per_s,
-                delta_temperature_needed_in_celsius,
-                water_input_temperature_deg_c,
-            )
-            # Calculate electricity consumption
-            electric_power_consumption_w = thermal_power_delivered_w * self.config.efficiency
-            electric_energy_consumption_in_watt_hour = thermal_energy_delivered_in_watt_hour * self.config.efficiency
-
-            # Set outputs
-            stsv.set_output_value(self.thermal_output_power_sh_channel, thermal_power_delivered_w)
-            stsv.set_output_value(
-                self.thermal_output_energy_sh_channel,
-                thermal_energy_delivered_in_watt_hour,
-            )
-            stsv.set_output_value(self.electric_output_power_sh_channel, electric_power_consumption_w)
-            stsv.set_output_value(
-                self.electric_output_energy_sh_channel,
-                electric_energy_consumption_in_watt_hour,
-            )
-            stsv.set_output_value(
-                self.water_output_temperature_sh_channel,
-                water_output_temperature_deg_c,
-            )
-            stsv.set_output_value(
-                self.water_mass_flow_sh_output_channel,
-                water_mass_flow_rate_in_kg_per_s,
+            theoretical_thermal_building_in_watt = stsv.get_input_value(self.theoretical_thermal_building_power_channel)
+            theoretical_thermal_building_energy_in_watthour = stsv.get_input_value(
+                self.theoretical_thermal_building_energy_channel
             )
 
-            stsv.set_output_value(self.thermal_output_power_dhw_channel, 0)
-            stsv.set_output_value(self.thermal_output_energy_dhw_channel, 0)
-            stsv.set_output_value(self.electric_output_power_dhw_channel, 0)
-            stsv.set_output_value(self.electric_output_energy_dhw_channel, 0)
-            current_dhw_water_temperature_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
-            stsv.set_output_value(
-                self.water_output_temperature_dhw_channel,
-                current_dhw_water_temperature_deg_c,
-            )
-            stsv.set_output_value(self.water_mass_flow_dhw_output_channel, 0)
+            if theoretical_thermal_building_in_watt >= 0:
+                thermal_power_sh_delivered_in_watt = theoretical_thermal_building_in_watt
+                thermal_energy_sh_delivered_in_watthour = theoretical_thermal_building_energy_in_watthour
+            else:
+                thermal_power_sh_delivered_in_watt = 0.0
+                thermal_energy_sh_delivered_in_watthour = 0.0
+            # dhw outputs
+            thermal_power_dhw_delivered_w = 0.0
+            thermal_energy_dhw_delivered_in_watt_hour = 0.0
+            water_mass_flow_rate_for_dhw_in_kg_per_s = 0.0
+            water_output_temperature_for_dhw_deg_c = 0.0
 
         elif heating_mode == HeatingMode.DOMESTIC_HOT_WATER:
             # Get relevant inputs
-            delta_temperature_needed_in_celsius = stsv.get_input_value(self.delta_temperature_channel)
-            self._check_delta_temperature(delta_temperature_needed_in_celsius, timestep)
+            delta_temperature_needed_for_dhw_in_celsius = stsv.get_input_value(self.delta_temperature_for_dhw_channel)
+            self._check_delta_temperature(delta_temperature_needed_for_dhw_in_celsius, timestep)
 
-            water_input_temperature_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
+            water_input_temperature_for_dhw_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
 
             # Calculate
             (
-                thermal_power_delivered_w,
-                thermal_energy_delivered_in_watt_hour,
-                water_output_temperature_deg_c,
-                water_mass_flow_rate_in_kg_per_s,
+                thermal_power_dhw_delivered_w,
+                thermal_energy_dhw_delivered_in_watt_hour,
+                water_output_temperature_for_dhw_deg_c,
+                water_mass_flow_rate_for_dhw_in_kg_per_s,
             ) = self._calculate_dhw_outputs(
-                water_input_temperature_deg_c,
-                delta_temperature_needed_in_celsius,
+                water_input_temperature_for_dhw_deg_c,
+                delta_temperature_needed_for_dhw_in_celsius,
             )
-            # Calculate electricity consumption
-            electric_power_consumption_w = thermal_power_delivered_w * self.config.efficiency
-            electric_energy_consumption_in_watt_hour = thermal_energy_delivered_in_watt_hour * self.config.efficiency
+            # set sh outputs
+            thermal_power_sh_delivered_in_watt = 0.0
+            thermal_energy_sh_delivered_in_watthour = 0.0
 
-            # Set outputs
-            stsv.set_output_value(
-                self.thermal_output_power_dhw_channel,
-                thermal_power_delivered_w,
-            )
-            stsv.set_output_value(
-                self.thermal_output_energy_dhw_channel,
-                thermal_energy_delivered_in_watt_hour,
-            )
-            stsv.set_output_value(self.electric_output_power_dhw_channel, electric_power_consumption_w)
-            stsv.set_output_value(
-                self.electric_output_energy_dhw_channel,
-                electric_energy_consumption_in_watt_hour,
-            )
-            stsv.set_output_value(
-                self.water_output_temperature_dhw_channel,
-                water_output_temperature_deg_c,
-            )
-            stsv.set_output_value(
-                self.water_mass_flow_dhw_output_channel,
-                water_mass_flow_rate_in_kg_per_s,
+        elif heating_mode == HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL:
+            # Get relevant inputs
+            delta_temperature_needed_for_dhw_in_celsius = stsv.get_input_value(self.delta_temperature_for_dhw_channel)
+            self._check_delta_temperature(delta_temperature_needed_for_dhw_in_celsius, timestep)
+
+            water_input_temperature_for_dhw_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
+
+            # Calculate first for dhw
+            (
+                thermal_power_dhw_delivered_w,
+                thermal_energy_dhw_delivered_in_watt_hour,
+                water_output_temperature_for_dhw_deg_c,
+                water_mass_flow_rate_for_dhw_in_kg_per_s,
+            ) = self._calculate_dhw_outputs(
+                water_input_temperature_for_dhw_deg_c,
+                delta_temperature_needed_for_dhw_in_celsius,
             )
 
-            stsv.set_output_value(self.thermal_output_power_sh_channel, 0)
-            stsv.set_output_value(self.thermal_output_energy_sh_channel, 0)
-            stsv.set_output_value(self.electric_output_power_sh_channel, 0)
-            stsv.set_output_value(self.electric_output_energy_sh_channel, 0)
-            current_sh_water_temperature_deg_c = stsv.get_input_value(self.water_input_temperature_sh_channel)
-            stsv.set_output_value(
-                self.water_output_temperature_sh_channel,
-                current_sh_water_temperature_deg_c,
+            # Now calculate for space heating
+            # Calculate
+            if self.config.maximum_electric_power_w - thermal_power_dhw_delivered_w <= 0:
+                raise ValueError(
+                    f"Electric load for DHW {thermal_power_dhw_delivered_w}W is equal or higher than maximal electric load {self.config.maximum_electric_power_w}. "
+                )
+            theoretical_thermal_building_in_watt = stsv.get_input_value(self.theoretical_thermal_building_power_channel)
+            theoretical_thermal_building_energy_in_watthour = stsv.get_input_value(
+                self.theoretical_thermal_building_energy_channel
             )
-            stsv.set_output_value(self.water_mass_flow_sh_output_channel, 0)
+            available_electric_load_in_watt = self.config.maximum_electric_power_w - thermal_power_dhw_delivered_w
+
+            if theoretical_thermal_building_in_watt >= 0:
+                if theoretical_thermal_building_in_watt > available_electric_load_in_watt:
+                    logging.debug(
+                        "The needed thermal power for space heating is higher than the maximum connected load."
+                    )
+                thermal_power_sh_delivered_in_watt = min(
+                    theoretical_thermal_building_in_watt, available_electric_load_in_watt
+                )
+                thermal_energy_sh_delivered_in_watthour = min(
+                    theoretical_thermal_building_energy_in_watthour,
+                    available_electric_load_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3,
+                )
+            else:
+                thermal_power_sh_delivered_in_watt = 0.0
+                thermal_energy_sh_delivered_in_watthour = 0.0
 
         elif heating_mode == HeatingMode.OFF:
-            stsv.set_output_value(self.thermal_output_power_dhw_channel, 0)
-            stsv.set_output_value(self.thermal_output_energy_dhw_channel, 0)
-            stsv.set_output_value(self.electric_output_power_dhw_channel, 0)
-            stsv.set_output_value(self.electric_output_energy_dhw_channel, 0)
-            current_dhw_water_temperature_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
-            stsv.set_output_value(
-                self.water_output_temperature_dhw_channel,
-                current_dhw_water_temperature_deg_c,
-            )
-            stsv.set_output_value(self.water_mass_flow_dhw_output_channel, 0)
+            thermal_power_dhw_delivered_w = 0.0
+            thermal_energy_dhw_delivered_in_watt_hour = 0.0
+            thermal_power_dhw_delivered_w = 0.0
+            water_mass_flow_rate_for_dhw_in_kg_per_s = 0.0
+            water_output_temperature_for_dhw_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
+            thermal_power_sh_delivered_in_watt = 0.0
+            thermal_energy_sh_delivered_in_watthour = 0.0
 
-            stsv.set_output_value(self.thermal_output_power_sh_channel, 0)
-            stsv.set_output_value(self.thermal_output_energy_sh_channel, 0)
-            stsv.set_output_value(self.electric_output_power_sh_channel, 0)
-            stsv.set_output_value(self.electric_output_energy_sh_channel, 0)
-
-            current_sh_water_temperature_deg_c = stsv.get_input_value(self.water_input_temperature_sh_channel)
-            stsv.set_output_value(
-                self.water_output_temperature_sh_channel,
-                current_sh_water_temperature_deg_c,
-            )
-            stsv.set_output_value(self.water_mass_flow_sh_output_channel, 0)
         else:
             raise ValueError("Unknown heating mode")
+
+        # set outputs
+        stsv.set_output_value(self.thermal_output_power_dhw_channel, thermal_power_dhw_delivered_w)
+        stsv.set_output_value(self.thermal_output_energy_dhw_channel, thermal_energy_dhw_delivered_in_watt_hour)
+        stsv.set_output_value(
+            self.water_output_temperature_dhw_channel,
+            water_output_temperature_for_dhw_deg_c,
+        )
+        stsv.set_output_value(self.water_mass_flow_dhw_output_channel, water_mass_flow_rate_for_dhw_in_kg_per_s)
+        stsv.set_output_value(self.thermal_output_power_sh_channel, thermal_power_sh_delivered_in_watt)
+        stsv.set_output_value(self.thermal_output_energy_sh_channel, thermal_energy_sh_delivered_in_watthour)
+        # set electric power and energy
+        # stromdirektheizung -> electricpower =thermalpower
+        stsv.set_output_value(self.electric_output_power_sh_channel, thermal_power_sh_delivered_in_watt)
+        stsv.set_output_value(self.electric_output_energy_sh_channel, thermal_energy_sh_delivered_in_watthour)
+        stsv.set_output_value(self.electric_output_power_dhw_channel, thermal_power_dhw_delivered_w)
+        stsv.set_output_value(self.electric_output_energy_dhw_channel, thermal_energy_dhw_delivered_in_watt_hour)
 
     def _check_delta_temperature(self, delta_temperature: float, timestep: int):
         if delta_temperature < 0:
@@ -542,45 +508,16 @@ class ElectricHeating(Component):
                 f"Delta temperature is {delta_temperature} °C in timestep {timestep}." "This is way too high. "
             )
 
-    def _calculate_space_heating_outputs(
-        self,
-        water_mass_flow_rate_in_kg_per_s: float,
-        delta_temperature_needed_in_celsius: float,
-        water_input_temperature_deg_c: float,
-    ) -> Tuple[float, float, float]:
-        thermal_power_delivered_w = (
-            water_mass_flow_rate_in_kg_per_s
-            * PhysicsConfig.get_properties_for_energy_carrier(
-                energy_carrier=LoadTypes.WATER
-            ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-            * delta_temperature_needed_in_celsius
-        )
-
-        if thermal_power_delivered_w > self.config.connected_load_w:
-            # make sure that not more power is delivered than available
-            logging.warning("The needed thermal power for space heating is higher than the maximum connected load.")
-            thermal_power_delivered_w = self.config.connected_load_w
-            delta_temperature_achieved = thermal_power_delivered_w / (
-                water_mass_flow_rate_in_kg_per_s
-                * PhysicsConfig.get_properties_for_energy_carrier(
-                    energy_carrier=LoadTypes.WATER
-                ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-            )
-            water_output_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_achieved
-        else:
-            water_output_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
-
-        thermal_energy_delivered_in_watt_hour = (
-            thermal_power_delivered_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
-        )
-        return thermal_power_delivered_w, thermal_energy_delivered_in_watt_hour, water_output_temperature_deg_c
-
     def _calculate_dhw_outputs(self, water_input_temperature_deg_c: float, delta_temperature_needed_in_celsius: float):
         water_target_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
 
         # calculate thermal power delivered Q = m * cw * dT
         if delta_temperature_needed_in_celsius > 0:
-            thermal_power_delivered_w = self.config.connected_load_w
+            # regulate thermal output power based on deltaT needed
+            thermal_power_delivered_w = min(
+                self.config.maximum_electric_power_w * delta_temperature_needed_in_celsius / 100.0,
+                self.config.maximum_electric_power_w,
+            )
             water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_w / (
                 PhysicsConfig.get_properties_for_energy_carrier(
                     energy_carrier=LoadTypes.WATER
@@ -670,21 +607,21 @@ class ElectricHeating(Component):
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         component_type = ComponentType.ELECTRIC_HEATER
-        kpi_tag = (
-            KpiTagEnumClass.ELECTRIC_HEATING
-        )
+        kpi_tag = KpiTagEnumClass.ELECTRIC_HEATING
         unit = Units.KILOWATT
-        size_of_energy_system = config.connected_load_w * 1e-3
+        size_of_energy_system = config.maximum_electric_power_w * 1e-3
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
-        simulation_parameters=simulation_parameters,
-        component_type=component_type,
-        unit=unit,
-        size_of_energy_system=size_of_energy_system,
-        config=config,
-        kpi_tag=kpi_tag
+            simulation_parameters=simulation_parameters,
+            component_type=component_type,
+            unit=unit,
+            size_of_energy_system=size_of_energy_system,
+            config=config,
+            kpi_tag=kpi_tag,
         )
-        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(
+            config=config, capex_cost_data_class=capex_cost_data_class
+        )
 
         return capex_cost_data_class
 
@@ -808,23 +745,53 @@ class ElectricHeatingControllerConfig(ConfigBase):
 
     building_name: str
     name: str
-    set_heating_threshold_outside_temperature_in_celsius: Optional[float]
+    set_heating_threshold_outside_temperature_in_celsius: float
     with_domestic_hot_water_preparation: bool
-    offset: float  # overheating of dhw storage
+    hysteresis_water_temperature_offset: float
+    parallel_space_heating_and_dhw_option: bool
+    specific_heating_load_of_building_in_watt_per_m2: Optional[float]
 
     @classmethod
     def get_default_electric_heating_controller_config(
         cls,
         building_name: str = "BUI1",
         with_domestic_hot_water_preparation=False,
+        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
+        parallel_space_heating_and_dhw_option: bool = False,
     ) -> Any:
         """Gets a default electric heating controller."""
         return ElectricHeatingControllerConfig(
             building_name=building_name,
             name="ElectricHeatingController",
-            set_heating_threshold_outside_temperature_in_celsius=16.0,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-            offset=15,
+            hysteresis_water_temperature_offset=15,
+            parallel_space_heating_and_dhw_option=parallel_space_heating_and_dhw_option,
+            specific_heating_load_of_building_in_watt_per_m2=None,
+        )
+
+    @classmethod
+    def get_electric_heating_config_based_on_building_efficiency(
+        cls,
+        specific_heating_load_of_building_in_watt_per_m2: float,
+        building_name: str = "BUI1",
+        with_domestic_hot_water_preparation=False,
+        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
+        parallel_space_heating_and_dhw_option: bool = False,
+    ) -> Any:
+        """Gets a default electric heating controller."""
+        set_heating_threshold_outside_temperature_in_celsius = HeatDistributionControllerConfig.set_heating_threshold_temperature_based_on_building_efficiency(
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
+            specific_heating_load_of_building_in_watt_per_m2=specific_heating_load_of_building_in_watt_per_m2,
+        )
+        return ElectricHeatingControllerConfig(
+            building_name=building_name,
+            name="ElectricHeatingController",
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
+            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
+            hysteresis_water_temperature_offset=15,
+            parallel_space_heating_and_dhw_option=parallel_space_heating_and_dhw_option,
+            specific_heating_load_of_building_in_watt_per_m2=specific_heating_load_of_building_in_watt_per_m2,
         )
 
 
@@ -832,17 +799,14 @@ class ElectricHeatingController(Component):
     """Electric Heating Controller."""
 
     # Inputs
-    WaterTemperatureInputFromHeatDistributionSystem = "WaterTemperatureInputFromHeatDistributionSystem"
-    # set heating  flow temperature
-    HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
-
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
 
     # Relevant when used for dhw as well
     WaterTemperatureInputFromWarmWaterStorage = "WaterTemperatureInputFromWarmWaterStorage"
 
     # Outputs
-    DeltaTemperatureNeeded = "DeltaTemperatureNeeded"
+    DeltaTemperatureNeededForDHW = "DeltaTemperatureNeededForDHW"
+    DeltaTemperatureNeededForSH = "DeltaTemperatureNeededForSH"
     OperatingMode = "HeatingMode"
 
     def __init__(
@@ -866,21 +830,6 @@ class ElectricHeatingController(Component):
         self.build()
 
         # input channel
-        self.water_temperature_input_channel_sh: ComponentInput = self.add_input(
-            self.component_name,
-            self.WaterTemperatureInputFromHeatDistributionSystem,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
-            True,
-        )
-        self.heating_flow_temperature_from_heat_distribution_system_channel: ComponentInput = self.add_input(
-            self.component_name,
-            self.HeatingFlowTemperatureFromHeatDistributionSystem,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
-            True,
-        )
-
         if self.config.with_domestic_hot_water_preparation:
             self.water_temperature_input_channel_dhw: ComponentInput = self.add_input(
                 self.component_name,
@@ -897,12 +846,12 @@ class ElectricHeatingController(Component):
             True,
         )
 
-        self.delta_temperature_to_electric_heating_channel: ComponentOutput = self.add_output(
+        self.delta_temperature_for_dhw_to_electric_heating_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.DeltaTemperatureNeeded,
+            self.DeltaTemperatureNeededForDHW,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
-            output_description=f"here a description for {self.DeltaTemperatureNeeded} will follow.",
+            output_description=f"here a description for {self.DeltaTemperatureNeededForDHW} will follow.",
         )
 
         self.controller_mode: HeatingMode
@@ -917,8 +866,6 @@ class ElectricHeatingController(Component):
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
-        self.add_default_connections(self.get_default_connections_from_heat_distribution())
-        self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
 
         if self.config.with_domestic_hot_water_preparation:
             self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
@@ -939,22 +886,6 @@ class ElectricHeatingController(Component):
         )
         return connections
 
-    def get_default_connections_from_heat_distribution(
-        self,
-    ):
-        """Get heat ditribution default connections."""
-
-        connections = []
-        source_classname = HeatDistribution.get_classname()
-        connections.append(
-            ComponentConnection(
-                ElectricHeatingController.WaterTemperatureInputFromHeatDistributionSystem,
-                source_classname,
-                HeatDistribution.WaterTemperatureOutput,
-            )
-        )
-        return connections
-
     def get_default_connections_from_weather(
         self,
     ):
@@ -967,22 +898,6 @@ class ElectricHeatingController(Component):
                 ElectricHeatingController.DailyAverageOutsideTemperature,
                 weather_classname,
                 Weather.DailyAverageOutsideTemperatures,
-            )
-        )
-        return connections
-
-    def get_default_connections_from_heat_distribution_controller(
-        self,
-    ):
-        """Get heat distribution controller default connections."""
-
-        connections = []
-        hds_controller_classname = HeatDistributionController.get_classname()
-        connections.append(
-            ComponentConnection(
-                ElectricHeatingController.HeatingFlowTemperatureFromHeatDistributionSystem,
-                hds_controller_classname,
-                HeatDistributionController.HeatingFlowTemperature,
             )
         )
         return connections
@@ -1035,13 +950,7 @@ class ElectricHeatingController(Component):
             return
 
         # Retrieves inputs
-        water_temperature_input_from_heat_distibution_in_celsius = stsv.get_input_value(
-            self.water_temperature_input_channel_sh
-        )
 
-        heating_flow_temperature_from_heat_distribution_in_celsius = stsv.get_input_value(
-            self.heating_flow_temperature_from_heat_distribution_system_channel
-        )
         water_temperature_input_from_warm_water_storage_in_celsius = None
         if self.config.with_domestic_hot_water_preparation:
             water_temperature_input_from_warm_water_storage_in_celsius = stsv.get_input_value(
@@ -1053,25 +962,19 @@ class ElectricHeatingController(Component):
         )
 
         # Determine which operating mode to use in dual-circuit system
-        delta_temperature_in_celsius = self.determine_operating_mode(
+        delta_temperature_for_dhw_in_celsius = self.determine_operating_mode(
             daily_avg_outside_temperature_in_celsius,
-            water_temperature_input_from_heat_distibution_in_celsius,
-            heating_flow_temperature_from_heat_distribution_in_celsius,
             water_temperature_input_from_warm_water_storage_in_celsius,
         )
-
         stsv.set_output_value(
-            self.delta_temperature_to_electric_heating_channel,
-            delta_temperature_in_celsius,
+            self.delta_temperature_for_dhw_to_electric_heating_channel,
+            delta_temperature_for_dhw_in_celsius,
         )
+
         stsv.set_output_value(self.heating_mode_output_channel, self.controller_mode.value)
 
     def determine_operating_mode(
-        self,
-        daily_avg_outside_temperature_in_celsius: float,
-        sh_current_temperature_deg_c: float,
-        sh_set_temperature_deg_c: float,
-        dhw_current_temperature_deg_c: Optional[float],
+        self, daily_avg_outside_temperature_in_celsius: float, dhw_current_temperature_deg_c: Optional[float]
     ) -> float:
         """Determine operating mode."""
 
@@ -1079,41 +982,49 @@ class ElectricHeatingController(Component):
             with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
             current_controller_mode=self.controller_mode,
             daily_average_outside_temperature=daily_avg_outside_temperature_in_celsius,
-            water_temperature_input_sh_in_celsius=sh_current_temperature_deg_c,
+            water_temperature_input_sh_in_celsius=0,  # artificial because no sh water used
             water_temperature_input_dhw_in_celsius=(
                 dhw_current_temperature_deg_c if self.config.with_domestic_hot_water_preparation else None
             ),
             set_temperatures=SetTemperatureConfig(
-                set_temperature_space_heating=sh_set_temperature_deg_c,
+                set_temperature_space_heating=60,  # artificial because no sh water used
                 set_temperature_dhw=self.warm_water_temperature_aim_in_celsius,
-                hysteresis_dhw_offset=self.config.offset,
-                outside_temperature_threshold=self.electric_heating_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+                hysteresis_water_temperature_offset=self.config.hysteresis_water_temperature_offset,
+                outside_temperature_threshold=self.config.set_heating_threshold_outside_temperature_in_celsius,
             ),
+            parallel_space_heating_and_dhw_option=self.config.parallel_space_heating_and_dhw_option,
         )
 
         if self.controller_mode == HeatingMode.SPACE_HEATING:
-            # delta temperature should not be negative because electric heating cannot provide cooling
-            delta_temperature_in_celsius = float(
-                max(
-                    sh_set_temperature_deg_c - sh_current_temperature_deg_c,
-                    0.0,
-                )
-            )
+            delta_temperature_for_dhw_in_celsius = 0.0
+
         elif self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
-            # delta temperature should not be negative because electric heating cannot provide cooling
+            # delta temperature should not be negative because district heating cannot provide cooling
             assert dhw_current_temperature_deg_c is not None
-            delta_temperature_in_celsius = float(
+            delta_temperature_for_dhw_in_celsius = float(
                 max(
                     self.warm_water_temperature_aim_in_celsius - dhw_current_temperature_deg_c,
                     0.0,
                 )
-                + self.config.offset
+                + self.config.hysteresis_water_temperature_offset
             )
+
         elif self.controller_mode == HeatingMode.OFF:
-            delta_temperature_in_celsius = 0.0
+            delta_temperature_for_dhw_in_celsius = 0.0
+
+        elif self.controller_mode == HeatingMode.SPACE_HEATING_AND_DOMESTIC_HOT_WATER_IN_PARALLEL:
+            assert dhw_current_temperature_deg_c is not None
+            delta_temperature_for_dhw_in_celsius = float(
+                max(
+                    self.warm_water_temperature_aim_in_celsius - dhw_current_temperature_deg_c,
+                    0.0,
+                )
+                + self.config.hysteresis_water_temperature_offset
+            )
+
         else:
             raise ValueError("Electric Heating Controller control_signal unknown.")
-        return delta_temperature_in_celsius
+        return delta_temperature_for_dhw_in_celsius
 
     def get_cost_opex(
         self,

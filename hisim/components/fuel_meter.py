@@ -281,8 +281,8 @@ class FuelMeter(DynamicComponent):
 
         if self.config.fuel_loadtype == lt.LoadTypes.OIL:
 
-            co2_per_unit = emissions_and_cost_factors.oil_costs_in_euro_per_l
-            euro_per_unit = emissions_and_cost_factors.oil_footprint_in_kg_per_l
+            co2_per_unit = emissions_and_cost_factors.oil_footprint_in_kg_per_l
+            euro_per_unit = emissions_and_cost_factors.oil_costs_in_euro_per_l
             opex_cost_per_simulated_period_in_euro = fuel_consumption_in_liter * euro_per_unit
             co2_per_simulated_period_in_kg = fuel_consumption_in_liter * co2_per_unit
 

@@ -268,7 +268,7 @@ class FuelMeter(DynamicComponent):
                     total_heat_consumed_in_kwh = sum(postprocessing_results.iloc[:, index]) * 1e-3
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-            self.my_simulation_parameters.year
+            self.my_simulation_parameters.year, self.my_simulation_parameters.country
         )
         if (
             self.config.heating_value_of_fuel_in_kwh_per_liter is not None
@@ -281,8 +281,8 @@ class FuelMeter(DynamicComponent):
 
         if self.config.fuel_loadtype == lt.LoadTypes.OIL:
 
-            co2_per_unit = emissions_and_cost_factors.oil_costs_in_euro_per_l
-            euro_per_unit = emissions_and_cost_factors.oil_footprint_in_kg_per_l
+            co2_per_unit = emissions_and_cost_factors.oil_footprint_in_kg_per_l
+            euro_per_unit = emissions_and_cost_factors.oil_costs_in_euro_per_l
             opex_cost_per_simulated_period_in_euro = fuel_consumption_in_liter * euro_per_unit
             co2_per_simulated_period_in_kg = fuel_consumption_in_liter * co2_per_unit
 

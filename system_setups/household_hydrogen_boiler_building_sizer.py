@@ -28,7 +28,7 @@ from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptio
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
-from hisim.loadtypes import HeatingSystems
+from hisim.loadtypes import HeatingSystems, ComponentType
 from hisim.building_sizer_utils.interface_configs.modular_household_config import (
     read_in_configs,
     ModularHouseholdConfig,
@@ -76,6 +76,7 @@ def setup_function(
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_hydrogen()
+        my_sim.my_module_config = my_config.to_dict()
         log.warning(
             f"Could not read the modular household config from path '{config_filename}'. Using the hydrogen household default config instead."
         )
@@ -85,10 +86,12 @@ def setup_function(
     energy_system_config_ = my_config.energy_system_config_
 
     # Set Simulation Parameters
+    default_year = 2021
     if my_simulation_parameters is None:
-        year = 2021
-        seconds_per_timestep = 60 * 60
-        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+        seconds_per_timestep = 60 * 15
+        my_simulation_parameters = SimulationParameters.full_year(
+            year=default_year, seconds_per_timestep=seconds_per_timestep
+        )
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         if os.path.exists(cache_dir_path_simuparams):
             my_simulation_parameters.cache_dir_path = cache_dir_path_simuparams
@@ -107,7 +110,8 @@ def setup_function(
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.logging_level = 3
-
+    else:
+        simu_params_year = my_simulation_parameters.year
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================
@@ -118,11 +122,20 @@ def setup_function(
     if heating_system != HeatingSystems.HYDROGEN_HEATING:
         raise ValueError("Heating system needs to be hydrogen heating for this system setup.")
 
-    heating_reference_temperature_in_celsius = -12.2
-    building_set_heating_temperature_in_celsius = 22.0
+    heating_reference_temperature_in_celsius = -7.0
+    building_set_heating_temperature_in_celsius = 20.0
+    building_set_cooling_temperature_in_celsius = 25.0
 
     # Set Weather
     weather_location = arche_type_config_.weather_location
+
+    # Set heat distribution system
+    if energy_system_config_.heat_distribution_system == ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING:
+        my_hds_system = heat_distribution_system.HeatDistributionSystemType.FLOORHEATING
+    elif energy_system_config_.heat_distribution_system == ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR:
+        my_hds_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
+    else:
+        raise ValueError(f"Heat distrbution system not recognized: {energy_system_config_.heat_distribution_system}")
 
     # Set Photovoltaic System
     azimuth = arche_type_config_.pv_azimuth
@@ -176,6 +189,7 @@ def setup_function(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
         set_heating_temperature_in_celsius=building_set_heating_temperature_in_celsius,
+        set_cooling_temperature_in_celsius=building_set_cooling_temperature_in_celsius,
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
@@ -193,9 +207,22 @@ def setup_function(
     my_occupancy_config.household = lpg_households
     my_occupancy_config.cache_dir_path = cache_dir_path_utsp
 
-    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
-    )
+    if my_simulation_parameters.year > 2025:
+
+        my_occ_simulation_parameters = my_simulation_parameters
+        my_occ_simulation_parameters.year = default_year
+        my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+            config=my_occupancy_config, my_simulation_parameters=my_occ_simulation_parameters
+        )
+        print(
+            f"Use lpg profiles from standard year {my_occ_simulation_parameters.year} because future years cause error during utc conversion."
+        )
+        my_simulation_parameters.year = simu_params_year
+    else:
+        my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+            config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+        )
+
     # Add to simulator
     my_sim.add_component(my_occupancy)
 
@@ -230,13 +257,15 @@ def setup_function(
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
     # Build Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
+    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_config_based_on_building_efficiency(
         set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        heating_system=my_hds_system,
+        specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt
+        / my_building_information.scaled_conditioned_floor_area_in_m2,
     )
-    my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
@@ -247,9 +276,6 @@ def setup_function(
     )
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
-
-    # Set sizing option for Hot water Storage
-    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
 
     # Build hydrogen boiler For Space Heating
     my_hydrogen_boiler_config = generic_boiler.GenericBoilerConfig.get_scaled_condensing_hydrogen_boiler_config(
@@ -263,12 +289,11 @@ def setup_function(
     my_sim.add_component(my_hydrogen_boiler, connect_automatically=True)
 
     # Build hydrogen boiler Controller
-    my_hydrogen_boiler_controller_config = (
-        generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-            minimal_thermal_power_in_watt=my_hydrogen_boiler_config.minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=my_hydrogen_boiler_config.maximal_thermal_power_in_watt,
-            with_domestic_hot_water_preparation=True,
-        )
+    my_hydrogen_boiler_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
+        minimal_thermal_power_in_watt=my_hydrogen_boiler_config.minimal_thermal_power_in_watt,
+        maximal_thermal_power_in_watt=my_hydrogen_boiler_config.maximal_thermal_power_in_watt,
+        with_domestic_hot_water_preparation=True,
+        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
     )
     my_hydrogen_boiler_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters,
@@ -290,8 +315,7 @@ def setup_function(
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-        sizing_option=sizing_option,
+        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER,
     )
 
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
@@ -325,7 +349,7 @@ def setup_function(
     # Build Gas Meter
     my_gas_meter = gas_meter.GasMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=gas_meter.GasMeterConfig.get_gas_meter_default_config(),
+        config=gas_meter.GasMeterConfig.get_gas_meter_default_config(gas_loadtype=lt.LoadTypes.GREEN_HYDROGEN),
     )
     my_sim.add_component(my_gas_meter, connect_automatically=True)
 

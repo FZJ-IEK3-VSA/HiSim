@@ -223,7 +223,9 @@ class ComponentType(str, enum.Enum):
     ELECTRICITY_METER = "ElectricityMeter"
     GAS_METER = "GasMeter"
     ENERGY_MANAGEMENT_SYSTEM = "EnergyManagementSystem"
-    HEAT_DISTRIBUTION_SYSTEM = "HeatDistributionSystem"
+    HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING = "Floorheating"
+    HEAT_DISTRIBUTION_SYSTEM_RADIATOR = "Conventional Radiator"
+    NO_HDS = "No HDS"
 
     # different heat_pump types
     HEAT_PUMP_BUILDING = "HeatPumpBuilding"  # Heatpump for heating the house

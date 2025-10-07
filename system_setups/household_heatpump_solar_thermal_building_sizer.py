@@ -29,8 +29,7 @@ from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptio
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
-from hisim.units import Quantity, Celsius, Watt
-from hisim.loadtypes import HeatingSystems
+from hisim.loadtypes import HeatingSystems, ComponentType
 from hisim import log
 
 __authors__ = "Kristina Dabrock, Katharina Rieck"
@@ -74,6 +73,7 @@ def setup_function(
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_heatpump_solar_thermal()
+        my_sim.my_module_config = my_config.to_dict()
         log.warning(
             f"Could not read the modular household config from path '{config_filename}'. Using the heatpump and solar thermal household default config instead."
         )
@@ -83,10 +83,12 @@ def setup_function(
     energy_system_config_ = my_config.energy_system_config_
 
     # Set Simulation Parameters
+    default_year = 2021
     if my_simulation_parameters is None:
-        year = 2021
         seconds_per_timestep = 60 * 15
-        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year(
+            year=default_year, seconds_per_timestep=seconds_per_timestep
+        )
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         if os.path.exists(cache_dir_path_simuparams):
             my_simulation_parameters.cache_dir_path = cache_dir_path_simuparams
@@ -105,6 +107,8 @@ def setup_function(
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.logging_level = 3
+    else:
+        simu_params_year = my_simulation_parameters.year
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================
@@ -116,8 +120,17 @@ def setup_function(
         raise ValueError("Heating system needs to be heat pump solar thermal for this system setup.")
 
     heating_reference_temperature_in_celsius = -7.0
-    building_set_heating_temperature_in_celsius = 22.0
-    hp_controller_mode = 2  # mode 1 for heating/off and mode 2 for heating/cooling/off
+    building_set_heating_temperature_in_celsius = 20.0
+    building_set_cooling_temperature_in_celsius = 25.0
+    hp_controller_mode = 1  # hp controller mode 1 for only heating and off (2 would be heating, cooling, off)
+
+    # Set heat distribution system
+    if energy_system_config_.heat_distribution_system == ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING:
+        my_hds_system = heat_distribution_system.HeatDistributionSystemType.FLOORHEATING
+    elif energy_system_config_.heat_distribution_system == ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR:
+        my_hds_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
+    else:
+        raise ValueError(f"Heat distrbution system not recognized: {energy_system_config_.heat_distribution_system}")
 
     # Set Weather
     weather_location = arche_type_config_.weather_location
@@ -169,13 +182,12 @@ def setup_function(
 
     # =================================================================================================================================
     # Build Basic Components
-
-    # Building
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
         set_heating_temperature_in_celsius=building_set_heating_temperature_in_celsius,
+        set_cooling_temperature_in_celsius=building_set_cooling_temperature_in_celsius,
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
@@ -193,9 +205,22 @@ def setup_function(
     my_occupancy_config.household = lpg_households
     my_occupancy_config.cache_dir_path = cache_dir_path_utsp
 
-    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
-    )
+    if my_simulation_parameters.year > 2025:
+
+        my_occ_simulation_parameters = my_simulation_parameters
+        my_occ_simulation_parameters.year = default_year
+        my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+            config=my_occupancy_config, my_simulation_parameters=my_occ_simulation_parameters
+        )
+        print(
+            f"Use lpg profiles from standard year {my_occ_simulation_parameters.year} because future years cause error during utc conversion."
+        )
+        my_simulation_parameters.year = simu_params_year
+    else:
+        my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+            config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+        )
+
     # Add to simulator
     my_sim.add_component(my_occupancy)
 
@@ -229,12 +254,15 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
-    # Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
+    # Build Heat Distribution Controller
+    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_config_based_on_building_efficiency(
         set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        heating_system=my_hds_system,
+        specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt
+        / my_building_information.scaled_conditioned_floor_area_in_m2,
     )
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
@@ -249,7 +277,8 @@ def setup_function(
 
     # Build Heat Pump Controller for hot water (heating building)
     my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
-        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
+        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
+        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
     )
     my_heatpump_controller_sh_config.mode = hp_controller_mode
 
@@ -268,8 +297,8 @@ def setup_function(
 
     # Build Heat Pump
     my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
-        heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
     my_heatpump_config.with_domestic_hot_water_preparation = True
 
@@ -294,7 +323,6 @@ def setup_function(
     # Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
     )
 

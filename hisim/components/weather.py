@@ -688,9 +688,9 @@ class Weather(Component):
                 WeatherDataSourceEnum.GEOSPHERE,
                 WeatherDataSourceEnum.ERA5
             ):
-                temperature_degc = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")[:-1]
-                wind_speed_m_s = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")[:-1]
-                ghi_w_m2 = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")[:-1]
+                temperature_degc = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
+                wind_speed_m_s = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
+                ghi_w_m2 = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
             else:
                 temperature_degc = self.interpolate(tmy_data["T"], self.my_simulation_parameters.year)
                 wind_speed_m_s = self.interpolate(tmy_data["Wspd"], self.my_simulation_parameters.year)

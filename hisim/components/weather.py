@@ -369,6 +369,13 @@ class LocationEnum(Enum):
         "1267064_42.69_23.30_2019.csv",
         WeatherDataSourceEnum.NSRDB_15MIN,
     )
+    AT_REGION1_ALTITUDE2_PRESENT = (
+        "AT_Region1_Altitude1_Present",
+        "geosphere",
+        "",
+        "TRY_R1_Z1_LL1_A2_S3.xlsx",
+        WeatherDataSourceEnum.GEOSPHERE
+    )
 
 
 @dataclass
@@ -977,9 +984,10 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
                     break
 
     elif source_enum == WeatherDataSourceEnum.GEOSPHERE:
-        location_name = filepath.split('__')[2].split('_')[1]
-        lat = 48.21 # TODO read from file
-        lon = 16.38
+        df = pd.read_excel(filepath)
+        location_name = df.iloc[0, 1]
+        lat = df.iloc[1, 7]
+        lon = df.iloc[0, 7]
 
     else:
         # get the geoposition
@@ -1212,10 +1220,10 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
     return data
 
 def read_geosphere_data(filepath: str, year: int) -> pd.DataFrame:
-    df = pd.read_csv(filepath, sep='\t', skiprows=4)
+    df = pd.read_excel(filepath, skiprows=lambda x: x in [0, 1, 2, 3, 4, 5, 7, 8], usecols="B:H")
     df.index = pd.date_range(f"{year}-01-01 00:00:00", periods=8760, freq="H", tz="UTC")
-    df = df.drop(columns=["Monat", "Tag", "Stunde", "RF[%]"])
-    df = df.rename(columns={"LT[degC]": "T", "KWSU[Wm-2]": "GHI", "WG[ms-1]": "Wspd"})
+    df = df.drop(columns=["Monat", "Tag", "Stunde", "RF"])
+    df = df.rename(columns={"LT": "T", "KWSU": "GHI", "WG": "Wspd"})
     return df
 
 def calculate_direct_normal_radiation(

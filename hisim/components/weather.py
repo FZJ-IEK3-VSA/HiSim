@@ -676,12 +676,18 @@ class Weather(Component):
             # In order to make sure that the resampled data covers the entire
             # time period that, one data point is added at the end of the time
             # series. Otherwise, the interpolated data would end, for example,
-            # at 23:00 and not at 23:59. This last point is removed after 
+            # at 23:00 and not at 23:59. This last point is removed after
             # interpolation.
             delta = tmy_data.index[-1] - tmy_data.index[-2]
             tmy_data.loc[tmy_data.index[-1] + delta] = None
 
-            if self.weather_config.data_source in (WeatherDataSourceEnum.NSRDB_15MIN, WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN, WeatherDataSourceEnum.GEOSPHERE, WeatherDataSourceEnum.ERA5):
+            if self.weather_config.data_source in (
+                WeatherDataSourceEnum.NSRDB_15MIN,
+                WeatherDataSourceEnum.DWD_10MIN,
+                WeatherDataSourceEnum.DWD_15MIN,
+                WeatherDataSourceEnum.GEOSPHERE,
+                WeatherDataSourceEnum.ERA5
+            ):
                 temperature_degc = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")[:-1]
                 wind_speed_m_s = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")[:-1]
                 ghi_w_m2 = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")[:-1]
@@ -698,7 +704,12 @@ class Weather(Component):
             azimuth = solpos["azimuth"]
             apparent_zenith = solpos["apparent_zenith"]
 
-            if self.weather_config.data_source in (WeatherDataSourceEnum.NSRDB_15MIN, WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN, WeatherDataSourceEnum.ERA5):
+            if self.weather_config.data_source in (
+                WeatherDataSourceEnum.NSRDB_15MIN,
+                WeatherDataSourceEnum.DWD_10MIN,
+                WeatherDataSourceEnum.DWD_15MIN,
+                WeatherDataSourceEnum.ERA5
+            ):
                 dni_w_m2 = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
                 dhi_w_m2 = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
                 pressure_hpa = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
@@ -1219,12 +1230,15 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
 
     return data
 
+
 def read_geosphere_data(filepath: str, year: int) -> pd.DataFrame:
+    """Reads data provided for Austria by Geosphere Austria."""
     df = pd.read_excel(filepath, skiprows=lambda x: x in [0, 1, 2, 3, 4, 5, 7, 8], usecols="B:H")
     df.index = pd.date_range(f"{year}-01-01 00:00:00", periods=8760, freq="H", tz="UTC")
     df = df.drop(columns=["Monat", "Tag", "Stunde", "RF"])
     df = df.rename(columns={"LT": "T", "KWSU": "GHI", "WG": "Wspd"})
     return df
+
 
 def calculate_direct_normal_radiation(
     direct_horizontal_irradation: pd.Series,

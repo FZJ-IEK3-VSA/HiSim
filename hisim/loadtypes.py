@@ -128,6 +128,9 @@ class Units(str, enum.Enum):
     # Distance
     METER = "m"
 
+    # Area
+    SQUARE_METER = "m2"
+
     # Energy
     WATT_HOUR = "Wh"
     KWH = "kWh"
@@ -136,7 +139,7 @@ class Units(str, enum.Enum):
 
     # Volume
     LITER = "L"
-    CUBICMETERS = "m^3"
+    CUBICMETERS = "m3"
 
     # Volume per time
     LITER_PER_TIMESTEP = "Liter per timestep"
@@ -194,6 +197,11 @@ class ComponentType(str, enum.Enum):
     PREDICTIVE_CONTROLLER = "PredictiveControllerforSmartDevices"
     HEAT_PUMP = "HeatPump"
     GAS_HEATER = "GasHeater"
+    OIL_HEATER = "OilHeater"
+    PELLET_HEATER = "PelletHeater"
+    WOOD_CHIP_HEATER = "WoodChipHeater"
+    HYDROGEN_HEATER = "HydrogenHeater"
+    DISTRICT_HEATING = "DistrictHeating"
     BATTERY = "Battery"
     CAR_BATTERY = "CarBattery"
     CAR = "Car"
@@ -202,13 +210,22 @@ class ComponentType(str, enum.Enum):
     CHP = "CHP"
     H2_STORAGE = "H2Storage"
     ELECTRIC_VEHICLE = "ElectricVehicle"
+    ELECTRIC_HEATER = "ElectricHeater"
     ELECTRIC_HEATING_SH = "ElectricBoilerSH"  # Electric heating for space heating
     ELECTRIC_HEATING_DHW = "ElectricBoilerDHW"  # Electric heating for domnestic hot water
     BOILER = "Boiler"
     BUFFER = "Buffer"
+    THERMAL_ENERGY_STORAGE = "ThermalEnergyStorage"
     HEATERS = [HEAT_PUMP, GAS_HEATER]
     RESIDENTS = "Residents"
     BUILDINGS = "Buildings"
+    SOLAR_THERMAL_SYSTEM = "SolarThermalSystem"
+    ELECTRICITY_METER = "ElectricityMeter"
+    GAS_METER = "GasMeter"
+    ENERGY_MANAGEMENT_SYSTEM = "EnergyManagementSystem"
+    HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING = "Floorheating"
+    HEAT_DISTRIBUTION_SYSTEM_RADIATOR = "Conventional Radiator"
+    NO_HDS = "No HDS"
 
     # different heat_pump types
     HEAT_PUMP_BUILDING = "HeatPumpBuilding"  # Heatpump for heating the house

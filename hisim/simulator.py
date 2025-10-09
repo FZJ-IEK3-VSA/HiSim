@@ -82,7 +82,7 @@ class Simulator:
 
         # set the wrapper
         wrap = ComponentWrapper(component, is_cachable, connect_automatically=connect_automatically)
-        wrap.register_component_outputs(self.all_outputs)
+        wrap.register_component_outputs(self.all_outputs, wrapped_components_so_far=self.wrapped_components)
         self.wrapped_components.append(wrap)
         if component.component_name in self.config_dictionary:
             raise ValueError("duplicate component name : " + component.component_name)
@@ -246,6 +246,7 @@ class Simulator:
             + " outputs."
         )
         all_result_lines = []
+        log.information("Starting simulation for year " + str(self._simulation_parameters.year))
         log.information("Starting simulation for " + str(self._simulation_parameters.timesteps) + " timesteps")
         lastmessage = datetime.datetime.now()
         last_step: int = 0

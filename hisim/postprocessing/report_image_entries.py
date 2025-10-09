@@ -6,7 +6,6 @@ from typing import Optional
 
 @dataclass()
 class SystemChartEntry:
-
     """Class for system charts entries."""
 
     path: str
@@ -14,7 +13,6 @@ class SystemChartEntry:
 
 
 class ReportImageEntry:
-
     """Class for report images."""
 
     def __init__(

@@ -21,10 +21,10 @@ from hisim.components.generic_boiler import (
         "expected_mode",
     ],
     [
-        (HeatingMode.OFF, 0, 60, 60, HeatingMode.OFF),
+        (HeatingMode.OFF, 0, 65, 60, HeatingMode.OFF),
         (HeatingMode.OFF, 0, 40, 60, HeatingMode.SPACE_HEATING),
         (HeatingMode.OFF, 0, 40, 40, HeatingMode.DOMESTIC_HOT_WATER),
-        (HeatingMode.OFF, 0, 40, 54, HeatingMode.DOMESTIC_HOT_WATER),
+        (HeatingMode.OFF, 0, 65, 50, HeatingMode.DOMESTIC_HOT_WATER),
         (HeatingMode.OFF, 0, 0, 0, HeatingMode.DOMESTIC_HOT_WATER),
         (HeatingMode.SPACE_HEATING, 0, 60, 60, HeatingMode.OFF),
         (HeatingMode.DOMESTIC_HOT_WATER, 0, 60, 60, HeatingMode.OFF),
@@ -52,7 +52,7 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature_and_time(
     )
     testee.controller_mode = operating_mode
     testee.warm_water_temperature_aim_in_celsius = 60
-    testee.config.dhw_hysteresis_offset = 5
+    testee.config.hysteresis_water_temperature_offset = 5
 
     daily_avg_outside_temperature = 10
     heating_flow_temperature = 55
@@ -89,7 +89,7 @@ def given_default_testee(
     config.minimum_resting_time_in_seconds = config_overwrite.get(
         "minimum_resting_time_in_seconds", 0
     )
-    config.offset = 0
+    config.hysteresis_water_temperature_offset = 0
     testee = GenericBoilerController(
         simulationparameters,
         config,

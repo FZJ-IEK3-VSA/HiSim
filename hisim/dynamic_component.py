@@ -43,12 +43,13 @@ class DynamicConnectionOutput:
 
     """Describes a single component output for dynamic component."""
 
-    source_component_class: str
+    source_component_label: str
     source_output_field_name: str
     source_tags: list
     source_weight: int
     source_load_type: lt.LoadTypes
     source_unit: lt.Units  # noqa
+    source_component_class: Optional[str]
 
 
 def search_and_compare(
@@ -113,6 +114,7 @@ class DynamicComponent(Component):
         source_unit: lt.Units,
         source_weight: int,
         output_description: str,
+        source_component_class: Optional[str] = None,
     ) -> ComponentOutput:
         """Adds an output channel to a component."""
         # Label Output and generate variable
@@ -129,14 +131,20 @@ class DynamicComponent(Component):
             unit=source_unit,
             sankey_flow_direction=True,
             output_description=output_description,
+            source_component_class=source_component_class
         )
         self.outputs.append(myoutput)
         setattr(self, label, myoutput)
 
         # Define Output as DynamicConnectionOutput
+        # if source_component_class is None:
+        #     source_component_class = label
+        # else:
+        #     source_component_class = source_component_class + label
         self.my_component_outputs.append(
             DynamicConnectionOutput(
-                source_component_class=label,
+                source_component_label=label,
+                source_component_class=source_component_class,
                 source_output_field_name=source_output_name + label,
                 source_tags=source_tags,
                 source_load_type=source_load_type,
@@ -253,14 +261,15 @@ class DynamicComponent(Component):
     def add_dynamic_default_connections(self, connections: List[DynamicComponentConnection]) -> None:
         """Adds a dynamic default connection list definition."""
 
-        component_name = connections[0].source_class_name
+        source_component_name = connections[0].source_class_name
+
         for connection in connections:
-            if connection.source_class_name != component_name:
+            if connection.source_class_name != source_component_name:
                 raise ValueError("Trying to add dynamic connections to different components in one go.")
-        self.dynamic_default_connections[component_name] = connections
+        self.dynamic_default_connections[source_component_name] = connections
         log.trace(
             "added dynamic default connections for connections from : "
-            + component_name
+            + source_component_name
             + "\n"
             + str(self.dynamic_default_connections)
         )
@@ -316,7 +325,7 @@ class DynamicComponent(Component):
                 tags_to_search=tags,
                 tags_of_component=element.source_tags,
             ):
-                return getattr(self, element.source_component_class)
+                return getattr(self, element.source_component_label)
 
         return None
 
@@ -333,7 +342,7 @@ class DynamicComponent(Component):
                 tags_to_search=tags,
                 tags_of_component=element.source_tags,
             ):
-                outputs.append(getattr(self, element.source_component_class))
+                outputs.append(getattr(self, element.source_component_label))
             else:
                 continue
 

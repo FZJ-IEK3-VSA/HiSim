@@ -164,7 +164,7 @@ def simulation_for_one_timestep(
 
     log.information("Building code" + str(my_residence_config.building_code))
     log.information(
-        "Rooftop area " + str(my_residence_information.scaled_rooftop_area_in_m2)
+        "Rooftop area " + str(my_residence_information.roof_area_in_m2)
     )
     log.information(
         "Floor area "
@@ -179,14 +179,10 @@ def simulation_for_one_timestep(
         "Number of apartmens in building "
         + str(my_residence_information.number_of_apartments)
     )
-    log.information(
-        "Number of storeys in building "
-        + str(my_residence_information.number_of_storeys)
-    )
 
     # Set PV
     my_pv_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-        rooftop_area_in_m2=my_residence_information.scaled_rooftop_area_in_m2
+        rooftop_area_in_m2=my_residence_information.roof_area_in_m2
     )
 
     # Set hplib

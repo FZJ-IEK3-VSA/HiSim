@@ -84,8 +84,8 @@ class EMSDistrictConfig(cp.ConfigBase):
             strategy=strategy,
             limit_to_shave=0,
             building_indoor_temperature_offset_value=2,
-            domestic_hot_water_storage_temperature_offset_value=20,
-            space_heating_water_storage_temperature_offset_value=25,
+            domestic_hot_water_storage_temperature_offset_value=10,
+            space_heating_water_storage_temperature_offset_value=10,
         )
         return config
 

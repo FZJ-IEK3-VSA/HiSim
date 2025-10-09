@@ -1,4 +1,5 @@
-""" Charts for a single day. """
+"""Charts for a single day."""
+
 # clean
 import os
 from typing import Any
@@ -11,7 +12,6 @@ from hisim.postprocessing.report_image_entries import ReportImageEntry
 
 
 class ChartSingleDay(Chart, ChartFontsAndSize):
-
     """For making visualisations for a single day."""
 
     def __init__(
@@ -57,10 +57,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         self.day = day
         self.data = data
         self.plot_title: str
-        self.filename = (
-            f"{self.type.lower()}_m"
-            f"{self.month}_d{self.day}{self.figure_format}"
-        )
+        self.filename = f"{self.type.lower()}_m" f"{self.month}_d{self.day}{self.figure_format}"
 
         self.filepath = os.path.join(self.directory_path, self.filename)
         self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)
@@ -106,7 +103,11 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         single_day_data, self.units = self.rescale_y_axis(y_values=single_day_data, units=self.units)
         plt.title(self.title, fontsize=self.fontsize_title)
         plt.plot(
-            single_day_data.index, single_day_data, color="green", linewidth=1.0, label=self.property,
+            single_day_data.index,
+            single_day_data,
+            color="green",
+            linewidth=1.0,
+            label=self.property,
         )
         plt.grid(True)
         plt.xlabel("Time [hours]", fontsize=self.fontsize_label)

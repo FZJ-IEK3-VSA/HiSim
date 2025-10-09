@@ -51,10 +51,11 @@ def simulate_simple_water_storage(
         heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
         heat_exchanger_is_present=False,
         position_hot_water_storage_in_system=simple_water_storage.PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE,
-        co2_footprint=100,
-        cost=volume_heating_water_storage_in_liter * 14.51,
-        lifetime=100,
-        maintenance_cost_as_percentage_of_investment=0.0,
+        device_co2_footprint_in_kg=100,
+        investment_costs_in_euro=volume_heating_water_storage_in_liter * 14.51,
+        lifetime_in_years=100,
+        maintenance_costs_in_euro_per_year=0.0,
+        subsidy_as_percentage_of_investment_costs=0.0,
     )
     my_simple_heat_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

@@ -1,4 +1,4 @@
-"""Test for electricity meter."""
+"""Test for gas meter."""
 
 # clean
 
@@ -51,7 +51,8 @@ def test_house(
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
 
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON)
         my_simulation_parameters.logging_level = 4
@@ -118,6 +119,7 @@ def test_house(
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
@@ -145,8 +147,7 @@ def test_house(
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
+        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER,
     )
     my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -208,14 +209,14 @@ def test_house(
 
     jsondata = jsondata["BUI1"]
 
-    gas_consumption_in_kilowatt_hour = jsondata["Gas Meter"][f"Total {my_gas_meter_config.gas_loadtype.value} demand from grid"].get("value")
+    gas_consumption_in_kilowatt_hour = jsondata["Gas Meter"]["Total gas demand from grid"].get("value")
     gas_consumption_of_boiler_in_kilowatt_hour = jsondata["Gas Boiler"][
         f"Total {my_gas_heater.energy_carrier.value} consumption (energy)"
     ].get("value")
 
-    opex_costs_for_gas_in_euro = jsondata["Gas Meter"][f"Opex costs of {my_gas_meter_config.gas_loadtype.value} consumption from grid"].get("value")
+    opex_costs_for_gas_in_euro = jsondata["Gas Meter"]["Opex costs of gas consumption from grid"].get("value")
 
-    co2_footprint_due_to_gas_use_in_kg = jsondata["Gas Meter"][f"CO2 footprint of {my_gas_meter_config.gas_loadtype.value} consumption from grid"].get("value")
+    co2_footprint_due_to_gas_use_in_kg = jsondata["Gas Meter"]["CO2 footprint of gas consumption from grid"].get("value")
 
     log.information(
         f"Total {my_gas_meter_config.gas_loadtype.value} consumption [kWh] " + str(gas_consumption_of_boiler_in_kilowatt_hour)

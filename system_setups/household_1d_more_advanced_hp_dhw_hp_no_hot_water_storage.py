@@ -27,7 +27,6 @@ from hisim.components import electricity_meter
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim import utils
-from hisim.units import Quantity, Watt, Celsius, Seconds, KilogramPerSecond
 
 __authors__ = ["Jonas Hoppe"]
 __copyright__ = ""
@@ -80,9 +79,7 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
 
         household_config = cls.get_scaled_default(building_config)
 
-        household_config.hp_config.set_thermal_output_power_in_watt = Quantity(
-            6000, Watt  # default value leads to switching on-off very often
-        )
+        household_config.hp_config.set_thermal_output_power_in_watt = 6000
         household_config.hp_config.with_domestic_hot_water_preparation = False
 
         household_config.dhw_storage_config.volume = 250  # default(volume = 230) leads to an error
@@ -134,6 +131,7 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                     position_hot_water_storage_in_system=heat_distribution_system.PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR,
+                    heating_system=hds_controller_config.heating_system,
                 )
             ),
             hp_controller_config=more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
@@ -142,13 +140,9 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
                 lower_temperature_offset_for_state_conditions_in_celsius=0,
             ),
             hp_config=more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-                heating_load_of_building_in_watt=Quantity(
-                    my_building_information.max_thermal_building_demand_in_watt, Watt
-                ),
-                heating_reference_temperature_in_celsius=Quantity(
-                    my_building_information.heating_reference_temperature_in_celsius, Celsius
-                ),
-                massflow_nominal_secondary_side_in_kg_per_s=Quantity(0.333, KilogramPerSecond),
+                heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+                heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius,
+                massflow_nominal_secondary_side_in_kg_per_s=0.333,
             ),
             dhw_heatpump_config=generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
                 number_of_apartments=int(my_building_information.number_of_apartments)
@@ -166,12 +160,8 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
         # adjust HeatPump
         household_config.hp_config.group_id = 1  # use modulating heatpump as default
         household_config.hp_controller_config.mode = 2  # use heating and cooling as default
-        household_config.hp_config.minimum_idle_time_in_seconds = Quantity(
-            900, Seconds  # default value leads to switching on-off very often
-        )
-        household_config.hp_config.minimum_running_time_in_seconds = Quantity(
-            900, Seconds  # default value leads to switching on-off very often
-        )
+        household_config.hp_config.minimum_idle_time_in_seconds = 900
+        household_config.hp_config.minimum_running_time_in_seconds = 900
         household_config.hp_config.with_domestic_hot_water_preparation = False
         household_config.hp_config.position_hot_water_storage_in_system = (
             more_advanced_heat_pump_hplib.PositionHotWaterStorageInSystemSetup.NO_STORAGE
@@ -187,7 +177,7 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
             set_heating_threshold_outside_temperature_in_celsius
         )
 
-        household_config.hp_config.flow_temperature_in_celsius = Quantity(35, Celsius)  # Todo: check value
+        household_config.hp_config.flow_temperature_in_celsius = 35
 
         return household_config
 
@@ -242,6 +232,7 @@ def setup_function(
         my_simulation_parameters = SimulationParameters.one_week_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build heat Distribution System Controller
@@ -391,10 +382,31 @@ def setup_function(
         my_heat_pump.component_name,
         my_heat_pump.MassFlowOutputSH,
     )
-
+    # Connect Outputs to Electricity Meter manually because MoreAdvancedHeatPump has no dhw preparation
+    # which causes confusion with the default connections of the ElectricityMeter
     my_electricity_meter.add_component_input_and_connect(
         source_object_name=my_heat_pump.component_name,
-        source_component_output=my_heat_pump.ElectricalInputPowerTotal,
+        source_component_output=my_heat_pump.ElectricalInputPowerSH,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
+        source_weight=999,
+    )
+    my_electricity_meter.add_component_input_and_connect(
+        source_object_name=my_domnestic_hot_water_heatpump.component_name,
+        source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
+        source_weight=999,
+    )
+    my_electricity_meter.add_component_input_and_connect(
+        source_object_name=my_occupancy.component_name,
+        source_component_output=my_occupancy.ElectricalPowerConsumption,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[
@@ -414,6 +426,6 @@ def setup_function(
     my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
-    my_sim.add_component(my_electricity_meter, connect_automatically=True)
+    my_sim.add_component(my_electricity_meter, connect_automatically=False)
     for my_car in my_cars:
         my_sim.add_component(my_car)

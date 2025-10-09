@@ -119,7 +119,7 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
                 predictive=False,
             ),
             pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-                rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
+                rooftop_area_in_m2=my_building_information.roof_area_in_m2
             ),
             building_config=building_config,
             hds_controller_config=hds_controller_config,
@@ -127,6 +127,7 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+                    heating_system=hds_controller_config.heating_system,
                 )
             ),
             hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
@@ -145,7 +146,6 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
             simple_hot_water_storage_config=(
                 simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
                     max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-                    temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
                     sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
                 )
             ),

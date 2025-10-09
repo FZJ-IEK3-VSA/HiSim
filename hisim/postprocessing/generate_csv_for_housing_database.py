@@ -1,6 +1,6 @@
 # clean
 
-""" Computes all relevant parameters for data base of Energy System Models, as well as parameters needed for validation of the building types."""
+"""Computes all relevant parameters for data base of Energy System Models, as well as parameters needed for validation of the building types."""
 
 import datetime as dt
 import os

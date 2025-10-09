@@ -93,6 +93,6 @@ class ObsoleteDynamicComponent(Component):
                 tags_to_search=tags,
                 tags_of_component=element.source_tags,
             ):
-                stsv.set_output_value(getattr(self, element.source_component_class), output_value)
+                stsv.set_output_value(getattr(self, element.source_component_label), output_value)
             else:
                 continue

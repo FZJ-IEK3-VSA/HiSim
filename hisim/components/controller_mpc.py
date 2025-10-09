@@ -411,7 +411,7 @@ class MpcController(cp.Component):
         self.optimal_cost = self.mpcconfig.optimal_cost
         self.revenues = self.mpcconfig.revenues
         self.air_conditioning_electricity = self.mpcconfig.air_conditioning_electricity
-        self.cost_optimal_temperature_set_point = self.mpcconfig.cost_optimal_temperature_set_point
+        self.cost_optimal_temperature_set_point = self.mpcconfig.investment_costs_in_euro_optimal_temperature_set_point
         self.pv2load = self.mpcconfig.pv2load
         self.electricity_from_grid = self.mpcconfig.electricity_from_grid
         self.electricity_to_grid = self.mpcconfig.electricity_to_grid

@@ -13,7 +13,6 @@ from hisim.components import simple_water_storage
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import heat_distribution_system
 from hisim import loadtypes as lt
-from hisim.units import Quantity, Celsius, Watt
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -142,11 +141,11 @@ def setup_function(
 
     # Build Heat Pump
     my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
-        heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
     my_heatpump_config.group_id = group_id
-    my_heatpump_config.flow_temperature_in_celsius = Quantity(float(flow_temperature_in_celsius), Celsius)
+    my_heatpump_config.flow_temperature_in_celsius = float(flow_temperature_in_celsius)
     my_heatpump_config.with_domestic_hot_water_preparation = with_domestic_hot_water_preparation
 
     my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
@@ -159,6 +158,7 @@ def setup_function(
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
     )
 
@@ -171,7 +171,6 @@ def setup_function(
     my_hot_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_heatpump_config.set_thermal_output_power_in_watt.value,
         sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
-        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
     )
 
     my_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(

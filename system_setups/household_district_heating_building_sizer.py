@@ -21,13 +21,14 @@ from hisim.components import (
     generic_district_heating,
     electricity_meter,
     simple_water_storage,
+    fuel_meter,
 )
 from hisim.components.heat_distribution_system import PositionHotWaterStorageInSystemSetup
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
-from hisim.loadtypes import HeatingSystems
+from hisim.loadtypes import HeatingSystems, ComponentType
 from hisim.building_sizer_utils.interface_configs.modular_household_config import (
     read_in_configs,
     ModularHouseholdConfig,
@@ -74,6 +75,7 @@ def setup_function(
 
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_district_heating()
+        my_sim.my_module_config = my_config.to_dict()
         log.warning(
             f"Could not read the modular household config from path '{config_filename}'. Using the district heating household default config instead."
         )
@@ -83,10 +85,12 @@ def setup_function(
     energy_system_config_ = my_config.energy_system_config_
 
     # Set Simulation Parameters
+    default_year = 2021
     if my_simulation_parameters is None:
-        year = 2021
         seconds_per_timestep = 60 * 15
-        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year(
+            year=default_year, seconds_per_timestep=seconds_per_timestep
+        )
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         if os.path.exists(cache_dir_path_simuparams):
             my_simulation_parameters.cache_dir_path = cache_dir_path_simuparams
@@ -100,12 +104,13 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER
         )
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
-        # my_simulation_parameters.logging_level = 4
-
+        my_simulation_parameters.logging_level = 3
+    else:
+        simu_params_year = my_simulation_parameters.year
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================
@@ -118,8 +123,17 @@ def setup_function(
             f"Heating system was set as {heating_system} but needs to be {HeatingSystems.DISTRICT_HEATING.value} for this system setup."
         )
 
-    heating_reference_temperature_in_celsius = -12.2
-    building_set_heating_temperature_in_celsius = 22.0
+    heating_reference_temperature_in_celsius = -7.0
+    building_set_heating_temperature_in_celsius = 20.0
+    building_set_cooling_temperature_in_celsius = 25.0
+
+    # Set heat distribution system
+    if energy_system_config_.heat_distribution_system == ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING:
+        my_hds_system = heat_distribution_system.HeatDistributionSystemType.FLOORHEATING
+    elif energy_system_config_.heat_distribution_system == ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR:
+        my_hds_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
+    else:
+        raise ValueError(f"Heat distrbution system not recognized: {energy_system_config_.heat_distribution_system}")
 
     # Set Weather
     weather_location = arche_type_config_.weather_location
@@ -176,6 +190,7 @@ def setup_function(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
         set_heating_temperature_in_celsius=building_set_heating_temperature_in_celsius,
+        set_cooling_temperature_in_celsius=building_set_cooling_temperature_in_celsius,
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
@@ -193,9 +208,22 @@ def setup_function(
     my_occupancy_config.household = lpg_households
     my_occupancy_config.cache_dir_path = cache_dir_path_utsp
 
-    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
-    )
+    if my_simulation_parameters.year > 2025:
+
+        my_occ_simulation_parameters = my_simulation_parameters
+        my_occ_simulation_parameters.year = default_year
+        my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+            config=my_occupancy_config, my_simulation_parameters=my_occ_simulation_parameters
+        )
+        print(
+            f"Use lpg profiles from standard year {my_occ_simulation_parameters.year} because future years cause error during utc conversion."
+        )
+        my_simulation_parameters.year = simu_params_year
+    else:
+        my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+            config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+        )
+
     # Add to simulator
     my_sim.add_component(my_occupancy)
 
@@ -208,7 +236,7 @@ def setup_function(
     # Build PV
     if pv_power_in_watt is None:
         my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-            rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
+            rooftop_area_in_m2=my_building_information.roof_area_in_m2,
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             location=weather_location,
         )
@@ -230,13 +258,15 @@ def setup_function(
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
     # Build Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
+    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_config_based_on_building_efficiency(
         set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        heating_system=my_hds_system,
+        specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt
+        / my_building_information.scaled_conditioned_floor_area_in_m2,
     )
-    # my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
@@ -249,20 +279,24 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build district heating controller
-    my_district_heating_controller_sh_config = (
-        generic_district_heating.DistrictHeatingControllerConfig.get_default_district_heating_controller_config(
-            with_domestic_hot_water_preparation=True
-        )
+    my_district_heating_controller_sh_config = generic_district_heating.DistrictHeatingControllerConfig.get_default_district_heating_controller_config(
+        with_domestic_hot_water_preparation=True,
+        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
+        parallel_space_heating_and_dhw_option=True,
     )
+
     my_district_heating_controller = generic_district_heating.DistrictHeatingController(
-        my_simulation_parameters=my_simulation_parameters, config=my_district_heating_controller_sh_config
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_district_heating_controller_sh_config,
     )
     my_sim.add_component(my_district_heating_controller, connect_automatically=True)
 
     # Build district heating For Space Heating and DHW
     my_district_heating_sh_config = generic_district_heating.DistrictHeatingConfig.get_default_district_heating_config(
-        with_domestic_hot_water_preparation=True
+        with_domestic_hot_water_preparation=True,
+        connected_load_w=my_building_information.max_thermal_building_demand_in_watt,
     )
+
     my_district_heating = generic_district_heating.DistrictHeating(
         config=my_district_heating_sh_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -282,6 +316,7 @@ def setup_function(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX,
+            heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
@@ -291,6 +326,18 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
 
+    # Build Heating Meter
+    my_fuel_meter_config = fuel_meter.FuelMeterConfig.get_fuel_meter_default_config(
+        fuel_loadtype=lt.LoadTypes.DISTRICTHEATING
+    )
+    my_fuel_meter = fuel_meter.FuelMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_fuel_meter_config,
+    )
+
+    # Add to simulator
+    my_sim.add_component(my_fuel_meter, connect_automatically=True)
+
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
@@ -298,7 +345,7 @@ def setup_function(
     )
 
     # use ems and battery only when PV is used
-    if share_of_maximum_pv_potential != 0:
+    if share_of_maximum_pv_potential != 0 and energy_system_config_.use_battery_and_ems:
 
         # Build EMS
         my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
@@ -322,7 +369,7 @@ def setup_function(
         loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
             source_output_name="LoadingPowerInputForBattery_",
             source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-            source_weight=4,
+            source_weight=5,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Battery Control. ",

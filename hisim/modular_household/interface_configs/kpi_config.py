@@ -17,9 +17,9 @@ class KPIConfigModular:
     #: amount of electricity injected to the grid during the simulation period, given in kWh
     injection: float
     #: annual cost for investment and operation in the considered technology, given in euros
-    economic_cost: float
+    economic_investment_costs_in_euro: float
     #: annual C02 emmissions due to the construction and operation of the considered technology, given in kg
-    co2_cost: float
+    co2_investment_costs_in_euro: float
 
     def get_kpi(self) -> float:
         """Weights all kpis to get one value evaluating the performance of one building configuration.

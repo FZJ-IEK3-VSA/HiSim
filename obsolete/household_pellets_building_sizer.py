@@ -316,7 +316,6 @@ def setup_function(
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         sizing_option=sizing_option,
     )
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
@@ -395,7 +394,7 @@ def setup_function(
         car_battery.connect_only_predefined_connections(car_battery_controller)
 
     # use ems and battery only when PV is used
-    if share_of_maximum_pv_potential != 0:
+    if share_of_maximum_pv_potential != 0 and energy_system_config_.use_battery_and_ems:
 
         # Build EMS
         my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()

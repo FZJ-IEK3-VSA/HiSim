@@ -142,7 +142,7 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
             ),
             pv_config=(
                 generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-                    rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2, location=weather_location
+                    rooftop_area_in_m2=my_building_information.roof_area_in_m2, location=weather_location
                 )
                 if options.photovoltaic
                 else None
@@ -154,6 +154,7 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+                    heating_system=hds_controller_config.heating_system,
                 )
             ),
             gas_heater_controller_config=(

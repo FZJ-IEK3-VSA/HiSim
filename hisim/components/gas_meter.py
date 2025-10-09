@@ -20,6 +20,7 @@ from hisim.dynamic_component import (
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
 
 @dataclass_json
@@ -34,20 +35,37 @@ class GasMeterConfig(cp.ConfigBase):
 
     building_name: str
     name: str
-    total_energy_from_grid_in_kwh: None
+    total_energy_from_grid_in_kwh: float
     gas_loadtype: lt.LoadTypes
+    #: CO2 footprint of investment in kg
+    device_co2_footprint_in_kg: Optional[float]
+    #: cost for investment in Euro
+    investment_costs_in_euro: Optional[float]
+    #: lifetime in years
+    lifetime_in_years: Optional[float]
+    # maintenance cost in euro per year
+    maintenance_costs_in_euro_per_year: Optional[float]
+    # subsidies as percentage of investment costs
+    subsidy_as_percentage_of_investment_costs: Optional[float]
 
     @classmethod
     def get_gas_meter_default_config(
         cls,
         building_name: str = "BUI1",
+        gas_loadtype: lt.LoadTypes = lt.LoadTypes.GAS
     ) -> Any:
         """Gets a default GasMeter."""
         return GasMeterConfig(
             building_name=building_name,
             name="GasMeter",
-            total_energy_from_grid_in_kwh=None,
-            gas_loadtype=lt.LoadTypes.GAS
+            total_energy_from_grid_in_kwh=0.0,
+            gas_loadtype=gas_loadtype,
+            # capex and device emissions are calculated in get_cost_capex function by default
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
         )
 
 
@@ -158,7 +176,6 @@ class GasMeter(DynamicComponent):
         )
 
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_gas_heater())
-        # self.add_dynamic_default_connections(self.get_default_connections_from_generic_dhw_gas_heater())
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_heat_source())
 
     def get_default_connections_from_generic_gas_heater(
@@ -323,7 +340,7 @@ class GasMeter(DynamicComponent):
                     total_energy_from_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-            self.my_simulation_parameters.year
+            self.my_simulation_parameters.year, self.my_simulation_parameters.country
         )
         if self.config.gas_loadtype == lt.LoadTypes.GAS:
             co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
@@ -352,25 +369,36 @@ class GasMeter(DynamicComponent):
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         total_energy_from_grid_in_kwh: Optional[float] = None
+        total_energy_consumption_in_kwh: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.load_type == self.config.gas_loadtype and output.unit == lt.Units.WATT_HOUR:
                 if output.field_name == self.GasFromGrid:
                     total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
-                    break
+                elif output.field_name == self.GasConsumption:
+                    total_energy_consumption_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
 
         total_energy_from_grid_in_kwh_entry = KpiEntry(
-            name=f"Total {self.config.gas_loadtype.value} demand from grid",
+            name="Total gas demand from grid",
             unit="kWh",
             value=total_energy_from_grid_in_kwh,
             tag=KpiTagEnumClass.GAS_METER,
             description=self.component_name,
         )
         list_of_kpi_entries.append(total_energy_from_grid_in_kwh_entry)
+        total_energy_consumption_in_kwh_entry = KpiEntry(
+            name="Total gas consumption",
+            unit="kWh",
+            value=total_energy_consumption_in_kwh,
+            tag=KpiTagEnumClass.GAS_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(total_energy_consumption_in_kwh_entry)
+
         # try to get opex costs
         opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
         opex_costs_in_euro_entry = KpiEntry(
-            name=f"Opex costs of {self.config.gas_loadtype.value} consumption from grid",
+            name="Opex costs of gas consumption from grid",
             unit="Euro",
             value=opex_costs.opex_energy_cost_in_euro,
             tag=KpiTagEnumClass.GAS_METER,
@@ -378,7 +406,7 @@ class GasMeter(DynamicComponent):
         )
         list_of_kpi_entries.append(opex_costs_in_euro_entry)
         co2_footprint_in_kg_entry = KpiEntry(
-            name=f"CO2 footprint of {self.config.gas_loadtype.value} consumption from grid",
+            name="CO2 footprint of gas consumption from grid",
             unit="kg",
             value=opex_costs.co2_footprint_in_kg,
             tag=KpiTagEnumClass.GAS_METER,
@@ -391,7 +419,23 @@ class GasMeter(DynamicComponent):
     @staticmethod
     def get_cost_capex(config: GasMeterConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
-        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+        component_type = lt.ComponentType.GAS_METER
+        kpi_tag = (
+            KpiTagEnumClass.GAS_METER
+        )
+        unit = lt.Units.ANY
+        size_of_energy_system = 1
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
+        )
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
+
         return capex_cost_data_class
 
 

@@ -178,7 +178,7 @@ class GenericBuilding(cp.Component):
         # Build PV
         if pv_power_in_watt is None:
             my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-                rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
+                rooftop_area_in_m2=my_building_information.roof_area_in_m2,
                 share_of_maximum_pv_potential=share_of_maximum_pv_potential,
                 location=location,
                 building_name=building_name,
@@ -297,11 +297,12 @@ class GenericBuilding(cp.Component):
         my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
 
         # Build Heat Water Storage
-        my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-            max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-            temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-            sizing_option=sizing_option,
-            building_name=building_name,
+        my_simple_heat_water_storage_config = (
+            simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+                max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
+                sizing_option=sizing_option,
+                building_name=building_name,
+            )
         )
         my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
             config=my_simple_heat_water_storage_config,
@@ -315,6 +316,7 @@ class GenericBuilding(cp.Component):
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             building_name=building_name,
+            heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
         my_heat_distribution_system = heat_distribution_system.HeatDistribution(
             config=my_heat_distribution_system_config,

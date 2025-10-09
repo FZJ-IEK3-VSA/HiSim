@@ -10,7 +10,7 @@ Clone Repository
 To clone this repository, enter the following command to your terminal:
 
 
-git clone https://github.com/FZJ-IEK3-VSA/HiSim.git
+`git clone https://github.com/FZJ-IEK3-VSA/HiSim.git`
 
 
 Set Virtual Environment

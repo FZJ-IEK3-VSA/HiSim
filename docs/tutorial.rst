@@ -2,7 +2,7 @@
 
 Run Simple System Setups
 -----------------------
-Run the python interpreter in the ``HiSim\\system_setups`` directory with the following command:
+Run the python interpreter in the ``HiSim/system_setups`` directory with the following command:
 
 
 ``python ../hisim/hisim_main.py simple_system_setup_one.py``
@@ -14,13 +14,13 @@ or
 
 
 This command executes ``hisim_main.py`` on the setup function ``setup_function`` implemented in the files ``simple_system_setup_one.py``
-and ``simple_system_setup_two.py`` that are stored in ``HiSim\\system_setups``.
+and ``simple_system_setup_two.py`` that are stored in ``HiSim/system_setups``.
 The results can be visualized under directory `results` created under the same directory where the script with the setup
 function is located.
 
 Run Basic Household System Setup
 -----------------------
-The directory ``HiSim\\system_setups`` also contains a basic household configuration in the script ``basic_household.py``.
+The directory ``HiSim/system_setups`` also contains a basic household configuration in the script ``basic_household.py``.
 It can be executed with the following command:
 
 

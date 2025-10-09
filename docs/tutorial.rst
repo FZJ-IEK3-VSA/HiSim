@@ -22,8 +22,8 @@ Run Basic Household System Setup
 The directory `HiSim\system_setups` also contains a basic household configuration in the script `basic_household.py`.
 It can be executed with the following command:
 
-```python
-python ../hisim/hisim.py basic_household
+```
+python ../hisim/hisim_main.py basic_household
 ```
 
 The system is set up with the following elements:

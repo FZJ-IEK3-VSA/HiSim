@@ -56,7 +56,7 @@ virtual hisimvenv source hisimvenv/bin/activate
 Alternatively, Anaconda can be used to set up and activate the virtual environment:
 
 ```python 
-conda create -n hisimvenv python=3.9
+conda create -n hisimvenv python=3.10
 conda activate hisimvenv
 ```
 

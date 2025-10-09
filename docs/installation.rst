@@ -24,7 +24,7 @@ python -m venv hisimvenv
 After its creation, the virtual environment can be activated in the same directory:
 
 
-hisimvenv\Scripts\activate
+hisimvenv\\Scripts\\activate
 
 
 For Linux/Mac users, the virtual environment is set up and activated as follows:

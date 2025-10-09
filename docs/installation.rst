@@ -18,27 +18,26 @@ Set Virtual Environment
 Before installing `ETHOS.Hisim`, it is recommended to set up a python virtual environment. Let `hisimvenv` be the name of virtual environment to be created. For Windows users, setting the virtual environment in the path `\Hisim` is done with the command line:
 
 
-python -m venv hisimvenv
+``python -m venv hisimvenv``
 
 
 After its creation, the virtual environment can be activated in the same directory:
 
 
-hisimvenv\\Scripts\\activate
+``hisimvenv\\Scripts\\activate``
 
 
 For Linux/Mac users, the virtual environment is set up and activated as follows:
 
 
-virtual hisimvenv
-source hisimvenv/bin/activate
+``virtual hisimvenv source hisimvenv/bin/activate``
 
 
 Alternatively, Anaconda can be used to set up and activate the virtual environment:
 
 
-conda create -n hisimvenv python=3.10
-conda activate hisimvenv
+``conda create -n hisimvenv python=3.10``
+``conda activate hisimvenv``
 
 
 With the successful activation, `ETHOS.Hisim` is ready to be locally installed.
@@ -48,5 +47,5 @@ Install Package
 After setting up the virtual environment, install the package to your local libraries:
 
 
-pip install -e .
+``pip install -e .``
 

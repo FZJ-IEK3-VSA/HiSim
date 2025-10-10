@@ -365,6 +365,7 @@ class GenericBoiler(Component):
     EnergyDemandDhw = "EnergyDemandDhw"
     ThermalOutputPowerDhw = "ThermalOutputPowerDhw"
     ThermalOutputEnergyDhw = "ThermalOutputEnergyDhw"
+    TotalFuelConsumption = "TotalFuelConsumption"
 
     def __init__(
         self,
@@ -402,6 +403,14 @@ class GenericBoiler(Component):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.ANY,
             True,
+        )
+
+        self.total_fuel_input_power_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            GenericBoiler.TotalFuelConsumption,
+            lt.LoadTypes.ANY,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.TotalFuelConsumption} will follow.",
         )
 
         # Space heating
@@ -674,6 +683,11 @@ class GenericBoiler(Component):
             / (self.specific_heat_capacity_water_in_joule_per_kilogram_per_celsius * temperature_delta)
             if temperature_delta > 0
             else 0
+        )
+
+        stsv.set_output_value(
+            self.total_fuel_input_power_channel,
+            maximum_power_used_in_watt,
         )
 
         if operating_mode == HeatingMode.SPACE_HEATING.value:

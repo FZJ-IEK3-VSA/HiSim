@@ -56,7 +56,7 @@ virtual hisimvenv source hisimvenv/bin/activate
 Alternatively, Anaconda can be used to set up and activate the virtual environment:
 
 ```python 
-conda create -n hisimvenv python=3.9
+conda create -n hisimvenv python=3.10
 conda activate hisimvenv
 ```
 
@@ -79,9 +79,14 @@ UTSP_URL
 UTSP_API_KEY
 ```
 
+Executing a Building Simulation
+-----------------------
+In `ETHOS.HiSim` we are calling a specific building configuration a `system setup`. A system setup encompasses the building itself, all the technical infrastructure and other parameters, such as geographic location, weather, residents, energy prices and many more. You can find the predefined system setups in the directory `HiSim/system_setups`. 
+
 Run Simple System Setups
 -----------------------
-Run the python interpreter in the `HiSim/system_setups` directory with the following command:
+We provide some simplified examples to show the general principles of the simulation. 
+You can run the simple system setups in the directory `HiSim/system_setups` with the following command:
 
 ```python
 python ../hisim/hisim_main.py simple_system_setup_one.py

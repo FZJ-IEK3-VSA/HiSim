@@ -829,12 +829,12 @@ class MoreAdvancedHeatPumpHPLib(Component):
     ):
         """Get default connections."""
         connections = []
-        hpc_classname = MoreAdvancedHeatPumpHPLibControllerSH.get_classname()
+        hpc_classname = MoreAdvancedHeatPumpHPLibControllerSpaceHeating.get_classname()
         connections.append(
             ComponentConnection(
                 MoreAdvancedHeatPumpHPLib.OnOffSwitchSH,
                 hpc_classname,
-                MoreAdvancedHeatPumpHPLibControllerSH.State_SH,
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.State_SH,
             )
         )
         return connections
@@ -1984,13 +1984,13 @@ class CalculationRequest(JSONWizard):
 
 @dataclass_json
 @dataclass
-class MoreAdvancedHeatPumpHPLibControllerSHConfig(ConfigBase):
+class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
     """HeatPump Controller Config Class for building heating."""
 
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return MoreAdvancedHeatPumpHPLibControllerSH.get_full_classname()
+        return MoreAdvancedHeatPumpHPLibControllerSpaceHeating.get_full_classname()
 
     building_name: str
     name: str
@@ -2011,9 +2011,9 @@ class MoreAdvancedHeatPumpHPLibControllerSHConfig(ConfigBase):
         lower_temperature_offset_for_state_conditions_in_celsius: float = 5.0,
         set_heating_threshold_outside_temperature_in_celsius=16.0,
         set_cooling_threshold_outside_temperature_in_celsius=20.0,
-    ) -> "MoreAdvancedHeatPumpHPLibControllerSHConfig":
+    ) -> "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig":
         """Gets a default Generic Heat Pump Controller."""
-        return MoreAdvancedHeatPumpHPLibControllerSHConfig(
+        return MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(
             building_name=building_name,
             name=name,
             mode=1,
@@ -2025,7 +2025,7 @@ class MoreAdvancedHeatPumpHPLibControllerSHConfig(ConfigBase):
         )
 
 
-class MoreAdvancedHeatPumpHPLibControllerSH(Component):
+class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
     """Heat Pump Controller for Space Heating.
 
     It takes data from other
@@ -2061,7 +2061,7 @@ class MoreAdvancedHeatPumpHPLibControllerSH(Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: MoreAdvancedHeatPumpHPLibControllerSHConfig,
+        config: MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,
         my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
@@ -2137,7 +2137,7 @@ class MoreAdvancedHeatPumpHPLibControllerSH(Component):
         hdsc_classname = heat_distribution_system.HeatDistributionController.get_classname()
         connections.append(
             ComponentConnection(
-                MoreAdvancedHeatPumpHPLibControllerSH.HeatingFlowTemperatureFromHeatDistributionSystem,
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.HeatingFlowTemperatureFromHeatDistributionSystem,
                 hdsc_classname,
                 heat_distribution_system.HeatDistributionController.HeatingFlowTemperature,
             )
@@ -2152,7 +2152,7 @@ class MoreAdvancedHeatPumpHPLibControllerSH(Component):
         weather_classname = weather.Weather.get_classname()
         connections.append(
             ComponentConnection(
-                MoreAdvancedHeatPumpHPLibControllerSH.DailyAverageOutsideTemperature,
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.DailyAverageOutsideTemperature,
                 weather_classname,
                 weather.Weather.DailyAverageOutsideTemperatures,
             )
@@ -2167,7 +2167,7 @@ class MoreAdvancedHeatPumpHPLibControllerSH(Component):
         hws_classname = simple_water_storage.SimpleHotWaterStorage.get_classname()
         connections.append(
             ComponentConnection(
-                MoreAdvancedHeatPumpHPLibControllerSH.WaterTemperatureInput,
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.WaterTemperatureInput,
                 hws_classname,
                 simple_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
             )
@@ -2451,7 +2451,7 @@ class MoreAdvancedHeatPumpHPLibControllerSH(Component):
 
     @staticmethod
     def get_cost_capex(
-        config: MoreAdvancedHeatPumpHPLibControllerSHConfig, simulation_parameters: SimulationParameters
+        config: MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()

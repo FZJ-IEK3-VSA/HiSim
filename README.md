@@ -79,9 +79,14 @@ UTSP_URL
 UTSP_API_KEY
 ```
 
+Executing a building simulation
+-----------------------
+In `ETHOS.HiSim` we are calling a specific building configuration a `system setup`. A system setup encompasses the building itself, all the technical infrastructure and other parameters, such as geographic location, weather, residents, electricity prices and many more. You can find the predefined system setups in the directory `HiSim/system_setups`. 
+
 Run Simple System Setups
 -----------------------
-Run the python interpreter in the `HiSim/system_setups` directory with the following command:
+We provide some simplified examples to show the general principles of the simulation. 
+You can run the simple system setups in the `HiSim/system_setups` directory with the following command:
 
 ```python
 python ../hisim/hisim_main.py simple_system_setup_one.py

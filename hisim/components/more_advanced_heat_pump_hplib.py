@@ -895,7 +895,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         hws_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-                MoreAdvancedHeatPumpHPLib.TemperatureInputSecondary_SH,
+                MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH,
                 hws_classname,
                 simple_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
             )
@@ -914,7 +914,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         dhw_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-                MoreAdvancedHeatPumpHPLib.TemperatureInputSecondary_DHW,
+                MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW,
                 dhw_classname,
                 component_class.TemperatureMean,
             )
@@ -933,7 +933,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         dhw_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-                MoreAdvancedHeatPumpHPLib.TemperatureInputSecondary_DHW,
+                MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW,
                 dhw_classname,
                 component_class.WaterTemperatureToHeatGenerator,
             )

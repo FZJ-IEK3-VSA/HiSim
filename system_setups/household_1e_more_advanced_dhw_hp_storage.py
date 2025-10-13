@@ -336,7 +336,7 @@ def setup_function(
     )
 
     my_heatpump.connect_input(
-        my_heatpump.TemperatureInputSecondary_DHW,
+        my_heatpump.TemperatureInputSecondaryDHW,
         my_dhw_storage.component_name,
         my_dhw_storage.WaterMeanTemperatureInStorage,
     )

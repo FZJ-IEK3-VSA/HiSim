@@ -360,13 +360,13 @@ def setup_function(
     )
 
     my_heat_pump.connect_input(
-        my_heat_pump.SetHeatingTemperatureSpaceHeating,
+        my_heat_pump.SetHeatingTemperatureSH,
         my_heat_distribution_controller.component_name,
         my_heat_distribution_controller.HeatingFlowTemperature,
     )
 
     my_heat_pump.connect_input(
-        my_heat_pump.TemperatureInputSecondary_SH,
+        my_heat_pump.TemperatureInputSecondarySH,
         my_heat_distribution.component_name,
         my_heat_distribution.WaterTemperatureOutput,
     )

@@ -213,8 +213,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
     ThermalPowerIsConstantForDHW = "ThermalPowerIsConstantForDHW"  # true/false
     MaxThermalPowerValueForDHW = "MaxThermalPowerValueForDHW"  # max. Leistungswert
     TemperatureInputPrimary = "TemperatureInputPrimary"  # °C
-    TemperatureInputSecondary_SH = "TemperatureInputSecondarySH"  # °C
-    TemperatureInputSecondary_DHW = "TemperatureInputSecondaryDHW"  # °C
+    TemperatureInputSecondarySH = "TemperatureInputSecondarySH"  # °C
+    TemperatureInputSecondaryDHW = "TemperatureInputSecondaryDHW"  # °C
     TemperatureAmbient = "TemperatureAmbient"  # °C
     SetHeatingTemperatureSH = "SetHeatingTemperatureSH"
 
@@ -422,7 +422,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         self.t_in_secondary_sh: ComponentInput = self.add_input(
             object_name=self.component_name,
-            field_name=self.TemperatureInputSecondary_SH,
+            field_name=self.TemperatureInputSecondarySH,
             load_type=LoadTypes.TEMPERATURE,
             unit=Units.CELSIUS,
             mandatory=False,
@@ -463,7 +463,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
             self.t_in_secondary_dhw: ComponentInput = self.add_input(
                 object_name=self.component_name,
-                field_name=self.TemperatureInputSecondary_DHW,
+                field_name=self.TemperatureInputSecondaryDHW,
                 load_type=LoadTypes.TEMPERATURE,
                 unit=Units.CELSIUS,
                 mandatory=True,

@@ -7,7 +7,6 @@ import errno
 import io
 import json
 import os
-import portalocker
 import shutil
 import contextlib
 from ast import literal_eval
@@ -16,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union, Set
 import copy
 import enum
+import portalocker
 import pandas as pd
 from dataclasses_json import dataclass_json
 
@@ -428,6 +428,7 @@ class UtspLpgConnector(cp.Component):
         Union[str, List],
         Union[str, List],
         Union[str, List],
+        Union[str, List],
     ]:
         """Requests the required load profiles from local lpg. Returns raw, unparsed result file contents.
 
@@ -436,6 +437,7 @@ class UtspLpgConnector(cp.Component):
         """
         if isinstance(lpg_households, JsonReference):
             (
+                result_folder,
                 electricity_file,
                 warm_water_file,
                 inner_device_heat_gains_file,
@@ -451,6 +453,7 @@ class UtspLpgConnector(cp.Component):
 
         elif isinstance(lpg_households, List):
             (
+                result_folder,
                 electricity_file,
                 warm_water_file,
                 inner_device_heat_gains_file,
@@ -470,6 +473,7 @@ class UtspLpgConnector(cp.Component):
             )
 
         return (
+            result_folder,
             electricity_file,
             warm_water_file,
             inner_device_heat_gains_file,
@@ -742,6 +746,7 @@ class UtspLpgConnector(cp.Component):
                                 )
                             elif self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG:
                                 (
+                                    result_folder,
                                     electricity_file,
                                     warm_water_file,
                                     inner_device_heat_gains_file,
@@ -905,6 +910,20 @@ class UtspLpgConnector(cp.Component):
                                 f"LPG data acquisition mode will be set to: {self.utsp_config.data_acquisition_mode}!"
                             )
                             attempt += 1
+
+                        finally:
+                            folder_to_delete = os.path.dirname(result_folder)
+                            try:
+                                if os.path.exists(folder_to_delete):
+                                    shutil.rmtree(folder_to_delete)
+                                    log.information(
+                                        f"Folder with local lpg result '{os.path.basename(folder_to_delete)}' deleted.")
+                                else:
+                                    log.warning(
+                                        f"Error: Folder with local lpg result '{os.path.basename(folder_to_delete)}' does "
+                                        f"not exist and can not be deleted")
+                            except OSError as e:
+                                log.warning(f"Error: {e}")
 
                 if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
                     log.information(
@@ -1145,7 +1164,8 @@ class UtspLpgConnector(cp.Component):
 
         return str(path_to_result_folder)
 
-    def calculate_one_lpg_request(self, household: JsonReference) -> Tuple[str, str, str, str, str, str, str, str, str]:
+    def calculate_one_lpg_request(self, household: JsonReference) -> Tuple[str, str, str, str, str, str, str, str,
+    str, str]:
         """Calculate one lpg request."""
 
         # define required results files
@@ -1198,18 +1218,8 @@ class UtspLpgConnector(cp.Component):
                 driving_distance_file = driving_distance_path
                 break
 
-        folder_to_delete = os.path.dirname(result_folder)
-        try:
-            if os.path.exists(folder_to_delete):
-                shutil.rmtree(folder_to_delete)
-                log.information(f"Folder with local lpg result '{os.path.basename(folder_to_delete)}' deleted.")
-            else:
-                log.warning(f"Error: Folder with local lpg result '{os.path.basename(folder_to_delete)}' does "
-                            f"not exist and can not be deleted")
-        except OSError as e:
-            log.warning(f"Error: {e}")
-
         return (
+            result_folder,
             electricity_file,
             warm_water_file,
             inner_device_heat_gains_file,
@@ -1223,7 +1233,7 @@ class UtspLpgConnector(cp.Component):
 
     def calculate_multiple_lpg_request(
         self, households: List[JsonReference]
-    ) -> Tuple[List[str], List[str], List[str], List[str], List[str], List[str], List[str], List[str], List[str]]:
+    ) -> Tuple[List[str], List[str], List[str], List[str], List[str], List[str], List[str], List[str], List[str], List[str]]:
         """Calculate one lpg request."""
         # define required results files
         (
@@ -1303,6 +1313,7 @@ class UtspLpgConnector(cp.Component):
             driving_distances_file.append(driving_distances_file_one_result)
 
         return (
+            result_folder_list,
             electricity_file,
             warm_water_file,
             inner_device_heat_gains_file,
@@ -1757,7 +1768,7 @@ class UtspLpgConnector(cp.Component):
         lock_filepath = cache_filepath + ".lock"
 
         try:
-            with open(lock_filepath, "a") as lock_file:
+            with open(lock_filepath, "a", encoding="utf-8") as lock_file:
                 with portalocker.Lock(lock_file, mode='exclusive', timeout=60):
                     if os.path.exists(cache_filepath):
                         return
@@ -1802,7 +1813,8 @@ class UtspLpgConnector(cp.Component):
 
                     log.information(f"Caching of lpg utsp results finished. Cache filepath is {cache_filepath}.")
 
-        except portalocker.exceptions.LockException:
+        except portalocker.exceptions.LockException as e:
+            log.error(f"Could not acquire lock on {lock_filepath}: {e}")
             raise
 
         finally:

@@ -724,7 +724,7 @@ class UtspLpgConnector(cp.Component):
                         (LpgDataAcquisitionMode.USE_UTSP, LpgDataAcquisitionMode.USE_LOCAL_LPG)):
                     max_attempts = 2
                     attempt = 0
-                    result_folder: Optional[str] = None
+                    result_folder: Optional[Union[str, List[str]]] = None
                     while attempt < max_attempts:
                         try:
                             log.information(f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}")
@@ -913,14 +913,12 @@ class UtspLpgConnector(cp.Component):
 
                         finally:
                             if result_folder is not None:
-                                # Erstelle eine Liste, die verarbeitet werden soll, egal ob result_folder ein String oder eine Liste ist
-                                folders_to_process = []
+                                folders_to_process: List[str] = []
                                 if isinstance(result_folder, list):
                                     folders_to_process = result_folder
                                 elif isinstance(result_folder, str):
                                     folders_to_process = [result_folder]
 
-                                # Iteriere über alle zu löschenden Ordner
                                 for folder in folders_to_process:
                                     if folder is None:
                                         continue

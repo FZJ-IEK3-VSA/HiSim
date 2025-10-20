@@ -920,8 +920,6 @@ class UtspLpgConnector(cp.Component):
                                     folders_to_process = [result_folder]
 
                                 for folder in folders_to_process:
-                                    if folder is None:
-                                        continue
                                     folder_to_delete = os.path.dirname(folder)
                                     try:
                                         if folder_to_delete and os.path.exists(folder_to_delete):

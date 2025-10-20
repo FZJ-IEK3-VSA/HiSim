@@ -7,6 +7,8 @@ import errno
 import io
 import json
 import os
+import portalocker
+import shutil
 import contextlib
 from ast import literal_eval
 from dataclasses import dataclass
@@ -76,6 +78,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     name_of_predefined_loadprofile: Optional[str] = "CHR01 Couple both at Work"
     predefined_loadprofile_filepaths: Optional[str] = None
     guid: str = ""
+    calculation_index_for_local_lpg: Optional[int] = None
 
     @classmethod
     def get_main_classname(cls):
@@ -106,6 +109,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             predictive=False,
             cache_dir_path=None,
             guid="",
+            calculation_index_for_local_lpg=None
         )
         return config
 
@@ -161,6 +165,10 @@ class UtspLpgConnector(cp.Component):
         )
         self.name_of_predefined_loadprofile = config.name_of_predefined_loadprofile
         self.predefined_loadprofile_filepaths = config.predefined_loadprofile_filepaths
+
+        self.calculation_index_for_local_lpg = config.calculation_index_for_local_lpg
+        if not self.calculation_index_for_local_lpg:
+            self.calculation_index_for_local_lpg = 1
 
         self.build()
         # dummy value as long as there is no way to consider multiple households in one house
@@ -1156,7 +1164,7 @@ class UtspLpgConnector(cp.Component):
 
         log.information("Requesting LPG profiles from local lpg for one household.")
 
-        result_folder = self.execute_local_lpg_single_household(calculation_index=1,
+        result_folder = self.execute_local_lpg_single_household(calculation_index=self.calculation_index_for_local_lpg,
                                                                 household=household,
                                                                 random_seed=None)
 
@@ -1189,6 +1197,17 @@ class UtspLpgConnector(cp.Component):
             if os.path.exists(driving_distance_path):
                 driving_distance_file = driving_distance_path
                 break
+
+        folder_to_delete = os.path.dirname(result_folder)
+        try:
+            if os.path.exists(folder_to_delete):
+                shutil.rmtree(folder_to_delete)
+                log.information(f"Folder with local lpg result '{os.path.basename(folder_to_delete)}' deleted.")
+            else:
+                log.warning(f"Error: Folder with local lpg result '{os.path.basename(folder_to_delete)}' does "
+                            f"not exist and can not be deleted")
+        except OSError as e:
+            log.warning(f"Error: {e}")
 
         return (
             electricity_file,
@@ -1735,49 +1754,60 @@ class UtspLpgConnector(cp.Component):
     ) -> None:
         """Make caching file for the results."""
 
-        # Saves normal loadprofile data in cache
-        loadprofile_dataframe = pd.DataFrame(
-            {
-                "number_of_residents": number_of_residents,
-                "heating_by_residents": heating_by_residents,
-                "electricity_consumption": electricity_consumption,
-                "water_consumption": water_consumption,
-                "heating_by_devices": heating_by_devices,
-            }
-        )
-        # save car data in cache
-        car_data_dict = {
-            "car_states": car_states,
-            "car_locations": car_locations,
-            "driving_distances": driving_distances,
-        }
-        # save flexibility data in cache
-        flexibility_data_dict = {"flexibility": flexibility}
+        lock_filepath = cache_filepath + ".lock"
 
-        # transform to dataframes
-        car_dataframe = pd.DataFrame(car_data_dict)
-        flexibility_dataframe = pd.DataFrame(flexibility_data_dict)
+        try:
+            with open(lock_filepath, "a") as lock_file:
+                with portalocker.Lock(lock_file, mode='exclusive', timeout=60):
+                    if os.path.exists(cache_filepath):
+                        return
 
-        # dump the dataframe to str i the cache content dict
-        cache_content: Dict[str, Any] = {
-            "data": loadprofile_dataframe,
-            "car_data": car_dataframe,
-            "flexibility_data": flexibility_dataframe,
-        }
+                    loadprofile_dataframe = pd.DataFrame(
+                        {
+                            "number_of_residents": number_of_residents,
+                            "heating_by_residents": heating_by_residents,
+                            "electricity_consumption": electricity_consumption,
+                            "water_consumption": water_consumption,
+                            "heating_by_devices": heating_by_devices,
+                        }
+                    )
+                    car_data_dict = {
+                        "car_states": car_states,
+                        "car_locations": car_locations,
+                        "driving_distances": driving_distances,
+                    }
+                    flexibility_data_dict = {"flexibility": flexibility}
 
-        for key, d_f in cache_content.items():
-            cache_file = io.StringIO()
-            d_f.to_csv(cache_file)
-            d_f_str = cache_file.getvalue()
-            cache_content.update({key: d_f_str})
+                    car_dataframe = pd.DataFrame(car_data_dict)
+                    flexibility_dataframe = pd.DataFrame(flexibility_data_dict)
 
-        with open(cache_filepath, "w", encoding="utf-8") as file:
-            json.dump(cache_content, file)
-        del loadprofile_dataframe
-        del car_dataframe
-        del flexibility_dataframe
+                    cache_content: Dict[str, Any] = {
+                        "data": loadprofile_dataframe,
+                        "car_data": car_dataframe,
+                        "flexibility_data": flexibility_dataframe,
+                    }
 
-        log.information(f"Caching of lpg utsp results finished. Cache filepath is {cache_filepath}.")
+                    for key, d_f in cache_content.items():
+                        cache_file = io.StringIO()
+                        d_f.to_csv(cache_file)
+                        d_f_str = cache_file.getvalue()
+                        cache_content.update({key: d_f_str})
+
+                    with open(cache_filepath, "w", encoding="utf-8") as file:
+                        json.dump(cache_content, file)
+
+                    del loadprofile_dataframe
+                    del car_dataframe
+                    del flexibility_dataframe
+
+                    log.information(f"Caching of lpg utsp results finished. Cache filepath is {cache_filepath}.")
+
+        except portalocker.exceptions.LockException:
+            raise
+
+        finally:
+            if os.path.exists(lock_filepath):
+                os.remove(lock_filepath)
 
     def load_results_and_transform_string_to_data(self, list_of_result_files: List[str]) -> List[Any]:
         """Transform a string of data into a data."""

@@ -31,3 +31,4 @@ cdsapi
 xarray
 pygfunction
 pyloadprofilegenerator
+portalocker

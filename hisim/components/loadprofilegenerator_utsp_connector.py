@@ -419,7 +419,7 @@ class UtspLpgConnector(cp.Component):
         self,
         lpg_households: Union[JsonReference, List[JsonReference]]
     ) -> Tuple[
-        Union[str, List],
+        str,
         Union[str, List],
         Union[str, List],
         Union[str, List],

@@ -724,7 +724,7 @@ class UtspLpgConnector(cp.Component):
                         (LpgDataAcquisitionMode.USE_UTSP, LpgDataAcquisitionMode.USE_LOCAL_LPG)):
                     max_attempts = 2
                     attempt = 0
-
+                    result_folder = None
                     while attempt < max_attempts:
                         try:
                             log.information(f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}")

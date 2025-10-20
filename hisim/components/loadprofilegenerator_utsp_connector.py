@@ -1769,52 +1769,50 @@ class UtspLpgConnector(cp.Component):
         """Make caching file for the results."""
 
         lock_filepath = cache_filepath + ".lock"
-
         try:
-            with open(lock_filepath, "a", encoding="utf-8") as lock_file:
-                with portalocker.Lock(lock_file, mode='exclusive', timeout=60):
-                    if os.path.exists(cache_filepath):
-                        return
+            with portalocker.Lock(lock_filepath, timeout=60):
+                if os.path.exists(cache_filepath):
+                    return
 
-                    loadprofile_dataframe = pd.DataFrame(
-                        {
-                            "number_of_residents": number_of_residents,
-                            "heating_by_residents": heating_by_residents,
-                            "electricity_consumption": electricity_consumption,
-                            "water_consumption": water_consumption,
-                            "heating_by_devices": heating_by_devices,
-                        }
-                    )
-                    car_data_dict = {
-                        "car_states": car_states,
-                        "car_locations": car_locations,
-                        "driving_distances": driving_distances,
+                loadprofile_dataframe = pd.DataFrame(
+                    {
+                        "number_of_residents": number_of_residents,
+                        "heating_by_residents": heating_by_residents,
+                        "electricity_consumption": electricity_consumption,
+                        "water_consumption": water_consumption,
+                        "heating_by_devices": heating_by_devices,
                     }
-                    flexibility_data_dict = {"flexibility": flexibility}
+                )
+                car_data_dict = {
+                    "car_states": car_states,
+                    "car_locations": car_locations,
+                    "driving_distances": driving_distances,
+                }
+                flexibility_data_dict = {"flexibility": flexibility}
 
-                    car_dataframe = pd.DataFrame(car_data_dict)
-                    flexibility_dataframe = pd.DataFrame(flexibility_data_dict)
+                car_dataframe = pd.DataFrame(car_data_dict)
+                flexibility_dataframe = pd.DataFrame(flexibility_data_dict)
 
-                    cache_content: Dict[str, Any] = {
-                        "data": loadprofile_dataframe,
-                        "car_data": car_dataframe,
-                        "flexibility_data": flexibility_dataframe,
-                    }
+                cache_content: Dict[str, Any] = {
+                    "data": loadprofile_dataframe,
+                    "car_data": car_dataframe,
+                    "flexibility_data": flexibility_dataframe,
+                }
 
-                    for key, d_f in cache_content.items():
-                        cache_file = io.StringIO()
-                        d_f.to_csv(cache_file)
-                        d_f_str = cache_file.getvalue()
-                        cache_content.update({key: d_f_str})
+                for key, d_f in cache_content.items():
+                    cache_file = io.StringIO()
+                    d_f.to_csv(cache_file)
+                    d_f_str = cache_file.getvalue()
+                    cache_content.update({key: d_f_str})
 
-                    with open(cache_filepath, "w", encoding="utf-8") as file:
-                        json.dump(cache_content, file)
+                with open(cache_filepath, "w", encoding="utf-8") as file:
+                    json.dump(cache_content, file)
 
-                    del loadprofile_dataframe
-                    del car_dataframe
-                    del flexibility_dataframe
+                del loadprofile_dataframe
+                del car_dataframe
+                del flexibility_dataframe
 
-                    log.information(f"Caching of lpg utsp results finished. Cache filepath is {cache_filepath}.")
+                log.information(f"Caching of lpg utsp results finished. Cache filepath is {cache_filepath}.")
 
         except portalocker.exceptions.LockException as e:
             log.error(f"Could not acquire lock on {lock_filepath}: {e}")

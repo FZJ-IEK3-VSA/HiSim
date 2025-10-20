@@ -724,7 +724,7 @@ class UtspLpgConnector(cp.Component):
                         (LpgDataAcquisitionMode.USE_UTSP, LpgDataAcquisitionMode.USE_LOCAL_LPG)):
                     max_attempts = 2
                     attempt = 0
-                    result_folder = None
+                    result_folder: Optional[str] = None
                     while attempt < max_attempts:
                         try:
                             log.information(f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}")
@@ -912,18 +912,21 @@ class UtspLpgConnector(cp.Component):
                             attempt += 1
 
                         finally:
-                            folder_to_delete = os.path.dirname(result_folder)
-                            try:
-                                if os.path.exists(folder_to_delete):
-                                    shutil.rmtree(folder_to_delete)
-                                    log.information(
-                                        f"Folder with local lpg result '{os.path.basename(folder_to_delete)}' deleted.")
-                                else:
-                                    log.warning(
-                                        f"Error: Folder with local lpg result '{os.path.basename(folder_to_delete)}' does "
-                                        f"not exist and can not be deleted")
-                            except OSError as e:
-                                log.warning(f"Error: {e}")
+                            if result_folder is not None:
+                                folder_to_delete = os.path.dirname(result_folder)
+                                try:
+                                    if os.path.exists(folder_to_delete):
+                                        shutil.rmtree(folder_to_delete)
+                                        log.information(
+                                            f"Folder with local lpg result '{os.path.basename(folder_to_delete)}' deleted.")
+                                    else:
+                                        log.warning(
+                                            f"Error: Folder with local lpg result '{os.path.basename(folder_to_delete)}' does "
+                                            f"not exist and can not be deleted")
+                                except OSError as e:
+                                    log.warning(f"Error: {e}")
+                            else:
+                                log.warning("LPG result folder was None; cleanup skipped.")
 
                 if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
                     log.information(

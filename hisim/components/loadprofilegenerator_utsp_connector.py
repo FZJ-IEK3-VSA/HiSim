@@ -419,7 +419,7 @@ class UtspLpgConnector(cp.Component):
         self,
         lpg_households: Union[JsonReference, List[JsonReference]]
     ) -> Tuple[
-        str,
+        Union[str, List],
         Union[str, List],
         Union[str, List],
         Union[str, List],
@@ -913,18 +913,28 @@ class UtspLpgConnector(cp.Component):
 
                         finally:
                             if result_folder is not None:
-                                folder_to_delete = os.path.dirname(result_folder)
-                                try:
-                                    if os.path.exists(folder_to_delete):
-                                        shutil.rmtree(folder_to_delete)
-                                        log.information(
-                                            f"Folder with local lpg result '{os.path.basename(folder_to_delete)}' deleted.")
-                                    else:
-                                        log.warning(
-                                            f"Error: Folder with local lpg result '{os.path.basename(folder_to_delete)}' does "
-                                            f"not exist and can not be deleted")
-                                except OSError as e:
-                                    log.warning(f"Error: {e}")
+                                # Erstelle eine Liste, die verarbeitet werden soll, egal ob result_folder ein String oder eine Liste ist
+                                folders_to_process = []
+                                if isinstance(result_folder, list):
+                                    folders_to_process = result_folder
+                                elif isinstance(result_folder, str):
+                                    folders_to_process = [result_folder]
+
+                                # Iteriere über alle zu löschenden Ordner
+                                for folder in folders_to_process:
+                                    if folder is None:
+                                        continue
+                                    folder_to_delete = os.path.dirname(folder)
+                                    try:
+                                        if folder_to_delete and os.path.exists(folder_to_delete):
+                                            shutil.rmtree(folder_to_delete)
+                                            log.information(
+                                                f"Folder with local lpg result '{os.path.basename(folder_to_delete)}' deleted.")
+                                        else:
+                                            log.warning(
+                                                f"Error: Folder '{folder_to_delete}' does not exist and cannot be deleted.")
+                                    except (OSError, TypeError) as e:
+                                        log.warning(f"Error during folder cleanup: {e}")
                             else:
                                 log.warning("LPG result folder was None; cleanup skipped.")
 

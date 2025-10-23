@@ -396,10 +396,12 @@ class SimpleWaterStorage(cp.Component):
         ambient_temperature_in_celsius: float,
         mass_in_storage_in_kg: float,
     ) -> Tuple[float, float]:
-        """Calculate the heat energy loss in W and the temperature loss in K/s of the water storage
-        based on surface area, heat transfer coefficient, inner and outer temperature and water
-        mass in storage."""
+        """Calculate heat energy loss in W and temperature loss in K/s.
 
+        Calculate the heat energy loss in W and the temperature loss in K/s of the water storage
+        based on surface area, heat transfer coefficient, inner and outer temperature and water
+        mass in storage.
+        """
         heat_loss_in_watt = self.calculate_heat_loss_in_watt(
             mean_temperature_in_storage_in_celsius=mean_water_temperature_in_water_storage_in_celsius,
             storage_surface_in_m2=storage_surface_in_m2,

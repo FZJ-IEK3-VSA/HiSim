@@ -662,7 +662,7 @@ class GenericBoiler(Component):
             delta_power = self.maximal_thermal_power_in_watt - self.minimal_thermal_power_in_watt
             slope = delta_efficiency / delta_power
             # real efficiency formula
-            real_combustion_efficiency = (self.min_combustion_efficiency 
+            real_combustion_efficiency = (self.min_combustion_efficiency
                 + (maximum_power_used_in_watt - self.minimal_thermal_power_in_watt) * slope)
 
         # energy consumption

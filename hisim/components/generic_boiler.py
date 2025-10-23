@@ -657,7 +657,13 @@ class GenericBoiler(Component):
             real_combustion_efficiency = self.min_combustion_efficiency
         else:
             maximum_power_used_in_watt = control_signal * self.maximal_thermal_power_in_watt
-            real_combustion_efficiency = self.min_combustion_efficiency + delta_efficiency * control_signal
+            # values for the efficiency
+            delta_efficiency = self.max_combustion_efficiency - self.min_combustion_efficiency
+            delta_power = self.maximal_thermal_power_in_watt - self.minimal_thermal_power_in_watt
+            slope = delta_efficiency / delta_power
+            # real efficiency formula
+            real_combustion_efficiency = (self.min_combustion_efficiency 
+                + (maximum_power_used_in_watt - self.minimal_thermal_power_in_watt) * slope)
 
         # energy consumption
         fuel_energy_consumption_in_watt_hour = (

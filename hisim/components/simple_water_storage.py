@@ -1426,6 +1426,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
 
     # Output
     WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
+    WaterTemperatureToSecondaryHeatGenerator = "WaterTemperatureToSecondaryHeatGenerator"
     WaterTemperatureFromHeatGeneratorOutput = "WaterTemperatureFromHeatGenerator"
     WaterTemperatureFromSecondaryHeatGeneratorOutput = "WaterTemperatureFromSecondaryHeatGenerator"
     WaterMeanTemperatureInStorage = "WaterMeanTemperatureInStorage"
@@ -1522,6 +1523,14 @@ class SimpleDHWStorage(SimpleWaterStorage):
             lt.LoadTypes.WATER,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureToHeatGenerator} will follow.",
+        )
+
+        self.water_temperature_secondary_heat_generator_output_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterTemperatureToSecondaryHeatGenerator,
+            lt.LoadTypes.WATER,
+            lt.Units.CELSIUS,
+            output_description=f"here a description for {self.WaterTemperatureToSecondaryHeatGenerator} will follow.",
         )
 
         self.water_temperature_from_heat_generator_channel: ComponentOutput = self.add_output(
@@ -1993,10 +2002,16 @@ class SimpleDHWStorage(SimpleWaterStorage):
         )
 
         water_temperature_to_heat_generator_in_celsius = self.state.mean_water_temperature_in_celsius
+        water_temperature_to_secondary_heat_generator_in_celsius = self.state.mean_water_temperature_in_celsius
 
         stsv.set_output_value(
             self.water_temperature_to_heat_generator_channel,
             water_temperature_to_heat_generator_in_celsius,
+        )
+
+        stsv.set_output_value(
+            self.water_temperature_secondary_heat_generator_output_channel,
+            water_temperature_to_secondary_heat_generator_in_celsius,
         )
 
         stsv.set_output_value(

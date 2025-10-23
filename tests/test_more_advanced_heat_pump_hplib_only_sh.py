@@ -57,7 +57,6 @@ def test_heat_pump_hplib_new():
         passive_cooling_with_brine=False,
         electrical_input_power_brine_pump_in_watt=None,
         massflow_nominal_secondary_side_in_kg_per_s=0.333,
-        massflow_nominal_primary_side_in_kg_per_s=0,
         specific_heat_capacity_of_primary_fluid=0,
         device_co2_footprint_in_kg=p_th_set * 1e-3 * 165.84,
         investment_costs_in_euro=p_th_set * 1e-3 * 1513.74,

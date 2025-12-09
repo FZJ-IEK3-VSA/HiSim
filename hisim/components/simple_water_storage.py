@@ -396,8 +396,12 @@ class SimpleWaterStorage(cp.Component):
         ambient_temperature_in_celsius: float,
         mass_in_storage_in_kg: float,
     ) -> Tuple[float, float]:
-        """Calculate temperature loss in celsius per timestep."""
+        """Calculate heat energy loss in W and temperature loss in K/s.
 
+        Calculate the heat energy loss in W and the temperature loss in K/s of the water storage
+        based on surface area, heat transfer coefficient, inner and outer temperature and water
+        mass in storage.
+        """
         heat_loss_in_watt = self.calculate_heat_loss_in_watt(
             mean_temperature_in_storage_in_celsius=mean_water_temperature_in_water_storage_in_celsius,
             storage_surface_in_m2=storage_surface_in_m2,
@@ -406,14 +410,14 @@ class SimpleWaterStorage(cp.Component):
         )
 
         # basis here: Q = m * cw * delta temperature, temperature loss is another term for delta temperature here
-        temperature_loss_of_water_in_kelvin = heat_loss_in_watt / (
+        temperature_loss_of_water_in_kelvin_per_s = heat_loss_in_watt / (
             PhysicsConfig.get_properties_for_energy_carrier(
                 energy_carrier=lt.LoadTypes.WATER
             ).specific_heat_capacity_in_joule_per_kg_per_kelvin
             * mass_in_storage_in_kg
         )
 
-        return heat_loss_in_watt, temperature_loss_of_water_in_kelvin
+        return heat_loss_in_watt, temperature_loss_of_water_in_kelvin_per_s
 
     def calculate_heat_loss_in_watt(
         self,
@@ -1144,16 +1148,15 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         # Set state -------------------------------------------------------------------------------------------------------
 
         # calc heat loss in W and the temperature loss
-        (
-            self.state.heat_loss_in_watt,
-            self.state.temperature_loss_in_celsius_per_timestep,
-        ) = self.calculate_heat_loss_and_temperature_loss(
+        self.state.heat_loss_in_watt, t_loss = self.calculate_heat_loss_and_temperature_loss(
             storage_surface_in_m2=self.storage_surface_in_m2,
             mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin,
             mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
             ambient_temperature_in_celsius=self.ambient_temperature_in_celsius,
         )
+
+        self.state.temperature_loss_in_celsius_per_timestep = t_loss * self.seconds_per_timestep
 
         self.state.mean_water_temperature_in_celsius = (
             self.mean_water_temperature_in_water_storage_in_celsius
@@ -2085,17 +2088,15 @@ class SimpleDHWStorage(SimpleWaterStorage):
         )
         # Set state -------------------------------------------------------------------------------------------------------
         # calc heat loss in W and the temperature loss
-
-        (
-            self.state.heat_loss_in_watt,
-            self.state.temperature_loss_in_celsius_per_timestep,
-        ) = self.calculate_heat_loss_and_temperature_loss(
+        self.state.heat_loss_in_watt, t_loss = self.calculate_heat_loss_and_temperature_loss(
             storage_surface_in_m2=self.storage_surface_in_m2,
             mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin,
             mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
             ambient_temperature_in_celsius=self.ambient_temperature_in_celsius,
         )
+
+        self.state.temperature_loss_in_celsius_per_timestep = t_loss * self.seconds_per_timestep
 
         self.state.mean_water_temperature_in_celsius = (
             self.mean_water_temperature_in_water_storage_in_celsius

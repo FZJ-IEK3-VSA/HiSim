@@ -225,6 +225,7 @@ class ComponentType(str, enum.Enum):
     ENERGY_MANAGEMENT_SYSTEM = "EnergyManagementSystem"
     HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING = "Floorheating"
     HEAT_DISTRIBUTION_SYSTEM_RADIATOR = "Conventional Radiator"
+    HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR = "Low Temperature Radiator"
     NO_HDS = "No HDS"
 
     # different heat_pump types

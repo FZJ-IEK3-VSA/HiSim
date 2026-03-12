@@ -208,11 +208,10 @@ class Simulator:
         if not os.path.isdir(self._simulation_parameters.result_directory):
             os.makedirs(self._simulation_parameters.result_directory, exist_ok=True)
 
-        log.LOGGING_LEVEL = self._simulation_parameters.logging_level
         self.iteration_logging_path = os.path.join(
             self._simulation_parameters.result_directory, "Detailed_Iteration_Log.txt"
         )
-        log.initialize_properly(self._simulation_parameters.result_directory)
+        log.initialize_properly(self._simulation_parameters.logging_level, self._simulation_parameters.result_directory)
 
     # @profile
     # @utils.measure_execution_time

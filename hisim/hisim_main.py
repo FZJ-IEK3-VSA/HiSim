@@ -23,14 +23,8 @@ def main(
     # Suppress warnings (e.g., from pvlib)
     warnings.filterwarnings("ignore")
 
-    # Delete old log files
-    logging_default_path = Path(log.LOGGING_PATH)
-    if logging_default_path.exists() and logging_default_path.is_dir():
-        for file in logging_default_path.iterdir():
-            try:
-                file.unlink()
-            except Exception:
-                log.information("Logging default file could not be removed. This can occur when more than one simulation run simultaneously.")
+    # set up logging
+    log.set_up()
 
     # Logging simulation start
     function_in_module = "setup_function"

@@ -15,7 +15,8 @@ __email__ = ""
 __status__ = ""
 
 
-def execute_import() -> None:
+def execute_import() -> WeatherDataImport:
+    """Uses WeatherDataImport"""
     location: str = "Aachen"
     latitude: float = 50.775
     longitude: float = 6.083
@@ -35,3 +36,5 @@ def execute_import() -> None:
         distance_weather_stations=30,
         weather_data_source=WeatherDataSourceEnum.DWD_10MIN,
     )
+
+    return weather_data

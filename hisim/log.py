@@ -110,44 +110,32 @@ class LogPrio(IntEnum):
 # would always use the LOGGING_PATH at definition time, not at runtime.
 def error(message: str, logging_message_path: str | None = None) -> None:
     """Log an error message."""
-    if logging_message_path is None:
-        logging_message_path = LOGGING_PATH
     log(LogPrio.ERROR, message, logging_message_path)
 
 
 def warning(message: str, logging_message_path: str | None = None) -> None:
     """Log a warning message."""
-    if logging_message_path is None:
-        logging_message_path = LOGGING_PATH
     log(LogPrio.WARNING, message, logging_message_path)
 
 
 def information(message: str, logging_message_path: str | None = None) -> None:
     """Log a information message."""
-    if logging_message_path is None:
-        logging_message_path = LOGGING_PATH
     log(LogPrio.INFORMATION, message, logging_message_path)
 
 
 def trace(message: str, logging_message_path: str | None = None) -> None:
     """Log a trace message."""
-    if logging_message_path is None:
-        logging_message_path = LOGGING_PATH
     log(LogPrio.TRACE, message, logging_message_path)
 
 
 def debug(message: str, logging_message_path: str | None = None) -> None:
     """Log a debug message."""
-    if logging_message_path is None:
-        logging_message_path = LOGGING_PATH
     log(LogPrio.DEBUG, message, logging_message_path)
 
 
 def profile(message: str, logging_message_path: str | None = None) -> None:
     """Log a profile message."""
     log(LogPrio.PROFILE, message, logging_message_path)
-    if logging_message_path is None:
-        logging_message_path = LOGGING_PATH
     log_profile_file(message, logging_message_path)
 
 

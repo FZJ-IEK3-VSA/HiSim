@@ -25,7 +25,7 @@ def set_up():
     # reset global variables
     global LOGGING_LEVEL, LOGGING_PATH, PRE, PRE_LOGS, PRE_PROFILE  # pylint: disable=global-statement
     LOGGING_LEVEL = 3
-    LOGGING_PATH: str = r"../logs/"
+    LOGGING_PATH = r"../logs/"
     PRE = True
     PRE_LOGS = ""
     PRE_PROFILE = ""

@@ -1,7 +1,4 @@
-# noqa
 # flake8: noqa
-# noqa: D400, D415, D413, D407
-# pylint: skip-file
 """ Logging functionality for all of HiSim. """
 # clean
 from enum import IntEnum

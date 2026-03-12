@@ -16,7 +16,7 @@ __status__ = ""
 
 
 def execute_import() -> WeatherDataImport:
-    """Uses WeatherDataImport"""
+    """Uses WeatherDataImport."""
     location: str = "Aachen"
     latitude: float = 50.775
     longitude: float = 6.083

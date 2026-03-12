@@ -1,4 +1,4 @@
-# pylint: skip-file
+# noqa
 """ Logging functionality for all of HiSim. """
 # clean
 from enum import IntEnum

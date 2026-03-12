@@ -373,7 +373,7 @@ class SolarThermalSystem(Component):
                 break
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-            self.my_simulation_parameters.year
+            self.my_simulation_parameters.year, self.my_simulation_parameters.country
         )
         assert electricity_consumption_in_kilowatt_hour is not None
 

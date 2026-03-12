@@ -147,7 +147,6 @@ def test_house(
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER,
     )
     my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
@@ -210,14 +209,14 @@ def test_house(
 
     jsondata = jsondata["BUI1"]
 
-    gas_consumption_in_kilowatt_hour = jsondata["Gas Meter"][f"Total {my_gas_meter_config.gas_loadtype.value} demand from grid"].get("value")
+    gas_consumption_in_kilowatt_hour = jsondata["Gas Meter"]["Total gas demand from grid"].get("value")
     gas_consumption_of_boiler_in_kilowatt_hour = jsondata["Gas Boiler"][
         f"Total {my_gas_heater.energy_carrier.value} consumption (energy)"
     ].get("value")
 
-    opex_costs_for_gas_in_euro = jsondata["Gas Meter"][f"Opex costs of {my_gas_meter_config.gas_loadtype.value} consumption from grid"].get("value")
+    opex_costs_for_gas_in_euro = jsondata["Gas Meter"]["Opex costs of gas consumption from grid"].get("value")
 
-    co2_footprint_due_to_gas_use_in_kg = jsondata["Gas Meter"][f"CO2 footprint of {my_gas_meter_config.gas_loadtype.value} consumption from grid"].get("value")
+    co2_footprint_due_to_gas_use_in_kg = jsondata["Gas Meter"]["CO2 footprint of gas consumption from grid"].get("value")
 
     log.information(
         f"Total {my_gas_meter_config.gas_loadtype.value} consumption [kWh] " + str(gas_consumption_of_boiler_in_kilowatt_hour)

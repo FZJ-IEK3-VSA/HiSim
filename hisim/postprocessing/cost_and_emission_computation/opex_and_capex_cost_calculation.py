@@ -11,7 +11,7 @@ from hisim.component_wrapper import ComponentWrapper
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.components.gas_meter import GasMeter
-from hisim.components.heating_meter import HeatingMeter
+from hisim.components.fuel_meter import FuelMeter
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
 from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
@@ -107,7 +107,7 @@ def opex_calculation(
                     )
                     is_meter = isinstance(
                         component_unwrapped,
-                        (ElectricityMeter, GasMeter, HeatingMeter, L2GenericEnergyManagementSystem),
+                        (ElectricityMeter, GasMeter, FuelMeter, L2GenericEnergyManagementSystem),
                     )
 
                     # Skip heat pumps for "without_hp"

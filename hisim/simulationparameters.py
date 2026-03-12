@@ -35,6 +35,7 @@ class SimulationParameters(JSONWizard):
         start_date: datetime.datetime,
         end_date: datetime.datetime,
         seconds_per_timestep: int,
+        country: str = 'DE',
         result_directory: str = "",
         post_processing_options: Optional[List[int]] = None,
         logging_level: int = log.LogPrio.INFORMATION,
@@ -51,6 +52,7 @@ class SimulationParameters(JSONWizard):
         total_seconds = self.duration.total_seconds()
         self.timesteps: int = int(total_seconds / seconds_per_timestep)
         self.year: int = int(start_date.year)
+        self.country: str = country
         if post_processing_options is None:
             post_processing_options = []
         self.post_processing_options: List[int] = post_processing_options
@@ -69,7 +71,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year + 1, 1, 1),
             seconds_per_timestep,
-            "",
         )
 
     def enable_all_options(self) -> None:
@@ -93,7 +94,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year + 1, 1, 1),
             seconds_per_timestep,
-            "",
         )
         pars.enable_all_options()
         return pars
@@ -105,7 +105,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year + 1, 1, 1),
             seconds_per_timestep,
-            "",
         )
         pars.enable_plots_only()
         return pars
@@ -117,7 +116,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 31),
             seconds_per_timestep,
-            "",
         )
         pars.enable_all_options()
         return pars
@@ -129,7 +127,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 31),
             seconds_per_timestep,
-            "",
         )
         pars.enable_plots_only()
         return pars
@@ -141,7 +138,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 3, 1),
             datetime.datetime(year, 5, 31),
             seconds_per_timestep,
-            "",
         )
 
     @classmethod
@@ -151,7 +147,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 6, 1),
             datetime.datetime(year, 8, 31),
             seconds_per_timestep,
-            "",
         )
         pars.enable_plots_only()
         return pars
@@ -163,7 +158,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 8),
             seconds_per_timestep,
-            "",
         )
 
     @classmethod
@@ -173,7 +167,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 8),
             seconds_per_timestep,
-            "",
         )
 
         pars.enable_plots_only()
@@ -186,7 +179,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 2),
             seconds_per_timestep,
-            "",
         )
 
     @classmethod
@@ -196,7 +188,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 2),
             seconds_per_timestep,
-            "",
         )
         pars.enable_all_options()
         return pars
@@ -208,7 +199,6 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 2),
             seconds_per_timestep,
-            "",
         )
         pars.enable_plots_only()
         return pars
@@ -225,6 +215,8 @@ class SimulationParameters(JSONWizard):
             + str(self.year)
             + "###"
             + str(self.timesteps)
+            + "###"
+            + str(self.country)
         )
 
     def get_unique_key_as_list(self) -> List[str]:
@@ -235,6 +227,7 @@ class SimulationParameters(JSONWizard):
         lines.append(f"Simulation year: {self.year}")
         lines.append(f"Seconds per timestep: {self.seconds_per_timestep}")
         lines.append(f"Total number of timesteps: {self.timesteps}")
+        lines.append(f"Country: {self.country}")
         return lines
 
 

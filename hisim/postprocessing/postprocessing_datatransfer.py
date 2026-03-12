@@ -1,4 +1,4 @@
-""" Data Transfer Object to get all the result data to the post processing. """
+"""Data Transfer Object to get all the result data to the post processing."""
 
 # clean
 from typing import Any, List, Dict
@@ -8,7 +8,6 @@ from hisim.simulationparameters import SimulationParameters
 
 
 class PostProcessingDataTransfer:  # noqa: too-few-public-methods
-
     """Data class for transfering the result data to this class."""
 
     def __init__(  # pylint: disable=dangerous-default-value

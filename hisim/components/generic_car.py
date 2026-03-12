@@ -342,7 +342,7 @@ class Car(cp.Component):
                     consumption_in_kwh = heating_value_of_diesel_in_kwh_per_liter * consumption_in_liter
 
                     emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-                        self.my_simulation_parameters.year
+                        self.my_simulation_parameters.year, self.my_simulation_parameters.country
                     )
                     co2_per_unit = emissions_and_cost_factors.diesel_footprint_in_kg_per_l
                     euro_per_unit = emissions_and_cost_factors.diesel_costs_in_euro_per_l

@@ -1,4 +1,5 @@
-""" Contains all the chart classes. """
+"""Contains all the chart classes."""
+
 # clean
 import gc
 from typing import Any
@@ -16,7 +17,6 @@ mpl.rcParams["agg.path.chunksize"] = 10000
 
 
 class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
-
     """Class for carpet plots."""
 
     def __init__(
@@ -101,7 +101,6 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 
 
 class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
-
     """Makes a line chart."""
 
     # @utils.measure_memory_leak
@@ -170,7 +169,6 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 
 
 class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
-
     """Makes Bar charts."""
 
     original_pv_sol = [
@@ -228,7 +226,9 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         plt.subplots(figsize=self.figsize, dpi=self.dpi)
         plt.bar(ind, data, width)
         plt.xticks(
-            ticks=ind, labels=[str(i) for i in self.months_abbrev_uppercase], fontsize=self.fontsize_ticks,
+            ticks=ind,
+            labels=[str(i) for i in self.months_abbrev_uppercase],
+            fontsize=self.fontsize_ticks,
         )
 
         plt.yticks(fontsize=self.fontsize_ticks)

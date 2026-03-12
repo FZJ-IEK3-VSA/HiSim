@@ -466,49 +466,67 @@ class PostProcessor:
     @utils.measure_execution_time
     def export_results_to_csv(self, ppdt: PostProcessingDataTransfer) -> None:
         """Exports the results to a CSV file."""
-        for column in ppdt.results:
+
+        if PostProcessingOptions.EXPORT_RESULTS_IN_ONE_FILE in ppdt.post_processing_options:
             csvfilename = os.path.join(
                 ppdt.simulation_parameters.result_directory,
-                f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}.csv",
+                "all_results.csv"
             )
             csvfilename = self.shorten_path(csvfilename)
-            ppdt.results[column].to_csv(csvfilename, sep=",", decimal=".")
-
-        if PostProcessingOptions.EXPORT_MONTHLY_RESULTS in ppdt.post_processing_options:
-            for column in ppdt.results_monthly:
+            ppdt.results.to_csv(csvfilename, sep=",", decimal=".")
+        else:
+            for column in ppdt.results:
                 csvfilename = os.path.join(
                     ppdt.simulation_parameters.result_directory,
-                    f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}_monthly.csv",
+                    f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}.csv",
                 )
-                header = [f"{column.split('[', 1)[0]} - monthly [" f"{column.split('[', 1)[1]}"]
                 csvfilename = self.shorten_path(csvfilename)
-                ppdt.results_monthly[column].to_csv(csvfilename, sep=",", decimal=".", header=header)
+                ppdt.results[column].to_csv(csvfilename, sep=",", decimal=".")
+
+            if PostProcessingOptions.EXPORT_MONTHLY_RESULTS in ppdt.post_processing_options:
+                for column in ppdt.results_monthly:
+                    csvfilename = os.path.join(
+                        ppdt.simulation_parameters.result_directory,
+                        f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}_monthly.csv",
+                    )
+                    header = [f"{column.split('[', 1)[0]} - monthly [" f"{column.split('[', 1)[1]}"]
+                    csvfilename = self.shorten_path(csvfilename)
+                    ppdt.results_monthly[column].to_csv(csvfilename, sep=",", decimal=".", header=header)
 
     @utils.measure_execution_time
     def export_results_to_pickle(self, ppdt: PostProcessingDataTransfer) -> None:
         """Exports the results to a Pickle file."""
 
-        for column in ppdt.results:
+        if PostProcessingOptions.EXPORT_RESULTS_IN_ONE_FILE in ppdt.post_processing_options:
             pickle_filename = os.path.join(
                 ppdt.simulation_parameters.result_directory,
-                f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}.pkl",
+                "all_results.pkl"
             )
-
             pickle_filename = self.shorten_path(pickle_filename)
-
             with open(pickle_filename, "wb") as f:
-                pickle.dump(ppdt.results[column], f)
-        if PostProcessingOptions.EXPORT_MONTHLY_RESULTS in ppdt.post_processing_options:
-            for column in ppdt.results_monthly:
-                pickle_filename_monthly = os.path.join(
+                pickle.dump(ppdt.results, f)
+        else:
+            for column in ppdt.results:
+                pickle_filename = os.path.join(
                     ppdt.simulation_parameters.result_directory,
-                    f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}_monthly.pkl",
+                    f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}.pkl",
                 )
 
-                pickle_filename_monthly = self.shorten_path(pickle_filename_monthly)
+                pickle_filename = self.shorten_path(pickle_filename)
 
-                with open(pickle_filename_monthly, "wb") as f:
-                    pickle.dump(ppdt.results_monthly[column], f)
+                with open(pickle_filename, "wb") as f:
+                    pickle.dump(ppdt.results[column], f)
+            if PostProcessingOptions.EXPORT_MONTHLY_RESULTS in ppdt.post_processing_options:
+                for column in ppdt.results_monthly:
+                    pickle_filename_monthly = os.path.join(
+                        ppdt.simulation_parameters.result_directory,
+                        f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}_monthly.pkl",
+                    )
+
+                    pickle_filename_monthly = self.shorten_path(pickle_filename_monthly)
+
+                    with open(pickle_filename_monthly, "wb") as f:
+                        pickle.dump(ppdt.results_monthly[column], f)
 
     def shorten_path(self, path, max_length=250):
         """Shorten path if its longer than 250."""
@@ -1151,34 +1169,140 @@ class PostProcessor:
                 # Get KPIs from ppdt
 
                 kpi_collection_dict = ppdt.kpi_collection_dict[building_object]
-
-                self_sufficiency_rate_in_percent = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Self-sufficiency rate according to solar htw berlin"
+                # conditioned floor area
+                conditioned_floor_area_in_m2 = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Conditioned floor area"
                 )
-                total_costs_in_euro = get_kpi_entries_for_building_sizer(
+                # Total costs
+                annualized_total_costs_in_euro = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Total costs for simulated period"
                 )
-                energy_costs_in_euro = get_kpi_entries_for_building_sizer(
+                # Investment costs
+                annualized_investment_costs_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Investment costs for equipment per simulated period"
+                )
+                annualized_net_investment_costs_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict,
+                    target_key="Investment costs for equipment per simulated period minus subsidies",
+                )
+                # Total upfront net investment costs
+                total_upfront_net_investment_costs_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Investment costs upfront for equipment period minus subsidies"
+                )
+                # Energy costs
+                total_annualized_energy_costs_in_euro = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Energy grid costs for simulated period"
                 )
-                maintenance_costs_in_euro = get_kpi_entries_for_building_sizer(
+                annualzed_energy_costs_electricity_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Costs of grid electricity for simulated period"
+                )
+                annualized_energy_costs_gas_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Costs of grid gas for simulated period"
+                )
+                annualized_energy_costs_heating_fuels_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Costs of other heating fuels for simulated period"
+                )
+                # Maintenance costs
+                annualized_maintenance_costs_in_euro = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Maintenance costs for simulated period"
                 )
-                investment_costs_in_euro = get_kpi_entries_for_building_sizer(
-                    data=kpi_collection_dict, target_key="Investment costs for equipment per simulated period minus subsidies"
-                )
-                total_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
+                # CO2 emissions
+                annualized_total_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Total CO2 emissions for simulated period"
+                )
+                # CO2 emissions fromd evices
+                annualized_co2_emissions_from_devices_in_kg = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="CO2 footprint for equipment per simulated period"
+                )
+                # CO2 emissions from energy consumption
+                annualized_electricity_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="CO2 footprint of grid electricity for simulated period"
+                )
+                annualized_gas_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="CO2 footprint of grid gas for simulated period"
+                )
+                annualized_heating_fuels_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="CO2 footprint of other heating fuels for simulated period"
+                )
+                annualized_energy_co2_emissions_in_kg = (
+                    annualized_electricity_co2_emissions_in_kg
+                    + annualized_gas_co2_emissions_in_kg
+                    + annualized_heating_fuels_co2_emissions_in_kg
+                )
+
+                # Other
+                self_sufficiency_rate_electricity_in_percent = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Self-sufficiency rate according to solar htw berlin"
+                )
+                self_sufficiency_rate_all_energy_in_percent = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Total energy self-suffiency rate"
+                )
+                annualized_purchased_energy_consumption_in_kwh = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Purchased energy consumption for simulated period"
+                )
+                annualized_electricity_to_grid_in_kwh = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Total energy to grid"
+                )
+                annualized_electricity_from_grid_in_kwh = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Total energy from grid"
+                )
+                minimum_indoor_temperature_in_celsius = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Minimum building indoor air temperature reached"
+                )
+                maximum_indoor_temperature_in_celsius = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Maximum building indoor air temperature reached"
+                )
+                deviation_from_minimum_indoor_temperature_in_celsius_hour = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict,
+                    target_key="Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius",
+                )
+                deviation_from_maximum_indoor_temperature_in_celsius_hour = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict,
+                    target_key="Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius",
                 )
 
                 # initialize json interface to pass kpi's to building_sizer
                 kpi_config = KPIConfig(
-                    self_sufficiency_rate_in_percent=self_sufficiency_rate_in_percent,
-                    total_costs_in_euro=total_costs_in_euro,
-                    total_co2_emissions_in_kg=total_co2_emissions_in_kg,
-                    energy_grid_costs_in_euro=energy_costs_in_euro,
-                    maintenance_costs_in_euro=maintenance_costs_in_euro,
-                    investment_costs_in_euro=investment_costs_in_euro,
+                    self_sufficiency_rate_electricity_in_percent=self_sufficiency_rate_electricity_in_percent,
+                    self_sufficiency_rate_all_energy_in_percent=self_sufficiency_rate_all_energy_in_percent,
+                    annualized_total_costs_in_euro_per_m2=annualized_total_costs_in_euro / conditioned_floor_area_in_m2,
+                    total_upfront_net_investment_costs_in_euro=total_upfront_net_investment_costs_in_euro,
+                    annualized_total_co2_emissions_in_kg_per_m2=annualized_total_co2_emissions_in_kg
+                    / conditioned_floor_area_in_m2,
+                    annualized_co2_emissions_for_devices_in_kg_per_m2=annualized_co2_emissions_from_devices_in_kg
+                    / conditioned_floor_area_in_m2,
+                    annualized_energy_co2_emissions_in_kg_per_m2=annualized_energy_co2_emissions_in_kg
+                    / conditioned_floor_area_in_m2,
+                    annualized_electricity_co2_emissions_in_kg_per_m2=annualized_electricity_co2_emissions_in_kg
+                    / conditioned_floor_area_in_m2,
+                    annualized_gas_co2_emissions_in_kg_per_m2=annualized_gas_co2_emissions_in_kg
+                    / conditioned_floor_area_in_m2,
+                    annualized_heat_co2_emissions_in_kg_per_m2=annualized_heating_fuels_co2_emissions_in_kg
+                    / conditioned_floor_area_in_m2,
+                    annualized_energy_costs_in_euro_per_m2=total_annualized_energy_costs_in_euro
+                    / conditioned_floor_area_in_m2,
+                    annualized_electricity_costs_in_euro_per_m2=annualzed_energy_costs_electricity_in_euro
+                    / conditioned_floor_area_in_m2,
+                    annualized_gas_costs_in_euro_per_m2=annualized_energy_costs_gas_in_euro
+                    / conditioned_floor_area_in_m2,
+                    annualized_heat_costs_in_euro_per_m2=annualized_energy_costs_heating_fuels_in_euro
+                    / conditioned_floor_area_in_m2,
+                    annualized_maintenance_costs_in_euro_per_m2=annualized_maintenance_costs_in_euro
+                    / conditioned_floor_area_in_m2,
+                    annualized_investment_costs_in_euro_per_m2=annualized_investment_costs_in_euro
+                    / conditioned_floor_area_in_m2,
+                    annualized_net_investment_costs_in_euro_per_m2=annualized_net_investment_costs_in_euro
+                    / conditioned_floor_area_in_m2,
+                    annualized_purchased_energy_consumption_in_kwh_per_m2=annualized_purchased_energy_consumption_in_kwh
+                    / conditioned_floor_area_in_m2,
+                    annualized_electricity_to_grid_in_kwh_per_m2=annualized_electricity_to_grid_in_kwh
+                    / conditioned_floor_area_in_m2,
+                    annualized_electricity_from_grid_in_kwh_per_m2=annualized_electricity_from_grid_in_kwh
+                    / conditioned_floor_area_in_m2,
+                    minimum_indoor_temperature_in_celsius=minimum_indoor_temperature_in_celsius,
+                    maximum_indoor_temperature_in_celsius=maximum_indoor_temperature_in_celsius,
+                    deviation_from_max_indoor_temperature_in_celsius_hour=deviation_from_maximum_indoor_temperature_in_celsius_hour,
+                    deviation_from_min_indoor_temperature_in_celsius_hour=deviation_from_minimum_indoor_temperature_in_celsius_hour,
                 )
 
                 kpi_dict = kpi_config.to_dict()  # type: ignore

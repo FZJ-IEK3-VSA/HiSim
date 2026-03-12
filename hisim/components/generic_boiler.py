@@ -365,6 +365,7 @@ class GenericBoiler(Component):
     EnergyDemandDhw = "EnergyDemandDhw"
     ThermalOutputPowerDhw = "ThermalOutputPowerDhw"
     ThermalOutputEnergyDhw = "ThermalOutputEnergyDhw"
+    TotalFuelConsumption = "TotalFuelConsumption"
 
     def __init__(
         self,
@@ -402,6 +403,14 @@ class GenericBoiler(Component):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.ANY,
             True,
+        )
+
+        self.total_fuel_input_power_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            GenericBoiler.TotalFuelConsumption,
+            lt.LoadTypes.ANY,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.TotalFuelConsumption} will follow.",
         )
 
         # Space heating
@@ -657,7 +666,13 @@ class GenericBoiler(Component):
             real_combustion_efficiency = self.min_combustion_efficiency
         else:
             maximum_power_used_in_watt = control_signal * self.maximal_thermal_power_in_watt
-            real_combustion_efficiency = self.min_combustion_efficiency + delta_efficiency * control_signal
+            # values for the efficiency
+            delta_efficiency = self.max_combustion_efficiency - self.min_combustion_efficiency
+            delta_power = self.maximal_thermal_power_in_watt - self.minimal_thermal_power_in_watt
+            slope = delta_efficiency / delta_power
+            # real efficiency formula
+            real_combustion_efficiency = (self.min_combustion_efficiency
+                + (maximum_power_used_in_watt - self.minimal_thermal_power_in_watt) * slope)
 
         # energy consumption
         fuel_energy_consumption_in_watt_hour = (
@@ -674,6 +689,11 @@ class GenericBoiler(Component):
             / (self.specific_heat_capacity_water_in_joule_per_kilogram_per_celsius * temperature_delta)
             if temperature_delta > 0
             else 0
+        )
+
+        stsv.set_output_value(
+            self.total_fuel_input_power_channel,
+            maximum_power_used_in_watt,
         )
 
         if operating_mode == HeatingMode.SPACE_HEATING.value:
@@ -850,7 +870,7 @@ class GenericBoiler(Component):
             1,
         )
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-            self.my_simulation_parameters.year
+            self.my_simulation_parameters.year, self.my_simulation_parameters.country
         )
         if self.energy_carrier == lt.LoadTypes.GAS:
             kpi_tag = KpiTagEnumClass.GAS_BOILER
@@ -1093,9 +1113,9 @@ class GenericBoilerControllerConfig(ConfigBase):
     set_temperature_difference_for_full_power: float
     minimum_runtime_in_seconds: float
     minimum_resting_time_in_seconds: float
-    dhw_hysteresis_offset: float
     with_domestic_hot_water_preparation: bool
     secondary_mode: Optional[bool]  # If used as secondary heat generator for DHW in hybrid mode
+    hysteresis_water_temperature_offset: float
 
     @classmethod
     def get_default_modulating_generic_boiler_controller_config(
@@ -1105,22 +1125,23 @@ class GenericBoilerControllerConfig(ConfigBase):
         building_name: str = "BUI1",
         secondary_mode: bool = False,
         with_domestic_hot_water_preparation: bool = False,
+        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
     ) -> Any:
         """Gets a default Generic Boiler Controller, for example for gas and oil boilers."""
         return GenericBoilerControllerConfig(
             building_name=building_name,
             name="ModulatingBoilerController",
             is_modulating=True,
-            set_heating_threshold_outside_temperature_in_celsius=16.0,
             # get min and max thermal power from Generic Boiler config
             minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
             minimum_runtime_in_seconds=1800,
             minimum_resting_time_in_seconds=1800,
-            dhw_hysteresis_offset=10,
             secondary_mode=secondary_mode,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
+            hysteresis_water_temperature_offset=10,
         )
 
     @classmethod
@@ -1129,6 +1150,7 @@ class GenericBoilerControllerConfig(ConfigBase):
         maximal_thermal_power_in_watt: float,
         minimal_thermal_power_in_watt: float,
         with_domestic_hot_water_preparation: bool = False,
+        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         building_name: str = "BUI1",
     ) -> Any:
         """Gets a default Generic Boiler Controller."""
@@ -1136,16 +1158,16 @@ class GenericBoilerControllerConfig(ConfigBase):
             building_name=building_name,
             name="OnOffBoilerController",
             is_modulating=False,
-            set_heating_threshold_outside_temperature_in_celsius=16.0,
             # get min and max thermal power from Generic Boiler config
             minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
             minimum_resting_time_in_seconds=0,
             minimum_runtime_in_seconds=0,
-            dhw_hysteresis_offset=10,
             secondary_mode=False,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
+            hysteresis_water_temperature_offset=10,
         )
 
     @classmethod
@@ -1154,6 +1176,7 @@ class GenericBoilerControllerConfig(ConfigBase):
         maximal_thermal_power_in_watt: float,
         minimal_thermal_power_in_watt: float,
         with_domestic_hot_water_preparation: bool = False,
+        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         building_name: str = "BUI1",
     ) -> Any:
         """Gets a default controller for pellet boiler."""
@@ -1161,16 +1184,16 @@ class GenericBoilerControllerConfig(ConfigBase):
             building_name=building_name,
             name="PelletBoilerController",
             is_modulating=False,
-            set_heating_threshold_outside_temperature_in_celsius=16.0,
             # get min and max thermal power from Generic Boiler config
             minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
             minimum_resting_time_in_seconds=15 * 60,
             minimum_runtime_in_seconds=30 * 60,
-            dhw_hysteresis_offset=10,
             secondary_mode=False,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
+            hysteresis_water_temperature_offset=10,
         )
 
     @classmethod
@@ -1179,6 +1202,7 @@ class GenericBoilerControllerConfig(ConfigBase):
         maximal_thermal_power_in_watt: float,
         minimal_thermal_power_in_watt: float,
         with_domestic_hot_water_preparation: bool = False,
+        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         building_name: str = "BUI1",
     ) -> Any:
         """Gets a default controller for wood chip boiler."""
@@ -1186,16 +1210,16 @@ class GenericBoilerControllerConfig(ConfigBase):
             building_name=building_name,
             name="WoodChipBoilerController",
             is_modulating=False,
-            set_heating_threshold_outside_temperature_in_celsius=16.0,
             # get min and max thermal power from Generic Boiler config
             minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
             set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
             minimum_resting_time_in_seconds=30 * 60,
             minimum_runtime_in_seconds=60 * 60,
-            dhw_hysteresis_offset=10,  # overheating of buffer storage to reduce number of startups
             secondary_mode=False,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
+            hysteresis_water_temperature_offset=10,
         )
 
 
@@ -1521,9 +1545,10 @@ class GenericBoilerController(Component):
             set_temperatures=SetTemperatureConfig(
                 set_temperature_space_heating=heating_flow_temperature_from_heat_distribution_system,
                 set_temperature_dhw=self.warm_water_temperature_aim_in_celsius,
-                hysteresis_dhw_offset=self.config.dhw_hysteresis_offset,
-                outside_temperature_threshold=self.config.set_heating_threshold_outside_temperature_in_celsius,
+                hysteresis_water_temperature_offset=self.config.hysteresis_water_temperature_offset,
+                outside_temperature_threshold=self.config.set_heating_threshold_outside_temperature_in_celsius
             ),
+            parallel_space_heating_and_dhw_option=False
         )
 
         # Enforce minimum run and idle times (if necessary overwrites previously set mode)
@@ -1549,12 +1574,12 @@ class GenericBoilerController(Component):
                 control_signal = self.modulate_power(
                     water_temperature_input_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius,
                     set_heating_flow_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius
-                    + self.config.dhw_hysteresis_offset,
+                    + self.config.hysteresis_water_temperature_offset,
                 )
             else:
                 control_signal = 1
             temperature_delta = max(
-                (self.warm_water_temperature_aim_in_celsius + self.config.dhw_hysteresis_offset)
+                (self.warm_water_temperature_aim_in_celsius + self.config.hysteresis_water_temperature_offset)
                 - water_temperature_input_from_dhw_water_storage_in_celsius,
                 0,
             )

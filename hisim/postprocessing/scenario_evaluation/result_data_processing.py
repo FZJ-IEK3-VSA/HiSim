@@ -1,6 +1,5 @@
 """Result Data Processing and Plotting for Scenario Comparison."""
 
-
 import os
 from enum import Enum
 from dataclasses import dataclass
@@ -11,7 +10,6 @@ from hisim import log
 
 
 class ScenarioDataProcessing:
-
     """ScenarioDataProcessing class."""
 
     @staticmethod
@@ -37,7 +35,8 @@ class ScenarioDataProcessing:
         if dict_of_scenarios_to_check is not None and dict_of_scenarios_to_check != {}:
 
             file_df = ScenarioDataProcessing.check_if_scenario_exists_and_filter_dataframe_for_scenarios_dict(
-                data_frame=file_df, dict_of_scenarios_to_check=dict_of_scenarios_to_check,
+                data_frame=file_df,
+                dict_of_scenarios_to_check=dict_of_scenarios_to_check,
             )
 
         return (
@@ -61,13 +60,17 @@ class ScenarioDataProcessing:
 
     @staticmethod
     def get_statistics_of_data_and_write_to_excel(
-        filtered_data: pd.DataFrame, x_and_y_plot_data: pd.DataFrame, path_to_save: str, kind_of_data_set: str,
+        filtered_data: pd.DataFrame,
+        x_and_y_plot_data: pd.DataFrame,
+        path_to_save: str,
+        kind_of_data_set: str,
     ) -> None:
         """Use pandas describe method to get statistical values of certain data."""
 
         # create a excel writer object
         with pd.ExcelWriter(  # pylint: disable=abstract-class-instantiated
-            path=os.path.join(path_to_save, f"{kind_of_data_set}_stats.xlsx"), mode="w",
+            path=os.path.join(path_to_save, f"{kind_of_data_set}_stats.xlsx"),
+            mode="w",
         ) as writer:
             # statistical data
             statistical_data = filtered_data.describe()
@@ -77,7 +80,9 @@ class ScenarioDataProcessing:
 
     @staticmethod
     def aggregate_all_values_for_one_scenario_and_rename(
-        dataframe: pd.DataFrame, list_of_scenarios_to_check: List, column_name_to_check: str,
+        dataframe: pd.DataFrame,
+        list_of_scenarios_to_check: List,
+        column_name_to_check: str,
     ) -> pd.DataFrame:
         """Check for one scenario."""
 
@@ -109,7 +114,8 @@ class ScenarioDataProcessing:
 
     @staticmethod
     def check_if_scenario_exists_and_filter_dataframe_for_scenarios_dict(
-        data_frame: pd.DataFrame, dict_of_scenarios_to_check: Dict[str, List[str]],
+        data_frame: pd.DataFrame,
+        dict_of_scenarios_to_check: Dict[str, List[str]],
     ) -> pd.DataFrame:
         """Check if scenario exists and filter dataframe for scenario."""
 
@@ -186,7 +192,6 @@ class ScenarioDataProcessing:
 
 
 class ResultDataTypeEnum(Enum):
-
     """ResultDataTypeEnum class.
 
     Here it is defined what kind of data you want to collect.
@@ -199,7 +204,6 @@ class ResultDataTypeEnum(Enum):
 
 
 class ResultDataProcessingModeEnum(Enum):
-
     """ResultDataProcessingModeEnum class.
 
     Here it is defined what kind of data processing you want to make.
@@ -218,14 +222,12 @@ class DataFormatEnum(Enum):
 
 @dataclass
 class DataInfo:
-
     """Data info class is an object for storing data in lists of strings."""
 
     descriptions: List[str]
 
 
 class OutputVariableEnumClass(Enum):
-
     """Output variable enum class is for determining variables which will be checked and plotted."""
 
     KPI_DATA = DataInfo(
@@ -343,7 +345,6 @@ class OutputVariableEnumClass(Enum):
 
 
 class ScenarioAggregationEnumClass(Enum):
-
     """Scenario Aggregation Enum class is for deciding according to which scenarios the data will be aggregated."""
 
     BUILDING_TYPE = DataInfo(descriptions=["SFH", "TH", "MFH", "AB"])

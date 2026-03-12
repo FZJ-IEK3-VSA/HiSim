@@ -1,4 +1,5 @@
-""" Contains the base class for the charts. """
+"""Contains the base class for the charts."""
+
 # clean
 import os
 import re
@@ -9,7 +10,6 @@ from hisim import result_path_provider
 
 
 class Chart:  # noqa: too-few-public-methods
-
     """Parent class for plots to be exported."""
 
     months_abbrev_uppercase = [
@@ -100,9 +100,7 @@ class Chart:  # noqa: too-few-public-methods
         self.property = chart_property
         if output2 is not None:
             self.output2 = output2
-            self.filename = (
-                f"{self.type.lower()}_double{self.figure_format.value}"
-            )
+            self.filename = f"{self.type.lower()}_double{self.figure_format.value}"
         else:
             self.filename = f"{self.type.lower()}{self.figure_format.value}"
         self.filepath = os.path.join(self.directory_path, self.filename)
@@ -112,7 +110,7 @@ class Chart:  # noqa: too-few-public-methods
 
     def rescale_y_axis(self, y_values: Any, units: Any) -> Tuple[Any, Any]:
         """Rescale y_values of plots."""
-        max_scale = np.max(np.abs(y_values))   # type: ignore
+        max_scale = np.max(np.abs(y_values))  # type: ignore
 
         if units not in ["-", "%"]:
             scale = ""
@@ -142,7 +140,6 @@ class Chart:  # noqa: too-few-public-methods
 
 @dataclass
 class ChartFontsAndSize:
-
     """Give the font sizes and figure sizes of the figures."""
 
     figsize = (6, 4)

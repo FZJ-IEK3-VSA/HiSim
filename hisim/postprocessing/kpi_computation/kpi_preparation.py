@@ -64,8 +64,10 @@ class KpiPreparation:
         output: ComponentOutput
 
         for index, output in enumerate(all_outputs):
-            if (building_objects_in_district == output.component_name.split("_")[0] or
-                    not self.simulation_parameters.multiple_buildings):
+            if (
+                building_objects_in_district == output.component_name.split("_")[0]
+                or not self.simulation_parameters.multiple_buildings
+            ):
                 if output.postprocessing_flag is not None:
                     if InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag:
                         total_production_ids.append(index)
@@ -569,6 +571,37 @@ class KpiPreparation:
             {ratio_in_percent_entry.name: ratio_in_percent_entry.to_dict()}
         )
 
+    def get_total_energy_self_sufficiency(
+        self,
+        self_sufficency_rate_for_electricity_in_percent: float,
+        total_electricity_consumption_in_kwh: float,
+        gas_demand_from_grid_in_kwh: float,
+        total_gas_consumption_in_kwh: float,
+        other_fuel_consumption_in_kwh: float,
+    ):
+        """Calculate self-sufficiency including all energy consumptions for all loadtypes.
+
+        Please note that the fuel meter has a self-sufficiency of 0% (all energy is pruchased).
+        """
+        total_energy_consumption_in_kwh = (
+            total_electricity_consumption_in_kwh + total_gas_consumption_in_kwh + other_fuel_consumption_in_kwh
+        )
+        self_sufficiency_gas_in_percent = (
+            (1 - gas_demand_from_grid_in_kwh / total_gas_consumption_in_kwh) * 100
+            if total_gas_consumption_in_kwh != 0
+            else 0
+        )
+        self_suffciency_other_fuels_in_percent = 0
+        total_self_sufficient_energy_consumption_in_kwh = (
+            self_sufficency_rate_for_electricity_in_percent * total_electricity_consumption_in_kwh
+            + self_sufficiency_gas_in_percent * total_gas_consumption_in_kwh
+            + self_suffciency_other_fuels_in_percent * other_fuel_consumption_in_kwh
+        )
+        total_energy_self_sufficiency_in_percent = (
+            total_self_sufficient_energy_consumption_in_kwh / total_energy_consumption_in_kwh
+        )
+        return round(total_energy_self_sufficiency_in_percent, 2)
+
     def read_opex_and_capex_costs_from_results(self, building_object: str) -> None:
         """Get CAPEX and OPEX costs for simulated period.
 
@@ -577,10 +610,14 @@ class KpiPreparation:
         # get costs and emissions from electricity meter and gas meter
         electricity_costs_in_euro: float = 0
         electricity_co2_in_kg: float = 0
+        electricity_from_grid_in_kwh: float = 0
         gas_costs_in_euro: float = 0
         gas_co2_in_kg: float = 0
-        heating_costs_in_euro: float = 0
-        heating_co2_in_kg: float = 0
+        gas_from_grid_in_kwh: float = 0
+        total_gas_consumption_in_kwh: float = 0
+        other_fuel_costs_in_euro: float = 0
+        other_fuel_co2_in_kg: float = 0
+        other_fuel_energy_consumption_kwh: float = 0
 
         for kpi_name, kpi_entry in self.kpi_collection_dict_unsorted[building_object].items():
             if kpi_entry["tag"] == KpiTagEnumClass.ELECTRICITY_METER.value:
@@ -588,19 +625,39 @@ class KpiPreparation:
                     electricity_costs_in_euro = kpi_entry["value"]
                 if kpi_name == "CO2 footprint of electricity consumption from grid":
                     electricity_co2_in_kg = kpi_entry["value"]
+                if kpi_name == "Total energy from grid":
+                    electricity_from_grid_in_kwh = kpi_entry["value"]
 
             elif kpi_entry["tag"] == KpiTagEnumClass.GAS_METER.value:
                 if kpi_name == "Opex costs of gas consumption from grid":
                     gas_costs_in_euro = kpi_entry["value"]
                 if kpi_name == "CO2 footprint of gas consumption from grid":
                     gas_co2_in_kg = kpi_entry["value"]
+                if kpi_name == "Total gas demand from grid":
+                    gas_from_grid_in_kwh = kpi_entry["value"]
+                if kpi_name == "Total gas consumption":
+                    total_gas_consumption_in_kwh = kpi_entry["value"]
 
-            elif kpi_entry["tag"] == KpiTagEnumClass.HEATING_METER.value:
+            elif kpi_entry["tag"] == KpiTagEnumClass.FUEL_METER.value:
                 if kpi_name == "OPEX - Energy costs":
-                    heating_costs_in_euro = kpi_entry["value"]
+                    other_fuel_costs_in_euro = kpi_entry["value"]
                 if kpi_name == "OPEX - CO2 Footprint":
-                    heating_co2_in_kg = kpi_entry["value"]
+                    other_fuel_co2_in_kg = kpi_entry["value"]
+                if kpi_name == "Total energy consumption":
+                    other_fuel_energy_consumption_kwh = kpi_entry["value"]
 
+        # calculate total energy self-suffciency for gas, heat and electricity
+        total_energy_self_sufficiency_in_percent = self.get_total_energy_self_sufficiency(
+            self_sufficency_rate_for_electricity_in_percent=self.kpi_collection_dict_unsorted[building_object][
+                "Self-sufficiency rate according to solar htw berlin"
+            ]["value"],
+            total_electricity_consumption_in_kwh=self.kpi_collection_dict_unsorted[building_object][
+                "Total electricity consumption"
+            ]["value"],
+            gas_demand_from_grid_in_kwh=gas_from_grid_in_kwh,
+            total_gas_consumption_in_kwh=total_gas_consumption_in_kwh,
+            other_fuel_consumption_in_kwh=other_fuel_energy_consumption_kwh,
+        )
         # get CAPEX and OPEX costs for simulated period
         capex_results_path = os.path.join(
             self.simulation_parameters.result_directory, "investment_cost_co2_footprint.csv"
@@ -616,19 +673,17 @@ class KpiPreparation:
                 total_maintenance_cost_per_simulated_period = opex_df["Maintenance costs per year [EUR]"].loc[
                     building_object + "_Total"
                 ]
-                total_maintenance_cost_per_simulated_period_without_hp = opex_df["Maintenance costs per year [EUR]"].loc[
-                    building_object + "_Total_without_heatpump"
-                ]
+                total_maintenance_cost_per_simulated_period_without_hp = opex_df[
+                    "Maintenance costs per year [EUR]"
+                ].loc[building_object + "_Total_without_heatpump"]
                 total_maintenance_cost_per_simulated_period_only_hp = opex_df["Maintenance costs per year [EUR]"].loc[
                     building_object + "_Total_only_heatpump"
                 ]
             if not self.simulation_parameters.multiple_buildings:
-                total_maintenance_cost_per_simulated_period = opex_df["Maintenance costs per year [EUR]"].loc[
-                    "Total"
-                ]
-                total_maintenance_cost_per_simulated_period_without_hp = opex_df["Maintenance costs per year [EUR]"].loc[
-                    "Total_without_heatpump"
-                ]
+                total_maintenance_cost_per_simulated_period = opex_df["Maintenance costs per year [EUR]"].loc["Total"]
+                total_maintenance_cost_per_simulated_period_without_hp = opex_df[
+                    "Maintenance costs per year [EUR]"
+                ].loc["Total_without_heatpump"]
                 total_maintenance_cost_per_simulated_period_only_hp = opex_df["Maintenance costs per year [EUR]"].loc[
                     "Total_only_heatpump"
                 ]
@@ -646,62 +701,65 @@ class KpiPreparation:
                     building_object + "_Total"
                 ]
                 # investment minus subsidies
-                total_rest_investment_cost_per_simulated_period = capex_df["Rest-Investment for simulated period [EUR]"].loc[
-                    building_object + "_Total"
-                ]
-                total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
-                    building_object + "_Total"
-                ]
-                total_investment_cost_per_simulated_period_without_hp = capex_df["Investment for simulated period [EUR]"].loc[
-                    building_object + "_Total_without_heatpump"
-                ]
-                total_rest_investment_cost_per_simulated_period_without_hp = capex_df["Rest-Investment for simulated period [EUR]"].loc[
-                    building_object + "_Total"
-                ]
-                total_device_co2_footprint_per_simulated_period_without_hp = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
-                    building_object + "_Total_without_heatpump"
-                ]
-                total_investment_cost_per_simulated_period_only_hp = capex_df["Investment for simulated period [EUR]"].loc[
-                    building_object + "_Total_only_heatpump"
-                ]
-                total_rest_investment_cost_per_simulated_period_only_hp = capex_df["Rest-Investment for simulated period [EUR]"].loc[
-                    building_object + "_Total"
-                ]
-                total_device_co2_footprint_per_simulated_period_only_hp = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
-                    building_object + "_Total_only_heatpump"
-                ]
+                total_rest_investment_cost_per_simulated_period = capex_df[
+                    "Rest-Investment for simulated period [EUR]"
+                ].loc[building_object + "_Total"]
+                total_rest_investment_cost_upfront = capex_df["Rest-Investment [EUR]"].loc[building_object + "_Total"]
+                total_device_co2_footprint_per_simulated_period = capex_df[
+                    "Device CO2-footprint for simulated period [kg]"
+                ].loc[building_object + "_Total"]
+                total_investment_cost_per_simulated_period_without_hp = capex_df[
+                    "Investment for simulated period [EUR]"
+                ].loc[building_object + "_Total_without_heatpump"]
+                total_rest_investment_cost_per_simulated_period_without_hp = capex_df[
+                    "Rest-Investment for simulated period [EUR]"
+                ].loc[building_object + "_Total"]
+                total_device_co2_footprint_per_simulated_period_without_hp = capex_df[
+                    "Device CO2-footprint for simulated period [kg]"
+                ].loc[building_object + "_Total_without_heatpump"]
+                total_investment_cost_per_simulated_period_only_hp = capex_df[
+                    "Investment for simulated period [EUR]"
+                ].loc[building_object + "_Total_only_heatpump"]
+                total_rest_investment_cost_per_simulated_period_only_hp = capex_df[
+                    "Rest-Investment for simulated period [EUR]"
+                ].loc[building_object + "_Total"]
+                total_device_co2_footprint_per_simulated_period_only_hp = capex_df[
+                    "Device CO2-footprint for simulated period [kg]"
+                ].loc[building_object + "_Total_only_heatpump"]
             if not self.simulation_parameters.multiple_buildings:
                 total_investment_cost_per_simulated_period = capex_df["Investment for simulated period [EUR]"].loc[
                     "Total"
                 ]
-                total_rest_investment_cost_per_simulated_period = capex_df["Rest-Investment for simulated period [EUR]"].loc[
-                    "Total"
-                ]
-                total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
-                    "Total"
-                ]
-                total_investment_cost_per_simulated_period_without_hp = capex_df["Investment for simulated period [EUR]"].loc[
-                    "Total_without_heatpump"
-                ]
-                total_rest_investment_cost_per_simulated_period_without_hp = capex_df["Rest-Investment for simulated period [EUR]"].loc[
-                    "Total_without_heatpump"
-                ]
-                total_device_co2_footprint_per_simulated_period_without_hp = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
-                    "Total_without_heatpump"
-                ]
-                total_investment_cost_per_simulated_period_only_hp = capex_df["Investment for simulated period [EUR]"].loc[
-                    "Total_only_heatpump"
-                ]
-                total_rest_investment_cost_per_simulated_period_only_hp = capex_df["Rest-Investment for simulated period [EUR]"].loc[
-                    "Total_only_heatpump"
-                ]
-                total_device_co2_footprint_per_simulated_period_only_hp = capex_df["Device CO2-footprint for simulated period [kg]"].loc[
-                    "Total_only_heatpump"
-                ]
+                total_rest_investment_cost_per_simulated_period = capex_df[
+                    "Rest-Investment for simulated period [EUR]"
+                ].loc["Total"]
+                total_rest_investment_cost_upfront = capex_df["Rest-Investment [EUR]"].loc["Total"]
+                total_device_co2_footprint_per_simulated_period = capex_df[
+                    "Device CO2-footprint for simulated period [kg]"
+                ].loc["Total"]
+                total_investment_cost_per_simulated_period_without_hp = capex_df[
+                    "Investment for simulated period [EUR]"
+                ].loc["Total_without_heatpump"]
+                total_rest_investment_cost_per_simulated_period_without_hp = capex_df[
+                    "Rest-Investment for simulated period [EUR]"
+                ].loc["Total_without_heatpump"]
+                total_device_co2_footprint_per_simulated_period_without_hp = capex_df[
+                    "Device CO2-footprint for simulated period [kg]"
+                ].loc["Total_without_heatpump"]
+                total_investment_cost_per_simulated_period_only_hp = capex_df[
+                    "Investment for simulated period [EUR]"
+                ].loc["Total_only_heatpump"]
+                total_rest_investment_cost_per_simulated_period_only_hp = capex_df[
+                    "Rest-Investment for simulated period [EUR]"
+                ].loc["Total_only_heatpump"]
+                total_device_co2_footprint_per_simulated_period_only_hp = capex_df[
+                    "Device CO2-footprint for simulated period [kg]"
+                ].loc["Total_only_heatpump"]
         else:
             log.warning("CAPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_CAPEX")
             total_investment_cost_per_simulated_period = 0
             total_rest_investment_cost_per_simulated_period = 0
+            total_rest_investment_cost_upfront = 0
             total_device_co2_footprint_per_simulated_period = 0
             total_investment_cost_per_simulated_period_without_hp = 0
             total_rest_investment_cost_per_simulated_period_without_hp = 0
@@ -751,10 +809,10 @@ class KpiPreparation:
                 else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
             ),
         )
-        total_heat_costs_entry = KpiEntry(
-            name="Costs of grid heat for simulated period",
+        total_other_fuel_heat_costs_entry = KpiEntry(
+            name="Costs of other heating fuels for simulated period",
             unit="EUR",
-            value=heating_costs_in_euro,
+            value=other_fuel_costs_in_euro,
             tag=(
                 KpiTagEnumClass.COSTS
                 if not any(word in building_object for word in DistrictNames)
@@ -762,14 +820,20 @@ class KpiPreparation:
             ),
         )
         total_heat_co2_emissions_entry = KpiEntry(
-            name="CO2 footprint of grid heat consumption for simulated period",
+            name="CO2 footprint of other heating fuels for simulated period",
             unit="kg",
-            value=heating_co2_in_kg,
+            value=other_fuel_co2_in_kg,
             tag=(
                 KpiTagEnumClass.EMISSIONS
                 if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
             ),
+        )
+        total_energy_self_sufficiency_entry = KpiEntry(
+            name="Total energy self-suffiency rate",
+            unit="%",
+            value=total_energy_self_sufficiency_in_percent,
+            tag=(KpiTagEnumClass.GENERAL),
         )
         total_investment_cost_per_simulated_period_entry = KpiEntry(
             name="Investment costs for equipment per simulated period",
@@ -785,6 +849,16 @@ class KpiPreparation:
             name="Investment costs for equipment per simulated period minus subsidies",
             unit="EUR",
             value=total_rest_investment_cost_per_simulated_period,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if not any(word in building_object for word in DistrictNames)
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
+        )
+        total_rest_investment_cost_upfront_entry = KpiEntry(
+            name="Investment costs upfront for equipment period minus subsidies",
+            unit="EUR",
+            value=total_rest_investment_cost_upfront,
             tag=(
                 KpiTagEnumClass.COSTS
                 if not any(word in building_object for word in DistrictNames)
@@ -815,14 +889,18 @@ class KpiPreparation:
         total_energy_cost_entry = KpiEntry(
             name="Energy grid costs for simulated period",
             unit="EUR",
-            value=gas_costs_in_euro
-            + electricity_costs_in_euro
-            + heating_costs_in_euro,
+            value=gas_costs_in_euro + electricity_costs_in_euro + other_fuel_costs_in_euro,
             tag=(
                 KpiTagEnumClass.COSTS
                 if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
+        )
+        total_energy_consumption_entry = KpiEntry(
+            name="Purchased energy consumption for simulated period",
+            unit="kWh",
+            value=gas_from_grid_in_kwh + electricity_from_grid_in_kwh + other_fuel_energy_consumption_kwh,
+            tag=(KpiTagEnumClass.GENERAL),
         )
 
         total_cost_entry = KpiEntry(
@@ -832,7 +910,7 @@ class KpiPreparation:
             + total_rest_investment_cost_per_simulated_period
             + gas_costs_in_euro
             + electricity_costs_in_euro
-            + heating_costs_in_euro,
+            + other_fuel_costs_in_euro,
             tag=(
                 KpiTagEnumClass.COSTS
                 if not any(word in building_object for word in DistrictNames)
@@ -845,7 +923,7 @@ class KpiPreparation:
             value=total_device_co2_footprint_per_simulated_period
             + gas_co2_in_kg
             + electricity_co2_in_kg
-            + heating_co2_in_kg,
+            + other_fuel_co2_in_kg,
             tag=(
                 KpiTagEnumClass.EMISSIONS
                 if not any(word in building_object for word in DistrictNames)
@@ -900,7 +978,7 @@ class KpiPreparation:
             + total_rest_investment_cost_per_simulated_period_without_hp
             + gas_costs_in_euro
             + electricity_costs_in_euro
-            + heating_costs_in_euro,
+            + other_fuel_costs_in_euro,
             tag=(
                 KpiTagEnumClass.COSTS
                 if not any(word in building_object for word in DistrictNames)
@@ -913,7 +991,7 @@ class KpiPreparation:
             value=total_device_co2_footprint_per_simulated_period_without_hp
             + gas_co2_in_kg
             + electricity_co2_in_kg
-            + heating_co2_in_kg,
+            + other_fuel_co2_in_kg,
             tag=(
                 KpiTagEnumClass.EMISSIONS
                 if not any(word in building_object for word in DistrictNames)
@@ -965,7 +1043,8 @@ class KpiPreparation:
             name="Total costs only heatpump for simulated period",
             unit="EUR",
             value=(
-                total_maintenance_cost_per_simulated_period_only_hp + total_rest_investment_cost_per_simulated_period_only_hp
+                total_maintenance_cost_per_simulated_period_only_hp
+                + total_rest_investment_cost_per_simulated_period_only_hp
             ),
             tag=(
                 KpiTagEnumClass.COSTS
@@ -991,12 +1070,15 @@ class KpiPreparation:
                 total_electricity_co2_footprint_entry.name: total_electricity_co2_footprint_entry.to_dict(),
                 total_gas_costs_entry.name: total_gas_costs_entry.to_dict(),
                 total_gas_co2_emissions_entry.name: total_gas_co2_emissions_entry.to_dict(),
-                total_heat_costs_entry.name: total_heat_costs_entry.to_dict(),
+                total_other_fuel_heat_costs_entry.name: total_other_fuel_heat_costs_entry.to_dict(),
                 total_heat_co2_emissions_entry.name: total_heat_co2_emissions_entry.to_dict(),
                 total_investment_cost_per_simulated_period_entry.name: total_investment_cost_per_simulated_period_entry.to_dict(),
                 total_rest_investment_cost_per_simulated_period_entry.name: total_rest_investment_cost_per_simulated_period_entry.to_dict(),
+                total_rest_investment_cost_upfront_entry.name: total_rest_investment_cost_upfront_entry.to_dict(),
                 total_device_co2_footprint_per_simulated_period_entry.name: total_device_co2_footprint_per_simulated_period_entry.to_dict(),
                 total_energy_cost_entry.name: total_energy_cost_entry.to_dict(),
+                total_energy_consumption_entry.name: total_energy_consumption_entry.to_dict(),
+                total_energy_self_sufficiency_entry.name: total_energy_self_sufficiency_entry.to_dict(),
                 total_maintenance_cost_entry.name: total_maintenance_cost_entry.to_dict(),
                 total_cost_entry.name: total_cost_entry.to_dict(),
                 total_emissions_entry.name: total_emissions_entry.to_dict(),
@@ -1365,47 +1447,29 @@ class KpiPreparation:
             value=overall_maintenance_cost_per_simulated_period_only_hp_district,
             tag=KpiTagEnumClass.COSTS,
         )
+        entries = [
+            total_investment_cost_for_equipment_per_simulated_period_all_single_buildings_entry,
+            total_investment_cost_per_simulated_period_without_hp_all_single_buildings_entry,
+            total_investment_cost_per_simulated_period_only_hp_all_single_buildings_entry,
+            total_maintenance_cost_per_simulated_period_all_single_buildings_entry,
+            total_maintenance_cost_per_simulated_period_without_hp_all_single_buildings_entry,
+            total_maintenance_cost_per_simulated_period_only_hp_all_single_buildings_entry,
+            total_investment_cost_for_equipment_per_simulated_period_district_entry,
+            total_investment_cost_per_simulated_period_without_hp_district_entry,
+            total_investment_cost_per_simulated_period_only_hp_district_entry,
+            total_maintenance_cost_per_simulated_period_district_entry,
+            total_maintenance_cost_per_simulated_period_without_hp_district_entry,
+            total_maintenance_cost_per_simulated_period_only_hp_district_entry,
+            overall_investment_cost_for_equipment_per_simulated_period_district_entry,
+            overall_investment_cost_per_simulated_period_without_hp_district_entry,
+            overall_investment_cost_per_simulated_period_only_hp_district_entry,
+            overall_maintenance_cost_per_simulated_period_district_entry,
+            overall_maintenance_cost_per_simulated_period_without_hp_district_entry,
+            overall_maintenance_cost_per_simulated_period_only_hp_district_entry,
+        ]
 
-        self.kpi_collection_dict_unsorted[district_name].update(
-            {
-                total_investment_cost_for_equipment_per_simulated_period_all_single_buildings_entry.name:
-                    total_investment_cost_for_equipment_per_simulated_period_all_single_buildings_entry.to_dict(),
-                total_investment_cost_per_simulated_period_without_hp_all_single_buildings_entry.name:
-                    total_investment_cost_per_simulated_period_without_hp_all_single_buildings_entry.to_dict(),
-                total_investment_cost_per_simulated_period_only_hp_all_single_buildings_entry.name:
-                    total_investment_cost_per_simulated_period_only_hp_all_single_buildings_entry.to_dict(),
-                total_maintenance_cost_per_simulated_period_all_single_buildings_entry.name:
-                    total_maintenance_cost_per_simulated_period_all_single_buildings_entry.to_dict(),
-                total_maintenance_cost_per_simulated_period_without_hp_all_single_buildings_entry.name:
-                    total_maintenance_cost_per_simulated_period_without_hp_all_single_buildings_entry.to_dict(),
-                total_maintenance_cost_per_simulated_period_only_hp_all_single_buildings_entry.name:
-                    total_maintenance_cost_per_simulated_period_only_hp_all_single_buildings_entry.to_dict(),
-                total_investment_cost_for_equipment_per_simulated_period_district_entry.name:
-                    total_investment_cost_for_equipment_per_simulated_period_district_entry.to_dict(),
-                total_investment_cost_per_simulated_period_without_hp_district_entry.name:
-                    total_investment_cost_per_simulated_period_without_hp_district_entry.to_dict(),
-                total_investment_cost_per_simulated_period_only_hp_district_entry.name:
-                    total_investment_cost_per_simulated_period_only_hp_district_entry.to_dict(),
-                total_maintenance_cost_per_simulated_period_district_entry.name:
-                    total_maintenance_cost_per_simulated_period_district_entry.to_dict(),
-                total_maintenance_cost_per_simulated_period_without_hp_district_entry.name:
-                    total_maintenance_cost_per_simulated_period_without_hp_district_entry.to_dict(),
-                total_maintenance_cost_per_simulated_period_only_hp_district_entry.name:
-                    total_maintenance_cost_per_simulated_period_only_hp_district_entry.to_dict(),
-                overall_investment_cost_for_equipment_per_simulated_period_district_entry.name:
-                    overall_investment_cost_for_equipment_per_simulated_period_district_entry.to_dict(),
-                overall_investment_cost_per_simulated_period_without_hp_district_entry.name:
-                    overall_investment_cost_per_simulated_period_without_hp_district_entry.to_dict(),
-                overall_investment_cost_per_simulated_period_only_hp_district_entry.name:
-                    overall_investment_cost_per_simulated_period_only_hp_district_entry.to_dict(),
-                overall_maintenance_cost_per_simulated_period_district_entry.name:
-                    overall_maintenance_cost_per_simulated_period_district_entry.to_dict(),
-                overall_maintenance_cost_per_simulated_period_without_hp_district_entry.name:
-                    overall_maintenance_cost_per_simulated_period_without_hp_district_entry.to_dict(),
-                overall_maintenance_cost_per_simulated_period_only_hp_district_entry.name:
-                    overall_maintenance_cost_per_simulated_period_only_hp_district_entry.to_dict(),
-            }
-        )
+        result_dict = {e.name: e.to_dict() for e in entries}
+        self.kpi_collection_dict_unsorted[district_name].update(result_dict)
 
     def create_overall_district_emissions_collection(self, district_name):
         """Overall kpis for districts."""
@@ -1524,29 +1588,19 @@ class KpiPreparation:
             value=overall_co2_emission_per_simulated_period_only_hp_district,
             tag=KpiTagEnumClass.EMISSIONS,
         )
-
-        self.kpi_collection_dict_unsorted[district_name].update(
-            {
-                total_co2_emissions_per_simulated_period_all_single_buildings_entry.name:
-                    total_co2_emissions_per_simulated_period_all_single_buildings_entry.to_dict(),
-                total_co2_emissions_per_simulated_period_without_hp_all_single_buildings_entry.name:
-                    total_co2_emissions_per_simulated_period_without_hp_all_single_buildings_entry.to_dict(),
-                total_co2_emissions_per_simulated_period_only_hp_all_single_buildings_entry.name:
-                    total_co2_emissions_per_simulated_period_only_hp_all_single_buildings_entry.to_dict(),
-                total_co2_emissions_for_equipment_per_simulated_period_district_entry.name:
-                    total_co2_emissions_for_equipment_per_simulated_period_district_entry.to_dict(),
-                total_co2_emissions_per_simulated_period_without_hp_district_entry.name:
-                    total_co2_emissions_per_simulated_period_without_hp_district_entry.to_dict(),
-                total_co2_emissions_per_simulated_period_only_hp_district_entry.name:
-                    total_co2_emissions_per_simulated_period_only_hp_district_entry.to_dict(),
-                overall_co2_emissions_for_equipment_per_simulated_period_district_entry.name:
-                    overall_co2_emissions_for_equipment_per_simulated_period_district_entry.to_dict(),
-                overall_co2_emissions_per_simulated_period_without_hp_district_entry.name:
-                    overall_co2_emissions_per_simulated_period_without_hp_district_entry.to_dict(),
-                overall_co2_emissions_per_simulated_period_only_hp_district_entry.name:
-                    overall_co2_emissions_per_simulated_period_only_hp_district_entry.to_dict(),
-            }
-        )
+        entries = [
+            total_co2_emissions_per_simulated_period_all_single_buildings_entry,
+            total_co2_emissions_per_simulated_period_without_hp_all_single_buildings_entry,
+            total_co2_emissions_per_simulated_period_only_hp_all_single_buildings_entry,
+            total_co2_emissions_for_equipment_per_simulated_period_district_entry,
+            total_co2_emissions_per_simulated_period_without_hp_district_entry,
+            total_co2_emissions_per_simulated_period_only_hp_district_entry,
+            overall_co2_emissions_for_equipment_per_simulated_period_district_entry,
+            overall_co2_emissions_per_simulated_period_without_hp_district_entry,
+            overall_co2_emissions_per_simulated_period_only_hp_district_entry
+        ]
+        result_dict = {e.name: e.to_dict() for e in entries}
+        self.kpi_collection_dict_unsorted[district_name].update(result_dict)
 
     def create_overall_district_contracting_collection(self, district_name, all_outputs):
         """If buildings are in contracting with district, heatpump costs and emissions are on district side."""
@@ -1582,31 +1636,29 @@ class KpiPreparation:
                     ]["value"]
                 )
                 total_maintenance_cost_for_hp_of_building_per_simulated_period_contracting += (
-                    self.kpi_collection_dict_unsorted[building][
-                        "Maintenance costs only heatpump for simulated period"
-                    ]["value"]
+                    self.kpi_collection_dict_unsorted[building]["Maintenance costs only heatpump for simulated period"][
+                        "value"
+                    ]
                 )
 
-            total_co2_emissions_of_district_grid_per_simulated_period_contracting = (
-                self.kpi_collection_dict_unsorted[district_name][
-                    "Total CO2 emissions for simulated period"
-                ]["value"]
+            total_co2_emissions_of_district_grid_per_simulated_period_contracting = self.kpi_collection_dict_unsorted[
+                district_name
+            ]["Total CO2 emissions for simulated period"]["value"]
+
+            total_costs_of_district_grid_per_simulated_period_contracting = self.kpi_collection_dict_unsorted[
+                district_name
+            ]["Total costs for simulated period"]["value"]
+
+            overall_district_cost_contracting = (
+                total_costs_of_district_grid_per_simulated_period_contracting
+                + total_investment_cost_for_hp_of_building_per_simulated_period_contracting
+                + total_maintenance_cost_for_hp_of_building_per_simulated_period_contracting
             )
 
-            total_costs_of_district_grid_per_simulated_period_contracting = (
-                self.kpi_collection_dict_unsorted[district_name][
-                    "Total costs for simulated period"
-                ]["value"]
+            overall_district_co2_emissions_contracting = (
+                total_co2_emissions_of_district_grid_per_simulated_period_contracting
+                + total_co2_emissions_for_hp_of_building_per_simulated_period_contracting
             )
-
-            overall_district_cost_contracting = \
-                (total_costs_of_district_grid_per_simulated_period_contracting +
-                 total_investment_cost_for_hp_of_building_per_simulated_period_contracting +
-                 total_maintenance_cost_for_hp_of_building_per_simulated_period_contracting)
-
-            overall_district_co2_emissions_contracting = \
-                (total_co2_emissions_of_district_grid_per_simulated_period_contracting +
-                 total_co2_emissions_for_hp_of_building_per_simulated_period_contracting)
 
             number_of_building_in_contracting_entry = KpiEntry(
                 name="Number of buildings in district contracting",
@@ -1650,18 +1702,12 @@ class KpiPreparation:
 
             self.kpi_collection_dict_unsorted[district_name].update(
                 {
-                    number_of_building_in_contracting_entry.name:
-                        number_of_building_in_contracting_entry.to_dict(),
-                    total_co2_emissions_for_hp_of_building_in_contracting_entry.name:
-                        total_co2_emissions_for_hp_of_building_in_contracting_entry.to_dict(),
-                    total_investment_cost_for_hp_of_building_in_contracting_entry.name:
-                        total_investment_cost_for_hp_of_building_in_contracting_entry.to_dict(),
-                    total_maintenance_cost_for_hp_of_building_contracting_entry.name:
-                        total_maintenance_cost_for_hp_of_building_contracting_entry.to_dict(),
-                    overall_district_cost_contracting_entry.name:
-                        overall_district_cost_contracting_entry.to_dict(),
-                    overall_district_co2_emissions_contracting_entry.name:
-                        overall_district_co2_emissions_contracting_entry.to_dict(),
+                    number_of_building_in_contracting_entry.name: number_of_building_in_contracting_entry.to_dict(),
+                    total_co2_emissions_for_hp_of_building_in_contracting_entry.name: total_co2_emissions_for_hp_of_building_in_contracting_entry.to_dict(),
+                    total_investment_cost_for_hp_of_building_in_contracting_entry.name: total_investment_cost_for_hp_of_building_in_contracting_entry.to_dict(),
+                    total_maintenance_cost_for_hp_of_building_contracting_entry.name: total_maintenance_cost_for_hp_of_building_contracting_entry.to_dict(),
+                    overall_district_cost_contracting_entry.name: overall_district_cost_contracting_entry.to_dict(),
+                    overall_district_co2_emissions_contracting_entry.name: overall_district_co2_emissions_contracting_entry.to_dict(),
                 }
             )
 
@@ -1685,8 +1731,10 @@ class KpiPreparation:
                 for kpi_entry in my_component_kpi_entry_list:
 
                     for object_name in self.kpi_collection_dict_unsorted.keys():
-                        if (object_name == my_component.component_name.split("_")[0] or
-                                not self.simulation_parameters.multiple_buildings):
+                        if (
+                            object_name == my_component.component_name.split("_")[0]
+                            or not self.simulation_parameters.multiple_buildings
+                        ):
                             self.kpi_collection_dict_unsorted[object_name][kpi_entry.name] = kpi_entry.to_dict()
                             break
             else:

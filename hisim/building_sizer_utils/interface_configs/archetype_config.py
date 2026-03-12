@@ -10,7 +10,6 @@ from dataclasses_json import dataclass_json
 @dataclass_json
 @dataclass
 class ArcheTypeConfig:
-
     """Archetype config class.
 
     Defines the system config for the modular household.
@@ -33,6 +32,11 @@ class ArcheTypeConfig:
     lpg_households: List[str] = field(default_factory=lambda: ["CHR01_Couple_both_at_Work"])
     commodity: str = "electric"
     supply_level: str = "central_heating"
+    building_density_within_buffer_area_of_100m_radius: float = 0.09
+    nearest_neighbor_distance_m: float = 20.0
+    construction_year: int = 1964
+    coordinates_latitude: float = 50.77664
+    coordinates_longitude: float = 6.0834
 
     # #: considered mobility options, passed as inputs to the LoadProfileGenerator and considered to model cars
     # mobility_set: Optional[JsonReference] = None

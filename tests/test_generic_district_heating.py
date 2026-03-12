@@ -23,14 +23,14 @@ from hisim import simulator as sim
         "expected_mode",
     ],
     [
-        (False, 0, 20, 25, None, HeatingMode.SPACE_HEATING),
-        (False, 0, 25, 25, None, HeatingMode.OFF),
-        (False, 0, 25, 23, None, HeatingMode.OFF),
+        (False, 0, 20, 70, None, HeatingMode.SPACE_HEATING),
+        (False, 0, 55, 25, None, HeatingMode.OFF),
+        (False, 0, 40, 23, None, HeatingMode.OFF),
         (False, 20, 20, 25, None, HeatingMode.OFF),
         (True, 0, 15, 30, 30, HeatingMode.DOMESTIC_HOT_WATER),
         (True, 20, 15, 30, 30, HeatingMode.DOMESTIC_HOT_WATER),
-        (True, 0, 25, 25, 50, HeatingMode.OFF),
-        (True, 0, 25, 30, 50, HeatingMode.SPACE_HEATING),
+        (True, 0, 40, 25, 50, HeatingMode.OFF),
+        (True, 0, 25, 60, 50, HeatingMode.SPACE_HEATING),
         (True, 20, 25, 30, 50, HeatingMode.OFF),
     ],
 )
@@ -68,8 +68,8 @@ def test_controller_determine_operating_mode(
         "expected_water_mass_flow_rate_in_kg_per_s",
     ],
     [
-        (15000, 50, 20, 15000, 15000 / 60, 70, 0.17942583732057416),
-        (20000, 50, 20, 20000, 20000 / 60, 70, 0.23923444976076555),
+        (15000, 50, 20, 3000, 3000 / 60, 70, 0.03588516746411483),
+        (20000, 50, 20, 4000, 4000 / 60, 70, 0.04784688995215311),
         (15000, 70, 0, 0, 0, 70, 0),
         (20000, 70, 0, 0, 0, 70, 0),
     ],
@@ -143,6 +143,7 @@ def test_component_get_space_heating_outputs(
         water_mass_flow_rate_in_kg_per_s,
         delta_temperature_needed_in_celsius,
         water_input_temperature_deg_c,
+        available_load_in_w=connected_load_w
     )
 
     assert thermal_power_delivered_w == expected_thermal_power_delivered_w

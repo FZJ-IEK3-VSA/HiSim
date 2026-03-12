@@ -539,6 +539,7 @@ class Building(cp.Component):
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_default_connections(self.get_default_connections_from_hds())
+        self.add_default_connections(self.get_default_connections_from_electric_heater())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
 
     def get_default_connections_from_weather(
@@ -646,6 +647,26 @@ class Building(cp.Component):
                 Building.ThermalPowerDelivered,
                 hds_classname,
                 component_class.ThermalPowerDelivered,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_electric_heater(
+        self,
+    ):
+        """Get electric heating default connections."""
+
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_electric_heating"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "ElectricHeating")
+        connections = []
+        hds_classname = component_class.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                Building.ThermalPowerDelivered,
+                hds_classname,
+                component_class.ThermalOutputShPower,
             )
         )
         return connections
@@ -1269,6 +1290,8 @@ class Building(cp.Component):
         scaled_rooftop_area_in_m2 = self.my_building_information.roof_area_in_m2
         # get specific heating load
         specific_heating_load_in_watt_per_m2 = heating_load_in_watt / scaled_conditioned_floor_area_in_m2
+        # get tabula ref value for heating demand per year
+        specific_heating_demand_per_year_tabula = self.my_building_information.tabula_ref_energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year
 
         # make kpi entries and append to list
         heating_load_in_watt_entry = KpiEntry(
@@ -1306,6 +1329,15 @@ class Building(cp.Component):
             description=self.component_name,
         )
         list_of_kpi_entries.append(specific_heating_load_in_watt_per_m2_entry)
+
+        specific_heating_demand_ref_in_watt_per_m2_entry = KpiEntry(
+            name="Tabula reference energy need for heating",
+            unit="kWh/m2",
+            value=specific_heating_demand_per_year_tabula,
+            tag=KpiTagEnumClass.BUILDING,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(specific_heating_demand_ref_in_watt_per_m2_entry)
         return list_of_kpi_entries
 
     def get_building_temperature_deviation_from_set_temperatures(

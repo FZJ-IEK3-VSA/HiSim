@@ -1,3 +1,4 @@
+# pylint: skip-file
 """ Logging functionality for all of HiSim. """
 # clean
 from enum import IntEnum
@@ -14,14 +15,17 @@ PRE_PROFILE = ""
 
 def set_up():
     """Sets up the logging once a hisim instance is started. The reason for this is twofold:
+
     a) I want to be minimally invasive, therefore, the current way of having module functions instead
     of a "Logger" class or similar has to be preserved. This necessitates using global variables.
+
     b) Global variables are set when a module is first imported in a python kernel, regardless of
     where the import takes place. That means starting a new HiSim instance in the same python kernel
     does not reset the global variables above. Therefore, this need to be done manually.
-    
+
     This function needs to be called once in every hisim instance, before anything is logged.
-    As soon as the output directory is created, initialize_properly() need to be run."""
+    As soon as the output directory is created, initialize_properly() need to be run.
+    """
     # reset global variables
     global LOGGING_LEVEL, LOGGING_PATH, PRE, PRE_LOGS, PRE_PROFILE  # pylint: disable=global-statement
     LOGGING_LEVEL = 3
@@ -41,12 +45,14 @@ def set_up():
 
 def initialize_properly(logging_level, logging_path) -> None:
     """Create actual logging path and file and move pre logs there. Also set logging level.
+
     This function should be called once during the setup of a HiSim instance, right after the actual
     result/output directory has been created.
-    
+
     Args:
         logging_level: The logging level that is to be used. Get from simulation parameters.
-        logging_path: The output directory. Get from simulation parameters."""
+        logging_path: The output directory. Get from simulation parameters.
+    """
     global LOGGING_LEVEL, LOGGING_PATH, PRE, PRE_LOGS, PRE_PROFILE  # pylint: disable=global-statement
     if not PRE:
         print("WARNING! Logging seems to be already initialized.")
@@ -78,8 +84,6 @@ def initialize_properly(logging_level, logging_path) -> None:
     PRE = False
     PRE_LOGS = ""
     PRE_PROFILE = ""
-
-
 
 
 class LogPrio(IntEnum):
@@ -156,7 +160,7 @@ def log(prio: int, message: str, logging_message_path: str | None = None) -> Non
         print("hisim_simulation.log could not be appended. "
               "This might happen when too many simultaneous simulations are running.")
 
-    if PRE: # if no output directory yet: temporarily store log in global variable
+    if PRE:  # if no output directory yet: temporarily store log in global variable
         global PRE_LOGS  # pylint: disable=global-statement
         PRE_LOGS += message + "\n"
 

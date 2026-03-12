@@ -22,7 +22,7 @@ __maintainer__ = "Noah Pflugradt"
 __email__ = "n.pflugradt@fz-juelich.de"
 __status__ = "development"
 
-BuiltInAttributes = [
+BUILT_IN_ATTRIBUTES = [
     "__builtins__",
     "__cached__",
     "__doc__",
@@ -274,7 +274,7 @@ class OverviewGenerator:
                 # this is an import from another module, therefore skip
                 if str(python_module_name) != str(module_member[1].__module__):
                     continue
-            if str(module_member[0]) in BuiltInAttributes:
+            if str(module_member[0]) in BUILT_IN_ATTRIBUTES:
                 continue
             mytype = type(module_member[1])
             strname = str(module_member[0])

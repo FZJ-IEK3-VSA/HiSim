@@ -36,6 +36,7 @@ class HeatDistributionSystemType(IntEnum):
 
     RADIATOR = 1
     FLOORHEATING = 2
+    LOW_TEMPERATURE_RADIATOR = 3
 
 
 class PositionHotWaterStorageInSystemSetup(IntEnum):
@@ -620,6 +621,8 @@ class HeatDistribution(cp.Component):
             component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING
         elif config.heating_system in [HeatDistributionSystemType.RADIATOR, 1]:
             component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR
+        elif config.heating_system in [HeatDistributionSystemType.LOW_TEMPERATURE_RADIATOR, 3]:
+            component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR
         else:
             capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
             return capex_cost_data_class  # or proceed as needed
@@ -1404,6 +1407,10 @@ class HeatDistributionControllerInformation:
         elif self.heat_distribution_system_type == HeatDistributionSystemType.RADIATOR:
             list_of_maximum_flow_and_return_temperatures_in_celsius = [70, 55]
             exponent_factor_of_heating_distribution_system = 1.3
+
+        elif self.heat_distribution_system_type == HeatDistributionSystemType.LOW_TEMPERATURE_RADIATOR:
+            list_of_maximum_flow_and_return_temperatures_in_celsius = [55, 45]
+            exponent_factor_of_heating_distribution_system = 1.2
         else:
             raise ValueError(
                 "Heating System Type not defined here. Check your heat distribution controller config or your Heating System Type class."

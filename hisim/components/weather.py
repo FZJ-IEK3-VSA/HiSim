@@ -392,32 +392,57 @@ class WeatherConfig(ConfigBase):
         location_entry: Any,
         name: str = "Weather",
         building_name: str = "BUI1",
+        direct_filepath: str = None,
+        direct_data_source: WeatherDataSourceEnum = None,
     ) -> Any:
-        """Gets the default configuration for Aachen."""
-        if not isinstance(location_entry, LocationEnum):
-            if location_entry in LocationEnum._member_names_:  # pylint: disable=W0212
-                location_entry = getattr(LocationEnum, location_entry)
-            else:
-                try:
-                    location_entry = getattr(LocationEnum, location_entry.strip())
-                except Exception as exc:
-                    raise ValueError(
-                        f"The location_entry {location_entry} could not be found in the Weather Location Enum class."
-                    ) from exc
+        """Gets the default configuration for a given location."""
 
-        path = os.path.join(
+        enum_entry = None
+        # If location_entry is enum entry, use it directly
+        if isinstance(location_entry, LocationEnum):
+            enum_entry = location_entry
+
+        # Read location_entry from enum        
+        elif isinstance(location_entry, str):
+            enum_entry = getattr(LocationEnum, location_entry.strip(), None)
+        
+        if enum_entry is not None:
+            location = enum_entry.value[0]
+            path = os.path.join(
             utils.get_input_directory(),
             "weather",
-            location_entry.value[1],
-            location_entry.value[2],
-            location_entry.value[3],
-        )
+            enum_entry.value[1],
+            enum_entry.value[2],
+            enum_entry.value[3],
+            )
+            data_source = enum_entry.value[4]
+
+        # Use direct filepath
+        else:
+            if direct_filepath is None:
+                raise ValueError(
+                    f"Location '{location_entry}' not found in Weather LocationEnum and no direct_filepath was provided."
+                )
+            if not os.path.isfile(direct_filepath):
+                raise ValueError(
+                    f"Weather data file not found: {direct_filepath}")
+            if direct_data_source is None:
+                raise ValueError(
+                    f"No data source (data type) provided for direct_filepath {direct_filepath}."
+                )
+            if direct_filepath.lower().endswith(".dat"):
+                direct_filepath = direct_filepath[:-4]
+
+            location = str(location_entry)
+            path = direct_filepath
+            data_source = direct_data_source
+        
         config = WeatherConfig(
             building_name=building_name,
             name=name,
-            location=location_entry.value[0],
+            location=location,
             source_path=path,
-            data_source=location_entry.value[4],
+            data_source=data_source,
             predictive_control=False,
         )
         return config

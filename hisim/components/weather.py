@@ -392,8 +392,8 @@ class WeatherConfig(ConfigBase):
         location_entry: Any,
         name: str = "Weather",
         building_name: str = "BUI1",
-        direct_filepath: str = None,
-        direct_data_source: WeatherDataSourceEnum = None,
+        weather_direct_filepath: str = None,
+        weather_direct_data_source: WeatherDataSourceEnum = None,
     ) -> Any:
         """Gets the default configuration for a given location."""
 
@@ -419,23 +419,23 @@ class WeatherConfig(ConfigBase):
 
         # Use direct filepath
         else:
-            if direct_filepath is None:
+            if weather_direct_filepath is None:
                 raise ValueError(
-                    f"Location '{location_entry}' not found in Weather LocationEnum and no direct_filepath was provided."
+                    f"Location '{location_entry}' not found in Weather LocationEnum and no weather_direct_filepath was provided."
                 )
-            if not os.path.isfile(direct_filepath):
+            if not os.path.isfile(weather_direct_filepath):
                 raise ValueError(
-                    f"Weather data file not found: {direct_filepath}")
-            if direct_data_source is None:
+                    f"Weather data file not found: {weather_direct_filepath}")
+            if weather_direct_data_source is None:
                 raise ValueError(
-                    f"No data source (data type) provided for direct_filepath {direct_filepath}."
+                    f"No data source (data type) provided for weather_direct_filepath {weather_direct_filepath}."
                 )
-            if direct_filepath.lower().endswith(".dat"):
-                direct_filepath = direct_filepath[:-4]
+            if weather_direct_filepath.lower().endswith(".dat"):
+                weather_direct_filepath = weather_direct_filepath[:-4]
 
             location = str(location_entry)
-            path = direct_filepath
-            data_source = direct_data_source
+            path = weather_direct_filepath
+            data_source = weather_direct_data_source
         
         config = WeatherConfig(
             building_name=building_name,

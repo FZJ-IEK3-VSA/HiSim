@@ -7,7 +7,7 @@ import math
 import os
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, List
+from typing import Any, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -392,8 +392,8 @@ class WeatherConfig(ConfigBase):
         location_entry: Any,
         name: str = "Weather",
         building_name: str = "BUI1",
-        weather_direct_filepath: str = None,
-        weather_direct_data_source: WeatherDataSourceEnum = None,
+        weather_direct_filepath: Optional[str] = None,
+        weather_direct_data_source: Optional[WeatherDataSourceEnum] = None,
     ) -> Any:
         """Gets the default configuration for a given location."""
 

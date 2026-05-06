@@ -402,10 +402,10 @@ class WeatherConfig(ConfigBase):
         if isinstance(location_entry, LocationEnum):
             enum_entry = location_entry
 
-        # Read location_entry from enum        
+        # Read location_entry from enum
         elif isinstance(location_entry, str):
             enum_entry = getattr(LocationEnum, location_entry.strip(), None)
-        
+
         if enum_entry is not None:
             location = enum_entry.value[0]
             path = os.path.join(
@@ -436,7 +436,7 @@ class WeatherConfig(ConfigBase):
             location = str(location_entry)
             path = weather_direct_filepath
             data_source = weather_direct_data_source
-        
+
         config = WeatherConfig(
             building_name=building_name,
             name=name,
@@ -648,8 +648,7 @@ class Weather(Component):
         if self.weather_config.predictive_control:
             timesteps_24h = 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
             last_forecast_timestep = int(timestep + timesteps_24h)
-            if last_forecast_timestep > len(self.temperature_list):
-                last_forecast_timestep = len(self.temperature_list)
+            last_forecast_timestep = min(last_forecast_timestep, len(self.temperature_list))
             # log.information( type(self.temperature))
             temperatureforecast = self.temperature_list[timestep:last_forecast_timestep]
             self.simulation_repository.set_entry(self.Weather_Temperature_Forecast_24h, temperatureforecast)
@@ -1027,6 +1026,8 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulation_param
         data = read_dwd_15min_data(filepath, simulation_parameters)
     elif weatherconfig.data_source == WeatherDataSourceEnum.ERA5:
         data = read_era5_data(filepath, simulation_parameters.year)
+    else:
+        raise ValueError(f"Unsupported weather data source: {weatherconfig.data_source}")
 
     return data
 

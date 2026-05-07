@@ -1,58 +1,70 @@
 """ HiSim converter from legacy python-based system setups to JSON-based configurations. """
 # clean
 import json
-import os
 import re
 import warnings
 import importlib
 from pathlib import Path
 import sys
 from datetime import datetime
-from typing import List, Optional, Tuple, Union
-#from attrs import field
+from typing import List, Any, Optional, Dict, Tuple, cast, overload
+# Third party imports
+from pydantic import BaseModel, Field
+import humps
 from dotenv import load_dotenv
+# First party imports
+from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 import hisim.simulator as sim
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
 import hisim.component as cp
 import hisim.dynamic_component as dcp
-from hisim.component import ComponentOutput, ConfigBase
-from typing import Any, Optional, Dict
-from pydantic import BaseModel, Field
-import humps
+from hisim.component import ConfigBase
 from hisim.dynamic_component import DynamicComponent
 from hisim.components.generic_car import GenericCarInformation
 
 load_dotenv()
 
+
 # Adapted from json_generator.py
 class Component(BaseModel):
+    """Represents a component in the scenario JSON."""
+
     component_full_classname: str
     configuration: Dict[Any, Any]
     config_full_classname: str
     inputs: list[Any]
     outputs: list[Any]
-    connect_automatically: bool = True # If all default connections are present
+    connect_automatically: bool = True  # If all default connections are present
+
 
 class Endpoint(BaseModel):
+    """Represents an endpoint of a connection."""
+
     component_name: str
     field_name: str
+
+
 class Connection(BaseModel):
+    """Represents a connection between components in the scenario JSON."""
+
     source: Endpoint
     target: Endpoint
 
+
 class Scenario(BaseModel):
+    """Represents the scenario JSON."""
+
     name: str
     description: str
     multiple_buildings: bool = False
     components: list[Component] = Field(default_factory=list)
-    connections: dict[str, Any] | list[Any] | None = None #list[ComponentOutput] = Field(default_factory=list)
+    connections: dict[str, Any] | list[Any] | None = None
 
-class SimulationInput(BaseModel):
-    scenario: Scenario
-    simulation_parameters: Dict[Any, Any]
 
 def get_filtered_simulation_parameters(my_sim: sim.Simulator):
+    """Gives the simulation parameters as a snake_case dict, with some fields excluded that are not strictly simulation parameters."""
+
     def export_filtered(obj, exclude: set[str]) -> dict:
         data = humps.decamelize(obj.to_dict())
         return {k: v for k, v in data.items() if k not in exclude}
@@ -65,9 +77,12 @@ def get_filtered_simulation_parameters(my_sim: sim.Simulator):
     filtered["post_processing_options"] = [ppo.name for ppo in filtered["post_processing_options"]]
     return filtered
 
+
 def write_standalone_simulation_json(my_sim: sim.Simulator, file_path="recent_simulation_parameters.json") -> None:
+    """Write the simulation parameters of the given simulator to a JSON file."""
+
     log.information("Writing simulation parameters to JSON file "f"{file_path}")
-    
+
     with open(file_path, "w", encoding="utf-8") as f:
         # Interesting when later executing these JSONs:
         # - multiple_buildings is actually (only) part of the simulation parameters
@@ -75,7 +90,6 @@ def write_standalone_simulation_json(my_sim: sim.Simulator, file_path="recent_si
         #   the exact behavior of the setup function (which household to create exactly) --> not needed anymore
         #   - the simulation parameter allows switching the car's surplus control
         filtered = get_filtered_simulation_parameters(my_sim)
-        #print(filtered)
         json.dump(filtered, f, indent=4)
         f.flush()
         f.close()
@@ -93,14 +107,14 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
         dir_parts = Path(config_json_str["source_path"]).parts
         if "inputs" in dir_parts:
             idx = dir_parts.index("inputs")
-            config_json_str["source_path"] = '<<utils.get_input_directory()>>\\'+str(Path(*dir_parts[idx+1:]))
+            config_json_str["source_path"] = '<<utils.get_input_directory()>>\\' + str(Path(*dir_parts[idx + 1:]))
         else:
             log.warning(f"Could not find 'inputs' in absolute weather source path {config_json_str['source_path']}, leaving it unchanged in JSON output...")
     # Car information can be generated using Occupancy (see class GenericCarInformation)
-    ### However, then each car must be assigned to an occupancy 
+    # However, then each car must be assigned to an occupancy
     elif config.get_main_classname() == "hisim.components.generic_car.Car":
         config_json_str["household_name"] = component.car_information_dict["household_name"]
-    
+
     outs = []
     ins = []
     for out in component.outputs:
@@ -136,16 +150,6 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
 
         # add_output has been used
         # => Does not have to be exported, since it is created automatically upon creation of the component
-        #outs.append({
-        #    "dynamic": False,
-        #    "object_name": out.component_name,
-        #    "field_name": out.field_name,
-        #    "load_type": out.load_type.value,
-        #    "unit": out.unit.value,
-        #    "postprocessing_flag": out.postprocessing_flag if out.postprocessing_flag is not None else None,
-        #    "sankey_flow_direction": out.sankey_flow_direction if out.sankey_flow_direction is not None else None,
-        #    "output_description": out.output_description if out.output_description is not None else None,
-        #})
 
     for inp in component.inputs:
         if isinstance(component, DynamicComponent):
@@ -180,17 +184,9 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
                     "source_weight": dyn_inp.source_weight,
                 })
                 continue
-        
+
         # add_input has been used
         # => Does not have to be exported, since it is created automatically upon creation of the component
-        #ins.append({
-        #    "dynamic": False,
-        #    "object_name": inp.component_name,
-        #    "field_name": inp.field_name,
-        #    "load_type": inp.loadtype.value,
-        #    "unit": inp.unit.value,
-        #    "mandatory": inp.is_mandatory,
-        #})
 
     component_entry = Component(
         component_full_classname=config.get_main_classname(),
@@ -198,51 +194,37 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
         config_full_classname=config.get_config_classname(),
         inputs=ins,
         outputs=outs,
-        connect_automatically=True, # Update later based on connections
+        connect_automatically=True,  # Update later based on connections
     )
     return component_entry, ins, outs
-    
+
+
 def add_component_to_scenario(scenario: Scenario, config: ConfigBase, component: cp.Component, my_sim: sim.Simulator) -> None:
+    """Add a simulator component to the scenario JSON object."""
+
     component_entry, ins, outs = convert_component_to_json(config, component)
     if config.get_main_classname() == "hisim.components.generic_car.Car":
-        # Handle special case for Car component, link to LPG connector 
+        # Handle special case for Car component, link to LPG connector
         for idx, comp in enumerate(scenario.components):
             if comp.component_full_classname == "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector":
                 car_info = component.car_information_dict
-                new_gci = GenericCarInformation(my_occupancy_instance=my_sim.wrapped_components[idx].my_component).data_dict_for_car_component[car_info["household_name"]]
+                my_comp = cast(UtspLpgConnector, my_sim.wrapped_components[idx].my_component)  # For mypy, we know that this is an UtspLpgConnector
+                new_gci = GenericCarInformation(my_occupancy_instance=my_comp).data_dict_for_car_component[car_info["household_name"]]
 
-                #print(new_gci.keys())
-                if new_gci["time_resolution"] == car_info["time_resolution"] and new_gci["car_location"] == car_info["car_location"] and new_gci["driven_meters"] == car_info["driven_meters"]:
+                if new_gci["time_resolution"] == car_info["time_resolution"] and \
+                new_gci["car_location"] == car_info["car_location"] and new_gci["driven_meters"] == car_info["driven_meters"]:
                     # Cannot include car inside LPG connector, then not found for connections/inputs/outputs etc.
-                    #comp.configuration["cars"] = comp.configuration.get("cars", []).append(component_entry)
-                    #log.information(f"Added car information to LPG connector config for car {component.component_name}")
                     comp.configuration["cars"] = (comp.configuration.get("cars") or []) + [component_entry.configuration["name"]]
                     log.information(f"Added car information to LPG connector config for car {component.component_name}")
-                    #scenario.components.append(component_entry)
 
-    #else:
     # Always do:
     scenario.components.append(component_entry)
     log.information("Added component " + config.name + " with " + str(len(ins)) + " inputs and " + str(len(outs)) + " outputs")
 
-def load_component_connections(my_sim: sim.Simulator) -> Any:
-    conn_path = os.path.join(my_sim.get_simulation_parameters().result_directory, "component_connections.json")
-    with open(conn_path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-def normalize_connection(conn: dict) -> dict:
-    return Connection(
-        source=Endpoint(
-            component_name=conn["From"]["Component"],
-            field_name=conn["From"]["Field"],
-        ),
-        target=Endpoint(
-            component_name=conn["To"]["Component"],
-            field_name=conn["To"]["Field"],
-        ),
-    )
 
 def get_unique_connections(all_connections: List[Connection]) -> Tuple[List[Connection], set]:
+    """Return only the unique connections from the list of all connections, and a set of seen generated keys for these connections."""
+
     unique_connections = []
     seen = set()
     for conn in all_connections:
@@ -260,24 +242,135 @@ def get_unique_connections(all_connections: List[Connection]) -> Tuple[List[Conn
 
     return unique_connections, seen
 
-def get_default_connection_dict(target_component) -> Union[
-        Dict[str, List[cp.ComponentConnection]],
-        Dict[str, List[dcp.DynamicComponentConnection]],
-    ]:
-    # Copied from simulator.py (from method connect_everything_automatically)
+
+# These 3 functions are needed separately due to mypy type-checking
+@overload
+def get_default_connection_dict(
+    target_component: dcp.DynamicComponent,
+) -> dict[str, list[dcp.DynamicComponentConnection]]:
+    ...
+
+
+@overload
+def get_default_connection_dict(
+    target_component: cp.Component,
+) -> dict[str, list[cp.ComponentConnection]]:
+    ...
+
+
+def get_default_connection_dict(target_component):
+    """Get the default connection dict of the target component."""
+
     if isinstance(target_component, dcp.DynamicComponent):
-        target_default_connection_dict = target_component.dynamic_default_connections
-    elif isinstance(target_component, cp.Component) and not isinstance(target_component, dcp.DynamicComponent):
-        target_default_connection_dict = target_component.default_connections
-    else:
-        raise TypeError(
-            f"Type {type(target_component)} of target_component should be Component or Dynamic Component."
+        return target_component.dynamic_default_connections
+    if isinstance(target_component, cp.Component):
+        return target_component.default_connections
+    raise TypeError(f"Type {type(target_component)} of target_component should be Component or DynamicComponent.")
+
+
+def compare_automatic_connections(target_default_connection_dict, source_component_list, target_component, seen_keys) -> bool:
+    """Check whether the target component was/can be automatically connected, i.e., whether it features all default connections."""
+
+    if (
+        any(
+            source_component.get_classname() in target_default_connection_dict
+            for source_component in source_component_list
         )
-    return target_default_connection_dict
-    
+        is False
+    ):
+        # connect_automatically does not connect anything
+        log.information(f"Component {target_component.get_classname()} was not automatically connected: no source components found in default connections")
+        return False
+
+    # go through all registered components
+    for source_component in source_component_list:
+        source_component_classname = source_component.get_classname()
+
+        # if the source components' classname is found in the target components' default connection dict, a connection is made
+        if source_component_classname in target_default_connection_dict.keys():
+            if isinstance(target_component, dcp.DynamicComponent):
+                dynamic_connections = target_component.get_dynamic_default_connections(
+                    source_component=source_component
+                )
+
+                # Check whether connection is present, if not, set connect_automatically to False and break inner loop
+                for dynamic_connection in dynamic_connections:
+                    # Hashable key
+                    key = (
+                        source_component.component_name,
+                        dynamic_connection.source_component_field_name,
+                        target_component.component_name,
+                        dynamic_connection.source_component_field_name,
+                    )
+                    if key not in seen_keys:
+                        log.information(f"DComponent {target_component.get_classname()} was not automatically connected: missing {dynamic_connection}")
+                        return False
+
+            if isinstance(target_component, cp.Component) and not isinstance(
+                target_component, dcp.DynamicComponent
+            ):
+                connections = target_component.get_default_connections(source_component=source_component)
+                for connection in connections:
+                    # Hashable key
+                    key = (
+                        source_component.component_name,
+                        connection.source_output_name,
+                        target_component.component_name,
+                        connection.target_input_name,
+                    )
+                    if key not in seen_keys:
+                        log.information(f"Component {target_component.get_classname()} was not automatically connected: missing {key}")
+                        return False
+    return True
+
+
+def delete_connections(target_component, source_component, unique_connections) -> int:
+    """Delete the default connections of source_component to target_component from the unique_connections. Return the number of removed connections."""
+
+    removed = 0
+    if isinstance(target_component, dcp.DynamicComponent):
+        dynamic_connections = target_component.get_dynamic_default_connections(
+            source_component=source_component
+        )
+        for dynamic_connection in dynamic_connections:
+            for c in unique_connections:
+                if (
+                    c.source.component_name == source_component.component_name and
+                    c.source.field_name == dynamic_connection.source_component_field_name and
+                    c.target.component_name == target_component.component_name and
+                    c.target.field_name == dynamic_connection.source_component_field_name
+                ):
+                    unique_connections.remove(c)
+                    removed += 1
+
+    elif isinstance(target_component, cp.Component):
+        connections = target_component.get_default_connections(
+            source_component=source_component
+        )
+        for connection in connections:
+            for c in unique_connections:
+                if (
+                    c.source.component_name == source_component.component_name and
+                    c.source.field_name == connection.source_output_name and
+                    c.target.component_name == target_component.component_name and
+                    c.target.field_name == connection.target_input_name
+                ):
+                    unique_connections.remove(c)
+                    removed += 1
+
+    else:
+        # This error message was generated by Copilot.
+        raise TypeError(
+            f"Type {type(target_component)} of target_component should be Component or DynamicComponent."
+        )
+
+    return removed
+
+
 def remove_automatic_connections(my_sim: sim.Simulator, scenario: Scenario, unique_connections: List[Connection], seen_keys: set):
-    # Now check which components have all their default connections, flag the others as "connect_automatically" false
-    source_component_list=[wp.my_component for wp in my_sim.wrapped_components]
+    """Remove all eligible automatic connections from unique_connections."""
+
+    source_component_list = [wp.my_component for wp in my_sim.wrapped_components]
     removed = 0
     for target_component in source_component_list:
         tg_comps = [
@@ -288,65 +381,11 @@ def remove_automatic_connections(my_sim: sim.Simulator, scenario: Scenario, uniq
         tg_comp = tg_comps[0]
 
         target_default_connection_dict = get_default_connection_dict(target_component)
-        
+
         # check if target component has any default connections
         if bool(target_default_connection_dict) is True:
-            # check if at least one source_component is in the target default connections
-            if (
-                any(
-                    source_component.get_classname() in target_default_connection_dict
-                    for source_component in source_component_list
-                )
-                is False
-            ):
-                # connect_automatically does not connect anything
-                log.information(f"Component {target_component.get_classname()} was not automatically connected: no source components found in default connections")
-                tg_comp.connect_automatically = False
-                continue
-
-            # go through all registered components
-            for source_component in source_component_list:
-                if tg_comp.connect_automatically is False:
-                    break
-                source_component_classname = source_component.get_classname()
-
-                # if the source components' classname is found in the target components' default connection dict, a connection is made
-                if source_component_classname in target_default_connection_dict.keys():
-                    if isinstance(target_component, dcp.DynamicComponent):
-                        dynamic_connections = target_component.get_dynamic_default_connections(
-                            source_component=source_component
-                        )
-
-                        # Check whether connection is present, if not, set connect_automatically to False and break inner loop
-                        for dynamic_connection in dynamic_connections:
-                            # Hashable key
-                            key = (
-                                source_component.component_name,
-                                dynamic_connection.source_component_field_name,
-                                target_component.component_name,
-                                dynamic_connection.source_component_field_name,
-                            )
-                            if key not in seen_keys:
-                                tg_comp.connect_automatically = False
-                                log.information(f"DComponent {target_component.get_classname()} was not automatically connected: missing {dynamic_connection}")
-                                break
-                        
-                    if isinstance(target_component, cp.Component) and not isinstance(
-                        target_component, dcp.DynamicComponent
-                    ):
-                        connections = target_component.get_default_connections(source_component=source_component)
-                        for connection in connections:
-                            # Hashable key
-                            key = (
-                                source_component.component_name,
-                                connection.source_output_name,
-                                target_component.component_name,
-                                connection.target_input_name,
-                            )
-                            if key not in seen_keys:
-                                tg_comp.connect_automatically = False
-                                log.information(f"Component {target_component.get_classname()} was not automatically connected: missing {key}")
-                                break
+            # Check whether the target component is connected automatically (i.e., all default connections' keys are present in the seen_keys)
+            tg_comp.connect_automatically = compare_automatic_connections(target_default_connection_dict, source_component_list, target_component, seen_keys)
         else:
             # There are no default connections
             log.information(f"Component {target_component.get_classname()} was not automatically connected: no default connections present")
@@ -360,73 +399,9 @@ def remove_automatic_connections(my_sim: sim.Simulator, scenario: Scenario, uniq
 
                 # if the source components' classname is found in the target components' default connection dict, find connection to delete
                 if source_component_classname in target_default_connection_dict.keys():
-                    if isinstance(target_component, dcp.DynamicComponent):
-                        dynamic_connections = target_component.get_dynamic_default_connections(
-                            source_component=source_component
-                        )
-
-                        for dynamic_connection in dynamic_connections:
-                            for c in unique_connections:
-                                if (
-                                    c.source.component_name == source_component.component_name and
-                                    c.source.field_name == dynamic_connection.source_component_field_name and
-                                    c.target.component_name == target_component.component_name and
-                                    c.target.field_name == dynamic_connection.source_component_field_name
-                                ):
-                                    unique_connections.remove(c)
-                                    removed += 1
-                        
-                    if isinstance(target_component, cp.Component) and not isinstance(
-                        target_component, dcp.DynamicComponent
-                    ):
-                        connections = target_component.get_default_connections(source_component=source_component)
-                        for connection in connections:
-                            # Hashable key
-                            key = (
-                                source_component.component_name,
-                                connection.source_output_name,
-                                target_component.component_name,
-                                connection.target_input_name,
-                            )
-                            for c in unique_connections:
-                                if (
-                                    c.source.component_name == source_component.component_name and
-                                    c.source.field_name == connection.source_output_name and
-                                    c.target.component_name == target_component.component_name and
-                                    c.target.field_name == connection.target_input_name
-                                ):
-                                    unique_connections.remove(c)
-                                    removed += 1
+                    removed += delete_connections(target_component, source_component, unique_connections)
 
     log.information(f"Removed {removed} automatic connections from JSON output.")
-
-# This method can be used at the end of a simulation run to write the input configuration to a JSON file
-def write_hisim_input(my_sim: sim.Simulator, file_path="recent_simulation_input.json", description="N/A") -> None:
-    log.information("Writing simulation input to JSON file "f"{file_path}")
-    
-    # Get prettified name for the scenario from the module filename
-    nice_name = my_sim.module_filename.replace("_", " ").capitalize()
-
-    scenario = Scenario(
-        name=nice_name,
-        description=description,
-        multiple_buildings=my_sim.get_simulation_parameters().multiple_buildings
-    )
-
-    for component in my_sim.wrapped_components:
-        add_component_to_scenario(scenario=scenario, config=component.my_component.config, component=component.my_component, my_sim=my_sim)
-    
-    all_connections = [normalize_connection(conn) for conn in load_component_connections(my_sim=my_sim)]
-    unique_connections, _ = get_unique_connections(all_connections)
-
-    scenario.connections = unique_connections
-
-    sim_in = SimulationInput(scenario=scenario, simulation_parameters=get_filtered_simulation_parameters(my_sim))
-
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(sim_in.model_dump_json(indent=4))
-        f.flush()
-        f.close()
 
 
 def main(
@@ -495,53 +470,50 @@ def main(
 
     my_simulation_parameters = my_sim.get_simulation_parameters()
     my_simulation_parameters.log_connections = True
-    my_sim: sim.Simulator = sim.Simulator(
+
+    # Other name due to mypy no-redef
+    my_sim2: sim.Simulator = sim.Simulator(
         module_directory=str(module_dir),
         module_filename=module_filename,
         setup_function=function_in_module,
         my_simulation_parameters=my_simulation_parameters,
         my_module_config=my_module_config,
     )
-    model_init_method(my_sim, my_simulation_parameters)
+    model_init_method(my_sim2, my_simulation_parameters)
 
-    if my_sim.my_module_config is not None:
-        log.warning(f"Module config is not None but not exported to JSON: {my_sim.my_module_config}")
+    if my_sim2.my_module_config is not None:
+        log.warning(f"Module config is not None but not exported to JSON: {my_sim2.my_module_config}")
     # The config dictionary is already part of the components (under "configuration")
-    #if len(my_sim.config_dictionary) > 0:
-    #    log.warning(f"Config dictionary is not empty but not exported to JSON: {my_sim.config_dictionary}")
+    # if len(my_sim2.config_dictionary) > 0:
+    #     log.warning(f"Config dictionary is not empty but not exported to JSON: {my_sim2.config_dictionary}")
 
     # Do not run the simulation
-    #my_sim.run_all_timesteps()
-    my_sim.prepare_calculation()
-    my_sim.connect_all_components()
-    
+    my_sim2.prepare_calculation()
+    my_sim2.connect_all_components()
+
     # Extract brief description from the first line of the system setup python file
     with open(path_obj, 'r', encoding="utf-8") as f:
         first_line = f.readline().strip()
-    
+
     desc = first_line
     for quote_type in ['"""', "'''"]:
         if first_line.startswith(quote_type):
             desc = first_line.replace(quote_type, '').strip()
             break
-    
+
     # Get prettified name for the scenario from the module filename
     nice_name = module_filename.replace("_", " ").capitalize()
 
     scenario = Scenario(
         name=nice_name,
         description=desc,
-        multiple_buildings=my_sim.get_simulation_parameters().multiple_buildings
+        multiple_buildings=my_sim2.get_simulation_parameters().multiple_buildings
     )
 
     component_connections = []
-    for component in my_sim.wrapped_components:
-        add_component_to_scenario(scenario=scenario, config=component.my_component.config, component=component.my_component, my_sim=my_sim)
-        #log.information(f"Component {component.my_component.config.name} has connections: {component.my_component.log_connections}")
-        #if component.my_component.config.name == "ElectricityMeter":
-        #    print([c.fullname for c in component.component_inputs])
-        #    print([c.full_name for c in component.component_outputs])
-        #    print(component.my_component.default_connections)
+    for component in my_sim2.wrapped_components:
+        add_component_to_scenario(scenario=scenario, config=component.my_component.config, component=component.my_component, my_sim=my_sim2)
+
         for con in component.my_component.log_connections:
             component_connections += [Connection(
                 source=Endpoint(
@@ -554,17 +526,10 @@ def main(
                 ),
             )]
 
-    # To get connections, we have to get info from connect_input / connect_dynamic_input calls
-    #def add_connection(scenario: Scenario, conn: ComponentOutput):
-    #    """Adds a connection and returns a connection entry."""
-    #    scenario.connections.append(conn)
-    #    log.information("Added connection " + conn.get_pretty_name())
-
-    #all_connections = [normalize_connection(conn) for conn in load_component_connections(my_sim=my_sim)]
     all_connections = component_connections
     unique_connections, seen_keys = get_unique_connections(all_connections)
 
-    remove_automatic_connections(my_sim=my_sim, scenario=scenario, unique_connections=unique_connections, seen_keys=seen_keys)
+    remove_automatic_connections(my_sim=my_sim2, scenario=scenario, unique_connections=unique_connections, seen_keys=seen_keys)
 
     scenario.connections = unique_connections
     log.information("Writing scenario parameters to JSON file "f"{module_dir}/{module_filename}.json")
@@ -584,7 +549,7 @@ def main(
 
     # At the end put new logging files into result directory
     try:
-        my_sim.put_log_files_into_result_path()
+        my_sim2.put_log_files_into_result_path()
     # sometimes when running many simulations at once this leads to errors, so ignore
     except Exception:
         pass

@@ -7,7 +7,7 @@ import math
 import os
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, List
+from typing import Any, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -392,8 +392,8 @@ class WeatherConfig(ConfigBase):
         location_entry: Any,
         name: str = "Weather",
         building_name: str = "BUI1",
-        direct_filepath: str = None,
-        direct_data_source: WeatherDataSourceEnum = None,
+        weather_direct_filepath: Optional[str] = None,
+        weather_direct_data_source: Optional[WeatherDataSourceEnum] = None,
     ) -> Any:
         """Gets the default configuration for a given location."""
 
@@ -402,10 +402,10 @@ class WeatherConfig(ConfigBase):
         if isinstance(location_entry, LocationEnum):
             enum_entry = location_entry
 
-        # Read location_entry from enum        
+        # Read location_entry from enum
         elif isinstance(location_entry, str):
             enum_entry = getattr(LocationEnum, location_entry.strip(), None)
-        
+
         if enum_entry is not None:
             location = enum_entry.value[0]
             path = os.path.join(
@@ -419,28 +419,28 @@ class WeatherConfig(ConfigBase):
 
         # Use direct filepath
         else:
-            print(f"DEBUG checking file: '{direct_filepath}'")
-            print(f"DEBUG file exists: {os.path.isfile(direct_filepath)}")
-            if direct_filepath is None:
+            if weather_direct_filepath is None:
+                print(f"DEBUG checking file: '{weather_direct_filepath}'")
+                print(f"DEBUG file exists: {os.path.isfile(weather_direct_filepath)}")
                 raise ValueError(
-                    f"Location '{location_entry}' not found in Weather LocationEnum and no direct_filepath was provided."
+                    f"Location '{location_entry}' not found in Weather LocationEnum and no weather_direct_filepath was provided."
                 )
-            if not os.path.isfile(direct_filepath):
+            if not os.path.isfile(weather_direct_filepath):
                 raise ValueError(
-                    f"Weather data file not found: {direct_filepath}")
-            if direct_data_source is None:
+                    f"Weather data file not found: {weather_direct_filepath}")
+            if weather_direct_data_source is None:
                 raise ValueError(
-                    f"No data source (data type) provided for direct_filepath {direct_filepath}."
+                    f"No data source (data type) provided for weather_direct_filepath {weather_direct_filepath}."
                 )
-            if direct_filepath.lower().endswith(".dat"):
-                direct_filepath = direct_filepath[:-4]
-            elif direct_filepath.lower().endswith(".csv"): 
-                direct_filepath = direct_filepath[:-4]
+            if weather_direct_filepath.lower().endswith(".dat"):
+                weather_direct_filepath = weather_direct_filepath[:-4]
+            elif weather_direct_filepath.lower().endswith(".csv"): 
+                weather_direct_filepath = weather_direct_filepath[:-4]
 
             location = str(location_entry)
-            path = direct_filepath
-            data_source = direct_data_source
-        
+            path = weather_direct_filepath
+            data_source = weather_direct_data_source
+
         config = WeatherConfig(
             building_name=building_name,
             name=name,
@@ -652,8 +652,7 @@ class Weather(Component):
         if self.weather_config.predictive_control:
             timesteps_24h = 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
             last_forecast_timestep = int(timestep + timesteps_24h)
-            if last_forecast_timestep > len(self.temperature_list):
-                last_forecast_timestep = len(self.temperature_list)
+            last_forecast_timestep = min(last_forecast_timestep, len(self.temperature_list))
             # log.information( type(self.temperature))
             temperatureforecast = self.temperature_list[timestep:last_forecast_timestep]
             self.simulation_repository.set_entry(self.Weather_Temperature_Forecast_24h, temperatureforecast)
@@ -1036,6 +1035,8 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulation_param
         data = read_dwd_15min_data(filepath, simulation_parameters)
     elif weatherconfig.data_source == WeatherDataSourceEnum.ERA5:
         data = read_era5_data(filepath, simulation_parameters.year)
+    else:
+        raise ValueError(f"Unsupported weather data source: {weatherconfig.data_source}")
 
     return data
 

@@ -67,7 +67,9 @@ def setup_function(
         - Electricity Meter
     """
 
-    # =================================================================================================================================
+    # ================================================================
+    # 
+    # =================================================================
     # Set System Parameters from Config
 
     # household-pv-config
@@ -230,6 +232,8 @@ def setup_function(
     my_sim.add_component(my_occupancy)
 
     # Build Weather
+    if isinstance(weather_datasource, str):
+        weather_datasource = weather.WeatherDataSourceEnum[weather_datasource]
     #my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
     my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location, direct_filepath=weather_filepath, direct_data_source=weather_datasource)
 

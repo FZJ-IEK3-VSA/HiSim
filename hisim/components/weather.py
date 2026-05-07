@@ -419,6 +419,8 @@ class WeatherConfig(ConfigBase):
 
         # Use direct filepath
         else:
+            print(f"DEBUG checking file: '{direct_filepath}'")
+            print(f"DEBUG file exists: {os.path.isfile(direct_filepath)}")
             if direct_filepath is None:
                 raise ValueError(
                     f"Location '{location_entry}' not found in Weather LocationEnum and no direct_filepath was provided."
@@ -431,6 +433,8 @@ class WeatherConfig(ConfigBase):
                     f"No data source (data type) provided for direct_filepath {direct_filepath}."
                 )
             if direct_filepath.lower().endswith(".dat"):
+                direct_filepath = direct_filepath[:-4]
+            elif direct_filepath.lower().endswith(".csv"): 
                 direct_filepath = direct_filepath[:-4]
 
             location = str(location_entry)
@@ -1015,6 +1019,11 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulation_param
     """
     # get the correct file path
     filepath = os.path.join(weatherconfig.source_path)
+
+    print(f"DEBUG data_source: '{weatherconfig.data_source}'")
+    print(f"DEBUG data_source type: {type(weatherconfig.data_source)}")
+    print(f"DEBUG source_path: '{weatherconfig.source_path}'")
+
     if weatherconfig.data_source == WeatherDataSourceEnum.NSRDB:
         data = read_nsrdb_data(filepath, simulation_parameters.year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.DWD_TRY:
@@ -1033,6 +1042,12 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulation_param
 
 def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads the DWD Test Reference Year (TRY) data."""
+
+    print(f"DEBUG filepath: '{filepath}'")
+    print(f"DEBUG .csv exists: {os.path.isfile(filepath + '.csv')}")
+    print(f"DEBUG .dat exists: {os.path.isfile(filepath + '.dat')}")
+
+
     # get the geoposition
     with open(filepath + ".dat", encoding="utf-8") as file_stream:
         lines = file_stream.readlines()
@@ -1046,6 +1061,7 @@ def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
     else:
         # get data
         data = pd.read_csv(filepath + ".dat", sep=r"\s+", skiprows=list(range(0, 31)))
+
         data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
         data["GHI"] = data["D"] + data["B"]
         data = data.rename(

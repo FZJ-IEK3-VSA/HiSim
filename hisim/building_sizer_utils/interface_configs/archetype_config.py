@@ -25,8 +25,13 @@ class ArcheTypeConfig:
     conditioned_floor_area_in_m2: float = 121.2
     number_of_dwellings_per_building: int = 1
     norm_heating_load_in_kilowatt: Optional[float] = None
-    weather_location: str = "AACHEN"
+    #weather_location: str = "AACHEN"
+    weather_location: str = None
     weather_try_region: int = 6
+    #
+    weather_filepath: str = None,
+    weather_datasource: str = None,
+    #
     building_postal_code: str = "52062"
     building_location: str = "Aachen"
     lpg_households: List[str] = field(default_factory=lambda: ["CHR01_Couple_both_at_Work"])

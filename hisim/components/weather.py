@@ -432,7 +432,7 @@ class WeatherConfig(ConfigBase):
                 )
             if weather_direct_filepath.lower().endswith(".dat"):
                 weather_direct_filepath = weather_direct_filepath[:-4]
-            elif weather_direct_filepath.lower().endswith(".csv"):
+            elif weather_direct_filepath.lower().endswith(".csv"): 
                 weather_direct_filepath = weather_direct_filepath[:-4]
 
             location = str(location_entry)
@@ -1016,6 +1016,7 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulation_param
     """
     # get the correct file path
     filepath = os.path.join(weatherconfig.source_path)
+
     if weatherconfig.data_source == WeatherDataSourceEnum.NSRDB:
         data = read_nsrdb_data(filepath, simulation_parameters.year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.DWD_TRY:
@@ -1035,7 +1036,8 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulation_param
 
 
 def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
-    """Reads the DWD Test Reference Year (TRY) data."""
+    """Reads the DWD Test Reference Year (TRY) data.""
+
     # get the geoposition
     with open(filepath + ".dat", encoding="utf-8") as file_stream:
         lines = file_stream.readlines()
@@ -1049,6 +1051,7 @@ def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
     else:
         # get data
         data = pd.read_csv(filepath + ".dat", sep=r"\s+", skiprows=list(range(0, 31)))
+
         data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
         data["GHI"] = data["D"] + data["B"]
         data = data.rename(

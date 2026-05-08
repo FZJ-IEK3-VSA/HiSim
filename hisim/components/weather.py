@@ -420,8 +420,6 @@ class WeatherConfig(ConfigBase):
         # Use direct filepath
         else:
             if weather_direct_filepath is None:
-                print(f"DEBUG checking file: '{weather_direct_filepath}'")
-                print(f"DEBUG file exists: {os.path.isfile(weather_direct_filepath)}")
                 raise ValueError(
                     f"Location '{location_entry}' not found in Weather LocationEnum and no weather_direct_filepath was provided."
                 )
@@ -1019,10 +1017,6 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulation_param
     # get the correct file path
     filepath = os.path.join(weatherconfig.source_path)
 
-    print(f"DEBUG data_source: '{weatherconfig.data_source}'")
-    print(f"DEBUG data_source type: {type(weatherconfig.data_source)}")
-    print(f"DEBUG source_path: '{weatherconfig.source_path}'")
-
     if weatherconfig.data_source == WeatherDataSourceEnum.NSRDB:
         data = read_nsrdb_data(filepath, simulation_parameters.year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.DWD_TRY:
@@ -1042,12 +1036,7 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulation_param
 
 
 def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
-    """Reads the DWD Test Reference Year (TRY) data."""
-
-    print(f"DEBUG filepath: '{filepath}'")
-    print(f"DEBUG .csv exists: {os.path.isfile(filepath + '.csv')}")
-    print(f"DEBUG .dat exists: {os.path.isfile(filepath + '.dat')}")
-
+    """Reads the DWD Test Reference Year (TRY) data.""
 
     # get the geoposition
     with open(filepath + ".dat", encoding="utf-8") as file_stream:

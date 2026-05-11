@@ -33,7 +33,8 @@ class ComponentWrapper:
         self, all_outputs: List[cp.ComponentOutput], wrapped_components_so_far: List[Any]
     ) -> None:
         """Registers component outputs in the global list of components."""
-        log.information("Registering component outputs on " + self.my_component.component_name)
+
+        log.debug("Registering component outputs on " + self.my_component.component_name)
 
         # Collect classnames of already wrapped components once
         wrapped_class_names_so_far = {component.my_component.get_classname() for component in wrapped_components_so_far}
@@ -86,7 +87,8 @@ class ComponentWrapper:
 
     def register_component_inputs(self, global_column_dict: Dict[str, Any]) -> None:
         """Gets the inputs for the current component from the global column dict and puts them into component_inputs."""
-        log.information("Registering component inputs for " + self.my_component.component_name)
+
+        log.debug("Registering component inputs for " + self.my_component.component_name)
         # look up input columns and cache, so we only have the correct columns saved
         input_columns: List[cp.ComponentInput] = self.my_component.get_input_definitions()
         for col in input_columns:

@@ -432,7 +432,7 @@ class WeatherConfig(ConfigBase):
                 )
             if weather_direct_filepath.lower().endswith(".dat"):
                 weather_direct_filepath = weather_direct_filepath[:-4]
-            elif weather_direct_filepath.lower().endswith(".csv"): 
+            elif weather_direct_filepath.lower().endswith(".csv"):
                 weather_direct_filepath = weather_direct_filepath[:-4]
 
             location = str(location_entry)

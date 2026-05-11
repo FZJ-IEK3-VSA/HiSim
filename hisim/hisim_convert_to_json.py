@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field
 import humps
 from dotenv import load_dotenv
 # First party imports
+from hisim.components.controller_l2_district_energy_management_system import L2GenericDistrictEnergyManagementSystem
+from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 import hisim.simulator as sim
 from hisim import log
@@ -129,6 +131,23 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
                     f"Multiple dynamic outputs found for field '{out.field_name}' in component '{component.component_name}'"
                 )
             if len(matches) == 1:
+                # Handle special case for EMS
+                if isinstance(component, L2GenericEnergyManagementSystem):
+                    if out.output_description in ["Target electricity for Occupancy. ",
+                                                  "Target electricity for Heating Heat Pump. ",
+                                                  "Target electricity for dhw heat pump.",
+                                                  "Target electricity for electric heater space heating.",
+                                                  "Target electricity for electric heater domestic hot water.",
+                                                  "Target electricity for electric heater space heating.",
+                                                  "Target electricity for solar thermal domestic hot water."]:
+                        continue
+
+                if isinstance(component, L2GenericDistrictEnergyManagementSystem):
+                    if out.output_description in ["Target electricity for Occupancy. ",
+                                                  "Target electricity for Heating Heat Pump. ",
+                                                  "Target electricity for dhw heat pump."]:
+                        continue
+
                 # add_component_output has been used
                 dyn_out = matches[0]
                 # Extract source_output_name from the field_name

@@ -67,8 +67,6 @@ def setup_function(
         - Electricity Meter
     """
 
-    # ================================================================
-    # 
     # =================================================================
     # Set System Parameters from Config
 
@@ -143,7 +141,6 @@ def setup_function(
     # testing AU weather data
     weather_filepath = arche_type_config_.weather_filepath
     weather_datasource = arche_type_config_.weather_datasource
-
 
     # Set Photovoltaic System
     azimuth = arche_type_config_.pv_azimuth

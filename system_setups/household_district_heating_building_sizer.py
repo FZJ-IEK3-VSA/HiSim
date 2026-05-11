@@ -236,7 +236,7 @@ def setup_function(
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    #my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
+    # my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
     my_weather_config = weather.WeatherConfig.get_default(
         location_entry=weather_location,
         weather_direct_filepath=weather_filepath,

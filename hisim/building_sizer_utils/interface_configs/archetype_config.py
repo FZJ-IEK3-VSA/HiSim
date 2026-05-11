@@ -28,10 +28,10 @@ class ArcheTypeConfig:
     #weather_location: str = "AACHEN"
     weather_location: str = None
     weather_try_region: int = 6
-    #
-    weather_filepath: str = None,
-    weather_datasource: str = None,
-    #
+
+    weather_filepath: str = None
+    weather_datasource: str = None
+
     building_postal_code: str = "52062"
     building_location: str = "Aachen"
     lpg_households: List[str] = field(default_factory=lambda: ["CHR01_Couple_both_at_Work"])

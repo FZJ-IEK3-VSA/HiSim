@@ -143,6 +143,8 @@ def setup_function(
     # testing AU weather data 
     weather_filepath = arche_type_config_.weather_filepath
     weather_datasource = arche_type_config_.weather_datasource
+    if isinstance(weather_datasource, str):
+        weather_datasource = weather.WeatherDataSourceEnum[weather_datasource]
 
     # Set Photovoltaic System
     azimuth = arche_type_config_.pv_azimuth

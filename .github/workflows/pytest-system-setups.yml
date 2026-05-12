@@ -23,9 +23,9 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest
-        if [ -f requirements.txt ]; then pip install --no-deps -r requirements.txt; fi
-        pip install -e .
+        pip install uv
+        if [ -f requirements.txt ]; then uv pip install --system -r requirements.txt; fi
+        uv pip install --system -e .
     - name: Test with pytest
       env:
         UTSP_URL: ${{ secrets.UTSP_URL }}

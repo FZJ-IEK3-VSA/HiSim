@@ -33,7 +33,6 @@ from hisim.building_sizer_utils.interface_configs.modular_household_config impor
 )
 from hisim import log
 
-
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
 __credits__ = ["Noah Pflugradt"]
@@ -135,7 +134,7 @@ def setup_function(
     # Set Weather
     weather_location = arche_type_config_.weather_location
     if weather_location is None:
-        weather_location = "AACHEN" # default weather location
+        weather_location = "AACHEN"  # default weather location
 
     # testing AU weather data
     weather_filepath = arche_type_config_.weather_filepath
@@ -237,7 +236,7 @@ def setup_function(
     my_weather_config = weather.WeatherConfig.get_default(
         location_entry=weather_location,
         weather_direct_filepath=weather_filepath,
-        weather_direct_data_source=weather_datasource
+        weather_direct_data_source=weather_datasource,
     )
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator

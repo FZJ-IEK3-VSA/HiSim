@@ -136,7 +136,7 @@ def setup_function(
     # Set Weather
     weather_location = arche_type_config_.weather_location
     if weather_location is None:
-        weather_location = "AACHEN" # default weather location
+        weather_location = "AACHEN"  # default weather location
     # testing AU weather data
     weather_filepath = arche_type_config_.weather_filepath
     weather_datasource = arche_type_config_.weather_datasource

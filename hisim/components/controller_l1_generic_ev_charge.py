@@ -2,7 +2,7 @@
 """ Controller of EV battery with configuration and state. """
 # clean
 
-from typing import List
+from typing import List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -17,8 +17,11 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import generic_car
 from hisim.components import advanced_ev_battery_bslib
-from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.loadtypes import Units, ComponentType
+from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
+from hisim.component import OpexCostDataClass, CapexCostDataClass
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -54,6 +57,8 @@ class ChargingStationConfig(cp.ConfigBase):
     lifetime_in_years: float
     # maintenance cost in euro per year
     maintenance_costs_in_euro_per_year: float
+    # subsidies as percentage of investment
+    subsidy_as_percentage_of_investment_costs: float
 
     @classmethod
     def get_main_classname(cls):
@@ -81,6 +86,7 @@ class ChargingStationConfig(cp.ConfigBase):
             investment_costs_in_euro=1000,  # Todo: check value
             lifetime_in_years=10,  # estimated value  # Todo: check value
             maintenance_costs_in_euro_per_year=0.05 * 1000,  # SOURCE: https://photovoltaik.one/wallbox-kosten (estimated value)
+            subsidy_as_percentage_of_investment_costs=0
         )
         return config
 
@@ -334,23 +340,25 @@ class L1Controller(cp.Component):
     @staticmethod
     def get_cost_capex(config: ChargingStationConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.investment_costs_in_euro / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
+
+        component_type = ComponentType.CAR_BATTERY
+        kpi_tag = (
+            KpiTagEnumClass.CAR_BATTERY
         )
-        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
-            simulation_parameters.duration.total_seconds() / seconds_per_year
+        unit = Units.ANY
+        size_of_energy_system = 1
+
+        capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
+        simulation_parameters=simulation_parameters,
+        component_type=component_type,
+        unit=unit,
+        size_of_energy_system=size_of_energy_system,
+        config=config,
+        kpi_tag=kpi_tag
         )
 
-        capex_cost_data_class = CapexCostDataClass(
-            capex_investment_cost_in_euro=config.investment_costs_in_euro,
-            device_co2_footprint_in_kg=config.device_co2_footprint_in_kg,
-            lifetime_in_years=config.lifetime_in_years,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.CAR_BATTERY
-        )
         return capex_cost_data_class
+
 
     def get_cost_opex(
         self,

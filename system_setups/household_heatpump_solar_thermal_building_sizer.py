@@ -135,7 +135,7 @@ def setup_function(
     # Set Weather
     weather_location = arche_type_config_.weather_location
     if weather_location is None:
-        raise ValueError("weather_location must not be None.")
+        weather_location = "AACHEN" # default weather location
 
     # Set Photovoltaic System
     azimuth = arche_type_config_.pv_azimuth

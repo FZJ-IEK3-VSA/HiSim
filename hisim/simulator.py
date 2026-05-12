@@ -297,7 +297,7 @@ class Simulator:
             raise ValueError("postprocessing_datatransfer was none")
 
         my_post_processor = pp.PostProcessor()
-        my_post_processor.run(ppdt=postprocessing_datatransfer)
+        my_post_processor.run(ppdt=postprocessing_datatransfer, my_sim=self)
         for wrapped_component in self.wrapped_components:
             wrapped_component.clear()
         del all_result_lines

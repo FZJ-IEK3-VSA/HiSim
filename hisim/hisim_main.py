@@ -17,6 +17,8 @@ try:
     import hisim.simulator as sim
     from hisim import log
     from hisim.simulationparameters import SimulationParameters
+    from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+    from hisim.hisim_convert_to_json import get_description_from_py
 except ModuleNotFoundError:
     raise ModuleNotFoundError(
         "Could not import HiSim modules. "
@@ -58,6 +60,10 @@ def initialize_from_python(
     # Final check and import
     if not path_obj.is_file():
         raise ValueError(f"Python script {module_filename}.py could not be found at {path_obj}")
+
+    SingletonSimRepository().set_entry(
+        key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{get_description_from_py(path_obj)}",
+    )
 
     # Make setup function executable
     targetmodule = importlib.import_module(module_filename)
@@ -105,6 +111,9 @@ def initialize_from_json(
 
     # Load JSON files
     scenario_data = load_json_file(scenario)
+    SingletonSimRepository().set_entry(
+        key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}",
+    )
     # Missing in the following data: result_directory, surplus_control, cache_dir_path, multiple_buildings
     # -> Result Directory is set in prepare_simulation_directory function, called by run_all_timesteps
     # -> Cache Dir Path is filled by default in SimulationParameters
@@ -135,6 +144,9 @@ def initialize_from_json(
         my_module_config=None,
         my_simulation_parameters=sim_params,
     )  # type: ignore[no-any-return]
+
+    # Prepare the simulation directory, to which the component_connections.json is written within the setup_components_and_connections function
+    my_sim.prepare_simulation_directory()
 
     my_sim = setup_components_and_connections(scenario_data, my_sim, sim_params)
 

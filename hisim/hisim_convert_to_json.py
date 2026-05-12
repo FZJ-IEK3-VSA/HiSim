@@ -80,12 +80,14 @@ def get_filtered_simulation_parameters(my_sim: sim.Simulator):
     return filtered
 
 
-def write_standalone_simulation_json(my_sim: sim.Simulator, file_path="recent_simulation_parameters.json") -> None:
+def write_standalone_simulation_json(my_sim: sim.Simulator, path="recent_simulation_parameters.json") -> None:
     """Write the simulation parameters of the given simulator to a JSON file."""
 
-    log.information("Writing simulation parameters to JSON file "f"{file_path}")
+    if path.lower()[-5:] != ".json":
+        path = path + ".json"
+    log.information(f"Writing simulation parameters to JSON file {path}")
 
-    with open(file_path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8") as f:
         # Interesting when later executing these JSONs:
         # - multiple_buildings is actually (only) part of the simulation parameters
         # - surplus_control is part of the household configuration, i.e., the dataclass that determines
@@ -423,6 +425,64 @@ def remove_automatic_connections(my_sim: sim.Simulator, scenario: Scenario, uniq
     log.information(f"Removed {removed} automatic connections from JSON output.")
 
 
+def write_standalone_scenario_json(module_filename: str, my_sim: sim.Simulator, desc: str, path: str) -> None:
+    """Write the scenario JSON file based on the components and connections of the simulator."""
+
+    # Get prettified name for the scenario from the module filename
+    nice_name = module_filename.replace("_", " ").capitalize()
+
+    scenario = Scenario(
+        name=nice_name,
+        description=desc,
+        multiple_buildings=my_sim.get_simulation_parameters().multiple_buildings
+    )
+
+    component_connections = []
+    for component in my_sim.wrapped_components:
+        add_component_to_scenario(scenario=scenario, config=component.my_component.config, component=component.my_component, my_sim=my_sim)
+
+        for con in component.my_component.log_connections:
+            component_connections += [Connection(
+                source=Endpoint(
+                    component_name=con["src_object_name"],
+                    field_name=con["src_field_name"],
+                ),
+                target=Endpoint(
+                    component_name=component.my_component.component_name,
+                    field_name=con["input_fieldname"],
+                ),
+            )]
+
+    all_connections = component_connections
+    unique_connections, seen_keys = get_unique_connections(all_connections)
+
+    remove_automatic_connections(my_sim=my_sim, scenario=scenario, unique_connections=unique_connections, seen_keys=seen_keys)
+
+    scenario.connections = unique_connections
+    if path.lower()[-5:] != ".json":
+        path = path + ".json"
+    log.information(f"Writing scenario parameters to JSON file {path}")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(scenario.model_dump_json(indent=4))
+        f.flush()
+        f.close()
+
+
+def get_description_from_py(path_obj: Path) -> str:
+    """Extract brief description from the first line of the system setup python file."""
+
+    with open(path_obj, 'r', encoding="utf-8") as f:
+        first_line = f.readline().strip()
+
+    desc = first_line
+    for quote_type in ['"""', "'''"]:
+        if first_line.startswith(quote_type):
+            desc = first_line.replace(quote_type, '').strip()
+            break
+
+    return desc
+
+
 def main(
     path_to_module: str,
     my_simulation_parameters: Optional[SimulationParameters] = None,
@@ -485,7 +545,7 @@ def main(
     # Pass setup function to simulator
     model_init_method(my_sim, my_simulation_parameters)
     # Write the simulation parameters now, then alter them to include advanced logging
-    write_standalone_simulation_json(my_sim)
+    write_standalone_simulation_json(my_sim, path=f"{module_dir}/{module_filename}.simulation.json")
 
     my_simulation_parameters = my_sim.get_simulation_parameters()
     my_simulation_parameters.log_connections = True
@@ -510,52 +570,9 @@ def main(
     my_sim2.prepare_calculation()
     my_sim2.connect_all_components()
 
-    # Extract brief description from the first line of the system setup python file
-    with open(path_obj, 'r', encoding="utf-8") as f:
-        first_line = f.readline().strip()
+    desc = get_description_from_py(path_obj)
 
-    desc = first_line
-    for quote_type in ['"""', "'''"]:
-        if first_line.startswith(quote_type):
-            desc = first_line.replace(quote_type, '').strip()
-            break
-
-    # Get prettified name for the scenario from the module filename
-    nice_name = module_filename.replace("_", " ").capitalize()
-
-    scenario = Scenario(
-        name=nice_name,
-        description=desc,
-        multiple_buildings=my_sim2.get_simulation_parameters().multiple_buildings
-    )
-
-    component_connections = []
-    for component in my_sim2.wrapped_components:
-        add_component_to_scenario(scenario=scenario, config=component.my_component.config, component=component.my_component, my_sim=my_sim2)
-
-        for con in component.my_component.log_connections:
-            component_connections += [Connection(
-                source=Endpoint(
-                    component_name=con["src_object_name"],
-                    field_name=con["src_field_name"],
-                ),
-                target=Endpoint(
-                    component_name=component.my_component.component_name,
-                    field_name=con["input_fieldname"],
-                ),
-            )]
-
-    all_connections = component_connections
-    unique_connections, seen_keys = get_unique_connections(all_connections)
-
-    remove_automatic_connections(my_sim=my_sim2, scenario=scenario, unique_connections=unique_connections, seen_keys=seen_keys)
-
-    scenario.connections = unique_connections
-    log.information("Writing scenario parameters to JSON file "f"{module_dir}/{module_filename}.json")
-    with open(f"{module_dir}/{module_filename}.json", "w", encoding="utf-8") as f:
-        f.write(scenario.model_dump_json(indent=4))
-        f.flush()
-        f.close()
+    write_standalone_scenario_json(module_filename=module_filename, my_sim=my_sim2, desc=desc, path=f"{module_dir}/{module_filename}.scenario.json")
 
     log.information("#################################")
     endtime = datetime.now()

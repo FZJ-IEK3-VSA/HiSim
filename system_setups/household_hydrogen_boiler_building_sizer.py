@@ -128,6 +128,8 @@ def setup_function(
 
     # Set Weather
     weather_location = arche_type_config_.weather_location
+    if weather_location is None:
+        weather_location = "AACHEN"  # default weather location
 
     # Set heat distribution system
     if energy_system_config_.heat_distribution_system == ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING:

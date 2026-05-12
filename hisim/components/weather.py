@@ -7,7 +7,7 @@ import math
 import os
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, List
+from typing import Any, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -392,32 +392,59 @@ class WeatherConfig(ConfigBase):
         location_entry: Any,
         name: str = "Weather",
         building_name: str = "BUI1",
+        weather_direct_filepath: Optional[str] = None,
+        weather_direct_data_source: Optional[WeatherDataSourceEnum] = None,
     ) -> Any:
-        """Gets the default configuration for Aachen."""
-        if not isinstance(location_entry, LocationEnum):
-            if location_entry in LocationEnum._member_names_:  # pylint: disable=W0212
-                location_entry = getattr(LocationEnum, location_entry)
-            else:
-                try:
-                    location_entry = getattr(LocationEnum, location_entry.strip())
-                except Exception as exc:
-                    raise ValueError(
-                        f"The location_entry {location_entry} could not be found in the Weather Location Enum class."
-                    ) from exc
+        """Gets the default configuration for a given location."""
 
-        path = os.path.join(
+        enum_entry = None
+        # If location_entry is enum entry, use it directly
+        if isinstance(location_entry, LocationEnum):
+            enum_entry = location_entry
+
+        # Read location_entry from enum
+        elif isinstance(location_entry, str):
+            enum_entry = getattr(LocationEnum, location_entry.strip(), None)
+
+        if enum_entry is not None:
+            location = enum_entry.value[0]
+            path = os.path.join(
             utils.get_input_directory(),
             "weather",
-            location_entry.value[1],
-            location_entry.value[2],
-            location_entry.value[3],
-        )
+            enum_entry.value[1],
+            enum_entry.value[2],
+            enum_entry.value[3],
+            )
+            data_source = enum_entry.value[4]
+
+        # Use direct filepath
+        else:
+            if weather_direct_filepath is None:
+                raise ValueError(
+                    f"Location '{location_entry}' not found in Weather LocationEnum and no weather_direct_filepath was provided."
+                )
+            if not os.path.isfile(weather_direct_filepath):
+                raise ValueError(
+                    f"Weather data file not found: {weather_direct_filepath}")
+            if weather_direct_data_source is None:
+                raise ValueError(
+                    f"No data source (data type) provided for weather_direct_filepath {weather_direct_filepath}."
+                )
+            if weather_direct_filepath.lower().endswith(".dat"):
+                weather_direct_filepath = weather_direct_filepath[:-4]
+            elif weather_direct_filepath.lower().endswith(".csv"):
+                weather_direct_filepath = weather_direct_filepath[:-4]
+
+            location = str(location_entry)
+            path = weather_direct_filepath
+            data_source = weather_direct_data_source
+
         config = WeatherConfig(
             building_name=building_name,
             name=name,
-            location=location_entry.value[0],
+            location=location,
             source_path=path,
-            data_source=location_entry.value[4],
+            data_source=data_source,
             predictive_control=False,
         )
         return config
@@ -623,8 +650,7 @@ class Weather(Component):
         if self.weather_config.predictive_control:
             timesteps_24h = 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
             last_forecast_timestep = int(timestep + timesteps_24h)
-            if last_forecast_timestep > len(self.temperature_list):
-                last_forecast_timestep = len(self.temperature_list)
+            last_forecast_timestep = min(last_forecast_timestep, len(self.temperature_list))
             # log.information( type(self.temperature))
             temperatureforecast = self.temperature_list[timestep:last_forecast_timestep]
             self.simulation_repository.set_entry(self.Weather_Temperature_Forecast_24h, temperatureforecast)
@@ -990,6 +1016,7 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulation_param
     """
     # get the correct file path
     filepath = os.path.join(weatherconfig.source_path)
+
     if weatherconfig.data_source == WeatherDataSourceEnum.NSRDB:
         data = read_nsrdb_data(filepath, simulation_parameters.year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.DWD_TRY:
@@ -1002,12 +1029,15 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulation_param
         data = read_dwd_15min_data(filepath, simulation_parameters)
     elif weatherconfig.data_source == WeatherDataSourceEnum.ERA5:
         data = read_era5_data(filepath, simulation_parameters.year)
+    else:
+        raise ValueError(f"Unsupported weather data source: {weatherconfig.data_source}")
 
     return data
 
 
 def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads the DWD Test Reference Year (TRY) data."""
+
     # get the geoposition
     with open(filepath + ".dat", encoding="utf-8") as file_stream:
         lines = file_stream.readlines()
@@ -1021,6 +1051,7 @@ def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
     else:
         # get data
         data = pd.read_csv(filepath + ".dat", sep=r"\s+", skiprows=list(range(0, 31)))
+
         data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
         data["GHI"] = data["D"] + data["B"]
         data = data.rename(

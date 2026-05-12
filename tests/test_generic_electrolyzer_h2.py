@@ -85,8 +85,7 @@ def test_electrolyzer():
 
     else:
         assert (
-            stsv.values[my_electrolyzer.hydrogen_flow_rate.global_index]
-            == 0.621840650119573
+            stsv.values[my_electrolyzer.hydrogen_flow_rate.global_index] == pytest.approx(0.621840650119573)
         )
 
     # python -m pytest ../tests/test_generic_electrolyzer_h2.py

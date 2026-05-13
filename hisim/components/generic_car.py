@@ -31,7 +31,6 @@ from hisim.units import (
     Unitless
 )
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
-from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector

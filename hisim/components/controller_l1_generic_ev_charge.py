@@ -265,12 +265,13 @@ class L1Controller(cp.Component):
 
         if car_consumption > 0:
             return car_consumption * (-1)
+        # only allow charging when car is at charging location
         if car_location != self.charging_location:
             return 0
         if soc < self.config.battery_set_soc:
-            return self.power
+            return self.power_in_watt
         if electricity_target > self.config.lower_threshold_charging_power_in_watt:
-            return min(electricity_target, self.power)
+            return min(electricity_target, self.power_in_watt)
         return 0
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
@@ -323,13 +324,13 @@ class L1Controller(cp.Component):
                 'Charging location not known, check the input on the charging station set. It was set to "charging at home per default.'
             )
         power = float(charging_station_string.partition("with ")[2].partition(" kW")[0]) * 1e3
-        self.power = power
+        self.power_in_watt = power
 
     def write_to_report(self) -> List[str]:
         """Writes EV charge controller values to report."""
         lines = []
         lines.append(self.name + "_w" + str(self.source_weight) + "charging controller: ")
-        lines.append(f"Power [kW]: {self.power * 1e-3:2.1f}")
+        lines.append(f"Power [kW]: {self.power_in_watt * 1e-3:2.1f}")
         if self.charging_location == 1:
             lines.append("At Home")
         elif self.charging_location == 2:
@@ -389,4 +390,13 @@ class L1Controller(cp.Component):
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        return []
+        list_of_kpi_entries = []
+        my_kpi_entry_4 = KpiEntry(
+            name="Car charging location",
+            unit="-",
+            value=self.charging_location,
+            tag=KpiTagEnumClass.CAR,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(my_kpi_entry_4)
+        return list_of_kpi_entries

@@ -113,7 +113,7 @@ def setup_function(
 
     simu_params_year = my_simulation_parameters.year
 
-    my_simulation_parameters.country = 'DE'
+    my_simulation_parameters.country = "DE"
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================
@@ -138,6 +138,14 @@ def setup_function(
 
     # Set Weather
     weather_location = arche_type_config_.weather_location
+    if weather_location is None:
+        weather_location = "AACHEN"  # default weather location
+
+    # testing AU weather data
+    weather_filepath = arche_type_config_.weather_filepath
+    weather_datasource = arche_type_config_.weather_datasource
+    if isinstance(weather_datasource, str):
+        weather_datasource = weather.WeatherDataSourceEnum[weather_datasource]
 
     # Set Photovoltaic System
     azimuth = arche_type_config_.pv_azimuth
@@ -228,7 +236,12 @@ def setup_function(
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
+    # my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
+    my_weather_config = weather.WeatherConfig.get_default(
+        location_entry=weather_location,
+        weather_direct_filepath=weather_filepath,
+        weather_direct_data_source=weather_datasource,
+    )
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_weather)

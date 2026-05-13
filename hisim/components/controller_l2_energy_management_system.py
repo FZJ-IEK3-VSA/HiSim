@@ -576,29 +576,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
         return dynamic_connections
 
-    def get_default_connections_from_advanced_battery(
-        self,
-    ):
-        """Get advanced battery default connections."""
-
-        from hisim.components.advanced_battery_bslib import Battery  # pylint: disable=import-outside-toplevel
-
-        dynamic_connections = []
-        advanced_battery_class_name = Battery.get_classname()
-        dynamic_connections.append(
-            dynamic_component.DynamicComponentConnection(
-                source_component_class=Battery,
-                source_class_name=advanced_battery_class_name,
-                source_component_field_name=Battery.AcBatteryPowerUsed,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-                source_weight=5,
-            )
-        )
-
-        return dynamic_connections
-
     def get_default_connections_from_car_battery(
         self,
     ):
@@ -617,8 +594,43 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_component_field_name=L1Controller.BatteryChargingPowerToEMS,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
-                source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-                source_weight=999,
+                source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+                source_weight=5,
+            )
+        )
+        self.add_component_output(
+            source_output_name=f"ElectricityToOrFromGridOf{electric_car_charger_class_name}_",
+            source_tags=[
+                lt.ComponentType.CAR_BATTERY,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_component_class=electric_car_charger_class_name,
+            source_weight=5,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for battery of electric car.",
+        )
+
+        return dynamic_connections
+
+    def get_default_connections_from_advanced_battery(
+        self,
+    ):
+        """Get advanced battery default connections."""
+
+        from hisim.components.advanced_battery_bslib import Battery  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        advanced_battery_class_name = Battery.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=Battery,
+                source_class_name=advanced_battery_class_name,
+                source_component_field_name=Battery.AcBatteryPowerUsed,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+                source_weight=6,
             )
         )
 
@@ -869,8 +881,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             raise ValueError(
                 "Lengths of inputs, component types, and outputs must match."
                 f" Got {len(inputs_sorted)}, {len(component_types_sorted)}, and {len(outputs_sorted)}."
-                "Make sure all inputs have the same source weight as the corresponding output. "
-                "Please check all your default and manual connections."
+                "Make sure all inputs have the same source weight as the corresponding output! "
+                "Please check all your default and manual connections. \n"
+                f"Inputs: {[input.fullname for input in inputs_sorted]} \n"
+                f"Outputs: {[output.full_name for output in outputs_sorted]} \n"
+                
             )
 
         for index, single_input_sorted in enumerate(inputs_sorted):

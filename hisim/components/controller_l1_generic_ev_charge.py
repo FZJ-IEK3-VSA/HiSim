@@ -113,7 +113,7 @@ class L1Controller(cp.Component):
     """
 
     # Inputs
-    ElectricityOutput = "ElectricityOutput"
+    ElectricityNeededByCar = "ElectricityNeededByCar"
     CarLocation = "CarLocation"
     StateOfCharge = "StateOfCharge"
     ElectricityTarget = "ElectricityTarget"
@@ -147,7 +147,7 @@ class L1Controller(cp.Component):
         # add inputs
         self.car_consumption_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.ElectricityOutput,
+            self.ElectricityNeededByCar,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             mandatory=True,
@@ -210,7 +210,7 @@ class L1Controller(cp.Component):
         car_classname = generic_car.Car.get_classname()
         connections.append(
             cp.ComponentConnection(
-                L1Controller.ElectricityOutput,
+                L1Controller.ElectricityNeededByCar,
                 car_classname,
                 generic_car.Car.ElectricityOutput,
             )

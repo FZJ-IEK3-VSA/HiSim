@@ -52,10 +52,11 @@ def initialize_from_python(
 
     # Add parent directory to PYTHONPATH
     module_dir = path_obj.parent
-    if module_dir.exists():
-        sys.path.append(str(module_dir))
-    else:
-        raise ValueError(f"Directory of module does not exist: {module_dir}")
+    for parent in path_obj.parents:
+        if parent.exists():
+            sys.path.append(str(parent))
+        else:
+            raise ValueError(f"Directory of module does not exist: {module_dir}")
 
     # Final check and import
     if not path_obj.is_file():
@@ -165,8 +166,8 @@ def run_simulation(my_sim: sim.Simulator, path_to_module: Optional[str]) -> None
     # If debugging is needed, this may be used to print components and their inputs/outputs
     for comp in my_sim.wrapped_components:
         log.debug(f"Component {comp.my_component.component_name} has inputs "
-                        f"{[input.full_name for input in comp.component_inputs]} and"
-                        f" outputs {[output.full_name for output in comp.component_outputs]}")
+                  f"{[input.full_name for input in comp.component_inputs]} and"
+                  f" outputs {[output.full_name for output in comp.component_outputs]}")
 
     log.information("#################################")
     log.information(f"Starting simulation of {path_to_module}")

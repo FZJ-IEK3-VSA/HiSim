@@ -1,5 +1,5 @@
 """Main postprocessing module that starts all other modules."""
-
+from __future__ import annotations
 import json
 
 # clean
@@ -8,7 +8,7 @@ import pickle
 import string
 import sys
 from timeit import default_timer as timer
-from typing import Any, Optional, List, Dict, Tuple
+from typing import Any, Optional, List, Dict, Tuple, TYPE_CHECKING
 
 import pandas as pd
 
@@ -16,7 +16,7 @@ from hisim import log
 from hisim import utils
 from hisim.component import ComponentOutput
 from hisim.components import building, loadprofilegenerator_utsp_connector
-from hisim.hisim_convert_to_json import write_standalone_simulation_json, write_standalone_scenario_json
+from hisim.json_generator import write_standalone_simulation_json, write_standalone_scenario_json
 from hisim.building_sizer_utils.interface_configs.kpi_config import KPIConfig
 from hisim.postprocessing import charts
 from hisim.postprocessing import reportgenerator
@@ -33,8 +33,10 @@ from hisim.postprocessing.system_chart import SystemChart
 from hisim.postprocessing.webtool_entries import WebtoolDict
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
-import hisim.simulator as sim
 from hisim.loadtypes import OutputPostprocessingRules
+
+if TYPE_CHECKING:
+    from hisim.simulator import Simulator
 
 
 class PostProcessor:
@@ -51,6 +53,7 @@ class PostProcessor:
         self.scenario: str = ""
         self.region: str = ""
         self.year: int = 2021
+        self.description: str = ""
 
     def set_dir_results(self, dirname: Optional[str] = None) -> None:
         """Sets the results directory."""
@@ -60,7 +63,7 @@ class PostProcessor:
 
     @utils.measure_execution_time
     @utils.measure_memory_leak
-    def run(self, ppdt: PostProcessingDataTransfer, my_sim: sim.Simulator) -> None:  # noqa: MC0001
+    def run(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:  # noqa: MC0001
         """Runs the main post processing."""
         # Define the directory name
         log.information("Main post processing function")
@@ -808,7 +811,7 @@ class PostProcessor:
         pass  # noqa: unnecessary-pass
 
     @utils.measure_execution_time
-    def prepare_results_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer, my_sim: sim.Simulator) -> None:
+    def prepare_results_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
         """Prepare the results for the scenario evaluation."""
 
         # create result data folder
@@ -897,7 +900,7 @@ class PostProcessor:
 
         self.write_config_data_for_scenario_evaluation(ppdt, my_sim)
 
-    def write_config_data_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer, my_sim: sim.Simulator) -> None:
+    def write_config_data_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
         """Prepare the results for the scenario evaluation."""
         # create dictionary with all import data information
         if PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in ppdt.post_processing_options:
@@ -937,21 +940,20 @@ class PostProcessor:
         write_standalone_simulation_json(my_sim, path=os.path.join(result_data_folder_for_scenario_evaluation, "simulation.json"))
 
         # Here, the my_sim could maybe be replaced by an altered ppdt
-        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=self.description, path=os.path.join(result_data_folder_for_scenario_evaluation, "scenario.json"))
+        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=self.description,
+                                       path=os.path.join(result_data_folder_for_scenario_evaluation, "scenario.json"))
 
-
-    def write_component_configurations_to_json(self, ppdt: PostProcessingDataTransfer, my_sim: sim.Simulator) -> None:
+    def write_component_configurations_to_json(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
         """Collect all component configurations and write into JSON file in result directory."""
 
         write_standalone_simulation_json(my_sim, path=os.path.join(
-                ppdt.simulation_parameters.result_directory,
-                "simulation.json",
-            ))
+            ppdt.simulation_parameters.result_directory,
+            "simulation.json",
+        ))
         write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=self.description, path=os.path.join(
-                ppdt.simulation_parameters.result_directory,
-                "scenario.json",
-            ))
-
+            ppdt.simulation_parameters.result_directory,
+            "scenario.json",
+        ))
 
     def write_kpis_in_dict(
         self,

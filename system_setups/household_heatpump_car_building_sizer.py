@@ -195,7 +195,8 @@ def setup_function(
         raise TypeError(f"Type {type(arche_type_config_.lpg_households)} is incompatible. Should be List[str].")
     # Set electric car
     car_surplus_charging = True
-    
+    energy_system_config_.use_battery_and_ems = True
+
     # =================================================================================================================================
     # Build Basic Components
     # Build Building
@@ -416,9 +417,9 @@ def setup_function(
         my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
         if car_surplus_charging:
             # lower threshold for soc of car battery in clever case. This enables more surplus charging
-            my_car_battery_controller_config.battery_set = 0.4
+            my_car_battery_controller_config.battery_set_soc = 0.4
         else:
-            my_car_battery_controller_config.battery_set = 1.0
+            my_car_battery_controller_config.battery_set_soc = 1.0
 
         my_car_battery_controller = controller_l1_generic_ev_charge.L1Controller(
             my_simulation_parameters=my_simulation_parameters,
@@ -480,7 +481,7 @@ def setup_function(
                 )
 
                 electricity_target = my_electricity_controller.add_component_output(
-                    source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+                    source_output_name="ChargingPowerForEVBattery_", # lt.InandOutputType.ELECTRICITY_TARGET,
                     source_tags=[
                         lt.ComponentType.CAR_BATTERY,
                         lt.InandOutputType.ELECTRICITY_TARGET,
@@ -511,7 +512,7 @@ def setup_function(
         # -----------------------------------------------------------------------------------------------------------------
         # Add outputs to EMS
         loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
-            source_output_name="LoadingPowerInputForBattery_",
+            source_output_name="ChargingPowerForBattery_", # "LoadingPowerInputForBattery_",
             source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
             source_weight=5,
             source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -568,7 +569,7 @@ def setup_function(
     else:
         scenario_hash_string = "default_scenario"
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
-        further_result_folder_description = "default_config"
+        further_result_folder_description = f"{car_surplus_charging}_{my_config.energy_system_config_.use_battery_and_ems}" #"default_config"
 
     SingletonSimRepository().set_entry(
         key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,

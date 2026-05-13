@@ -1,4 +1,4 @@
-""" Car Battery implementation built upon the bslib library. It contains a CarBattery Class together with its Configuration and State. """
+"""Car Battery implementation built upon the bslib library. It contains a CarBattery Class together with its Configuration and State."""
 
 # clean
 
@@ -21,11 +21,11 @@ from hisim.component import (
     SingleTimeStepValues,
     OpexCostDataClass,
     DisplayConfig,
-    CapexCostDataClass
+    CapexCostDataClass,
 )
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -55,9 +55,9 @@ class CarBatteryConfig(ConfigBase):
     #: battery capacity in in kWh
     e_bat_custom: float
     #: amount of energy used to charge the car battery
-    charge: float
+    total_charged_energy_in_kilowatthour: float
     #: amount of energy discharged from the battery
-    discharge: float
+    total_discharged_energy_in_kilowatthour: float
 
     @classmethod
     def get_main_classname(cls):
@@ -74,8 +74,8 @@ class CarBatteryConfig(ConfigBase):
             p_inv_custom=1e4,
             e_bat_custom=30,
             source_weight=1,
-            charge=0,
-            discharge=0,
+            total_charged_energy_in_kilowatthour=0,
+            total_discharged_energy_in_kilowatthour=0,
         )
         return config
 
@@ -92,11 +92,11 @@ class CarBattery(Component):
     """
 
     # Inputs
-    LoadingPowerInput = "LoadingPowerInput"  # W
+    TargetPowerToOrFromBattery = "TargetPowerToOrFromBattery"  # W
 
     # Outputs
-    AcBatteryPower = "AcBatteryPower"  # W
-    DcBatteryPower = "DcBatteryPower"  # W
+    AcBatteryChargingPower = "AcBatteryChargingPower"  # W
+    DcBatteryChargingPower = "DcBatteryChargingPower"  # W
     StateOfCharge = "StateOfCharge"  # [0..1]
 
     def __init__(
@@ -139,7 +139,7 @@ class CarBattery(Component):
         # Define component inputs
         self.p_set: ComponentInput = self.add_input(
             object_name=self.component_name,
-            field_name=self.LoadingPowerInput,
+            field_name=self.TargetPowerToOrFromBattery,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             mandatory=True,
@@ -148,11 +148,11 @@ class CarBattery(Component):
         # Define component outputs
         self.p_bs: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.AcBatteryPower,
+            field_name=self.AcBatteryChargingPower,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             postprocessing_flag=[
-                InandOutputType.CHARGE_DISCHARGE,
+                InandOutputType.CHARGE,
                 ComponentType.CAR_BATTERY,
             ],
             output_description="Charging power of the battery in Watt (Alternating current)",
@@ -160,7 +160,7 @@ class CarBattery(Component):
 
         self.p_bat: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.DcBatteryPower,
+            field_name=self.DcBatteryChargingPower,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             output_description="Charging power of the battery in Watt (Direct current).",
@@ -187,7 +187,7 @@ class CarBattery(Component):
         ev_charge_controller_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-                CarBattery.LoadingPowerInput,
+                CarBattery.TargetPowerToOrFromBattery,
                 ev_charge_controller_classname,
                 component_class.ToOrFromBattery,
             )
@@ -216,30 +216,34 @@ class CarBattery(Component):
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
 
         # Load input values
-        p_set = stsv.get_input_value(self.p_set)
+        target_power_to_or_from_car_battery_in_watt = stsv.get_input_value(self.p_set)
         soc = self.state.soc
 
         # Simulate battery charging
-        if p_set >= 0:
-            results = self.bat.simulate(p_load=p_set, soc=soc, dt=seconds_per_timestep)
-            p_bs = results[0]
-            p_bat = results[1]
+        if target_power_to_or_from_car_battery_in_watt >= 0:
+            results = self.bat.simulate(
+                p_load=target_power_to_or_from_car_battery_in_watt, soc=soc, dt=seconds_per_timestep
+            )
+            ac_charging_power_in_watt = results[0]
+            dc_charging_power_in_watt = results[1]
             soc = results[2]
 
         # Simulate battery discharge without losses (this is included in the car consumption of the car component)
         else:
-            soc = soc + (p_set * self.my_simulation_parameters.seconds_per_timestep / 3600) / (self.e_bat_custom * 1e3)
+            soc = soc + (
+                target_power_to_or_from_car_battery_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600
+            ) / (self.e_bat_custom * 1e3)
             if soc < 0:
                 raise ValueError(
                     "Car cannot drive, because battery is empty."
                     + "This points towards a major problem in the battery configuration - or the consumption pattern of the car."
                 )
-            p_bs = 0
-            p_bat = 0
+            ac_charging_power_in_watt = 0
+            dc_charging_power_in_watt = 0
 
         # write values for output time series
-        stsv.set_output_value(self.p_bs, p_bs)
-        stsv.set_output_value(self.p_bat, p_bat)
+        stsv.set_output_value(self.p_bs, ac_charging_power_in_watt)
+        stsv.set_output_value(self.p_bat, dc_charging_power_in_watt)
         stsv.set_output_value(self.soc, soc)
 
         # write values to state
@@ -263,24 +267,56 @@ class CarBattery(Component):
         """
         battery_losses_in_kwh: float = 0.0
         for index, output in enumerate(all_outputs):
+            # get charged energy
             if (
                 output.postprocessing_flag is not None
                 and output.component_name == self.component_name
+                and output.field_name == self.AcBatteryChargingPower
+                and output.load_type == LoadTypes.ELECTRICITY
+                and output.unit == Units.WATT
             ):
-                if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
-                    self.battery_config.charge = round(
-                        postprocessing_results.iloc[:, index].clip(lower=0).sum()
-                        * self.my_simulation_parameters.seconds_per_timestep
-                        / 3.6e6,
-                        1,
-                    )
-                    self.battery_config.discharge = round(
-                        postprocessing_results.iloc[:, index].clip(upper=0).sum()
-                        * self.my_simulation_parameters.seconds_per_timestep
-                        / 3.6e6,
-                        1,
-                    ) * (-1)
-                    battery_losses_in_kwh = self.battery_config.charge - self.battery_config.discharge
+
+                # self.battery_config.total_charged_energy_in_kilowatthour = round(
+                #     postprocessing_results.iloc[:, index].clip(lower=0).sum()
+                #     * self.my_simulation_parameters.seconds_per_timestep
+                #     / 3.6e6,
+                #     1,
+                # )
+                self.battery_config.total_charged_energy_in_kilowatthour = round(
+                    KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=postprocessing_results.iloc[:, index].clip(lower=0),
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    ),
+                    1,
+                )
+
+            # get discharged energy
+            if (
+                output.postprocessing_flag is not None
+                and output.component_name == self.component_name
+                and output.field_name == self.TargetPowerToOrFromBattery
+                and output.load_type == LoadTypes.ELECTRICITY
+                and output.unit == Units.WATT
+            ):
+                # take only negative values for discharging amount
+                # self.battery_config.total_discharged_energy_in_kilowatthour = round(
+                #     postprocessing_results.iloc[:, index].clip(upper=0).sum()
+                #     * self.my_simulation_parameters.seconds_per_timestep
+                #     / 3.6e6,
+                #     1,
+                # ) * (-1)
+                self.battery_config.total_discharged_energy_in_kilowatthour = round(
+                    KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=postprocessing_results.iloc[:, index].clip(upper=0),
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    ),
+                    1,
+                ) * (-1)
+        # calculate battery losses
+        battery_losses_in_kwh = (
+            self.battery_config.total_charged_energy_in_kilowatthour
+            - self.battery_config.total_discharged_energy_in_kilowatthour
+        )
         # Todo: Battery Aging like in component advanced_battery_bslib? Or is this considered in maintenance cost of car?
 
         opex_cost_data_class = OpexCostDataClass(
@@ -289,13 +325,15 @@ class CarBattery(Component):
             co2_footprint_in_kg=0,
             total_consumption_in_kwh=battery_losses_in_kwh,
             loadtype=LoadTypes.ELECTRICITY,
-            kpi_tag=KpiTagEnumClass.CAR_BATTERY
+            kpi_tag=KpiTagEnumClass.CAR_BATTERY,
         )
 
         return opex_cost_data_class
 
     @staticmethod
-    def get_cost_capex(config: CarBatteryConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
+    def get_cost_capex(
+        config: CarBatteryConfig, simulation_parameters: SimulationParameters
+    ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class

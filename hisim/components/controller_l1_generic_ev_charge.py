@@ -46,9 +46,9 @@ class ChargingStationConfig(cp.ConfigBase):
     #: definition of the charging station, in line with definitions from LoadProfileGenerator
     charging_station_set: JsonReference
     #: set point for state of charge of battery
-    battery_set: float
+    battery_set_soc: float
     #: lower threshold for charging power (below efficiency goes down)
-    lower_threshold_charging_power: float
+    lower_threshold_charging_power_in_watt: float
     #: CO2 footprint of investment in kg
     device_co2_footprint_in_kg: float
     #: cost for investment in Euro
@@ -71,17 +71,17 @@ class ChargingStationConfig(cp.ConfigBase):
         building_name: str = "BUI1",
     ) -> "ChargingStationConfig":
         """Returns default configuration of charging station and desired SOC Level."""
-        charging_power = float((charging_station_set.Name or "").split("with ")[1].split(" kW")[0])
-        lower_threshold_charging_power = (
-            charging_power * 1e3 * 0.1
+        charging_power_in_kilowatt = float((charging_station_set.Name or "").split("with ")[1].split(" kW")[0])
+        lower_threshold_charging_power_in_watt = (
+            charging_power_in_kilowatt * 1e3 * 0.1
         )  # 10 % of charging power for acceptable efficiencies
         config = ChargingStationConfig(
             building_name=building_name,
             name="L1EVChargeControl",
             source_weight=1,
             charging_station_set=charging_station_set,
-            battery_set=0.8,
-            lower_threshold_charging_power=lower_threshold_charging_power,
+            battery_set_soc=0.8,
+            lower_threshold_charging_power_in_watt=lower_threshold_charging_power_in_watt,
             device_co2_footprint_in_kg=100,  # estimated value  # Todo: check value
             investment_costs_in_euro=1000,  # Todo: check value
             lifetime_in_years=10,  # estimated value  # Todo: check value
@@ -117,7 +117,7 @@ class L1Controller(cp.Component):
     CarLocation = "CarLocation"
     StateOfCharge = "StateOfCharge"
     ElectricityTarget = "ElectricityTarget"
-    AcBatteryPower = "AcBatteryPower"
+    AcBatteryChargingPower = "AcBatteryChargingPower"
 
     # Outputs
     ToOrFromBattery = "ToOrFromBattery"
@@ -169,7 +169,7 @@ class L1Controller(cp.Component):
 
         self.ac_battery_power_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.AcBatteryPower,
+            self.AcBatteryChargingPower,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             mandatory=True,
@@ -232,9 +232,9 @@ class L1Controller(cp.Component):
         )
         connections.append(
             cp.ComponentConnection(
-                L1Controller.AcBatteryPower,
+                L1Controller.AcBatteryChargingPower,
                 battery_classname,
-                advanced_ev_battery_bslib.CarBattery.AcBatteryPower,
+                advanced_ev_battery_bslib.CarBattery.AcBatteryChargingPower,
             )
         )
         return connections
@@ -268,9 +268,9 @@ class L1Controller(cp.Component):
             return car_consumption * (-1)
         if car_location != self.charging_location:
             return 0
-        if soc < self.config.battery_set:
+        if soc < self.config.battery_set_soc:
             return self.power
-        if electricity_target > self.config.lower_threshold_charging_power:
+        if electricity_target > self.config.lower_threshold_charging_power_in_watt:
             return min(electricity_target, self.power)
         return 0
 

@@ -598,6 +598,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_weight=5,
             )
         )
+
         self.add_component_output(
             source_output_name=f"ElectricityToOrFromGridOf{electric_car_charger_class_name}_",
             source_tags=[
@@ -1166,7 +1167,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     )
                     list_of_kpi_entries.append(dhw_st_electricity_from_grid_entry)
 
-                elif "ChargingPowerForEVBattery" in output.field_name and output.unit == lt.Units.WATT:
+                elif "L1Controller" in output.field_name and output.unit == lt.Units.WATT:
                     electric_car_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
                         postprocessing_results.iloc[:, index] < 0.0
                     ]

@@ -581,9 +581,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     ):
         """Get car battery default connections."""
 
-        from hisim.components.controller_l1_generic_ev_charge import (
+        from hisim.components.controller_l1_generic_ev_charge import (  # pylint: disable=import-outside-toplevel
             L1Controller,
-        )  # pylint: disable=import-outside-toplevel
+        )
 
         dynamic_connections = []
         electric_car_charger_class_name = L1Controller.get_classname()

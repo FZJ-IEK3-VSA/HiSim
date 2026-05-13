@@ -18,7 +18,6 @@ from hisim import log
 from hisim.components import generic_car
 from hisim.components import advanced_ev_battery_bslib
 from hisim.loadtypes import Units, ComponentType
-from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.component import OpexCostDataClass, CapexCostDataClass

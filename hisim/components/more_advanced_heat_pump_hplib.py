@@ -225,7 +225,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
     ElectricalInputPowerSH = "ElectricalInputPowerSH"  # W
     ElectricalInputPowerForCooling = "ElectricalInputPowerForCooling"  # W
     ElectricalInputPowerDHW = "ElectricalInputPowerDHW"  # W
-    ElectricalInputPowerTotal = "ElectricalInputPowerTotalHeatpump"
+    ElectricalInputPowerTotal = "ElectricalInputPowerTotalHeatpump"  # W
     COP = "COP"  # -
     EER = "EER"  # -
     HeatPumpOnOffState = "OnOffStateHeatpump"

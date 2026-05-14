@@ -241,7 +241,9 @@ class KpiGenerator(JSONWizard, KpiPreparation):
                 for kpi_name, kpi_entry in kpi_entries.items():
                     value = kpi_entry["value"]
                     if value is not None:
-                        value = round(value, 2)
+                        if not isinstance(value, str):
+                            value = round(value, 2)
+
                     unit = kpi_entry["unit"]
                     table.append([f"{building_object}", f"{kpi_name}: ", f"{value}", f"{unit}"])
                 table.append(["\n", "\n", "\n", "\n"])

@@ -17,6 +17,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import generic_car
 from hisim.components import advanced_ev_battery_bslib
+from hisim.components import controller_l2_energy_management_system
 from hisim.loadtypes import Units, ComponentType
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
@@ -115,7 +116,7 @@ class L1Controller(cp.Component):
     ElectricityNeededByCar = "ElectricityNeededByCar"
     CarLocation = "CarLocation"
     StateOfCharge = "StateOfCharge"
-    ElectricityTarget = "ElectricityTarget"
+    ElectricityTargetFromEMS = "ElectricityTargetFromEMS"
     AcBatteryChargingPower = "AcBatteryChargingPower"
 
     # Outputs
@@ -176,7 +177,7 @@ class L1Controller(cp.Component):
 
         self.electricity_target_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.ElectricityTarget,
+            self.ElectricityTargetFromEMS,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             mandatory=False,
@@ -238,6 +239,7 @@ class L1Controller(cp.Component):
         )
         return connections
 
+
     def i_save_state(self) -> None:
         """Saves actual state."""
         self.previous_state = self.state.clone()
@@ -269,9 +271,9 @@ class L1Controller(cp.Component):
         if car_location != self.charging_location:
             return 0
         if soc < self.config.battery_set_soc:
-            return self.power_in_watt
+            return self.power_delivered_at_charging_station_in_watt
         if electricity_target > self.config.lower_threshold_charging_power_in_watt:
-            return min(electricity_target, self.power_in_watt)
+            return min(electricity_target, self.power_delivered_at_charging_station_in_watt)
         return 0
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
@@ -314,23 +316,23 @@ class L1Controller(cp.Component):
         # get charging station location and charging station power out of ChargingStationSet
         if config.charging_station_set.Name is not None:
             charging_station_string = config.charging_station_set.Name.partition("At ")[2]
-            location = charging_station_string.partition(" with")[0]
-            if location == "Home":
+            self.location = charging_station_string.partition(" with")[0]
+            if self.location == "Home":
                 self.charging_location = 1
-            elif location == "Work":
+            elif self.location == "Work":
                 self.charging_location = 2
         else:
             log.error(
                 'Charging location not known, check the input on the charging station set. It was set to "charging at home per default.'
             )
         power = float(charging_station_string.partition("with ")[2].partition(" kW")[0]) * 1e3
-        self.power_in_watt = power
+        self.power_delivered_at_charging_station_in_watt = power
 
     def write_to_report(self) -> List[str]:
         """Writes EV charge controller values to report."""
         lines = []
         lines.append(self.name + "_w" + str(self.source_weight) + "charging controller: ")
-        lines.append(f"Power [kW]: {self.power_in_watt * 1e-3:2.1f}")
+        lines.append(f"Power [kW]: {self.power_delivered_at_charging_station_in_watt * 1e-3:2.1f}")
         if self.charging_location == 1:
             lines.append("At Home")
         elif self.charging_location == 2:
@@ -394,9 +396,18 @@ class L1Controller(cp.Component):
         my_kpi_entry_4 = KpiEntry(
             name="Car charging location",
             unit="-",
-            value=self.charging_location,
+            value=self.location,
             tag=KpiTagEnumClass.CAR,
             description=self.component_name,
         )
         list_of_kpi_entries.append(my_kpi_entry_4)
+
+        my_kpi_entry_5 = KpiEntry(
+            name="Power delivered at charging station",
+            unit="kW",
+            value=self.power_delivered_at_charging_station_in_watt * 1e-3,
+            tag=KpiTagEnumClass.CAR,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(my_kpi_entry_5)
         return list_of_kpi_entries

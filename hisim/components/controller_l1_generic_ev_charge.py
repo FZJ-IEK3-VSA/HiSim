@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-""" Controller of EV battery with configuration and state. """
+"""Controller of EV battery with configuration and state."""
+
 # clean
 
 from typing import List, Optional
@@ -85,8 +86,9 @@ class ChargingStationConfig(cp.ConfigBase):
             device_co2_footprint_in_kg=100,  # estimated value  # Todo: check value
             investment_costs_in_euro=1000,  # Todo: check value
             lifetime_in_years=10,  # estimated value  # Todo: check value
-            maintenance_costs_in_euro_per_year=0.05 * 1000,  # SOURCE: https://photovoltaik.one/wallbox-kosten (estimated value)
-            subsidy_as_percentage_of_investment_costs=0
+            maintenance_costs_in_euro_per_year=0.05
+            * 1000,  # SOURCE: https://photovoltaik.one/wallbox-kosten (estimated value)
+            subsidy_as_percentage_of_investment_costs=0,
         )
         return config
 
@@ -120,7 +122,7 @@ class L1Controller(cp.Component):
     AcBatteryChargingPower = "AcBatteryChargingPower"
 
     # Outputs
-    ToOrFromBattery = "ToOrFromBattery"
+    ElectricityTargetToOrFromCarBattery = "ElectricityTargetToOrFromCarBattery"
     BatteryChargingPowerToEMS = "BatteryChargingPowerToEMS"
 
     def __init__(
@@ -175,7 +177,7 @@ class L1Controller(cp.Component):
             mandatory=True,
         )
 
-        self.electricity_target_channel: cp.ComponentInput = self.add_input(
+        self.electricity_target_from_ems_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.ElectricityTargetFromEMS,
             lt.LoadTypes.ELECTRICITY,
@@ -184,9 +186,9 @@ class L1Controller(cp.Component):
         )
 
         # add outputs
-        self.p_set_channel: cp.ComponentOutput = self.add_output(
+        self.electricity_to_or_from_car_battery_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.ToOrFromBattery,
+            field_name=self.ElectricityTargetToOrFromCarBattery,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
             output_description="Set power for EV charging (and discharging) in Watt.",
@@ -239,7 +241,6 @@ class L1Controller(cp.Component):
         )
         return connections
 
-
     def i_save_state(self) -> None:
         """Saves actual state."""
         self.previous_state = self.state.clone()
@@ -264,17 +265,36 @@ class L1Controller(cp.Component):
         electricity_target: float,
     ) -> float:
         """Control."""
-
+        electricity_to_or_from_car_battery_in_watt = 0
+        # DISCHARGING: car is consuming energy and discharging: either due to driving or stanbd-by losses
         if car_consumption > 0:
-            return car_consumption * (-1)
-        # only allow charging when car is at charging location
-        if car_location != self.charging_location:
-            return 0
-        if soc < self.config.battery_set_soc:
-            return self.power_delivered_at_charging_station_in_watt
-        if electricity_target > self.config.lower_threshold_charging_power_in_watt:
-            return min(electricity_target, self.power_delivered_at_charging_station_in_watt)
-        return 0
+            electricity_to_or_from_car_battery_in_watt = car_consumption * (-1)
+
+        # CHARGING or PARKING: car is not driving and can be charged if located at charging station
+        elif car_consumption == 0:
+
+            # PARKING: car is not driving and only parking; only allow charging when car is at charging location
+            if car_location != self.charging_location:
+                electricity_to_or_from_car_battery_in_watt = 0
+
+            # CHARGING: car is not driving and located at charging station
+            else:
+                # CHARGING: if current soc is below threshold, car will always be charged with full power
+                if soc < self.config.battery_set_soc:
+                    electricity_to_or_from_car_battery_in_watt = self.power_delivered_at_charging_station_in_watt
+
+                # CHARGING: if surplus energy is left (according to EMS) and this is higher than charging threshold
+                # -> take this surplus energy for charging the car, but not more than the charging station can offer
+                if electricity_target > self.config.lower_threshold_charging_power_in_watt:
+                    electricity_to_or_from_car_battery_in_watt = min(
+                        electricity_target, self.power_delivered_at_charging_station_in_watt
+                    )
+        else:
+            raise ValueError(
+                f"Car consumption cannot be negative, otherwise car would be producing energy: {car_consumption}"
+            )
+
+        return electricity_to_or_from_car_battery_in_watt
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Returns battery charge and discharge (energy consumption of car) of battery at each timestep."""
@@ -284,22 +304,23 @@ class L1Controller(cp.Component):
             car_location = int(stsv.get_input_value(self.car_location_channel))
             car_consumption = stsv.get_input_value(self.car_consumption_channel)
             soc = stsv.get_input_value(self.state_of_charge_channel)
-            if self.electricity_target_channel.source_output is not None:
-                electricity_target = stsv.get_input_value(self.electricity_target_channel)
+            if self.electricity_target_from_ems_channel.source_output is not None:
+                electricity_target_from_ems_in_watt = stsv.get_input_value(self.electricity_target_from_ems_channel)
             else:
-                electricity_target = 0
+                electricity_target_from_ems_in_watt = 0
             self.state.power = self.control(
                 car_consumption,
                 car_location=car_location,
                 soc=soc,
-                electricity_target=electricity_target,
+                electricity_target=electricity_target_from_ems_in_watt,
             )
             self.processed_state = self.state.clone()
-        stsv.set_output_value(self.p_set_channel, self.state.power)
+        stsv.set_output_value(self.electricity_to_or_from_car_battery_channel, self.state.power)
 
+        # get current charging power from car battery
         ac_battery_power = stsv.get_input_value(self.ac_battery_power_channel)
         if ac_battery_power > 0:
-            # charging of EV
+            # charging of EV is communicated to EMS
             stsv.set_output_value(self.battery_charging_power_to_ems_channel, ac_battery_power)
         else:
             # no charging of EV
@@ -340,27 +361,26 @@ class L1Controller(cp.Component):
         return lines
 
     @staticmethod
-    def get_cost_capex(config: ChargingStationConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
+    def get_cost_capex(
+        config: ChargingStationConfig, simulation_parameters: SimulationParameters
+    ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
 
         component_type = ComponentType.CAR_BATTERY
-        kpi_tag = (
-            KpiTagEnumClass.CAR_BATTERY
-        )
+        kpi_tag = KpiTagEnumClass.CAR_BATTERY
         unit = Units.ANY
         size_of_energy_system = 1
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
-        simulation_parameters=simulation_parameters,
-        component_type=component_type,
-        unit=unit,
-        size_of_energy_system=size_of_energy_system,
-        config=config,
-        kpi_tag=kpi_tag
+            simulation_parameters=simulation_parameters,
+            component_type=component_type,
+            unit=unit,
+            size_of_energy_system=size_of_energy_system,
+            config=config,
+            kpi_tag=kpi_tag,
         )
 
         return capex_cost_data_class
-
 
     def get_cost_opex(
         self,
@@ -381,7 +401,7 @@ class L1Controller(cp.Component):
             co2_footprint_in_kg=0,
             total_consumption_in_kwh=0,
             loadtype=lt.LoadTypes.ELECTRICITY,
-            kpi_tag=KpiTagEnumClass.CAR_BATTERY
+            kpi_tag=KpiTagEnumClass.CAR_BATTERY,
         )
 
         return opex_cost_data_class

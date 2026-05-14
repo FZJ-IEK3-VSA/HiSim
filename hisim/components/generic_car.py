@@ -19,17 +19,8 @@ from hisim import loadtypes as lt
 from hisim import utils, log
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
-from hisim.loadtypes import Units, InandOutputType, OutputPostprocessingRules, ComponentType
-from hisim.units import (
-    Quantity,
-    Watt,
-    Celsius,
-    Seconds,
-    Kilogram,
-    Euro,
-    Years,
-    Unitless
-)
+from hisim.loadtypes import Units, ComponentType
+
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
@@ -48,7 +39,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class GenericCarInformation:
-
     """Class for collecting important generic car parameters from occupancy."""
 
     def __init__(self, my_occupancy_instance: UtspLpgConnector):
@@ -68,9 +58,14 @@ class GenericCarInformation:
         """Get important values from occupancy instance."""
         # get names of all available cars
         car_data_dict = my_occupancy_instance.car_data_dict
-        if all(isinstance(value_list, list) and all(not bool(car_info_dict) for car_info_dict in value_list) for value_list in car_data_dict.values()):
-            raise ValueError("The car data from occupancy contains only empty dictionaries in its value lists. "
-                             "If you are using the predefined occupancy profile, no car data is currently available. ")
+        if all(
+            isinstance(value_list, list) and all(not bool(car_info_dict) for car_info_dict in value_list)
+            for value_list in car_data_dict.values()
+        ):
+            raise ValueError(
+                "The car data from occupancy contains only empty dictionaries in its value lists. "
+                "If you are using the predefined occupancy profile, no car data is currently available. "
+            )
 
         # get car names and household names
         (
@@ -194,7 +189,7 @@ class CarConfig(cp.ConfigBase):
             investment_costs_in_euro=32035.0,
             lifetime_in_years=18,
             maintenance_costs_in_euro_per_year=0.02 * 32035.0,
-            subsidy_as_percentage_of_investment_costs=0
+            subsidy_as_percentage_of_investment_costs=0,
         )
         return config
 
@@ -214,7 +209,7 @@ class CarConfig(cp.ConfigBase):
             investment_costs_in_euro=44498.0,
             maintenance_costs_in_euro_per_year=0.02 * 44498.0,
             lifetime_in_years=18,
-            subsidy_as_percentage_of_investment_costs=0
+            subsidy_as_percentage_of_investment_costs=0,
         )
         return config
 
@@ -347,9 +342,9 @@ class Car(cp.Component):
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
                 if (
-                        output.field_name == self.FuelConsumption
-                        and output.unit == lt.Units.LITER
-                        and output.load_type == lt.LoadTypes.DIESEL
+                    output.field_name == self.FuelConsumption
+                    and output.unit == lt.Units.LITER
+                    and output.load_type == lt.LoadTypes.DIESEL
                 ):
                     consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
                     # heating value: https://nachhaltigmobil.schule/leistung-energie-verbrauch/#:~:text=Benzin%20hat%20einen%20Heizwert%20von,9%2C8%20kWh%20pro%20Liter.
@@ -391,7 +386,7 @@ class Car(cp.Component):
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             total_consumption_in_kwh=consumption_in_kwh,
             loadtype=self.config.fuel,
-            kpi_tag=KpiTagEnumClass.CAR
+            kpi_tag=KpiTagEnumClass.CAR,
         )
 
         return opex_cost_data_class
@@ -477,14 +472,16 @@ class Car(cp.Component):
         size_of_energy_system = 1
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
-        simulation_parameters=simulation_parameters,
-        component_type=component_type,
-        unit=unit,
-        size_of_energy_system=size_of_energy_system,
-        config=config,
-        kpi_tag=kpi_tag
+            simulation_parameters=simulation_parameters,
+            component_type=component_type,
+            unit=unit,
+            size_of_energy_system=size_of_energy_system,
+            config=config,
+            kpi_tag=kpi_tag,
         )
-        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(
+            config=config, capex_cost_data_class=capex_cost_data_class
+        )
         return capex_cost_data_class
 
     def build(self, config: CarConfig, car_information_dict: Dict) -> None:

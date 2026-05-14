@@ -98,6 +98,7 @@ class CarBattery(Component):
     AcBatteryChargingPower = "AcBatteryChargingPower"  # W
     DcBatteryChargingPower = "DcBatteryChargingPower"  # W
     StateOfCharge = "StateOfCharge"  # [0..1]
+    AcBatteryDischargingPower = "AcBatteryDischargingPower"  # W
 
     def __init__(
         self,
@@ -174,6 +175,17 @@ class CarBattery(Component):
             postprocessing_flag=[InandOutputType.STORAGE_CONTENT],
             output_description="State of charge of the battery.",
         )
+        self.p_bs_discharge: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.AcBatteryDischargingPower,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            postprocessing_flag=[
+                InandOutputType.DISCHARGE,
+                ComponentType.CAR_BATTERY,
+            ],
+            output_description="Discharging power of the battery in Watt (Alternating current)",
+        )
 
         self.add_default_connections(self.get_default_connections_from_charge_controller())
 
@@ -189,7 +201,7 @@ class CarBattery(Component):
             ComponentConnection(
                 CarBattery.TargetPowerToOrFromBattery,
                 ev_charge_controller_classname,
-                component_class.ToOrFromBattery,
+                component_class.ElectricityTargetToOrFromCarBattery,
             )
         )
         return connections
@@ -227,12 +239,15 @@ class CarBattery(Component):
             ac_charging_power_in_watt = results[0]
             dc_charging_power_in_watt = results[1]
             soc = results[2]
+            discharging_power_ac_in_watt = 0
 
         # Simulate battery discharge without losses (this is included in the car consumption of the car component)
         else:
-            soc = soc + (
-                target_power_to_or_from_car_battery_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600
-            ) / (self.e_bat_custom * 1e3)
+            # make it positive
+            discharging_power_ac_in_watt = (-1) * target_power_to_or_from_car_battery_in_watt
+            soc = soc - (discharging_power_ac_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600) / (
+                self.e_bat_custom * 1e3
+            )
             if soc < 0:
                 raise ValueError(
                     "Car cannot drive, because battery is empty."
@@ -245,6 +260,7 @@ class CarBattery(Component):
         stsv.set_output_value(self.p_bs, ac_charging_power_in_watt)
         stsv.set_output_value(self.p_bat, dc_charging_power_in_watt)
         stsv.set_output_value(self.soc, soc)
+        stsv.set_output_value(self.p_bs_discharge, discharging_power_ac_in_watt)
 
         # write values to state
         self.state.soc = soc
@@ -276,15 +292,9 @@ class CarBattery(Component):
                 and output.unit == Units.WATT
             ):
 
-                # self.battery_config.total_charged_energy_in_kilowatthour = round(
-                #     postprocessing_results.iloc[:, index].clip(lower=0).sum()
-                #     * self.my_simulation_parameters.seconds_per_timestep
-                #     / 3.6e6,
-                #     1,
-                # )
                 self.battery_config.total_charged_energy_in_kilowatthour = round(
                     KpiHelperClass.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=postprocessing_results.iloc[:, index].clip(lower=0),
+                        power_timeseries_in_watt=postprocessing_results.iloc[:, index],
                         timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                     ),
                     1,
@@ -294,24 +304,18 @@ class CarBattery(Component):
             if (
                 output.postprocessing_flag is not None
                 and output.component_name == self.component_name
-                and output.field_name == self.TargetPowerToOrFromBattery
+                and output.field_name == self.AcBatteryDischargingPower
                 and output.load_type == LoadTypes.ELECTRICITY
                 and output.unit == Units.WATT
             ):
                 # take only negative values for discharging amount
-                # self.battery_config.total_discharged_energy_in_kilowatthour = round(
-                #     postprocessing_results.iloc[:, index].clip(upper=0).sum()
-                #     * self.my_simulation_parameters.seconds_per_timestep
-                #     / 3.6e6,
-                #     1,
-                # ) * (-1)
                 self.battery_config.total_discharged_energy_in_kilowatthour = round(
                     KpiHelperClass.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=postprocessing_results.iloc[:, index].clip(upper=0),
+                        power_timeseries_in_watt=postprocessing_results.iloc[:, index],
                         timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                     ),
                     1,
-                ) * (-1)
+                )
         # calculate battery losses
         battery_losses_in_kwh = (
             self.battery_config.total_charged_energy_in_kilowatthour
@@ -344,7 +348,76 @@ class CarBattery(Component):
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        return []
+        list_of_kpi_entries: List[KpiEntry] = []
+
+        battery_losses_in_kwh: float = 0.0
+        for index, output in enumerate(all_outputs):
+            # get charged energy
+            if (
+                output.postprocessing_flag is not None
+                and output.component_name == self.component_name
+                and output.field_name == self.AcBatteryChargingPower
+                and output.load_type == LoadTypes.ELECTRICITY
+                and output.unit == Units.WATT
+            ):
+
+                self.battery_config.total_charged_energy_in_kilowatthour = round(
+                    KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=postprocessing_results.iloc[:, index],
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    ),
+                    1,
+                )
+                my_kpi_entry_1 = KpiEntry(
+                    name="Total charged electricity for electric car",
+                    unit="kWh",
+                    value=self.battery_config.total_charged_energy_in_kilowatthour,
+                    tag=KpiTagEnumClass.CAR_BATTERY,
+                    description=self.component_name,
+                )
+                list_of_kpi_entries.append(my_kpi_entry_1)
+
+            # get discharged energy
+            if (
+                output.postprocessing_flag is not None
+                and output.component_name == self.component_name
+                and output.field_name == self.AcBatteryDischargingPower
+                and output.load_type == LoadTypes.ELECTRICITY
+                and output.unit == Units.WATT
+            ):
+                # take only negative values for discharging amount
+                self.battery_config.total_discharged_energy_in_kilowatthour = round(
+                    KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=postprocessing_results.iloc[:, index],
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    ),
+                    1,
+                )
+                my_kpi_entry_2 = KpiEntry(
+                    name="Total discharged electricity for electric car",
+                    unit="kWh",
+                    value=self.battery_config.total_discharged_energy_in_kilowatthour,
+                    tag=KpiTagEnumClass.CAR_BATTERY,
+                    description=self.component_name,
+                )
+                list_of_kpi_entries.append(my_kpi_entry_2)
+
+        # calculate battery losses
+        battery_losses_in_kwh = round(
+            self.battery_config.total_charged_energy_in_kilowatthour
+            - self.battery_config.total_discharged_energy_in_kilowatthour,
+            1,
+        )
+        my_kpi_entry = KpiEntry(
+            name="Total losses of car battery",
+            unit="kWh",
+            value=battery_losses_in_kwh,
+            tag=KpiTagEnumClass.CAR_BATTERY,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(my_kpi_entry)
+
+        return list_of_kpi_entries
 
 
 @dataclass

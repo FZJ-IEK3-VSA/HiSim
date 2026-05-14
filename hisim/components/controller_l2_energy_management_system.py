@@ -301,7 +301,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             output_description=f"here a description for {self.ElectricityToBuildingFromDistrictEMSOutput} will follow.",
         )
 
-
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
@@ -586,34 +585,34 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     #         L1Controller,
     #     )
 
-        # dynamic_connections = []
-        # electric_car_charger_class_name = L1Controller.get_classname()
-        # dynamic_connections.append(
-        #     dynamic_component.DynamicComponentConnection(
-        #         source_component_class=L1Controller,
-        #         source_class_name=electric_car_charger_class_name,
-        #         source_component_field_name=L1Controller.BatteryChargingPowerToEMS,
-        #         source_load_type=lt.LoadTypes.ELECTRICITY,
-        #         source_unit=lt.Units.WATT,
-        #         source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-        #         source_weight=5,
-        #     )
-        # )
+    # dynamic_connections = []
+    # electric_car_charger_class_name = L1Controller.get_classname()
+    # dynamic_connections.append(
+    #     dynamic_component.DynamicComponentConnection(
+    #         source_component_class=L1Controller,
+    #         source_class_name=electric_car_charger_class_name,
+    #         source_component_field_name=L1Controller.BatteryChargingPowerToEMS,
+    #         source_load_type=lt.LoadTypes.ELECTRICITY,
+    #         source_unit=lt.Units.WATT,
+    #         source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+    #         source_weight=5,
+    #     )
+    # )
 
-        # self.add_component_output(
-        #     source_output_name=f"ElectricityToOrFromGridOf{electric_car_charger_class_name}_",
-        #     source_tags=[
-        #         lt.ComponentType.CAR_BATTERY,
-        #         lt.InandOutputType.ELECTRICITY_TARGET,
-        #     ],
-        #     source_component_class=electric_car_charger_class_name,
-        #     source_weight=5,
-        #     source_load_type=lt.LoadTypes.ELECTRICITY,
-        #     source_unit=lt.Units.WATT,
-        #     output_description="Target electricity for battery of electric car.",
-        # )
+    # self.add_component_output(
+    #     source_output_name=f"ElectricityToOrFromGridOf{electric_car_charger_class_name}_",
+    #     source_tags=[
+    #         lt.ComponentType.CAR_BATTERY,
+    #         lt.InandOutputType.ELECTRICITY_TARGET,
+    #     ],
+    #     source_component_class=electric_car_charger_class_name,
+    #     source_weight=5,
+    #     source_load_type=lt.LoadTypes.ELECTRICITY,
+    #     source_unit=lt.Units.WATT,
+    #     output_description="Target electricity for battery of electric car.",
+    # )
 
-        # return dynamic_connections
+    # return dynamic_connections
 
     def get_default_connections_from_advanced_battery(
         self,
@@ -797,6 +796,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 available_surplus_electricity_in_watt = (
                     available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
                 )
+                # if this value is 0, all electricity demand from this consumer could be covered exactly from surplus energy
+                # if this value is positive, all electricity demand from this consumer could be covered from surplus energy and there is even surplus energy left
+                # if this value is negative in (0, -electricity_demand): then only parts of the electricity demand from the consumer could be covered from surplus energy
+                # if this value is equal to -electrcity demand: no surplus energy was available and electricty demand from the consumer was totally taken from grid
                 stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
             # otherwise all of the component's consumption is taken from grid
             else:
@@ -887,7 +890,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 "Please check all your default and manual connections. \n"
                 f"Inputs: {[input.fullname for input in inputs_sorted]} \n"
                 f"Outputs: {[output.full_name for output in outputs_sorted]} \n"
-                
             )
 
         for index, single_input_sorted in enumerate(inputs_sorted):

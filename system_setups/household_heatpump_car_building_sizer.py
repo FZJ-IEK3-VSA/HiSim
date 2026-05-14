@@ -30,7 +30,7 @@ from hisim.components import (
     electricity_meter,
     advanced_ev_battery_bslib,
     generic_car,
-    controller_l1_generic_ev_charge
+    controller_l1_generic_ev_charge,
 )
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
@@ -42,7 +42,6 @@ from hisim.building_sizer_utils.interface_configs.modular_household_config impor
     ModularHouseholdConfig,
 )
 from hisim import log
-
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -78,7 +77,7 @@ def setup_function(
         - Electric Car
         - Electric Car Controller
         - Electric Car Battery
-        - 
+        -
     """
 
     # =================================================================================================================================
@@ -119,8 +118,8 @@ def setup_function(
             PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER
         )
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.logging_level = 3
     else:
@@ -399,7 +398,7 @@ def setup_function(
     my_car_batteries: List[advanced_ev_battery_bslib.CarBattery] = []
     my_car_battery_controllers: List[controller_l1_generic_ev_charge.L1Controller] = []
     car_number = 1
-    
+
     for car in my_cars:
         my_car_battery_config = advanced_ev_battery_bslib.CarBatteryConfig.get_default_config()
         my_car_battery_config.source_weight = car.config.source_weight
@@ -411,7 +410,8 @@ def setup_function(
         my_car_batteries.append(my_car_battery)
 
         my_car_battery_controller_config = controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(
-                    charging_station_set=charging_station_set)
+            charging_station_set=charging_station_set
+        )
         my_car_battery_controller_config.source_weight = car.config.source_weight
         my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
         if car_surplus_charging:
@@ -432,10 +432,6 @@ def setup_function(
         car_battery_controller.connect_only_predefined_connections(car)
         car_battery_controller.connect_only_predefined_connections(car_battery)
         car_battery.connect_only_predefined_connections(car_battery_controller)
-        # add to simulator
-        my_sim.add_component(car)
-        my_sim.add_component(car_battery)
-        my_sim.add_component(car_battery_controller)
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
@@ -494,24 +490,6 @@ def setup_function(
                     input_fieldname=controller_l1_generic_ev_charge.L1Controller.ElectricityTargetFromEMS,
                     src_object=electricity_target,
                 )
-
-
-                # electricity_target = my_electricity_controller.add_component_output(
-                #     source_output_name="ChargingPowerForEVBattery_", # lt.InandOutputType.ELECTRICITY_TARGET,
-                #     source_tags=[
-                #         lt.ComponentType.CAR_BATTERY,
-                #         lt.InandOutputType.ELECTRICITY_TARGET,
-                #     ],
-                #     source_weight=1,
-                #     source_load_type=lt.LoadTypes.ELECTRICITY,
-                #     source_unit=lt.Units.WATT,
-                #     output_description="Target Electricity for EV Battery Controller. ",
-                # )
-
-                # car_battery_controller.connect_dynamic_input(
-                #     input_fieldname=controller_l1_generic_ev_charge.L1Controller.ElectricityTarget,
-                #     src_object=electricity_target,
-                # )
             else:
                 my_electricity_controller.add_component_input_and_connect(
                     source_object_name=car_battery_controller.component_name,
@@ -522,13 +500,12 @@ def setup_function(
                         lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                     ],
                     source_weight=999,
-                    )
-        
+                )
 
         # -----------------------------------------------------------------------------------------------------------------
         # Add outputs to EMS
         loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
-            source_output_name="ChargingPowerForBattery_", # "LoadingPowerInputForBattery_",
+            source_output_name="ChargingPowerForBattery_",  # "LoadingPowerInputForBattery_",
             source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
             source_weight=6,
             source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -555,7 +532,13 @@ def setup_function(
         )
 
         # =================================================================================================================================
-        # Add Remaining Components to Simulation Parameters
+        # Add Remaining Components to Simulator
+        # add cars to components
+        for car, car_battery, car_battery_controller in zip(my_cars, my_car_batteries, my_car_battery_controllers):
+            # add to simulator
+            my_sim.add_component(car)
+            my_sim.add_component(car_battery)
+            my_sim.add_component(car_battery_controller)
 
         my_sim.add_component(my_electricity_meter)
         my_sim.add_component(my_advanced_battery)
@@ -563,6 +546,11 @@ def setup_function(
 
     # when no PV is used, connect electricty meter automatically
     else:
+        for car, car_battery, car_battery_controller in zip(my_cars, my_car_batteries, my_car_battery_controllers):
+            # add to simulator
+            my_sim.add_component(car)
+            my_sim.add_component(car_battery)
+            my_sim.add_component(car_battery_controller)
         my_sim.add_component(my_electricity_meter, connect_automatically=True)
 
     # Set Results Path
@@ -585,7 +573,9 @@ def setup_function(
     else:
         scenario_hash_string = "default_scenario"
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
-        further_result_folder_description = f"{car_surplus_charging}_{my_config.energy_system_config_.use_battery_and_ems}" #"default_config"
+        further_result_folder_description = (
+            f"{car_surplus_charging}_{my_config.energy_system_config_.use_battery_and_ems}"  # "default_config"
+        )
 
     SingletonSimRepository().set_entry(
         key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,

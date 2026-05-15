@@ -576,7 +576,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
         return dynamic_connections
 
-
     def get_default_connections_from_advanced_battery(
         self,
     ):
@@ -880,7 +879,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 self.consumption_uncontrolled_inputs,
                 self.consumption_ems_controlled_inputs,
             ) = self.sort_source_weights_and_components()
-
 
         district_electricity_unused = stsv.get_input_value(component_input=self.electricity_to_building_from_district)
 

@@ -114,7 +114,7 @@ def setup_function(
         )
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.logging_level = 3
     else:
@@ -188,7 +188,7 @@ def setup_function(
     else:
         raise TypeError(f"Type {type(arche_type_config_.lpg_households)} is incompatible. Should be List[str].")
     # Set electric car
-    car_surplus_charging = False
+    car_surplus_charging = True
     energy_system_config_.use_battery_and_ems = True
 
     # =================================================================================================================================
@@ -500,7 +500,7 @@ def setup_function(
         # -----------------------------------------------------------------------------------------------------------------
         # Add outputs to EMS
         loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
-            source_output_name="ChargingPowerForBattery_",  # "LoadingPowerInputForBattery_",
+            source_output_name="ChargingPowerForBattery_",
             source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
             source_weight=6,
             source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -580,7 +580,7 @@ def setup_function(
     if my_simulation_parameters.result_directory == "":
 
         ResultPathProviderSingleton().set_important_result_path_information(
-            module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/analysis_austria_for_kristina_18_11_2024",  #
+            module_directory=my_sim.module_directory,
             model_name=my_sim.module_filename,
             further_result_folder_description=os.path.join(
                 *[

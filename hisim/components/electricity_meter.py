@@ -717,7 +717,7 @@ class ElectricityMeter(DynamicComponent):
         total_energy_to_grid_in_kwh: float
         total_power_from_grid_in_watt: float
         total_power_to_grid_in_watt: float
-        total_electricity_consumption_in_kwh: float
+
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.load_type == lt.LoadTypes.ELECTRICITY:
@@ -730,7 +730,6 @@ class ElectricityMeter(DynamicComponent):
                 elif output.field_name == self.ElectricityToGridInWatt:
                     total_power_to_grid_in_watt = postprocessing_results.iloc[:, index] * 1e-3
 
-
         (mean_total_power_from_grid_in_watt,
         max_total_power_from_grid_in_watt,
         min_total_power_from_grid_in_watt,
@@ -740,7 +739,6 @@ class ElectricityMeter(DynamicComponent):
         max_total_power_to_grid_in_watt,
         min_total_power_to_grid_in_watt,
          ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=total_power_to_grid_in_watt)
-
 
         total_energy_from_grid_in_kwh_entry = KpiEntry(
             name="Total energy from grid",

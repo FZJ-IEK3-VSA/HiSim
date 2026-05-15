@@ -187,9 +187,9 @@ def setup_function(
             raise ValueError("Config list with lpg household is empty.")
     else:
         raise TypeError(f"Type {type(arche_type_config_.lpg_households)} is incompatible. Should be List[str].")
-    # Set electric car
+
+    # Set electric car, if it will accept surplus charging or not
     car_surplus_charging = True
-    energy_system_config_.use_battery_and_ems = True
 
     # =================================================================================================================================
     # Build Basic Components

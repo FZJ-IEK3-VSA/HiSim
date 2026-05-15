@@ -230,6 +230,8 @@ class Component:
                 "Please check your components' configuration classes and inherit from ConfigBase class according to hisim/components/example_component.py.",
             )
         self.my_display_config: DisplayConfig = my_display_config
+        self.log_connections: List[Any] = []
+        self.enable_logging = my_simulation_parameters.log_connections
 
     def get_component_name(
         self,
@@ -308,6 +310,12 @@ class Component:
         """Connecting an input to an output."""
         if len(self.inputs) == 0:
             raise ValueError("The component " + self.component_name + " has no inputs.")
+        if self.enable_logging:
+            self.log_connections += [{
+                "input_fieldname": input_fieldname,
+                "src_object_name": src_object_name,
+                "src_field_name": src_field_name,
+            }]
 
         component_input: ComponentInput
         input_to_set = None

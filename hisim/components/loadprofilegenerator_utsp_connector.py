@@ -79,6 +79,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     predefined_loadprofile_filepaths: Optional[str] = None
     guid: str = ""
     calculation_index_for_local_lpg: Optional[int] = None
+    cars: Optional[List[str]] = None
 
     @classmethod
     def get_main_classname(cls):

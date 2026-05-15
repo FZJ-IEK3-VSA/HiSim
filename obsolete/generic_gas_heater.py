@@ -329,7 +329,7 @@ class GasHeater(Component):
 
         capex_cost_data_class = CapexCostDataClass(
             capex_investment_cost_in_euro=config.investment_costs_in_euro,
-            device_co2_footprint_in_kg=config.device_co2_footprint_in_kg
+            device_co2_footprint_in_kg=config.device_co2_footprint_in_kg,
             lifetime_in_years=config.lifetime_in_years,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
@@ -348,7 +348,7 @@ class GasHeater(Component):
                 self.config.consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-            self.my_simulation_parameters.year
+            self.my_simulation_parameters.year, "N/A"
         )
         co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
         co2_per_simulated_period_in_kg = self.config.consumption_in_kilowatt_hour * co2_per_unit

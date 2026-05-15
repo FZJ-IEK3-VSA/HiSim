@@ -68,6 +68,10 @@ class Simulator:
         if self._simulation_parameters is not None:
             log.LOGGING_LEVEL = self._simulation_parameters.logging_level
 
+    def get_simulation_parameters(self) -> SimulationParameters:
+        """Returns the simulation parameters for exporting them to JSON."""
+        return self._simulation_parameters
+
     def add_component(
         self,
         component: cp.Component,
@@ -293,7 +297,7 @@ class Simulator:
             raise ValueError("postprocessing_datatransfer was none")
 
         my_post_processor = pp.PostProcessor()
-        my_post_processor.run(ppdt=postprocessing_datatransfer)
+        my_post_processor.run(ppdt=postprocessing_datatransfer, my_sim=self)
         for wrapped_component in self.wrapped_components:
             wrapped_component.clear()
         del all_result_lines

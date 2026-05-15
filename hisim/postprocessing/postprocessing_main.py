@@ -1,5 +1,5 @@
 """Main postprocessing module that starts all other modules."""
-
+from __future__ import annotations
 import json
 
 # clean
@@ -8,7 +8,7 @@ import pickle
 import string
 import sys
 from timeit import default_timer as timer
-from typing import Any, Optional, List, Dict, Tuple
+from typing import Any, Optional, List, Dict, Tuple, TYPE_CHECKING
 
 import pandas as pd
 
@@ -16,7 +16,7 @@ from hisim import log
 from hisim import utils
 from hisim.component import ComponentOutput
 from hisim.components import building, loadprofilegenerator_utsp_connector
-from hisim.json_generator import JsonConfigurationGenerator
+from hisim.json_generator import write_standalone_simulation_json, write_standalone_scenario_json
 from hisim.building_sizer_utils.interface_configs.kpi_config import KPIConfig
 from hisim.postprocessing import charts
 from hisim.postprocessing import reportgenerator
@@ -35,6 +35,9 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.loadtypes import OutputPostprocessingRules
 
+if TYPE_CHECKING:
+    from hisim.simulator import Simulator
+
 
 class PostProcessor:
     """Core Post processor class."""
@@ -50,6 +53,7 @@ class PostProcessor:
         self.scenario: str = ""
         self.region: str = ""
         self.year: int = 2021
+        self.description: str = ""
 
     def set_dir_results(self, dirname: Optional[str] = None) -> None:
         """Sets the results directory."""
@@ -59,7 +63,7 @@ class PostProcessor:
 
     @utils.measure_execution_time
     @utils.measure_memory_leak
-    def run(self, ppdt: PostProcessingDataTransfer) -> None:  # noqa: MC0001
+    def run(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:  # noqa: MC0001
         """Runs the main post processing."""
         # Define the directory name
         log.information("Main post processing function")
@@ -284,7 +288,7 @@ class PostProcessor:
         if PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in ppdt.post_processing_options:
             log.information("Prepare results for scenario evaluation.")
             start = timer()
-            self.prepare_results_for_scenario_evaluation(ppdt)
+            self.prepare_results_for_scenario_evaluation(ppdt, my_sim=my_sim)
             end = timer()
             duration = end - start
             log.information("Preparing results for scenario evaluation took " + f"{duration:1.2f}s.")
@@ -306,11 +310,11 @@ class PostProcessor:
 
         if PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON in ppdt.post_processing_options:
             log.information("Writing component configurations to JSON file.")
-            self.write_component_configurations_to_json(ppdt)
+            self.write_component_configurations_to_json(ppdt, my_sim=my_sim)
 
         if PostProcessingOptions.WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON in ppdt.post_processing_options:
             log.information("Writing component configurations for scenario evaluation to JSON file.")
-            self.write_config_data_for_scenario_evaluation(ppdt)
+            self.write_config_data_for_scenario_evaluation(ppdt, my_sim=my_sim)
 
         if PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER in ppdt.post_processing_options:
             log.information("Writing KPIs to JSON file for building sizer.")
@@ -807,7 +811,7 @@ class PostProcessor:
         pass  # noqa: unnecessary-pass
 
     @utils.measure_execution_time
-    def prepare_results_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer) -> None:
+    def prepare_results_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
         """Prepare the results for the scenario evaluation."""
 
         # create result data folder
@@ -894,9 +898,9 @@ class PostProcessor:
             simulation_duration=ppdt.simulation_parameters.duration.days,
         )
 
-        self.write_config_data_for_scenario_evaluation(ppdt)
+        self.write_config_data_for_scenario_evaluation(ppdt, my_sim)
 
-    def write_config_data_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer) -> None:
+    def write_config_data_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
         """Prepare the results for the scenario evaluation."""
         # create dictionary with all import data information
         if PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in ppdt.post_processing_options:
@@ -922,42 +926,34 @@ class PostProcessor:
         else:
             self.region = ""
 
+        # set description
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.DESCRIPTION):
+            self.description = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.DESCRIPTION)
+        else:
+            self.description = ""
+
         # set year or timeseries
         self.year = ppdt.simulation_parameters.year
 
-        data_information_dict = {
-            "model": self.model,
-            "scenario": self.scenario,
-            "region": self.region,
-            "year": self.year,
-            "duration in days": ppdt.simulation_parameters.duration.days,
-        }
+        # Write the two new JSON configuration files
+        # Here, the my_sim could be replace by ppdt.simulation_parameters
+        write_standalone_simulation_json(my_sim, path=os.path.join(result_data_folder_for_scenario_evaluation, "simulation.json"))
 
-        # write json config with all component configs, module config, pyam information dict and simulation parameters
-        json_generator_config = JsonConfigurationGenerator(name=f"{self.scenario}")
-        json_generator_config.set_simulation_parameters(my_simulation_parameters=ppdt.simulation_parameters)
-        if ppdt.my_module_config is not None:
-            json_generator_config.set_module_config(my_module_config=ppdt.my_module_config)
-        json_generator_config.set_scenario_data_information_dict(scenario_data_information_dict=data_information_dict)
-        for component in ppdt.wrapped_components:
-            json_generator_config.add_component(config=component.my_component.config)
+        # Here, the my_sim could maybe be replaced by an altered ppdt
+        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=self.description,
+                                       path=os.path.join(result_data_folder_for_scenario_evaluation, "scenario.json"))
 
-        # save the json config
-        json_generator_config.save_to_json(
-            filename=os.path.join(result_data_folder_for_scenario_evaluation, "data_for_scenario_evaluation.json")
-        )
-
-    def write_component_configurations_to_json(self, ppdt: PostProcessingDataTransfer) -> None:
+    def write_component_configurations_to_json(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
         """Collect all component configurations and write into JSON file in result directory."""
-        json_generator_config = JsonConfigurationGenerator(name=f"{self.scenario}")
-        for component in ppdt.wrapped_components:
-            json_generator_config.add_component(config=component.my_component.config)
-        json_generator_config.save_to_json(
-            filename=os.path.join(
-                ppdt.simulation_parameters.result_directory,
-                "component_configurations.json",
-            )
-        )
+
+        write_standalone_simulation_json(my_sim, path=os.path.join(
+            ppdt.simulation_parameters.result_directory,
+            "simulation.json",
+        ))
+        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=self.description, path=os.path.join(
+            ppdt.simulation_parameters.result_directory,
+            "scenario.json",
+        ))
 
     def write_kpis_in_dict(
         self,

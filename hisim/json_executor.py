@@ -1,138 +1,193 @@
-""" Executes a json file in the simulator. """
+""" Helper module to set up components and connections in the simulator based on the scenario data from the JSON file. """
 # clean
-import inspect
+import importlib
 import os
-from typing import List, Any, Dict
-from inspect import isclass
-from pkgutil import iter_modules
-from pathlib import Path as PathlibPath
-from importlib import import_module
-from dataclasses import dataclass
+from typing import Any, cast
+from hisim import log, utils, loadtypes as lt
+from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
+import hisim.simulator as sim
+from hisim.components.generic_car import GenericCarInformation
+try:
+    import humps
+except ModuleNotFoundError:
+    raise ModuleNotFoundError(
+        "The 'humps' library is required for JSON-based scenario execution. "
+        "Please install it with 'pip install -e .'."
+    ) from None
 
-from hisim.simulator import Simulator
-from hisim import log
-from hisim.json_generator import ConfigFile, ComponentEntry
-from hisim.simulationparameters import SimulationParameters
-from hisim import component as cp
-
-
-@dataclass()
-class ClassEntry:
-
-    """Entry for a single class."""
-
-    file_name: str
-    module_name: str
-    class_name: str
-    module: Any
+__authors__ = "Valentin Janser"
+__credits__ = ["Noah Pflugradt", "Katharina Rieck"]
+__maintainer__ = "Valentin Janser"
+__email__ = "v.janser@fz-juelich.de"
 
 
-class JsonExecutor:
+def import_from_string(full_classname: str):
+    """Import a class from a full module path string."""
+    # This function was created with the help of ChatGPT
 
-    """Class to read a json file created by the json generator and executre it."""
+    try:
+        module_path, class_name = full_classname.rsplit(".", 1)
+    except ValueError as e:
+        raise ValueError(f"Invalid class path: {full_classname}") from e
 
-    def __init__(self, filename):
-        """Initializes the JsonExecutor."""
-        with open(filename, "r", encoding="utf-8") as filestream:
-            json_str = filestream.read()
-            self.my_obj: ConfigFile = ConfigFile.from_json(json_str)
-            if self.my_obj.my_simulation_parameters is None:
-                raise ValueError("No simulation parameters object was found.")
-            self.my_simulation_parameters: SimulationParameters = self.my_obj.my_simulation_parameters
+    try:
+        module = importlib.import_module(module_path)
+    except ModuleNotFoundError as e:
+        raise ImportError(f"Could not import module '{module_path}'") from e
 
-    def component_importer(self, needed_classes: List[str]) -> Dict[str, Any]:
-        """Imports a config."""
-        package_dir = os.path.join(PathlibPath(__file__).resolve().parent, "components")
-        class_dict = {}
-        for _idx1, module_name, _idx2 in iter_modules([package_dir]):
-            # import the module and iterate through its attributes
-            module = import_module(f"hisim.components.{module_name}")
+    try:
+        return getattr(module, class_name)
+    except AttributeError as e:
+        raise ImportError(f"Module '{module_path}' has no class '{class_name}'") from e
 
-            for attribute_name in dir(module):
-                attribute = getattr(module, attribute_name)
-                if not isclass(attribute):
-                    continue
-                if attribute.__module__ != module.__name__:
-                    # skipping because it's an import
-                    continue
 
-                # only import things that are actually needed
-                full_class_name = attribute.__module__ + "." + attribute.__name__
-                if full_class_name in needed_classes:
-                    # Add the class to this package's variables
-                    globals()[attribute_name] = attribute
-                    class_dict[full_class_name] = attribute
-        return class_dict
+def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.Simulator, sim_params: sim.SimulationParameters) -> sim.Simulator:
+    """Given the scenario data from the JSON file, set up the components and connections in the simulator."""
 
-    def execute_all(self) -> None:
-        """Executes the json and starts the simulation."""
-        needed_classes = self.generate_list_of_needed_classes_for_import()
-        class_dict = self.component_importer(needed_classes)
+    component_dict = {}
 
-        my_simulation_parameters: SimulationParameters = self.my_simulation_parameters
+    # Build Components
+    components = scenario_data.get("components", [])
+    if not components:
+        raise ValueError("No components defined in scenario")
 
-        simulator: Simulator = Simulator(
-            module_directory="json",
-            setup_function="json_func",
-            my_simulation_parameters=my_simulation_parameters,
-            module_filename="json.py",
-        )
-        component_dict = {}
-        for component_entry in self.my_obj.component_entries:
-            component_instance = self.process_one_component_entry(component_entry, class_dict, my_simulation_parameters)
-            simulator.add_component(component_instance)
-            component_dict[component_entry.component_name] = component_instance
-        for component_entry in self.my_obj.component_entries:
-            if len(component_entry.default_connections) == 0:
-                continue
-            for component_name in component_entry.default_connections:
-                dst_class: cp.Component = component_dict[component_entry.component_name]
-                src_class = component_dict[component_name]
-                dst_class.connect_only_predefined_connections(src_class)
-        simulator.run_all_timesteps()
+    for comp_def in components:
+        component_class = import_from_string(comp_def["component_full_classname"])
+        config_class = import_from_string(comp_def["config_full_classname"])
+        try:
+            config_dict = comp_def.get("configuration", {})
+            # Fill in the absolute paths we have filled with placeholders in JSON
+            if comp_def["component_full_classname"] == "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector":
+                if config_dict["result_dir_path"] == "<<utils.HISIMPATH['utsp_results']>>":
+                    config_dict["result_dir_path"] = utils.HISIMPATH["utsp_results"]
+                else:
+                    # This warning was generated by Copilot
+                    log.warning(f"Unexpected value for result_dir_path in UtspLpgConnector config: {config_dict['result_dir_path']}.")
+                # UtspLpgConnectorConfig has values of type JsonReference, which need to be converted to pascal-case
+                config_dict["household"] = humps.pascalize(config_dict["household"])
+                config_dict["travel_route_set"] = humps.pascalize(config_dict["travel_route_set"])
+                config_dict["transportation_device_set"] = humps.pascalize(config_dict["transportation_device_set"])
+                config_dict["charging_station_set"] = humps.pascalize(config_dict["charging_station_set"])
+            elif comp_def["component_full_classname"] == "hisim.components.controller_l1_generic_ev_charge.L1Controller":
+                config_dict["charging_station_set"] = humps.pascalize(config_dict["charging_station_set"])
+            elif comp_def["component_full_classname"] == "hisim.components.weather.Weather":
+                if "<<utils.get_input_directory()>>" in config_dict["source_path"]:
+                    path_str = config_dict["source_path"].replace("<<utils.get_input_directory()>>", utils.get_input_directory())
+                    # Now replace "\\" and "/" with the correct os separator
+                    config_dict["source_path"] = os.path.normpath(path_str.replace("\\\\", os.sep).replace("\\", os.sep).replace("/", os.sep))
+                    # log.information(f"Resolved weather source path to {config_dict['source_path']}.")
+                else:
+                    # This warning was generated by Copilot
+                    log.warning(f"Unexpected value for source_path in Weather config: {config_dict['source_path']}.")
 
-    def process_one_component_entry(
-        self,
-        component_entry: ComponentEntry,
-        class_dict: Any,
-        my_simulation_parameters: SimulationParameters,
-    ) -> Any:
-        """Processes a single component entry in the json."""
-        my_class = class_dict[component_entry.component_full_classname]
-        signature_component = inspect.signature(my_class)
-        found_simulation_parameters = False
-        found_config = False
-        for parameter_name in signature_component.parameters:
-            if parameter_name == "my_simulation_parameters":
-                found_simulation_parameters = True
-            elif parameter_name == "config":
-                found_config = True
-            else:
-                log.warning(
-                    "Found unclear parameter: "
-                    + parameter_name
-                    + " in component "
-                    + component_entry.component_full_classname
+            # Use the JSONWizard from_dict method to get ConfigBase instance
+            config = config_class.from_dict(config_dict)
+
+            if comp_def["component_full_classname"] == "hisim.components.generic_car.Car":
+                # We have to generate the car_info_dict
+                car_info = None
+                found = False
+                for comp in my_sim.wrapped_components:
+                    if comp.my_component.get_full_classname() == "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector":
+                        if config_dict["name"] in comp.my_component.config.cars:
+                            found = True
+                            car_info = GenericCarInformation(cast(UtspLpgConnector, comp.my_component)).data_dict_for_car_component[config_dict["household_name"]]
+                if not found:
+                    raise ValueError(f"The car '{config_dict['name']}' was not associated with any UTSP connector.")
+                component = component_class(
+                    config=config,
+                    my_simulation_parameters=sim_params,
+                    data_dict_with_car_information=car_info,
                 )
-        if not found_simulation_parameters:
+            else:
+                component = component_class(
+                    config=config,
+                    my_simulation_parameters=sim_params,
+                )
+        except TypeError as e:
             raise ValueError(
-                "The class " + component_entry.component_full_classname + " has no simulation parameters parameter"
-            )
-        if not found_config:
-            raise ValueError("The class " + component_entry.component_full_classname + " has no config parameter")
-        config_class = class_dict[component_entry.config_full_classname]
+                f"Failed to initialize component {component_class.__name__}: {e}"
+            ) from e
 
-        config_instance = config_class.from_dict(component_entry.configuration)
+        # Create inputs/outputs
+        for input_def in comp_def.get("inputs", []):
+            if input_def["dynamic"]:
+                component.add_component_input_and_connect(
+                    source_component_output=input_def["source_component_output"],
+                    source_object_name=input_def["source_object_name"],
+                    source_load_type=lt.LoadTypes(input_def["source_load_type"]),
+                    source_unit=lt.Units(input_def["source_unit"]),
+                    source_tags=input_def["source_tags"],
+                    source_weight=input_def["source_weight"],
+                )
+            else:
+                component.add_input(
+                    object_name=input_def["object_name"],
+                    field_name=input_def["field_name"],
+                    load_type=lt.LoadTypes(input_def["load_type"]),
+                    unit=lt.Units(input_def["unit"]),
+                    mandatory=input_def["mandatory"],
+                )
+        for output_def in comp_def.get("outputs", []):
+            if output_def["dynamic"]:
+                component.add_component_output(
+                    source_output_name=output_def["source_output_name"],
+                    source_tags=output_def["source_tags"],
+                    source_load_type=lt.LoadTypes(output_def["source_load_type"]),
+                    source_unit=lt.Units(output_def["source_unit"]),
+                    source_weight=output_def["source_weight"],
+                    output_description=output_def["output_description"],
+                    source_component_class=output_def.get("source_component_class", None),
+                )
+            else:
+                component.add_output(
+                    object_name=output_def["object_name"],
+                    field_name=output_def["field_name"],
+                    load_type=lt.LoadTypes(output_def["load_type"]),
+                    unit=lt.Units(output_def["unit"]),
+                    postprocessing_flag=output_def.get("postprocessing_flag", None),
+                    sankey_flow_direction=output_def.get("sankey_flow_direction", None),
+                    output_description=output_def.get("output_description", None),
+                )
 
-        class_instance = my_class(config=config_instance, my_simulation_parameters=my_simulation_parameters)
-        return class_instance
+        my_sim.add_component(component, connect_automatically=comp_def["connect_automatically"])
+        component_dict[component.config.name] = component
 
-    def generate_list_of_needed_classes_for_import(self):
-        """Generates a list of classes that need to be important from the object list."""
-        needed_classes: List[str] = []
-        for component_entry in self.my_obj.component_entries:
-            needed_key = component_entry.component_full_classname
-            needed_classes.append(needed_key)
-            needed_config_key = component_entry.config_full_classname
-            needed_classes.append(needed_config_key)
-        return needed_classes
+    # Connect components
+    for conn in scenario_data.get("connections", []):
+        try:
+            source_name = conn["source"]["component_name"]
+            source_field = conn["source"]["field_name"]
+
+            target_name = conn["target"]["component_name"]
+            target_field = conn["target"]["field_name"]
+
+            # Resolve components
+            source_comp = component_dict.get(source_name)
+            target_comp = component_dict.get(target_name)
+            if source_comp is None:
+                log.warning(f"Source component not found: {source_name}")
+                continue
+            if target_comp is None:
+                log.warning(f"Target component not found: {target_name}")
+                continue
+
+            # Connect (analogous to Python-based setups)
+            try:
+                target_comp.connect_input(
+                    target_field,
+                    source_name,
+                    source_field,
+                )
+                log.debug(
+                    f"Added connection: {source_name}.{source_field} -> {target_name}.{target_field}"
+                )
+
+            except Exception as e:
+                # Likely, fields named like Input_..._value_number do not actually have a corresponding input?!
+                log.warning(f"Failed to connect {source_name}.{source_field} to {target_name}.{target_field}: {e}")
+
+        except KeyError as e:
+            raise ValueError(f"Malformed connection entry: missing {e}") from e
+
+    return my_sim

@@ -748,7 +748,7 @@ class ResultDataCollection:
                             my_module_config_dict["share_of_maximum_pv_power"] = 0
                         except Exception as ecx:
                             raise KeyError(
-                                "The key share of maximum pv power does not exist in the module dict. Unable this function if it not needed."
+                                "The key share of maximum pv power does not exist in the module dict. Disable this function if it not needed."
                             ) from ecx
 
         # check if module config and default config have any keys in common

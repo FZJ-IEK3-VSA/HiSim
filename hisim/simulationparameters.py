@@ -29,6 +29,7 @@ class SimulationParameters(JSONWizard):
     surplus_control: bool
     cache_dir_path: str
     multiple_buildings: bool
+    log_connections: bool
 
     def __init__(
         self,
@@ -43,6 +44,7 @@ class SimulationParameters(JSONWizard):
         surplus_control: bool = True,
         cache_dir_path: str = os.path.join(os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))), "inputs", "cache"),  # type: ignore
         multiple_buildings: bool = False,
+        log_connections: bool = False,
     ):
         """Initializes the class."""
         self.start_date: datetime.datetime = start_date
@@ -63,6 +65,7 @@ class SimulationParameters(JSONWizard):
         self.cache_dir_path = cache_dir_path
         self.multiple_buildings = multiple_buildings
         self.figure_format = FigureFormat.PNG
+        self.log_connections = log_connections
 
     @classmethod
     def full_year(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:

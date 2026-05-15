@@ -1,6 +1,5 @@
 """Test for weather."""
 import pytest
-from hisim import sim_repository
 from hisim import component
 from hisim.components import weather
 from hisim.simulationparameters import SimulationParameters
@@ -13,7 +12,7 @@ def test_weather():
     mysim: SimulationParameters = SimulationParameters.full_year(
         year=2021, seconds_per_timestep=60
     )
-    repo = sim_repository.SimRepository()
+
     my_weather_config = weather.WeatherConfig.get_default(
         location_entry=weather.LocationEnum.AACHEN
     )
@@ -28,7 +27,6 @@ def test_weather():
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([my_weather])
-    my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
     # Simulate
     dni = []

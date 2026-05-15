@@ -2,7 +2,6 @@
 
 import pytest
 from tests import functions_for_testing as fft
-from hisim import sim_repository
 from hisim import component
 from hisim.components import weather
 from hisim.components import generic_pv_system
@@ -18,8 +17,6 @@ def test_photovoltaic_sandia():
     seconds_per_timestep = 60
     power_in_watt = 10 * 1e3
 
-    repo = sim_repository.SimRepository()
-
     mysim = sim.SimulationParameters.full_year(
         year=2021, seconds_per_timestep=seconds_per_timestep
     )
@@ -34,7 +31,6 @@ def test_photovoltaic_sandia():
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=mysim
     )
-    my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
     my_pvs_config = generic_pv_system.PVSystemConfig.get_default_pv_system(
         module_name="Hanwha HSL60P6-PA-4-250T [2013]",
@@ -46,7 +42,6 @@ def test_photovoltaic_sandia():
     my_pvs = generic_pv_system.PVSystem(
         config=my_pvs_config, my_simulation_parameters=mysim
     )
-    my_pvs.set_sim_repo(repo)
     my_pvs.i_prepare_simulation()
     number_of_outputs = fft.get_number_of_outputs([my_weather, my_pvs])
     stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
@@ -103,8 +98,6 @@ def test_photovoltaic_cec():
     seconds_per_timestep = 60
     power_in_watt = 10 * 1e3
 
-    repo = sim_repository.SimRepository()
-
     mysim: sim.SimulationParameters = sim.SimulationParameters.full_year(
         year=2021, seconds_per_timestep=seconds_per_timestep
     )
@@ -119,14 +112,14 @@ def test_photovoltaic_cec():
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=mysim
     )
-    my_weather.set_sim_repo(repo)
+
     my_weather.i_prepare_simulation()
     my_pvs_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
     my_pvs_config.power_in_watt = power_in_watt
     my_pvs = generic_pv_system.PVSystem(
         config=my_pvs_config, my_simulation_parameters=mysim
     )
-    my_pvs.set_sim_repo(repo)
+
     my_pvs.i_prepare_simulation()
     number_of_outputs = fft.get_number_of_outputs([my_weather, my_pvs])
     stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(

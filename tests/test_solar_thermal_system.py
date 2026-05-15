@@ -4,7 +4,7 @@ import datetime
 import pandas as pd
 import pytest
 from oemof.thermal.solar_thermal_collector import flat_plate_precalc
-from hisim import sim_repository, component, log, simulator as sim
+from hisim import component, log, simulator as sim
 from hisim.components import weather, solar_thermal_system
 from hisim.loadtypes import LoadTypes, Units
 from tests import functions_for_testing as fft

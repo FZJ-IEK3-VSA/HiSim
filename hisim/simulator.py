@@ -11,7 +11,7 @@ import pandas as pd
 
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.component_wrapper import ComponentWrapper
-from hisim import sim_repository
+from hisim import sim_repository_singleton
 from hisim.postprocessing import postprocessing_main as pp
 import hisim.component as cp
 import hisim.dynamic_component as dcp
@@ -57,7 +57,6 @@ class Simulator:
         self.module_filename = module_filename
         self.module_directory = module_directory
         self.my_module_config = my_module_config
-        self.simulation_repository = sim_repository.SimRepository()
         self.results_data_frame: pd.DataFrame
         self.iteration_logging_path: str = ""
         self.config_dictionary: Dict[str, Any] = {}
@@ -81,8 +80,6 @@ class Simulator:
         """Adds component to simulator and wraps it up the output in the register."""
         if self._simulation_parameters is None:
             raise ValueError("Simulation Parameters were not initialized")
-        # set the repository
-        component.set_sim_repo(self.simulation_repository)
 
         # set the wrapper
         wrap = ComponentWrapper(component, is_cachable, connect_automatically=connect_automatically)
@@ -303,7 +300,7 @@ class Simulator:
         del all_result_lines
         del postprocessing_datatransfer
         del my_post_processor
-        self.simulation_repository.clear()
+        sim_repository_singleton.SingletonSimRepository().clear()
         log.information("Finished postprocessing")
         with open(flagfile, "a", encoding="utf-8") as filestream:
             filestream.write("finished")

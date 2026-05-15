@@ -635,12 +635,6 @@ class PVSystem(cp.Component):
 
             ac_power_in_watt = ac_power_ratio * self.pvconfig.power_in_watt
 
-            # if you wanted to access the temperature forecast from the
-            # weather component:
-            # val = self.simulation_repository.get_entry(
-            #   Weather.Weather_Temperature_Forecast_24h
-            # )
-
             stsv.set_output_value(self.electricity_output_channel, ac_power_in_watt)
             stsv.set_output_value(
                 self.electricity_energy_output_channel,
@@ -674,7 +668,8 @@ class PVSystem(cp.Component):
                 self.ac_power_ratios_for_all_timesteps_output[t] * self.pvconfig.power_in_watt
                 for t in range(timestep, last_forecast_timestep)
             ]
-            self.simulation_repository.set_dynamic_entry(
+
+            SingletonSimRepository().set_dynamic_entry(
                 component_type=lt.ComponentType.PV,
                 source_weight=self.pvconfig.source_weight,
                 entry=pvforecast,

@@ -3,7 +3,7 @@
 
 # clean
 
-from typing import List, Optional
+from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -18,7 +18,6 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import generic_car
 from hisim.components import advanced_ev_battery_bslib
-from hisim.components import controller_l2_energy_management_system
 from hisim.loadtypes import Units, ComponentType
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions

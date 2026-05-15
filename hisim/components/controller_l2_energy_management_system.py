@@ -576,43 +576,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
         return dynamic_connections
 
-    # def get_default_connections_from_car_battery(
-    #     self,
-    # ):
-    #     """Get car battery default connections."""
-
-    #     from hisim.components.controller_l1_generic_ev_charge import (  # pylint: disable=import-outside-toplevel
-    #         L1Controller,
-    #     )
-
-    # dynamic_connections = []
-    # electric_car_charger_class_name = L1Controller.get_classname()
-    # dynamic_connections.append(
-    #     dynamic_component.DynamicComponentConnection(
-    #         source_component_class=L1Controller,
-    #         source_class_name=electric_car_charger_class_name,
-    #         source_component_field_name=L1Controller.BatteryChargingPowerToEMS,
-    #         source_load_type=lt.LoadTypes.ELECTRICITY,
-    #         source_unit=lt.Units.WATT,
-    #         source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-    #         source_weight=5,
-    #     )
-    # )
-
-    # self.add_component_output(
-    #     source_output_name=f"ElectricityToOrFromGridOf{electric_car_charger_class_name}_",
-    #     source_tags=[
-    #         lt.ComponentType.CAR_BATTERY,
-    #         lt.InandOutputType.ELECTRICITY_TARGET,
-    #     ],
-    #     source_component_class=electric_car_charger_class_name,
-    #     source_weight=5,
-    #     source_load_type=lt.LoadTypes.ELECTRICITY,
-    #     source_unit=lt.Units.WATT,
-    #     output_description="Target electricity for battery of electric car.",
-    # )
-
-    # return dynamic_connections
 
     def get_default_connections_from_advanced_battery(
         self,
@@ -917,6 +880,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 self.consumption_uncontrolled_inputs,
                 self.consumption_ems_controlled_inputs,
             ) = self.sort_source_weights_and_components()
+
 
         district_electricity_unused = stsv.get_input_value(component_input=self.electricity_to_building_from_district)
 

@@ -10,8 +10,6 @@ from utspclient.helpers.lpgpythonbindings import JsonReference
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
     Households,
-    TransportationDeviceSets,
-    TravelRouteSets,
 )
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector

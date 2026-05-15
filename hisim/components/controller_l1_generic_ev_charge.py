@@ -265,17 +265,17 @@ class L1Controller(cp.Component):
         electricity_target: float,
     ) -> float:
         """Control."""
-        electricity_to_or_from_car_battery_in_watt = 0
+        electricity_to_or_from_car_battery_in_watt: float = 0.0
         # DISCHARGING: car is consuming energy and discharging: either due to driving or stanbd-by losses
-        if car_consumption > 0:
+        if car_consumption > 0.0:
             electricity_to_or_from_car_battery_in_watt = car_consumption * (-1)
 
         # CHARGING or PARKING: car is not driving and can be charged if located at charging station
-        elif car_consumption == 0:
+        elif car_consumption == 0.0:
 
             # PARKING: car is not driving and only parking; only allow charging when car is at charging location
             if car_location != self.charging_location:
-                electricity_to_or_from_car_battery_in_watt = 0
+                electricity_to_or_from_car_battery_in_watt = 0.0
 
             # CHARGING: car is not driving and located at charging station
             else:

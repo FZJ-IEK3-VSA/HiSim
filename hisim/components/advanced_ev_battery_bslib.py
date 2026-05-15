@@ -232,14 +232,14 @@ class CarBattery(Component):
         soc = self.state.soc
 
         # Simulate battery charging
-        if target_power_to_or_from_car_battery_in_watt >= 0:
+        if target_power_to_or_from_car_battery_in_watt >= 0.0:
             results = self.bat.simulate(
                 p_load=target_power_to_or_from_car_battery_in_watt, soc=soc, dt=seconds_per_timestep
             )
             ac_charging_power_in_watt = results[0]
             dc_charging_power_in_watt = results[1]
             soc = results[2]
-            discharging_power_ac_in_watt = 0
+            discharging_power_ac_in_watt = 0.0
 
         # Simulate battery discharge without losses (this is included in the car consumption of the car component)
         else:
@@ -253,8 +253,8 @@ class CarBattery(Component):
                     "Car cannot drive, because battery is empty."
                     + "This points towards a major problem in the battery configuration - or the consumption pattern of the car."
                 )
-            ac_charging_power_in_watt = 0
-            dc_charging_power_in_watt = 0
+            ac_charging_power_in_watt = 0.0
+            dc_charging_power_in_watt = 0.0
 
         # write values for output time series
         stsv.set_output_value(self.p_bs, ac_charging_power_in_watt)

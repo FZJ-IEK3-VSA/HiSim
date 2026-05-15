@@ -5,13 +5,10 @@
 from typing import Optional, Any, Union, List
 import re
 import os
-from utspclient.helpers.lpgdata import (
-    Households,
-)
+
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
-    EnergyIntensityType,
     Households,
     TransportationDeviceSets,
     TravelRouteSets,
@@ -379,7 +376,7 @@ def setup_function(
     # get all available cars from occupancy
     my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
     my_car_config = generic_car.CarConfig.get_default_ev_config()
-    my_car_config.name = f"ElectricCar"
+    my_car_config.name = "ElectricCar"
     charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
 
     # create all cars
@@ -460,9 +457,8 @@ def setup_function(
         )
         # -----------------------------------------------------------------------------------------------------------------
         # connect Electric Vehicle
-        if car_surplus_charging:
-            for car, car_battery, car_battery_controller in zip(my_cars, my_car_batteries, my_car_battery_controllers):
-
+        for car, car_battery, car_battery_controller in zip(my_cars, my_car_batteries, my_car_battery_controllers):
+            if car_surplus_charging:
                 my_electricity_controller.add_component_input_and_connect(
                     source_object_name=car_battery_controller.component_name,
                     source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
@@ -490,17 +486,18 @@ def setup_function(
                     input_fieldname=controller_l1_generic_ev_charge.L1Controller.ElectricityTargetFromEMS,
                     src_object=electricity_target,
                 )
-            else:
-                my_electricity_controller.add_component_input_and_connect(
-                    source_object_name=car_battery_controller.component_name,
-                    source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
-                    source_load_type=lt.LoadTypes.ELECTRICITY,
-                    source_unit=lt.Units.WATT,
-                    source_tags=[
-                        lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-                    ],
-                    source_weight=999,
-                )
+        else:
+            # car is normal consumer and won't receive surplus energy for extra charging
+            my_electricity_controller.add_component_input_and_connect(
+                source_object_name=car_battery_controller.component_name,
+                source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                ],
+                source_weight=999,
+            )
 
         # -----------------------------------------------------------------------------------------------------------------
         # Add outputs to EMS

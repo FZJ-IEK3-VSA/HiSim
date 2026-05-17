@@ -157,6 +157,7 @@ Theses classes inherent from `Component` (`component.py`) class and can be used 
 
 - `RandomNumbers` (`random_numbers.py`)
 - `SimpleWaterStorage` (`simple_water_storage.py`)
+- `NightSetbackController` (`night_setback_controller.py`)
 - `Transformer` (`transformer_rectifier.py`)
 - `PVSystem` (`generic_pv_system.py`)
 - `SimpleCHP` (`generic_chp.py`)

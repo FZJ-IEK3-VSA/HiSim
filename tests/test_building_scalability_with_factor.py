@@ -29,8 +29,6 @@ def test_building_scalability():
         year=2021, seconds_per_timestep=seconds_per_timestep
     )
 
-    repo = component.SimRepository()
-
     # # in case ou want to check on all TABULA buildings -> run test over all building_codes
     # d_f = pd.read_csv(
     #     utils.HISIMPATH["housing"],
@@ -53,7 +51,7 @@ def test_building_scalability():
         config=my_residence_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_residence.set_sim_repo(repo)
+
     my_residence.i_prepare_simulation()
 
     log.information(my_residence_config.building_code)
@@ -63,7 +61,7 @@ def test_building_scalability():
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
-    my_occupancy.set_sim_repo(repo)
+
     my_occupancy.i_prepare_simulation()
 
     # Set Weather
@@ -73,7 +71,7 @@ def test_building_scalability():
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
-    my_weather.set_sim_repo(repo)
+
     my_weather.i_prepare_simulation()
 
     number_of_outputs = fft.get_number_of_outputs(
@@ -142,7 +140,7 @@ def test_building_scalability():
             config=my_residence_config,
             my_simulation_parameters=my_simulation_parameters,
         )
-        my_residence.set_sim_repo(repo)
+
         my_residence.i_prepare_simulation()
         my_residence.i_simulate(0, stsv, False)
 

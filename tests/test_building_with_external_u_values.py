@@ -98,10 +98,6 @@ def test_house_with_idealized_electric_heater_for_testing_u_values(
         abs(max_thermal_building_demand_in_watt - max_thermal_building_demand_in_watt_tabula) < 0.01
     ), f"max_thermal_building_demand_in_watt: {max_thermal_building_demand_in_watt} != {max_thermal_building_demand_in_watt_tabula}"
 
-@pytest.fixture(autouse=True)
-def reset_singletons():
-    """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
-    SingletonMeta._instances.clear()  # pylint: disable=protected-access
 
 def house_with_idealized_electric_heater_for_testing_u_values(
     my_simulation_parameters: Optional[SimulationParameters] = None,

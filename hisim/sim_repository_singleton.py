@@ -43,8 +43,18 @@ class SingletonSimRepository(metaclass=SingletonMeta):
 
     def __init__(self) -> None:
         """Initializes the SimRepository."""
+
+        # self.my_dict: Dict[Any, Any] = {}
+        # self.my_dynamic_dict: Dict[lt.ComponentType, Dict[int, Any]] = {elem: {} for elem in lt.ComponentType}
+        if hasattr(self, "_initialized"):
+            return
+
         self.my_dict: Dict[Any, Any] = {}
-        self.my_dynamic_dict: Dict[lt.ComponentType, Dict[int, Any]] = {elem: {} for elem in lt.ComponentType}
+        self.my_dynamic_dict: Dict[lt.ComponentType, Dict[int, Any]] = {
+            elem: {} for elem in lt.ComponentType
+        }
+
+        self._initialized = True
 
     def set_entry(self, key: Any, entry: Any) -> None:
         """Sets an entry in the SimRepository."""

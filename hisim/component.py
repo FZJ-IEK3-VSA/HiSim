@@ -219,8 +219,7 @@ class Component:
         self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
         if my_simulation_parameters is None:
             raise ValueError("My Simulation parameters was None.")
-        # self.simulation_repository: SimRepository
-        # self.singleton_simulation_repository: SingletonSimRepository
+        self.singleton_simulation_repository: SingletonSimRepository = SingletonSimRepository()
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
         if isinstance(my_config, ConfigBase):
             self.config = my_config

@@ -18,7 +18,6 @@ from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 
-
 load_dotenv()
 
 
@@ -78,9 +77,7 @@ def test_occupancy_scaling_with_utsp():
         np.testing.assert_allclose(water_consumption_two, len(household_list) * water_consumption_one, rtol=0.01)
 
 
-def initialize_lpg_utsp_connector_and_return_results(
-    households: Union[JsonReference, List[JsonReference]]
-) -> Tuple[
+def initialize_lpg_utsp_connector_and_return_results(households: Union[JsonReference, List[JsonReference]]) -> Tuple[
     Union[float, Any],
     Union[float, Any],
     Union[float, Any],

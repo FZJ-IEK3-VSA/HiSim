@@ -1,4 +1,5 @@
-""" Test for the advanced battery lib. """
+"""Test for the advanced battery lib."""
+
 # clean
 import pytest
 from hisim import component as cp
@@ -13,9 +14,7 @@ from tests import functions_for_testing as fft
 def test_advanced_battery_bslib():
     """Performs a basic test for a single calculation of the battery lib."""
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
     # ===================================================================================================================
     # Set Advanced Battery
@@ -47,7 +46,7 @@ def test_advanced_battery_bslib():
         lifetime_in_years=lifetime,
         lifetime_in_cycles=lifetime_in_cycles,
         maintenance_costs_in_euro_per_year=maintenance_costs_in_euro_per_year,
-        subsidy_as_percentage_of_investment_costs=subsidy_as_percentage_of_investment_costs
+        subsidy_as_percentage_of_investment_costs=subsidy_as_percentage_of_investment_costs,
     )
     my_advanced_battery = advanced_battery_bslib.Battery(
         config=my_advanced_battery_config,
@@ -62,9 +61,7 @@ def test_advanced_battery_bslib():
         lt.Units.WATT,
     )
 
-    number_of_outputs = fft.get_number_of_outputs(
-        [my_advanced_battery, loading_power_input]
-    )
+    number_of_outputs = fft.get_number_of_outputs([my_advanced_battery, loading_power_input])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     my_advanced_battery.loading_power_input_channel.source_output = loading_power_input
@@ -81,14 +78,6 @@ def test_advanced_battery_bslib():
     log.information(str(stsv.values))
 
     # Check if set power is charged
-    assert (
-        stsv.values[my_advanced_battery.ac_battery_power_channel.global_index] == 4000
-    )  # noqa B101
-    assert (
-        stsv.values[my_advanced_battery.dc_battery_power_channel.global_index]
-        == 3807.546
-    )  # noqa B101
-    assert (
-        stsv.values[my_advanced_battery.state_of_charge_channel.global_index]
-        == 0.006185227970066665
-    )  # noqa B101
+    assert stsv.values[my_advanced_battery.ac_battery_power_channel.global_index] == 4000  # noqa B101
+    assert stsv.values[my_advanced_battery.dc_battery_power_channel.global_index] == 3807.546  # noqa B101
+    assert stsv.values[my_advanced_battery.state_of_charge_channel.global_index] == 0.006185227970066665  # noqa B101

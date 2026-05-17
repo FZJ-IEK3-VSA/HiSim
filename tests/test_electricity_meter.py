@@ -23,13 +23,16 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
 from hisim.sim_repository_singleton import SingletonMeta
 
+
 @pytest.fixture(autouse=True)
 def reset_singletons():
     """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
     SingletonMeta._instances.clear()  # pylint: disable=protected-access
 
+
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_electricity_meter.py"
+
 
 @utils.measure_execution_time
 @pytest.mark.base
@@ -54,15 +57,9 @@ def test_house(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
 
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.EXPORT_TO_CSV
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_KPIS
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.WRITE_KPIS_TO_JSON
-        )
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON)
 
     # this part is copied from hisim_main
     # Build Simulator
@@ -79,15 +76,11 @@ def test_house(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Build PV
-    my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_scaled_pv_system(share_of_maximum_pv_potential=1, rooftop_area_in_m2=120)
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+        share_of_maximum_pv_potential=1, rooftop_area_in_m2=120
     )
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
@@ -96,9 +89,7 @@ def test_house(
     )
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
@@ -178,7 +169,9 @@ def test_house(
     # Compare with kpi computation results
 
     # read kpi data
-    with open(os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"), "r", encoding="utf-8") as file:  # pylint: disable=W0212
+    with open(
+        os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"), "r", encoding="utf-8"
+    ) as file:  # pylint: disable=W0212
         jsondata = json.load(file)
 
     jsondata = jsondata["BUI1"]
@@ -190,59 +183,34 @@ def test_house(
     electricity_from_grid_kpi_in_kilowatt_hour = jsondata["Electricity Meter"]["Total energy from grid"].get("value")
 
     # simualtion results from grid energy balancer (last entry)
-    simulation_results_electricity_meter_cumulative_production_in_watt_hour = (
-        my_sim.results_data_frame["ElectricityMeter - CumulativeProduction [Electricity - Wh]"][-1]
-    )
-    simulation_results_electricity_meter_cumulative_consumption_in_watt_hour = (
-        my_sim.results_data_frame["ElectricityMeter - CumulativeConsumption [Electricity - Wh]"][-1]
-    )
-    simulation_results_electricity_from_grid_in_watt_hour = (
-        my_sim.results_data_frame["ElectricityMeter - ElectricityFromGrid [Electricity - Wh]"]
-    )
-    simulation_results_electricity_consumption_in_watt_hour = (
-        my_sim.results_data_frame["ElectricityMeter - ElectricityConsumption [Electricity - Wh]"]
-    )
+    simulation_results_electricity_meter_cumulative_production_in_watt_hour = my_sim.results_data_frame[
+        "ElectricityMeter - CumulativeProduction [Electricity - Wh]"
+    ][-1]
+    simulation_results_electricity_meter_cumulative_consumption_in_watt_hour = my_sim.results_data_frame[
+        "ElectricityMeter - CumulativeConsumption [Electricity - Wh]"
+    ][-1]
+    simulation_results_electricity_from_grid_in_watt_hour = my_sim.results_data_frame[
+        "ElectricityMeter - ElectricityFromGrid [Electricity - Wh]"
+    ]
+    simulation_results_electricity_consumption_in_watt_hour = my_sim.results_data_frame[
+        "ElectricityMeter - ElectricityConsumption [Electricity - Wh]"
+    ]
     sum_electricity_from_grid_in_kilowatt_hour = sum(simulation_results_electricity_from_grid_in_watt_hour) / 1000
     sum_electricity_consumption_in_kilowatt_hour = sum(simulation_results_electricity_consumption_in_watt_hour) / 1000
 
-    log.information(
-        "kpi cumulative production [kWh] "
-        + str(cumulative_production_kpi_in_kilowatt_hour)
-    )
-    log.information(
-        "kpi cumulative consumption [kWh] "
-        + str(cumulative_consumption_kpi_in_kilowatt_hour)
-    )
-    log.information(
-        "kpi energy from grid [kWh] "
-        + str(electricity_from_grid_kpi_in_kilowatt_hour)
-    )
+    log.information("kpi cumulative production [kWh] " + str(cumulative_production_kpi_in_kilowatt_hour))
+    log.information("kpi cumulative consumption [kWh] " + str(cumulative_consumption_kpi_in_kilowatt_hour))
+    log.information("kpi energy from grid [kWh] " + str(electricity_from_grid_kpi_in_kilowatt_hour))
     log.information(
         "ElectricityMeter cumulative production [kWh] "
-        + str(
-            simulation_results_electricity_meter_cumulative_production_in_watt_hour
-            * 1e-3
-        )
+        + str(simulation_results_electricity_meter_cumulative_production_in_watt_hour * 1e-3)
     )
     log.information(
         "ElectricityMeter cumulative consumption [kWh] "
-        + str(
-            simulation_results_electricity_meter_cumulative_consumption_in_watt_hour
-            * 1e-3
-        )
+        + str(simulation_results_electricity_meter_cumulative_consumption_in_watt_hour * 1e-3)
     )
-    log.information(
-        "ElectricityMeter energy from grid [kWh] "
-        + str(
-            sum_electricity_from_grid_in_kilowatt_hour
-        )
-    )
-    log.information(
-        "ElectricityMeter consumption [kWh] "
-        + str(
-            sum_electricity_consumption_in_kilowatt_hour
-        )
-    )
+    log.information("ElectricityMeter energy from grid [kWh] " + str(sum_electricity_from_grid_in_kilowatt_hour))
+    log.information("ElectricityMeter consumption [kWh] " + str(sum_electricity_consumption_in_kilowatt_hour))
 
     # test and compare with relative error of 10%
     np.testing.assert_allclose(

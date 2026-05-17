@@ -3,6 +3,7 @@
 Depending on building properties like rooftop area, floor area, number of apartments and heating load the energy system components,
 such as pv system, battery, heat pumps, water storage, etc. need to be scaled up.
 """
+
 # clean
 
 from typing import Tuple, Any
@@ -41,28 +42,15 @@ def test_energy_system_scalability():
         scaling_factor_for_absolute_conditioned_floor_area=1,
     )
 
+    log.information("original size pv in watt " + str(original_pv_electricity_output_in_watt))
+    log.information("original size hplib in watt " + str(original_hplib_thermal_outout_power_in_watt))
     log.information(
-        "original size pv in watt " + str(original_pv_electricity_output_in_watt)
+        "original size storage for space heating in liter " + str(original_storage_size_for_space_heating_in_liter)
     )
+    log.information("original size battery in kWh " + str(original_battery_size_in_kilowatt_hours))
+    log.information("original size hp modular for dhw " + str(original_hp_modular_thermal_power_in_watt_for_dhw))
     log.information(
-        "original size hplib in watt "
-        + str(original_hplib_thermal_outout_power_in_watt)
-    )
-    log.information(
-        "original size storage for space heating in liter "
-        + str(original_storage_size_for_space_heating_in_liter)
-    )
-    log.information(
-        "original size battery in kWh " + str(original_battery_size_in_kilowatt_hours)
-    )
-    log.information(
-        "original size hp modular for dhw "
-        + str(original_hp_modular_thermal_power_in_watt_for_dhw)
-    )
-    log.information(
-        "original size storage modular for dwh in liter "
-        + str(original_storage_modular_size_in_liter_for_dhw)
-        + "\n"
+        "original size storage modular for dwh in liter " + str(original_storage_modular_size_in_liter_for_dhw) + "\n"
     )
 
     # calculate sizes and respective scaling factor when
@@ -79,27 +67,15 @@ def test_energy_system_scalability():
         scaling_factor_for_absolute_conditioned_floor_area=5,
     )
 
+    log.information("original size pv in watt " + str(scaled_pv_electricity_output_in_watt))
+    log.information("original size hplib in watt " + str(scaled_hplib_thermal_outout_power_in_watt))
     log.information(
-        "original size pv in watt " + str(scaled_pv_electricity_output_in_watt)
+        "original size storage for space heating in liter " + str(scaled_storage_size_for_space_heating_in_liter)
     )
+    log.information("original size battery in kWh " + str(scaled_battery_size_in_kilowatt_hours))
+    log.information("original size hp modular for dhw " + str(scaled_hp_modular_thermal_power_in_watt_for_dhw))
     log.information(
-        "original size hplib in watt " + str(scaled_hplib_thermal_outout_power_in_watt)
-    )
-    log.information(
-        "original size storage for space heating in liter "
-        + str(scaled_storage_size_for_space_heating_in_liter)
-    )
-    log.information(
-        "original size battery in kWh " + str(scaled_battery_size_in_kilowatt_hours)
-    )
-    log.information(
-        "original size hp modular for dhw "
-        + str(scaled_hp_modular_thermal_power_in_watt_for_dhw)
-    )
-    log.information(
-        "original size storage modular for dwh in liter "
-        + str(scaled_storage_modular_size_in_liter_for_dhw)
-        + "\n"
+        "original size storage modular for dwh in liter " + str(scaled_storage_modular_size_in_liter_for_dhw) + "\n"
     )
 
     # now compare the two results and test if sizes are upscaled correctly
@@ -148,37 +124,22 @@ def simulation_for_one_timestep(
     """Test function for the system setup house for one timestep."""
 
     # Set building inputs
-    absolute_conditioned_floor_area_in_m2 = (
-        121.2 * scaling_factor_for_absolute_conditioned_floor_area
-    )
+    absolute_conditioned_floor_area_in_m2 = 121.2 * scaling_factor_for_absolute_conditioned_floor_area
 
     # Set Residence
-    my_residence_config = (
-        building.BuildingConfig.get_default_german_single_family_home()
-    )
-    my_residence_config.absolute_conditioned_floor_area_in_m2 = (
-        absolute_conditioned_floor_area_in_m2
-    )
+    my_residence_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_residence_config.absolute_conditioned_floor_area_in_m2 = absolute_conditioned_floor_area_in_m2
 
     my_residence_information = building.BuildingInformation(config=my_residence_config)
 
     log.information("Building code" + str(my_residence_config.building_code))
-    log.information(
-        "Rooftop area " + str(my_residence_information.roof_area_in_m2)
-    )
-    log.information(
-        "Floor area "
-        + str(my_residence_information.scaled_conditioned_floor_area_in_m2)
-    )
+    log.information("Rooftop area " + str(my_residence_information.roof_area_in_m2))
+    log.information("Floor area " + str(my_residence_information.scaled_conditioned_floor_area_in_m2))
 
     log.information(
-        "Heating load of building in W "
-        + str(my_residence_information.max_thermal_building_demand_in_watt)
+        "Heating load of building in W " + str(my_residence_information.max_thermal_building_demand_in_watt)
     )
-    log.information(
-        "Number of apartmens in building "
-        + str(my_residence_information.number_of_apartments)
-    )
+    log.information("Number of apartmens in building " + str(my_residence_information.number_of_apartments))
 
     # Set PV
     my_pv_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
@@ -207,19 +168,17 @@ def simulation_for_one_timestep(
     )
 
     # Set DHW Storage modular
-    my_storage_for_dhw_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-        my_residence_information.number_of_apartments
+    my_storage_for_dhw_config = (
+        generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+            my_residence_information.number_of_apartments
+        )
     )
 
     # Energy system sizes
     pv_power_in_watt = my_pv_config.power_in_watt
     hplib_thermal_power_in_watt = my_hplib_config.set_thermal_output_power_in_watt
-    simple_hot_water_storage_size_in_liter = (
-        my_simple_hot_water_storage_config.volume_heating_water_storage_in_liter
-    )
-    battery_capacity_in_kilowatt_hours = (
-        my_battery_config.custom_battery_capacity_generic_in_kilowatt_hour
-    )
+    simple_hot_water_storage_size_in_liter = my_simple_hot_water_storage_config.volume_heating_water_storage_in_liter
+    battery_capacity_in_kilowatt_hours = my_battery_config.custom_battery_capacity_generic_in_kilowatt_hour
     hp_for_dhw_thermal_power_in_watt = my_hp_for_dhw_config.power_th
     water_storage_size_for_dhw_in_liter = my_storage_for_dhw_config.volume
 

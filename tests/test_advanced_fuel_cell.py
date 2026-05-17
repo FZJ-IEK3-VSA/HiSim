@@ -17,9 +17,7 @@ def test_chp_system():
     """Test chp system."""
 
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
     # CHP-System
     # min_operation_time=60
@@ -41,9 +39,7 @@ def test_chp_system():
         config=my_chp_system_config, my_simulation_parameters=my_simulation_parameters
     )
     # Set Fake Outputs for Gas Heater
-    control_signal = cp.ComponentOutput(
-        "FakeControlSignal", "ControlSignal", lt.LoadTypes.ANY, lt.Units.PERCENT
-    )
+    control_signal = cp.ComponentOutput("FakeControlSignal", "ControlSignal", lt.LoadTypes.ANY, lt.Units.PERCENT)
 
     massflow_input_temperature = cp.ComponentOutput(
         "FakeMassflowInputTemperature",
@@ -96,18 +92,9 @@ def test_chp_system():
     # Check if the delivered electricity demand got produced by chp
     #
     assert stsv.values[my_chp_system.mass_out_channel.global_index] == 0.011
-    assert (
-        stsv.values[my_chp_system.mass_out_temp_channel.global_index]
-        == 82.6072779444372
-    )
-    assert (
-        stsv.values[my_chp_system.gas_demand_target_channel.global_index]
-        == 9.994428193341691e-05
-    )
+    assert stsv.values[my_chp_system.mass_out_temp_channel.global_index] == 82.6072779444372
+    assert stsv.values[my_chp_system.gas_demand_target_channel.global_index] == 9.994428193341691e-05
     assert stsv.values[my_chp_system.el_power_channel.global_index] == 400.0
     assert stsv.values[my_chp_system.number_of_cycles_channel.global_index] == 1
     assert stsv.values[my_chp_system.th_power_channel.global_index] == 1500.0
-    assert (
-        stsv.values[my_chp_system.gas_demand_real_used_channel.global_index]
-        == 9.994428193341691e-05
-    )
+    assert stsv.values[my_chp_system.gas_demand_real_used_channel.global_index] == 9.994428193341691e-05

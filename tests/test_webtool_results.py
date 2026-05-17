@@ -12,10 +12,12 @@ from hisim.hisim_main import main
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.sim_repository_singleton import SingletonMeta
 
+
 @pytest.fixture(autouse=True)
 def reset_singletons():
     """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
     SingletonMeta._instances.clear()  # pylint: disable=protected-access
+
 
 @pytest.mark.base
 def test_webtool_results():
@@ -57,7 +59,9 @@ def test_webtool_results():
 
     # Test quantity
     assert isinstance(
-        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["configuration"]["flow_temperature_in_celsius"]["unit"]["symbol"],
+        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["configuration"]["flow_temperature_in_celsius"][
+            "unit"
+        ]["symbol"],
         str,
     )
 

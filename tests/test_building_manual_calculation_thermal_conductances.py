@@ -3,6 +3,7 @@
 The aim is to implement scalability in the building module by scaling up the area of the building.
 Therefore some functions must be adjusted which are tested here before.
 """
+
 # clean
 import numpy as np
 import pytest
@@ -11,10 +12,12 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim.sim_repository_singleton import SingletonMeta
 
+
 @pytest.fixture(autouse=True)
 def reset_singletons():
     """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
     SingletonMeta._instances.clear()  # pylint: disable=protected-access
+
 
 @pytest.mark.buildingtest
 @utils.measure_execution_time
@@ -24,19 +27,13 @@ def test_building_thermal_conductance_calculation():
     building_code = "DE.N.SFH.05.Gen.ReEx.001.001"
     building_heat_capacity_class = "medium"
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        year=2021, seconds_per_timestep=seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=seconds_per_timestep)
 
     # Set Residence
-    my_residence_config = (
-        building.BuildingConfig.get_default_german_single_family_home()
-    )
+    my_residence_config = building.BuildingConfig.get_default_german_single_family_home()
     my_residence_config.building_code = building_code
     my_residence_config.building_heat_capacity_class = building_heat_capacity_class
-    my_residence = building.Building(
-        config=my_residence_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_residence = building.Building(config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
 
     # Test calculation of the thermal conductances H_Transmission (H_tr) given by TABULA
     # building function: get_thermal_conductance_between_exterior_and_windows_and_door_in_watt_per_kelvin
@@ -51,15 +48,11 @@ def test_building_thermal_conductance_calculation():
     k = 0
     for w_i in w_s:
         list_h_tr_window.append(
-            my_residence.my_building_information.buildingdata_ref[
-                "H_Transmission_" + w_i
-            ].values[0]
+            my_residence.my_building_information.buildingdata_ref["H_Transmission_" + w_i].values[0]
         )
         # with H_Tr = U * A * b_tr [W/K] -> by calculating H_tr manually one can later scale this up by scaling up A_Calc
         h_tr_i = (
-            my_residence.my_building_information.buildingdata_ref["U_Actual_" + w_i].values[
-                0
-            ]
+            my_residence.my_building_information.buildingdata_ref["U_Actual_" + w_i].values[0]
             * my_residence.my_building_information.buildingdata_ref["A_" + w_i].values[0]
             * 1.0
         )
@@ -84,19 +77,13 @@ def test_building_thermal_conductance_calculation():
     k = 0
     for o_p in opaque_walls:
         list_h_tr_opaque.append(
-            my_residence.my_building_information.buildingdata_ref[
-                "H_Transmission_" + o_p
-            ].values[0]
+            my_residence.my_building_information.buildingdata_ref["H_Transmission_" + o_p].values[0]
         )
         # with H_Tr = U * A * b_tr [W/K] -> by calculating H_tr manually one can later scale this up by scaling up A_Calc
         h_tr_i = (
-            my_residence.my_building_information.buildingdata_ref["U_Actual_" + o_p].values[
-                0
-            ]
+            my_residence.my_building_information.buildingdata_ref["U_Actual_" + o_p].values[0]
             * my_residence.my_building_information.buildingdata_ref["A_" + o_p].values[0]
-            * my_residence.my_building_information.buildingdata_ref[
-                "b_Transmission_" + o_p
-            ].values[0]
+            * my_residence.my_building_information.buildingdata_ref["b_Transmission_" + o_p].values[0]
         )
 
         list_h_tr_opaque_calculated.append(h_tr_i)

@@ -14,7 +14,6 @@ from hisim.components import building
 from hisim.components import idealized_electric_heater
 from hisim.sim_repository_singleton import SingletonMeta
 
-
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
 __credits__ = ["Noah Pflugradt"]
@@ -26,10 +25,12 @@ __status__ = "development"
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_building_theoretical_heat_demand.py"
 
+
 @pytest.fixture(autouse=True)
 def reset_singletons():
     """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
     SingletonMeta._instances.clear()  # pylint: disable=protected-access
+
 
 @pytest.mark.buildingtest
 def test_house_with_idealized_electric_heater_for_heating_test(
@@ -64,9 +65,7 @@ def test_house_with_idealized_electric_heater_for_heating_test(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
 
     # # in case ou want to check on all TABULA buildings -> run test over all building_codes
     # d_f = pd.read_csv(
@@ -97,12 +96,8 @@ def test_house_with_idealized_electric_heater_for_heating_test(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Build Fake Heater Config
     my_idealized_electric_heater_config = idealized_electric_heater.IdealizedHeaterConfig(
         building_name="BUI1",
@@ -119,9 +114,7 @@ def test_house_with_idealized_electric_heater_for_heating_test(
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
 
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
 
     # Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
@@ -133,12 +126,8 @@ def test_house_with_idealized_electric_heater_for_heating_test(
     # Connect Components
 
     # Building
-    my_building.connect_input(
-        my_building.Altitude, my_weather.component_name, my_weather.Altitude
-    )
-    my_building.connect_input(
-        my_building.Azimuth, my_weather.component_name, my_weather.Azimuth
-    )
+    my_building.connect_input(my_building.Altitude, my_weather.component_name, my_weather.Altitude)
+    my_building.connect_input(my_building.Azimuth, my_weather.component_name, my_weather.Azimuth)
     my_building.connect_input(
         my_building.DirectNormalIrradiance,
         my_weather.component_name,
@@ -159,9 +148,7 @@ def test_house_with_idealized_electric_heater_for_heating_test(
         my_weather.component_name,
         my_weather.DirectNormalIrradianceExtra,
     )
-    my_building.connect_input(
-        my_building.ApparentZenith, my_weather.component_name, my_weather.ApparentZenith
-    )
+    my_building.connect_input(my_building.ApparentZenith, my_weather.component_name, my_weather.ApparentZenith)
     my_building.connect_input(
         my_building.TemperatureOutside,
         my_weather.component_name,

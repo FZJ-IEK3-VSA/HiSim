@@ -1,7 +1,8 @@
-""" Tests for the cluster system setups.
+"""Tests for the cluster system setups.
 
 These system setups can only be tested on cluster because so far they need access to a certain cluster directory.
 """
+
 # clean
 import os
 import pytest

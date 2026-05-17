@@ -1,4 +1,4 @@
-""" Tests for the electrolyzer with renewables system setup. """
+"""Tests for the electrolyzer with renewables system setup."""
 
 import os
 import pytest

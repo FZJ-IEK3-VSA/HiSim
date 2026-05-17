@@ -26,10 +26,12 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
 from hisim.sim_repository_singleton import SingletonMeta
 
+
 @pytest.fixture(autouse=True)
 def reset_singletons():
     """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
     SingletonMeta._instances.clear()  # pylint: disable=protected-access
+
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_fuel_meter.py"
@@ -54,7 +56,9 @@ def test_house(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.one_day_only(
+            year=year, seconds_per_timestep=seconds_per_timestep
+        )
 
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
@@ -231,8 +235,7 @@ def test_house(
     co2_footprint_due_to_heating_use_in_kg = jsondata["Fuel Meter"]["OPEX - CO2 Footprint"].get("value")
 
     log.information(
-        f"Total {my_fuel_meter_config.fuel_loadtype.value} consumption [kWh] "
-        + str(oil_consumption_in_kilowatt_hour)
+        f"Total {my_fuel_meter_config.fuel_loadtype.value} consumption [kWh] " + str(oil_consumption_in_kilowatt_hour)
     )
 
     log.information(

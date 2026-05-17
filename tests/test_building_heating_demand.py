@@ -2,6 +2,7 @@
 
 The aim is to compare the calculated heat demand in the building module with the heat demand given by TABULA.
 """
+
 # clean
 import os
 from typing import Optional
@@ -30,10 +31,12 @@ __status__ = "development"
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_building_heat_demand.py"
 
+
 @pytest.fixture(autouse=True)
 def reset_singletons():
     """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
     SingletonMeta._instances.clear()  # pylint: disable=protected-access
+
 
 @pytest.mark.buildingtest
 @utils.measure_execution_time

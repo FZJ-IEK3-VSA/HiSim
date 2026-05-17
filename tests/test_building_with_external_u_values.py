@@ -20,14 +20,15 @@ from hisim import log
 from hisim import utils
 from hisim.sim_repository_singleton import SingletonMeta
 
-
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_building_u_values.py"
+
 
 @pytest.fixture(autouse=True)
 def reset_singletons():
     """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
     SingletonMeta._instances.clear()  # pylint: disable=protected-access
+
 
 @pytest.mark.buildingtest
 @utils.measure_execution_time
@@ -85,15 +86,11 @@ def test_house_with_idealized_electric_heater_for_testing_u_values(
         f"{total_heat_conductance_transmission} != "
         f"{total_heat_conductance_transmission_tabula}"
     )
-    assert (
-        abs(
-            total_heat_conductance_transmission
-            - total_heat_conductance_transmission_tabula
-        )
-        < 0.01
-    ), (f"total_heat_conductance_transmission: "
+    assert abs(total_heat_conductance_transmission - total_heat_conductance_transmission_tabula) < 0.01, (
+        f"total_heat_conductance_transmission: "
         f"{total_heat_conductance_transmission} != "
-        f"{total_heat_conductance_transmission_tabula}")
+        f"{total_heat_conductance_transmission_tabula}"
+    )
     log.information(
         f"max_thermal_building_demand_in_watt: {max_thermal_building_demand_in_watt} != {max_thermal_building_demand_in_watt_tabula}"
     )
@@ -256,19 +253,14 @@ def house_with_idealized_electric_heater_for_testing_u_values(
     u_value_roof1 = my_building.my_building_information.buildingdata_ref["U_Actual_Roof_1"].values[0]
 
     max_thermal_building_demand_in_watt = my_building.my_building_information.max_thermal_building_demand_in_watt
-    total_heat_conductance_transmission = (
-        my_building.my_building_information.total_heat_conductance_transmission
-    )
+    total_heat_conductance_transmission = my_building.my_building_information.total_heat_conductance_transmission
 
     log.information("u_value_wall1: " + str(u_value_wall1))
     log.information("u_value_window1: " + str(u_value_window1))
     log.information("u_value_door1: " + str(u_value_door1))
     log.information("u_value_roof1: " + str(u_value_roof1))
     log.information("________")
-    log.information(
-        "total_heat_conductance_transmission: "
-        + str(total_heat_conductance_transmission)
-    )
+    log.information("total_heat_conductance_transmission: " + str(total_heat_conductance_transmission))
     log.information("max_termal_building_demand: " + str(max_thermal_building_demand_in_watt))
 
     return (

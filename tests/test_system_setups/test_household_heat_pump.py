@@ -1,4 +1,4 @@
-""" Tests for the household with advanced heat pump. """
+"""Tests for the household with advanced heat pump."""
 
 import json
 import os

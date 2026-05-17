@@ -1,4 +1,5 @@
 """Test for generic electrolyzer h2."""
+
 import pytest
 
 from hisim import component as cp
@@ -13,9 +14,7 @@ from tests import functions_for_testing as fft
 def test_electrolyzer():
     """Test electrolyzer."""
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2021, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
 
     name: str = "HTecME450"
     electrolyzer_type: str = "PEM"
@@ -49,13 +48,9 @@ def test_electrolyzer():
 
     # ===================================================================================================================
     # Set Fake Inputs
-    load_input = cp.ComponentOutput(
-        "FakeLoadInput", "LoadInput", lt.LoadTypes.ELECTRICITY, lt.Units.KILOWATT
-    )
+    load_input = cp.ComponentOutput("FakeLoadInput", "LoadInput", lt.LoadTypes.ELECTRICITY, lt.Units.KILOWATT)
 
-    input_state = cp.ComponentOutput(
-        "FakeInputState", "InputState", lt.LoadTypes.ACTIVATION, lt.Units.ANY
-    )
+    input_state = cp.ComponentOutput("FakeInputState", "InputState", lt.LoadTypes.ACTIVATION, lt.Units.ANY)
 
     number_of_outputs = fft.get_number_of_outputs([load_input, input_state])
 
@@ -84,8 +79,6 @@ def test_electrolyzer():
         assert stsv.values[my_electrolyzer.hydrogen_flow_rate.global_index] == 0
 
     else:
-        assert (
-            stsv.values[my_electrolyzer.hydrogen_flow_rate.global_index] == pytest.approx(0.621840650119573)
-        )
+        assert stsv.values[my_electrolyzer.hydrogen_flow_rate.global_index] == pytest.approx(0.621840650119573)
 
     # python -m pytest ../tests/test_generic_electrolyzer_h2.py

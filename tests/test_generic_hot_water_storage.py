@@ -1,4 +1,5 @@
 """Test for generic hot water storage."""
+
 import pytest
 from tests import functions_for_testing as fft
 from hisim import component as cp
@@ -12,9 +13,7 @@ def test_storage():
     """Test hot water storage."""
 
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
     # Storage
     volume_sp_heating_water = 1000
     volume_sp_warm_water = 200
@@ -23,15 +22,11 @@ def test_storage():
 
     # ===================================================================================================================
     # Set Storage
-    my_storage_config = (
-        generic_heat_water_storage.HeatStorageConfig.get_default_heat_storage_config()
-    )
+    my_storage_config = generic_heat_water_storage.HeatStorageConfig.get_default_heat_storage_config()
 
     my_storage_config.volume_sp_heating_water = volume_sp_heating_water
     my_storage_config.volume_sp_warm_water = volume_sp_warm_water
-    my_storage_config.temperature_of_warm_water_extratcion = (
-        temperature_of_warm_water_extratcion
-    )
+    my_storage_config.temperature_of_warm_water_extratcion = temperature_of_warm_water_extratcion
     my_storage_config.ambient_temperature = ambient_temperature
 
     my_storage = generic_heat_water_storage.HeatStorage(
@@ -66,15 +61,9 @@ def test_storage():
         lt.Units.CELSIUS,
     )
 
-    my_storage.thermal_demand_heating_water_channel.source_output = (
-        thermal_demand_heating_water
-    )
-    my_storage.thermal_demand_warm_water_channel.source_output = (
-        thermal_demand_warm_water
-    )
-    my_storage.control_signal_choose_storage_channel.source_output = (
-        control_signal_choose_storage
-    )
+    my_storage.thermal_demand_heating_water_channel.source_output = thermal_demand_heating_water
+    my_storage.thermal_demand_warm_water_channel.source_output = thermal_demand_warm_water
+    my_storage.control_signal_choose_storage_channel.source_output = control_signal_choose_storage
     my_storage.thermal_input_power_one_channel.source_output = thermal_input_power1
 
     number_of_outputs = fft.get_number_of_outputs(
@@ -112,25 +101,13 @@ def test_storage():
     # WW-Storage is choosed to be heated up
     assert 1 == stsv.values[control_signal_choose_storage.global_index]
     # Temperature of Heating-Water Storage sinks
-    assert (
-        39.97334630595229
-        == stsv.values[
-            my_storage.water_output_temperature_heating_water_channel.global_index
-        ]
-    )
+    assert 39.97334630595229 == stsv.values[my_storage.water_output_temperature_heating_water_channel.global_index]
     # Temperature of Heating-Water Storage raise
-    assert (
-        40.02265485276707
-        == stsv.values[
-            my_storage.water_output_temperature_warm_water_channel.global_index
-        ]
-    )
+    assert 40.02265485276707 == stsv.values[my_storage.water_output_temperature_warm_water_channel.global_index]
     # Energy Loss of Storage
     assert 6.26 == stsv.values[my_storage.storage_energy_loss_channel.global_index]
     # Temperature of choosed storage (warm-Water) to be heated up
     assert (
         stsv.values[my_storage.water_output_temperature_warm_water_channel.global_index]
-        == stsv.values[
-            my_storage.water_output_temperature_storage_for_heaters_channel.global_index
-        ]
+        == stsv.values[my_storage.water_output_temperature_storage_for_heaters_channel.global_index]
     )

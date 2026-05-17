@@ -62,7 +62,7 @@ def test_heat_pump_hplib_new():
         investment_costs_in_euro=p_th_set * 1e-3 * 1513.74,
         lifetime_in_years=10,
         maintenance_costs_in_euro_per_year=0.025 * p_th_set * 1e-3 * 1513.74,
-        subsidy_as_percentage_of_investment_costs=0.3
+        subsidy_as_percentage_of_investment_costs=0.3,
     )
 
     heatpump = MoreAdvancedHeatPumpHPLib(config=heatpump_config, my_simulation_parameters=simpars)
@@ -81,7 +81,7 @@ def test_heat_pump_hplib_new():
         counter_switch_dhw=0,
         counter_onoff=0,
         delta_t_secondary_side=5,
-        delta_t_primary_side=5
+        delta_t_primary_side=5,
     )
 
     number_of_outputs = fft.get_number_of_outputs(

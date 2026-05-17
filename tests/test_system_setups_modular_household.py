@@ -13,7 +13,5 @@ def test_modular_household_configurations_default():
     """Tests the modular households."""
     path = "../system_setups/modular_example.py"
 
-    mysimpar = SimulationParameters.one_day_only(
-        year=2021, seconds_per_timestep=60 * 15
-    )
+    mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 15)
     hisim_main.main(path, mysimpar)

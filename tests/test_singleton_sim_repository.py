@@ -129,7 +129,7 @@ def test_house(
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_building)
 
-    my_sim.run_all_timesteps()
+    my_sim.run_all_timesteps(clear_sim_singleton_repository=False)
 
     log.information("singelton sim repo" + str(SingletonSimRepository().my_dict))
 

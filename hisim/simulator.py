@@ -216,7 +216,7 @@ class Simulator:
 
     # @profile
     # @utils.measure_execution_time
-    def run_all_timesteps(self) -> None:
+    def run_all_timesteps(self, clear_sim_singleton_repository: bool = True) -> None:
         """Performs all the timesteps of the simulation and saves the results in the attribute results."""
         # Error Tests
         # Test if all parameters were initialized
@@ -300,7 +300,8 @@ class Simulator:
         del all_result_lines
         del postprocessing_datatransfer
         del my_post_processor
-        sim_repository_singleton.SingletonSimRepository().clear()
+        if clear_sim_singleton_repository:
+            sim_repository_singleton.SingletonSimRepository().clear()
         log.information("Finished postprocessing")
         with open(flagfile, "a", encoding="utf-8") as filestream:
             filestream.write("finished")

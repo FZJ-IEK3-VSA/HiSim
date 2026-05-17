@@ -18,6 +18,7 @@ def reset_singletons():
     """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
     SingletonMeta._instances.clear()  # pylint: disable=protected-access
 
+
 @pytest.mark.utsp
 def test_system_setup_starter():
     """Run a simulation from JSON."""

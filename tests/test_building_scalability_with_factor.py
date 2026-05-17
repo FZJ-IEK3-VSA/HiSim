@@ -15,7 +15,12 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
 from tests import functions_for_testing as fft
+from hisim.sim_repository_singleton import SingletonMeta
 
+@pytest.fixture(autouse=True)
+def reset_singletons():
+    """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
+    SingletonMeta._instances.clear()
 
 @pytest.mark.buildingtest
 @utils.measure_execution_time
@@ -29,17 +34,6 @@ def test_building_scalability():
         year=2021, seconds_per_timestep=seconds_per_timestep
     )
 
-    # # in case ou want to check on all TABULA buildings -> run test over all building_codes
-    # d_f = pd.read_csv(
-    #     utils.HISIMPATH["housing"],
-    #     decimal=",",
-    #     sep=";",
-    #     encoding="cp1252",
-    #     low_memory=False,
-    # )
-
-    # for building_code in d_f["Code_BuildingVariant"]:
-    #     if isinstance(building_code, str):
     # Set Residence
     my_residence_config = (
         building.BuildingConfig.get_default_german_single_family_home()

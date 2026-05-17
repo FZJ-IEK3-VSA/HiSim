@@ -9,24 +9,13 @@ import pytest
 from hisim.components import building
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
+from hisim.sim_repository_singleton import SingletonMeta
 
+@pytest.fixture(autouse=True)
+def reset_singletons():
+    """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
+    SingletonMeta._instances.clear()
 
-# # in case you want to check on all TABULA buildings -> run test over all building_codes
-# d_f = pd.read_csv(
-#     utils.HISIMPATH["housing"],
-#     decimal=",",
-#     sep=";",
-#     encoding="cp1252",
-#     low_memory=False,
-# )
-
-# for building_code in d_f["Code_BuildingVariant"]:
-#     if isinstance(building_code, str):
-#         my_residence_config.building_code = building_code
-
-#         my_residence = building.Building(
-#             config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
-#         log.information(building_code)
 @pytest.mark.buildingtest
 @utils.measure_execution_time
 def test_building_thermal_conductance_calculation():

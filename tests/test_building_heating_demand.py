@@ -32,6 +32,7 @@ PATH = "../system_setups/household_for_test_building_heat_demand.py"
 
 @pytest.fixture(autouse=True)
 def reset_singletons():
+    """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
     SingletonMeta._instances.clear()
 
 @pytest.mark.buildingtest
@@ -43,7 +44,6 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
 
     This setup function emulates an household including the basic components. Here the residents have their
     heating needs covered by the heat pump.
-
     - Simulation Parameters
     - Components
         - Occupancy (Residents' Demands)

@@ -32,7 +32,6 @@ from hisim.units import Quantity, Celsius, Watt
 from hisim import loadtypes as lt
 from hisim.sim_repository_singleton import SingletonMeta
 
-
 @pytest.fixture(autouse=True)
 def reset_singletons():
     """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
@@ -91,6 +90,10 @@ def test_cluster_house_for_several_time_resolutions():
         "In some cases different time resolutions can lead to different calculation results."
     )
 
+@pytest.fixture(autouse=True)
+def reset_singletons():
+    """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
+    SingletonMeta._instances.clear()  # pylint: disable=protected-access
 
 def run_cluster_house(
     seconds_per_timestep: int, yearly_result_dict: Dict, opex_consumptions_dict: Dict

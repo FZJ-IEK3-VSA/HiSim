@@ -17,7 +17,6 @@ from dataclass_wizard import JSONWizard
 
 from hisim import loadtypes as lt
 from hisim import log
-from hisim.sim_repository_singleton import SingletonSimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 
@@ -219,7 +218,7 @@ class Component:
         self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
         if my_simulation_parameters is None:
             raise ValueError("My Simulation parameters was None.")
-        self.singleton_simulation_repository: SingletonSimRepository = SingletonSimRepository()
+
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
         if isinstance(my_config, ConfigBase):
             self.config = my_config

@@ -1,7 +1,6 @@
 """Test for generic windturbine."""
 import pytest
 from tests import functions_for_testing as fft
-from hisim import sim_repository
 from hisim import component
 from hisim.components import weather
 from hisim.components import generic_windturbine
@@ -17,8 +16,6 @@ def test_windturbine():
     seconds_per_timestep = 60
     turbine_type = "V126/3300"  # Vestas - V126-3.3 MW
 
-    repo = sim_repository.SimRepository()
-
     mysim = sim.SimulationParameters.full_year(
         year=2021, seconds_per_timestep=seconds_per_timestep
     )
@@ -33,14 +30,14 @@ def test_windturbine():
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=mysim
     )
-    my_weather.set_sim_repo(repo)
+
     my_weather.i_prepare_simulation()
     my_windturbine_config = generic_windturbine.WindturbineConfig.get_default_windturbine_config()
     my_windturbine_config.turbine_type = turbine_type
     my_windturbine = generic_windturbine.Windturbine(
         config=my_windturbine_config, my_simulation_parameters=mysim
     )
-    my_windturbine.set_sim_repo(repo)
+
     my_windturbine.i_prepare_simulation()
     number_of_outputs = fft.get_number_of_outputs([my_weather, my_windturbine])
     stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(

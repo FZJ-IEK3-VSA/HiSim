@@ -27,7 +27,7 @@ PATH = "../system_setups/household_for_test_building_u_values.py"
 @pytest.fixture(autouse=True)
 def reset_singletons():
     """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
-    SingletonMeta._instances.clear()
+    SingletonMeta._instances.clear()  # pylint: disable=protected-access
 
 @pytest.mark.buildingtest
 @utils.measure_execution_time

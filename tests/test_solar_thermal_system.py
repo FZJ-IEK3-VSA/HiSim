@@ -8,7 +8,12 @@ from hisim import component, log, simulator as sim
 from hisim.components import weather, solar_thermal_system
 from hisim.loadtypes import LoadTypes, Units
 from tests import functions_for_testing as fft
+from hisim.sim_repository_singleton import SingletonMeta
 
+@pytest.fixture(autouse=True)
+def reset_singletons():
+    """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
+    SingletonMeta._instances.clear()
 
 @pytest.mark.base
 def test_solar_thermal_system():

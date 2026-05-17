@@ -14,6 +14,12 @@ from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim import postprocessingoptions
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
+from hisim.sim_repository_singleton import SingletonMeta
+
+@pytest.fixture(autouse=True)
+def reset_singletons():
+    """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
+    SingletonMeta._instances.clear()
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"

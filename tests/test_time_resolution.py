@@ -30,7 +30,12 @@ from hisim.components import (
 )
 from hisim.units import Quantity, Celsius, Watt
 from hisim import loadtypes as lt
+from hisim.sim_repository_singleton import SingletonMeta
 
+@pytest.fixture(autouse=True)
+def reset_singletons():
+    """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
+    SingletonMeta._instances.clear()
 
 def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:
     """Function to check if values are similar within a certain tolerance (rel tolerance = 5%, absolute tolerance = 0.1)."""

@@ -24,7 +24,12 @@ from hisim import utils
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
+from hisim.sim_repository_singleton import SingletonMeta
 
+@pytest.fixture(autouse=True)
+def reset_singletons():
+    """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
+    SingletonMeta._instances.clear()
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_fuel_meter.py"

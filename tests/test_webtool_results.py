@@ -10,7 +10,12 @@ import pytest
 from hisim.component import SimulationParameters
 from hisim.hisim_main import main
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.sim_repository_singleton import SingletonMeta
 
+@pytest.fixture(autouse=True)
+def reset_singletons():
+    """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
+    SingletonMeta._instances.clear()
 
 @pytest.mark.base
 def test_webtool_results():

@@ -38,27 +38,8 @@ def test_building():
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=seconds_per_timestep)
 
-    repo = component.SimRepository()
-
     t_two = time.perf_counter()
     log.profile(f"T2: {t_two - t_one}")
-
-    # # check on all TABULA buildings -> run test over all building_codes
-    # d_f = pd.read_csv(
-    #     utils.HISIMPATH["housing"],
-    #     decimal=",",
-    #     sep=";",
-    #     encoding="cp1252",
-    #     low_memory=False,
-    # )
-
-    # for building_code in d_f["Code_BuildingVariant"]:
-    #     if isinstance(building_code, str):
-    #         my_residence_config.building_code = building_code
-
-    #         my_residence = building.Building(
-    #             config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
-    #         log.information(building_code)
 
     t_three = time.perf_counter()
     log.profile(f"T2:{t_three - t_two}")
@@ -66,7 +47,7 @@ def test_building():
     # Set Weather
     my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
-    my_weather.set_sim_repo(repo)
+
     my_weather.i_prepare_simulation()
     t_four = time.perf_counter()
     log.profile(f"T2: {t_four - t_three}")
@@ -78,7 +59,7 @@ def test_building():
         config=my_residence_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_residence.set_sim_repo(repo)
+
     my_residence.i_prepare_simulation()
 
     # Occupancy
@@ -86,7 +67,7 @@ def test_building():
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
-    my_occupancy.set_sim_repo(repo)
+
     my_occupancy.i_prepare_simulation()
     # Fake power delivered
     thermal_power_delivered_output = component.ComponentOutput(

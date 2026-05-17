@@ -234,7 +234,7 @@ def house_with_idealized_electric_heater_for_testing_u_values(
     my_sim.add_component(my_building)
     my_sim.add_component(my_idealized_electric_heater)
 
-    my_sim.run_all_timesteps()
+    my_sim.run_all_timesteps(clear_sim_singleton_repository=False)
 
     # =========================================================================================================================================================
     # Calculate annual heat pump heating energy

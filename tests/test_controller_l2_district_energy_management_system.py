@@ -343,9 +343,9 @@ def test_house(
 
     # Read kpi data
     with open(
-        os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"),
+        os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"),  # pylint: disable=W0212
         "r",
-        encoding="utf-8",  # pylint: disable=W0212
+        encoding="utf-8",
     ) as file:
         jsondata = json.load(file)
 

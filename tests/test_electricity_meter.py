@@ -26,7 +26,7 @@ from hisim.sim_repository_singleton import SingletonMeta
 
 @pytest.fixture(autouse=True)
 def reset_singletons():
-    """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
+    """Function resets the Singleton SimRepo which is needed for github pytest workflows."""
     SingletonMeta._instances.clear()  # pylint: disable=protected-access
 
 
@@ -170,8 +170,8 @@ def test_house(
 
     # read kpi data
     with open(
-        os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"), "r", encoding="utf-8"
-    ) as file:  # pylint: disable=W0212
+        os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"), "r", encoding="utf-8"  # pylint: disable=W0212
+    ) as file:
         jsondata = json.load(file)
 
     jsondata = jsondata["BUI1"]

@@ -41,8 +41,8 @@ PATH = "../system_setups/household_for_test_ems.py"
 
 @pytest.fixture(autouse=True)
 def reset_singletons():
-    """This function resets the Singleton SimRepo which is needed for github pytest workflows."""
-    SingletonMeta._instances.clear()
+    """Function resets the Singleton SimRepo which is needed for github pytest workflows."""
+    SingletonMeta._instances.clear()  # pylint: disable=protected-access
 
 
 @utils.measure_execution_time
@@ -322,9 +322,9 @@ def test_house(
 
     # Read kpi data
     with open(
-        os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"),
+        os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"),  # pylint: disable=W0212
         "r",
-        encoding="utf-8",  # pylint: disable=W0212
+        encoding="utf-8",
     ) as file:
         jsondata = json.load(file)
 

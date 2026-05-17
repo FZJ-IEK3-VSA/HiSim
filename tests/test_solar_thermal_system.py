@@ -16,7 +16,6 @@ def test_solar_thermal_system():
     # Inputs
     seconds_per_timestep = 60
 
-    repo = sim_repository.SimRepository()
     mysim: sim.SimulationParameters = sim.SimulationParameters.full_year(
         year=2021, seconds_per_timestep=seconds_per_timestep
     )
@@ -28,7 +27,6 @@ def test_solar_thermal_system():
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=mysim
     )
-    my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
 
     # Configure solar thermal
@@ -44,7 +42,6 @@ def test_solar_thermal_system():
     )
     my_sts.control_signal_channel.source_output = state_controller
 
-    my_sts.set_sim_repo(repo)
     my_sts.i_prepare_simulation()
 
     # Outputs

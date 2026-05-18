@@ -432,7 +432,7 @@ class WeatherConfig(ConfigBase):
                 )
             if weather_direct_filepath.lower().endswith(".dat"):
                 weather_direct_filepath = weather_direct_filepath[:-4]
-            elif weather_direct_filepath.lower().endswith(".csv"): 
+            elif weather_direct_filepath.lower().endswith(".csv"):
                 weather_direct_filepath = weather_direct_filepath[:-4]
 
             location = str(location_entry)
@@ -1036,7 +1036,7 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulation_param
 
 
 def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
-    """Reads the DWD Test Reference Year (TRY) data.""
+    """Reads the DWD Test Reference Year (TRY) data."""
 
     # get the geoposition
     with open(filepath + ".dat", encoding="utf-8") as file_stream:

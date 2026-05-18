@@ -235,7 +235,7 @@ def add_component_to_scenario(scenario: Scenario, config: ConfigBase, component:
 
     # Always do:
     scenario.components.append(component_entry)
-    log.information("Added component " + config.name + " with " + str(len(ins)) + " inputs and " + str(len(outs)) + " outputs")
+    log.debug("Added component " + config.name + " with " + str(len(ins)) + " inputs and " + str(len(outs)) + " outputs")
 
 
 def get_unique_connections(all_connections: List[Connection]) -> Tuple[List[Connection], set]:
@@ -295,7 +295,7 @@ def compare_automatic_connections(target_default_connection_dict, source_compone
         is False
     ):
         # connect_automatically does not connect anything
-        log.information(f"Component {target_component.get_classname()} was not automatically connected: no source components found in default connections")
+        log.debug(f"Component {target_component.get_classname()} was not automatically connected: no source components found in default connections")
         return False
 
     # go through all registered components
@@ -319,7 +319,7 @@ def compare_automatic_connections(target_default_connection_dict, source_compone
                         dynamic_connection.source_component_field_name,
                     )
                     if key not in seen_keys:
-                        log.information(f"DComponent {target_component.get_classname()} was not automatically connected: missing {dynamic_connection}")
+                        log.debug(f"Component {target_component.get_classname()} was not automatically connected: missing {dynamic_connection}")
                         return False
 
             if isinstance(target_component, cp.Component) and not isinstance(
@@ -335,7 +335,7 @@ def compare_automatic_connections(target_default_connection_dict, source_compone
                         connection.target_input_name,
                     )
                     if key not in seen_keys:
-                        log.information(f"Component {target_component.get_classname()} was not automatically connected: missing {key}")
+                        log.debug(f"Component {target_component.get_classname()} was not automatically connected: missing {key}")
                         return False
     return True
 
@@ -412,7 +412,7 @@ def remove_automatic_connections(my_sim: "Simulator", scenario: Scenario, unique
             tg_comp.connect_automatically = compare_automatic_connections(target_default_connection_dict, source_component_list, target_component, seen_keys)
         else:
             # There are no default connections
-            log.information(f"Component {target_component.get_classname()} was not automatically connected: no default connections present")
+            log.debug(f"Component {target_component.get_classname()} was not automatically connected: no default connections present")
             tg_comp.connect_automatically = False
 
         if tg_comp.connect_automatically:
@@ -439,7 +439,7 @@ def write_standalone_scenario_json(module_filename: str, my_sim: "Simulator", de
         description=desc,
         multiple_buildings=my_sim.get_simulation_parameters().multiple_buildings
     )
-
+    log.information(f"Writing component configurations to JSON file {path}.")
     component_connections = []
     for component in my_sim.wrapped_components:
         add_component_to_scenario(scenario=scenario, config=component.my_component.config, component=component.my_component, my_sim=my_sim)
@@ -464,7 +464,7 @@ def write_standalone_scenario_json(module_filename: str, my_sim: "Simulator", de
     scenario.connections = unique_connections
     if path.lower()[-5:] != ".json":
         path = path + ".json"
-    log.information(f"Writing scenario parameters to JSON file {path}")
+    log.information(f"Writing scenario parameters to JSON file {path}.")
     with open(path, "w", encoding="utf-8") as f:
         f.write(scenario.model_dump_json(indent=4))
         f.flush()

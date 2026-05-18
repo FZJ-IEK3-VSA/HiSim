@@ -83,7 +83,7 @@ class KpiPreparation:
                     ):
                         if ComponentType.BUILDINGS not in output.postprocessing_flag:
                             total_consumption_ids.append(index)
-                            log.debug(
+                            log.information(
                                 "Output considered in total electricity consumption "
                                 + output.full_name
                                 + " "

@@ -29,8 +29,8 @@ from hisim.components import (
     loadprofilegenerator_utsp_connector,
     generic_electric_heating,
     solar_thermal_system,
+    controller_l1_generic_ev_charge,
 )
-
 
 __authors__ = "Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -309,6 +309,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
         self.add_dynamic_default_connections(self.get_default_connections_from_electric_heater())
         self.add_dynamic_default_connections(self.get_default_connections_from_solar_thermal_system())
+        # self.add_dynamic_default_connections(self.get_default_connections_from_car_battery())
 
     def get_default_connections_from_pv_system(
         self,
@@ -592,7 +593,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-                source_weight=5,
+                source_weight=6,
             )
         )
 
@@ -757,6 +758,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 available_surplus_electricity_in_watt = (
                     available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
                 )
+                # if this value is 0, all electricity demand from this consumer could be covered exactly from surplus energy
+                # if this value is positive, all electricity demand from this consumer could be covered from surplus energy and there is even surplus energy left
+                # if this value is negative in (0, -electricity_demand): then only parts of the electricity demand from the consumer could be covered from surplus energy
+                # if this value is equal to -electrcity demand: no surplus energy was available and electricty demand from the consumer was totally taken from grid
                 stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
             # otherwise all of the component's consumption is taken from grid
             else:
@@ -843,8 +848,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             raise ValueError(
                 "Lengths of inputs, component types, and outputs must match."
                 f" Got {len(inputs_sorted)}, {len(component_types_sorted)}, and {len(outputs_sorted)}."
-                "Make sure all inputs have the same source weight as the corresponding output. "
-                "Please check all your default and manual connections."
+                "Make sure all inputs have the same source weight as the corresponding output! "
+                "Please check all your default and manual connections. \n"
+                f"Inputs: {[input.fullname for input in inputs_sorted]} \n"
+                f"Outputs: {[output.full_name for output in outputs_sorted]} \n"
             )
 
         for index, single_input_sorted in enumerate(inputs_sorted):
@@ -950,6 +957,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         occupancy_class_name = loadprofilegenerator_utsp_connector.UtspLpgConnector.get_classname()
         electric_heater_class_name = generic_electric_heating.ElectricHeating.get_classname()
         solar_thermal_system_class_name = solar_thermal_system.SolarThermalSystem.get_classname()
+        electric_car_charger_class_name = controller_l1_generic_ev_charge.L1Controller.get_classname()
 
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
@@ -1124,6 +1132,39 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     )
                     list_of_kpi_entries.append(dhw_st_electricity_from_grid_entry)
 
+                elif "L1Controller" in output.field_name and output.unit == lt.Units.WATT:
+                    electric_car_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] < 0.0
+                    ]
+
+                    electric_car_electricity_from_grid_in_kilowatt_hour = abs(
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=electric_car_electricity_from_grid_in_watt_series,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+                    electric_car_electricity_from_grid_entry = KpiEntry(
+                        name="Electric car electricity consumption from grid",
+                        unit="kWh",
+                        value=electric_car_electricity_from_grid_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.EMS,
+                        description=self.component_name,
+                        name_of_source_component=electric_car_charger_class_name,
+                    )
+                    list_of_kpi_entries.append(electric_car_electricity_from_grid_entry)
+
+        # add all source weights to KPIs
+        for index, input_sorted in enumerate(self.inputs_sorted):
+            input_source_weight_entry = dhw_st_electricity_from_grid_entry = KpiEntry(
+                name=f"Priority for {input_sorted.field_name}",
+                unit="-",
+                value=index,
+                tag=KpiTagEnumClass.EMS,
+                description=self.component_name,
+                name_of_source_component=input_sorted.component_name,
+            )
+            list_of_kpi_entries.append(input_source_weight_entry)
+
         return list_of_kpi_entries
 
     def get_cost_opex(
@@ -1149,20 +1190,20 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     ) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         component_type = lt.ComponentType.ENERGY_MANAGEMENT_SYSTEM
-        kpi_tag = (
-            KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM
-        )
+        kpi_tag = KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM
         unit = lt.Units.ANY
         size_of_energy_system = 1
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
-        simulation_parameters=simulation_parameters,
-        component_type=component_type,
-        unit=unit,
-        size_of_energy_system=size_of_energy_system,
-        config=config,
-        kpi_tag=kpi_tag
+            simulation_parameters=simulation_parameters,
+            component_type=component_type,
+            unit=unit,
+            size_of_energy_system=size_of_energy_system,
+            config=config,
+            kpi_tag=kpi_tag,
         )
-        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(
+            config=config, capex_cost_data_class=capex_cost_data_class
+        )
 
         return capex_cost_data_class

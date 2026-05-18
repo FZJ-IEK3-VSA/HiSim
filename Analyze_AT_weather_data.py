@@ -21,186 +21,226 @@ results_Path.mkdir(parents=True, exist_ok=True)
 
 raw_folder    = r"C:\Alvarez\HiSim\HiSim\TRY_au_data\2011-2030\raw"
 
-#%% Check for jumps during leap years
+# %% Check for jumps during leap years
 
 days_per_month = {1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30,
                   7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31}
 
-results = []
-all_changes_per_file = {}
+COLS_RENAME = {"WG": "Wspd", "Monat": "Month", "Tag": "Day",
+               "Stunde": "Hour", "LT": "AirTemp", "RF": "RelHum", "KWSU": "GHI"}
+NUMERIC_FLOAT = ["AirTemp", "RelHum", "GHI", "Wspd"]
+NUMERIC_INT   = ["Month", "Day", "Hour"]
+
+# ── Load & filter files ───────────────────────────────────────────────────────
+def load_file(filepath):
+    raw = pd.read_excel(filepath, header=None, skiprows=1)
+    region = raw.iloc[0, 1]
+    df = raw.iloc[8:].copy()
+    df.columns = raw.iloc[5]
+    df = (df.iloc[:, 1:8]
+            .reset_index(drop=True)
+            .drop_duplicates(keep='first')
+            .rename(columns=COLS_RENAME))
+    for col in NUMERIC_FLOAT:
+        df[col] = pd.to_numeric(
+            df[col].astype(str).str.replace(',', '.', regex=False), errors='coerce')
+    for col in NUMERIC_INT:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+    return df, region
+
+
+def analyse_file(df):
+    """Return daily stats and Feb28→Mar1 jump metrics."""
+    # Remove duplicate hours
+    dup_mask = df.duplicated(subset=['Month', 'Day', 'Hour'], keep='first')
+    df = df[~dup_mask]
+
+    daily = (df.groupby(['Month', 'Day'])[['AirTemp', 'RelHum']]
+               .mean()
+               .reset_index()
+               .sort_values(['Month', 'Day'])
+               .reset_index(drop=True))
+
+    changes_T   = daily['AirTemp'].diff().abs().dropna()
+    changes_hum = daily['RelHum'].diff().abs().dropna()
+
+    feb28 = daily[(daily['Month'] == 2) & (daily['Day'] == 28)]
+    mar1  = daily[(daily['Month'] == 3) & (daily['Day'] == 1)]
+    if feb28.empty or mar1.empty:
+        return None, None, None
+
+    def jump_stats(jump, changes):
+        mean, std = changes.mean(), changes.std()
+        z = (jump - mean) / std if std > 0 else 0
+        _, p = stats.ttest_1samp(changes, jump)
+        return round(mean, 2), round(std, 2), round(z, 2), round(p, 4), p < 0.05
+
+    jump_T   = abs(mar1['AirTemp'].values[0]  - feb28['AirTemp'].values[0])
+    jump_hum = abs(mar1['RelHum'].values[0]   - feb28['RelHum'].values[0])
+
+    row = {
+        "feb28_T":  round(feb28['AirTemp'].values[0], 2),
+        "mar1_T":   round(mar1['AirTemp'].values[0],  2),
+        "jump_T":   round(jump_T, 2),
+        "feb28_hum": round(feb28['RelHum'].values[0], 2),
+        "mar1_hum":  round(mar1['RelHum'].values[0],  2),
+        "jump_hum":  round(jump_hum, 2),
+    }
+    for key, jump, changes in [("T", jump_T, changes_T), ("hum", jump_hum, changes_hum)]:
+        mean, std, z, p, sig = jump_stats(jump, changes)
+        row.update({f"mean_daily_change_{key}": mean, f"std_daily_change_{key}": std,
+                    f"z_score_{key}": z, f"p_value_{key}": p, f"significant_{key}": sig})
+
+    return row, changes_T.values, changes_hum.values
+
+
+# ── Main loop ─────────────────────────────────────────────────────────────────
+results, all_changes = [], {}
 
 for file in os.listdir(raw_folder):
     if not file.endswith(".xlsx"):
         continue
-
-    filepath = os.path.join(raw_folder, file)
-    data_au_raw = pd.read_excel(filepath, header=None, skiprows=1)
-    region = data_au_raw.iloc[0, 1]
-
-    data_au = data_au_raw.iloc[8:].copy()
-    data_au.columns = data_au_raw.iloc[5]
-    data_au = data_au.iloc[:, 1:8].reset_index(drop=True)
-    data_au = data_au.drop_duplicates(keep='first')
-    data_au = data_au.rename(columns={
-        "WG":    "Wspd",
-        "Monat": "Month",
-        "Tag":   "Day",
-        "Stunde":"Hour",
-        "LT":    "AirTemp",
-        "RF":    "RelHum",
-        "KWSU":  "GHI",
-    })
-
-    # Force numeric
-    for col in ["AirTemp", "RelHum", "GHI", "Wspd"]:
-        data_au[col] = pd.to_numeric(
-            data_au[col].astype(str).str.replace(',', '.', regex=False),
-            errors='coerce'
-        )
-    for col in ["Month", "Day", "Hour"]:
-        data_au[col] = pd.to_numeric(data_au[col], errors='coerce')
-
-    # ── Only process files with Feb 29 ───────────────────────────────────────
-    has_feb29 = ((data_au["Month"] == 2) & (data_au["Day"] == 29)).any()
-    if not has_feb29:
+    df, region = load_file(os.path.join(raw_folder, file))
+    if not ((df["Month"] == 2) & (df["Day"] == 29)).any():
         print(f"Skipping {file} — no Feb 29")
         continue
 
     print(f"Processing {file} (has Feb 29)...")
-
-    # Remove duplicate hours
-    for (month, day, hour), group in data_au.groupby(['Month', 'Day', 'Hour']):
-        if len(group) > 1:
-            data_au = data_au.drop(group.index[1:])
-
-    # ── Daily averages using raw Month/Day columns ───────────────────────────
-    daily = data_au.groupby(['Month', 'Day'])[['AirTemp', 'RelHum']].mean().reset_index()
-    daily = daily.sort_values(['Month', 'Day']).reset_index(drop=True)
-
-    # ── Day-to-day absolute changes ──────────────────────────────────────────
-    daily_changes_T   = daily['AirTemp'].diff().abs().dropna()
-    daily_changes_hum = daily['RelHum'].diff().abs().dropna()
-
-    # ── Feb 28 and Mar 1 values ──────────────────────────────────────────────
-    feb28 = daily[(daily['Month'] == 2) & (daily['Day'] == 28)]
-    mar1  = daily[(daily['Month'] == 3) & (daily['Day'] == 1)]
-
-    if feb28.empty or mar1.empty:
+    row, ch_T, ch_hum = analyse_file(df)
+    if row is None:
         continue
 
-    feb28_T  = feb28['AirTemp'].values[0]
-    mar1_T   = mar1['AirTemp'].values[0]
-    jump_T   = abs(mar1_T - feb28_T)
-
-    feb28_hum = feb28['RelHum'].values[0]
-    mar1_hum  = mar1['RelHum'].values[0]
-    jump_hum  = abs(mar1_hum - feb28_hum)
-
-    # ── Z-scores and t-tests ─────────────────────────────────────────────────
-    mean_T, std_T   = daily_changes_T.mean(),   daily_changes_T.std()
-    mean_hum, std_hum = daily_changes_hum.mean(), daily_changes_hum.std()
-
-    z_T   = (jump_T   - mean_T)   / std_T   if std_T   > 0 else 0
-    z_hum = (jump_hum - mean_hum) / std_hum if std_hum > 0 else 0
-
-    _, p_val_T   = stats.ttest_1samp(daily_changes_T,   jump_T)
-    _, p_val_hum = stats.ttest_1samp(daily_changes_hum, jump_hum)
-
-    results.append({
-        "file":                    file.replace(".xlsx", ""),
-        "region":                  region,
-        "feb28_T":                 round(feb28_T,   2),
-        "mar1_T":                  round(mar1_T,    2),
-        "jump_T":                  round(jump_T,    2),
-        "mean_daily_change_T":     round(mean_T,    2),
-        "std_daily_change_T":      round(std_T,     2),
-        "z_score_T":               round(z_T,       2),
-        "p_value_T":               round(p_val_T,   4),
-        "significant_T":           p_val_T < 0.05,
-        "feb28_hum":               round(feb28_hum, 2),
-        "mar1_hum":                round(mar1_hum,  2),
-        "jump_hum":                round(jump_hum,  2),
-        "mean_daily_change_hum":   round(mean_hum,  2),
-        "std_daily_change_hum":    round(std_hum,   2),
-        "z_score_hum":             round(z_hum,     2),
-        "p_value_hum":             round(p_val_hum, 4),
-        "significant_hum":         p_val_hum < 0.05,
-    })
-    all_changes_per_file[file.replace(".xlsx", "")] = {
-        "T":   daily_changes_T.values,
-        "hum": daily_changes_hum.values,
-    }
+    name = file.replace(".xlsx", "")
+    row.update({"file": name, "region": region})
+    results.append(row)
+    all_changes[name] = {"T": ch_T, "hum": ch_hum}
 
 results_df = pd.DataFrame(results).sort_values("z_score_T", ascending=False)
-
 print("\n── Results sorted by temperature z-score ────────────────────────────")
 print(results_df[["file", "jump_T", "mean_daily_change_T",
                    "z_score_T", "p_value_T", "significant_T"]].to_string(index=False))
 
-#%%
-def save_results_figure(results_df, results_folder):
-    cols_T   = ["file", "feb28_T", "mar1_T", "jump_T", "mean_daily_change_T",
-                "std_daily_change_T", "z_score_T", "p_value_T", "significant_T"]
-    cols_hum = ["file", "feb28_hum", "mar1_hum", "jump_hum", "mean_daily_change_hum",
-                "std_daily_change_hum", "z_score_hum", "p_value_hum", "significant_hum"]
 
-    df_T   = results_df[cols_T].copy()
-    df_hum = results_df[cols_hum].copy()
+# %% ── Plotting helpers ────────────────────────────────────────────────────────
+BLUE, RED, GREEN = "#378ADD", "#E24B4A", "#1D9E75"
 
-    def make_cell_colours(df, sig_col):
-        colours = []
-        for _, row in df.iterrows():
-            row_colours = []
-            for col in df.columns:
-                if col == sig_col:
-                    row_colours.append("#d4f7d4" if row[col] else "#ffd6d6")
-                else:
-                    row_colours.append("#f9f9f9")
-            colours.append(row_colours)
-        return colours
+def savefig(fig, name):
+    path = os.path.join(results_Path, name)
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved → {path}")
+
+
+# ── Figure 1: Results table ───────────────────────────────────────────────────
+def plot_results_table(results_df):
+    cols = {
+        "T":   ["file", "feb28_T", "mar1_T", "jump_T", "mean_daily_change_T",
+                 "std_daily_change_T", "z_score_T", "p_value_T", "significant_T"],
+        "hum": ["file", "feb28_hum", "mar1_hum", "jump_hum", "mean_daily_change_hum",
+                 "std_daily_change_hum", "z_score_hum", "p_value_hum", "significant_hum"],
+    }
+    titles   = {"T": "Temperature (°C)", "hum": "Humidity (%)"}
+    sig_cols = {"T": "significant_T",    "hum": "significant_hum"}
 
     fig, axes = plt.subplots(2, 1, figsize=(16, 0.5 * len(results_df) + 4))
     fig.suptitle("Feb 28 → Mar 1 Jump Analysis", fontsize=14, fontweight="bold", y=1.01)
 
-    for ax, df, title, sig_col in [
-        (axes[0], df_T,   "Temperature (°C)",  "significant_T"),
-        (axes[1], df_hum, "Humidity (%)",       "significant_hum"),
-    ]:
+    for ax, key in zip(axes, ["T", "hum"]):
+        df = results_df[cols[key]].copy()
+        sig_col = sig_cols[key]
+
+        cell_colors = [
+            ["#d4f7d4" if (col == sig_col and row[col]) else
+             "#ffd6d6" if (col == sig_col) else "#f9f9f9"
+             for col in df.columns]
+            for _, row in df.iterrows()
+        ]
+
         ax.axis("off")
-        ax.set_title(title, fontweight="bold", loc="left", pad=8)
-
-        cell_text   = df.astype(str).values.tolist()
-        cell_colors = make_cell_colours(df, sig_col)
-
-        tbl = ax.table(
-            cellText=cell_text,
-            colLabels=df.columns.tolist(),
-            cellColours=cell_colors,
-            loc="center",
-            cellLoc="center",
-        )
+        ax.set_title(titles[key], fontweight="bold", loc="left", pad=8)
+        tbl = ax.table(cellText=df.astype(str).values.tolist(),
+                       colLabels=df.columns.tolist(),
+                       cellColours=cell_colors,
+                       loc="center", cellLoc="center")
         tbl.auto_set_font_size(False)
         tbl.set_fontsize(8)
         tbl.auto_set_column_width(col=list(range(len(df.columns))))
+        for c in range(len(df.columns)):
+            tbl[0, c].set_facecolor("#333333")
+            tbl[0, c].set_text_props(color="white", fontweight="bold")
 
-        # Bold header row
-        for col_idx in range(len(df.columns)):
-            tbl[0, col_idx].set_facecolor("#333333")
-            tbl[0, col_idx].set_text_props(color="white", fontweight="bold")
-
-    # Legend
-    sig_patch   = mpatches.Patch(color="#d4f7d4", label="Significant (p < 0.05)")
-    insig_patch = mpatches.Patch(color="#ffd6d6", label="Not significant")
-    fig.legend(handles=[sig_patch, insig_patch], loc="lower center",
-               ncol=2, bbox_to_anchor=(0.5, -0.02), fontsize=9)
-
+    fig.legend(handles=[mpatches.Patch(color="#d4f7d4", label="Significant (p < 0.05)"),
+                        mpatches.Patch(color="#ffd6d6", label="Not significant")],
+               loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.02), fontsize=9)
     fig.tight_layout()
-    out_path = os.path.join(results_folder, "jump_analysis_results.png")
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"Figure saved → {out_path}")
+    savefig(fig, "jump_analysis_results.png")
 
-save_results_figure(results_df, results_Path)
+
+# ── Figure 2: Z-score bar chart ───────────────────────────────────────────────
+def plot_zscores(results_df):
+    fig, ax = plt.subplots(figsize=(13, 5))
+    colors = [RED if s else BLUE for s in results_df["significant_T"]]
+    ax.bar(range(len(results_df)), results_df["z_score_T"], color=colors, width=0.6)
+    for y in (1.96, -1.96):
+        ax.axhline(y, color=RED, linestyle="--", linewidth=1,
+                   label="p=0.05 (z=1.96)" if y > 0 else "")
+    ax.axhline(0, color="black", linewidth=0.5)
+    ax.set_xticks(range(len(results_df)))
+    ax.set_xticklabels(results_df["file"], rotation=45, ha="right", fontsize=8)
+    ax.set_ylabel("Z-score of Feb28→Mar1 jump")
+    ax.set_title("Statistical significance of Feb 28 → Mar 1 temperature jump (leap year files only)")
+    ax.legend(handles=[mpatches.Patch(color=RED,  label="Significant (p<0.05)"),
+                       mpatches.Patch(color=BLUE, label="Not significant")], fontsize=9)
+    plt.tight_layout()
+    savefig(fig, "zscore_T_jump.png")
+
+
+# ── Shared boxplot builder ────────────────────────────────────────────────────
+def plot_boxplot(results_df, all_changes, var, ylabel, title, filename,
+                 box_face, box_edge, med_color):
+    labels  = list(results_df["file"])
+    changes = [all_changes[f][var] for f in labels]
+    sig_col = f"significant_{var}"
+    jump_col = f"jump_{var}"
+
+    fig, ax = plt.subplots(figsize=(13, 6))
+    ax.boxplot(changes, positions=range(len(labels)), widths=0.5, patch_artist=True,
+               medianprops=dict(color=med_color, linewidth=1.5),
+               boxprops=dict(facecolor=box_face, color=box_edge),
+               whiskerprops=dict(color=box_edge), capprops=dict(color=box_edge),
+               flierprops=dict(marker="o", markersize=3, markerfacecolor=box_face, alpha=0.4))
+
+    for i, (_, row) in enumerate(results_df.iterrows()):
+        ax.scatter(i, row[jump_col], color=RED if row[sig_col] else GREEN, zorder=5, s=70)
+
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=8)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.legend(handles=[mpatches.Patch(color=RED,       label="Feb28→Mar1 jump — significant"),
+                       mpatches.Patch(color=GREEN,     label="Feb28→Mar1 jump — not significant"),
+                       mpatches.Patch(color=box_face,  label="Distribution of all daily changes")],
+               fontsize=9)
+    plt.tight_layout()
+    savefig(fig, filename)
+
+
+# %% ── Generate all figures ───────────────────────────────────────────────────
+plot_results_table(results_df)
+
+plot_zscores(results_df)
+
+plot_boxplot(results_df, all_changes,
+             var="T", ylabel="Temperature change (°C)",
+             title="Feb 28 → Mar 1 jump vs distribution of all daily changes (leap year files only)",
+             filename="jump_vs_distribution_T.png",
+             box_face="#B5D4F4", box_edge="#185FA5", med_color="#185FA5")
+
+plot_boxplot(results_df, all_changes,
+             var="hum", ylabel="Humidity change (%)",
+             title="Feb 28 → Mar 1 humidity jump vs distribution of all daily changes (leap year files only)",
+             filename="jump_vs_distribution_hum.png",
+             box_face="#9FE1CB", box_edge="#0F6E56", med_color="#0F6E56")
 
 #%% Compare GHI, DHI, DNI
 

@@ -46,7 +46,6 @@ class SingletonSimRepository(metaclass=SingletonMeta):
         self.my_dict: Dict[Any, Any] = {}
         self.my_dynamic_dict: Dict[lt.ComponentType, Dict[int, Any]] = {elem: {} for elem in lt.ComponentType}
 
-
     def set_entry(self, key: Any, entry: Any) -> None:
         """Sets an entry in the SimRepository."""
         self.my_dict[key] = entry

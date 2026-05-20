@@ -129,7 +129,7 @@ The basic structure of a setup function in the Household System Setups in `HiSim
 1. Set the simulation parameters (See `SimulationParameters` class in `hisim/hisim/component.py`)
 2. Create a `Component` object and add it to `Simulator` object
     1. Create a `Component` object from one of the child classes implemented in `hisim/hisim/components`
-        2. Check if `Component` class has been correctly imported
+    2. Check if `Component` class has been correctly imported
     3. If necessary, connect your object's inputs with previous created `Component` objects' outputs. You can use manual or automatic default connections.
     4. Finally, add your `Component` object to `Simulator` object
 3. Repeat step 2 while all the necessary components have been created, connected and added to the `Simulator` object.

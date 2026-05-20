@@ -99,4 +99,10 @@ This project has received funding from the European Union’s Horizon 2020 resea
 
 |tag3| |tag4|
 
+This project has received funding from the Federal Ministry for Economic Affairs and Climate Actions (BMWK.IIB4) under the WAAGE Grant Program (Grant No. 03EI1044/03EE5031D).
+
+.. |tag5| image:: ../BMWE_gefoerdert_de_RGB.png
+   :width: 200px
+
 .. _iek3link:
+

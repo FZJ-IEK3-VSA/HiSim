@@ -86,6 +86,9 @@ Acknowledgement
 .. |tag4| image:: ../whylogo.jpg
    :width: 200px
 
+.. |tag5| image:: ../BMWE_gefoerdert_de_RGB.jpg
+   :width: 200px
+
 This work was supported by the `Helmholtz Association <https://www.fz-juelich.de/iek/iek-3/EN/Home/home_node.html>`_ under the Joint Initiative `Energy System 2050 - A Contribution of the Research Field Energy <https://www.helmholtz.de/en/research/energy/energy_system_2050/>`_ .
 
 |tag1|
@@ -99,4 +102,9 @@ This project has received funding from the European Union’s Horizon 2020 resea
 
 |tag3| |tag4|
 
+This project has received funding from the Federal Ministry for Economic Affairs and Climate Actions (BMWK.IIB4) under the WAAGE Grant Program (Grant No. 03EI1044/03EE5031D).
+
+|tag5|
+
 .. _iek3link:
+

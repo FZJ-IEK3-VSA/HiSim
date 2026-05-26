@@ -222,7 +222,7 @@ def parse_args() -> argparse.Namespace:
             "JSON mode:\n"
             "  <scenario_params.json> <simulation_params.json> [scenario_delta.json]\n\n"
             "Legacy Python mode:\n"
-            "  <module.py> [module_config]"
+            "  <module.py> [module_config.json] [simulation_params.json]"
         ),
     )
 
@@ -235,14 +235,15 @@ def validate_args(args: argparse.Namespace):
     inputs = args.inputs
 
     if inputs[0].endswith(".py"):
-        if len(inputs) > 2:
+        if len(inputs) > 3:
             raise ValueError(
-                "The legancy Python mode accepts at most 2 arguments:\n"
-                "  <module.py> [module_config]"
+                "The legancy Python mode accepts at most 3 arguments:\n"
+                "  <module.py> [module_config.json] [simulation_params]"
             )
 
         module_file = inputs[0]
-        module_config = inputs[1] if len(inputs) == 2 else None
+        module_config = inputs[1] if len(inputs) > 1 else None
+        simulation_params = inputs[2] if len(inputs) > 2 else None
 
         if not os.path.isfile(module_file):
             raise FileNotFoundError(f"Python module not found: {module_file}")
@@ -251,6 +252,7 @@ def validate_args(args: argparse.Namespace):
             "mode": "python",
             "module_file": module_file,
             "module_config": module_config,
+            "simulation_params": simulation_params
         }
 
     if inputs[0].endswith(".json"):
@@ -312,6 +314,7 @@ def main_cli():
             my_sim = initialize_from_python(
                 path_to_module=config["module_file"],
                 my_module_config=config["module_config"],
+                my_simulation_parameters=config["simulation_params"]
             )
             ptm = config["module_file"]
 

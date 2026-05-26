@@ -438,8 +438,8 @@ def write_standalone_scenario_json(module_filename: str, my_sim: "Simulator", de
     # Get prettified name for the scenario from the module filename
     nice_name = module_filename.replace("_", " ").capitalize()
     # Get module config values if not None and if passed as path
-    if isinstance(my_module_config, str):
-        with open(my_module_config, "r", encoding="utf-8") as f:
+    if isinstance(my_sim.my_module_config, str):
+        with open(my_sim.my_module_config, "r", encoding="utf-8") as f:
             my_module_config = json.load(f)
 
     scenario = Scenario(

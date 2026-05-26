@@ -21,7 +21,7 @@
         "building_postal_code": "61130",
         "building_location": "Nidderau",
         "lpg_households": [
-            "CHR14_3_adults_Couple_30_64_years_both_at_work_Senior_at_home"
+            "CHR01_Couple_both_at_Work"
         ],
         "commodity": "electric",
         "supply_level": "central_heating"

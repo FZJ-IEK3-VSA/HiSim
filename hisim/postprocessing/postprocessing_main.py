@@ -937,8 +937,7 @@ class PostProcessor:
         self.year = ppdt.simulation_parameters.year
 
         # Write the two new JSON configuration files
-        # Here, the my_sim could be replace by ppdt.simulation_parameters
-        write_standalone_simulation_json(my_sim, path=os.path.join(result_data_folder_for_scenario_evaluation, "simulation.json"))
+        write_standalone_simulation_json(my_sim, path=os.path.join(result_data_folder_for_scenario_evaluation, "simulation_params.json"), filter_simulation_parameters=False)
 
         # Here, the my_sim could maybe be replaced by an altered ppdt
         write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=self.description,

@@ -61,6 +61,7 @@ class Scenario(BaseModel):
     multiple_buildings: bool = False
     components: list[Component] = Field(default_factory=list)
     connections: dict[str, Any] | list[Any] | None = None
+    my_module_config: str | None = None
 
 
 # Adapted from old json_generator.py
@@ -196,7 +197,7 @@ def get_filtered_simulation_parameters(my_sim: "Simulator"):
     return filtered
 
 
-def write_standalone_simulation_json(my_sim: "Simulator", path="recent_simulation_parameters.json") -> None:
+def write_standalone_simulation_json(my_sim: "Simulator", path="recent_simulation_parameters.json", filter_simulation_parameters: bool = True) -> None:
     """Write the simulation parameters of the given simulator to a JSON file."""
 
     if path.lower()[-5:] != ".json":
@@ -209,8 +210,11 @@ def write_standalone_simulation_json(my_sim: "Simulator", path="recent_simulatio
         # - surplus_control is part of the household configuration, i.e., the dataclass that determines
         #   the exact behavior of the setup function (which household to create exactly) --> not needed anymore
         #   - the simulation parameter allows switching the car's surplus control
-        filtered = get_filtered_simulation_parameters(my_sim)
-        json.dump(filtered, f, indent=4)
+        if filter_simulation_parameters:
+            my_simu_params = get_filtered_simulation_parameters(my_sim)
+        else:
+            my_simu_params = my_sim.get_simulation_parameters().to_dict()
+        json.dump(my_simu_params, f, indent=4)
         f.flush()
         f.close()
 
@@ -437,7 +441,8 @@ def write_standalone_scenario_json(module_filename: str, my_sim: "Simulator", de
     scenario = Scenario(
         name=nice_name,
         description=desc,
-        multiple_buildings=my_sim.get_simulation_parameters().multiple_buildings
+        multiple_buildings=my_sim.get_simulation_parameters().multiple_buildings,
+        my_module_config=my_sim.my_module_config
     )
     log.information(f"Writing component configurations to JSON file {path}.")
     component_connections = []

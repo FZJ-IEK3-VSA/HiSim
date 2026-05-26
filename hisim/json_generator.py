@@ -61,7 +61,7 @@ class Scenario(BaseModel):
     multiple_buildings: bool = False
     components: list[Component] = Field(default_factory=list)
     connections: dict[str, Any] | list[Any] | None = None
-    my_module_config: str | None = None
+    my_module_config: dict | str | None = None
 
 
 # Adapted from old json_generator.py
@@ -437,12 +437,16 @@ def write_standalone_scenario_json(module_filename: str, my_sim: "Simulator", de
 
     # Get prettified name for the scenario from the module filename
     nice_name = module_filename.replace("_", " ").capitalize()
+    # Get module config values if not None and if passed as path
+    if isinstance(my_module_config, str):
+        with open(my_module_config, "r", encoding="utf-8") as f:
+            my_module_config = json.load(f)
 
     scenario = Scenario(
         name=nice_name,
         description=desc,
         multiple_buildings=my_sim.get_simulation_parameters().multiple_buildings,
-        my_module_config=my_sim.my_module_config
+        my_module_config=my_module_config
     )
     log.information(f"Writing component configurations to JSON file {path}.")
     component_connections = []

@@ -1,4 +1,5 @@
 """Main postprocessing module that starts all other modules."""
+
 from __future__ import annotations
 import json
 
@@ -472,10 +473,7 @@ class PostProcessor:
         """Exports the results to a CSV file."""
 
         if PostProcessingOptions.EXPORT_RESULTS_IN_ONE_FILE in ppdt.post_processing_options:
-            csvfilename = os.path.join(
-                ppdt.simulation_parameters.result_directory,
-                "all_results.csv"
-            )
+            csvfilename = os.path.join(ppdt.simulation_parameters.result_directory, "all_results.csv")
             csvfilename = self.shorten_path(csvfilename)
             ppdt.results.to_csv(csvfilename, sep=",", decimal=".")
         else:
@@ -502,10 +500,7 @@ class PostProcessor:
         """Exports the results to a Pickle file."""
 
         if PostProcessingOptions.EXPORT_RESULTS_IN_ONE_FILE in ppdt.post_processing_options:
-            pickle_filename = os.path.join(
-                ppdt.simulation_parameters.result_directory,
-                "all_results.pkl"
-            )
+            pickle_filename = os.path.join(ppdt.simulation_parameters.result_directory, "all_results.pkl")
             pickle_filename = self.shorten_path(pickle_filename)
             with open(pickle_filename, "wb") as f:
                 pickle.dump(ppdt.results, f)
@@ -937,23 +932,39 @@ class PostProcessor:
         self.year = ppdt.simulation_parameters.year
 
         # Write the two new JSON configuration files
-        write_standalone_simulation_json(my_sim, path=os.path.join(result_data_folder_for_scenario_evaluation, "simulation_params.json"), filter_simulation_parameters=False)
+        write_standalone_simulation_json(
+            my_sim,
+            path=os.path.join(result_data_folder_for_scenario_evaluation, "simulation_params.json"),
+            filter_simulation_parameters=False,
+        )
 
         # Here, the my_sim could maybe be replaced by an altered ppdt
-        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=self.description,
-                                       path=os.path.join(result_data_folder_for_scenario_evaluation, "scenario.json"))
+        write_standalone_scenario_json(
+            ppdt.module_filename,
+            my_sim=my_sim,
+            desc=self.description,
+            path=os.path.join(result_data_folder_for_scenario_evaluation, "scenario.json"),
+        )
 
     def write_component_configurations_to_json(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
         """Collect all component configurations and write into JSON file in result directory."""
 
-        write_standalone_simulation_json(my_sim, path=os.path.join(
-            ppdt.simulation_parameters.result_directory,
-            "simulation.json",
-        ))
-        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=self.description, path=os.path.join(
-            ppdt.simulation_parameters.result_directory,
-            "scenario.json",
-        ))
+        write_standalone_simulation_json(
+            my_sim,
+            path=os.path.join(
+                ppdt.simulation_parameters.result_directory,
+                "simulation.json",
+            ),
+        )
+        write_standalone_scenario_json(
+            ppdt.module_filename,
+            my_sim=my_sim,
+            desc=self.description,
+            path=os.path.join(
+                ppdt.simulation_parameters.result_directory,
+                "scenario.json",
+            ),
+        )
 
     def write_kpis_in_dict(
         self,

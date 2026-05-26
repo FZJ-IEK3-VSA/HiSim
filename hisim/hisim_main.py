@@ -3,6 +3,7 @@
 import os
 import warnings
 import importlib
+import json
 from pathlib import Path
 import sys
 from datetime import datetime
@@ -10,7 +11,7 @@ from typing import Optional, Any, cast
 import argparse
 from pydantic import TypeAdapter
 from dotenv import load_dotenv
-import json
+
 try:
     from hisim.json_executor import setup_components_and_connections
     from hisim.postprocessingoptions import PostProcessingOptions
@@ -73,7 +74,7 @@ def initialize_from_python(
     if my_simulation_parameters is not None and not isinstance(my_simulation_parameters, SimulationParameters):
 
         if isinstance(my_simulation_parameters, str):
-            with open(my_simulation_parameters, "r") as f:
+            with open(my_simulation_parameters, "r", encoding="utf-8") as f:
                 my_simulation_parameters = json.load(f)
 
             my_simulation_parameters = SimulationParameters.from_dict(my_simulation_parameters)

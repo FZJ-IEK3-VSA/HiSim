@@ -1,5 +1,6 @@
 # %% Load packages & Setup
 import pandas as pd
+import geopandas as gpd
 import os
 from pathlib import Path
 import pvlib
@@ -19,7 +20,8 @@ flist = os.listdir(folder)
 results_Path =  Path("TRY_au_data/Analyze_data_output")
 results_Path.mkdir(parents=True, exist_ok=True)
 
-raw_folder    = r"C:\Alvarez\HiSim\HiSim\TRY_au_data\2011-2030\raw"
+# raw_folder    = r"C:\Alvarez\HiSim\HiSim\TRY_au_data\2011-2030\raw"
+raw_folder = r"H:\02_Projekte\04_Repositories\HiSim\TRY_au_data\2011-2030\raw"
 
 # %% Check for jumps during leap years
 
@@ -247,14 +249,15 @@ plot_boxplot(results_df, all_changes,
 results_folder = results_Path
 
 # ── Load Austria data ────────────────────────────────────────────────────────
-raw_folder  = r"C:\Alvarez\HiSim\HiSim\TRY_au_data\2011-2030\raw"
+# raw_folder  = r"C:\Alvarez\HiSim\HiSim\TRY_au_data\2011-2030\raw"
 file        = "TRY__R1__Z1__LL11__A1__S1.xlsx"
 data_au_raw = pd.read_excel(os.path.join(raw_folder, file), header=None, skiprows=1)
 lon    = data_au_raw.iloc[0, 7]
 lat    = data_au_raw.iloc[1, 7]
 region = data_au_raw.iloc[0, 1]
 
-cleaned_folder = r"C:\Alvarez\HiSim\HiSim\TRY_au_data\2011-2030\cleaned"
+# cleaned_folder = r"C:\Alvarez\HiSim\HiSim\TRY_au_data\2011-2030\cleaned"
+cleaned_folder = r"H:\02_Projekte\04_Repositories\HiSim\TRY_au_data\2011-2030\cleaned"
 auex = pd.read_csv(
     os.path.join(cleaned_folder, "TRY__R1__Z1__LL11__A1__S1.csv"),
     sep=";", index_col=0
@@ -262,7 +265,8 @@ auex = pd.read_csv(
 
 # ── Load Vienna data ─────────────────────────────────────────────────────────
 wien_data = pd.read_csv(
-    r"C:\Alvarez\HiSim\HiSim\hisim\inputs\weather\NSRDB_15min\Viena\902141_48.21_16.38_2019.csv",
+    # r"C:\Alvarez\HiSim\HiSim\hisim\inputs\weather\NSRDB_15min\Viena\902141_48.21_16.38_2019.csv",
+    r"H:\02_Projekte\04_Repositories\HiSim\hisim\inputs\weather\NSRDB_15min\Viena\902141_48.21_16.38_2019.csv",
     encoding="utf-8", skiprows=[0, 1]
 )
 wien_data.index = pd.date_range("2011-01-01", periods=24 * 4 * 365, freq="900s")
@@ -291,8 +295,8 @@ wien_data = strip_tz(wien_data)
 
 # ── Labels ───────────────────────────────────────────────────────────────────
 # Build AT label from lat/lon read out of the raw file
-LABEL_A = f"AT ({lat}°N, {lon}°E)"
-LABEL_B = "Wien (48.21°N, 16.38°E)"
+LABEL_A = f"TRY AT ({lat}°N, {lon}°E)"
+LABEL_B = "NSRDB Wien (48.21°N, 16.38°E)"
 
 COLORS = {
     "A_DNI": "#E63946", "B_DNI": "#457B9D",
@@ -525,3 +529,83 @@ plot_ghi_annual()
 plot_ghi_seasonal()
 plot_ghi_monthly()
 plot_ghi_scatter()
+# %%
+
+base_path = Path(__file__).resolve().parent
+geodata_FILEPATH = base_path / "../ai4c/data/external/STATISTIK_AUSTRIA_NUTS3_20260101/STATISTIK_AUSTRIA_NUTS3_20260101.shp"
+geodata_FILEPATH = geodata_FILEPATH.resolve()
+
+folder = "TRY_au_data/2011-2030/raw"
+files = os.listdir(folder)
+
+coords = []
+
+for file in files:
+    if not file.endswith(".xlsx"):
+        continue
+    filepath = os.path.join(folder, file)
+    try:
+        # skiprows=0: Zeile 1 ist leer/Header, Longitude in Zeile 2 (iloc[1,7]), Latitude in Zeile 3 (iloc[2,7])
+        raw = pd.read_excel(filepath, header=None)
+        
+        # Debug: zeige erste Zeilen um Struktur zu prüfen
+        print(f"\n{file} — erste 4 Zeilen, Spalten 5-8:")
+        print(raw.iloc[0:4, 5:9].to_string())
+        
+        lon_raw = raw.iloc[1, 7]  # Zeile 2 (0-indexed: 1), Spalte H (0-indexed: 7)
+        lat_raw = raw.iloc[2, 7]  # Zeile 3 (0-indexed: 2), Spalte H (0-indexed: 7)
+        
+        lon = pd.to_numeric(str(lon_raw).replace(",", "."), errors="coerce")
+        lat = pd.to_numeric(str(lat_raw).replace(",", "."), errors="coerce")
+        
+        name = file.replace(".xlsx", "")
+        coords.append({"file": name, "lon": lon, "lat": lat})
+        print(f"  → lon={lon}, lat={lat}")
+        
+    except Exception as e:
+        print(f"Could not read {file}: {e}")
+
+coords_df = pd.DataFrame(coords).dropna(subset=["lon", "lat"])
+print(f"\nFound {len(coords_df)} TRY files with valid coordinates")
+print(coords_df)
+
+# ── Load Austria shapefile ────────────────────────────────────────────────────
+gdf_at = gpd.read_file(geodata_FILEPATH).to_crs(epsg=4326)
+
+# ── Plot ──────────────────────────────────────────────────────────────────────
+if len(coords_df) > 0:
+    fig, ax = plt.subplots(figsize=(13, 7))
+
+    gdf_at.plot(ax=ax, color="#f2f2f2", edgecolor="#aaaaaa", linewidth=0.8)
+
+    palette = plt.cm.tab20.colors
+    for i, row in coords_df.iterrows():
+        color = palette[i % len(palette)]
+        ax.scatter(row["lon"], row["lat"],
+                   color=color, s=120, zorder=5,
+                   edgecolors="white", linewidths=0.6,
+                   label=row["file"])
+        ax.annotate(row["file"],
+                    xy=(row["lon"], row["lat"]),
+                    xytext=(4, 4), textcoords="offset points",
+                    fontsize=7, color="#333333")
+
+    ax.set_xlim(9.3, 17.3)
+    ax.set_ylim(46.3, 49.1)
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    ax.set_title(f"TRY file locations on Austria map (N={len(coords_df)})")
+    ax.legend(bbox_to_anchor=(1.01, 1), loc="upper left",
+              fontsize=7, title="TRY file", title_fontsize=8,
+              frameon=True, borderaxespad=0)
+
+    plt.tight_layout()
+    try:
+        save_path = os.path.join(results_Path, "TRY_locations_austria.png")
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"Saved → {save_path}")
+        plt.close(fig)
+    except Exception:
+        plt.show()
+else:
+    print("No valid coordinates found — check the debug output above!")

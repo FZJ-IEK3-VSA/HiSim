@@ -6,8 +6,10 @@ import pvlib
 #%%
 
 # ── Paths ──────────────────────────────────────────────────────────────────
-raw_folder     = r"C:\Alvarez\HiSim\HiSim\TRY_au_data\2011-2030\raw"
-cleaned_folder = r"C:\Alvarez\HiSim\HiSim\TRY_au_data\2011-2030\cleaned"
+# raw_folder     = r"C:\Alvarez\HiSim\HiSim\TRY_au_data\2011-2030\raw"
+raw_folder = r"H:\02_Projekte\04_Repositories\HiSim\TRY_au_data\2011-2030\raw"
+# cleaned_folder = r"C:\Alvarez\HiSim\HiSim\TRY_au_data\2011-2030\cleaned"
+cleaned_folder = r"H:\02_Projekte\04_Repositories\HiSim\TRY_au_data\2011-2030\cleaned"
 os.makedirs(cleaned_folder, exist_ok=True)
 
 days_per_month = {1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30,
@@ -63,10 +65,10 @@ for file in os.listdir(raw_folder):
     
     data_au = data_au.drop(data_au.index[-1])
 
-    # Make this a dynamic time
-    # ── Set datetime index ──────────────────────────────────────────────────
+
+    # hour 0-23 in UTC, set timestamp = interval mid (xx:30 UTC)
     data_au.index = pd.date_range(
-        "2011-01-01 00:30:00", periods=8760, freq="H"
+        "2011-01-01 00:30:00", periods=8760, freq="H", tz="UTC"
     )
 
     for col in ['T', 'GHI', 'Wspd']:
@@ -74,6 +76,9 @@ for file in os.listdir(raw_folder):
             data_au[col].astype(str).str.replace(',', '.', regex=False),
             errors='coerce'
         )
+
+    # ── Calculate solar components ──────────────────────────────────────────
+    data_au['GHI'] = data_au['GHI'] * 3.
 
     # ── Calculate solar components ──────────────────────────────────────────
     solar_position = pvlib.solarposition.get_solarposition(
@@ -87,6 +92,11 @@ for file in os.listdir(raw_folder):
     data_au['Pressure'] = 1013.25   # standard sea-level pressure
     data_au['Wdir']     = 0.0       # dummy wind direction
 
+    # For CSV/Plot: convert to local vienna time
+    data_au.index = data_au.index.tz_convert("Europe/Vienna")
+
+    # Remove tz information from datetime
+    data_au.index = data_au.index.tz_localize(None)  # necessary for function strip_tz() to work
 
     # ── Write cleaned CSV ───────────────────────────────────────────────────
     data_au.to_csv(csv_path, sep=';', decimal=',')
@@ -108,5 +118,3 @@ for file in os.listdir(raw_folder):
     
     
 print("\nAll files processed.")
-
-

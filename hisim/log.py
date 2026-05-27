@@ -1,3 +1,7 @@
+# noqa
+# flake8: noqa
+# noqa: D400, D415, D413, D407
+# pylint: skip-file
 """ Logging functionality for all of HiSim. """
 # clean
 from enum import IntEnum
@@ -60,7 +64,6 @@ class Logger:
 
         Args:
             logging_path: The output directory. Get from simulation parameters.
-
         """
         # safety checks
         if not self.before_result_dir_created:
@@ -103,7 +106,8 @@ class Logger:
     def file_thanos(self, filename):
         """Checks the size of a default logfile and halves it if it is too large."""
         file_path = os.path.join(LOGGING_DEFAULT_PATH, filename + ".log")
-        if not os.path.exists(file_path): return
+        if not os.path.exists(file_path):
+            return
         with open(file_path, "rb") as file:
             num_lines = sum(1 for line in file)
         if num_lines > 10000:

@@ -71,7 +71,10 @@ class Logger:
         # delete parts of file if it becomes too large
         if self.before_result_dir_created:
             for filename in ["hisim_simulation", "profiling_timeuse"]:
-                self.file_thanos(filename)
+                try:
+                    self.file_thanos(filename)
+                except:
+                    pass
         # set path and make folder if it does not exist
         self.logging_path = logging_path
         if not os.path.exists(logging_path):
@@ -111,8 +114,9 @@ class Logger:
         with open(file_path, "rb") as file:
             num_lines = sum(1 for line in file)
         if num_lines > 10000:
-            with open(file_path, "w", encoding="utf-8") as file:
+            with open(file_path, "r", encoding="utf-8") as file:
                 lines = file.readlines()
+            with open(file_path, "w", encoding="utf-8") as file:
                 file.writelines(lines[-5000:])
 
     # --------------------------------------------------------------------------------------------

@@ -66,7 +66,6 @@ class Simulator:
         self.prepare_simulation_directory()
         log.logger.setup(self._simulation_parameters.result_directory)
 
-
     def set_simulation_parameters(self, my_simulation_parameters: SimulationParameters) -> None:
         """Sets the simulation parameters and the logging level at the same time."""
         self._simulation_parameters = my_simulation_parameters

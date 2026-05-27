@@ -188,7 +188,6 @@ def run_simulation(my_sim: sim.Simulator, path_to_module: Optional[str]) -> None
     log.logger.reset()
 
 
-
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments for HiSim execution."""
 

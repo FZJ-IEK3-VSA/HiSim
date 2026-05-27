@@ -9,6 +9,7 @@ LOGGING_DEFAULT_PATH: str = r"../logs/"
 
 class LogPrio(IntEnum):
     """Define a logging priority."""
+
     ERROR = 1
     WARNING = 2
     INFORMATION = 3
@@ -35,7 +36,7 @@ class Logger:
     """Class that handles the logging.
 
     A logger is created the first time this module is imported
-    in a kernel. Every time a simulation is started, the logger has to be set up for that 
+    in a kernel. Every time a simulation is started, the logger has to be set up for that
     simulation using the setup() function. Every time a simulation ends, it should be reset with
     the reset() function.
     """
@@ -59,6 +60,7 @@ class Logger:
 
         Args:
             logging_path: The output directory. Get from simulation parameters.
+
         """
         # safety checks
         if not self.before_result_dir_created:
@@ -72,7 +74,7 @@ class Logger:
         if not os.path.exists(logging_path):
             os.makedirs(logging_path)
         # write buffered logs to files
-        for filename, buffer in [["hisim_simulation", self.log_buffer], 
+        for filename, buffer in [["hisim_simulation", self.log_buffer],
                                  ["profiling_timeuse", self.profile_buffer]]:
             file_path = os.path.join(logging_path, filename + ".log")
             try:
@@ -90,7 +92,8 @@ class Logger:
         """Resets the logger at the end of a simulation to prepare it for the next one.
 
         This is necessary because the logger gets initialized only once per kernel, when
-        log.py is first imported."""
+        log.py is first imported.
+        """
         self.logging_path: str = LOGGING_DEFAULT_PATH
         self.logging_level: int = LOGGING_DEFAULT_LEVEL
         self.before_result_dir_created: bool = True
@@ -100,6 +103,7 @@ class Logger:
     def file_thanos(self, filename):
         """Checks the size of a default logfile and halves it if it is too large."""
         file_path = os.path.join(LOGGING_DEFAULT_PATH, filename + ".log")
+        if not os.path.exists(file_path): return
         with open(file_path, "rb") as file:
             num_lines = sum(1 for line in file)
         if num_lines > 10000:

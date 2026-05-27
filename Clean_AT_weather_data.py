@@ -80,13 +80,70 @@ for file in os.listdir(raw_folder):
     # ── Calculate solar components ──────────────────────────────────────────
     data_au['GHI'] = data_au['GHI'] * 3.
 
-    # ── Calculate solar components ──────────────────────────────────────────
+    # --------------------------------------------------------------------------------
+    # ── ERBS MODEL to calculate DHI & DNI ──────────────────────────────────────────
+    # solar_position = pvlib.solarposition.get_solarposition(
+    #     time=data_au.index, latitude=lat, longitude=lon
+    # )
+    # decomp = pvlib.irradiance.erbs(data_au['GHI'], solar_position['zenith'], data_au.index)
+    # data_au['DHI'] = pd.to_numeric(decomp['dhi']).round(2)
+    # data_au['DNI'] = pd.to_numeric(decomp['dni']).round(2)
+
+    # ── Boland MODEL to calculate DHI & DNI ──────────────────────────────────────────
+    # solar_position = pvlib.solarposition.get_solarposition(
+    #     time=data_au.index, latitude=lat, longitude=lon
+    # )
+    # decomp = pvlib.irradiance.boland(data_au['GHI'], solar_position['zenith'], data_au.index)
+    # data_au['DHI'] = pd.to_numeric(decomp['dhi']).round(2)
+    # data_au['DNI'] = pd.to_numeric(decomp['dni']).round(2)
+
+    # ── Reindl MODEL to calculate DHI & DNI ──────────────────────────────────────────
+    # solar_position = pvlib.solarposition.get_solarposition(
+    #     time=data_au.index, latitude=lat, longitude=lon
+    # )
+
+    # dni_extra = pvlib.irradiance.get_extra_radiation(data_au.index)
+ 
+    # decomp = pvlib.irradiance.reindl(
+    #     data_au['GHI'],
+    #     solar_position['zenith'],
+    #     dni_extra
+    # )
+    # data_au['DHI'] = pd.to_numeric(decomp['dhi']).round(2)
+    # data_au['DNI'] = pd.to_numeric(decomp['dni']).round(2)
+
+    # ── Suppress noise ────────────────────────────────────
+
+    # ── Clean night times and very low solar position ──────────────────────
+    # Below ~5° sun position (height) models generate artifacts
+    # valid_sun = solar_position['apparent_elevation'] > 5   # ° above zero
+ 
+    # data_au.loc[~valid_sun, 'DNI'] = 0.0
+    # data_au.loc[~valid_sun, 'DHI'] = 0.0
+ 
+    # Physical plausibility: set negative values to zero
+    # data_au['DNI'] = data_au['DNI'].clip(lower=0)
+    # data_au['DHI'] = data_au['DHI'].clip(lower=0)
+
+    # ── Calculate solar components using dirint ──────────────────────────────────────────
+ 
     solar_position = pvlib.solarposition.get_solarposition(
         time=data_au.index, latitude=lat, longitude=lon
     )
-    decomp = pvlib.irradiance.erbs(data_au['GHI'], solar_position['zenith'], data_au.index)
-    data_au['DHI'] = pd.to_numeric(decomp['dhi']).round(2)
-    data_au['DNI'] = pd.to_numeric(decomp['dni']).round(2)
+ 
+    data_au['DNI'] = pvlib.irradiance.dirint(
+        data_au['GHI'],
+        solar_position['zenith'],
+        data_au.index
+    ).clip(lower=0)
+ 
+    cos_z = pvlib.tools.cosd(solar_position['zenith']).clip(lower=0.01)
+    data_au['DHI'] = (data_au['GHI'] - data_au['DNI'] * cos_z).clip(lower=0)
+ 
+    valid_sun = solar_position['apparent_elevation'] > 8  # remove radiation from angles <8°
+    data_au.loc[~valid_sun, ['DNI', 'DHI']] = 0.0
+
+    # -----------------------------------------------------------------------------------
 
     # ── Add dummy columns HiSim expects ────────────────────────────────────
     data_au['Pressure'] = 1013.25   # standard sea-level pressure
@@ -118,3 +175,5 @@ for file in os.listdir(raw_folder):
     
     
 print("\nAll files processed.")
+
+# %%

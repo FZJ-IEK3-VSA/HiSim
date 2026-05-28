@@ -24,7 +24,10 @@ except ModuleNotFoundError:
         "Could not import HiSim modules. "
         "It may not be installed in the current Python environment.\n\n"
         "If you already installed HiSim locally with 'pip install -e .', "
-        "make sure you are using the same virtual environment/interpreter."
+        "make sure you are using the same virtual environment/interpreter.\n\n"
+        "If you recently updated the repository via 'git pull', new dependencies "
+        "may have been added. Try re-running 'pip install -e .' from the HiSim "
+        "root directory to install any missing packages."
     ) from None
 
 load_dotenv()

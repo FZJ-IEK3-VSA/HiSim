@@ -143,7 +143,11 @@ class SingleTimeStepValues:
         return newstsv
 
     def get_input_value(self, component_input: ComponentInput) -> float:
-        """Gets a value for an input from the single time step values."""
+        """Gets a value for an input from the single time step values.
+        
+        If no component output is connected to the specified input (this can
+        happen for non-mandatory inputs), this function returns 0.
+        """
         if component_input.source_output is None:
             return 0
         return self.values[component_input.source_output.global_index]

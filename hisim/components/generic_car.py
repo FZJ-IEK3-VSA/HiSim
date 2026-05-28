@@ -64,7 +64,11 @@ class GenericCarInformation:
         ):
             raise ValueError(
                 "The car data from occupancy contains only empty dictionaries in its value lists. "
-                "If you are using the predefined occupancy profile, no car data is currently available. "
+                "This is likely caused by one of the following reasons: "
+                "(1) You are using the predefined occupancy profile, no car data is currently available. "
+                "(2) The UTSP request failed (e.g., due to missing or incorrect UTSP configuration). "
+                "(3) USE_LOCAL_LPG is currently not supported on macOS (darwin). "
+                "Please switch to USE_UTSP with a reachable UTSP endpoint with correct UTSP configuration."
             )
 
         # get car names and household names

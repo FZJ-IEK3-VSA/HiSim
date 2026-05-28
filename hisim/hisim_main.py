@@ -37,9 +37,11 @@ __credits__ = ["Noah Pflugradt", "Katharina Rieck"]
 __maintainer__ = "Valentin Janser"
 __email__ = "v.janser@fz-juelich.de"
 
+
 def is_hisim_root(path: Path) -> bool:
     """Check if given path is HiSim root directory."""
     return (path / "setup.py").exists() and (path / "hisim").is_dir()
+
 
 def initialize_from_python(
     path_to_module: str,

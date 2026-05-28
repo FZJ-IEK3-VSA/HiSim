@@ -37,6 +37,9 @@ __credits__ = ["Noah Pflugradt", "Katharina Rieck"]
 __maintainer__ = "Valentin Janser"
 __email__ = "v.janser@fz-juelich.de"
 
+def is_hisim_root(path: Path) -> bool:
+    """Check if given path is HiSim root directory."""
+    return (path / "setup.py").exists() and (path / "hisim").isdir()
 
 def initialize_from_python(
     path_to_module: str,
@@ -58,6 +61,8 @@ def initialize_from_python(
     for parent in path_obj.parents:
         if parent.exists():
             sys.path.append(str(parent))
+            if is_hisim_root(parent):
+                break
         else:
             raise ValueError(f"Directory of module does not exist: {module_dir}")
 

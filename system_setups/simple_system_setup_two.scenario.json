@@ -1,0 +1,93 @@
+{
+    "name": "Simple system setup two",
+    "description": "Simple System Setup Module.",
+    "multiple_buildings": false,
+    "components": [
+        {
+            "component_full_classname": "hisim.components.random_numbers.RandomNumbers",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Random numbers 100-200",
+                "timesteps": 525600,
+                "minimum": 100,
+                "maximum": 200
+            },
+            "config_full_classname": "hisim.components.random_numbers.RandomNumbersConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.random_numbers.RandomNumbers",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Random numbers 10-20",
+                "timesteps": 525600,
+                "minimum": 10,
+                "maximum": 20
+            },
+            "config_full_classname": "hisim.components.random_numbers.RandomNumbersConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.example_transformer.ExampleTransformer",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Example Transformer default",
+                "loadtype": "Any",
+                "unit": "-"
+            },
+            "config_full_classname": "hisim.components.example_transformer.ExampleTransformerConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.sumbuilder.SumBuilderForTwoInputs",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Sum",
+                "loadtype": "Any",
+                "unit": "-"
+            },
+            "config_full_classname": "hisim.components.sumbuilder.SumBuilderConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        }
+    ],
+    "connections": [
+        {
+            "source": {
+                "component_name": "Random numbers 10-20",
+                "field_name": "Random Numbers"
+            },
+            "target": {
+                "component_name": "Example Transformer default",
+                "field_name": "Input1"
+            }
+        },
+        {
+            "source": {
+                "component_name": "Random numbers 100-200",
+                "field_name": "Random Numbers"
+            },
+            "target": {
+                "component_name": "Sum",
+                "field_name": "Input 1"
+            }
+        },
+        {
+            "source": {
+                "component_name": "Example Transformer default",
+                "field_name": "MyTransformerOutput"
+            },
+            "target": {
+                "component_name": "Sum",
+                "field_name": "Input 2"
+            }
+        }
+    ]
+}

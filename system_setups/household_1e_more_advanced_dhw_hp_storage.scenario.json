@@ -1,0 +1,449 @@
+{
+    "name": "Household 1e more advanced dhw hp storage",
+    "description": "Household system setup with advanced heat pump and diesel car.",
+    "multiple_buildings": false,
+    "components": [
+        {
+            "component_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "UTSPConnector",
+                "data_acquisition_mode": "use_utsp",
+                "household": {
+                    "name": "CHR01 Couple both at Work",
+                    "guid": {
+                        "str_val": "516a33ab-79e1-4221-853b-967fc11cc85a"
+                    }
+                },
+                "energy_intensity": "EnergySaving",
+                "travel_route_set": {
+                    "name": "Travel Route Set for 10km Commuting Distance",
+                    "guid": {
+                        "str_val": "ca46be86-9cc7-47b5-9769-abff78ceca7a"
+                    }
+                },
+                "transportation_device_set": {
+                    "name": "Bus and one 30 km/h Car",
+                    "guid": {
+                        "str_val": "6ac74bd0-bacd-4b39-b84a-dc7ae16702c9"
+                    }
+                },
+                "charging_station_set": {
+                    "name": "Charging At Home with 11 kW",
+                    "guid": {
+                        "str_val": "78dae308-24c4-45cc-8bdf-b001d61f45c2"
+                    }
+                },
+                "profile_with_washing_machine_and_dishwasher": true,
+                "predictive_control": false,
+                "predictive": false,
+                "result_dir_path": "<<utils.HISIMPATH['utsp_results']>>",
+                "cache_dir_path": null,
+                "name_of_predefined_loadprofile": "CHR01 Couple both at Work",
+                "predefined_loadprofile_filepaths": null,
+                "guid": "",
+                "calculation_index_for_local_lpg": null,
+                "cars": [
+                    "Car_2_22kW_Charging_Power_avg_Speed_30_kmh_0"
+                ]
+            },
+            "config_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.weather.Weather",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Weather",
+                "location": "Aachen",
+                "source_path": "<<utils.get_input_directory()>>\\weather\\test-reference-years_1995-2012_1-location\\data_processed\\aachen_center",
+                "data_source": 1,
+                "predictive_control": false
+            },
+            "config_full_classname": "hisim.components.weather.WeatherConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.building.Building",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Building",
+                "heating_reference_temperature_in_celsius": -7,
+                "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
+                "building_heat_capacity_class": "medium",
+                "initial_internal_temperature_in_celsius": 22.0,
+                "absolute_conditioned_floor_area_in_m2": 121.2,
+                "total_base_area_in_m2": null,
+                "number_of_apartments": null,
+                "max_thermal_building_demand_in_watt": null,
+                "floor_u_value_in_watt_per_m2_per_kelvin": null,
+                "floor_area_in_m2": null,
+                "facade_u_value_in_watt_per_m2_per_kelvin": null,
+                "facade_area_in_m2": null,
+                "roof_u_value_in_watt_per_m2_per_kelvin": null,
+                "roof_area_in_m2": null,
+                "window_u_value_in_watt_per_m2_per_kelvin": null,
+                "window_area_in_m2": null,
+                "door_u_value_in_watt_per_m2_per_kelvin": null,
+                "door_area_in_m2": null,
+                "predictive": false,
+                "set_heating_temperature_in_celsius": 20.0,
+                "set_cooling_temperature_in_celsius": 25.0,
+                "enable_opening_windows": false,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.building.BuildingConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "HeatPumpHPLib",
+                "model": "Generic",
+                "fluid_primary_side": "air",
+                "group_id": 1,
+                "heating_reference_temperature_in_celsius": -7,
+                "flow_temperature_in_celsius": 21,
+                "set_thermal_output_power_in_watt": 6000,
+                "cycling_mode": true,
+                "minimum_running_time_in_seconds": 900,
+                "minimum_idle_time_in_seconds": 900,
+                "minimum_thermal_output_power_in_watt": 1800,
+                "position_hot_water_storage_in_system": 1,
+                "with_domestic_hot_water_preparation": true,
+                "passive_cooling_with_brine": false,
+                "electrical_input_power_brine_pump_in_watt": null,
+                "massflow_nominal_secondary_side_in_kg_per_s": 0.333,
+                "specific_heat_capacity_of_primary_fluid": 0,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "HeatPumpControllerSH",
+                "mode": 2,
+                "set_heating_threshold_outside_temperature_in_celsius": 16.0,
+                "set_cooling_threshold_outside_temperature_in_celsius": 20.0,
+                "upper_temperature_offset_for_state_conditions_in_celsius": 5.0,
+                "lower_temperature_offset_for_state_conditions_in_celsius": 5.0,
+                "heat_distribution_system_type": 2
+            },
+            "config_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "HeatPumpControllerDHW",
+                "t_min_dhw_storage_in_celsius": 40.0,
+                "t_max_dhw_storage_in_celsius": 60.0,
+                "thermalpower_dhw_is_constant": false,
+                "p_th_max_dhw_in_watt": 5000.0
+            },
+            "config_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.heat_distribution_system.HeatDistribution",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "HeatDistributionSystem",
+                "heating_system": 2,
+                "water_mass_flow_rate_in_kg_per_second": 0.27,
+                "absolute_conditioned_floor_area_in_m2": 121.2,
+                "position_hot_water_storage_in_system": 1,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.heat_distribution_system.HeatDistributionConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.heat_distribution_system.HeatDistributionController",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "HeatDistributionController",
+                "heating_system": 2,
+                "set_heating_threshold_outside_temperature_in_celsius": 16.0,
+                "heating_reference_temperature_in_celsius": -7,
+                "set_heating_temperature_for_building_in_celsius": 20.0,
+                "set_cooling_temperature_for_building_in_celsius": 25.0,
+                "heating_load_of_building_in_watt": 7780.75,
+                "specific_heating_load_of_building_in_watt_per_m2": null
+            },
+            "config_full_classname": "hisim.components.heat_distribution_system.HeatDistributionControllerConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.simple_water_storage.SimpleHotWaterStorage",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "SimpleHotWaterStorage",
+                "volume_heating_water_storage_in_liter": 389.04,
+                "heat_transfer_coefficient_in_watt_per_m2_per_kelvin": 2.0,
+                "heat_exchanger_is_present": true,
+                "position_hot_water_storage_in_system": 1,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.simple_water_storage.SimpleHotWaterStorageConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.simple_water_storage.SimpleDHWStorage",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "DHWStorage",
+                "volume_heating_water_storage_in_liter": 100,
+                "heat_transfer_coefficient_in_watt_per_m2_per_kelvin": 0.36,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.simple_water_storage.SimpleDHWStorageConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.electricity_meter.ElectricityMeter",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "ElectricityMeter",
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.electricity_meter.ElectricityMeterConfig",
+            "inputs": [
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricalPowerConsumption",
+                    "source_object_name": "UTSPConnector",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "Consumption without any EMS control"
+                    ],
+                    "source_weight": 999
+                },
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricalInputPowerTotalHeatpump",
+                    "source_object_name": "HeatPumpHPLib",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "Consumption without any EMS control"
+                    ],
+                    "source_weight": 999
+                }
+            ],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.generic_car.Car",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Car_2_22kW_Charging_Power_avg_Speed_30_kmh_0",
+                "source_weight": 1,
+                "fuel": "Diesel",
+                "consumption_per_km": 0.06,
+                "device_co2_footprint_in_kg": 9139.3,
+                "investment_costs_in_euro": 32035.0,
+                "lifetime_in_years": 18,
+                "maintenance_costs_in_euro_per_year": 640.7,
+                "household_name": "CHR01_Couple_both_at_Work_HH1"
+            },
+            "config_full_classname": "hisim.components.generic_car.CarConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        }
+    ],
+    "connections": [
+        {
+            "source": {
+                "component_name": "HeatPumpControllerSH",
+                "field_name": "State_SH"
+            },
+            "target": {
+                "component_name": "HeatPumpHPLib",
+                "field_name": "OnOffSwitchSH"
+            }
+        },
+        {
+            "source": {
+                "component_name": "HeatPumpControllerDHW",
+                "field_name": "StateDHW"
+            },
+            "target": {
+                "component_name": "HeatPumpHPLib",
+                "field_name": "OnOffSwitchDHW"
+            }
+        },
+        {
+            "source": {
+                "component_name": "HeatPumpControllerDHW",
+                "field_name": "ThermalPowerDHWConst"
+            },
+            "target": {
+                "component_name": "HeatPumpHPLib",
+                "field_name": "ThermalPowerIsConstantForDHW"
+            }
+        },
+        {
+            "source": {
+                "component_name": "HeatPumpControllerDHW",
+                "field_name": "ThermalPowerHPForDHWConst"
+            },
+            "target": {
+                "component_name": "HeatPumpHPLib",
+                "field_name": "MaxThermalPowerValueForDHW"
+            }
+        },
+        {
+            "source": {
+                "component_name": "Weather",
+                "field_name": "DailyAverageOutsideTemperatures"
+            },
+            "target": {
+                "component_name": "HeatPumpHPLib",
+                "field_name": "TemperatureAmbient"
+            }
+        },
+        {
+            "source": {
+                "component_name": "SimpleHotWaterStorage",
+                "field_name": "WaterTemperatureToHeatGenerator"
+            },
+            "target": {
+                "component_name": "HeatPumpHPLib",
+                "field_name": "TemperatureInputSecondarySH"
+            }
+        },
+        {
+            "source": {
+                "component_name": "DHWStorage",
+                "field_name": "WaterMeanTemperatureInStorage"
+            },
+            "target": {
+                "component_name": "HeatPumpHPLib",
+                "field_name": "TemperatureInputSecondaryDHW"
+            }
+        },
+        {
+            "source": {
+                "component_name": "Weather",
+                "field_name": "DailyAverageOutsideTemperatures"
+            },
+            "target": {
+                "component_name": "HeatPumpHPLib",
+                "field_name": "TemperatureInputPrimary"
+            }
+        },
+        {
+            "source": {
+                "component_name": "DHWStorage",
+                "field_name": "WaterMeanTemperatureInStorage"
+            },
+            "target": {
+                "component_name": "HeatPumpControllerDHW",
+                "field_name": "WaterTemperatureInputFromDHWStorage"
+            }
+        },
+        {
+            "source": {
+                "component_name": "HeatDistributionSystem",
+                "field_name": "WaterTemperatureOutput"
+            },
+            "target": {
+                "component_name": "SimpleHotWaterStorage",
+                "field_name": "WaterTemperatureFromHeatDistribution"
+            }
+        },
+        {
+            "source": {
+                "component_name": "HeatPumpHPLib",
+                "field_name": "TemperatureOutputSH"
+            },
+            "target": {
+                "component_name": "SimpleHotWaterStorage",
+                "field_name": "WaterTemperatureFromHeatGenerator"
+            }
+        },
+        {
+            "source": {
+                "component_name": "HeatPumpHPLib",
+                "field_name": "MassFlowOutputSH"
+            },
+            "target": {
+                "component_name": "SimpleHotWaterStorage",
+                "field_name": "WaterMassFlowRateFromHeatGenerator"
+            }
+        },
+        {
+            "source": {
+                "component_name": "UTSPConnector",
+                "field_name": "ElectricalPowerConsumption"
+            },
+            "target": {
+                "component_name": "ElectricityMeter",
+                "field_name": "Input_UTSPConnector_ElectricalPowerConsumption_0"
+            }
+        },
+        {
+            "source": {
+                "component_name": "HeatPumpHPLib",
+                "field_name": "ElectricalInputPowerTotalHeatpump"
+            },
+            "target": {
+                "component_name": "ElectricityMeter",
+                "field_name": "Input_HeatPumpHPLib_ElectricalInputPowerTotalHeatpump_1"
+            }
+        }
+    ]
+}

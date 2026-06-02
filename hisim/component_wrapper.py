@@ -84,6 +84,8 @@ class ComponentWrapper:
             all_outputs.append(output)
             self.component_outputs.append(output)
             log.debug("Registered output " + output.full_name)
+            if not self.component_outputs:
+                raise ValueError(f"The component {self.my_component.component_name} has no outputs registered.")
 
     def register_component_inputs(self, global_column_dict: Dict[str, Any]) -> None:
         """Gets the inputs for the current component from the global column dict and puts them into component_inputs."""

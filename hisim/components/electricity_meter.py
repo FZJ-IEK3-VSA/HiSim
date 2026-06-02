@@ -271,6 +271,7 @@ class ElectricityMeter(DynamicComponent):
         self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_electric_heater())
         self.add_dynamic_default_connections(self.get_default_connections_from_solar_thermal_system())
+        self.add_dynamic_default_connections(self.get_default_connections_from_electric_car())
 
     def get_default_connections_from_utsp_occupancy(
         self,
@@ -466,6 +467,28 @@ class ElectricityMeter(DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.SOLAR_THERMAL_SYSTEM, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_electric_car(
+        self,
+    ):
+        """Get electric car default connections."""
+
+        from hisim.components.controller_l1_generic_ev_charge import L1Controller  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        electric_car_charger_class_name = L1Controller.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=L1Controller,
+                source_class_name=electric_car_charger_class_name,
+                source_component_field_name=L1Controller.BatteryChargingPowerToEMS,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
                 source_weight=999,
             )
         )
@@ -694,6 +717,7 @@ class ElectricityMeter(DynamicComponent):
         total_energy_to_grid_in_kwh: float
         total_power_from_grid_in_watt: float
         total_power_to_grid_in_watt: float
+
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.load_type == lt.LoadTypes.ELECTRICITY:

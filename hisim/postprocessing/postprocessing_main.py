@@ -903,6 +903,7 @@ class PostProcessor:
     def write_config_data_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
         """Prepare the results for the scenario evaluation."""
         # create dictionary with all import data information
+
         if PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in ppdt.post_processing_options:
             result_data_folder_for_scenario_evaluation = os.path.join(
                 ppdt.simulation_parameters.result_directory, "result_data_for_scenario_evaluation"

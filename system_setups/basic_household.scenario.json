@@ -1,0 +1,263 @@
+{
+    "name": "Basic household",
+    "description": "Basic household system setup. Shows how to set up a standard system.",
+    "multiple_buildings": false,
+    "components": [
+        {
+            "component_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "UTSPConnector",
+                "data_acquisition_mode": "use_predefined_profile",
+                "household": {
+                    "name": "CHR01 Couple both at Work",
+                    "guid": {
+                        "str_val": "516a33ab-79e1-4221-853b-967fc11cc85a"
+                    }
+                },
+                "energy_intensity": "EnergySaving",
+                "travel_route_set": {
+                    "name": "Travel Route Set for 10km Commuting Distance",
+                    "guid": {
+                        "str_val": "ca46be86-9cc7-47b5-9769-abff78ceca7a"
+                    }
+                },
+                "transportation_device_set": {
+                    "name": "Bus and one 30 km/h Car",
+                    "guid": {
+                        "str_val": "6ac74bd0-bacd-4b39-b84a-dc7ae16702c9"
+                    }
+                },
+                "charging_station_set": {
+                    "name": "Charging At Home with 11 kW",
+                    "guid": {
+                        "str_val": "78dae308-24c4-45cc-8bdf-b001d61f45c2"
+                    }
+                },
+                "profile_with_washing_machine_and_dishwasher": true,
+                "predictive_control": false,
+                "predictive": false,
+                "result_dir_path": "<<utils.HISIMPATH['utsp_results']>>",
+                "cache_dir_path": null,
+                "name_of_predefined_loadprofile": "CHR01 Couple both at Work",
+                "predefined_loadprofile_filepaths": null,
+                "guid": "",
+                "calculation_index_for_local_lpg": null,
+                "cars": null
+            },
+            "config_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.weather.Weather",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Weather",
+                "location": "Aachen",
+                "source_path": "<<utils.get_input_directory()>>\\weather\\test-reference-years_1995-2012_1-location\\data_processed\\aachen_center",
+                "data_source": 1,
+                "predictive_control": false
+            },
+            "config_full_classname": "hisim.components.weather.WeatherConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.generic_pv_system.PVSystem",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "PVSystem",
+                "time": 2019,
+                "location": "Aachen",
+                "module_name": "Trina Solar TSM-435NE09RC.05",
+                "integrate_inverter": true,
+                "inverter_name": "Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]",
+                "module_database": 3,
+                "inverter_database": 4,
+                "power_in_watt": 10000.0,
+                "azimuth": 180,
+                "tilt": 30,
+                "share_of_maximum_pv_potential": 1.0,
+                "load_module_data": false,
+                "source_weight": 0,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null,
+                "predictive": false,
+                "predictive_control": false,
+                "prediction_horizon": null
+            },
+            "config_full_classname": "hisim.components.generic_pv_system.PVSystemConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.electricity_meter.ElectricityMeter",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "ElectricityMeter",
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.electricity_meter.ElectricityMeterConfig",
+            "inputs": [
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricityOutput",
+                    "source_object_name": "PVSystem",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "PV",
+                        "ElectricityProduction"
+                    ],
+                    "source_weight": 999
+                },
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricalPowerConsumption",
+                    "source_object_name": "UTSPConnector",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "Consumption without any EMS control"
+                    ],
+                    "source_weight": 999
+                },
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricityOutput",
+                    "source_object_name": "HeatPump",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "HeatPump",
+                        "Consumption without any EMS control"
+                    ],
+                    "source_weight": 999
+                }
+            ],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.building.Building",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Building",
+                "heating_reference_temperature_in_celsius": -7.0,
+                "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
+                "building_heat_capacity_class": "medium",
+                "initial_internal_temperature_in_celsius": 22.0,
+                "absolute_conditioned_floor_area_in_m2": 121.2,
+                "total_base_area_in_m2": null,
+                "number_of_apartments": null,
+                "max_thermal_building_demand_in_watt": null,
+                "floor_u_value_in_watt_per_m2_per_kelvin": null,
+                "floor_area_in_m2": null,
+                "facade_u_value_in_watt_per_m2_per_kelvin": null,
+                "facade_area_in_m2": null,
+                "roof_u_value_in_watt_per_m2_per_kelvin": null,
+                "roof_area_in_m2": null,
+                "window_u_value_in_watt_per_m2_per_kelvin": null,
+                "window_area_in_m2": null,
+                "door_u_value_in_watt_per_m2_per_kelvin": null,
+                "door_area_in_m2": null,
+                "predictive": false,
+                "set_heating_temperature_in_celsius": 20.0,
+                "set_cooling_temperature_in_celsius": 25.0,
+                "enable_opening_windows": false,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.building.BuildingConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.generic_heat_pump.GenericHeatPumpController",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "GenericHeatPumpController",
+                "temperature_air_heating_in_celsius": 19.0,
+                "temperature_air_cooling_in_celsius": 24.0,
+                "offset": 0.5,
+                "mode": 2
+            },
+            "config_full_classname": "hisim.components.generic_heat_pump.GenericHeatPumpControllerConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.generic_heat_pump.GenericHeatPump",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "HeatPump",
+                "manufacturer": "Viessmann Werke GmbH & Co KG",
+                "heat_pump_name": "Vitocal 300-A AWO-AC 301.B07",
+                "min_operation_time": 3600,
+                "min_idle_time": 900
+            },
+            "config_full_classname": "hisim.components.generic_heat_pump.GenericHeatPumpConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        }
+    ],
+    "connections": [
+        {
+            "source": {
+                "component_name": "PVSystem",
+                "field_name": "ElectricityOutput"
+            },
+            "target": {
+                "component_name": "ElectricityMeter",
+                "field_name": "Input_PVSystem_ElectricityOutput_0"
+            }
+        },
+        {
+            "source": {
+                "component_name": "UTSPConnector",
+                "field_name": "ElectricalPowerConsumption"
+            },
+            "target": {
+                "component_name": "ElectricityMeter",
+                "field_name": "Input_UTSPConnector_ElectricalPowerConsumption_1"
+            }
+        },
+        {
+            "source": {
+                "component_name": "HeatPump",
+                "field_name": "ElectricityOutput"
+            },
+            "target": {
+                "component_name": "ElectricityMeter",
+                "field_name": "Input_HeatPump_ElectricityOutput_2"
+            }
+        },
+        {
+            "source": {
+                "component_name": "HeatPump",
+                "field_name": "ThermalPowerDelivered"
+            },
+            "target": {
+                "component_name": "Building",
+                "field_name": "ThermalPowerDelivered"
+            }
+        }
+    ]
+}

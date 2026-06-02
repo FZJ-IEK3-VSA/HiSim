@@ -119,3 +119,13 @@ def test_household_heatpump_solar_thermal_heating():
 
     hisim_main.main(path, my_simulation_parameters)
     log.information(os.getcwd())
+
+
+@pytest.mark.system_setups
+@utils.measure_execution_time
+def test_household_heatpump_car():
+    """Single day."""
+    path = "../system_setups/household_heatpump_car_building_sizer.py"
+
+    hisim_main.main(path, my_simulation_parameters)
+    log.information(os.getcwd())

@@ -25,8 +25,7 @@ class ArcheTypeConfig:
     conditioned_floor_area_in_m2: float = 121.2
     number_of_dwellings_per_building: int = 1
     norm_heating_load_in_kilowatt: Optional[float] = None
-    # weather_location: str = "AACHEN"
-    weather_location: Optional[str] = None
+    weather_location: str = "AACHEN"
     weather_try_region: int = 6
 
     weather_filepath: Optional[str] = None
@@ -42,23 +41,3 @@ class ArcheTypeConfig:
     construction_year: int = 1964
     coordinates_latitude: float = 50.77664
     coordinates_longitude: float = 6.0834
-
-    # #: considered mobility options, passed as inputs to the LoadProfileGenerator and considered to model cars
-    # mobility_set: Optional[JsonReference] = None
-    # # field(
-    # #     default_factory=lambda: TransportationDeviceSets.Bus_and_one_30_km_h_Car  # type: ignore
-    # #     )
-    # #: average daily commuting distance in kilometers, passed as input to the LoadProfileGenerator and considered to model consumption of cars
-    # mobility_distance: Optional[JsonReference] = field(
-    #     default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_15km_Commuting_Distance
-    # )  # type: ignore
-
-
-# def create_archetype_config_file() -> None:
-#     """Component Cost file is created."""
-
-#     config_file=ArcheTypeConfig()
-#     config_file_written = config_file.to_json()
-
-#     with open('arche_type_config.json', 'w', encoding="utf-8") as outfile:
-#         outfile.write(config_file_written)

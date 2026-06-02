@@ -59,7 +59,7 @@ class KpiEntry(JSONWizard):
 
     name: str
     unit: str
-    value: Optional[float]
+    value: Optional[Union[float, str]]
     description: Optional[str] = None
     tag: Optional[KpiTagEnumClass] = None
     name_of_source_component: Optional[str] = None

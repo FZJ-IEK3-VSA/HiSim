@@ -141,6 +141,20 @@ A `Component` child class has to have the following methods implemented:
 
 These methods are used by `Simulator` to execute the simulation and generate the results.
 
+List of `Component` Children
+-----------
+Theses classes inherent from `Component` (`component.py`) class and can be used in your setup function to customize different configurations. All `Component` class children are stored in `hisim/hisim/components` directory. Some of these classes are:
+
+- `RandomNumbers` (`random_numbers.py`)
+- `SimpleWaterStorage` (`simple_water_storage.py`)
+- `NightSetbackController` (`night_setback_controller.py`)
+- `Transformer` (`transformer_rectifier.py`)
+- `PVSystem` (`generic_pv_system.py`)
+- `SimpleCHP` (`generic_chp.py`)
+- `CSVLoader` (`csvloader.py`)
+- `SumBuilderForTwoInputs` (`sumbuilder.py`)
+- `SumBuilderForThreeInputs` (`sumbuilder.py`)
+- ToDo: more components to be added
 
 Connecting Input/Outputs
 -----------

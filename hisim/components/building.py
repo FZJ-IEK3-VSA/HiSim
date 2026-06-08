@@ -74,8 +74,8 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class BuildingConfig(cp.ConfigBase):
-    """Configuration of the Building class.
-    
+    r"""Configuration of the Building class.
+
     The following parameters are no longer a full description - the documentation should be amended.
 
     Parameters
@@ -312,7 +312,7 @@ class Building(cp.Component):
         # add inputs and outputs
         self.add_all_inputs()
         self.add_all_outputs()
- 
+
         # add default connections
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_utsp_occupancy())
@@ -371,7 +371,7 @@ class Building(cp.Component):
             lt.Units.WATT_PER_SQUARE_METER,
             True,
         )
-        self.direct_horizontal_irradiance_channel: cp.ComponentInput = self.add_input(
+        self.diffuse_horizontal_irradiance_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.DiffuseHorizontalIrradiance,
             lt.LoadTypes.IRRADIANCE,
@@ -709,7 +709,7 @@ class Building(cp.Component):
         )
 
     def get_conductances(self) -> Tuple[float, float, float, float, float, float]:
-        """Get the thermal conductances based on the norm EN ISO 13970.
+        r"""Get the thermal conductances based on the norm EN ISO 13970.
 
         Returns:
             tuple(float, float, float, float, float, float):
@@ -818,7 +818,7 @@ class Building(cp.Component):
         if hasattr(self, "solar_gain_through_windows") is False:
             azimuth = stsv.get_input_value(self.azimuth_channel)
             direct_normal_irradiance = stsv.get_input_value(self.direct_normal_irradiance_channel)
-            direct_horizontal_irradiance = stsv.get_input_value(self.direct_horizontal_irradiance_channel)
+            diffuse_horizontal_irradiance = stsv.get_input_value(self.diffuse_horizontal_irradiance_channel)
             global_horizontal_irradiance = stsv.get_input_value(self.global_horizontal_irradiance_channel)
             direct_normal_irradiance_extra = stsv.get_input_value(self.direct_normal_irradiance_extra_channel)
             apparent_zenith = stsv.get_input_value(self.apparent_zenith_channel)
@@ -846,12 +846,12 @@ class Building(cp.Component):
         # Performs calculations
         if hasattr(self, "solar_gain_through_windows") is False:
             solar_heat_gain_through_windows_in_watt = self.get_solar_heat_gain_through_windows(
-                azimuth=azimuth,  # type: ignore - this isn't really unbound, as the other if has the same condition
-                direct_normal_irradiance=direct_normal_irradiance,  # type: ignore - see above
-                direct_horizontal_irradiance=direct_horizontal_irradiance,  # type: ignore - see above
-                global_horizontal_irradiance=global_horizontal_irradiance,  # type: ignore - see above
-                direct_normal_irradiance_extra=direct_normal_irradiance_extra,  # type: ignore - see above
-                apparent_zenith=apparent_zenith,  # type: ignore - see above
+                azimuth=azimuth,  # type: ignore # this isn't really unbound, as the other if has the same condition
+                direct_normal_irradiance=direct_normal_irradiance,  # type: ignore # see above
+                diffuse_horizontal_irradiance=diffuse_horizontal_irradiance,  # type: ignore # see above
+                global_horizontal_irradiance=global_horizontal_irradiance,  # type: ignore # see above
+                direct_normal_irradiance_extra=direct_normal_irradiance_extra,  # type: ignore # see above
+                apparent_zenith=apparent_zenith,  # type: ignore # see above
             )
         else:
             solar_heat_gain_through_windows_in_watt = self.solar_heat_gain_through_windows[timestep]
@@ -1029,7 +1029,7 @@ class Building(cp.Component):
             apparent_zenith_forecast = SingletonSimRepository().get_entry(
                 key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST
             )
-            direct_horizontal_irradiance_forecast = SingletonSimRepository().get_entry(
+            diffuse_horizontal_irradiance_forecast = SingletonSimRepository().get_entry(
                 key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST
             )
             direct_normal_irradiance_forecast = SingletonSimRepository().get_entry(
@@ -1047,7 +1047,7 @@ class Building(cp.Component):
                 solar_gains_forecast_yearly = self.get_solar_heat_gain_through_windows(
                     azimuth=azimuth_forecast[i],
                     direct_normal_irradiance=direct_normal_irradiance_forecast[i],
-                    direct_horizontal_irradiance=direct_horizontal_irradiance_forecast[i],
+                    diffuse_horizontal_irradiance=diffuse_horizontal_irradiance_forecast[i],
                     global_horizontal_irradiance=global_horizontal_irradiance_forecast[i],
                     direct_normal_irradiance_extra=direct_normal_irradiance_extra_forecast[i],
                     apparent_zenith=apparent_zenith_forecast[i],
@@ -1183,7 +1183,7 @@ class Building(cp.Component):
         return opex_cost_data_class
 
     @staticmethod
-    def get_cost_capex(  # type: ignore - the error here is that get_cost_capex requires ConfigBase in Component, and we use a child class here
+    def get_cost_capex(  # type: ignore # the error here is that get_cost_capex requires ConfigBase in Component, and we use a child class
         config: BuildingConfig, simulation_parameters: SimulationParameters
     ) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
@@ -1529,7 +1529,7 @@ class Building(cp.Component):
         """
         # Long from for H_tr_ms, this is the same as internal pasrt of transmission heat transfer coefficient for opaque elements
         return float(
-            self.my_building_information.effective_mass_area_in_m2 
+            self.my_building_information.effective_mass_area_in_m2
             * heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin
         )
 
@@ -1583,7 +1583,7 @@ class Building(cp.Component):
         self,
         azimuth,
         direct_normal_irradiance,
-        direct_horizontal_irradiance,
+        diffuse_horizontal_irradiance,
         global_horizontal_irradiance,
         direct_normal_irradiance_extra,
         apparent_zenith,
@@ -1592,23 +1592,25 @@ class Building(cp.Component):
 
         Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)
         """
-        solar_heat_gains = 0.0
-
-        if direct_normal_irradiance != 0 or direct_horizontal_irradiance != 0 or global_horizontal_irradiance != 0:
-            for window in self.windows:
-                solar_heat_gain = window.calc_solar_heat_gains(
-                    sun_azimuth=azimuth,
-                    direct_normal_irradiance=direct_normal_irradiance,
-                    direct_horizontal_irradiance=direct_horizontal_irradiance,
-                    global_horizontal_irradiance=global_horizontal_irradiance,
-                    direct_normal_irradiance_extra=direct_normal_irradiance_extra,
-                    apparent_zenith=apparent_zenith,
-                    window_tilt_angle=window.window_tilt_angle,
-                    window_azimuth_angle=window.window_azimuth_angle,
-                    reduction_factor_with_area=window.reduction_factor_with_area,
-                )
-                solar_heat_gains += solar_heat_gain
-        return solar_heat_gains
+        # if all irradiances are zero: skip calculation
+        if direct_normal_irradiance == 0 and diffuse_horizontal_irradiance == 0 and global_horizontal_irradiance == 0:
+            return 0.0
+        # else: iterate through windows
+        total_solar_heat_gains = 0.0
+        for window in self.windows:
+            solar_heat_gain = window.calc_solar_heat_gains(
+                sun_azimuth=azimuth,
+                direct_normal_irradiance=direct_normal_irradiance,
+                diffuse_horizontal_irradiance=diffuse_horizontal_irradiance,
+                global_horizontal_irradiance=global_horizontal_irradiance,
+                direct_normal_irradiance_extra=direct_normal_irradiance_extra,
+                apparent_zenith=apparent_zenith,
+                window_tilt_angle=window.window_tilt_angle,
+                window_azimuth_angle=window.window_azimuth_angle,
+                reduction_factor_with_area=window.reduction_factor_with_area,
+            )
+            total_solar_heat_gains += solar_heat_gain
+        return total_solar_heat_gains
 
     # =====================================================================================================================================
     # Calculation of the heat flows from internal and solar heat sources.
@@ -1940,7 +1942,6 @@ class Building(cp.Component):
         Returns:
             float: The theoretical thermal building demand in watt.
         """
-
         # step1, calculate air temperature when thermal power delivered is zero
         indoor_air_temperature_zero_in_celsius = self.calc_indoor_air_temperature_zero_step_one(
             previous_thermal_mass_temperature_in_celsius=previous_thermal_mass_temperature_in_celsius,
@@ -1949,7 +1950,6 @@ class Building(cp.Component):
             heat_flux_indoor_air_in_watt=heat_flux_indoor_air_in_watt,
             heat_flux_internal_room_surface_in_watt=heat_flux_internal_room_surface_in_watt,
         )
-
         # conditions for air_temperature_zero
         if (
             set_heating_temperature_in_celsius
@@ -1990,7 +1990,7 @@ class Building(cp.Component):
             )
         else:
             raise ValueError(
-                f"Value error for theoretical building demand. Indoor_air_temp_zero has uncompatible value {indoor_air_temperature_zero_in_celsius} C."
+                f"Value error for theoretical building demand. Indoor_air_temp_zero has incompatible value {indoor_air_temperature_zero_in_celsius} C."
             )
 
         return theoretical_thermal_building_demand_in_watt
@@ -2129,14 +2129,14 @@ class Window:
         window_azimuth_angle: float | None = None,
     ):
         """Construct all the neccessary attributes. See class documentation for a list and explanations.
-        
+
         You have to provide all parameters, except window_azimuth_angle. If you provide None for
         that or leave it empty, it is automatically set to 0 (south) and a warning is logged.
         """
         # Angles
-        self.window_tilt_angle: float = window_tilt_angle # this value is in degrees!
+        self.window_tilt_angle: float = window_tilt_angle  # this value is in degrees!
         if window_azimuth_angle is None:
-            window_azimuth_angle = 0
+            self.window_azimuth_angle = 0
             log.warning("Window azimuth angle was set to 0 south because no value was set.")
         else:
             self.window_azimuth_angle = window_azimuth_angle
@@ -2213,7 +2213,7 @@ class Window:
         self,
         sun_azimuth,
         direct_normal_irradiance,
-        direct_horizontal_irradiance,
+        diffuse_horizontal_irradiance,
         global_horizontal_irradiance,
         direct_normal_irradiance_extra,
         apparent_zenith,
@@ -2243,7 +2243,7 @@ class Window:
             sun_azimuth,
             direct_normal_irradiance,
             global_horizontal_irradiance,
-            direct_horizontal_irradiance,
+            diffuse_horizontal_irradiance,
             direct_normal_irradiance_extra,
         )
 

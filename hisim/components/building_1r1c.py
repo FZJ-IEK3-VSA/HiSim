@@ -41,10 +41,18 @@ class Building1R1CConfig(cp.ConfigBase):
             coefficient, glare factor (for non-orthogonal incidence), ratio of the window that is the frame,
             and external shading. Default: 0.65 * 0.9 * 0.7 * 0.7 = 0.28665.
 
-        thermal_capacity (float): The thermal capacity of the building.
+        thermal_capacity (float): The thermal capacity of the building in J/K.
         u_values (dict[str, float]): Contains the u-values of the five hull parts: "floor", "wall", "roof", "windows",
             "door", with those strings as keys and the u-values in W/(m² K) as values.
         areas (dict[str, float]): Contains the areas of the five hull parts in m², similar to the u-values.
+
+        air_volume (float): The volume of air in m³ in the building. Gets set automatically.
+        air_exchange_rate (float): The rate of air exchange with the outside in h^-1, which fraction of the air is
+            exchanged with the outside each hour. Default: 0.5.
+        air_heat_cap (float): The heat capacity of air. Unless you are simulating on a different planet, you likely
+            do not have a reason to change this. Default: 0.34 Wh/(m³ K)
+        
+        
     """
     @classmethod
     def get_main_classname(cls):
@@ -59,6 +67,10 @@ class Building1R1CConfig(cp.ConfigBase):
     name: str
     target_temperature: float
     solar_gain_reduction_factor: float
+
+    air_volume: float
+    air_exchange_rate: float
+    air_heat_cap: float
 
     def __init__(
         self,
@@ -93,8 +105,8 @@ class Building1R1CConfig(cp.ConfigBase):
                 or using the wall and floor areas that are guaranteed to exist. Default: None.
             air_exchange_rate (float): The rate at which air is exchanged through ventilation in
                 per hour (h^(-1)). Default: 0.5. 
-            thermal_capacity (float or str): This sets the "thermal_capacity" attribute. There are
-                two ways to use this:
+            thermal_capacity (float or str): This sets the "thermal_capacity" attribute. Uni: J/K.
+                There are two ways to use this:
                 - Provide a float value directly. The attribute then gets set to this.
                 - Provide the string key of a heat capacity class. If you do this, you also need
                     to provide a float value to the keyword argument "living_area".<br>
@@ -109,7 +121,7 @@ class Building1R1CConfig(cp.ConfigBase):
                     you can leave out the door (the last one) and it will be set to 1.0.
                 - Leave empty or set to None: If you do this, you can alternatively set each
                     u_value individually by providing the kwargs: "floor_u_value" etc.
-            areas (dict(str, float) or list(float)): This sets the "areas" attribute. There
+            areas (dict(str, float) or list(float)): This sets the "areas" attribute in m². There
                 are almost the same options to use this as for the u_values parameter, but:
                 - If you leave "door" empty, it will be set to 2.0.
                 - You can additionally leave "window" empty, and it will be calculated using the
@@ -173,7 +185,7 @@ class Building1R1CConfig(cp.ConfigBase):
         else: self.set_air_volume(areas, kwargs)
 
     def set_thermal_capacity(self, thermal_capacity, kwargs):
-        """Helper function of __init__ to set the thermal capacity based on the different input options."""
+        """Helper function of __init__ to set the thermal capacity in J/K based on the different input options."""
         if isinstance(thermal_capacity, float) or isinstance(thermal_capacity, int):
             self.thermal_capacity = (float)(thermal_capacity)
         elif isinstance(thermal_capacity, str):
@@ -269,6 +281,15 @@ class Building1R1C(cp.Component):
 
     ### Creating an instance of Building1R1C:
         - documentation to be added ...
+
+    Attributes:
+        total_heat_transfer_coefficient (float): The lumped heat transfer coefficient from the mass
+            to the outside before correction factors. Gets calculated automatically based on values
+            from the config. Unit: W/K.
+        tau (float): A time constant that is calculated from thermal capacity / lumped heat transfer
+            coefficient. The higher this is, the slower the building cools off. Gets calculated
+            automatically from the config. Unit: (J/K) / (W/K) = W s / W = seconds.
+        more_to_follow (Any): ...
     """
 
     # --------------------------------------------------------------------------------------------
@@ -304,6 +325,8 @@ class Building1R1C(cp.Component):
     previous_state: float # whatever the state was before the current time step
     input_channels: dict[str, cp.ComponentInput] = {}
     output_channels: dict[str, cp.ComponentOutput] = {}
+    total_heat_transfer_coefficient: float
+    tau: float
     # ... other stuff from the superclass ...
 
     # --------------------------------------------------------------------------------------------
@@ -329,6 +352,7 @@ class Building1R1C(cp.Component):
                          my_display_config=my_display_config)
         # set a few static values
         self.total_heat_transfer_coefficient = self.get_total_heat_transfer_coefficient()
+        self.tau = self.config.thermal_capacity / self.total_heat_transfer_coefficient
         # set state
         self.state = config.target_temperature
         self.previous_state = self.state
@@ -432,7 +456,7 @@ class Building1R1C(cp.Component):
                 result += areas[hp] * u_values[hp]
         # add ventilation term and return
         heat_capacity = self.config.air_heat_cap * self.config.air_volume
-        result += heat_capacity * self.config.air_exchange_rate
+        result += heat_capacity * self.config.air_exchange_rate  # Unit here: (Wh/K) * (1/h) = W/K
         return result
 
     # --------------------------------------------------------------------------------------------
@@ -441,14 +465,14 @@ class Building1R1C(cp.Component):
 
     @staticmethod
     def get_heat_cap_by_living_area(living_area: float, cap_class: str = "medium") -> float:
-        """Calculate the heat capacity based on the living area and a capacity class.
+        """Calculate the heat capacity in J/K based on the living area and a capacity class.
         
         The heat capacity classes are taken from ISO 13790, table 12, p.69/70. For more info on
         the classes, see Building1R1C.get_heat_capacity_classes().
 
         Args:
             living_area (float): The living area of the building in m².
-            cap_class (str): One of five heat capacity classes 
+            cap_class (str): One of five heat capacity classes.
         """
         return Building1R1C.get_heat_capacity_classes()[cap_class] * living_area
 
@@ -478,6 +502,21 @@ class Building1R1C(cp.Component):
             "very heavy": 3.7e5,
         }
 
+    @staticmethod
+    def calc_k_c(tau: float, tdiff: float) -> float:
+        """Calculates k_c: An empirical correction factor for the heat losses.
+
+        # Todo: This function still needs to be written. For this, I first need to find a working
+        empirical formula. I will do this by comparing my results to the 5R1C model, tabula, and
+        the real values I get in my google poll.
+
+        Args:
+            tau (float): The building cooldown time constant in seconds. 
+                Calculated by dividing: heat capacity / heat transfer coefficient.
+            tdiff (float): The temperature difference between inside and outside in Kelvin.
+        """
+        return 1.0
+
     # --------------------------------------------------------------------------------------------
     # ----- "i-functions" ------------------------------------------------------------------------
     # --------------------------------------------------------------------------------------------
@@ -506,6 +545,9 @@ class Building1R1C(cp.Component):
         lines.append(f"U-values: {self.config.u_values}")
         lines.append(f"Areas: {self.config.areas}")
         lines.append(f"Thermal Capacity: {self.config.thermal_capacity}")
+        lines.append(f"Air volume: {self.config.air_volume}")
+        lines.append(f"Air exchange rate: {self.config.air_exchange_rate}")
+        lines.append(f"Air heat capacity: {self.config.air_heat_cap}")
         lines.append(f"Target temperature: {self.config.target_temperature}")
         return lines
 
@@ -530,13 +572,14 @@ class Building1R1C(cp.Component):
         # do the calculations
         solar_power_input = self.calc_solar_power_input(**solar_inputs)
         thermal_power_input = sum(thermal_power_inputs.values()) + solar_power_input
+        k_c = Building1R1C.calc_k_c(self.tau, t_internal_previous - temperature_outside)
         new_internal_temperature = self.calc_new_internal_temperature(
-            thermal_power_input, t_internal_previous, temperature_outside, seconds_per_timestep)
+            thermal_power_input, t_internal_previous, temperature_outside, seconds_per_timestep, k_c)
         # this may be weird, but the heat distribution system is lagging one time step,
         # so we use the final temperature here to calc the demand for the next time step,
         # but using the outdoor temperature of the current one... whatever, we make do with what we have
         theoretical_heat_demand = self.calc_theoretical_heat_demand(
-            new_internal_temperature, temperature_outside, seconds_per_timestep)
+            new_internal_temperature, temperature_outside, seconds_per_timestep, k_c)
 
         # set outputs and new state
         self.state = new_internal_temperature
@@ -564,23 +607,25 @@ class Building1R1C(cp.Component):
         t_internal: float,
         t_outside: float,
         seconds_per_timestep: int,
+        k_c: float,
         max_heating_rate: float = 1.0,
     ) -> float:
         """Calculates the theoretical heat demand of the building.
         
         For this component, it is the power that would be needed to keep the building at
         the target temperature or heat it up at a rate of up to [max_heating_rate] °C per hour
-        if the building is colder than it is supposed to be.
+        if the building is colder than it is supposed to be. This ignores internal and solar gains.
 
         Args:
             t_internal (float): The internal temperature with which the losses are calculated (in °C).
             t_outside (float): The ambient temperature in °C.
             seconds_per_timestep (int): How many seconds one time step has.
+            k_c (float): The empirical heat loss correction coefficient.
             max_heating_rate (float): The maximum heating rate in °C per hour. Default: 1.0.
         """
         # preparation
         cap_th = self.config.thermal_capacity
-        h_tr_coeff = self.total_heat_transfer_coefficient
+        h_tr_coeff = self.total_heat_transfer_coefficient * k_c
         # calculation
         p_loss_ambient = h_tr_coeff * (t_internal - t_outside)
         t_loss_ambient = p_loss_ambient / cap_th * seconds_per_timestep
@@ -626,6 +671,7 @@ class Building1R1C(cp.Component):
         t_internal_previous: float,
         t_outside: float,
         seconds_per_timestep: int,
+        k_c: float,
         method: str = "analytical"
     ) -> float:
         """Calculates the new internal temperature.
@@ -639,6 +685,7 @@ class Building1R1C(cp.Component):
                 the temperature at the beginning of the time step.
             t_outside (float): The ambient temperature in °C.
             seconds_per_timestep (int): How many seconds one time step has.
+            k_c (float): The empirical heat loss correction coefficient.
             method (str): Which calculation method to use. Currently implemented:
                 - "analytical": Solves the ODE analytically. Most accurate (no numerical error at
                     all), but also slowest. However, that barely matters, it's still very fast,
@@ -653,7 +700,7 @@ class Building1R1C(cp.Component):
         """
         # preparation
         cap_th = self.config.thermal_capacity
-        h_tr_coeff = self.total_heat_transfer_coefficient
+        h_tr_coeff = self.total_heat_transfer_coefficient * k_c
         # calculation
         if method == "analytical": # most accurate but slowest
             # Analytical solution of T' = P_heat/c - (T - T_amb) * H/c

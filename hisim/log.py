@@ -123,9 +123,15 @@ class Logger:
     # ----- logger class actual logging function -------------------------------------------------
     # --------------------------------------------------------------------------------------------
 
-    def log(self, prio: int, message: str, logging_message_path: str = logging_path,
+    def log(self, prio: int, message: str, logging_message_path: str|None = None,
             use_profile_file: bool = False) -> None:
-        """Write and print a log message."""
+        """Write and print a log message.
+        
+        If the parameter logging_message_path is not provided, the instance attribute
+        self.logging_path, which is set during the Logger setup, is used.
+        """
+        if logging_message_path is None:
+            logging_message_path = self.logging_path
         # if prio high enough: print to stdout
         if not use_profile_file and prio <= self.logging_level:
             print(str(LogPrio.get_prio_string(prio)) + ":" + message)
@@ -155,42 +161,42 @@ class Logger:
 logger = Logger()
 
 
-def error(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+def error(message: str, logging_message_path: str|None = None) -> None:
     """Log an error message."""
     logger.log(LogPrio.ERROR, message, logging_message_path, False)
 
 
-def warning(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+def warning(message: str, logging_message_path: str|None = None) -> None:
     """Log a warning message."""
     logger.log(LogPrio.WARNING, message, logging_message_path, False)
 
 
-def information(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+def information(message: str, logging_message_path: str|None = None) -> None:
     """Log a information message."""
     logger.log(LogPrio.INFORMATION, message, logging_message_path, False)
 
 
-def trace(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+def trace(message: str, logging_message_path: str|None = None) -> None:
     """Log a trace message."""
     logger.log(LogPrio.TRACE, message, logging_message_path, False)
 
 
-def debug(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+def debug(message: str, logging_message_path: str|None = None) -> None:
     """Log a debug message."""
     logger.log(LogPrio.DEBUG, message, logging_message_path, False)
 
 
-def profile(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+def profile(message: str, logging_message_path: str|None = None) -> None:
     """Log a profile message."""
     logger.log(LogPrio.PROFILE, message, logging_message_path, False)
     logger.log(LogPrio.PROFILE, message, logging_message_path, True)
 
 
-def log(prio: int, message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+def log(prio: int, message: str, logging_message_path: str|None = None) -> None:
     """Write and print a log message."""
     logger.log(prio, message, logging_message_path)
 
 
-def log_profile_file(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+def log_profile_file(message: str, logging_message_path: str|None = None) -> None:
     """Write log message to logfile."""
     logger.log(LogPrio.PROFILE, message, logging_message_path, True)

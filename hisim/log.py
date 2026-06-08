@@ -126,7 +126,7 @@ class Logger:
     def log(self, prio: int, message: str, logging_message_path: str|None = None,
             use_profile_file: bool = False) -> None:
         """Write and print a log message.
-        
+
         If the parameter logging_message_path is not provided, the instance attribute
         self.logging_path, which is set during the Logger setup, is used.
         """

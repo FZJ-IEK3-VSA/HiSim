@@ -1,0 +1,411 @@
+{
+    "name": "Household electric heating building sizer",
+    "description": "Basic household new system setup.",
+    "multiple_buildings": false,
+    "components": [
+        {
+            "component_full_classname": "hisim.components.building.Building",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Building",
+                "heating_reference_temperature_in_celsius": -7.0,
+                "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
+                "building_heat_capacity_class": "medium",
+                "initial_internal_temperature_in_celsius": 22.0,
+                "absolute_conditioned_floor_area_in_m2": 121.2,
+                "total_base_area_in_m2": null,
+                "number_of_apartments": 1,
+                "max_thermal_building_demand_in_watt": null,
+                "floor_u_value_in_watt_per_m2_per_kelvin": null,
+                "floor_area_in_m2": null,
+                "facade_u_value_in_watt_per_m2_per_kelvin": null,
+                "facade_area_in_m2": null,
+                "roof_u_value_in_watt_per_m2_per_kelvin": null,
+                "roof_area_in_m2": null,
+                "window_u_value_in_watt_per_m2_per_kelvin": null,
+                "window_area_in_m2": null,
+                "door_u_value_in_watt_per_m2_per_kelvin": null,
+                "door_area_in_m2": null,
+                "predictive": false,
+                "set_heating_temperature_in_celsius": 20.0,
+                "set_cooling_temperature_in_celsius": 25.0,
+                "enable_opening_windows": true,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.building.BuildingConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "UTSPConnector",
+                "data_acquisition_mode": "use_local_lpg",
+                "household": {
+                    "name": "CHR01 Couple both at Work",
+                    "guid": {
+                        "str_val": "516a33ab-79e1-4221-853b-967fc11cc85a"
+                    }
+                },
+                "energy_intensity": "EnergySaving",
+                "travel_route_set": {
+                    "name": "Travel Route Set for 10km Commuting Distance",
+                    "guid": {
+                        "str_val": "ca46be86-9cc7-47b5-9769-abff78ceca7a"
+                    }
+                },
+                "transportation_device_set": {
+                    "name": "Bus and one 30 km/h Car",
+                    "guid": {
+                        "str_val": "6ac74bd0-bacd-4b39-b84a-dc7ae16702c9"
+                    }
+                },
+                "charging_station_set": {
+                    "name": "Charging At Home with 11 kW",
+                    "guid": {
+                        "str_val": "78dae308-24c4-45cc-8bdf-b001d61f45c2"
+                    }
+                },
+                "profile_with_washing_machine_and_dishwasher": true,
+                "predictive_control": false,
+                "predictive": false,
+                "result_dir_path": "<<utils.HISIMPATH['utsp_results']>>",
+                "cache_dir_path": null,
+                "name_of_predefined_loadprofile": "CHR01 Couple both at Work",
+                "predefined_loadprofile_filepaths": null,
+                "guid": "",
+                "calculation_index_for_local_lpg": null,
+                "cars": null
+            },
+            "config_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.weather.Weather",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Weather",
+                "location": "Aachen",
+                "source_path": "<<utils.get_input_directory()>>\\weather\\test-reference-years_1995-2012_1-location\\data_processed\\aachen_center",
+                "data_source": 1,
+                "predictive_control": false
+            },
+            "config_full_classname": "hisim.components.weather.WeatherConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.generic_pv_system.PVSystem",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "PVSystem",
+                "time": 2019,
+                "location": "AACHEN",
+                "module_name": "Trina Solar TSM-435NE09RC.05",
+                "integrate_inverter": true,
+                "inverter_name": "Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]",
+                "module_database": 3,
+                "inverter_database": 4,
+                "power_in_watt": 22272.28,
+                "azimuth": 180,
+                "tilt": 30,
+                "share_of_maximum_pv_potential": 1.0,
+                "load_module_data": false,
+                "source_weight": 0,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null,
+                "predictive": false,
+                "predictive_control": false,
+                "prediction_horizon": null
+            },
+            "config_full_classname": "hisim.components.generic_pv_system.PVSystemConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.generic_electric_heating.ElectricHeatingController",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "ElectricHeatingController",
+                "set_heating_threshold_outside_temperature_in_celsius": 18.0,
+                "with_domestic_hot_water_preparation": true,
+                "hysteresis_water_temperature_offset": 15,
+                "parallel_space_heating_and_dhw_option": true,
+                "specific_heating_load_of_building_in_watt_per_m2": 64.19762541254126
+            },
+            "config_full_classname": "hisim.components.generic_electric_heating.ElectricHeatingControllerConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.generic_electric_heating.ElectricHeating",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "ElectricHeating",
+                "maximum_electric_power_w": 7780.752200000001,
+                "efficiency": 1.0,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null,
+                "with_domestic_hot_water_preparation": true
+            },
+            "config_full_classname": "hisim.components.generic_electric_heating.ElectricHeatingConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.simple_water_storage.SimpleDHWStorage",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "DHWStorage",
+                "volume_heating_water_storage_in_liter": 250.0,
+                "heat_transfer_coefficient_in_watt_per_m2_per_kelvin": 0.36,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.simple_water_storage.SimpleDHWStorageConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.electricity_meter.ElectricityMeter",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "ElectricityMeter",
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.electricity_meter.ElectricityMeterConfig",
+            "inputs": [
+                {
+                    "dynamic": true,
+                    "source_component_output": "TotalElectricityToOrFromGrid",
+                    "source_object_name": "L2EMSElectricityController",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "ElectricityProduction"
+                    ],
+                    "source_weight": 999
+                }
+            ],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.advanced_battery_bslib.Battery",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Battery",
+                "source_weight": 1,
+                "system_id": "SG1",
+                "custom_pv_inverter_power_generic_in_watt": 11136.14,
+                "custom_battery_capacity_generic_in_kilowatt_hour": 22.27,
+                "charge_in_kwh": 0,
+                "discharge_in_kwh": 0,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null,
+                "lifetime_in_cycles": 5000.0
+            },
+            "config_full_classname": "hisim.components.advanced_battery_bslib.BatteryConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "L2EMSElectricityController",
+                "strategy": "optimize_own_consumption",
+                "limit_to_shave": 0,
+                "building_indoor_temperature_offset_value": 2,
+                "domestic_hot_water_storage_temperature_offset_value": 10,
+                "space_heating_water_storage_temperature_offset_value": 10,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.controller_l2_energy_management_system.EMSConfig",
+            "inputs": [
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricalPowerConsumption",
+                    "source_object_name": "UTSPConnector",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "Residents",
+                        "Consumption with EMS control"
+                    ],
+                    "source_weight": 1
+                },
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricityOutput",
+                    "source_object_name": "PVSystem",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "PV",
+                        "ElectricityProduction"
+                    ],
+                    "source_weight": 999
+                },
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricOutputShPower",
+                    "source_object_name": "ElectricHeating",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "ElectricBoilerSH",
+                        "Consumption with EMS control"
+                    ],
+                    "source_weight": 2
+                },
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricOutputDhwPower",
+                    "source_object_name": "ElectricHeating",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "ElectricBoilerDHW",
+                        "Consumption with EMS control"
+                    ],
+                    "source_weight": 3
+                },
+                {
+                    "dynamic": true,
+                    "source_component_output": "AcBatteryPowerUsed",
+                    "source_object_name": "Battery",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "Battery",
+                        "Consumption with EMS control"
+                    ],
+                    "source_weight": 5
+                }
+            ],
+            "outputs": [
+                {
+                    "dynamic": true,
+                    "source_output_name": "LoadingPowerInputForBattery_",
+                    "source_tags": [
+                        "Battery",
+                        "ElectricityTarget"
+                    ],
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_weight": 6,
+                    "output_description": "Target electricity for Battery Control. ",
+                    "source_component_class": null
+                }
+            ],
+            "connect_automatically": false
+        }
+    ],
+    "connections": [
+        {
+            "source": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "TotalElectricityToOrFromGrid"
+            },
+            "target": {
+                "component_name": "ElectricityMeter",
+                "field_name": "Input_L2EMSElectricityController_TotalElectricityToOrFromGrid_0"
+            }
+        },
+        {
+            "source": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "LoadingPowerInputForBattery_Output16"
+            },
+            "target": {
+                "component_name": "Battery",
+                "field_name": "LoadingPowerInput"
+            }
+        },
+        {
+            "source": {
+                "component_name": "UTSPConnector",
+                "field_name": "ElectricalPowerConsumption"
+            },
+            "target": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "Input_UTSPConnector_ElectricalPowerConsumption_2"
+            }
+        },
+        {
+            "source": {
+                "component_name": "PVSystem",
+                "field_name": "ElectricityOutput"
+            },
+            "target": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "Input_PVSystem_ElectricityOutput_3"
+            }
+        },
+        {
+            "source": {
+                "component_name": "ElectricHeating",
+                "field_name": "ElectricOutputShPower"
+            },
+            "target": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "Input_ElectricHeating_ElectricOutputShPower_4"
+            }
+        },
+        {
+            "source": {
+                "component_name": "ElectricHeating",
+                "field_name": "ElectricOutputDhwPower"
+            },
+            "target": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "Input_ElectricHeating_ElectricOutputDhwPower_5"
+            }
+        },
+        {
+            "source": {
+                "component_name": "Battery",
+                "field_name": "AcBatteryPowerUsed"
+            },
+            "target": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "Input_Battery_AcBatteryPowerUsed_6"
+            }
+        }
+    ]
+}

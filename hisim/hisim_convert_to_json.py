@@ -69,10 +69,11 @@ def main(
 
     # Add parent directory to PYTHONPATH
     module_dir = path_obj.parent
-    if module_dir.exists():
-        sys.path.append(str(module_dir))
-    else:
-        raise ValueError(f"Directory of module does not exist: {module_dir}")
+    for parent in path_obj.parents:
+        if parent.exists():
+            sys.path.append(str(parent))
+        else:
+            raise ValueError(f"Directory of module does not exist: {module_dir}")
 
     # Final check and import
     if not path_obj.is_file():

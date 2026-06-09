@@ -259,15 +259,14 @@ class Simulator:
         stsv = cp.SingleTimeStepValues(number_of_outputs)
 
         for step in range(self._simulation_parameters.timesteps):
-            if self._simulation_parameters.timesteps % 500 == 0:
-                log.information("Starting step " + str(step))
-
             (
                 resulting_stsv,
                 iteration_tries,
                 force_convergence,
             ) = self.process_one_timestep(step, stsv)
-            stsv = cp.SingleTimeStepValues(number_of_outputs)
+            # Comment this out to always begin the convergence process with the previously converged state
+            # stsv = cp.SingleTimeStepValues(number_of_outputs)
+
             # Accumulates iteration counter
             total_iteration_tries_since_last_msg += iteration_tries
 

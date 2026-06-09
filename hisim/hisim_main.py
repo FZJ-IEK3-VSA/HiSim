@@ -24,7 +24,10 @@ except ModuleNotFoundError:
         "Could not import HiSim modules. "
         "It may not be installed in the current Python environment.\n\n"
         "If you already installed HiSim locally with 'pip install -e .', "
-        "make sure you are using the same virtual environment/interpreter."
+        "make sure you are using the same virtual environment/interpreter.\n\n"
+        "If you recently updated the repository via 'git pull', new dependencies "
+        "may have been added. Try re-running 'pip install -e .' from the HiSim "
+        "root directory to install any missing packages."
     ) from None
 
 load_dotenv()
@@ -33,6 +36,11 @@ __authors__ = "Valentin Janser"
 __credits__ = ["Noah Pflugradt", "Katharina Rieck"]
 __maintainer__ = "Valentin Janser"
 __email__ = "v.janser@fz-juelich.de"
+
+
+def is_hisim_root(path: Path) -> bool:
+    """Check if given path is HiSim root directory."""
+    return (path / "setup.py").exists() and (path / "hisim").is_dir()
 
 
 def initialize_from_python(
@@ -55,6 +63,8 @@ def initialize_from_python(
     for parent in path_obj.parents:
         if parent.exists():
             sys.path.append(str(parent))
+            if is_hisim_root(parent):
+                break
         else:
             raise ValueError(f"Directory of module does not exist: {module_dir}")
 

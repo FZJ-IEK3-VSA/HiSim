@@ -156,9 +156,6 @@ def initialize_from_json(
         my_simulation_parameters=sim_params,
     )  # type: ignore[no-any-return]
 
-    # Prepare the simulation directory, to which the component_connections.json is written within the setup_components_and_connections function
-    my_sim.prepare_simulation_directory()
-
     my_sim = setup_components_and_connections(scenario_data, my_sim, sim_params)
 
     if delta:
@@ -198,12 +195,7 @@ def run_simulation(my_sim: sim.Simulator, path_to_module: Optional[str]) -> None
     log.information("#################################")
     log.information("")
 
-    # At the end put new logging files into result directory
-    try:
-        my_sim.put_log_files_into_result_path()
-    # sometimes when running many simulations at once this leads to errors, so ignore
-    except Exception:
-        pass
+    log.logger.reset()
 
 
 def parse_args() -> argparse.Namespace:
@@ -304,15 +296,6 @@ def main_cli():
 
         # Suppress warnings (e.g., from pvlib)
         warnings.filterwarnings("ignore")
-
-        # Delete old log files
-        logging_default_path = Path(log.LOGGING_DEFAULT_PATH)
-        if logging_default_path.exists() and logging_default_path.is_dir():
-            for file in logging_default_path.iterdir():
-                try:
-                    file.unlink()
-                except Exception:
-                    log.information("Logging default file could not be removed. This can occur when more than one simulation run simultaneously.")
 
         my_sim: sim.Simulator
         ptm: str

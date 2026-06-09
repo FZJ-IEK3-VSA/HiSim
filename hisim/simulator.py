@@ -49,7 +49,7 @@ class Simulator:
         self._simulation_parameters: SimulationParameters
         if my_simulation_parameters is not None:
             self._simulation_parameters = my_simulation_parameters
-            log.LOGGING_LEVEL = self._simulation_parameters.logging_level
+            log.logger.logging_level = self._simulation_parameters.logging_level
         self.wrapped_components: List[ComponentWrapper] = []
         self.all_outputs: List[cp.ComponentOutput] = []
 
@@ -62,11 +62,15 @@ class Simulator:
         self.iteration_logging_path: str = ""
         self.config_dictionary: Dict[str, Any] = {}
 
+        # prepare logging and simulation directory
+        self.prepare_simulation_directory()
+        log.logger.setup(self._simulation_parameters.result_directory)
+
     def set_simulation_parameters(self, my_simulation_parameters: SimulationParameters) -> None:
         """Sets the simulation parameters and the logging level at the same time."""
         self._simulation_parameters = my_simulation_parameters
         if self._simulation_parameters is not None:
-            log.LOGGING_LEVEL = self._simulation_parameters.logging_level
+            log.logger.logging_level = self._simulation_parameters.logging_level
 
     def get_simulation_parameters(self) -> SimulationParameters:
         """Returns the simulation parameters for exporting them to JSON."""
@@ -212,7 +216,6 @@ class Simulator:
         if not os.path.isdir(self._simulation_parameters.result_directory):
             os.makedirs(self._simulation_parameters.result_directory, exist_ok=True)
 
-        log.LOGGING_LEVEL = self._simulation_parameters.logging_level
         self.iteration_logging_path = os.path.join(
             self._simulation_parameters.result_directory, "Detailed_Iteration_Log.txt"
         )
@@ -229,9 +232,6 @@ class Simulator:
         # Tests if wrapper has any components at all
         if len(self.wrapped_components) == 0:
             raise ValueError("Not a single component was defined. Quitting.")
-
-        # call again because it might not have gotten executed depending on how it's called.
-        self.prepare_simulation_directory()
 
         flagfile = os.path.join(self._simulation_parameters.result_directory, "finished.flag")
         if self._simulation_parameters.skip_finished_results and os.path.exists(flagfile):
@@ -529,18 +529,3 @@ class Simulator:
                 f"Automatic connection does not work for {target_component.component_name} because no default connections were found. "
                 + "Please check if a connection is needed and if yes, create the missing default connection in your component."
             )
-
-    def put_log_files_into_result_path(self) -> None:
-        """Put logging files from /logs path into result path."""
-
-        default_logging_path = log.LOGGING_DEFAULT_PATH
-        result_directory = self._simulation_parameters.result_directory
-
-        if os.path.exists(result_directory) is False:
-            raise NameError(f"The result directory {result_directory} could not be found.")
-
-        # move log files to result path
-        for file in os.listdir(default_logging_path):
-            # if logging file is not yet in result directory, move it from default directory /logs to result directory
-            if not os.path.isfile(os.path.join(result_directory, file)):
-                os.rename(os.path.join(default_logging_path, file), os.path.join(result_directory, file))

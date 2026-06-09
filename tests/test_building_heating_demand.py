@@ -18,7 +18,6 @@ from hisim.components import building
 from hisim.components import idealized_electric_heater
 from hisim import log
 from hisim import utils
-from hisim.sim_repository_singleton import SingletonMeta
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -31,11 +30,6 @@ __status__ = "development"
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_building_heat_demand.py"
 
-
-@pytest.fixture(autouse=True)
-def reset_singletons():
-    """Function resets the Singleton SimRepo which is needed for github pytest workflows."""
-    SingletonMeta._instances.clear()  # pylint: disable=protected-access
 
 
 @pytest.mark.buildingtest

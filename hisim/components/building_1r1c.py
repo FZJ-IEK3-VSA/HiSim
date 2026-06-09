@@ -45,6 +45,10 @@ class Building1R1CConfig(cp.ConfigBase):
         u_values (dict[str, float]): Contains the u-values of the five hull parts: "floor", "wall", "roof", "windows",
             "door", with those strings as keys and the u-values in W/(m² K) as values.
         areas (dict[str, float]): Contains the areas of the five hull parts in m², similar to the u-values.
+        use_correction_factor (bool): The 1R1C model overestimates losses for badly insulated buildings, compared to
+            the 5R1C model. There is an empirical correction factor for this that depends on the ration between the
+            thermal capacity and the total heat transfer coefficient. This attribute decides, whether the correction
+            factor should be used or not. Default: True.
 
         air_volume (float): The volume of air in m³ in the building. Gets set automatically.
         air_exchange_rate (float): The rate of air exchange with the outside in h^-1, which fraction of the air is
@@ -62,6 +66,7 @@ class Building1R1CConfig(cp.ConfigBase):
     thermal_capacity: float
     u_values: dict[str, float]
     areas: dict[str, float]
+    use_correction_factor: bool
 
     building_name: str
     name: str
@@ -77,6 +82,7 @@ class Building1R1CConfig(cp.ConfigBase):
         thermal_capacity: float | str,
         u_values: dict[str, float|None] | list[float|None] | None = None,
         areas: dict[str, float|None] | list[float|None] | None = None,
+        use_correction_factor: bool = True,
         building_name: str = "BUI1",
         name: str = "Building1R1C",
         target_temperature: float = 20.0,
@@ -100,11 +106,13 @@ class Building1R1CConfig(cp.ConfigBase):
             solar_gain_reduction_factor (float): The factor by which the window solar irradiation
                 gets reduced to calculate the actual thermal solar gains.
                 Default: 0.65 * 0.9 * 0.7 * 0.7 = 0.28665.
+
             air_volume (float): The total volume of air in the building in m³. If this is not
                 given, the volume gets estimated with the kwarg "living_area"*2.8, if provided, 
                 or using the wall and floor areas that are guaranteed to exist. Default: None.
             air_exchange_rate (float): The rate at which air is exchanged through ventilation in
-                per hour (h^(-1)). Default: 0.5. 
+                per hour (h^(-1)). Default: 0.5.
+
             thermal_capacity (float or str): This sets the "thermal_capacity" attribute. Uni: J/K.
                 There are two ways to use this:
                 - Provide a float value directly. The attribute then gets set to this.
@@ -117,7 +125,7 @@ class Building1R1CConfig(cp.ConfigBase):
                     "windows", "door" as keys, provide a u_value as a float.
                 - Provide a partially filled dict: If you leave "door" empty, it will be set to 1.0.
                 - Provide a full list: You can provide a list and the values will be interpreted
-                    in this order: "floor", "wall", "roof, "windows", "door". Once again, 
+                    in this order: "floor", "wall", "roof, "windows", "door". Once again,
                     you can leave out the door (the last one) and it will be set to 1.0.
                 - Leave empty or set to None: If you do this, you can alternatively set each
                     u_value individually by providing the kwargs: "floor_u_value" etc.
@@ -132,6 +140,11 @@ class Building1R1CConfig(cp.ConfigBase):
                     value and provide a later one (f.ex. leave out roof but provide door). This
                     would mess up the interpretation. In this case, you have to actively provide
                     "None" for the value you're leaving out.
+            use_correction_factor (bool): The 1R1C model overestimates losses for badly insulated buildings, compared to
+                the 5R1C model. There is an empirical correction factor for this that depends on the ration between the
+                thermal capacity and the total heat transfer coefficient. This attribute decides, whether the correction
+                factor should be used or not. Default: True.
+        
             window_to_wall_ratio (float): If you don't provide a value for the window area, this
                 parameter is used to calculate it based on the wall area. Otherwise, it is
                 ignored. Default: 0.2 = 20%.
@@ -144,6 +157,7 @@ class Building1R1CConfig(cp.ConfigBase):
         self.target_temperature = target_temperature
         self.solar_gain_reduction_factor = solar_gain_reduction_factor
         self.set_thermal_capacity(thermal_capacity, kwargs)
+        self.use_correction_factor = use_correction_factor
         self.air_exchange_rate = air_exchange_rate  # per hour
         self.air_heat_cap = 0.34  # heat capacity of air in Wh/(m³ K)
         # ----------------------------------
@@ -286,6 +300,8 @@ class Building1R1C(cp.Component):
         total_heat_transfer_coefficient (float): The lumped heat transfer coefficient from the mass
             to the outside before correction factors. Gets calculated automatically based on values
             from the config. Unit: W/K.
+        k_c (float): An empirical correction factor for the total_heat_transfer_coefficient. Gets
+            calculated automatically based on tau, if it is used, or set to 1.0 if not.
         tau (float): A time constant that is calculated from thermal capacity / lumped heat transfer
             coefficient. The higher this is, the slower the building cools off. Gets calculated
             automatically from the config. Unit: (J/K) / (W/K) = W s / W = seconds.
@@ -327,6 +343,7 @@ class Building1R1C(cp.Component):
     output_channels: dict[str, cp.ComponentOutput] = {}
     total_heat_transfer_coefficient: float
     tau: float
+    k_c: float
     # ... other stuff from the superclass ...
 
     # --------------------------------------------------------------------------------------------
@@ -353,6 +370,10 @@ class Building1R1C(cp.Component):
         # set a few static values
         self.total_heat_transfer_coefficient = self.get_total_heat_transfer_coefficient()
         self.tau = self.config.thermal_capacity / self.total_heat_transfer_coefficient
+        if self.config.use_correction_factor:
+            self.k_c = self.calc_k_c(self.tau)
+        else:
+            self.k_c = 1.0
         # set state
         self.state = config.target_temperature
         self.previous_state = self.state
@@ -503,19 +524,27 @@ class Building1R1C(cp.Component):
         }
 
     @staticmethod
-    def calc_k_c(tau: float, tdiff: float) -> float:
+    def calc_k_c(tau: float) -> float:
         """Calculates k_c: An empirical correction factor for the heat losses.
 
-        # Todo: This function still needs to be written. For this, I first need to find a working
-        empirical formula. I will do this by comparing my results to the 5R1C model, tabula, and
-        the real values I get in my google poll.
+        This is needed because in the 1r1c model, the thermal mass is directly connected to the
+        outside and at the same time forced to remain at the target temperature at all times.
+        However, for badly insulated buildings, parts of the thermal mass (namely: the outer walls)
+        actually drop below the indoor air temperature on cold days, reducing the heat demand.
 
         Args:
             tau (float): The building cooldown time constant in seconds. 
                 Calculated by dividing: heat capacity / heat transfer coefficient.
-            tdiff (float): The temperature difference between inside and outside in Kelvin.
         """
-        return 1.0
+        tau_hours = tau / 3600.0
+        # empirically optimized coefficients. Optimized on 480 random buildings by comparing the
+        # 5r1c yearly heat demand with the 1r1c yearly heat demand. R² Score: 0.86 /// RMSE: 0.054
+        a = 1.5320096  # stderr: 0.06829685
+        b = 3.7337019  # stderr: 0.12951503
+        c = 1.05360277  # stderr: 0.0043758
+        # Calculate the overestimation ratio and return the inverse
+        overestimation_ratio = a * np.exp(-tau_hours / b) + c
+        return 1.0 / overestimation_ratio
 
     # --------------------------------------------------------------------------------------------
     # ----- "i-functions" ------------------------------------------------------------------------
@@ -572,14 +601,13 @@ class Building1R1C(cp.Component):
         # do the calculations
         solar_power_input = self.calc_solar_power_input(**solar_inputs)
         thermal_power_input = sum(thermal_power_inputs.values()) + solar_power_input
-        k_c = Building1R1C.calc_k_c(self.tau, t_internal_previous - temperature_outside)
         new_internal_temperature = self.calc_new_internal_temperature(
-            thermal_power_input, t_internal_previous, temperature_outside, seconds_per_timestep, k_c)
+            thermal_power_input, t_internal_previous, temperature_outside, seconds_per_timestep)
         # this may be weird, but the heat distribution system is lagging one time step,
         # so we use the final temperature here to calc the demand for the next time step,
         # but using the outdoor temperature of the current one... whatever, we make do with what we have
         theoretical_heat_demand = self.calc_theoretical_heat_demand(
-            new_internal_temperature, temperature_outside, seconds_per_timestep, k_c)
+            new_internal_temperature, temperature_outside, seconds_per_timestep)
 
         # set outputs and new state
         self.state = new_internal_temperature
@@ -607,7 +635,6 @@ class Building1R1C(cp.Component):
         t_internal: float,
         t_outside: float,
         seconds_per_timestep: int,
-        k_c: float,
         max_heating_rate: float = 1.0,
     ) -> float:
         """Calculates the theoretical heat demand of the building.
@@ -620,12 +647,11 @@ class Building1R1C(cp.Component):
             t_internal (float): The internal temperature with which the losses are calculated (in °C).
             t_outside (float): The ambient temperature in °C.
             seconds_per_timestep (int): How many seconds one time step has.
-            k_c (float): The empirical heat loss correction coefficient.
             max_heating_rate (float): The maximum heating rate in °C per hour. Default: 1.0.
         """
         # preparation
         cap_th = self.config.thermal_capacity
-        h_tr_coeff = self.total_heat_transfer_coefficient * k_c
+        h_tr_coeff = self.total_heat_transfer_coefficient * self.k_c
         # calculation
         p_loss_ambient = h_tr_coeff * (t_internal - t_outside)
         t_loss_ambient = p_loss_ambient / cap_th * seconds_per_timestep
@@ -671,7 +697,6 @@ class Building1R1C(cp.Component):
         t_internal_previous: float,
         t_outside: float,
         seconds_per_timestep: int,
-        k_c: float,
         method: str = "analytical"
     ) -> float:
         """Calculates the new internal temperature.
@@ -685,7 +710,6 @@ class Building1R1C(cp.Component):
                 the temperature at the beginning of the time step.
             t_outside (float): The ambient temperature in °C.
             seconds_per_timestep (int): How many seconds one time step has.
-            k_c (float): The empirical heat loss correction coefficient.
             method (str): Which calculation method to use. Currently implemented:
                 - "analytical": Solves the ODE analytically. Most accurate (no numerical error at
                     all), but also slowest. However, that barely matters, it's still very fast,
@@ -700,7 +724,7 @@ class Building1R1C(cp.Component):
         """
         # preparation
         cap_th = self.config.thermal_capacity
-        h_tr_coeff = self.total_heat_transfer_coefficient * k_c
+        h_tr_coeff = self.total_heat_transfer_coefficient * self.k_c
         # calculation
         if method == "analytical": # most accurate but slowest
             # Analytical solution of T' = P_heat/c - (T - T_amb) * H/c

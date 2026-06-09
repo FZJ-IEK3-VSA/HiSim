@@ -14,6 +14,7 @@ from hisim.sim_repository_singleton import SingletonSimRepository
 from hisim import log
 from hisim import utils
 
+
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_sim_repository.py"
 

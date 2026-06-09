@@ -11,6 +11,7 @@ import pytest
 from hisim.hisim_main import main
 from hisim.system_setup_starter import make_system_setup
 
+
 @pytest.mark.utsp
 def test_system_setup_starter():
     """Run a simulation from JSON."""

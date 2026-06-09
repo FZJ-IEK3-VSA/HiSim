@@ -30,7 +30,6 @@ from hisim.components import (
 )
 from hisim.units import Quantity, Celsius, Watt
 from hisim import loadtypes as lt
-from hisim.sim_repository_singleton import SingletonMeta
 
 
 def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:
@@ -40,12 +39,6 @@ def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_test_timeresolutions.py"
-
-
-@pytest.fixture(autouse=True)
-def reset_singletons():
-    """Function resets the Singleton SimRepo which is needed for github pytest workflows."""
-    SingletonMeta._instances.clear()  # pylint: disable=protected-access
 
 
 @utils.measure_execution_time

@@ -10,6 +10,7 @@ from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import utils
 
+
 @pytest.mark.system_setups
 @utils.measure_execution_time
 def test_basic_household_network_chart():

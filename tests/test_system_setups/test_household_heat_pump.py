@@ -12,13 +12,6 @@ from hisim.hisim_main import main
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 from hisim.system_setup_starter import make_system_setup
-from hisim.sim_repository_singleton import SingletonMeta
-
-
-@pytest.fixture(autouse=True)
-def reset_singletons():
-    """Function resets the Singleton SimRepo which is needed for github pytest workflows."""
-    SingletonMeta._instances.clear()  # pylint: disable=protected-access
 
 
 MY_PATH_TO_MODULE = "../system_setups/household_heat_pump.py"

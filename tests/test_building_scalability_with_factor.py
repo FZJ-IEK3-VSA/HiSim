@@ -15,14 +15,7 @@ from hisim.components import building
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
-from hisim.sim_repository_singleton import SingletonMeta
 from tests import functions_for_testing as fft
-
-
-@pytest.fixture(autouse=True)
-def reset_singletons():
-    """Function resets the Singleton SimRepo which is needed for github pytest workflows."""
-    SingletonMeta._instances.clear()  # pylint: disable=protected-access
 
 
 @pytest.mark.buildingtest

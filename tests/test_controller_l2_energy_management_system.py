@@ -33,16 +33,9 @@ import hisim.loadtypes as lt
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.units import Quantity, Celsius, Watt
-from hisim.sim_repository_singleton import SingletonMeta
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_ems.py"
-
-
-@pytest.fixture(autouse=True)
-def reset_singletons():
-    """Function resets the Singleton SimRepo which is needed for github pytest workflows."""
-    SingletonMeta._instances.clear()  # pylint: disable=protected-access
 
 
 @utils.measure_execution_time

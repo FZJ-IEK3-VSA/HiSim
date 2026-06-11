@@ -26,7 +26,6 @@ jobs:
         pip install uv
         if [ -f requirements.txt ]; then uv pip install --system -r requirements.txt; fi
         uv pip install --system -e .
-        - name: Run hisim_main.py directly from the command line
     - name: Run hisim_main.py directly from the command line
       working-directory: ./system_setups/
       run: |

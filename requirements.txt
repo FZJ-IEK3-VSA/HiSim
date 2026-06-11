@@ -1,6 +1,6 @@
-numpy
-pandas
-matplotlib
+numpy<2 # upper bound only required because wetterdienst is pinned to ==0.63.0
+pandas<2.2 # see wetterdienst note above
+matplotlib<3.9 # see wetterdienst note above
 seaborn
 reportlab
 pvlib # ==0.10.2

@@ -60,21 +60,13 @@ def test_house(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Build Occupancy
-    my_occupancy_config = (
-        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
-    )
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -83,12 +75,8 @@ def test_house(
     # Connect Components
 
     # Building
-    my_building.connect_input(
-        my_building.Altitude, my_weather.component_name, my_weather.Altitude
-    )
-    my_building.connect_input(
-        my_building.Azimuth, my_weather.component_name, my_weather.Azimuth
-    )
+    my_building.connect_input(my_building.Altitude, my_weather.component_name, my_weather.Altitude)
+    my_building.connect_input(my_building.Azimuth, my_weather.component_name, my_weather.Azimuth)
     my_building.connect_input(
         my_building.DirectNormalIrradiance,
         my_weather.component_name,
@@ -109,9 +97,7 @@ def test_house(
         my_weather.component_name,
         my_weather.DirectNormalIrradianceExtra,
     )
-    my_building.connect_input(
-        my_building.ApparentZenith, my_weather.component_name, my_weather.ApparentZenith
-    )
+    my_building.connect_input(my_building.ApparentZenith, my_weather.component_name, my_weather.ApparentZenith)
     my_building.connect_input(
         my_building.TemperatureOutside,
         my_weather.component_name,
@@ -136,7 +122,7 @@ def test_house(
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_building)
 
-    my_sim.run_all_timesteps()
+    my_sim.run_all_timesteps(clear_sim_singleton_repository=False)
 
     log.information("singelton sim repo" + str(SingletonSimRepository().my_dict))
 
@@ -149,7 +135,6 @@ def test_house(
     # Sanity check - a non-singleton class should create two separate instances
 
     class NonSingleton:
-
         """Just a class to show the difference between a singleton and a non-singleton."""
 
         pass

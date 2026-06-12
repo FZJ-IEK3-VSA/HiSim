@@ -77,18 +77,12 @@ def given_default_testee(
     """Create and configure default testee."""
     if config_overwrite is None:
         config_overwrite = {}
-    simulationparameters = sim.SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=60
-    )
+    simulationparameters = sim.SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
     config = GenericBoilerControllerConfig.get_default_on_off_generic_boiler_controller_config(
         maximal_thermal_power_in_watt=2500, minimal_thermal_power_in_watt=1000, with_domestic_hot_water_preparation=True
     )
-    config.minimum_runtime_in_seconds = config_overwrite.get(
-        "minimum_runtime_in_seconds", 0
-    )
-    config.minimum_resting_time_in_seconds = config_overwrite.get(
-        "minimum_resting_time_in_seconds", 0
-    )
+    config.minimum_runtime_in_seconds = config_overwrite.get("minimum_runtime_in_seconds", 0)
+    config.minimum_resting_time_in_seconds = config_overwrite.get("minimum_resting_time_in_seconds", 0)
     config.hysteresis_water_temperature_offset = 0
     testee = GenericBoilerController(
         simulationparameters,

@@ -13,9 +13,7 @@ from hisim import log
 def test_electrolyzer_controller():
     """Test electrolzyer controller."""
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2021, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
 
     name: str = "Test-Controller"
     nom_load: float = 800.0  # [kW]
@@ -46,9 +44,7 @@ def test_electrolyzer_controller():
 
     # ===================================================================================================================
     # Set Fake Inputs
-    load_input = cp.ComponentOutput(
-        "FakeProvidedLoad", "Provided Load", lt.LoadTypes.ELECTRICITY, lt.Units.KILOWATT
-    )
+    load_input = cp.ComponentOutput("FakeProvidedLoad", "Provided Load", lt.LoadTypes.ELECTRICITY, lt.Units.KILOWATT)
 
     number_of_outputs = fft.get_number_of_outputs([my_controller, load_input])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)

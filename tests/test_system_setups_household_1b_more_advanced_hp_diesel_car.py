@@ -1,4 +1,5 @@
-""" Tests for the basic household system setup. """
+"""Tests for the basic household system setup."""
+
 # clean
 import os
 from pathlib import Path
@@ -10,7 +11,6 @@ from hisim import log
 from hisim import utils
 
 
-# @pytest.mark.system_setups
 @pytest.mark.utsp
 @utils.measure_execution_time
 def test_basic_household():

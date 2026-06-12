@@ -653,7 +653,7 @@ class Weather(Component):
             last_forecast_timestep = min(last_forecast_timestep, len(self.temperature_list))
             # log.information( type(self.temperature))
             temperatureforecast = self.temperature_list[timestep:last_forecast_timestep]
-            self.simulation_repository.set_entry(self.Weather_Temperature_Forecast_24h, temperatureforecast)
+            SingletonSimRepository().set_entry(key=self.Weather_Temperature_Forecast_24h, entry=temperatureforecast)
         self.last_timestep_with_update = timestep
 
     def i_prepare_simulation(self) -> None:
@@ -664,7 +664,7 @@ class Weather(Component):
             filepath=self.weather_config.source_path,
             source_enum=self.weather_config.data_source,
         )
-        self.simulation_repository.set_entry("weather_location", location_dict)
+        SingletonSimRepository().set_entry(key="weather_location", entry=location_dict)
         cachefound, cache_filepath = utils.get_cache_file(self.config.name, self.weather_config, self.my_simulation_parameters)
         if cachefound:
             # read cached files

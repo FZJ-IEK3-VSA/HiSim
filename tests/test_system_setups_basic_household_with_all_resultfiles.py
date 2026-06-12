@@ -1,4 +1,5 @@
-""" Tests for the basic household system setup. """
+"""Tests for the basic household system setup."""
+
 # clean
 import os
 import pytest
@@ -15,9 +16,7 @@ def test_basic_household_with_all_resultfiles():
     """One day with all options."""
     path = "../system_setups/basic_household.py"
 
-    mysimpar = SimulationParameters.one_day_only_with_all_options(
-        year=2021, seconds_per_timestep=60
-    )
+    mysimpar = SimulationParameters.one_day_only_with_all_options(year=2021, seconds_per_timestep=60)
 
     hisim_main.main(path, mysimpar)
     log.information(os.getcwd())

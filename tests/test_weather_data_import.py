@@ -1,4 +1,5 @@
 """Test for weather data import."""
+
 import datetime
 import shutil
 import pytest

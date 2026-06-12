@@ -15,15 +15,11 @@ def test_heat_pump_modular():
 
     # simulation parameters
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
     # default config
     my_hp_config = generic_heat_pump_modular.HeatPumpConfig.get_default_config_heating()
-    l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller(
-        "HP1"
-    )
+    l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller("HP1")
 
     # definition of outputs
     number_of_outputs = 6
@@ -49,9 +45,7 @@ def test_heat_pump_modular():
     )
 
     # definition of building output
-    t_m_output = cp.ComponentOutput(
-        "FakeHouse", "TemperatureMean", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS
-    )
+    t_m_output = cp.ComponentOutput("FakeHouse", "TemperatureMean", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
 
     # definition of electricity surplus
     electricity_target_output = cp.ComponentOutput(

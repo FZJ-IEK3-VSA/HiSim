@@ -6,6 +6,7 @@ import os
 import json
 from typing import Optional
 import pytest
+
 # import numpy as np
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
@@ -25,7 +26,6 @@ from hisim import utils
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
-
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_gas_meter.py"
@@ -243,9 +243,9 @@ def test_house(
 
     opex_costs_for_heat_in_euro = jsondata["Heating Meter"]["Opex costs of heat consumption from grid"].get("value")
 
-    co2_footprint_due_to_heat_use_in_kg = jsondata["Heating Meter"][
-        "CO2 footprint of heat consumption from grid"
-    ].get("value")
+    co2_footprint_due_to_heat_use_in_kg = jsondata["Heating Meter"]["CO2 footprint of heat consumption from grid"].get(
+        "value"
+    )
 
     log.information(
         "Heat consumption for space heating [kWh] " + str(heat_consumption_for_space_heating_in_kilowatt_hour)

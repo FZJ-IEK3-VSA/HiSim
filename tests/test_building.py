@@ -29,57 +29,30 @@ def test_building():
     t_one = time.perf_counter()
 
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=seconds_per_timestep
-    )
-
-    repo = component.SimRepository()
+    my_simulation_parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=seconds_per_timestep)
 
     t_two = time.perf_counter()
     log.profile(f"T2: {t_two - t_one}")
-
-    # # check on all TABULA buildings -> run test over all building_codes
-    # d_f = pd.read_csv(
-    #     utils.HISIMPATH["housing"],
-    #     decimal=",",
-    #     sep=";",
-    #     encoding="cp1252",
-    #     low_memory=False,
-    # )
-
-    # for building_code in d_f["Code_BuildingVariant"]:
-    #     if isinstance(building_code, str):
-    #         my_residence_config.building_code = building_code
-
-    #         my_residence = building.Building(
-    #             config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
-    #         log.information(building_code)
 
     t_three = time.perf_counter()
     log.profile(f"T2:{t_three - t_two}")
 
     # Set Weather
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
-    )
-    my_weather.set_sim_repo(repo)
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
+
     my_weather.i_prepare_simulation()
     t_four = time.perf_counter()
     log.profile(f"T2: {t_four - t_three}")
 
     # Set Residence
-    my_residence_config = (
-        building.BuildingConfig.get_default_german_single_family_home()
-    )
+    my_residence_config = building.BuildingConfig.get_default_german_single_family_home()
 
     my_residence = building.Building(
         config=my_residence_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_residence.set_sim_repo(repo)
+
     my_residence.i_prepare_simulation()
 
     # Occupancy
@@ -87,7 +60,7 @@ def test_building():
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
-    my_occupancy.set_sim_repo(repo)
+
     my_occupancy.i_prepare_simulation()
     # Fake power delivered
     thermal_power_delivered_output = component.ComponentOutput(
@@ -102,28 +75,16 @@ def test_building():
     number_of_outputs = fft.get_number_of_outputs(
         [my_occupancy, my_weather, my_residence, thermal_power_delivered_output]
     )
-    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
-        number_of_outputs
-    )
-    my_residence.temperature_outside_channel.source_output = (
-        my_weather.air_temperature_output
-    )
+    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(number_of_outputs)
+    my_residence.temperature_outside_channel.source_output = my_weather.air_temperature_output
     my_residence.altitude_channel.source_output = my_weather.altitude_output
     my_residence.azimuth_channel.source_output = my_weather.azimuth_output
     my_residence.direct_normal_irradiance_channel.source_output = my_weather.dni_output
-    my_residence.direct_horizontal_irradiance_channel.source_output = (
-        my_weather.dhi_output
-    )
-    my_residence.occupancy_heat_gain_channel.source_output = (
-        my_occupancy.heating_by_residents_channel
-    )
-    my_residence.thermal_power_delivered_channel.source_output = (
-        thermal_power_delivered_output
-    )
+    my_residence.direct_horizontal_irradiance_channel.source_output = my_weather.dhi_output
+    my_residence.occupancy_heat_gain_channel.source_output = my_occupancy.heating_by_residents_channel
+    my_residence.thermal_power_delivered_channel.source_output = thermal_power_delivered_output
 
-    fft.add_global_index_of_components(
-        [my_occupancy, my_weather, my_residence, thermal_power_delivered_output]
-    )
+    fft.add_global_index_of_components([my_occupancy, my_weather, my_residence, thermal_power_delivered_output])
 
     # Test building models for various time resolutions
     #   -> assume weather and occupancy data from t=0 (time resolution 1 min)
@@ -146,9 +107,7 @@ def test_building():
         my_weather.i_simulate(0, stsv, False)
         my_residence.i_simulate(0, stsv, False)
 
-        log.information(
-            f"Fake Residence Thermal Power Delivery Output: {stsv.values[0]}"
-        )
+        log.information(f"Fake Residence Thermal Power Delivery Output: {stsv.values[0]}")
         log.information(f"Occupancy Outputs: {stsv.values[1:5]}")
         log.information(f"Weather Outputs: {stsv.values[5:14]}")
         log.information(f"Residence Outputs: {stsv.values[14:18]}\n")

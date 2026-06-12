@@ -1,4 +1,4 @@
-""" Tests for the household with advanced heat pump. """
+"""Tests for the household with advanced heat pump."""
 
 import json
 import os
@@ -12,6 +12,7 @@ from hisim.hisim_main import main
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 from hisim.system_setup_starter import make_system_setup
+
 
 MY_PATH_TO_MODULE = "../system_setups/household_heat_pump.py"
 MY_SIMULATION_PARAMETERS = {

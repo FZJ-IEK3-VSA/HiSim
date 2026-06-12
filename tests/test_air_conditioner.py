@@ -35,14 +35,10 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature(
     """ GIVEN """
     testee = given_default_testee()
 
-    testee.previous_state = AirConditionerControllerState(
-        start_controller_mode, 0, 0, 0.0
-    )
+    testee.previous_state = AirConditionerControllerState(start_controller_mode, 0, 0, 0.0)
 
     """ WHEN """
-    returned_mode = testee.determine_operating_mode(
-        current_temperature_deg_c, 0
-    )
+    returned_mode = testee.determine_operating_mode(current_temperature_deg_c, 0)
 
     """ THEN """
     assert returned_mode == mode
@@ -81,20 +77,14 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature(
 def test_determine_mode_returns_correct_operation_mode_for_operating_time(
     start_controller_mode, current_temperature_deg_c: float, expected_mode: str
 ):
-    """ Test determine_operation_mode."""
+    """Test determine_operation_mode."""
     """ GIVEN """
-    testee = given_default_testee(
-        {"minimum_runtime_s": 60 * 15, "minimum_idle_time_s": 60 * 10}
-    )
-    testee.state = AirConditionerControllerState(
-        start_controller_mode, 0, 0, 0.0
-    )
+    testee = given_default_testee({"minimum_runtime_s": 60 * 15, "minimum_idle_time_s": 60 * 10})
+    testee.state = AirConditionerControllerState(start_controller_mode, 0, 0, 0.0)
     testee.previous_state = testee.state.clone()
 
     """ WHEN """
-    returned_mode = testee.determine_operating_mode(
-        current_temperature_deg_c, 0
-    )
+    returned_mode = testee.determine_operating_mode(current_temperature_deg_c, 0)
 
     """ THEN """
     assert returned_mode == expected_mode
@@ -125,20 +115,16 @@ def test_determine_mode_returns_correct_operation_mode_for_operating_time(
 def test_modulate_returns_correct_modulation_percentage(
     operating_mode, current_temperature_deg_c, expected_modulation_percentage
 ):
-    """ Test modulate_power."""
+    """Test modulate_power."""
 
     """ GIVEN """
     testee = given_default_testee()
 
     """ WHEN """
-    modulating_percentage = testee.modulate_power(
-        current_temperature_deg_c, operating_mode
-    )
+    modulating_percentage = testee.modulate_power(current_temperature_deg_c, operating_mode)
 
     """ THEN """
-    assert modulating_percentage == pytest.approx(
-        expected_modulation_percentage
-    )
+    assert modulating_percentage == pytest.approx(expected_modulation_percentage)
 
 
 @pytest.mark.base
@@ -159,14 +145,12 @@ def test_simulate_sets_correct_state_for_operation_mode(
     mocked_modulation,
     expected_output,
 ):
-    """ Test i_simulate."""
+    """Test i_simulate."""
 
     """ GIVEN """
     testee = given_default_testee()
     number_of_outputs = fft.get_number_of_outputs([testee])
-    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
-        number_of_outputs
-    )
+    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(number_of_outputs)
     fft.add_global_index_of_components([testee])
     mock_method_mode.return_value = mocked_mode
     mock_method_modulate.return_value = mocked_modulation
@@ -175,10 +159,7 @@ def test_simulate_sets_correct_state_for_operation_mode(
     testee.i_simulate(0, stsv, False)
 
     """ THEN """
-    assert (
-        stsv.values[testee.operation_modulating_signal_channel.global_index]
-        == expected_output
-    )
+    assert stsv.values[testee.operation_modulating_signal_channel.global_index] == expected_output
     mock_method_modulate.assert_called_once()
     mock_method_mode.assert_called_once()
 
@@ -189,9 +170,7 @@ def given_default_testee(
     """Create and configure default testee."""
     if config_overwrite is None:
         config_overwrite = {}
-    simulationparameters = sim.SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=60
-    )
+    simulationparameters = sim.SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
     config = AirConditionerControllerConfig.get_default_air_conditioner_controller_config()
     config.heating_set_temperature_deg_c = 18.0
     config.cooling_set_temperature_deg_c = 26.0

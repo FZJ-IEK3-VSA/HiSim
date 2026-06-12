@@ -2,6 +2,7 @@
 
 The aim is to compare the calculated heat demand in the building module with the heat demand given by TABULA.
 """
+
 # clean
 import os
 from typing import Optional
@@ -39,7 +40,6 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
 
     This setup function emulates an household including the basic components. Here the residents have their
     heating needs covered by the heat pump.
-
     - Simulation Parameters
     - Components
         - Occupancy (Residents' Demands)

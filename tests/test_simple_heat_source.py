@@ -1,4 +1,5 @@
 """Test for generic heat source."""
+
 import pytest
 from hisim import component as cp
 from hisim.components import simple_heat_source

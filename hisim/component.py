@@ -17,7 +17,6 @@ from dataclass_wizard import JSONWizard
 
 from hisim import loadtypes as lt
 from hisim import log
-from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 
@@ -219,8 +218,7 @@ class Component:
         self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
         if my_simulation_parameters is None:
             raise ValueError("My Simulation parameters was None.")
-        self.simulation_repository: SimRepository
-        # self.singleton_simulation_repository: SingletonSimRepository
+
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
         if isinstance(my_config, ConfigBase):
             self.config = my_config
@@ -260,12 +258,6 @@ class Component:
         raise NotImplementedError(
             "Simulation preparation is missing for " + self.component_name + " (" + self.get_full_classname() + ")"
         )
-
-    def set_sim_repo(self, simulation_repository: SimRepository) -> None:
-        """Sets the SimRepository."""
-        if simulation_repository is None:
-            raise ValueError("simulation repository was none")
-        self.simulation_repository = simulation_repository
 
     def add_input(
         self,

@@ -98,7 +98,9 @@ def test_house(
     my_sim.add_component(my_building, connect_automatically=True)
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config(building_name=building_name,)
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config(
+        building_name=building_name,
+    )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -106,7 +108,9 @@ def test_house(
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(building_name=building_name, location_entry=weather.LocationEnum.AACHEN)
+    my_weather_config = weather.WeatherConfig.get_default(
+        building_name=building_name, location_entry=weather.LocationEnum.AACHEN
+    )
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_weather)
@@ -119,7 +123,7 @@ def test_house(
         module_name="Hanwha HSL60P6-PA-4-250T [2013]",
         module_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
         inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-        inverter_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE
+        inverter_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
@@ -150,7 +154,7 @@ def test_house(
     my_heat_pump_controller_config = (
         advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
             building_name=building_name,
-            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
+            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
         )
     )
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
@@ -210,8 +214,7 @@ def test_house(
     )
     my_dhw_heatpump_controller_config = (
         controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-            building_name=building_name,
-            name="DHWHeatpumpController"
+            building_name=building_name, name="DHWHeatpumpController"
         )
     )
     my_dhw_storage_config = (
@@ -244,7 +247,9 @@ def test_house(
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
 
     # Build Electricity Meter
-    my_electricity_meter_config = electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(building_name=building_name,)
+    my_electricity_meter_config = electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(
+        building_name=building_name,
+    )
 
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
@@ -254,7 +259,7 @@ def test_house(
     # Build EMS
     my_electricity_controller_config = controller_l2_district_energy_management_system.EMSDistrictConfig.get_default_config_ems(
         building_name=building_name,
-        strategy=controller_l2_district_energy_management_system.EMSControlStrategy.BUILDING_OPTIMIZEOWNCONSUMPTION_PARALLEL
+        strategy=controller_l2_district_energy_management_system.EMSControlStrategy.BUILDING_OPTIMIZEOWNCONSUMPTION_PARALLEL,
     )
 
     my_electricity_controller = controller_l2_district_energy_management_system.L2GenericDistrictEnergyManagementSystem(
@@ -264,8 +269,7 @@ def test_house(
 
     # Build Battery
     my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-        building_name=building_name,
-        total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
+        building_name=building_name, total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
     )
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
@@ -339,7 +343,9 @@ def test_house(
 
     # Read kpi data
     with open(
-        os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"), "r", encoding="utf-8"  # pylint: disable=W0212
+        os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"),  # pylint: disable=W0212
+        "r",
+        encoding="utf-8",
     ) as file:
         jsondata = json.load(file)
 
@@ -406,7 +412,8 @@ def test_house(
 
     # Get EMS output TotalElectricityConsumption
     simulation_results_ems_total_consumption_in_watt = my_sim.results_data_frame[
-        "L2EMSElectricityController - TotalElectricityConsumption [Electricity - W]"]
+        "L2EMSElectricityController - TotalElectricityConsumption [Electricity - W]"
+    ]
 
     ems_total_consumption_in_kilowatt_hour = (
         sum(simulation_results_ems_total_consumption_in_watt) * seconds_per_timestep / 3.6e6
@@ -425,9 +432,9 @@ def test_house(
 
     # Get EMS output ElectricityToOrFromGrid -> get grid injection by filterig only values > 0
     simulation_results_ems_grid_injection_in_watt = my_sim.results_data_frame[
-        "L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"].loc[
-        my_sim.results_data_frame["L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"]
-        > 0.0
+        "L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"
+    ].loc[
+        my_sim.results_data_frame["L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"] > 0.0
     ]
     ems_grid_injection_in_kilowatt_hour = (
         sum(simulation_results_ems_grid_injection_in_watt) * seconds_per_timestep / 3.6e6

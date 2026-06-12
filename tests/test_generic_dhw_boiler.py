@@ -16,17 +16,11 @@ def test_simple_bucket_boiler_state():
 
     # simulation parameters
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
     # Boiler default config
-    l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-        "HP Controller"
-    )
-    boiler_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
-    )
+    l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw("HP Controller")
+    boiler_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
     boiler_config.volume = 200
     heater_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
         heating_system=lt.HeatingSystems.DISTRICT_HEATING,
@@ -44,31 +38,21 @@ def test_simple_bucket_boiler_state():
     my_boiler = generic_hot_water_storage_modular.HotWaterStorage(
         config=boiler_config, my_simulation_parameters=my_simulation_parameters
     )
-    my_heater = generic_heat_source.HeatSource(
-        config=heater_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
     # Set L1 Boiler Controller
     my_boiler_controller_l1 = controller_l1_heatpump.L1HeatPumpController(
         config=l1_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # definition of hot water use
-    ww_use = cp.ComponentOutput(
-        "FakeWarmwaterUse", "WaterConsumption", lt.LoadTypes.WARM_WATER, lt.Units.LITER
-    )
+    ww_use = cp.ComponentOutput("FakeWarmwaterUse", "WaterConsumption", lt.LoadTypes.WARM_WATER, lt.Units.LITER)
 
     # connection of in- and outputs
 
-    my_boiler_controller_l1.storage_temperature_channel.source_output = (
-        my_boiler.temperature_mean_channel
-    )
+    my_boiler_controller_l1.storage_temperature_channel.source_output = my_boiler.temperature_mean_channel
     my_boiler.water_consumption_channel.source_output = ww_use
-    my_boiler.thermal_power_delivered_channel.source_output = (
-        my_heater.thermal_power_delivered_channel
-    )
-    my_heater.l1_heatsource_taget_percentage.source_output = (
-        my_boiler_controller_l1.heat_pump_target_percentage_channel
-    )
+    my_boiler.thermal_power_delivered_channel.source_output = my_heater.thermal_power_delivered_channel
+    my_heater.l1_heatsource_taget_percentage.source_output = my_boiler_controller_l1.heat_pump_target_percentage_channel
 
     # indexing of in- and outputs
     ww_use.global_index = 0

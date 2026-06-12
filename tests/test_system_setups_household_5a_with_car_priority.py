@@ -1,4 +1,5 @@
-""" Tests for the basic household system setup. """
+"""Tests for the basic household system setup."""
+
 # clean
 import os
 from pathlib import Path
@@ -21,9 +22,7 @@ def test_basic_household():
     if Path(config_filename).is_file():
         os.remove(config_filename)
 
-    path = (
-        "../system_setups/household_5a_with_car_priority_advanced_hp_ev_pv_battery.py"
-    )
+    path = "../system_setups/household_5a_with_car_priority_advanced_hp_ev_pv_battery.py"
 
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)

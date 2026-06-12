@@ -1,4 +1,5 @@
 """Test for generic heat source."""
+
 import pytest
 from hisim import component as cp
 from hisim.components import generic_heat_source
@@ -13,17 +14,11 @@ def test_heat_source():
 
     # simulation parameters
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
     # default config
-    my_heat_source_config = (
-        generic_heat_source.HeatSourceConfig.get_default_config_heating()
-    )
-    l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller(
-        name="HeatSource"
-    )
+    my_heat_source_config = generic_heat_source.HeatSourceConfig.get_default_config_heating()
+    l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller(name="HeatSource")
 
     # definition of outputs
     number_of_outputs = 4
@@ -41,9 +36,7 @@ def test_heat_source():
     )
 
     # definition of building output
-    t_m_output = cp.ComponentOutput(
-        "FakeHouse", "TemperatureMean", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS
-    )
+    t_m_output = cp.ComponentOutput("FakeHouse", "TemperatureMean", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
 
     # connection of in- and outputs
     my_heat_source_controller_l1.storage_temperature_channel.source_output = t_m_output

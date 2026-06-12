@@ -317,7 +317,7 @@ class UtspLpgConnector(cp.Component):
             if last_forecast_timestep > len(self.electricity_consumption):
                 last_forecast_timestep = len(self.electricity_consumption)
             demandforecast = self.electricity_consumption[timestep:last_forecast_timestep]
-            self.simulation_repository.set_entry(self.Electricity_Demand_Forecast_24h, demandforecast)
+            SingletonSimRepository().set_entry(key=self.Electricity_Demand_Forecast_24h, entry=demandforecast)
 
     def get_resolution(self) -> str:
         """Gets the temporal resolution of the simulation as a string in the format hh:mm:ss.

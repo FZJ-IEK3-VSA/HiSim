@@ -1,7 +1,8 @@
-""" Tests for the cluster system setups.
+"""Tests for the cluster system setups.
 
 These system setups can only be tested on cluster because so far they need access to a certain cluster directory.
 """
+
 # clean
 import os
 import pytest
@@ -11,6 +12,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
+
 
 # Set simulation parameters for tests
 my_simulation_parameters = SimulationParameters.one_day_only(year=2024, seconds_per_timestep=60 * 15)

@@ -1,4 +1,5 @@
-""" Tests for the household with gas heater. """
+"""Tests for the household with gas heater."""
+
 import os
 import shutil
 from pathlib import Path
@@ -10,6 +11,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.system_setup_starter import make_system_setup
 from hisim.hisim_main import main
+
 
 MY_PATH_TO_MODULE = "../system_setups/household_gas_heater.py"
 MY_SIMULATION_PARAMETERS = {
@@ -114,7 +116,7 @@ def test_household_gas_heater_system_setup_starter_pv():
             "maintenance_costs_in_euro_per_year": 0.01,
             "subsidy_as_percentage_of_investment_costs": 0,
             "lifetime_in_years": 1,
-    },
+        },
         "options": {"photovoltaic": True},
     }
 
@@ -127,8 +129,10 @@ def test_household_gas_heater_system_setup_starter_pv():
     # Automatic connections are created with an index, we check the first three indexes here, which should suffice to
     # find the component.
     pv_con_dicts = [
-        {"From": {"Component": "PVSystem", "Field": "ElectricityOutput"}, "To":
-            {"Component": "ElectricityMeter", "Field": f"Input_PVSystem_ElectricityOutput_{i}"}}
+        {
+            "From": {"Component": "PVSystem", "Field": "ElectricityOutput"},
+            "To": {"Component": "ElectricityMeter", "Field": f"Input_PVSystem_ElectricityOutput_{i}"},
+        }
         for i in range(3)
     ]
     assert any(any(connection == pv_con_dict for connection in connections_list) for pv_con_dict in pv_con_dicts)

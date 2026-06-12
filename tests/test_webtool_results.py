@@ -52,7 +52,9 @@ def test_webtool_results():
 
     # Test quantity
     assert isinstance(
-        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["configuration"]["flow_temperature_in_celsius"]["unit"]["symbol"],
+        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["configuration"]["flow_temperature_in_celsius"][
+            "unit"
+        ]["symbol"],
         str,
     )
 

@@ -92,7 +92,7 @@ def test_component_get_dhw_outputs(
         thermal_power_delivered_w,
         thermal_energy_delivered_in_watt_hour,
         water_output_temperature_deg_c,
-        water_mass_flow_rate_in_kg_per_s
+        water_mass_flow_rate_in_kg_per_s,
     ) = testee._calculate_dhw_outputs(  # pylint: disable=protected-access
         water_input_temperature_deg_c,
         delta_temperature_needed_in_celsius,
@@ -143,7 +143,7 @@ def test_component_get_space_heating_outputs(
         water_mass_flow_rate_in_kg_per_s,
         delta_temperature_needed_in_celsius,
         water_input_temperature_deg_c,
-        available_load_in_w=connected_load_w
+        available_load_in_w=connected_load_w,
     )
 
     assert thermal_power_delivered_w == expected_thermal_power_delivered_w
@@ -156,9 +156,7 @@ def given_default_controller_testee(
 ) -> DistrictHeatingController:
     """Create default controller testee."""
 
-    simulation_parameters = sim.SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=60
-    )
+    simulation_parameters = sim.SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
     config = DistrictHeatingControllerConfig.get_default_district_heating_controller_config(
         with_domestic_hot_water_preparation=with_warm_water
     )
@@ -168,9 +166,9 @@ def given_default_controller_testee(
 def given_default_component_testee(with_warm_water: bool = False) -> DistrictHeating:
     """Create default component testee."""
 
-    simulation_parameters = sim.SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=60
+    simulation_parameters = sim.SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
+    config = DistrictHeatingConfig.get_default_district_heating_config(
+        with_domestic_hot_water_preparation=with_warm_water
     )
-    config = DistrictHeatingConfig.get_default_district_heating_config(with_domestic_hot_water_preparation=with_warm_water)
 
     return DistrictHeating(simulation_parameters, config)

@@ -1,4 +1,5 @@
-""" Helper functions for testing. """
+"""Helper functions for testing."""
+
 # clean
 from hisim.component import ComponentOutput
 
@@ -14,9 +15,7 @@ def get_number_of_outputs(list_of_components: list) -> int:
     return number_of_outputs
 
 
-def add_global_index_of_real_components(
-    list_of_components: list, number_of_fake_inputs: int
-) -> None:
+def add_global_index_of_real_components(list_of_components: list, number_of_fake_inputs: int) -> None:
     """Sets the global index for components."""
     counter = 0 + number_of_fake_inputs
     for component in list_of_components:

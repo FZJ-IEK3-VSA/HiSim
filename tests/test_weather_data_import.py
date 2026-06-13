@@ -2,8 +2,8 @@
 import datetime
 import shutil
 import pytest
-from hisim.components.weather_data_import import WeatherDataImport
-from hisim.components.weather import WeatherDataSourceEnum
+#from hisim.components.weather_data_import import WeatherDataImport
+#from hisim.components.weather import WeatherDataSourceEnum
 
 
 @pytest.mark.base

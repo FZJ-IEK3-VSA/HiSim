@@ -75,11 +75,14 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     predictive: bool
     result_dir_path: str
     cache_dir_path: Optional[str] = None
-    name_of_predefined_loadprofile: Optional[str] = "CHR01 Couple both at Work"
+    name_of_predefined_loadprofile: Optional[str] = None
     predefined_loadprofile_filepaths: Optional[str] = None
     guid: str = ""
     calculation_index_for_local_lpg: Optional[int] = None
     cars: Optional[List[str]] = None
+
+    # Default profile name constant for use when name_of_predefined_loadprofile is None
+    DEFAULT_PROFILE_NAME: str = "CHR01 Couple both at Work"
 
     @classmethod
     def get_main_classname(cls):
@@ -97,7 +100,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             building_name=building_name,
             name="UTSPConnector",
             data_acquisition_mode=LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE,
-            name_of_predefined_loadprofile="CHR01 Couple both at Work",
+            name_of_predefined_loadprofile=cls.DEFAULT_PROFILE_NAME,
             predefined_loadprofile_filepaths=None,
             household=Households.CHR01_Couple_both_at_Work,
             result_dir_path=utils.HISIMPATH["utsp_results"],
@@ -491,7 +494,7 @@ class UtspLpgConnector(cp.Component):
     ) -> Tuple[str, str, str, str, str]:
         """Get the loadprofiles for a specific predefined profile from hisim/inputs/loadprofiles."""
         if self.name_of_predefined_loadprofile is None:
-            self.name_of_predefined_loadprofile = "CHR01 Couple both at Work"
+            self.name_of_predefined_loadprofile = self.utsp_config.DEFAULT_PROFILE_NAME
             log.information(f"You choose {self.utsp_config.data_acquisition_mode}, "
                             f"but did not specify a predefined loadprofile."
                             f" Using default profile {self.name_of_predefined_loadprofile}.")
@@ -936,11 +939,7 @@ class UtspLpgConnector(cp.Component):
                                 log.warning("LPG result folder was None; cleanup skipped.")
 
                 if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
-                    log.information(
-                        f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}. "
-                        f"This means the {self.name_of_predefined_loadprofile} from hisim/inputs/loadprofiles/ is taken."
-                    )
-
+                    # Get the profile first (this will set it to default if None)
                     (
                         electricity_file,
                         warm_water_file,
@@ -948,6 +947,11 @@ class UtspLpgConnector(cp.Component):
                         high_activity_file,
                         low_activity_file,
                     ) = self.get_profiles_from_predefined_profile()
+
+                    log.information(
+                        f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}. "
+                        f"This means the {self.name_of_predefined_loadprofile} from hisim/inputs/loadprofiles/ is taken."
+                    )
 
                     (
                         self.electricity_consumption,

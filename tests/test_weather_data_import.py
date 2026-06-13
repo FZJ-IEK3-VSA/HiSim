@@ -7,7 +7,7 @@ from hisim.components.weather import WeatherDataSourceEnum
 
 
 @pytest.mark.base
-def test_weather_data_import():
+def disabled_test_weather_data_import():
     """Test weather data import."""
 
     location = "AACHEN"

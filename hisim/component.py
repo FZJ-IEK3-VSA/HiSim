@@ -2,7 +2,7 @@
 
 The component class is the base class for all other components.
 """
-
+# needs more documentation
 # clean
 
 from __future__ import annotations

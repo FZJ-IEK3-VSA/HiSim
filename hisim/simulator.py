@@ -62,10 +62,6 @@ class Simulator:
         self.iteration_logging_path: str = ""
         self.config_dictionary: Dict[str, Any] = {}
 
-        # prepare logging and simulation directory
-        self.prepare_simulation_directory()
-        log.logger.setup(self._simulation_parameters.result_directory)
-
     def set_simulation_parameters(self, my_simulation_parameters: SimulationParameters) -> None:
         """Sets the simulation parameters and the logging level at the same time."""
         self._simulation_parameters = my_simulation_parameters
@@ -232,6 +228,10 @@ class Simulator:
         # Tests if wrapper has any components at all
         if len(self.wrapped_components) == 0:
             raise ValueError("Not a single component was defined. Quitting.")
+
+        # prepare logging and simulation directory
+        self.prepare_simulation_directory()
+        log.logger.setup(self._simulation_parameters.result_directory)
 
         flagfile = os.path.join(self._simulation_parameters.result_directory, "finished.flag")
         if self._simulation_parameters.skip_finished_results and os.path.exists(flagfile):

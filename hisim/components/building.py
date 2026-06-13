@@ -2247,10 +2247,10 @@ class Window:
             direct_normal_irradiance_extra,
         )
 
-        if math.isnan(poa_irrad["poa_direct"]):
+        if math.isnan(poa_irrad["poa_global"]):
             return 0
 
-        return poa_irrad["poa_direct"] * reduction_factor_with_area
+        return poa_irrad["poa_global"] * reduction_factor_with_area
 
 
 @dataclass_json

@@ -26,6 +26,11 @@ from hisim.simulationparameters import SimulationParameters
 HULL_PARTS: list[str] = ["floor", "wall", "roof", "windows", "door"]
 
 
+# Todo: I have my empirical reduction factor now. But that essentially just reduces H_tr, which is equivalent
+# to increasing R. So what if I just find the R values for internal and external surface-to-air conduction and
+# simply add those to the u-values before calculating H_tr?
+
+
 @dataclass_json
 @dataclass
 class Building1R1CConfig(cp.ConfigBase):

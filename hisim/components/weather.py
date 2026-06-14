@@ -728,8 +728,8 @@ class Weather(Component):
             apparent_zenith = solpos["apparent_zenith"]
 
             if seconds_per_timestep != 60:
-                self.temperature_list = temperature.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                self.dry_bulb_list = temperature.resample(str(seconds_per_timestep) + "S").mean().to_list()
+                self.temperature_list = temperature.resample(str(seconds_per_timestep) + "s").mean().tolist()
+                self.dry_bulb_list = temperature.resample(str(seconds_per_timestep) + "s").mean().to_list()
                 self.calculate_daily_average_outside_temperature(
                     temperaturelist=self.temperature_list,
                     seconds_per_timestep=seconds_per_timestep,

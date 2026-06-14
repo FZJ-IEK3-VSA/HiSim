@@ -200,3 +200,5 @@ system_setups/district_system_setup/results
 
 # history extension
 .history/
+
+component_connections.json

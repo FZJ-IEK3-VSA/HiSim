@@ -10,7 +10,7 @@ from hisim import simulator as sim
 from hisim import log
 
 
-@pytest.mark.base
+@pytest.mark.extendedbase
 def test_photovoltaic_sandia():
     """Test generic pv system."""
     # Sets inputs
@@ -95,7 +95,7 @@ def test_photovoltaic_sandia():
     ) == 334.880014 * (seconds_per_timestep / 3600)
 
 
-@pytest.mark.base
+@pytest.mark.extendedbase
 def test_photovoltaic_cec():
     """Test generic pv system."""
     # Sets inputs

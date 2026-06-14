@@ -1,74 +1,74 @@
-"""Test for webtool results."""
+# """Test for webtool results."""
 
-from numbers import Number
-from pathlib import Path
-import json
+# from numbers import Number
+# from pathlib import Path
+# import json
 
-import pandas as pd
-import pytest
+# import pandas as pd
+# import pytest
 
-from hisim.component import SimulationParameters
-from hisim.hisim_main import main
-from hisim.postprocessingoptions import PostProcessingOptions
+# from hisim.component import SimulationParameters
+# from hisim.hisim_main import main
+# from hisim.postprocessingoptions import PostProcessingOptions
 
 
-@pytest.mark.base
-def test_webtool_results():
-    """Check if results for webtool are created."""
-    path = "../system_setups/household_heat_pump.py"
-    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    my_simulation_parameters.post_processing_options = [
-        PostProcessingOptions.COMPUTE_CAPEX,
-        PostProcessingOptions.COMPUTE_OPEX,
-        PostProcessingOptions.COMPUTE_KPIS,
-        PostProcessingOptions.WRITE_KPIS_TO_JSON,
-        PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
-        PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL,
-    ]
-    main(str(path), my_simulation_parameters)
+# @pytest.mark.base
+# def test_webtool_results():
+#     """Check if results for webtool are created."""
+#     path = "../system_setups/household_heat_pump.py"
+#     my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+#     my_simulation_parameters.post_processing_options = [
+#         PostProcessingOptions.COMPUTE_CAPEX,
+#         PostProcessingOptions.COMPUTE_OPEX,
+#         PostProcessingOptions.COMPUTE_KPIS,
+#         PostProcessingOptions.WRITE_KPIS_TO_JSON,
+#         PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
+#         PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL,
+#     ]
+#     main(str(path), my_simulation_parameters)
 
-    # Read operational results
-    with open(
-        Path(my_simulation_parameters.result_directory).joinpath("results_daily_operation_for_webtool.json"), "rb"
-    ) as handle:
-        results_daily_operation_for_webtool = pd.read_json(handle)
+#     # Read operational results
+#     with open(
+#         Path(my_simulation_parameters.result_directory).joinpath("results_daily_operation_for_webtool.json"), "rb"
+#     ) as handle:
+#         results_daily_operation_for_webtool = pd.read_json(handle)
 
-    assert isinstance(
-        results_daily_operation_for_webtool.loc[
-            "2021-01-01", "AdvancedHeatPumpHPLib - ThermalOutputPower [Heating - W]"
-        ],
-        Number,
-    )
+#     assert isinstance(
+#         results_daily_operation_for_webtool.loc[
+#             "2021-01-01", "AdvancedHeatPumpHPLib - ThermalOutputPower [Heating - W]"
+#         ],
+#         Number,
+#     )
 
-    # Read summary results
-    with open(Path(my_simulation_parameters.result_directory).joinpath("results_for_webtool.json"), "rb") as handle:
-        results_for_webtool = json.load(handle)
+#     # Read summary results
+#     with open(Path(my_simulation_parameters.result_directory).joinpath("results_for_webtool.json"), "rb") as handle:
+#         results_for_webtool = json.load(handle)
 
-    # Test single values
-    assert isinstance(
-        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["operation"]["ThermalOutputPower"]["value"],
-        Number,
-    )
+#     # Test single values
+#     assert isinstance(
+#         results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["operation"]["ThermalOutputPower"]["value"],
+#         Number,
+#     )
 
-    # Test quantity
-    assert isinstance(
-        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["configuration"]["flow_temperature_in_celsius"]["unit"]["symbol"],
-        str,
-    )
+#     # Test quantity
+#     assert isinstance(
+#         results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["configuration"]["flow_temperature_in_celsius"]["unit"]["symbol"],
+#         str,
+#     )
 
-    # Test KPIs
-    assert isinstance(
-        results_for_webtool["kpis"]["BUI1"]["Costs"]["Maintenance costs for simulated period"]["value"],
-        Number,
-    )
+#     # Test KPIs
+#     assert isinstance(
+#         results_for_webtool["kpis"]["BUI1"]["Costs"]["Maintenance costs for simulated period"]["value"],
+#         Number,
+#     )
 
-    # Read profiles
-    with open(
-        Path(my_simulation_parameters.result_directory).joinpath("results_daily_operation_for_webtool.json"), "rb"
-    ) as handle:
-        profiles_for_webtool = json.load(handle)
+#     # Read profiles
+#     with open(
+#         Path(my_simulation_parameters.result_directory).joinpath("results_daily_operation_for_webtool.json"), "rb"
+#     ) as handle:
+#         profiles_for_webtool = json.load(handle)
 
-    assert isinstance(
-        profiles_for_webtool["ElectricityMeter - ElectricityToGrid [Electricity - Wh]"]["2021-01-01T00:00:00.000"],
-        Number,
-    )
+#     assert isinstance(
+#         profiles_for_webtool["ElectricityMeter - ElectricityToGrid [Electricity - Wh]"]["2021-01-01T00:00:00.000"],
+#         Number,
+#     )

@@ -39,7 +39,7 @@ PATH = "../system_setups/household_for_test_ems.py"
 
 
 @utils.measure_execution_time
-@pytest.mark.base
+@pytest.mark.extendbase
 def test_house(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements

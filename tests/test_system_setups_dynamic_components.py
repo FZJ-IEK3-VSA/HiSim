@@ -9,7 +9,7 @@ from hisim import log
 from hisim import utils
 
 
-@pytest.mark.base
+@pytest.mark.extendedbase
 @utils.measure_execution_time
 def test_dynamic_components_system_setup():
     """Test dynamic components system setup."""

@@ -326,7 +326,7 @@ class Simulator:
         df_index = pd.date_range(
             start=self._simulation_parameters.start_date,
             end=self._simulation_parameters.end_date,
-            freq=f"{self._simulation_parameters.seconds_per_timestep}S",
+            freq=f"{self._simulation_parameters.seconds_per_timestep}s",
         )[:-1]
         self.results_data_frame.index = df_index
         end_counter = time.perf_counter()

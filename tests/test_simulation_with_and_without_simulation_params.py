@@ -9,7 +9,7 @@ from hisim import log
 from hisim import utils
 
 
-@pytest.mark.base
+@pytest.mark.extendedbase
 @utils.measure_execution_time
 def test_basic_household_with_simu_params():
     """Single day."""
@@ -19,7 +19,7 @@ def test_basic_household_with_simu_params():
     log.information(os.getcwd())
 
 
-@pytest.mark.base
+@pytest.mark.extendedbase
 @utils.measure_execution_time
 def test_basic_household_without_simu_params():
     """No simulation params given. HiSim is often called this way."""

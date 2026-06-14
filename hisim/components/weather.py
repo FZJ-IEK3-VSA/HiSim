@@ -690,28 +690,28 @@ class Weather(Component):
                 weatherconfig=self.weather_config,
                 simulation_parameters=self.my_simulation_parameters,
             )
-
+    # todo: check if this should indeed be daily resample or if another time frequency would be needed.
             if self.weather_config.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
-                dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
-                temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
-                dhi = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
-                ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
-                wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
-                pressure = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
+                dni = tmy_data["DNI"].resample("1d").asfreq().interpolate(method="linear")
+                temperature = tmy_data["T"].resample("1d").asfreq().interpolate(method="linear")
+                dhi = tmy_data["DHI"].resample("1d").asfreq().interpolate(method="linear")
+                ghi = tmy_data["GHI"].resample("1d").asfreq().interpolate(method="linear")
+                wind_speed = tmy_data["Wspd"].resample("1d").asfreq().interpolate(method="linear")
+                pressure = tmy_data["Pressure"].resample("1d").asfreq().interpolate(method="linear")
             elif self.weather_config.data_source in (WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN):
-                dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
-                temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
-                dhi = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
-                ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
-                wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
-                pressure = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
+                dni = tmy_data["DNI"].resample("1d").asfreq().interpolate(method="linear")
+                temperature = tmy_data["T"].resample("1d").asfreq().interpolate(method="linear")
+                dhi = tmy_data["DHI"].resample("1d").asfreq().interpolate(method="linear")
+                ghi = tmy_data["GHI"].resample("1d").asfreq().interpolate(method="linear")
+                wind_speed = tmy_data["Wspd"].resample("1d").asfreq().interpolate(method="linear")
+                pressure = tmy_data["Pressure"].resample("1d").asfreq().interpolate(method="linear")
             elif self.weather_config.data_source == WeatherDataSourceEnum.ERA5:
-                dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
-                temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
-                dhi = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
-                ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
-                wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
-                pressure = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
+                dni = tmy_data["DNI"].resample("1d").asfreq().interpolate(method="linear")
+                temperature = tmy_data["T"].resample("1d").asfreq().interpolate(method="linear")
+                dhi = tmy_data["DHI"].resample("1d").asfreq().interpolate(method="linear")
+                ghi = tmy_data["GHI"].resample("1d").asfreq().interpolate(method="linear")
+                wind_speed = tmy_data["Wspd"].resample("1d").asfreq().interpolate(method="linear")
+                pressure = tmy_data["Pressure"].resample("1d").asfreq().interpolate(method="linear")
             else:
                 dni = self.interpolate(tmy_data["DNI"], self.my_simulation_parameters.year)
                 temperature = self.interpolate(tmy_data["T"], self.my_simulation_parameters.year)
@@ -735,16 +735,16 @@ class Weather(Component):
                     seconds_per_timestep=seconds_per_timestep,
                 )
 
-                self.dhi_list = dhi.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.dhi_list = dhi.resample(str(seconds_per_timestep) + "s").mean().tolist()
                 # np.float64( ## not sure what this is fore. python float and npfloat 64 are the same.
-                self.dni_list = dni.resample(str(seconds_per_timestep) + "S").mean().tolist()  # )  # type: ignore
-                self.dniextra_list = dni_extra.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                self.ghi_list = ghi.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                self.altitude_list = altitude.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                self.azimuth_list = azimuth.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                self.apparent_zenith_list = apparent_zenith.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                self.wind_speed_list = wind_speed.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                self.pressure_list = pressure.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.dni_list = dni.resample(str(seconds_per_timestep) + "s").mean().tolist()  # )  # type: ignore
+                self.dniextra_list = dni_extra.resample(str(seconds_per_timestep) + "s").mean().tolist()
+                self.ghi_list = ghi.resample(str(seconds_per_timestep) + "s").mean().tolist()
+                self.altitude_list = altitude.resample(str(seconds_per_timestep) + "s").mean().tolist()
+                self.azimuth_list = azimuth.resample(str(seconds_per_timestep) + "s").mean().tolist()
+                self.apparent_zenith_list = apparent_zenith.resample(str(seconds_per_timestep) + "s").mean().tolist()
+                self.wind_speed_list = wind_speed.resample(str(seconds_per_timestep) + "s").mean().tolist()
+                self.pressure_list = pressure.resample(str(seconds_per_timestep) + "s").mean().tolist()
             else:
                 self.temperature_list = temperature.tolist()
                 self.dry_bulb_list = temperature.to_list()
@@ -759,7 +759,7 @@ class Weather(Component):
                 self.altitude_list = altitude.tolist()
                 self.azimuth_list = azimuth.tolist()
                 self.apparent_zenith_list = apparent_zenith.tolist()
-                self.wind_speed_list = wind_speed.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.wind_speed_list = wind_speed.resample(str(seconds_per_timestep) + "s").mean().tolist()
                 self.pressure_list = pressure.tolist()
 
             solardata = [

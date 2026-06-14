@@ -1052,7 +1052,7 @@ def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
         # get data
         data = pd.read_csv(filepath + ".dat", sep=r"\s+", skiprows=list(range(0, 31)))
 
-        data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
+        data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="h", tz="Europe/Berlin")
         data["GHI"] = data["D"] + data["B"]
         data = data.rename(
             columns={
@@ -1077,7 +1077,7 @@ def read_nsrdb_data(filepath: str, year: int) -> pd.DataFrame:
     # get data
     data = pd.read_csv(filepath + ".dat", sep=",", skiprows=list(range(0, 11)))
     data = data.drop(data.index[8761:8772])
-    data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
+    data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="h", tz="Europe/Berlin")
     data = data.rename(
         columns={
             "DHI": "DHI",
@@ -1212,7 +1212,7 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
 
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
-    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=8760, freq="H", tz="UTC")
+    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=8760, freq="h", tz="UTC")
     data = data.rename(
         columns={
             "month": "Month",

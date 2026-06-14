@@ -2435,7 +2435,7 @@ class BuildingInformation:
         )
 
         # Gets parameters from chosen building
-        self.buildingdata_ref = d_f.loc[d_f["Code_BuildingVariant"] == self.buildingconfig.building_code]
+        self.buildingdata_ref = d_f.loc[d_f["Code_BuildingVariant"] == self.buildingconfig.building_code].copy()
         self.buildingcode = self.buildingconfig.building_code
 
     def get_constants(

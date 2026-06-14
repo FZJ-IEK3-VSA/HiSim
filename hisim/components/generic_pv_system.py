@@ -898,7 +898,7 @@ class PVSystem(cp.Component):
                 )
 
             # choose module from modules database
-            module = modules.loc[modules["Name"] == module_name]
+            module = modules.loc[modules["Name"] == module_name].copy()
 
             # transform column object types to numeric types
             for column in module.columns:
@@ -962,7 +962,7 @@ class PVSystem(cp.Component):
                     os.path.join(utils.HISIMPATH["photovoltaic"]["cec_inverters"]),
                 )
                 # choose inverter from inverters database
-                inverter = inverters.loc[inverters["Name"] == inverter_name]
+                inverter = inverters.loc[inverters["Name"] == inverter_name].copy()
 
                 # transform column object types to numeric types
                 for column in inverter.columns:

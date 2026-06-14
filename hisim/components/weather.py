@@ -692,26 +692,26 @@ class Weather(Component):
             )
     # todo: check if this should indeed be daily resample or if another time frequency would be needed.
             if self.weather_config.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
-                dni = tmy_data["DNI"].resample("1d").asfreq().interpolate(method="linear")
-                temperature = tmy_data["T"].resample("1d").asfreq().interpolate(method="linear")
-                dhi = tmy_data["DHI"].resample("1d").asfreq().interpolate(method="linear")
-                ghi = tmy_data["GHI"].resample("1d").asfreq().interpolate(method="linear")
-                wind_speed = tmy_data["Wspd"].resample("1d").asfreq().interpolate(method="linear")
-                pressure = tmy_data["Pressure"].resample("1d").asfreq().interpolate(method="linear")
+                dni = tmy_data["DNI"].resample("1min").asfreq().interpolate(method="linear")
+                temperature = tmy_data["T"].resample("1min").asfreq().interpolate(method="linear")
+                dhi = tmy_data["DHI"].resample("1min").asfreq().interpolate(method="linear")
+                ghi = tmy_data["GHI"].resample("1min").asfreq().interpolate(method="linear")
+                wind_speed = tmy_data["Wspd"].resample("1min").asfreq().interpolate(method="linear")
+                pressure = tmy_data["Pressure"].resample("1min").asfreq().interpolate(method="linear")
             elif self.weather_config.data_source in (WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN):
-                dni = tmy_data["DNI"].resample("1d").asfreq().interpolate(method="linear")
-                temperature = tmy_data["T"].resample("1d").asfreq().interpolate(method="linear")
-                dhi = tmy_data["DHI"].resample("1d").asfreq().interpolate(method="linear")
-                ghi = tmy_data["GHI"].resample("1d").asfreq().interpolate(method="linear")
-                wind_speed = tmy_data["Wspd"].resample("1d").asfreq().interpolate(method="linear")
-                pressure = tmy_data["Pressure"].resample("1d").asfreq().interpolate(method="linear")
+                dni = tmy_data["DNI"].resample("1min").asfreq().interpolate(method="linear")
+                temperature = tmy_data["T"].resample("1min").asfreq().interpolate(method="linear")
+                dhi = tmy_data["DHI"].resample("1min").asfreq().interpolate(method="linear")
+                ghi = tmy_data["GHI"].resample("1min").asfreq().interpolate(method="linear")
+                wind_speed = tmy_data["Wspd"].resample("1min").asfreq().interpolate(method="linear")
+                pressure = tmy_data["Pressure"].resample("1min").asfreq().interpolate(method="linear")
             elif self.weather_config.data_source == WeatherDataSourceEnum.ERA5:
-                dni = tmy_data["DNI"].resample("1d").asfreq().interpolate(method="linear")
-                temperature = tmy_data["T"].resample("1d").asfreq().interpolate(method="linear")
-                dhi = tmy_data["DHI"].resample("1d").asfreq().interpolate(method="linear")
-                ghi = tmy_data["GHI"].resample("1d").asfreq().interpolate(method="linear")
-                wind_speed = tmy_data["Wspd"].resample("1d").asfreq().interpolate(method="linear")
-                pressure = tmy_data["Pressure"].resample("1d").asfreq().interpolate(method="linear")
+                dni = tmy_data["DNI"].resample("1min").asfreq().interpolate(method="linear")
+                temperature = tmy_data["T"].resample("1min").asfreq().interpolate(method="linear")
+                dhi = tmy_data["DHI"].resample("1min").asfreq().interpolate(method="linear")
+                ghi = tmy_data["GHI"].resample("1min").asfreq().interpolate(method="linear")
+                wind_speed = tmy_data["Wspd"].resample("1min").asfreq().interpolate(method="linear")
+                pressure = tmy_data["Pressure"].resample("1min").asfreq().interpolate(method="linear")
             else:
                 dni = self.interpolate(tmy_data["DNI"], self.my_simulation_parameters.year)
                 temperature = self.interpolate(tmy_data["T"], self.my_simulation_parameters.year)
@@ -851,7 +851,7 @@ class Weather(Component):
         )
         pd_database = pd.concat([pd_database, firstday, lastday])
         pd_database = pd_database.sort_index()
-        return pd_database.resample("1d").asfreq().interpolate(method="linear")
+        return pd_database.resample("1min").asfreq().interpolate(method="linear")
 
     def calc_sun_position(self, latitude_deg, longitude_deg, year, hoy):
         """Calculates the Sun Position for a specific hour and location.

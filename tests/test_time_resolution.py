@@ -42,7 +42,7 @@ PATH = "../system_setups/household_test_timeresolutions.py"
 
 
 @utils.measure_execution_time
-@pytest.mark.base
+@pytest.mark.extendedbase
 def test_cluster_house_for_several_time_resolutions():
     """Test cluster house for several time resolutions."""
 

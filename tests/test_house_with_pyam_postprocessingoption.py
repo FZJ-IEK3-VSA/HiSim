@@ -27,7 +27,7 @@ __status__ = "development"
 PATH = "../system_setups/household_for_pyam_test.py"
 
 
-@pytest.mark.base
+@pytest.mark.extendedbase
 def test_house_with_pyam(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements

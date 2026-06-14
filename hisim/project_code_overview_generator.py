@@ -316,7 +316,7 @@ class OverviewGenerator:
             module: Optional[ModuleType] = importlib.util.module_from_spec(spec)  # type: ignore
             spec.loader.exec_module(module)  # type: ignore
             sys.modules[myfi.module_name] = module  # type: ignore
-        except Exception:  # noqa: broad-except # pylint: disable=broad-except
+        except (Exception, SystemExit):  # noqa: broad-except # pylint: disable=broad-except
             module = None
         return module
 

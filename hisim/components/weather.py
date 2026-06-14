@@ -851,7 +851,7 @@ class Weather(Component):
         )
         pd_database = pd.concat([pd_database, firstday, lastday])
         pd_database = pd_database.sort_index()
-        return pd_database.resample("1T").asfreq().interpolate(method="linear")
+        return pd_database.resample("1d").asfreq().interpolate(method="linear")
 
     def calc_sun_position(self, latitude_deg, longitude_deg, year, hoy):
         """Calculates the Sun Position for a specific hour and location.

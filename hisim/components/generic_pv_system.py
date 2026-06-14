@@ -861,7 +861,7 @@ class PVSystem(cp.Component):
 
         pd_database = pd_database.append(lastday)
         pd_database = pd_database.sort_index()
-        return pd_database.resample("1T").asfreq().interpolate(method="linear").tolist()
+        return pd_database.resample("1d").asfreq().interpolate(method="linear").tolist()
 
     def get_modules_from_database(self, module_database: Any, load_module_data: bool, module_name: str) -> Any:
         """Get modules from pvlib module database."""

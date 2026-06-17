@@ -41,6 +41,11 @@ setup(
         ],
     },
     install_requires=requirements,
+    extras_require={
+        # Optional: required only for the MPI HPC harness (hisim.hpc_harness).
+        # mpi4py must be built against the cluster's MPI implementation.
+        "hpc": ["mpi4py"],
+    },
     license="MIT license",
     long_description=readme,
     long_description_content_type="text/markdown",

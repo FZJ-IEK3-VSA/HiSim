@@ -1,0 +1,17 @@
+{
+  "db": "/scratch/myproject/run123/tasks.db",
+  "sim_params": "/scratch/myproject/run123/2021_15minutely_noplots.simulation.json",
+  "result_root": "/scratch/myproject/run123/results",
+
+  "per_sim_mem_gb": 10.0,
+  "min_headroom_gb": 12.0,
+  "max_slots": null,
+
+  "timeout_s": 7200.0,
+  "max_attempts": 3,
+  "lease_timeout_s": null,
+
+  "head_runs_jobs": true,
+  "sample_interval_s": 1.0,
+  "backoff_s": 5.0
+}

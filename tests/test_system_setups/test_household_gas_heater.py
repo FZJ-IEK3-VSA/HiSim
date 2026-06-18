@@ -10,6 +10,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.system_setup_starter import make_system_setup
 from hisim.hisim_main import main
+from tests.testing_utils import TestingUtils
 
 MY_PATH_TO_MODULE = "../system_setups/household_gas_heater.py"
 MY_SIMULATION_PARAMETERS = {
@@ -18,7 +19,6 @@ MY_SIMULATION_PARAMETERS = {
     "seconds_per_timestep": 900,
     "post_processing_options": [9, 18, 19, 20, 22],
 }
-MY_RESULT_DIRECTORY = "test_system_setups/results/test_household_gas_heater_with_system_setup_starter"
 
 
 def create_results_directory(result_directory):
@@ -68,13 +68,14 @@ def test_household_gas_heater_system_setup_starter_default():
     """Execute setup with hisim system setup starter."""
     my_config_json = {"path_to_module": MY_PATH_TO_MODULE, "simulation_parameters": MY_SIMULATION_PARAMETERS}
 
-    create_results_directory(MY_RESULT_DIRECTORY)
-    run_system(my_config_json, MY_RESULT_DIRECTORY)
+    result_directory = TestingUtils.get_result_directory()
+    create_results_directory(result_directory)
+    run_system(my_config_json, result_directory)
 
     #  Check if calculation has finished without errors.
-    assert Path(MY_RESULT_DIRECTORY).joinpath("finished.flag").is_file()
+    assert Path(result_directory).joinpath("finished.flag").is_file()
 
-    remove_results_directory(MY_RESULT_DIRECTORY)
+    remove_results_directory(result_directory)
 
 
 @pytest.mark.system_setups
@@ -118,11 +119,12 @@ def test_household_gas_heater_system_setup_starter_pv():
         "options": {"photovoltaic": True},
     }
 
-    create_results_directory(MY_RESULT_DIRECTORY)
-    run_system(my_config_json, MY_RESULT_DIRECTORY)
+    result_directory = TestingUtils.get_result_directory()
+    create_results_directory(result_directory)
+    run_system(my_config_json, result_directory)
 
     # Check if PV has been build and is connected.
-    with open(Path(MY_RESULT_DIRECTORY).joinpath("component_connections.json"), mode="r", encoding="utf-8") as file:
+    with open(Path(result_directory).joinpath("component_connections.json"), mode="r", encoding="utf-8") as file:
         connections_list = json.load(file)
     # Automatic connections are created with an index, we check the first three indexes here, which should suffice to
     # find the component.
@@ -133,4 +135,4 @@ def test_household_gas_heater_system_setup_starter_pv():
     ]
     assert any(any(connection == pv_con_dict for connection in connections_list) for pv_con_dict in pv_con_dicts)
 
-    remove_results_directory(MY_RESULT_DIRECTORY)
+    remove_results_directory(result_directory)

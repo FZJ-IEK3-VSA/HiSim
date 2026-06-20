@@ -18,10 +18,11 @@ def run_agent(comm: "object", cfg: HarnessConfig) -> None:
 
     rank = comm.Get_rank()
     host = MPI.Get_processor_name()
+    _, sim_params, result_root = cfg.required_paths()
 
     slots = compute_max_slots(cfg.per_sim_mem_gb, cfg.min_headroom_gb, cfg.max_slots)
     pool = LocalPool(
-        host=f"rank{rank}@{host}", sim_params=cfg.sim_params, result_root=cfg.result_root,
+        host=f"rank{rank}@{host}", sim_params=sim_params, result_root=result_root,
         per_sim_mem_gb=cfg.per_sim_mem_gb, min_headroom_gb=cfg.min_headroom_gb,
         timeout_s=cfg.timeout_s, max_slots=slots,
     )

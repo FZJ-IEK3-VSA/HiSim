@@ -484,7 +484,6 @@ def test_example_component_simulation() -> None:
 
 @pytest.mark.base
 def test_component_name_with_multiple_buildings() -> None:
-def test_component_name_with_multiple_buildings() -> None:
     """Test Component name generation with multiple buildings.
 
     This test verifies:
@@ -500,9 +499,6 @@ def test_component_name_with_multiple_buildings() -> None:
 
     # Create a simple component subclass for testing
     class TestComponent(cp.Component):
-        """Minimal component subclass for testing component name generation."""
-
-        def __init__(self, config: cp.ConfigBase, my_simulation_parameters: SimulationParameters) -> None:
         """Minimal component subclass for testing component name generation."""
 
         def __init__(self, config: cp.ConfigBase, my_simulation_parameters: SimulationParameters) -> None:

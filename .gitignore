@@ -203,4 +203,6 @@ system_setups/district_system_setup/results
 
 component_connections.json
 *.backup
+*.bak*.backup
 *.bak
+results/

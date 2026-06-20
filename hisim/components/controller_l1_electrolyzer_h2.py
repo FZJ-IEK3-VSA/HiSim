@@ -2,7 +2,7 @@
 
 # clean
 import os
-from typing import List, Any
+from typing import List, Dict
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -46,7 +46,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
     def get_default_electrolyzer_controller_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "ElectrolyzerControllerConfig":
         """Get a default electrolyzer controller config."""
         config = ElectrolyzerControllerConfig(
             building_name=building_name,
@@ -61,7 +61,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
         return config
 
     @staticmethod
-    def read_config(electrolyzer_name):
+    def read_config(electrolyzer_name: str) -> Dict:
         """Opens the according JSON-file, based on the electrolyzer_name."""
 
         config_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json")
@@ -74,7 +74,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
         cls,
         electrolyzer_name: str,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "ElectrolyzerControllerConfig":
         """Initializes the config variables based on the JSON-file."""
 
         config_json = cls.read_config(electrolyzer_name)

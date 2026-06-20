@@ -6,6 +6,7 @@ Here we test the cluster household.
 # clean
 
 import os
+import shutil
 from typing import Dict, List, Tuple
 import pandas as pd
 import pytest
@@ -30,6 +31,7 @@ from hisim.components import (
 )
 from hisim.units import Quantity, Celsius, Watt
 from hisim import loadtypes as lt
+from tests.testing_utils import TestingUtils
 
 
 def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:
@@ -98,6 +100,11 @@ def run_cluster_house(
     # Build Simulation Parameters
 
     my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+    my_simulation_parameters.result_directory = TestingUtils.get_result_directory(
+        test_name=f"test_cluster_house_for_several_time_resolutions_{seconds_per_timestep}s"
+    )
+    if os.path.isdir(my_simulation_parameters.result_directory):
+        shutil.rmtree(my_simulation_parameters.result_directory)
     my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
     my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
     my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)

@@ -101,7 +101,7 @@ class FuelCellController(Component):
 
     # Outputs
     CurrentMode = "CurrentMode"
-    PowerTarger = "PowerTarger"
+    PowerTarget = "PowerTarget"
     ShutdownCount = "ShutdownCount"
     StandbyCount = "StandbyCount"
     PowerNotProvided = "PowerNotProvided"
@@ -151,7 +151,7 @@ class FuelCellController(Component):
 
         self.power_target: ComponentOutput = self.add_output(
             self.component_name,
-            FuelCellController.PowerTarger,
+            FuelCellController.PowerTarget,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
             output_description="Power to be generated",

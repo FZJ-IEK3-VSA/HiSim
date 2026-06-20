@@ -14,13 +14,14 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from collections.abc import Iterator
 from typing import Set
 
 import pytest
 
 from hisim.result_path_provider import ResultPathProviderSingleton
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT: Path = Path(__file__).resolve().parent.parent
 
 
 def _git_status() -> Set[str]:
@@ -61,7 +62,7 @@ def _is_in_result_dir(rel_path: str, result_dir: Path) -> bool:
 
 
 @pytest.fixture(autouse=True)
-def guard_against_stray_files():
+def guard_against_stray_files() -> Iterator[None]:
     """Fail the test if it leaves stray files outside the result directory."""
     before = _git_status()
     yield

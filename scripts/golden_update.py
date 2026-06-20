@@ -4,7 +4,6 @@ Review the resulting diff in git before committing."""
 from __future__ import annotations
 import json
 import sys
-from pathlib import Path
 from golden_check import SETUPS, run_setup, REF_DIR   # reuse the same run logic
 
 def main() -> int:

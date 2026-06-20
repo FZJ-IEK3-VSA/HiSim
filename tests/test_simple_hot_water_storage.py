@@ -10,7 +10,7 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_simple_storage():
+def test_simple_storage() -> None:
     """Test for simple hot water storage."""
 
     # calculate mixing factors and run simulation for different seconds per timestep

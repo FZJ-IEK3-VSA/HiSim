@@ -18,7 +18,7 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_component_output_and_input():
+def test_component_output_and_input() -> None:
     """Test ComponentOutput and ComponentInput classes.
 
     This test verifies:
@@ -87,7 +87,7 @@ def test_component_output_and_input():
 
 
 @pytest.mark.base
-def test_single_time_step_values():
+def test_single_time_step_values() -> None:
     """Test SingleTimeStepValues class.
 
     This test verifies:
@@ -169,7 +169,7 @@ def test_single_time_step_values():
 
 
 @pytest.mark.base
-def test_config_base():
+def test_config_base() -> None:
     """Test ConfigBase class.
 
     This test verifies:
@@ -209,7 +209,7 @@ def test_config_base():
 
 
 @pytest.mark.base
-def test_example_component_with_config():
+def test_example_component_with_config() -> None:
     """Test ExampleComponent with a custom configuration.
 
     This test verifies:
@@ -266,7 +266,7 @@ def test_example_component_with_config():
 
 
 @pytest.mark.base
-def test_component_connections():
+def test_component_connections() -> None:
     """Test Component connection methods.
 
     This test verifies:
@@ -361,7 +361,7 @@ def test_component_connections():
 
 
 @pytest.mark.base
-def test_component_default_opex_and_capex():
+def test_component_default_opex_and_capex() -> None:
     """Test default OpexCostDataClass and CapexCostDataClass.
 
     This test verifies:
@@ -438,7 +438,7 @@ def test_component_default_opex_and_capex():
 
 
 @pytest.mark.base
-def test_example_component_simulation():
+def test_example_component_simulation() -> None:
     """Test ExampleComponent simulation functionality.
 
     This test verifies:
@@ -496,7 +496,7 @@ def test_example_component_simulation():
 
 
 @pytest.mark.base
-def test_component_name_with_multiple_buildings():
+def test_component_name_with_multiple_buildings() -> None:
     """Test Component name generation with multiple buildings.
 
     This test verifies:
@@ -512,7 +512,7 @@ def test_component_name_with_multiple_buildings():
 
     # Create a simple component subclass for testing
     class TestComponent(cp.Component):
-        def __init__(self, config, my_simulation_parameters):
+        def __init__(self, config: cp.ConfigBase, my_simulation_parameters: SimulationParameters) -> None:
             super().__init__(
                 name="TestComponent",
                 my_simulation_parameters=my_simulation_parameters,
@@ -520,16 +520,16 @@ def test_component_name_with_multiple_buildings():
                 my_display_config=cp.DisplayConfig(),
             )
 
-        def i_prepare_simulation(self):
+        def i_prepare_simulation(self) -> None:
             pass
 
-        def i_save_state(self):
+        def i_save_state(self) -> None:
             pass
 
-        def i_restore_state(self):
+        def i_restore_state(self) -> None:
             pass
 
-        def i_simulate(self, timestep, stsv, force_convergence):
+        def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
             pass
 
     component = TestComponent(config, sim_params)

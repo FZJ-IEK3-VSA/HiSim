@@ -126,8 +126,7 @@ def initialize_lpg_utsp_connector_and_return_results(
     )
     my_occupancy_data_acquisition_mode_after_initialization = my_occupancy.utsp_config.data_acquisition_mode
 
-    number_of_outputs = fft.get_number_of_outputs([my_occupancy])
-    stsv = component.SingleTimeStepValues(number_of_outputs)
+    stsv = component.SingleTimeStepValues(fft.get_number_of_outputs([my_occupancy]))
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([my_occupancy])

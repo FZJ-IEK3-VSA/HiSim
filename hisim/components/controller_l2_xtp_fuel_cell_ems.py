@@ -1,7 +1,7 @@
 """ L2 Controller for PtX Buffer Battery operation. """
 
 # clean
-import os
+from pathlib import Path
 from typing import List, Any
 import json
 from dataclasses import dataclass
@@ -25,7 +25,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class XTPControllerConfig(ConfigBase):
-    """Configutation of the PtX  Controller."""
+    """Configuration of the PtX  Controller."""
 
     @classmethod
     def get_main_classname(cls):
@@ -43,8 +43,8 @@ class XTPControllerConfig(ConfigBase):
     @staticmethod
     def read_config(fuel_cell_name):
         """Read config."""
-        config_file = os.path.join(utils.HISIMPATH["inputs"], "fuel_cell_manufacturer_config.json")
-        with open(config_file, "r", encoding="utf-8") as json_file:
+        config_file = Path(utils.HISIMPATH["inputs"]) / "fuel_cell_manufacturer_config.json"
+        with config_file.open("r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
 

@@ -114,4 +114,4 @@ def test_building_thermal_conductance_calculation():
         k = k + 1
 
     # check if calculated H_tr is equal to H_tr which was read from buildingdata directly
-    np.testing.assert_allclose(list_h_tr_window, list_h_tr_window_calculated, atol=0.02)
+    np.testing.assert_allclose(list_h_tr_opaque, list_h_tr_opaque_calculated, atol=0.02)

@@ -51,6 +51,9 @@ class SimpleController(Component):
     StorageFillLevel: str = "Fill Level Percent"
     GasHeaterPowerPercent: str = "Gas Heater Power Level"
 
+    FILL_LEVEL_LOW_THRESHOLD: float = 0.4
+    FILL_LEVEL_HIGH_THRESHOLD: float = 0.99
+
     def __init__(
         self,
         name: str,
@@ -99,8 +102,8 @@ class SimpleController(Component):
         if force_convergence:
             return
         percent = stsv.get_input_value(self.input1_channel)
-        if percent < 0.4:
+        if percent < SimpleController.FILL_LEVEL_LOW_THRESHOLD:
             self.state = 1
-        if percent > 0.99:
+        if percent > SimpleController.FILL_LEVEL_HIGH_THRESHOLD:
             self.state = 0
         stsv.set_output_value(self.output1_channel, self.state)

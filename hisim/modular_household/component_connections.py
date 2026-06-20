@@ -1403,7 +1403,6 @@ def configure_electrolyzer_and_h2_storage(
     )
     my_sim.add_component(my_electrolyzer_controller)
     my_electrolyzer.connect_only_predefined_connections(my_electrolyzer_controller)
-    print(my_electrolyzer)
 
     # electricity controller of fuel cell
     my_electricity_controller.add_component_input_and_connect(

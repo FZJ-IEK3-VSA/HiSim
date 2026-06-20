@@ -2,8 +2,8 @@
 
 # clean
 
-from typing import Optional, Any
-from hisim.simulator import SimulationParameters
+from typing import Optional
+from hisim.simulator import SimulationParameters, Simulator
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
@@ -13,7 +13,10 @@ from hisim.components import electricity_meter
 from hisim import loadtypes
 
 
-def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> Any:
+def setup_function(
+    my_sim: Simulator,
+    my_simulation_parameters: Optional[SimulationParameters] = None,
+) -> None:
     """The setup function emulates an household including the basic components.
 
     Here the residents have their electricity and heating needs covered
@@ -28,11 +31,6 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         - Heat Pump
 
     """
-
-    # delete all files in cache:
-    # dir = '..//hisim//inputs//cache'
-    # for file in os.listdir( dir ):
-    #   os.remove( os.path.join( dir, file ) )
 
     # ==== System Parameters ====
 

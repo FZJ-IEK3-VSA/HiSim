@@ -71,7 +71,7 @@ class IdealizedElectricHeater(cp.Component):
         config: IdealizedHeaterConfig,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
-        """Construct all the neccessary attributes."""
+        """Construct all the necessary attributes."""
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()

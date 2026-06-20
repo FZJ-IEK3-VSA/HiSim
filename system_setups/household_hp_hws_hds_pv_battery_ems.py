@@ -117,7 +117,7 @@ def setup_function(
             my_config = BuildingPVWeatherConfig.from_json(system_config_file.read())  # type: ignore
 
         log.information(f"Read system config from {config_filename}")
-        log.information("Config values: " + f"{my_config.to_dict}" + "\n")
+        log.information("Config values: " + f"{my_config.to_dict()}" + "\n")
     else:
         my_config = BuildingPVWeatherConfig.get_default()
         log.information("No module config path from the simulator was given. Use default config.")

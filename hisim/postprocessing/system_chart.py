@@ -18,7 +18,7 @@ class SystemChart:
     """Class for generating charts that show all the components."""
 
     def __init__(self, ppdt: PostProcessingDataTransfer) -> None:
-        """Initizalizes the class."""
+        """Initializes the class."""
         self.ppdt: PostProcessingDataTransfer = ppdt
 
     def make_chart(self) -> List[SystemChartEntry]:  # type: ignore

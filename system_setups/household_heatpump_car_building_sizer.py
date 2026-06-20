@@ -5,6 +5,7 @@
 from typing import Optional, Any, Union, List
 import re
 import os
+from pathlib import Path
 
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from utspclient.helpers.lpgdata import (
@@ -100,7 +101,7 @@ def setup_function(
             year=default_year, seconds_per_timestep=seconds_per_timestep
         )
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
-        if os.path.exists(cache_dir_path_simuparams):
+        if Path(cache_dir_path_simuparams).exists():
             my_simulation_parameters.cache_dir_path = cache_dir_path_simuparams
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
@@ -165,7 +166,7 @@ def setup_function(
     # Set Occupancy
     # try to get profiles from cluster directory
     cache_dir_path_utsp: Optional[str] = "/benchtop/2024-k-rieck-hisim/lpg-utsp-cache"
-    if cache_dir_path_utsp is not None and os.path.exists(cache_dir_path_utsp):
+    if cache_dir_path_utsp is not None and Path(cache_dir_path_utsp).exists():
         pass
     # else use default specific cache_dir_path
     else:
@@ -582,11 +583,7 @@ def setup_function(
         ResultPathProviderSingleton().set_important_result_path_information(
             module_directory=my_sim.module_directory,
             model_name=my_sim.module_filename,
-            further_result_folder_description=os.path.join(
-                *[
-                    further_result_folder_description,
-                ]
-            ),
+            further_result_folder_description=Path(further_result_folder_description),
             variant_name="_",
             scenario_hash_string=scenario_hash_string,
             sorting_option=sorting_option,

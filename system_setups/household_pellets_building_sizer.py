@@ -132,7 +132,7 @@ def setup_function(
     elif energy_system_config_.heat_distribution_system == ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR:
         my_hds_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
     else:
-        raise ValueError(f"Heat distrbution system not recognized: {energy_system_config_.heat_distribution_system}")
+        raise ValueError(f"Heat distribution system not recognized: {energy_system_config_.heat_distribution_system}")
     # Set Weather
     weather_location = arche_type_config_.weather_location
     if weather_location is None:

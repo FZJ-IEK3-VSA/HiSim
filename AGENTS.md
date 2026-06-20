@@ -7,6 +7,7 @@ ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python packag
 ## Guidelines for coding
 - All result files should always end up in the results directory directly underneath the repository directory. If that directory doesn't exist it needs to be created.
 - No test should leave any calculation artefact in any other directory
+- When components expose string constants for field names, connection names, output names, or class-derived identifiers, reference those constants instead of duplicating the literal strings. This keeps connections safe when the constants are renamed or adjusted.
 
 ## Test commands
 

@@ -202,3 +202,5 @@ system_setups/district_system_setup/results
 .history/
 
 component_connections.json
+*.backup
+*.bak

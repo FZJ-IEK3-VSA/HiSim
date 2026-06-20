@@ -368,10 +368,10 @@ class Windturbine(cp.Component):
     def get_cost_capex(config: WindturbineConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.investment_costs_in_euro / config.lifetime) * (
+        capex_per_simulated_period = (config.investment_costs_in_euro / config.lifetime_in_years) * (
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
-        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
+        device_co2_footprint_per_simulated_period = (config.device_co2_footprint_in_kg / config.lifetime_in_years) * (
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
 

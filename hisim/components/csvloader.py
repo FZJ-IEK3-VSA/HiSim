@@ -2,7 +2,7 @@
 
 # clean
 
-import os
+from pathlib import Path
 from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -105,7 +105,7 @@ class CSVLoader(cp.Component):
 
         # ? self.column = column
         dataframe = pd.read_csv(
-            os.path.join(utils.HISIMPATH["inputs"], self.csvconfig.csv_filename),
+            Path(utils.HISIMPATH["inputs"]) / self.csvconfig.csv_filename,
             sep=self.csvconfig.sep,
             decimal=self.csvconfig.decimal,
         )

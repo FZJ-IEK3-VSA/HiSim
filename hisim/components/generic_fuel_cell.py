@@ -695,6 +695,6 @@ class FuelCell(cp.Component):
         lines.append("Total oxygen consumed during simulation: " + str(self.total_oxygen_consumed) + " [kg]")
         lines.append("Total water demand during simulation: " + str(self.total_water_produced) + " [kg]")
         lines.append("Total energy produced during simulation: " + str(self.total_energy) + " [kWh]")
-        lines.append("Total ramp-up time during simulation: " + str(self.total_ramp_up_count_state) + " [kg]")
-        lines.append("Total ramp-down time during simulation: " + str(self.total_ramp_down_count_state) + " [kg]")
+        lines.append("Total ramp-up time during simulation: " + str(self.total_ramp_up_count_state) + " [s]")
+        lines.append("Total ramp-down time during simulation: " + str(self.total_ramp_down_count_state) + " [s]")
         return lines

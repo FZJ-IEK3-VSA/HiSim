@@ -76,7 +76,7 @@ class ExampleTransformer(Component):
         config: ExampleTransformerConfig,
         my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
-        """Constructs all the neccessary attributes."""
+        """Constructs all the necessary attributes."""
         self.transformerconfig = config
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config

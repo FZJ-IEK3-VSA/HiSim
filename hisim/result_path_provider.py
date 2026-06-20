@@ -259,7 +259,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         """Get the run's root directory (alias for :meth:`get_result_directory_name`)."""
         return self.get_result_directory_name()
 
-    def get_result_directory_name(self) -> Any:
+    def get_result_directory_name(self) -> Optional[str]:
         """Get the result directory path."""
 
         if self.run_mode == RunMode.TEST:

@@ -115,7 +115,7 @@ class CapexComputationHelperFunctions:
                 maintenance_costs_in_euro = config.maintenance_costs_in_euro_per_year.value
                 subsidy_as_percentage_of_investment_costs = config.subsidy_as_percentage_of_investment_costs.value
             else:
-                raise ValueError("Config values have wrong type: ", [type(v) for v in list_of_config_capex_variables])
+                raise ValueError(f"Config values have wrong type: {[type(v) for v in list_of_config_capex_variables]}")
 
         # Calculate values per simulated period
         seconds_per_year = 365 * 24 * 60 * 60

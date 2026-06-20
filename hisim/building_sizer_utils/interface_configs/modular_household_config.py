@@ -1,4 +1,5 @@
 """Modular household config module."""
+from __future__ import annotations
 
 # clean
 
@@ -29,7 +30,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
     archetype_config_: Optional[archetype_config.ArcheTypeConfig] = None
 
     @classmethod
-    def get_default_config_for_household_gas(cls):
+    def get_default_config_for_household_gas(cls) -> ModularHouseholdConfig:
         """Get default ModularHouseholdConfig."""
         energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_gas()
         archetype_config_ = archetype_config.ArcheTypeConfig()
@@ -39,7 +40,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         return household_config
 
     @classmethod
-    def get_default_config_for_household_oil(cls):
+    def get_default_config_for_household_oil(cls) -> ModularHouseholdConfig:
         """Get default ModularHouseholdConfig."""
         energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_oil()
         archetype_config_ = archetype_config.ArcheTypeConfig()
@@ -49,7 +50,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         return household_config
 
     @classmethod
-    def get_default_config_for_household_heatpump(cls):
+    def get_default_config_for_household_heatpump(cls) -> ModularHouseholdConfig:
         """Get default ModularHouseholdConfig."""
         energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_heatpump()
         archetype_config_ = archetype_config.ArcheTypeConfig()
@@ -59,7 +60,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         return household_config
 
     @classmethod
-    def get_default_config_for_household_district_heating(cls):
+    def get_default_config_for_household_district_heating(cls) -> ModularHouseholdConfig:
         """Get default ModularHouseholdConfig."""
         energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_district_heating()
         archetype_config_ = archetype_config.ArcheTypeConfig()
@@ -69,7 +70,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         return household_config
 
     @classmethod
-    def get_default_config_for_household_pellet(cls):
+    def get_default_config_for_household_pellet(cls) -> ModularHouseholdConfig:
         """Get default ModularHouseholdConfig."""
         energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_pellet_heating()
         archetype_config_ = archetype_config.ArcheTypeConfig()
@@ -79,7 +80,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         return household_config
 
     @classmethod
-    def get_default_config_for_household_wood_chips(cls):
+    def get_default_config_for_household_wood_chips(cls) -> ModularHouseholdConfig:
         """Get default ModularHouseholdConfig."""
         energy_system_config_ = (
             system_config.EnergySystemConfig.get_default_config_for_energy_system_wood_chip_heating()
@@ -91,7 +92,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         return household_config
 
     @classmethod
-    def get_default_config_for_household_hydrogen(cls):
+    def get_default_config_for_household_hydrogen(cls) -> ModularHouseholdConfig:
         """Get default ModularHouseholdConfig."""
         energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_hydrogen()
         archetype_config_ = archetype_config.ArcheTypeConfig()
@@ -101,7 +102,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         return household_config
 
     @classmethod
-    def get_default_config_for_household_electric_heating(cls):
+    def get_default_config_for_household_electric_heating(cls) -> ModularHouseholdConfig:
         """Get default ModularHouseholdConfig."""
         energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_electric()
         archetype_config_ = archetype_config.ArcheTypeConfig()
@@ -111,7 +112,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         return household_config
 
     @classmethod
-    def get_default_config_for_household_gas_solar_thermal(cls):
+    def get_default_config_for_household_gas_solar_thermal(cls) -> ModularHouseholdConfig:
         """Get default ModularHouseholdConfig."""
         energy_system_config_ = (
             system_config.EnergySystemConfig.get_default_config_for_energy_system_gas_solar_thermal()
@@ -123,7 +124,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         return household_config
 
     @classmethod
-    def get_default_config_for_household_heatpump_solar_thermal(cls):
+    def get_default_config_for_household_heatpump_solar_thermal(cls) -> ModularHouseholdConfig:
         """Get default ModularHouseholdConfig."""
         energy_system_config_ = (
             system_config.EnergySystemConfig.get_default_config_for_energy_system_heatpump_solar_thermal()
@@ -134,7 +135,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         )
         return household_config
 
-    def get_hash(self):
+    def get_hash(self) -> int:
         """Generate a hash for ModularHouseholdConfig."""
         household_config = ModularHouseholdConfig(
             energy_system_config_=self.energy_system_config_, archetype_config_=self.archetype_config_

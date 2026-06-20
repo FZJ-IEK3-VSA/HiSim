@@ -7,7 +7,7 @@
 from enum import IntEnum
 from pathlib import Path
 
-LOGGING_DEFAULT_LEVEL = 3
+LOGGING_DEFAULT_LEVEL: int = 3
 LOGGING_DEFAULT_PATH: str = r"../logs/"
 
 
@@ -59,7 +59,7 @@ class Logger:
     # ----- setup functions ----------------------------------------------------------------------
     # --------------------------------------------------------------------------------------------
 
-    def setup(self, logging_path) -> None:
+    def setup(self, logging_path: str) -> None:
         """Create actual logging path and files and move the buffered logs there.
 
         Args:
@@ -106,7 +106,7 @@ class Logger:
         self.log_buffer: str = ""
         self.profile_buffer: str = ""
 
-    def file_thanos(self, filename):
+    def file_thanos(self, filename: str) -> None:
         """Checks the size of a default logfile and halves it if it is too large."""
         file_path = str(Path(LOGGING_DEFAULT_PATH) / (filename + ".log"))
         if not Path(file_path).exists():

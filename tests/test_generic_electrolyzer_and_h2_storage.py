@@ -11,7 +11,7 @@ from hisim import log
 
 @pytest.mark.base
 def test_hydrogen_generator():
-    """Test hydroge generator."""
+    """Test hydrogen generator."""
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(

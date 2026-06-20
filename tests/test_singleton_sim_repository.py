@@ -2,8 +2,8 @@
 
 # clean
 
-import os
 from typing import Optional
+from pathlib import Path
 import pytest
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
@@ -46,11 +46,8 @@ def test_house(
         )
 
     # this part is copied from hisim_main
+    path_to_be_added = str(Path(PATH).resolve().parent)
     # Build Simulator
-    normalized_path = os.path.normpath(PATH)
-    path_in_list = normalized_path.split(os.sep)
-    if len(path_in_list) >= 1:
-        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,

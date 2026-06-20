@@ -322,7 +322,7 @@ class CHP(Component):
         pass
 
     def simulate_chp(self, control_signal: float, stsv: SingleTimeStepValues, timestep: int) -> Any:
-        """Simualtes the component."""
+        """Simulates the component."""
 
         specific_heat_capacity_water = 4182
         # Calculation.Electric Energy deliverd

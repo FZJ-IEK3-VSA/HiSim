@@ -15,11 +15,11 @@ from hisim.postprocessingoptions import PostProcessingOptions
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_district():
+def test_district() -> None:
     """Single day."""
-    path = "../system_setups/district_system_setup/simple_district.py"
+    path: str = "../system_setups/district_system_setup/simple_district.py"
 
-    my_simulation_parameters = SimulationParameters.one_week_only(year=2021, seconds_per_timestep=60)
+    my_simulation_parameters: SimulationParameters = SimulationParameters.one_week_only(year=2021, seconds_per_timestep=60)
 
     my_simulation_parameters.multiple_buildings = True
 

@@ -1,8 +1,8 @@
 """rSOC."""
 
 # clean
-import os
 import json
+from pathlib import Path
 from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -56,7 +56,7 @@ class RsocConfig(cp.ConfigBase):
     def read_config(rsoc_name):
         """Opens the according JSON-file, based on the rSOC_name."""
 
-        config_file = os.path.join(utils.HISIMPATH["inputs"], "rSOC_manufacturer_config.json")
+        config_file = Path(utils.HISIMPATH["inputs"]) / "rSOC_manufacturer_config.json"
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("rSOC variants", {}).get(rsoc_name, {})
@@ -384,7 +384,7 @@ class Rsoc(cp.Component):
     def soec_efficiency(self, name, current_load, min_load, max_load):
         """Efficiency curve data is provided corresponding to the used rSOC system."""
         # Load data from the JSON file
-        data_file = os.path.join(utils.HISIMPATH["inputs"], "rSOC_efficiency_curve_data.json")
+        data_file = Path(utils.HISIMPATH["inputs"]) / "rSOC_efficiency_curve_data.json"
         with open(data_file, "r", encoding="utf-8") as file:
             data = json.load(file)
 
@@ -409,7 +409,7 @@ class Rsoc(cp.Component):
     def sofc_efficiency(self, name, current_demand, min_power, max_power):
         """Efficiency curve data is provided corresponding to the used rSOC system."""
         # Load data from the JSON file
-        data_file = os.path.join(utils.HISIMPATH["inputs"], "rSOC_efficiency_curve_data.json")
+        data_file = Path(utils.HISIMPATH["inputs"]) / "rSOC_efficiency_curve_data.json"
         with open(data_file, "r", encoding="utf-8") as file:
             data = json.load(file)
 

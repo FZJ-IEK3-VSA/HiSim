@@ -7,7 +7,6 @@ from hisim import component as cp
 from hisim.components import generic_rsoc
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim import log
 
 
 @pytest.mark.base
@@ -85,7 +84,6 @@ def test_electrolyzer():
     # Simulate
     my_rsoc.i_restore_state()
     my_rsoc.i_simulate(timestep, stsv, False)
-    log.information(str(stsv.values))
 
     # Checking differnt values
     assert (

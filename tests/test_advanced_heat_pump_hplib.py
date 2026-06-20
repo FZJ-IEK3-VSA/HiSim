@@ -15,7 +15,7 @@ from hisim.units import Quantity, Watt, Celsius, Seconds, Kilogram, Euro, Years,
 
 
 @pytest.mark.base
-def test_heat_pump_hplib():
+def test_heat_pump_hplib() -> None:
     """Test heat pump hplib."""
 
     # Definitions for HeatPump init

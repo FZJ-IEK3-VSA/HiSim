@@ -19,7 +19,7 @@ from tests import functions_for_testing as fft
 
 @pytest.mark.buildingtest
 @utils.measure_execution_time
-def test_building_scalability():
+def test_building_scalability() -> None:
     """Test function for the building module."""
 
     # Sets inputs

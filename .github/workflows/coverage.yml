@@ -1,39 +1,129 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
-
 name: coverage
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - pytest base tests
+      - pytest extendedbase tests
+      - pytest buildingtest
+      - pytest system_setups
+      - pytest jsonconfig
+      - pytest others
+      - pytest utsp
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
 
 jobs:
-  build:
+  combine:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.workflow_run.head_sha || github.sha }}
     - name: Set up Python 3.11
       uses: actions/setup-python@v3
       with:
         python-version: "3.11"
-    - name: Setup Graphviz
-      uses: ts-graphviz/setup-graphviz@v1
-    - name: Install dependencies
+    - name: Install coverage
       run: |
         python -m pip install --upgrade pip
-        pip install uv
-        python3 -m pip install --upgrade setuptools wheel
-        uv pip install --system h5py --upgrade
-        uv pip install --system coverage
-        if [ -f requirements.txt ]; then uv pip install --system -r requirements.txt; fi
-        uv pip install --system -e .
-    - name: Coverage test
+        python -m pip install coverage
+    - name: Download coverage data from pytest workflows
       env:
-        UTSP_URL: ${{ secrets.UTSP_URL }}
-        UTSP_API_KEY: ${{ secrets.UTSP_API_KEY }}
-      working-directory: ./tests
+        GH_TOKEN: ${{ github.token }}
+        HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        EVENT_NAME: ${{ github.event.workflow_run.event || '' }}
       run: |
-        coverage run --rcfile=.coveragerc -m pytest
-        coverage html
+        set -euo pipefail
+        mkdir -p coverage-data
+
+        workflows=(
+          "pytest-base.yml:coverage-pytest-base"
+          "pytest-extendedbase.yml:coverage-pytest-extendedbase"
+          "pytest-buildingtest.yml:coverage-pytest-buildingtest"
+          "pytest-system-setups.yml:coverage-pytest-system-setups"
+          "pytest-jsonconfig.yml:coverage-pytest-jsonconfig"
+          "pytest-others.yml:coverage-pytest-others"
+          "pytest-utsp.yml:coverage-pytest-utsp"
+        )
+
+        missing_or_running=0
+        failed=0
+
+        for entry in "${workflows[@]}"; do
+          workflow="${entry%%:*}"
+          artifact="${entry##*:}"
+          run_args=(--workflow "$workflow" --commit "$HEAD_SHA" --limit 1 --json databaseId,status,conclusion)
+          if [ -n "$EVENT_NAME" ]; then
+            run_args+=(--event "$EVENT_NAME")
+          fi
+          run_json="$(gh run list "${run_args[@]}" --jq '.[0] // empty')"
+
+          if [ -z "$run_json" ]; then
+            echo "No run found for $workflow at $HEAD_SHA ($EVENT_NAME) yet."
+            missing_or_running=1
+            continue
+          fi
+
+          run_id="$(jq -r '.databaseId' <<< "$run_json")"
+          status="$(jq -r '.status' <<< "$run_json")"
+          conclusion="$(jq -r '.conclusion' <<< "$run_json")"
+
+          if [ "$status" != "completed" ]; then
+            echo "$workflow is still $status."
+            missing_or_running=1
+            continue
+          fi
+
+          if [ "$conclusion" != "success" ]; then
+            echo "$workflow completed with conclusion $conclusion."
+            failed=1
+            continue
+          fi
+
+          echo "Downloading $artifact from $workflow run $run_id"
+          gh run download "$run_id" --name "$artifact" --dir "coverage-data/$artifact" || {
+            echo "Coverage artifact $artifact was not available."
+            missing_or_running=1
+          }
+        done
+
+        if [ "$missing_or_running" -ne 0 ]; then
+          echo "Not all pytest coverage artifacts are available yet. A later workflow_run will combine them."
+          exit 0
+        fi
+
+        if [ "$failed" -ne 0 ]; then
+          echo "At least one pytest workflow failed; skipping combined coverage."
+          exit 1
+        fi
+
+        find coverage-data -type f -name '.coverage*' -print -quit | grep -q . || {
+          echo "No coverage data files were downloaded."
+          exit 1
+        }
+    - name: Combine coverage
+      run: |
+        mkdir -p coverage-combine
+        index=0
+        while IFS= read -r coverage_file; do
+          cp "$coverage_file" "coverage-combine/.coverage.$index"
+          index=$((index + 1))
+        done < <(find coverage-data -type f -name '.coverage*')
+        coverage combine coverage-combine
+        coverage report
+        coverage xml -o coverage.xml
+        coverage html -d htmlcov
+    - name: Upload combined coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: combined-coverage-report
+        path: |
+          coverage.xml
+          htmlcov/
+        if-no-files-found: error

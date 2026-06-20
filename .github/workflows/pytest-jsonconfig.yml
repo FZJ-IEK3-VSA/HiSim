@@ -24,12 +24,21 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install uv
+        uv pip install --system coverage
         if [ -f requirements.txt ]; then uv pip install --system -r requirements.txt; fi
         uv pip install --system -e .
     - name: Test with pytest
       working-directory: ./tests/
       run: |
-        pytest -m "jsonconfig" --durations=0
+        coverage run --parallel-mode --source=../hisim -m pytest -m "jsonconfig" --durations=20
+    - name: Upload coverage data
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-pytest-jsonconfig
+        path: tests/.coverage.*
+        include-hidden-files: true
+        if-no-files-found: warn
 
     #    # stop the build if there are Python syntax errors or undefined names
        

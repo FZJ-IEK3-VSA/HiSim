@@ -4,7 +4,6 @@
 
 from typing import Optional, Any, Union, List
 import re
-import os
 from pathlib import Path
 
 from utspclient.helpers.lpgpythonbindings import JsonReference

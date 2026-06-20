@@ -149,7 +149,7 @@ def main():
                 my_config = ScenarioAnalysisConfig.from_json(scenario_analysis_config_file.read())  # type: ignore
 
             log.information(f"Read scenario analysis config from {scenario_analysis_config_path}")
-            log.information("Config values: " + f"{my_config.to_dict}" + "\n")
+            log.information("Config values: " + f"{my_config.to_dict()}" + "\n")
         else:
             # cannot open file for scenario analysis config so default config will be used
             use_default_scenario_analysis_config = True

@@ -1,0 +1,53 @@
+image: python:3.11
+
+workflow:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - when: never
+
+stages:
+  - lint
+  - test
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - .cache/pip
+    - .cache/uv
+
+.python_setup:
+  before_script:
+    - python -m pip install --upgrade pip
+    - pip install uv
+    - uv pip install --system ruff
+    - if [ -f requirements.txt ]; then uv pip install --system -r requirements.txt; fi
+    - uv pip install --system -e .
+
+ruff:
+  stage: lint
+  extends: .python_setup
+  script:
+    - ruff check . --exclude obsolete
+
+pytest-base:
+  stage: test
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends graphviz
+    - python -m pip install --upgrade pip
+    - pip install uv
+    - uv pip install --system coverage
+    - if [ -f requirements.txt ]; then uv pip install --system -r requirements.txt; fi
+    - uv pip install --system -e .
+  script:
+    - cd tests
+    - coverage run --parallel-mode --source=../hisim -m pytest -m "base" --durations=20
+  artifacts:
+    when: always
+    paths:
+      - tests/.coverage.*
+    expire_in: 1 week

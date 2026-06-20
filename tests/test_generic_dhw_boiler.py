@@ -77,21 +77,21 @@ def test_simple_bucket_boiler_state():
     my_boiler_controller_l1.heat_pump_target_percentage_channel.global_index = 3
     my_heater.fuel_delivered_channel.global_index = 4
 
-    j = 60
+    default_timestep = 60
     stsv.values[0] = 1
 
     # check if heat loss in boiler corresponds to heatloss originated from 1 l hot water use and u-value heat loss
     my_boiler.i_restore_state()
-    my_boiler.i_simulate(j, stsv, False)
+    my_boiler.i_simulate(default_timestep, stsv, False)
 
     my_boiler_controller_l1.i_restore_state()
-    my_boiler_controller_l1.i_simulate(j, stsv, False)
+    my_boiler_controller_l1.i_simulate(default_timestep, stsv, False)
 
     my_heater.i_restore_state()
-    my_heater.i_simulate(j, stsv, False)
+    my_heater.i_simulate(default_timestep, stsv, False)
 
     my_boiler.i_restore_state()
-    my_boiler.i_simulate(j, stsv, False)
+    my_boiler.i_simulate(default_timestep, stsv, False)
 
     assert stsv.values[1] >= 59.6 and stsv.values[1] < 59.7
 
@@ -100,13 +100,13 @@ def test_simple_bucket_boiler_state():
     stsv.values[1] = 20
 
     my_boiler_controller_l1.i_restore_state()
-    my_boiler_controller_l1.i_simulate(j, stsv, False)
+    my_boiler_controller_l1.i_simulate(default_timestep, stsv, False)
 
     my_heater.i_restore_state()
-    my_heater.i_simulate(j, stsv, False)
+    my_heater.i_simulate(default_timestep, stsv, False)
 
     my_boiler.i_restore_state()
-    my_boiler.i_simulate(j, stsv, False)
+    my_boiler.i_simulate(default_timestep, stsv, False)
 
     # check if heat loss in boiler corresponds to heatloss originated from 1 l hot water use and u-value heat loss
     assert stsv.values[2] == my_heater.config.thermal_power_in_watt * my_heater.config.efficiency
@@ -116,13 +116,13 @@ def test_simple_bucket_boiler_state():
     stsv.values[1] = 100
 
     my_boiler_controller_l1.i_restore_state()
-    my_boiler_controller_l1.i_simulate(j, stsv, False)
+    my_boiler_controller_l1.i_simulate(default_timestep, stsv, False)
 
     my_heater.i_restore_state()
-    my_heater.i_simulate(j, stsv, False)
+    my_heater.i_simulate(default_timestep, stsv, False)
 
     my_boiler.i_restore_state()
-    my_boiler.i_simulate(j, stsv, False)
+    my_boiler.i_simulate(default_timestep, stsv, False)
 
     # check if heat loss in boiler corresponds to heatloss originated from 1 l hot water use and u-value heat loss
     assert stsv.values[2] == 0

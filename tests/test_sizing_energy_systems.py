@@ -32,7 +32,7 @@ def test_energy_system_scalability():
     (
         number_of_apartments,
         original_pv_electricity_output_in_watt,
-        original_hplib_thermal_outout_power_in_watt,
+        original_hplib_thermal_output_power_in_watt,
         original_storage_size_for_space_heating_in_liter,
         original_battery_size_in_kilowatt_hours,
         original_hp_modular_thermal_power_in_watt_for_dhw,
@@ -46,7 +46,7 @@ def test_energy_system_scalability():
     )
     log.information(
         "original size hplib in watt "
-        + str(original_hplib_thermal_outout_power_in_watt)
+        + str(original_hplib_thermal_output_power_in_watt)
     )
     log.information(
         "original size storage for space heating in liter "
@@ -70,7 +70,7 @@ def test_energy_system_scalability():
     (
         number_of_apartments,
         scaled_pv_electricity_output_in_watt,
-        scaled_hplib_thermal_outout_power_in_watt,
+        scaled_hplib_thermal_output_power_in_watt,
         scaled_storage_size_for_space_heating_in_liter,
         scaled_battery_size_in_kilowatt_hours,
         scaled_hp_modular_thermal_power_in_watt_for_dhw,
@@ -83,7 +83,7 @@ def test_energy_system_scalability():
         "original size pv in watt " + str(scaled_pv_electricity_output_in_watt)
     )
     log.information(
-        "original size hplib in watt " + str(scaled_hplib_thermal_outout_power_in_watt)
+        "original size hplib in watt " + str(scaled_hplib_thermal_output_power_in_watt)
     )
     log.information(
         "original size storage for space heating in liter "
@@ -110,8 +110,8 @@ def test_energy_system_scalability():
     )
 
     np.testing.assert_allclose(
-        scaled_hplib_thermal_outout_power_in_watt,
-        original_hplib_thermal_outout_power_in_watt * 5,
+        scaled_hplib_thermal_output_power_in_watt,
+        original_hplib_thermal_output_power_in_watt * 5,
         rtol=0.01,
     )
 

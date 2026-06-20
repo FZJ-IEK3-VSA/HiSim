@@ -104,7 +104,7 @@ class LocalPool:
             env[var] = "1"
 
         log_path = result_dir / "harness_run.log"
-        log_file = open(log_path, "wb")  # noqa: SIM115 (closed in _finish)
+        log_file = open(log_path, "wb")  # pylint: disable=consider-using-with
         cmd = self._build_command(task, str(result_dir), self.sim_params)
         popen = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT, env=env)
         self.running[task["id"]] = {

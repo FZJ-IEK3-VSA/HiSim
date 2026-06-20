@@ -265,7 +265,7 @@ class L1Controller(cp.Component):
         """
         return car_consumption * (-1)
 
-    def _handle_parking(self, car_location: int) -> float:
+    def _handle_parking(self, _car_location: int) -> float:
         """Handle parking case when car is not at charging location.
         
         When the car is parked but not at the charging location, no charging occurs.

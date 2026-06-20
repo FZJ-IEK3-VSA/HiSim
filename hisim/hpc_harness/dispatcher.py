@@ -23,7 +23,7 @@ def _log(message: str) -> None:
 
 def run_head(comm: "object", cfg: HarnessConfig) -> None:
     """Run the dispatcher loop on rank 0 until every task is finished."""
-    from mpi4py import MPI
+    from mpi4py import MPI  # pylint: disable=import-outside-toplevel
 
     size = comm.Get_size()
     n_workers = size - 1

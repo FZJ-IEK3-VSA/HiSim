@@ -83,7 +83,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     cfg = _build_config(args)
 
     try:
-        from mpi4py import MPI
+        from mpi4py import MPI  # pylint: disable=import-outside-toplevel
     except ModuleNotFoundError:
         print("mpi4py is required for 'run'. Install it (built against your cluster MPI), "
               "e.g. 'pip install -e .[hpc]'.", file=sys.stderr)
@@ -93,10 +93,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     rank = comm.Get_rank()
     try:
         if rank == 0:
-            from hisim.hpc_harness.dispatcher import run_head
+            from hisim.hpc_harness.dispatcher import run_head  # pylint: disable=import-outside-toplevel
             run_head(comm, cfg)
         else:
-            from hisim.hpc_harness.node_agent import run_agent
+            from hisim.hpc_harness.node_agent import run_agent  # pylint: disable=import-outside-toplevel
             run_agent(comm, cfg)
     except Exception:
         # A crashing rank must tear down the whole job; restart resumes from the DB.

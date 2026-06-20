@@ -22,4 +22,7 @@ class TestingUtils:
             run_mode=RunMode.TEST,
             test_name=test_name or detect_test_name(),
         )
-        return ResultPathProviderSingleton().get_result_directory_name()
+        result_directory = ResultPathProviderSingleton().get_result_directory_name()
+        if result_directory is None:
+            raise ValueError("Result directory could not be determined for test run.")
+        return str(result_directory)

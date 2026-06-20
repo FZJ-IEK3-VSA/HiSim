@@ -76,5 +76,4 @@ def guard_against_stray_files() -> Iterator[None]:
             + "\n\nWrite into the ResultPathProviderSingleton result directory, "
             "or add a legitimate output location to .gitignore."
         )
-    else:
-        print("No stray files left behind!")
+    print("No stray files left behind!")

@@ -437,14 +437,14 @@ class Simulator:
             unit = self.all_outputs[i].unit
 
             if unit in units_mean:
-                monthly = col_data.resample("M").mean()
+                monthly = col_data.resample("ME").mean()
                 daily = col_data.resample("D").mean()
-                hourly = col_data.resample("60T").mean() if use_hourly_resample else col_data
+                hourly = col_data.resample("60min").mean() if use_hourly_resample else col_data
                 cumulative = col_data.mean()
             else:
-                monthly = col_data.resample("M").sum()
+                monthly = col_data.resample("ME").sum()
                 daily = col_data.resample("D").sum()
-                hourly = col_data.resample("60T").sum() if use_hourly_resample else col_data
+                hourly = col_data.resample("60min").sum() if use_hourly_resample else col_data
                 cumulative = col_data.sum()
 
             monthly_frames.append(monthly.rename(column_name))

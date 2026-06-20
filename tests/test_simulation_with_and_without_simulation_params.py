@@ -18,7 +18,6 @@ BASIC_HOUSEHOLD_PATH = str(Path(__file__).resolve().parent.parent / "system_setu
 @pytest.mark.extendedbase
 @utils.measure_execution_time
 def test_basic_household_with_simu_params() -> None:
-def test_basic_household_with_simu_params() -> None:
     """Single day."""
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 60)
     mysimpar.result_directory = TestingUtils.get_result_directory()

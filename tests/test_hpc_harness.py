@@ -21,6 +21,7 @@ from hisim.hpc_harness.pool import LocalPool, compute_max_slots
 # --------------------------------------------------------------------------- db
 @pytest.mark.base
 def test_import_is_idempotent(tmp_path):
+    """Test that importing the same scenario directory twice does not duplicate tasks."""
     scen_dir = tmp_path / "scenarios"
     scen_dir.mkdir()
     for i in range(3):
@@ -38,6 +39,7 @@ def test_import_is_idempotent(tmp_path):
 
 @pytest.mark.base
 def test_lease_report_retry_and_dead(tmp_path):
+    """Test task leasing, reporting, retry, and dead-letter state transitions."""
     scen_dir = tmp_path / "scenarios"
     scen_dir.mkdir()
     (scen_dir / "a.json").write_text("{}", encoding="utf-8")
@@ -84,6 +86,7 @@ def test_lease_report_retry_and_dead(tmp_path):
 
 @pytest.mark.base
 def test_startup_recovery_requeues_leases(tmp_path):
+    """Test that startup recovery requeues tasks left in leased state."""
     scen_dir = tmp_path / "scenarios"
     scen_dir.mkdir()
     (scen_dir / "a.json").write_text("{}", encoding="utf-8")
@@ -102,6 +105,7 @@ def test_startup_recovery_requeues_leases(tmp_path):
 
 @pytest.mark.base
 def test_reset_stale_leases(tmp_path):
+    """Test that stale task leases are reclaimed as pending work."""
     scen_dir = tmp_path / "scenarios"
     scen_dir.mkdir()
     (scen_dir / "a.json").write_text("{}", encoding="utf-8")
@@ -123,6 +127,7 @@ def test_reset_stale_leases(tmp_path):
 # ----------------------------------------------------------------------- config
 @pytest.mark.base
 def test_config_from_file_and_overrides(tmp_path):
+    """Test loading harness config from JSON and applying runtime overrides."""
     cfg_path = tmp_path / "harness.json"
     cfg_path.write_text(
         '{"db": "t.db", "sim_params": "s.json", "result_root": "out", "timeout_s": 100}',
@@ -139,6 +144,7 @@ def test_config_from_file_and_overrides(tmp_path):
 
 @pytest.mark.base
 def test_config_rejects_unknown_keys(tmp_path):
+    """Test that harness config loading rejects unknown JSON keys."""
     cfg_path = tmp_path / "harness.json"
     cfg_path.write_text('{"db": "t.db", "bogus": 1}', encoding="utf-8")
     with pytest.raises(ValueError):
@@ -147,12 +153,14 @@ def test_config_rejects_unknown_keys(tmp_path):
 
 @pytest.mark.base
 def test_config_missing_required_raises():
+    """Test that incomplete harness configuration fails finalization."""
     with pytest.raises(ValueError):
         HarnessConfig(db="only.db").finalize()
 
 
 @pytest.mark.base
 def test_compute_max_slots():
+    """Test explicit and derived subprocess slot calculation."""
     assert compute_max_slots(per_sim_mem_gb=10, min_headroom_gb=12, configured=7) == 7
     # Derived value is positive and leaves headroom on a real machine.
     assert compute_max_slots(per_sim_mem_gb=10, min_headroom_gb=12, configured=None) >= 1
@@ -181,7 +189,9 @@ def _make_pool(tmp_path, builder, timeout_s=60.0, max_slots=4):
 
 @pytest.mark.base
 def test_pool_success_and_failure(tmp_path):
-    def builder(task, result_dir, sim_params):
+    """Test that the local pool reports successful and failed subprocesses."""
+
+    def builder(task, _result_dir, _sim_params):
         if task["scenario_path"].endswith("fail.json"):
             return [sys.executable, "-c", "import sys; sys.exit(3)"]
         return [sys.executable, "-c", "import time; time.sleep(0.3)"]
@@ -204,7 +214,9 @@ def test_pool_success_and_failure(tmp_path):
 
 @pytest.mark.base
 def test_pool_timeout_kills_subprocess(tmp_path):
-    def builder(task, result_dir, sim_params):
+    """Test that timed-out subprocesses are killed and reported as failures."""
+
+    def builder(_task, _result_dir, _sim_params):
         return [sys.executable, "-c", "import time; time.sleep(60)"]
 
     pool = _make_pool(tmp_path, builder, timeout_s=0.5)

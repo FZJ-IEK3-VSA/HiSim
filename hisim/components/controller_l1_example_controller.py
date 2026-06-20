@@ -31,7 +31,7 @@ class SimpleControllerConfig(ConfigBase):
     name: str
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Return the full class name of the base class."""
         return SimpleController.get_full_classname()
 
@@ -48,8 +48,8 @@ class SimpleControllerConfig(ConfigBase):
 class SimpleController(Component):
     """Simple controller class."""
 
-    StorageFillLevel = "Fill Level Percent"
-    GasHeaterPowerPercent = "Gas Heater Power Level"
+    StorageFillLevel: str = "Fill Level Percent"
+    GasHeaterPowerPercent: str = "Gas Heater Power Level"
 
     def __init__(
         self,
@@ -82,8 +82,8 @@ class SimpleController(Component):
             lt.LoadTypes.GAS,
             lt.Units.PERCENT,
         )
-        self.state = 0
-        self.previous_state = self.state
+        self.state: int = 0
+        self.previous_state: int = self.state
 
     def i_save_state(self) -> None:
         """Saves the state."""

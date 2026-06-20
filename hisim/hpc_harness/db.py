@@ -262,4 +262,4 @@ def is_drained(conn: sqlite3.Connection) -> bool:
     row = conn.execute(
         "SELECT COUNT(*) AS c FROM tasks WHERE status IN (?, ?)", (PENDING, LEASED)
     ).fetchone()
-    return row["c"] == 0
+    return bool(row["c"] == 0)

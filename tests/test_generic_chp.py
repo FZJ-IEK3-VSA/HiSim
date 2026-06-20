@@ -14,7 +14,7 @@ from hisim.simulationparameters import SimulationParameters
 
 
 @pytest.mark.base
-def test_chp_system():
+def test_chp_system() -> None:
     """Test chp system."""
     seconds_per_timestep = 60
     thermal_power = 500  # thermal power in Watt

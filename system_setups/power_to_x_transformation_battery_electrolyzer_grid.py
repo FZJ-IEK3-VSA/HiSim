@@ -34,13 +34,13 @@ from hisim.components.generic_electrolyzer_h2 import (
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 
-__authors__ = "Franz Oldopp"
-__copyright__ = "Copyright 2023, FZJ-IEK-3"
-__credits__ = ["Franz Oldopp"]
-__license__ = "-"
-__version__ = "2.0"
-__maintainer__ = "Franz Oldopp"
-__status__ = "development"
+__authors__: str = "Franz Oldopp"
+__copyright__: str = "Copyright 2023, FZJ-IEK-3"
+__credits__: list[str] = ["Franz Oldopp"]
+__license__: str = "-"
+__version__: str = "2.0"
+__maintainer__: str = "Franz Oldopp"
+__status__: str = "development"
 
 
 def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:

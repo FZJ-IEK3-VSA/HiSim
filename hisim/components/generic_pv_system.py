@@ -902,7 +902,9 @@ class PVSystem(cp.Component):
 
             # transform column object types to numeric types
             for column in module.columns:
-                module.loc[:, column] = pd.to_numeric(module.loc[:, column], errors="coerce")
+                if column == "Name":
+                    continue
+                module[column] = pd.to_numeric(module[column], errors="coerce")
 
             # transform module dataframe to dict
             if len(module) != 1:
@@ -966,7 +968,9 @@ class PVSystem(cp.Component):
 
                 # transform column object types to numeric types
                 for column in inverter.columns:
-                    inverter.loc[:, column] = pd.to_numeric(inverter.loc[:, column], errors="coerce")
+                    if column == "Name":
+                        continue
+                    inverter[column] = pd.to_numeric(inverter[column], errors="coerce")
 
                 # transform inverter dataframe to dict
                 if len(inverter) != 1:

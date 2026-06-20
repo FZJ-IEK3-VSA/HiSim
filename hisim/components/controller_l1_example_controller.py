@@ -33,7 +33,7 @@ class SimpleControllerConfig(ConfigBase):
     @classmethod
     def get_main_classname(cls) -> str:
         """Return the full class name of the base class."""
-        return SimpleController.get_full_classname()
+        return str(SimpleController.get_full_classname())
 
     @classmethod
     def get_default_config(

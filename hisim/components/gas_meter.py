@@ -31,7 +31,7 @@ class GasMeterConfig(cp.ConfigBase):
     @classmethod
     def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
-        return GasMeter.get_full_classname()
+        return str(GasMeter.get_full_classname())
 
     building_name: str
     name: str

@@ -1,4 +1,4 @@
-"""SQLite task database for the HiSim MPI HPC harness.
+r"""SQLite task database for the HiSim MPI HPC harness.
 
 The database is the durable source of truth for the whole run. Only the head rank
 (rank 0) ever opens or writes it, so single-writer SQLite is safe even on a shared
@@ -228,8 +228,11 @@ def startup_recovery(conn: sqlite3.Connection, max_attempts: int) -> int:
 
 
 def reset(conn: sqlite3.Connection, leased: bool = False, failed: bool = False) -> int:
-    """Manually requeue tasks. ``leased`` resets stuck leases; ``failed`` revives
-    failed/dead tasks (clearing their attempt count). Returns rows affected."""
+    """Manually requeue tasks.
+
+    ``leased`` resets stuck leases; ``failed`` revives failed/dead tasks
+    (clearing their attempt count). Returns rows affected.
+    """
     now = time.time()
     affected = 0
     if leased:

@@ -11,7 +11,7 @@ from hisim import utils
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_electrolyzer_with_renewables():
+def test_electrolyzer_with_renewables() -> None:
     """Single day."""
     path = "../system_setups/electrolyzer_with_renewables.py"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)

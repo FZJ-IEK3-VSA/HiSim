@@ -60,6 +60,7 @@ class LocalPool:
         max_slots: int,
         command_builder: Optional[Callable[[Dict[str, Any], str, str], List[str]]] = None,
     ) -> None:
+        """Initialize a node-local process pool with memory and timeout limits."""
         self.host = host
         self.sim_params = sim_params
         self.result_root = Path(result_root)
@@ -104,9 +105,11 @@ class LocalPool:
             env[var] = "1"
 
         log_path = result_dir / "harness_run.log"
-        log_file = open(log_path, "wb")  # pylint: disable=consider-using-with
         cmd = self._build_command(task, str(result_dir), self.sim_params)
-        popen = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT, env=env)
+        # The subprocess and log handle intentionally live beyond this method and
+        # are closed when the task finishes or times out.
+        log_file = open(log_path, "wb")  # pylint: disable=consider-using-with
+        popen = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT, env=env)  # pylint: disable=consider-using-with
         self.running[task["id"]] = {
             "task": task,
             "popen": popen,

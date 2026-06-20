@@ -14,7 +14,7 @@ from hisim.hpc_harness.protocol import GRANT, NONE, REPORT, REQUEST, SHUTDOWN, T
 
 def run_agent(comm: "object", cfg: HarnessConfig) -> None:
     """Run the node-agent loop on a worker rank until the head signals shutdown."""
-    from mpi4py import MPI  # pylint: disable=import-outside-toplevel
+    from mpi4py import MPI  # pylint: disable=import-outside-toplevel,import-error
 
     rank = comm.Get_rank()
     host = MPI.Get_processor_name()

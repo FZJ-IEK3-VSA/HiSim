@@ -6,10 +6,10 @@ directly to the shared filesystem by each subprocess.
 """
 
 # --- agent -> head -------------------------------------------------------------
-REQUEST = "REQUEST"
+REQUEST: str = "REQUEST"
 """Agent asks for work: {"type", "host", "rank", "n_free"}."""
 
-REPORT = "REPORT"
+REPORT: str = "REPORT"
 """Agent reports finished tasks: {"type", "reports": [report, ...]}.
 
 Each report: {"id", "status", "exit_code", "duration_s", "peak_mem_mb",
@@ -17,14 +17,14 @@ Each report: {"id", "status", "exit_code", "duration_s", "peak_mem_mb",
 """
 
 # --- head -> agent -------------------------------------------------------------
-GRANT = "GRANT"
+GRANT: str = "GRANT"
 """Head hands out work: {"type", "tasks": [{"id", "scenario_path"}, ...]}."""
 
-NONE = "NONE"
+NONE: str = "NONE"
 """No work available right now, but the run is not finished. Keep polling."""
 
-SHUTDOWN = "SHUTDOWN"
+SHUTDOWN: str = "SHUTDOWN"
 """Queue is fully drained and nothing is outstanding. Exit once the local pool idles."""
 
 # Single MPI tag for all harness traffic.
-TAG = 0
+TAG: int = 0

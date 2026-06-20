@@ -11,7 +11,7 @@ from hisim import utils
 
 @pytest.mark.extendedbase
 @utils.measure_execution_time
-def test_basic_household_with_simu_params():
+def test_basic_household_with_simu_params() -> None:
     """Single day."""
     path = "../system_setups/basic_household.py"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 60)
@@ -21,7 +21,7 @@ def test_basic_household_with_simu_params():
 
 @pytest.mark.extendedbase
 @utils.measure_execution_time
-def test_basic_household_without_simu_params():
+def test_basic_household_without_simu_params() -> None:
     """No simulation params given. HiSim is often called this way."""
     path = "../system_setups/basic_household.py"
     mysimpar = None

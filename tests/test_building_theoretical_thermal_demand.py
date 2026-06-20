@@ -1,7 +1,7 @@
 """Test for heat demand calculation in the building module."""
 
-# clean
 import os
+import shutil
 from typing import Optional
 import numpy as np
 import pytest
@@ -12,6 +12,7 @@ from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import idealized_electric_heater
+from tests.testing_utils import TestingUtils
 
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
@@ -48,7 +49,7 @@ def test_house_with_idealized_electric_heater_for_heating_test(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60
+    seconds_per_timestep = 60 * 60
 
     # Set Fake Heater
     set_heating_temperature_for_building_in_celsius = 20
@@ -59,9 +60,11 @@ def test_house_with_idealized_electric_heater_for_heating_test(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
+        my_simulation_parameters = SimulationParameters.one_week_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+    my_simulation_parameters.result_directory = TestingUtils.get_result_directory()
+    shutil.rmtree(my_simulation_parameters.result_directory, ignore_errors=True)
 
     # # in case ou want to check on all TABULA buildings -> run test over all building_codes
     # d_f = pd.read_csv(

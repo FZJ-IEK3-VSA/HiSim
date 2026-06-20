@@ -29,7 +29,7 @@ def main() -> None:
 
     # Imported here (not at module load) so the harness CLI works without a full
     # HiSim import and so each subprocess starts from a clean interpreter.
-    from hisim.hisim_main import initialize_from_json, run_simulation
+    from hisim.hisim_main import initialize_from_json, run_simulation  # pylint: disable=import-outside-toplevel
 
     my_sim = initialize_from_json(
         scenario=args.scenario,

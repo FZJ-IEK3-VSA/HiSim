@@ -2,7 +2,7 @@
 
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional
 
 from dataclasses_json import dataclass_json
 
@@ -33,7 +33,7 @@ class ArcheTypeConfig:
 
     building_postal_code: str = "52062"
     building_location: str = "Aachen"
-    lpg_households: List[str] = field(default_factory=lambda: ["CHR01_Couple_both_at_Work"])
+    lpg_households: list[str] = field(default_factory=lambda: ["CHR01_Couple_both_at_Work"])
     commodity: str = "electric"
     supply_level: str = "central_heating"
     building_density_within_buffer_area_of_100m_radius: float = 0.09

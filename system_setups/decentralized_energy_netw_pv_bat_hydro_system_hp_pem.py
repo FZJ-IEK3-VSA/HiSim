@@ -342,7 +342,7 @@ def setup_function(
     my_fuel_cell.connect_input(
         my_fuel_cell.DemandProfile,
         my_fuel_cell_controller.component_name,
-        my_fuel_cell_controller.PowerTarger,
+        my_fuel_cell_controller.PowerTarget,
     )
     my_fuel_cell.connect_input(
         my_fuel_cell.ControlSignal,

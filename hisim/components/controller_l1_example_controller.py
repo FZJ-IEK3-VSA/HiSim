@@ -4,7 +4,6 @@
 
 # Generic/Built-in
 
-from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -40,7 +39,7 @@ class SimpleControllerConfig(ConfigBase):
     def get_default_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "SimpleControllerConfig":
         """Returns default config."""
         config = SimpleControllerConfig(name="SimpleController", building_name=building_name)
         return config

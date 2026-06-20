@@ -227,14 +227,14 @@ class HeatPumpHplib(Component):
 
         self.minimum_running_time_in_seconds = (
             config.minimum_running_time_in_seconds.value
-            if config.minimum_running_time_in_seconds
-            else config.minimum_running_time_in_seconds
+            if config.minimum_running_time_in_seconds is not None
+            else None
         )
 
         self.minimum_idle_time_in_seconds = (
             config.minimum_idle_time_in_seconds.value
-            if config.minimum_idle_time_in_seconds
-            else config.minimum_idle_time_in_seconds
+            if config.minimum_idle_time_in_seconds is not None
+            else None
         )
 
         # Component has states

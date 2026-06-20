@@ -28,10 +28,14 @@ def run_head(comm: "object", cfg: HarnessConfig) -> None:
     size = comm.Get_size()
     n_workers = size - 1
     host = MPI.Get_processor_name()
+    db_path, sim_params, result_root = cfg.required_paths()
+    lease_timeout_s = cfg.lease_timeout_s
+    if lease_timeout_s is None:
+        raise ValueError("lease_timeout_s must be set before running the dispatcher.")
 
-    conn = db.connect(cfg.db)
-    db.set_meta(conn, "sim_params", cfg.sim_params)
-    db.set_meta(conn, "result_root", cfg.result_root)
+    conn = db.connect(db_path)
+    db.set_meta(conn, "sim_params", sim_params)
+    db.set_meta(conn, "result_root", result_root)
     db.set_meta(conn, "run_started_at", str(time.time()))
     recovered = db.startup_recovery(conn, cfg.max_attempts)
     initial = db.counts(conn)
@@ -42,7 +46,7 @@ def run_head(comm: "object", cfg: HarnessConfig) -> None:
     if cfg.head_runs_jobs:
         slots = compute_max_slots(cfg.per_sim_mem_gb, cfg.min_headroom_gb, cfg.max_slots)
         pool = LocalPool(
-            host=f"rank0@{host}", sim_params=cfg.sim_params, result_root=cfg.result_root,
+            host=f"rank0@{host}", sim_params=sim_params, result_root=result_root,
             per_sim_mem_gb=cfg.per_sim_mem_gb, min_headroom_gb=cfg.min_headroom_gb,
             timeout_s=cfg.timeout_s, max_slots=slots,
         )
@@ -91,7 +95,7 @@ def run_head(comm: "object", cfg: HarnessConfig) -> None:
             # 3. Reclaim stale leases (lost reports / dead workers).
             now = time.time()
             if now - last_reaper > reaper_period:
-                reclaimed = db.reset_stale_leases(conn, cfg.lease_timeout_s, cfg.max_attempts)
+                reclaimed = db.reset_stale_leases(conn, lease_timeout_s, cfg.max_attempts)
                 if reclaimed:
                     conn.commit()
                     _log(f"reclaimed {reclaimed} stale lease(s)")

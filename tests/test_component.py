@@ -19,6 +19,7 @@ from tests import functions_for_testing as fft
 
 @pytest.mark.base
 def test_component_output_and_input() -> None:
+def test_component_output_and_input() -> None:
     """Test ComponentOutput and ComponentInput classes.
 
     This test verifies:
@@ -87,6 +88,7 @@ def test_component_output_and_input() -> None:
 
 
 @pytest.mark.base
+def test_single_time_step_values() -> None:
 def test_single_time_step_values() -> None:
     """Test SingleTimeStepValues class.
 
@@ -170,6 +172,7 @@ def test_single_time_step_values() -> None:
 
 @pytest.mark.base
 def test_config_base() -> None:
+def test_config_base() -> None:
     """Test ConfigBase class.
 
     This test verifies:
@@ -209,6 +212,7 @@ def test_config_base() -> None:
 
 
 @pytest.mark.base
+def test_example_component_with_config() -> None:
 def test_example_component_with_config() -> None:
     """Test ExampleComponent with a custom configuration.
 
@@ -267,6 +271,7 @@ def test_example_component_with_config() -> None:
 
 @pytest.mark.base
 def test_component_connections() -> None:
+def test_component_connections() -> None:
     """Test Component connection methods.
 
     This test verifies:
@@ -278,17 +283,7 @@ def test_component_connections() -> None:
     # Create simulation parameters
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
 
-    # Create two components
-    config1 = example_component.ExampleComponentConfig(
-        building_name="Building1",
-        name="SourceComponent",
-        loadtype=lt.LoadTypes.ELECTRICITY,
-        unit=lt.Units.WATT,
-        electricity=-1e3,
-        capacity=45 * 121.2,
-        initial_temperature=25.0,
-    )
-
+    # Create target component
     config2 = example_component.ExampleComponentConfig(
         building_name="Building2",
         name="TargetComponent",
@@ -299,9 +294,6 @@ def test_component_connections() -> None:
         initial_temperature=25.0,
     )
 
-    source_component = example_component.ExampleComponent(
-        config=config1, my_simulation_parameters=sim_params
-    )
     target_component = example_component.ExampleComponent(
         config=config2, my_simulation_parameters=sim_params
     )
@@ -361,6 +353,7 @@ def test_component_connections() -> None:
 
 
 @pytest.mark.base
+def test_component_default_opex_and_capex() -> None:
 def test_component_default_opex_and_capex() -> None:
     """Test default OpexCostDataClass and CapexCostDataClass.
 
@@ -439,6 +432,7 @@ def test_component_default_opex_and_capex() -> None:
 
 @pytest.mark.base
 def test_example_component_simulation() -> None:
+def test_example_component_simulation() -> None:
     """Test ExampleComponent simulation functionality.
 
     This test verifies:
@@ -512,6 +506,8 @@ def test_component_name_with_multiple_buildings() -> None:
 
     # Create a simple component subclass for testing
     class TestComponent(cp.Component):
+        """Minimal component subclass for testing component name generation."""
+
         def __init__(self, config: cp.ConfigBase, my_simulation_parameters: SimulationParameters) -> None:
             super().__init__(
                 name="TestComponent",
@@ -520,15 +516,17 @@ def test_component_name_with_multiple_buildings() -> None:
                 my_display_config=cp.DisplayConfig(),
             )
 
-        def i_prepare_simulation(self) -> None:
+        def i_prepare_simulation(self) -> None :
             pass
 
-        def i_save_state(self) -> None:
+        def i_save_state(self) -> None :
             pass
 
         def i_restore_state(self) -> None:
+        def i_restore_state(self) -> None:
             pass
 
+        def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
             pass
 

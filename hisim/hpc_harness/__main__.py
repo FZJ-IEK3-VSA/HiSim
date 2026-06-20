@@ -17,6 +17,7 @@ Examples
 import argparse
 import sys
 import traceback
+from typing import Callable, cast
 
 from hisim.hpc_harness import db
 from hisim.hpc_harness.config import HarnessConfig
@@ -162,7 +163,8 @@ def main(argv: "list[str] | None" = None) -> int:
     p_reset.set_defaults(func=cmd_reset)
 
     args = parser.parse_args(argv)
-    return args.func(args)
+    command = cast(Callable[[argparse.Namespace], int], args.func)
+    return command(args)
 
 
 if __name__ == "__main__":

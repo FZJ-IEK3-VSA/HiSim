@@ -222,7 +222,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         """Set base path."""
         self.base_path = os.path.join(module_directory, "results")
 
-    def set_model_name(self, model_name: str) -> None:
+    def set_model_name(self, model_name: Optional[str]) -> None:
         """Set model name."""
         self.model_name = model_name
 

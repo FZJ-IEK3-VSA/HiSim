@@ -1,3 +1,5 @@
+"""Tests for webtool result generation."""
+
 # """Test for webtool results."""
 
 # from numbers import Number

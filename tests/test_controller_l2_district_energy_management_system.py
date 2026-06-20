@@ -8,6 +8,7 @@ Investigate total consumption, total grid consumption and grid injection.
 
 import os
 import json
+import shutil
 from typing import Optional
 import pytest
 import numpy as np
@@ -33,6 +34,7 @@ import hisim.loadtypes as lt
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.units import Quantity, Celsius, Watt
+from tests.testing_utils import TestingUtils
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_ems.py"
@@ -60,6 +62,11 @@ def test_house(
         my_simulation_parameters = SimulationParameters.one_week_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+        my_simulation_parameters.result_directory = TestingUtils.get_result_directory(
+            test_name="test_house_district_ems"
+        )
+        if os.path.isdir(my_simulation_parameters.result_directory):
+            shutil.rmtree(my_simulation_parameters.result_directory)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)

@@ -8,7 +8,7 @@ over the defaults below.
 import json
 from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 
 @dataclass
@@ -68,16 +68,23 @@ class HarnessConfig:
 
     def finalize(self) -> "HarnessConfig":
         """Fill in derived defaults and validate required fields."""
+        db_path, sim_params_path, result_root_path = self.required_paths()
+        if self.lease_timeout_s is None:
+            self.lease_timeout_s = 2.0 * self.timeout_s
+        # Normalise paths to absolute so every node resolves them identically.
+        self.db = str(Path(db_path).expanduser().resolve())
+        self.sim_params = str(Path(sim_params_path).expanduser().resolve())
+        self.result_root = str(Path(result_root_path).expanduser().resolve())
+        return self
+
+    def required_paths(self) -> Tuple[str, str, str]:
+        """Return required path settings after validating that all are configured."""
         missing = [name for name in ("db", "sim_params", "result_root") if getattr(self, name) is None]
         if missing:
             raise ValueError(
                 f"Missing required harness settings: {missing}. "
                 "Provide them in the config file or via command-line flags."
             )
-        if self.lease_timeout_s is None:
-            self.lease_timeout_s = 2.0 * self.timeout_s
-        # Normalise paths to absolute so every node resolves them identically.
-        self.db = str(Path(self.db).expanduser().resolve())
-        self.sim_params = str(Path(self.sim_params).expanduser().resolve())
-        self.result_root = str(Path(self.result_root).expanduser().resolve())
-        return self
+        if self.db is None or self.sim_params is None or self.result_root is None:
+            raise ValueError("Harness path settings were not fully configured.")
+        return self.db, self.sim_params, self.result_root

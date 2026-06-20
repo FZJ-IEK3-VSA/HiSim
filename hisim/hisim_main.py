@@ -231,7 +231,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def validate_args(args: argparse.Namespace):
+def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
     """Check the provided command-line arguments for validity and determine execution mode."""
 
     inputs = args.inputs
@@ -287,7 +287,7 @@ def validate_args(args: argparse.Namespace):
     )
 
 
-def main_cli():
+def main_cli() -> None:
     """Main function for command-line execution of HiSim, supporting both Python-based and JSON-based scenarios."""
 
     try:

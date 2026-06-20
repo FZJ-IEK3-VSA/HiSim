@@ -275,14 +275,14 @@ class ElectricityMeter(DynamicComponent):
 
     def get_default_connections_from_utsp_occupancy(
         self,
-    ):
+    ) -> List[DynamicComponentConnection]:
         """Get utsp occupancy default connections."""
 
         from hisim.components.loadprofilegenerator_utsp_connector import (  # pylint: disable=import-outside-toplevel
             UtspLpgConnector,
         )
 
-        dynamic_connections = []
+        dynamic_connections: List[DynamicComponentConnection] = []
         occupancy_class_name = UtspLpgConnector.get_classname()
         dynamic_connections.append(
             dynamic_component.DynamicComponentConnection(
@@ -299,12 +299,12 @@ class ElectricityMeter(DynamicComponent):
 
     def get_default_connections_from_pv_system(
         self,
-    ):
+    ) -> List[DynamicComponentConnection]:
         """Get pv system default connections."""
 
         from hisim.components.generic_pv_system import PVSystem  # pylint: disable=import-outside-toplevel
 
-        dynamic_connections = []
+        dynamic_connections: List[DynamicComponentConnection] = []
         pv_class_name = PVSystem.get_classname()
         dynamic_connections.append(
             DynamicComponentConnection(
@@ -324,14 +324,14 @@ class ElectricityMeter(DynamicComponent):
 
     def get_default_connections_from_dhw_heat_pump(
         self,
-    ):
+    ) -> List[DynamicComponentConnection]:
         """Get dhw heat pump default connections."""
 
         from hisim.components.generic_heat_pump_modular import (  # pylint: disable=import-outside-toplevel
             ModularHeatPump,
         )
 
-        dynamic_connections = []
+        dynamic_connections: List[DynamicComponentConnection] = []
         dhw_heat_pump_class_name = ModularHeatPump.get_classname()
         dynamic_connections.append(
             DynamicComponentConnection(
@@ -348,12 +348,12 @@ class ElectricityMeter(DynamicComponent):
 
     def get_default_connections_from_advanced_heat_pump(
         self,
-    ):
+    ) -> List[DynamicComponentConnection]:
         """Get advanced heat pump default connections."""
 
         from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib  # pylint: disable=import-outside-toplevel
 
-        dynamic_connections = []
+        dynamic_connections: List[DynamicComponentConnection] = []
         advanced_heat_pump_class_name = HeatPumpHplib.get_classname()
         dynamic_connections.append(
             DynamicComponentConnection(
@@ -373,13 +373,13 @@ class ElectricityMeter(DynamicComponent):
 
     def get_default_connections_from_more_advanced_heat_pump(
         self,
-    ):
+    ) -> List[DynamicComponentConnection]:
         """Get more advanced heat pump default connections."""
 
         from hisim.components.more_advanced_heat_pump_hplib import (   # pylint: disable=import-outside-toplevel
             MoreAdvancedHeatPumpHPLib,
         )
-        dynamic_connections = []
+        dynamic_connections: List[DynamicComponentConnection] = []
         more_advanced_heat_pump_class_name = MoreAdvancedHeatPumpHPLib.get_classname()
         dynamic_connections.append(
             dynamic_component.DynamicComponentConnection(
@@ -413,12 +413,12 @@ class ElectricityMeter(DynamicComponent):
 
     def get_default_connections_from_electric_heater(
         self,
-    ):
+    ) -> List[DynamicComponentConnection]:
         """Get electric heater default connections."""
 
         from hisim.components.generic_electric_heating import ElectricHeating  # pylint: disable=import-outside-toplevel
 
-        dynamic_connections = []
+        dynamic_connections: List[DynamicComponentConnection] = []
         electric_boiler_class_name = ElectricHeating.get_classname()
         dynamic_connections.append(
             DynamicComponentConnection(
@@ -452,12 +452,12 @@ class ElectricityMeter(DynamicComponent):
 
     def get_default_connections_from_solar_thermal_system(
         self,
-    ):
+    ) -> List[DynamicComponentConnection]:
         """Get solar thermal default connections."""
 
         from hisim.components.solar_thermal_system import SolarThermalSystem  # pylint: disable=import-outside-toplevel
 
-        dynamic_connections = []
+        dynamic_connections: List[DynamicComponentConnection] = []
         solar_thermal_class_name = SolarThermalSystem.get_classname()
         dynamic_connections.append(
             dynamic_component.DynamicComponentConnection(
@@ -474,12 +474,12 @@ class ElectricityMeter(DynamicComponent):
 
     def get_default_connections_from_electric_car(
         self,
-    ):
+    ) -> List[DynamicComponentConnection]:
         """Get electric car default connections."""
 
         from hisim.components.controller_l1_generic_ev_charge import L1Controller  # pylint: disable=import-outside-toplevel
 
-        dynamic_connections = []
+        dynamic_connections: List[DynamicComponentConnection] = []
         electric_car_charger_class_name = L1Controller.get_classname()
         dynamic_connections.append(
             dynamic_component.DynamicComponentConnection(

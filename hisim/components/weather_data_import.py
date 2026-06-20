@@ -1,5 +1,7 @@
 """Import weather data from dwd and era5."""
 
+# pylint: disable=import-error
+
 import os
 import urllib.request as url
 import io

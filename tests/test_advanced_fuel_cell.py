@@ -13,7 +13,7 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_chp_system():
+def test_chp_system() -> None:
     """Test chp system."""
 
     seconds_per_timestep = 60

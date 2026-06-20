@@ -14,7 +14,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 # @pytest.mark.system_setups
 @pytest.mark.utsp
 @utils.measure_execution_time
-def test_basic_household():
+def test_basic_household() -> None:
     """Single day."""
 
     config_filename = "household_5_advanced_hp_ev_pv_battery_config.json"

@@ -259,7 +259,7 @@ class L1Controller(cp.Component):
 
     def _handle_discharging(self, car_consumption: float) -> float:
         """Handle discharging case when car is consuming energy.
-        
+
         When the car is driving or has standby losses, it consumes energy from the battery.
         Returns negative power value indicating discharge.
         """
@@ -267,48 +267,48 @@ class L1Controller(cp.Component):
 
     def _handle_parking(self, _car_location: int) -> float:
         """Handle parking case when car is not at charging location.
-        
+
         When the car is parked but not at the charging location, no charging occurs.
         Returns 0 (no power flow).
         """
         return 0.0
 
     def _handle_charging(
-        self, 
-        soc: float, 
+        self,
+        soc: float,
         electricity_target: float
     ) -> float:
         """Handle charging case when car is at charging location.
-        
+
         Charging logic:
         - If SOC is below threshold, charge at full power
         - If EMS has surplus energy above threshold, charge with surplus (may override SOC-based charging)
-        
+
         Note: The original implementation had both conditions as separate if statements,
         meaning EMS surplus logic takes precedence over SOC threshold. This behavior is
         preserved for backward compatibility, though the precedence is now explicit in the code.
-        
+
         Args:
             soc: Current state of charge of the battery (0-1)
             electricity_target: Surplus energy from EMS in watts
-            
+
         Returns:
             Power to charge the car battery in watts (positive value)
         """
         charging_power = 0.0
-        
+
         # If SOC is below threshold, charge at full power
         if soc < self.config.battery_set_soc:
             charging_power = self.power_delivered_at_charging_station_in_watt
-        
+
         # If EMS has surplus energy above threshold, use it for charging
         # Note: This takes precedence over SOC-based charging (original behavior)
         if electricity_target > self.config.lower_threshold_charging_power_in_watt:
             charging_power = min(
-                electricity_target, 
+                electricity_target,
                 self.power_delivered_at_charging_station_in_watt
             )
-        
+
         return charging_power
 
     def control(
@@ -319,22 +319,22 @@ class L1Controller(cp.Component):
         electricity_target: float,
     ) -> float:
         """Control the EV charging and discharging based on car state and energy availability.
-        
+
         This method determines the power flow to/from the EV battery based on:
         - Car consumption (driving vs parked)
         - Car location (at charging station or not)
         - Battery state of charge
         - Available surplus energy from EMS
-        
+
         Args:
             car_consumption: Current power consumption of the car in watts (positive when consuming)
             car_location: Current location of the car (1=Home, 2=Work, etc.)
             soc: Current state of charge of the battery (0-1)
             electricity_target: Surplus energy from EMS in watts
-            
+
         Returns:
             Power to/from the car battery in watts. Positive = charging, Negative = discharging
-            
+
         Raises:
             ValueError: If car_consumption is negative (car cannot produce energy)
         """
@@ -343,19 +343,17 @@ class L1Controller(cp.Component):
             return self._handle_discharging(car_consumption)
 
         # CHARGING or PARKING: car is not driving
-        elif car_consumption == 0.0:
+        if car_consumption == 0.0:
             # PARKING: car is not at charging location
             if car_location != self.charging_location:
                 return self._handle_parking(car_location)
-            
+
             # CHARGING: car is at charging location
-            else:
-                return self._handle_charging(soc, electricity_target)
-        
-        else:
-            raise ValueError(
-                f"Car consumption cannot be negative, otherwise car would be producing energy: {car_consumption}"
-            )
+            return self._handle_charging(soc, electricity_target)
+
+        raise ValueError(
+            f"Car consumption cannot be negative, otherwise car would be producing energy: {car_consumption}"
+        )
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Returns battery charge and discharge (energy consumption of car) of battery at each timestep."""

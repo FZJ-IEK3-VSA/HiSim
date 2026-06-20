@@ -12,6 +12,7 @@ Examples
   python -m hisim.hpc_harness import --db run.db --scenario-dir ./scenarios
   srun python -m hisim.hpc_harness run --config harness.json
   python -m hisim.hpc_harness status --db run.db
+
 """
 
 import argparse
@@ -83,7 +84,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     cfg = _build_config(args)
 
     try:
-        from mpi4py import MPI  # pylint: disable=import-outside-toplevel
+        from mpi4py import MPI  # pylint: disable=import-outside-toplevel,import-error
     except ModuleNotFoundError:
         print("mpi4py is required for 'run'. Install it (built against your cluster MPI), "
               "e.g. 'pip install -e .[hpc]'.", file=sys.stderr)

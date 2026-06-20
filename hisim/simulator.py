@@ -12,7 +12,6 @@ import pandas as pd
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.component_wrapper import ComponentWrapper
 from hisim import sim_repository
-from hisim.postprocessing import postprocessing_main as pp
 import hisim.component as cp
 import hisim.dynamic_component as dcp
 from hisim import log
@@ -294,6 +293,8 @@ class Simulator:
         log.information("Starting postprocessing")
         if postprocessing_datatransfer is None:
             raise ValueError("postprocessing_datatransfer was none")
+
+        from hisim.postprocessing import postprocessing_main as pp  # pylint: disable=import-outside-toplevel
 
         my_post_processor = pp.PostProcessor()
         my_post_processor.run(ppdt=postprocessing_datatransfer, my_sim=self)

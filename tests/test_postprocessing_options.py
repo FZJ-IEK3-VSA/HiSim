@@ -36,7 +36,7 @@ def test_postprocessing_option_plot_single_days(
 ) -> None:
     postprocessing_option_framework.run(
         PostProcessingOptions.PLOT_SINGLE_DAYS,
-        expected_files=["*/*/days_m0_d0.png"],
+        expected_files=["*/*/days_m0_d0*.PNG"],
     )
 
 
@@ -67,7 +67,7 @@ def test_postprocessing_option_make_network_charts(
 ) -> None:
     postprocessing_option_framework.run(
         PostProcessingOptions.MAKE_NETWORK_CHARTS,
-        expected_files=["System_*.png"],
+        expected_files=["System_*.PNG"],
     )
 
 
@@ -100,7 +100,7 @@ def test_postprocessing_option_write_network_charts_to_report(
 ) -> None:
     postprocessing_option_framework.run(
         PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT,
-        expected_files=["System_*.png", "report.pdf"],
+        expected_files=["System_*.PNG", "report.pdf"],
     )
 
 
@@ -109,7 +109,7 @@ def test_postprocessing_option_plot_special_testing_single_day(
 ) -> None:
     postprocessing_option_framework.run(
         PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY,
-        expected_files=["*/*/days_m0_d0.png"],
+        expected_files=["*/*/days_m0_d0*.PNG"],
     )
 
 

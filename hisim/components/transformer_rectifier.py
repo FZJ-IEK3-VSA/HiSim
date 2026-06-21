@@ -23,7 +23,7 @@ class TransformerConfig(ConfigBase):
     @classmethod
     def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
-        return Transformer.get_full_classname()
+        return str(Transformer.get_full_classname())
 
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters

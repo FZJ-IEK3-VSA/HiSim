@@ -14,7 +14,6 @@ from hisim import log
 def test_photovoltaic_sandia():
     """Test generic pv system."""
     # Sets inputs
-    # weather_location = "Aachen"
     seconds_per_timestep = 60
     power_in_watt = 10 * 1e3
 
@@ -99,7 +98,6 @@ def test_photovoltaic_sandia():
 def test_photovoltaic_cec():
     """Test generic pv system."""
     # Sets inputs
-    # weather_location = "Aachen"
     seconds_per_timestep = 60
     power_in_watt = 10 * 1e3
 

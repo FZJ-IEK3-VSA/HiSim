@@ -126,8 +126,6 @@ class SimpleCHP(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-
-        self.config = config
         if self.config.use == lt.LoadTypes.GREEN_HYDROGEN:
             self.p_fuel = config.p_fuel / (3.6e3 * 3.939e4)  # converted to kg / s
         else:

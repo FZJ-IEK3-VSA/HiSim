@@ -211,7 +211,6 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 
     def plot(self, data: Any) -> ReportImageEntry:
         """Plots the bar chart."""
-        width = 0.35
         # Specify the values of blue bars (height)
 
         # Position of bars on x-axis

@@ -17,6 +17,11 @@ from hisim.hpc_harness.pool import LocalPool, compute_max_slots
 from hisim.hpc_harness.protocol import GRANT, NONE, REPORT, REQUEST, SHUTDOWN, TAG
 
 
+# Reaper period constants
+REAPER_PERIOD_MULTIPLIER = 10
+MIN_REAPER_PERIOD_SECONDS = 30.0
+
+
 def _log(message: str) -> None:
     print(f"[head] {message}", flush=True)
 
@@ -55,7 +60,7 @@ def run_head(comm: "object", cfg: HarnessConfig) -> None:
     shutdown_ranks: set = set()
     status = MPI.Status()
     last_reaper = 0.0
-    reaper_period = max(cfg.sample_interval_s * 10, 30.0)
+    reaper_period = max(cfg.sample_interval_s * REAPER_PERIOD_MULTIPLIER, MIN_REAPER_PERIOD_SECONDS)
 
     try:
         while True:

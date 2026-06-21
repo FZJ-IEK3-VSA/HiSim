@@ -9,7 +9,7 @@ from hisim.utils import InstanceCounterMeta
 
 
 @pytest.mark.base
-def test_instance_counter():
+def test_instance_counter() -> None:
     """The InstanceCounter should raise RuntimeError if too many Instances of `Quantity` exist."""
     with pytest.raises(RuntimeError):
         for i in range(1001):

@@ -10,7 +10,7 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_advanced_battery_bslib():
+def test_advanced_battery_bslib() -> None:
     """Performs a basic test for a single calculation of the battery lib."""
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(

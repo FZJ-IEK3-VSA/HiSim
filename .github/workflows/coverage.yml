@@ -9,6 +9,7 @@ on:
       - pytest buildingtest
       - pytest system_setups
       - pytest jsonconfig
+      - pytest PostProcessingOption-Tests
       - pytest others
       - pytest utsp
     types:
@@ -48,6 +49,7 @@ jobs:
           "pytest-buildingtest.yml:coverage-pytest-buildingtest"
           "pytest-system-setups.yml:coverage-pytest-system-setups"
           "pytest-jsonconfig.yml:coverage-pytest-jsonconfig"
+          "pytest-postprocessingoptions.yml:coverage-pytest-postprocessingoptions"
           "pytest-others.yml:coverage-pytest-others"
           "pytest-utsp.yml:coverage-pytest-utsp"
         )

@@ -94,6 +94,7 @@ def setup_function(
 
     # Set Simulation Parameters
     default_year = 2021
+    simu_params_year = default_year
     if my_simulation_parameters is None:
         seconds_per_timestep = 60 * 15
         my_simulation_parameters = SimulationParameters.full_year(
@@ -118,7 +119,7 @@ def setup_function(
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.logging_level = 3
     else:
-        simu_params_year = my_simulation_parameters.year
+        pass  # simu_params_year already initialized with default_year
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================

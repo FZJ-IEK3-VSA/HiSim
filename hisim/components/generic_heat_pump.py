@@ -431,7 +431,7 @@ class GenericHeatPump(cp.Component):
         lines = []
         lines.append(f"Max Heating Power [kW]: {(self.max_heating_power_in_watt) * 1e-3:4.3f}")
         lines.append(
-            f"Max Peating Power Variation Restriction [W]: {self.max_heating_power_variation_restriction_in_watt:4.3f}"
+            f"Max Heating Power Variation Restriction [W]: {self.max_heating_power_variation_restriction_in_watt:4.3f}"
         )
         return self.heatpump_config.get_string_dict() + lines
 

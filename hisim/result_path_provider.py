@@ -15,7 +15,8 @@ import os
 import re
 import datetime
 import enum
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any, Optional, Union
 
 from hisim.sim_repository_singleton import SingletonMeta
 
@@ -101,8 +102,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
     ):
         """Initialize the class."""
         # Default base path is the package directory (e.g. hisim-privat), the parent of the hisim/ package.
-        package_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.base_path: Optional[str] = os.path.join(package_directory, "results")
+        self.base_path: Optional[Path] = Path(__file__).resolve().parent.parent / "results"
         self.run_mode: RunMode = RunMode.SINGLE
         self.test_name: Optional[str] = None
         self.model_name: Optional[str] = None
@@ -130,7 +130,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         scenario_hash_string: Optional[str] = None,
         sorting_option: Optional[SortingOptionEnum] = None,
         further_result_folder_description: Optional[str] = None,
-        base_path: Optional[str] = None,
+        base_path: Optional[Union[str, Path]] = None,
         test_name: Optional[str] = None,
     ) -> None:
         """Configure the provider for a run.
@@ -161,7 +161,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
 
         self.run_mode = run_mode
         if base_path is not None:
-            self.base_path = base_path
+            self.base_path = Path(base_path)
         self.set_model_name(model_name=model_name)
         self.set_variant_name(variant_name=variant_name)
         self.set_scenario_hash_string(scenario_hash_string=scenario_hash_string)
@@ -218,9 +218,9 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         self.set_scenario_hash_string(scenario_hash_string=scenario_hash_string)
         self.set_further_result_folder_description(further_result_folder_description=further_result_folder_description)
 
-    def set_base_path(self, module_directory: str) -> None:
+    def set_base_path(self, module_directory: Union[str, Path]) -> None:
         """Set base path."""
-        self.base_path = os.path.join(module_directory, "results")
+        self.base_path = Path(module_directory) / "results"
 
     def set_model_name(self, model_name: Optional[str]) -> None:
         """Set model name."""
@@ -273,67 +273,32 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
             and self.scenario_hash_string is not None
         ):
             if self.sorting_option == SortingOptionEnum.DEEP:
-                path = os.path.join(
-                    self.base_path,
-                    self.model_name,
-                    self.variant_name,
-                    self.datetime_string,
-                )
+                path = self.base_path / self.model_name / self.variant_name / self.datetime_string
             elif self.sorting_option == SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION:
                 # schauen ob verzeichnis schon da und aufsteigende nummer anhängen
                 idx = 1
 
                 if self.further_result_folder_description is not None:
-                    path = os.path.join(
-                        self.base_path,
-                        self.model_name,
-                        self.further_result_folder_description,
-                        self.variant_name + "_" + str(idx),
-                    )
-                    while os.path.exists(path):
+                    path = self.base_path / self.model_name / self.further_result_folder_description / (self.variant_name + "_" + str(idx))
+                    while path.exists():
                         idx = idx + 1
-                        path = os.path.join(
-                            self.base_path,
-                            self.model_name,
-                            self.further_result_folder_description,
-                            self.variant_name + "_" + str(idx),
-                        )
+                        path = self.base_path / self.model_name / self.further_result_folder_description / (self.variant_name + "_" + str(idx))
                 else:
-                    path = os.path.join(
-                        self.base_path,
-                        self.model_name,
-                        self.variant_name + "_" + str(idx),
-                    )
-                    while os.path.exists(path):
+                    path = self.base_path / self.model_name / (self.variant_name + "_" + str(idx))
+                    while path.exists():
                         idx = idx + 1
-                        path = os.path.join(
-                            self.base_path,
-                            self.model_name,
-                            self.variant_name + "_" + str(idx),
-                        )
+                        path = self.base_path / self.model_name / (self.variant_name + "_" + str(idx))
             elif self.sorting_option == SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION:
                 if self.further_result_folder_description is not None:
-                    path = os.path.join(
-                        self.base_path,
-                        self.model_name,
-                        self.further_result_folder_description,
-                        self.variant_name + "_" + self.scenario_hash_string,
-                    )
+                    path = self.base_path / self.model_name / self.further_result_folder_description / (self.variant_name + "_" + self.scenario_hash_string)
                 else:
-                    path = os.path.join(
-                        self.base_path,
-                        self.model_name,
-                        self.variant_name + "_" + self.scenario_hash_string,
-                    )
+                    path = self.base_path / self.model_name / (self.variant_name + "_" + self.scenario_hash_string)
 
             elif self.sorting_option == SortingOptionEnum.FLAT:
-                path = os.path.join(
-                    self.base_path,
-                    self.model_name + "_" + self.variant_name + self.datetime_string,
-                )
+                path = self.base_path / (self.model_name + "_" + self.variant_name + self.datetime_string)
 
-            check_path_length(path=path)
-            return path
+            check_path_length(path=str(path))
+            return str(path)
 
         return None
 
@@ -341,13 +306,9 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         """Build the result directory for a test run, identified by the test name alone."""
         if self.base_path is None or self.test_name is None:
             return None
-        path = os.path.join(
-            self.base_path,
-            "test",
-            self.test_name,
-        )
-        check_path_length(path=path)
-        return path
+        path = self.base_path / "test" / self.test_name
+        check_path_length(path=str(path))
+        return str(path)
 
     def get_artifact_directory(self, category: ArtifactCategory) -> str:
         """Get (and create) the directory for a category of artifacts below the run directory."""
@@ -357,16 +318,16 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                 "Cannot build an artifact path because the result path provider is not configured yet. "
                 "Call configure(...) or set_important_result_path_information(...) first."
             )
-        artifact_directory = os.path.join(run_directory, category.value)
-        os.makedirs(artifact_directory, exist_ok=True)
-        check_path_length(path=artifact_directory)
-        return artifact_directory
+        artifact_directory = Path(run_directory) / category.value
+        artifact_directory.mkdir(parents=True, exist_ok=True)
+        check_path_length(path=str(artifact_directory))
+        return str(artifact_directory)
 
     def get_artifact_path(self, category: ArtifactCategory, filename: str) -> str:
         """Get the full path of a single artifact file in the given category."""
-        path = os.path.join(self.get_artifact_directory(category), filename)
-        check_path_length(path=path)
-        return path
+        path = Path(self.get_artifact_directory(category)) / filename
+        check_path_length(path=str(path))
+        return str(path)
 
 
 def detect_test_name() -> str:

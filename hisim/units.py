@@ -101,31 +101,31 @@ class Quantity(InstanceCounter, Generic[V, U]):
             return NotImplemented
         return Quantity(self.value - other.value, self.unit)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         """Docstring missing."""
         if not self._is_valid_operand(other):
             return NotImplemented
         return self.value == other.value
 
-    def __lt__(self, other):
+    def __lt__(self, other: Quantity[V, U]) -> bool:
         """Docstring missing."""
         if not self._is_valid_operand(other):
             return NotImplemented
         return self.value < other.value
 
-    def __le__(self, other):
+    def __le__(self, other: Quantity[V, U]) -> bool:
         """Docstring missing."""
         if not self._is_valid_operand(other):
             return NotImplemented
         return self.value <= other.value
 
-    def __gt__(self, other):
+    def __gt__(self, other: Quantity[V, U]) -> bool:
         """Docstring missing."""
         if not self._is_valid_operand(other):
             return NotImplemented
         return self.value > other.value
 
-    def __ge__(self, other):
+    def __ge__(self, other: Quantity[V, U]) -> bool:
         """Docstring missing."""
         if not self._is_valid_operand(other):
             return NotImplemented

@@ -222,4 +222,4 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     )
 
 
-# python ../hisim/hisim_main.py ptx_transf_bat_ec_no_gird.py setup_function
+# python ../hisim/hisim_main.py ptx_transf_bat_ec_no_grid.py setup_function

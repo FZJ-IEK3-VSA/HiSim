@@ -171,7 +171,6 @@ def initialize_from_json(
     my_sim = setup_components_and_connections(scenario_data, my_sim, sim_params)
 
     if delta:
-        # delta_data = load_json_file(delta)
         log.warning("====================================================================")
         log.warning("== The delta file is currently not supported and will be ignored. ==")
         log.warning("====================================================================")

@@ -5,6 +5,7 @@
 from typing import Optional
 import json
 from dataclasses import dataclass
+from dataclass_wizard.errors import ParseError
 
 from hisim.modular_household.interface_configs import archetype_config, system_config
 from hisim import log
@@ -47,7 +48,7 @@ def read_in_configs(pathname: str) -> ModularHouseholdConfig:
         log.information(f"Read modular household config from {pathname}")
         if (household_config.system_config_ is None) and (household_config.archetype_config_ is None):
             raise ValueError()
-    except Exception:
+    except (FileNotFoundError, OSError, json.JSONDecodeError, ParseError):
         household_config = ModularHouseholdConfig()
         log.warning(f"Could not read the modular household config from '{pathname}'. Using a default config instead.")
 

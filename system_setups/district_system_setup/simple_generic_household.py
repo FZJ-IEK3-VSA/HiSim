@@ -2,12 +2,13 @@
 
 # clean
 
-from typing import Optional, Any, Union, List
+from typing import Optional, Union, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import Households
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim import component as cp
+from hisim.simulator import Simulator
 from hisim.components import (
     loadprofilegenerator_utsp_connector,
     generic_pv_system,
@@ -57,7 +58,7 @@ class GenericBuildingConfig(ConfigBase):
     lpg_households: List[str]
 
     @classmethod
-    def get_default_generic_building_config(cls, building_name="BUI1"):
+    def get_default_generic_building_config(cls, building_name: str = "BUI1") -> "GenericBuildingConfig":
         """Get default BuildingPVConfig."""
 
         return GenericBuildingConfig(
@@ -79,10 +80,10 @@ class GenericBuildingConfig(ConfigBase):
 class GenericBuilding(cp.Component):
     """Simple Generic Building."""
 
-    electricity_meter_bui: Any
+    electricity_meter_bui: electricity_meter.ElectricityMeter
 
     def __init__(
-        self, my_sim: Any, my_simulation_parameters: Any, config: GenericBuildingConfig, location: Any
+        self, my_sim: Simulator, my_simulation_parameters: cp.SimulationParameters, config: GenericBuildingConfig, location: str
     ) -> None:
         """Simple Generic Building."""
 

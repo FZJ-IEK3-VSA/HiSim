@@ -1,4 +1,4 @@
-"""Test for singleton sim repostitory."""
+"""Test for singleton sim repository."""
 
 # clean
 

@@ -44,7 +44,7 @@ def test_chp_system() -> None:
         "FakeBuffer", "BufferTemperature", lt.LoadTypes.TEMPERATURE, lt.Units.WATT
     )
     boiler_temperature = cp.ComponentOutput(
-        "FakeBoilerTemperatue",
+        "FakeBoilerTemperature",
         "HotWaterStorageTemperature",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.WATT,

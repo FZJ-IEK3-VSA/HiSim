@@ -10,7 +10,7 @@ from hisim import utils
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_basic_household_with_default_connections():
+def test_basic_household_with_default_connections() -> None:
     """Test basic household with default connections."""
     path = "../system_setups/default_connections.py"
 

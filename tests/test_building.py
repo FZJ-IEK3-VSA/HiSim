@@ -36,7 +36,7 @@ def test_building():
     repo = component.SimRepository()
 
     t_two = time.perf_counter()
-    log.profile(f"T2: {t_two - t_one}")
+    log.profile(f"T1: {t_two - t_one}")
 
     # # check on all TABULA buildings -> run test over all building_codes
     # d_f = pd.read_csv(
@@ -68,7 +68,7 @@ def test_building():
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
     t_four = time.perf_counter()
-    log.profile(f"T2: {t_four - t_three}")
+    log.profile(f"T3: {t_four - t_three}")
 
     # Set Residence
     my_residence_config = (
@@ -97,7 +97,7 @@ def test_building():
         Units.WATT,
     )
     t_five = time.perf_counter()
-    log.profile(f"T2: {t_four - t_five}")
+    log.profile(f"T4: {t_four - t_five}")
 
     number_of_outputs = fft.get_number_of_outputs(
         [my_occupancy, my_weather, my_residence, thermal_power_delivered_output]
@@ -130,7 +130,7 @@ def test_building():
     #   -> calculate temperature of building ( with no heating considered) for varios time steps
     #   -> check if temperature difference is proportional to time step size ( > 0.1 °C per minute)
     t_six = time.perf_counter()
-    log.profile(f"T2: {t_six - t_five}")
+    log.profile(f"T5: {t_six - t_five}")
 
     for seconds_per_timestep in [60, 60 * 15, 60 * 60]:
 
@@ -159,7 +159,7 @@ def test_building():
         ) > -0.1 * (seconds_per_timestep / 60)
 
     t_seven = time.perf_counter()
-    log.profile(f"T2: {t_seven - t_six}")
+    log.profile(f"T6: {t_seven - t_six}")
     starttime = datetime.datetime.now()
     d_four = starttime.strftime("%d-%b-%Y %H:%M:%S")
     log.profile("Finished @ " + d_four)

@@ -7,8 +7,9 @@ Investigate total consumption, total grid consumption and grid injection.
 # clean
 
 import os
+from pathlib import Path
 import json
-import shutil
+from uuid import uuid4
 from typing import Optional
 import pytest
 import numpy as np
@@ -59,28 +60,18 @@ def test_house(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_week_only(
+        my_simulation_parameters = SimulationParameters.one_day_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.result_directory = TestingUtils.get_result_directory(
-            test_name="test_house_district_ems"
+            test_name=f"test_house_district_ems_kpis_{uuid4().hex}"
         )
-        if os.path.isdir(my_simulation_parameters.result_directory):
-            shutil.rmtree(my_simulation_parameters.result_directory)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
 
     # this part is copied from hisim_main
     # Build Simulator
-    normalized_path = os.path.normpath(PATH)
-    path_in_list = normalized_path.split(os.sep)
-    if len(path_in_list) >= 1:
-        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
+    path_to_be_added = str(Path(PATH).resolve().parent)
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
@@ -346,7 +337,7 @@ def test_house(
 
     # Read kpi data
     with open(
-        os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"), "r", encoding="utf-8"  # pylint: disable=W0212
+        Path(my_sim._simulation_parameters.result_directory) / "all_kpis.json", "r", encoding="utf-8"  # pylint: disable=W0212
     ) as file:
         jsondata = json.load(file)
 

@@ -236,6 +236,7 @@ class PriceSignal(cp.Component):
             ).tolist()
 
             fit_data = feed_in_tarrif.loc[self.price_signal_config.country]
+            price_injection = 0.0
             for i in range(len(fit_data)):
                 if (
                     fit_data["min_capacity (kW)"].values[i] < self.price_signal_config.installed_capacity

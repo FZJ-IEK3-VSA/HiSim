@@ -103,7 +103,6 @@ class CSVLoader(cp.Component):
         self.output1_channel.display_name = self.csvconfig.column_name
         self.multiplier = self.csvconfig.multiplier
 
-        # ? self.column = column
         dataframe = pd.read_csv(
             Path(utils.HISIMPATH["inputs"]) / self.csvconfig.csv_filename,
             sep=self.csvconfig.sep,
@@ -113,7 +112,7 @@ class CSVLoader(cp.Component):
             raise RuntimeError(
                 f"Invalid column number for the csv file: {self.csvconfig.column}. Found {len(dataframe.columns)} columns."
             )
-        dfcolumn = dataframe.iloc[:, [self.csvconfig.column]]
+        dfcolumn = dataframe.iloc[:, self.csvconfig.column]
         self.column_name = self.csvconfig.column_name
         if len(dfcolumn) < self.my_simulation_parameters.timesteps:
             raise Exception(

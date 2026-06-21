@@ -1,7 +1,7 @@
 """Contains the base class for the charts."""
 
 # clean
-import os
+from pathlib import Path
 import re
 from typing import Any, Tuple
 from dataclasses import dataclass
@@ -94,8 +94,8 @@ class Chart:  # noqa: too-few-public-methods
         self.title = self.title.strip()
         self.directory_path = directory_path
         self.output_type = self.output.split(" # ", 2)[1]
-        self.component_output_folder_path = os.path.join(self.directory_path, self.component_name, self.output_type)
-        os.makedirs(self.component_output_folder_path, exist_ok=True)
+        self.component_output_folder_path = str(Path(self.directory_path) / self.component_name / self.output_type)
+        Path(self.component_output_folder_path).mkdir(parents=True, exist_ok=True)
         self.object_name = " "
         self.property = chart_property
         if output2 is not None:
@@ -103,8 +103,8 @@ class Chart:  # noqa: too-few-public-methods
             self.filename = f"{self.type.lower()}_double{self.figure_format.value}"
         else:
             self.filename = f"{self.type.lower()}{self.figure_format.value}"
-        self.filepath = os.path.join(self.directory_path, self.filename)
-        self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)
+        self.filepath = str(Path(self.directory_path) / self.filename)
+        self.filepath2 = str(Path(self.component_output_folder_path) / self.filename)
         result_path_provider.check_path_length(path=self.filepath)
         result_path_provider.check_path_length(path=self.filepath2)
 

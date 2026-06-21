@@ -24,7 +24,7 @@ def test_heat_pump_hplib_new():
     t_out: float = 52
     p_th_set: float = 10000
     with_domestic_hot_water_preparation: bool = False
-    simpars = SimulationParameters.one_day_only(2017, 60)
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, 60)
     # Definitions for i_simulate
     timestep = 1
     force_convergence = False
@@ -64,7 +64,7 @@ def test_heat_pump_hplib_new():
         subsidy_as_percentage_of_investment_costs=0.3
     )
 
-    heatpump = MoreAdvancedHeatPumpHPLib(config=heatpump_config, my_simulation_parameters=simpars)
+    heatpump = MoreAdvancedHeatPumpHPLib(config=heatpump_config, my_simulation_parameters=my_simulation_parameters)
     heatpump.state = MoreAdvancedHeatPumpHPLibState(
         time_on_heating=0,
         time_off=0,

@@ -11,7 +11,7 @@ from hisim import utils
 
 @pytest.mark.extendedbase
 @utils.measure_execution_time
-def test_dynamic_components_system_setup():
+def test_dynamic_components_system_setup() -> None:
     """Test dynamic components system setup."""
 
     path = "../system_setups/dynamic_components.py"

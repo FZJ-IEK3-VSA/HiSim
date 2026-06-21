@@ -182,7 +182,7 @@ def test_house(
 
     electricity_from_grid_kpi_in_kilowatt_hour = jsondata["Electricity Meter"]["Total energy from grid"].get("value")
 
-    # simualtion results from grid energy balancer (last entry)
+    # simulation results from grid energy balancer (last entry)
     simulation_results_electricity_meter_cumulative_production_in_watt_hour = (
         my_sim.results_data_frame["ElectricityMeter - CumulativeProduction [Electricity - Wh]"].iloc[-1]
     )

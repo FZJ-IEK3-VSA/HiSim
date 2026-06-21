@@ -82,7 +82,7 @@ def test_cluster_house_for_several_time_resolutions():
             print(key, values, "not all similar. ")
     # go through all opex consumptions and compare if results are all the same
     print("\n")
-    print("Opex consumtions in kWh")
+    print("Opex consumptions in kWh")
     for key, values in opex_consumption_dict.items():
         if not values_are_similar(lst=values):
             print(key, values, "not all similar. ")

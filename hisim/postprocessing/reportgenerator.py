@@ -57,7 +57,7 @@ class ReportGenerator:
         self.story: Any
         self.toc = TableOfContents()
 
-        self.filepath = Path(dirpath) / "report.pdf"
+        self.filepath = str(Path(dirpath) / "report.pdf")
         self.open()
         self.write_preamble()
         self.write_table_of_content()
@@ -112,12 +112,12 @@ class ReportGenerator:
 
         # Inserts HiSim logo
         logo = Path(utils.hisim_postprocessing_img) / "hisim_logo.png"
-        im1 = Image(logo, 2 * inch, inch)
+        im1 = Image(str(logo), 2 * inch, inch)
         im1.hAlign = "LEFT"
 
         # Inserts FZJ logo
         logo = Path(utils.hisim_postprocessing_img) / "fzj_logo.jpg"
-        im2 = Image(logo, 2 * inch, inch)
+        im2 = Image(str(logo), 2 * inch, inch)
         im2.hAlign = "RIGHT"
 
         data = [[im1, im2]]

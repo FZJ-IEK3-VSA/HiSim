@@ -7,12 +7,15 @@ Here we test the cluster household.
 
 import os
 import shutil
+from math import isclose
 from typing import Dict, List, Tuple
+from uuid import uuid4
 import pandas as pd
 import pytest
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
 from hisim import utils
+from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.components import (
     building,
@@ -36,7 +39,8 @@ from tests.testing_utils import TestingUtils
 
 def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:
     """Function to check if values are similar within a certain tolerance (rel tolerance = 5%, absolute tolerance = 0.1)."""
-    return all(abs(x - lst[0]) / x <= relative_tolerance for x in lst) or all(abs(x - lst[0]) <= 0.1 for x in lst)
+    reference = float(lst[0])
+    return all(isclose(float(value), reference, rel_tol=relative_tolerance, abs_tol=0.1) for value in lst)
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -50,6 +54,7 @@ def test_cluster_house_for_several_time_resolutions():
 
     opex_consumption_dict: Dict = {}
     yearly_results_dict: Dict = {}
+    run_id = uuid4().hex
     # do not use seconds per timestep = 60 because test takes then too long
     for seconds_per_timestep in [60 * 15, 60 * 30, 60 * 60]:
         print("\n")
@@ -59,6 +64,7 @@ def test_cluster_house_for_several_time_resolutions():
             seconds_per_timestep=seconds_per_timestep,
             yearly_result_dict=yearly_results_dict,
             opex_consumptions_dict=opex_consumption_dict,
+            run_id=run_id,
         )
 
     # go through all results and compare if aggregated results are all the same
@@ -88,7 +94,7 @@ def test_cluster_house_for_several_time_resolutions():
 
 
 def run_cluster_house(
-    seconds_per_timestep: int, yearly_result_dict: Dict, opex_consumptions_dict: Dict
+    seconds_per_timestep: int, yearly_result_dict: Dict, opex_consumptions_dict: Dict, run_id: str
 ) -> Tuple[Dict, Dict]:  # noqa: too-many-statements
     """The test should check if a normal simulation works with the electricity grid implementation."""
 
@@ -99,9 +105,10 @@ def run_cluster_house(
     year = 2021
     # Build Simulation Parameters
 
-    my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+    my_simulation_parameters = SimulationParameters.one_day_only(year=year, seconds_per_timestep=seconds_per_timestep)
+    my_simulation_parameters.logging_level = log.LogPrio.ERROR
     my_simulation_parameters.result_directory = TestingUtils.get_result_directory(
-        test_name=f"test_cluster_house_for_several_time_resolutions_{seconds_per_timestep}s"
+        test_name=f"test_cluster_house_for_several_time_resolutions_{run_id}_{seconds_per_timestep}s"
     )
     if os.path.isdir(my_simulation_parameters.result_directory):
         shutil.rmtree(my_simulation_parameters.result_directory)
@@ -335,7 +342,9 @@ def run_cluster_house(
     # =========================================================================================================================================================
     # Get yearly results from scenario preparation
     yearly_results_path = os.path.join(
-        my_simulation_parameters.result_directory, "result_data_for_scenario_evaluation", "yearly_365_days.csv"
+        my_simulation_parameters.result_directory,
+        "result_data_for_scenario_evaluation",
+        f"yearly_{my_simulation_parameters.duration.days}_days.csv",
     )
     yearly_results = pd.read_csv(yearly_results_path, usecols=["variable", "value"])
     # Get opex consumptions

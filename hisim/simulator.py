@@ -186,8 +186,9 @@ class Simulator:
         ):
 
             # check if result path is already set somewhere manually
-            if ResultPathProviderSingleton().get_result_directory_name() is not None:
-                self._simulation_parameters.result_directory = ResultPathProviderSingleton().get_result_directory_name()
+            result_directory = ResultPathProviderSingleton().get_result_directory_name()
+            if result_directory is not None:
+                self._simulation_parameters.result_directory = result_directory
                 log.information(
                     "Using result directory: "
                     + self._simulation_parameters.result_directory
@@ -202,7 +203,10 @@ class Simulator:
                     scenario_hash_string=None,
                     sorting_option=SortingOptionEnum.FLAT,
                 )
-                self._simulation_parameters.result_directory = ResultPathProviderSingleton().get_result_directory_name()
+                result_directory = ResultPathProviderSingleton().get_result_directory_name()
+                if result_directory is None:
+                    raise ValueError("Result path provider did not return a result directory.")
+                self._simulation_parameters.result_directory = result_directory
                 log.information(
                     f"Using result directory:  {self._simulation_parameters.result_directory}"
                     + " which is set by the simulator."

@@ -1099,7 +1099,7 @@ def read_nsrdb_15min_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads a set of NSRDB data in 15 min resolution."""
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
     # get data
-    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900S", tz="UTC")
+    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900s", tz="UTC")
     data = data.rename(
         columns={
             "Temperature": "T",
@@ -1128,7 +1128,7 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
 
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
-    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=24 * 6 * 365, freq="600S", tz="UTC")
+    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=24 * 6 * 365, freq="600s", tz="UTC")
     data = data.rename(
         columns={
             "diffuse_irradiance": "DHI",
@@ -1170,7 +1170,12 @@ def read_dwd_15min_data(filepath: str, simulation_parameters: SimulationParamete
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
 
-    data.index = pd.date_range(f"{simulation_parameters.year}-01-01 00:00:00", periods=24 * 4 * int(simulation_parameters.duration.days), freq="900S", tz="UTC")
+    data.index = pd.date_range(
+        f"{simulation_parameters.year}-01-01 00:00:00",
+        periods=24 * 4 * int(simulation_parameters.duration.days),
+        freq="900s",
+        tz="UTC",
+    )
 
     data = data.rename(
         columns={

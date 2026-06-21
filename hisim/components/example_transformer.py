@@ -25,7 +25,7 @@ class ExampleTransformerConfig(ConfigBase):
     @classmethod
     def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
-        return ExampleTransformer.get_full_classname()
+        return str(ExampleTransformer.get_full_classname())
 
     building_name: str
     # parameter_string: str

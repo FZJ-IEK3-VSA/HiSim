@@ -11,7 +11,7 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_electrolyzer():
+def test_electrolyzer() -> None:
     """Test electrolyzer."""
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(

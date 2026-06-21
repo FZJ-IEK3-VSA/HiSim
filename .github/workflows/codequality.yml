@@ -18,10 +18,10 @@ jobs:
       uses: actions/setup-python@v6
       with:
         python-version: "3.11"
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install uv
         uv pip install --system prospector[with_everything]
         uv pip install --system prospector[with-everything]
         uv pip install --system prospector[with_bandit]

@@ -7,6 +7,7 @@ workflow:
 
 stages:
   - lint
+  - typecheck
   - test
 
 variables:
@@ -24,6 +25,7 @@ cache:
     - python -m pip install --upgrade pip
     - pip install uv
     - uv pip install --system ruff
+    - uv pip install --system mypy
     - if [ -f requirements.txt ]; then uv pip install --system -r requirements.txt; fi
     - uv pip install --system -e .
 
@@ -32,6 +34,12 @@ ruff:
   extends: .python_setup
   script:
     - ruff check . --exclude obsolete
+
+mypy:
+  stage: typecheck
+  extends: .python_setup
+  script:
+    - mypy -p hisim --config-file mypy.ini
 
 pytest-base:
   stage: test

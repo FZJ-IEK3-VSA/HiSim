@@ -103,9 +103,9 @@ class Quantity(InstanceCounter, Generic[V, U]):
 
     def __eq__(self, other: object) -> bool:
         """Docstring missing."""
-        if not self._is_valid_operand(other):
-            return NotImplemented
-        return self.value == other.value
+        if not isinstance(other, Quantity) or other.unit != self.unit:
+            return False
+        return bool(self.value == other.value)
 
     def __lt__(self, other: Quantity[V, U]) -> bool:
         """Docstring missing."""

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 # clean
 from pathlib import Path
-from typing import List, Any
+from typing import List, Any, cast
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -32,7 +32,7 @@ class XTPControllerConfig(ConfigBase):
     @classmethod
     def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
-        return XTPController.get_full_classname()
+        return str(XTPController.get_full_classname())
 
     building_name: str
     name: str
@@ -48,7 +48,7 @@ class XTPControllerConfig(ConfigBase):
         config_file = Path(utils.HISIMPATH["inputs"]) / "fuel_cell_manufacturer_config.json"
         with config_file.open("r", encoding="utf-8") as json_file:
             data = json.load(json_file)
-            return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
+            return cast(dict[str, Any], data.get("Fuel Cell variants", {}).get(fuel_cell_name, {}))
 
     @classmethod
     def control_fuel_cell(

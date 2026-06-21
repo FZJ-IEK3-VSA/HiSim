@@ -142,7 +142,6 @@ def initialize_lpg_utsp_connector_and_return_results(
 
     water_consumption = stsv.values[my_occupancy.water_consumption_channel.global_index]
 
-    print(number_of_residents, heating_by_residents, heating_by_devices, electricity_consumption)
     return (
         number_of_residents,
         heating_by_residents,

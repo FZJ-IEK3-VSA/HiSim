@@ -1,7 +1,7 @@
 """Data Transfer Object to get all the result data to the post processing."""
 
 # clean
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Optional
 from hisim import log
 from hisim.component_wrapper import ComponentWrapper
 from hisim.simulationparameters import SimulationParameters
@@ -10,7 +10,7 @@ from hisim.simulationparameters import SimulationParameters
 class PostProcessingDataTransfer:  # noqa: too-few-public-methods
     """Data class for transfering the result data to this class."""
 
-    def __init__(  # pylint: disable=dangerous-default-value
+    def __init__(
         self,
         results: Any,
         all_outputs: Any,
@@ -25,9 +25,11 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         results_hourly: Any,
         results_cumulative: Any,
         results_daily: Any,
-        kpi_collection_dict: Dict = {},
+        kpi_collection_dict: Optional[Dict] = None,
     ) -> None:
         """Initializes the values."""
+        if kpi_collection_dict is None:
+            kpi_collection_dict = {}
         # Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy
         self.time_correction_factor = simulation_parameters.seconds_per_timestep / 3600
         self.results = results

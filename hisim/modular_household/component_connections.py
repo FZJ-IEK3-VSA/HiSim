@@ -1356,7 +1356,7 @@ def configure_electrolyzer_and_h2_storage(
 ) -> int:
     """Configures electrolyzer and h2 storage with fuel cell already defined.
 
-    (in configure_elctrolysis_h2storage_fuelcell_system (_with_buffer))
+    (in configure_electrolysis_h2storage_fuelcell_system (_with_buffer))
 
     :param my_sim: Simulation class.
     :type my_sim: Any
@@ -1452,7 +1452,7 @@ def configure_electrolyzer_and_h2_storage(
     return count
 
 
-def configure_elctrolysis_h2storage_fuelcell_system(
+def configure_electrolysis_h2storage_fuelcell_system(
     my_sim: Any,
     my_simulation_parameters: SimulationParameters,
     my_building: building.Building,
@@ -1577,7 +1577,7 @@ def configure_elctrolysis_h2storage_fuelcell_system(
     return count
 
 
-def configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
+def configure_electrolysis_h2storage_fuelcell_system_with_buffer(
     my_sim: Any,
     my_simulation_parameters: SimulationParameters,
     my_buffer: generic_hot_water_storage_modular.HotWaterStorage,

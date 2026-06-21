@@ -8,7 +8,7 @@ from hisim.simulationparameters import SimulationParameters
 
 
 @pytest.mark.base
-def test_heat_source():
+def test_heat_source() -> None:
     """Test heat source."""
 
     # simulation parameters

@@ -80,7 +80,7 @@ def test_building_thermal_conductance_calculation():
     # check if calculated H_tr is equal to H_tr which was read from buildingdata directly
     np.testing.assert_allclose(list_h_tr_window, list_h_tr_window_calculated, atol=0.02)
 
-    # builing function: get_thermal_conductance_of_opaque_surfaces_in_watt_per_kelvin
+    # building function: get_thermal_conductance_of_opaque_surfaces_in_watt_per_kelvin
     opaque_walls = [
         "Wall_1",
         "Wall_2",

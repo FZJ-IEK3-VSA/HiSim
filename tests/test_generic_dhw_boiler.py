@@ -11,7 +11,7 @@ from hisim.simulationparameters import SimulationParameters
 
 
 @pytest.mark.base
-def test_simple_bucket_boiler_state():
+def test_simple_bucket_boiler_state() -> None:
     """Test simple bucket state."""
 
     # simulation parameters

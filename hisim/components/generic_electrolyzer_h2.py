@@ -1,7 +1,7 @@
 """Green hydrogen electrolyzer."""
 
 # clean
-import os
+from pathlib import Path
 from typing import List, Any
 import json
 from dataclasses import dataclass
@@ -73,8 +73,8 @@ class ElectrolyzerConfig(cp.ConfigBase):
     def read_config(electrolyzer_name):
         """Opens the according JSON-file, based on the electrolyzer_name."""
 
-        config_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json")
-        with open(config_file, "r", encoding="utf-8") as json_file:
+        config_file = Path(utils.HISIMPATH["inputs"]) / "electrolyzer_manufacturer_config.json"
+        with config_file.open("r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             electrolyzer_variants = data["Electrolyzer variants"]
             if electrolyzer_name not in electrolyzer_variants:
@@ -376,8 +376,8 @@ class Electrolyzer(cp.Component):
         based on the nominal current density.
         """
         # Load data from the JSON file
-        data_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_polarization_curve_data.json")
-        with open(data_file, "r", encoding="utf-8") as file:
+        data_file = Path(utils.HISIMPATH["inputs"]) / "electrolyzer_polarization_curve_data.json"
+        with data_file.open("r", encoding="utf-8") as file:
             data = json.load(file)
 
         # Check if the provided technology is valid
@@ -416,8 +416,8 @@ class Electrolyzer(cp.Component):
         based on the nominal current density.
         """
         # Load data from the JSON file
-        data_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_efficiency_curve_data.json")
-        with open(data_file, "r", encoding="utf-8") as file:
+        data_file = Path(utils.HISIMPATH["inputs"]) / "electrolyzer_efficiency_curve_data.json"
+        with data_file.open("r", encoding="utf-8") as file:
             data = json.load(file)
 
         # Check if the provided technology is valid

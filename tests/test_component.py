@@ -465,7 +465,7 @@ def test_example_component_simulation() -> None:
     stsv.values[thermal_energy_delivered_output.global_index] = 50
 
     # Test simulation
-    timestep = 60 * 10  # 10 hours in seconds
+    timestep = 60 * 10  # 10 minutes in seconds
     component.i_restore_state()
     component.i_simulate(timestep, stsv, False)
 

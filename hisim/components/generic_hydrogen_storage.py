@@ -97,7 +97,7 @@ class GenericHydrogenStorage(cp.Component):
     HydrogenOutput = "HydrogenOutput"  # kg/s
 
     # output
-    HydrogenSOC = "HydrogenSOC"  # kg/s
+    HydrogenSOC = "HydrogenSOC"  # %
 
     def __init__(
         self,
@@ -143,7 +143,7 @@ class GenericHydrogenStorage(cp.Component):
             load_type=lt.LoadTypes.GREEN_HYDROGEN,
             unit=lt.Units.PERCENT,
             postprocessing_flag=[lt.InandOutputType.STORAGE_CONTENT],
-            output_description="Hydrogen SOC",
+            output_description="Hydrogen state of charge in %",
         )
 
         self.add_default_connections(self.get_default_connections_from_generic_electrolyzer())

@@ -122,7 +122,7 @@ class CSVLoader(cp.Component):
                 + " vs. Lines in CSV "
                 + self.csvconfig.csv_filename
                 + ": "
-                + str(len(self.column_name))
+                + str(len(dfcolumn))
             )
 
         self.column = dfcolumn.to_numpy(dtype=float)

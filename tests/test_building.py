@@ -19,7 +19,7 @@ from tests import functions_for_testing as fft
 
 @pytest.mark.base
 @utils.measure_execution_time
-def test_building():
+def test_building() -> None:
     """Test function for the building module."""
 
     starttime = datetime.datetime.now()

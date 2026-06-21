@@ -136,11 +136,6 @@ class DynamicComponent(Component):
         self.outputs.append(myoutput)
         setattr(self, label, myoutput)
 
-        # Define Output as DynamicConnectionOutput
-        # if source_component_class is None:
-        #     source_component_class = label
-        # else:
-        #     source_component_class = source_component_class + label
         self.my_component_outputs.append(
             DynamicConnectionOutput(
                 source_component_label=label,

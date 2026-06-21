@@ -1,8 +1,8 @@
 """ Controller for the generic_electrolyzer_h2 component. """
 
 # clean
-import os
 from typing import Any, List, Dict
+from pathlib import Path
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -64,8 +64,8 @@ class ElectrolyzerControllerConfig(ConfigBase):
     def read_config(electrolyzer_name: str) -> Dict[Any, Any]:
         """Opens the according JSON-file, based on the electrolyzer_name."""
 
-        config_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json")
-        with open(config_file, "r", encoding="utf-8") as json_file:
+        config_file = Path(utils.HISIMPATH["inputs"]) / "electrolyzer_manufacturer_config.json"
+        with config_file.open("r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             config = data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
             if isinstance(config, dict):

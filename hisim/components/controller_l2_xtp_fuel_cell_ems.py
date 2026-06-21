@@ -1,5 +1,7 @@
 """ L2 Controller for PtX Buffer Battery operation. """
 
+from __future__ import annotations
+
 # clean
 from pathlib import Path
 from typing import List, Any
@@ -28,7 +30,7 @@ class XTPControllerConfig(ConfigBase):
     """Configuration of the PtX  Controller."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return XTPController.get_full_classname()
 
@@ -41,7 +43,7 @@ class XTPControllerConfig(ConfigBase):
     operation_mode: str
 
     @staticmethod
-    def read_config(fuel_cell_name):
+    def read_config(fuel_cell_name: str) -> dict[str, Any]:
         """Read config."""
         config_file = Path(utils.HISIMPATH["inputs"]) / "fuel_cell_manufacturer_config.json"
         with config_file.open("r", encoding="utf-8") as json_file:
@@ -54,7 +56,7 @@ class XTPControllerConfig(ConfigBase):
         fuel_cell_name: str,
         operation_mode: str,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> XTPControllerConfig:
         """Sets the according parameters for the chosen fuel cell."""
         config_json = cls.read_config(fuel_cell_name)
 
@@ -146,15 +148,15 @@ class XTPController(Component):
 
         # =================================================================================================================================
         # Initialize variables
-        self.system_state = "OFF"
-        self.threshold_exceeded = False
-        self.standby_time_count = 0.0
+        self.system_state: str = "OFF"
+        self.threshold_exceeded: bool = False
+        self.standby_time_count: float = 0.0
 
-        self.system_state_previous = self.system_state
-        self.threshold_exceeded_previous = self.threshold_exceeded
-        self.standby_time_count_previous = self.standby_time_count
+        self.system_state_previous: str = self.system_state
+        self.threshold_exceeded_previous: bool = self.threshold_exceeded
+        self.standby_time_count_previous: float = self.standby_time_count
 
-    def system_operation(self, operation_mode, demand_load):
+    def system_operation(self, operation_mode: str, demand_load: float) -> tuple[float, float]:
         """System operation."""
         if operation_mode == "StandbyLoad":
             if self.min_output <= demand_load <= self.max_output:

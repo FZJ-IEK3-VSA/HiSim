@@ -5,7 +5,7 @@
 from typing import Optional
 from typing import List
 
-import os
+from pathlib import Path
 import pydot
 
 from hisim import log
@@ -130,7 +130,7 @@ class SystemChart:
                     graph.add_edge(pydot.Edge(node_key[0], node_key[1], label=label))
                 else:
                     graph.add_edge(pydot.Edge(node_key[0], node_key[1]))
-            fullpath = os.path.join(self.ppdt.simulation_parameters.result_directory, filename)
+            fullpath = Path(self.ppdt.simulation_parameters.result_directory) / filename
             graph.write_png(fullpath)  # noqa: no-member
         except Exception as exc:  # noqa
             log.error(

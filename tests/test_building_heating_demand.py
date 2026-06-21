@@ -3,7 +3,7 @@
 The aim is to compare the calculated heat demand in the building module with the heat demand given by TABULA.
 """
 # clean
-import os
+from pathlib import Path
 from typing import Optional
 import pytest
 
@@ -81,10 +81,7 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
 
     # this part is copied from hisim_main
     # Build Simulator
-    normalized_path = os.path.normpath(PATH)
-    path_in_list = normalized_path.split(os.sep)
-    if len(path_in_list) >= 1:
-        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
+    path_to_be_added = str(Path(PATH).resolve().parent)
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,

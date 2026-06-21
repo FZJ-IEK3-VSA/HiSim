@@ -319,9 +319,12 @@ def _assert_expected_files_exist(
         for pattern in expected_files
         if not any(_matches_pattern(path=path, pattern=pattern) for path in files_after_postprocessing)
     ]
+    generated_files = sorted(path.as_posix() for path in files_after_postprocessing)
     assert not missing_patterns, (
         f"{option.name} did not create the expected file pattern(s) in {run_directory}: "
         + ", ".join(missing_patterns)
+        + "\nGenerated files:\n"
+        + ("\n".join(generated_files) if generated_files else "<none>")
     )
 
 

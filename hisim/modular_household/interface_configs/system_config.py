@@ -1,4 +1,4 @@
-""" For setting the configuration of the household. """
+"""For setting the configuration of the household. """
 
 # clean
 from dataclasses import dataclass, field
@@ -47,7 +47,7 @@ class SystemConfig:
     h2_storage_size: Optional[float] = 100
     #: maximal power of the electroylzer in Watt
     electrolyzer_power: Optional[float] = 0.5
-    #: decision on the consideration of an electriv vehicle
+    #: decision on the consideration of an electric vehicle
     ev_included: bool = False
     #: choice of charging station related to the options available in LoadProfileGenerator
     charging_station: JsonReference = field(

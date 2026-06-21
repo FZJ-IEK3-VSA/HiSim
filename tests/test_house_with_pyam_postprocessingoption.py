@@ -1,7 +1,7 @@
 """  Basic household system setup adapted for pyam postprocessing test. """
 
 # clean
-import os
+from pathlib import Path
 from typing import Optional
 
 import pytest
@@ -30,7 +30,7 @@ PATH = "../system_setups/household_for_pyam_test.py"
 @pytest.mark.extendedbase
 def test_house_with_pyam(
     my_simulation_parameters: Optional[SimulationParameters] = None,
-) -> None:  # noqa: too-many-statements
+) -> None:  # noqa: PLR0915
     """Basic household system setup.
 
     This setup function emulates an household including the basic components. Here the residents have their
@@ -70,11 +70,7 @@ def test_house_with_pyam(
     )
 
     # this part is copied from hisim_main
-    # Build Simulator
-    normalized_path = os.path.normpath(PATH)
-    path_in_list = normalized_path.split(os.sep)
-    if len(path_in_list) >= 1:
-        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
+    path_to_be_added = str(Path(PATH).resolve().parent)
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,

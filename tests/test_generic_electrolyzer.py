@@ -15,7 +15,7 @@ from hisim.components import generic_electrolyzer, controller_l1_electrolyzer
 
 
 @pytest.mark.base
-def test_chp_system():
+def test_chp_system() -> None:
     """Test chp system."""
 
     seconds_per_timestep = 60

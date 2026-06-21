@@ -146,7 +146,7 @@ class Logger:
             with open(file_path, "a", encoding="utf-8") as filestream:
                 filestream.write(message + "\n")
         except Exception:
-            print("{filename} could not be appended. "
+            print(f"{filename} could not be appended. "
                 "This might happen when too many simultaneous simulations are running.")
         # if result directory and therefore actual log file not yet created: buffer logs
         if self.before_result_dir_created:

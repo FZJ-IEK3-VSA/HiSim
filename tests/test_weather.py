@@ -1,4 +1,6 @@
 """Test for weather."""
+import pathlib
+
 import pytest
 from hisim import sim_repository
 from hisim import component
@@ -8,20 +10,20 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_weather():
+def test_weather() -> None:
     """Test weather."""
     mysim: SimulationParameters = SimulationParameters.full_year(
         year=2021, seconds_per_timestep=60
     )
-    repo = sim_repository.SimRepository()
-    my_weather_config = weather.WeatherConfig.get_default(
+    repo: sim_repository.SimRepository = sim_repository.SimRepository()
+    my_weather_config: weather.WeatherConfig = weather.WeatherConfig.get_default(
         location_entry=weather.LocationEnum.AACHEN
     )
-    my_weather = weather.Weather(
+    my_weather: weather.Weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=mysim
     )
 
-    number_of_outputs = fft.get_number_of_outputs([my_weather])
+    number_of_outputs: int = fft.get_number_of_outputs([my_weather])
     stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
         number_of_outputs
     )
@@ -31,7 +33,7 @@ def test_weather():
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
     # Simulate
-    dni = []
+    dni: list[float] = []
     for i in range(60 * 24 * 365):
         my_weather.i_simulate(i, stsv, False)
         dni.append(stsv.values[my_weather.dni_output.global_index])
@@ -39,13 +41,13 @@ def test_weather():
     assert sum(dni) > 950
 
 
-def test_weather_config_enum_vs_string_consistency():
+def test_weather_config_enum_vs_string_consistency() -> None:
     """Test consistency of enum vs. string configuration setup."""
-    my_weather_config_enum = weather.WeatherConfig.get_default(
+    my_weather_config_enum: weather.WeatherConfig = weather.WeatherConfig.get_default(
         location_entry=weather.LocationEnum.AACHEN
     )
 
-    my_weather_config_string = weather.WeatherConfig.get_default(
+    my_weather_config_string: weather.WeatherConfig = weather.WeatherConfig.get_default(
         location_entry="AACHEN"
     )
 
@@ -56,12 +58,12 @@ def test_weather_config_enum_vs_string_consistency():
     assert my_weather_config_enum.source_path == my_weather_config_string.source_path
 
 
-def test_weather_config_with_direct_filepath(tmp_path):
+def test_weather_config_with_direct_filepath(tmp_path: pathlib.Path) -> None:
     """Test weather config with direct filepath and direct data source."""
-    weather_file = tmp_path / "weather.csv"
+    weather_file: pathlib.Path = tmp_path / "weather.csv"
     weather_file.write_text("dummy weather data", encoding="utf-8")
 
-    my_weather_config = weather.WeatherConfig.get_default(
+    my_weather_config: weather.WeatherConfig = weather.WeatherConfig.get_default(
         location_entry="CUSTOM_LOCATION",
         weather_direct_filepath=str(weather_file),
         weather_direct_data_source=weather.WeatherDataSourceEnum.DWD_10MIN
@@ -72,9 +74,9 @@ def test_weather_config_with_direct_filepath(tmp_path):
     assert my_weather_config.data_source == weather.WeatherDataSourceEnum.DWD_10MIN
 
 
-def test_weather_config_with_direct_filepath_without_data_source(tmp_path):
+def test_weather_config_with_direct_filepath_without_data_source(tmp_path: pathlib.Path) -> None:
     """Test weather config fails for direct filepath without data source."""
-    weather_file = tmp_path / "weather.csv"
+    weather_file: pathlib.Path = tmp_path / "weather.csv"
     weather_file.write_text("dummy weather data", encoding="utf-8")
 
     with pytest.raises(ValueError):

@@ -11,7 +11,7 @@ from hisim import utils
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_basic_household():
+def test_basic_household() -> None:
     """Single day."""
     path = "../system_setups/basic_household.py"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)

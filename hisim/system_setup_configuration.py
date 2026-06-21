@@ -4,7 +4,7 @@
 
 from typing import Any
 import json
-import os
+from pathlib import Path
 from dataclasses import dataclass
 from dataclass_wizard import JSONWizard
 from typing_extensions import Self
@@ -22,14 +22,19 @@ class SystemSetupConfigBase(JSONWizard):
     def load_from_json(cls, module_config_path: str) -> Self:
         """Populate config from JSON."""
 
-        if os.path.exists(module_config_path):
-            with open(module_config_path, "r", encoding="utf8") as file:
-                module_config_dict = json.loads(file.read())
-        elif os.path.exists(module_config_path.rstrip("\r")):
-            with open(module_config_path.rstrip("\r"), "r", encoding="utf8") as file:
+        config_path = Path(module_config_path)
+        if config_path.exists():
+            with config_path.open("r", encoding="utf8") as file:
                 module_config_dict = json.loads(file.read())
         else:
-            raise FileExistsError(f"The module config file {module_config_path} could not be found.")
+            # Try with Windows line-ending workaround
+            config_path_without_cr = Path(module_config_path.rstrip("\r"))
+            if config_path_without_cr.exists():
+                with config_path_without_cr.open("r", encoding="utf8") as file:
+                    module_config_dict = json.loads(file.read())
+                config_path = config_path_without_cr
+            else:
+                raise FileExistsError(f"The module config file {module_config_path} could not be found.")
         log.information(f"Read module config from {module_config_path}.")
 
         # Read building config overwrites. It is used to scale the system setup.

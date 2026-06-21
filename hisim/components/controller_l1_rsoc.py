@@ -1,8 +1,8 @@
 """ rSOC controller. """
 
 # clean
-import os
 import json
+from pathlib import Path
 from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -56,8 +56,8 @@ class RsocControllerConfig(ConfigBase):
     def read_config(rsoc_name):
         """Opens the according JSON-file, based on the rSOC_name."""
 
-        config_file = os.path.join(utils.HISIMPATH["inputs"], "rSOC_manufacturer_config.json")
-        with open(config_file, "r", encoding="utf-8") as json_file:
+        config_file = Path(utils.HISIMPATH["inputs"]) / "rSOC_manufacturer_config.json"
+        with config_file.open(encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("rSOC variants", {}).get(rsoc_name, {})
 

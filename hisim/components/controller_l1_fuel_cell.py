@@ -1,7 +1,7 @@
 """Controller L1 for the fuel cell."""
 
 # clean
-import os
+from pathlib import Path
 from typing import List, Any
 import json
 from dataclasses import dataclass
@@ -65,7 +65,7 @@ class FuelCellControllerConfig(ConfigBase):
     def read_config(fuel_cell_name):
         """Opens the according JSON-file, based on the fuel_cell_name."""
 
-        config_file = os.path.join(utils.HISIMPATH["inputs"], "fuel_cell_manufacturer_config.json")
+        config_file = Path(utils.HISIMPATH["inputs"]) / "fuel_cell_manufacturer_config.json"
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})

@@ -1,6 +1,6 @@
 """Dynamic Components Module."""
 
-from typing import Any, Optional
+from typing import Optional
 
 from hisim import loadtypes as lt
 from hisim.components import controller_l2_energy_management_system as cl2
@@ -33,11 +33,11 @@ from hisim.components.generic_heat_pump import (
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
-from hisim.simulator import SimulationParameters
+from hisim.simulator import SimulationParameters, Simulator
 
 
 def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
+    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # first with bat
     """Dynamic Components Demonstration.
 

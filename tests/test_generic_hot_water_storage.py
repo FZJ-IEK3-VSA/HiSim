@@ -18,7 +18,7 @@ def test_storage():
     # Storage
     volume_sp_heating_water = 1000
     volume_sp_warm_water = 200
-    temperature_of_warm_water_extratcion = 32
+    temperature_of_warm_water_extraction = 32
     ambient_temperature = 15
 
     # ===================================================================================================================
@@ -29,8 +29,8 @@ def test_storage():
 
     my_storage_config.volume_sp_heating_water = volume_sp_heating_water
     my_storage_config.volume_sp_warm_water = volume_sp_warm_water
-    my_storage_config.temperature_of_warm_water_extratcion = (
-        temperature_of_warm_water_extratcion
+    my_storage_config.temperature_of_warm_water_extraction = (
+        temperature_of_warm_water_extraction
     )
     my_storage_config.ambient_temperature = ambient_temperature
 

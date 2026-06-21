@@ -121,26 +121,6 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         my_simulation_parameters=my_simulation_parameters,
         config=TransformerConfig.get_default_transformer(),
     )
-    # Setup the battery
-    """
-    my_battery = Battery(
-        my_simulation_parameters=my_simulation_parameters,
-        config=BatteryConfig(
-        name="test buffer battery",
-        source_weight=1,
-        system_id="SG1",
-        custom_pv_inverter_power_generic_in_watt=100000.0,
-        custom_battery_capacity_generic_in_kilowatt_hour=5000.0,
-        charge_in_kwh=0.0,
-        discharge_in_kwh=0.0,
-        device_co2_footprint_in_kg=0.0,
-        investment_costs_in_euro=0.0,
-        lifetime_in_years=10.0,
-        lifetime_in_cycles=30000.0,
-        maintenance_costs_in_euro_per_year=0.04,
-        )
-    )
-    """
 
     my_ptx_controller = PTXController(
         my_simulation_parameters=my_simulation_parameters,
@@ -167,19 +147,6 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         my_transformer.component_name,
         my_transformer.TransformerOutput,
     )
-    """
-    my_ptx_controller.connect_input(
-        my_ptx_controller.StateOfCharge,
-        my_battery.component_name,
-        my_battery.StateOfCharge
-    )
-
-    my_battery.connect_input(
-        my_battery.LoadingPowerInput,
-        my_ptx_controller.component_name,
-        my_ptx_controller.PowerToThird
-    )
-    """
     my_electrolyzer_controller.connect_input(
         my_electrolyzer_controller.ProvidedLoad,
         my_ptx_controller.component_name,
@@ -203,7 +170,6 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     my_sim.add_component(csv_loader)  # Add csv_loader to simulator
     my_sim.add_component(my_transformer)
-    # my_sim.add_component(my_battery)
     my_sim.add_component(my_ptx_controller)
     my_sim.add_component(my_electrolyzer_controller)
     my_sim.add_component(my_electrolyzer)

@@ -10,7 +10,7 @@ is reduced during the night.
 """
 
 from dataclasses import dataclass
-from typing import Any, List
+from typing import List
 
 from dataclasses_json import dataclass_json
 
@@ -50,7 +50,7 @@ class NightSetbackConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config(
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "NightSetbackConfig":
         """Return a default configuration with a 22:00 to 06:00 setback window."""
         return NightSetbackConfig(
             building_name=building_name,

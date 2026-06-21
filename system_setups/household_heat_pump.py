@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 import os
 import re
-from typing import List, Optional, Any
+from typing import List, Optional
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
@@ -13,7 +13,7 @@ from utspclient.helpers.lpgdata import (
     EnergyIntensityType,
 )
 from hisim.system_setup_configuration import SystemSetupConfigBase
-from hisim.simulator import SimulationParameters
+from hisim.simulator import Simulator, SimulationParameters
 from hisim.component import DisplayConfig
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
@@ -82,7 +82,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
     car_config: Optional[generic_car.CarConfig]
 
     @classmethod
-    def get_default_options(cls):
+    def get_default_options(cls) -> HouseholdHeatPumpOptions:
         """Get default options."""
         return HouseholdHeatPumpOptions()
 
@@ -218,7 +218,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
 
 
 def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
+    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
     """Generates a household with advanced heat pump."""
 

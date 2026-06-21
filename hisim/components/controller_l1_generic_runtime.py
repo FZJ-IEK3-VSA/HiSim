@@ -98,7 +98,7 @@ class L1GenericRuntimeControllerState:
         self.activation_time_step = timestep
 
     def deactivate(self, timestep: int) -> None:
-        """Activates the controller."""
+        """Deactivates the controller."""
         self.on_off = 0
         self.deactivation_time_step = timestep
 

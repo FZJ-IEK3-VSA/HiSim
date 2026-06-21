@@ -2,7 +2,7 @@
 
 # clean
 
-import os
+from pathlib import Path
 import json
 from typing import Optional
 import pytest
@@ -62,10 +62,7 @@ def test_house(
 
     # this part is copied from hisim_main
     # Build Simulator
-    normalized_path = os.path.normpath(PATH)
-    path_in_list = normalized_path.split(os.sep)
-    if len(path_in_list) >= 1:
-        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
+    path_to_be_added = str(Path(PATH).resolve().parent)
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
@@ -174,7 +171,7 @@ def test_house(
     # Compare with kpi computation results
 
     # read kpi data
-    with open(os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"), "r", encoding="utf-8") as file:  # pylint: disable=W0212
+    with open(str(Path(my_sim._simulation_parameters.result_directory) / "all_kpis.json"), "r", encoding="utf-8") as file:  # pylint: disable=W0212
         jsondata = json.load(file)
 
     jsondata = jsondata["BUI1"]
@@ -187,10 +184,10 @@ def test_house(
 
     # simualtion results from grid energy balancer (last entry)
     simulation_results_electricity_meter_cumulative_production_in_watt_hour = (
-        my_sim.results_data_frame["ElectricityMeter - CumulativeProduction [Electricity - Wh]"][-1]
+        my_sim.results_data_frame["ElectricityMeter - CumulativeProduction [Electricity - Wh]"].iloc[-1]
     )
     simulation_results_electricity_meter_cumulative_consumption_in_watt_hour = (
-        my_sim.results_data_frame["ElectricityMeter - CumulativeConsumption [Electricity - Wh]"][-1]
+        my_sim.results_data_frame["ElectricityMeter - CumulativeConsumption [Electricity - Wh]"].iloc[-1]
     )
     simulation_results_electricity_from_grid_in_watt_hour = (
         my_sim.results_data_frame["ElectricityMeter - ElectricityFromGrid [Electricity - Wh]"]

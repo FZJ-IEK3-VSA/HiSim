@@ -107,9 +107,6 @@ def main(
 
     if my_sim2.my_module_config is not None:
         log.warning(f"Module config is not None but not exported to JSON: {my_sim2.my_module_config}")
-    # The config dictionary is already part of the components (under "configuration")
-    # if len(my_sim2.config_dictionary) > 0:
-    #     log.warning(f"Config dictionary is not empty but not exported to JSON: {my_sim2.config_dictionary}")
 
     # Do not run the simulation
     my_sim2.prepare_calculation()

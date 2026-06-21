@@ -348,6 +348,56 @@ def test_component_connections() -> None:
 
 
 @pytest.mark.base
+def test_add_default_connections_empty_raises() -> None:
+    """Test that add_default_connections raises ValueError on an empty list.
+
+    This test verifies:
+    - Passing an empty connections list raises a ValueError (not an IndexError)
+      before the unsafe ``connections[0]`` access (see issue #192).
+    - The error message mentions the empty list and the component name.
+    - The normal, non-empty case still registers the default connections.
+    """
+    # Create simulation parameters
+    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+
+    # Create a component instance
+    config = example_component.ExampleComponentConfig(
+        building_name="Building1",
+        name="TargetComponent",
+        loadtype=lt.LoadTypes.HEATING,
+        unit=lt.Units.WATT,
+        electricity=-1e3,
+        capacity=45 * 121.2,
+        initial_temperature=25.0,
+    )
+    component = example_component.ExampleComponent(
+        config=config, my_simulation_parameters=sim_params
+    )
+
+    # An empty connections list must raise a clear ValueError, not an IndexError.
+    with pytest.raises(ValueError, match="connections list is empty"):
+        component.add_default_connections([])
+
+    # The error message should also mention the component that was called.
+    try:
+        component.add_default_connections([])
+    except ValueError as exc:
+        assert "TargetComponent" in str(exc)
+
+    # The normal (non-empty) case should still work and register the connection.
+    conn = cp.ComponentConnection(
+        target_input_name=example_component.ExampleComponent.ThermalEnergyDelivered,
+        source_class_name="ExampleComponent",
+        source_output_name=example_component.ExampleComponent.ElectricityOutput,
+    )
+    component.add_default_connections([conn])
+    assert "ExampleComponent" in component.default_connections
+    assert component.default_connections["ExampleComponent"] == [conn]
+
+    log.information("add_default_connections empty-list guard tests passed!")
+
+
+@pytest.mark.base
 def test_component_default_opex_and_capex() -> None:
     """Test default OpexCostDataClass and CapexCostDataClass.
 

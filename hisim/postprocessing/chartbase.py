@@ -91,7 +91,7 @@ class Chart:  # noqa: too-few-public-methods
                 self.title = f"{self.title}{single_match}"
 
         self.title = self.title.replace("# ", "\n")
-        self.title.strip()
+        self.title = self.title.strip()
         self.directory_path = directory_path
         self.output_type = self.output.split(" # ", 2)[1]
         self.component_output_folder_path = os.path.join(self.directory_path, self.component_name, self.output_type)

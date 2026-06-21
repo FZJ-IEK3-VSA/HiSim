@@ -29,7 +29,7 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         output_description: str,
         figure_format: FigureFormat,
     ) -> None:
-        """Initalizes a carpot plot."""
+        """Initializes a carpet plot."""
         super().__init__(
             output=output,
             component_name=component_name,

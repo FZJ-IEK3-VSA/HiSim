@@ -6,7 +6,6 @@ Investigate total consumption, total grid consumption and grid injection.
 
 # clean
 
-import os
 from pathlib import Path
 import json
 from uuid import uuid4

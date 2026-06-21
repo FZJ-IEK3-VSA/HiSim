@@ -1,9 +1,9 @@
 """Module for generating reports."""
 
 # clean
+from pathlib import Path
 import copy
 import time
-import os
 from typing import Any, Optional, List, Union
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.lib.pagesizes import letter
@@ -57,7 +57,7 @@ class ReportGenerator:
         self.story: Any
         self.toc = TableOfContents()
 
-        self.filepath = os.path.join(dirpath, "report.pdf")
+        self.filepath = Path(dirpath) / "report.pdf"
         self.open()
         self.write_preamble()
         self.write_table_of_content()
@@ -111,12 +111,12 @@ class ReportGenerator:
         story = []
 
         # Inserts HiSim logo
-        logo = os.path.join(utils.hisim_postprocessing_img, "hisim_logo.png")
+        logo = Path(utils.hisim_postprocessing_img) / "hisim_logo.png"
         im1 = Image(logo, 2 * inch, inch)
         im1.hAlign = "LEFT"
 
         # Inserts FZJ logo
-        logo = os.path.join(utils.hisim_postprocessing_img, "fzj_logo.jpg")
+        logo = Path(utils.hisim_postprocessing_img) / "fzj_logo.jpg"
         im2 = Image(logo, 2 * inch, inch)
         im2.hAlign = "RIGHT"
 
@@ -215,8 +215,9 @@ class ReportGenerator:
     def write_figures_to_report(self, file_path: str) -> None:
         """Add figure to the report."""
 
-        if os.path.isfile(file_path):
-            image = Image(file_path, useDPI=True)
+        path = Path(file_path)
+        if path.is_file():
+            image = Image(str(path), useDPI=True)
             image.hAlign = "CENTER"
             self.story.append(image)
         else:
@@ -225,8 +226,9 @@ class ReportGenerator:
     def write_figures_to_report_with_size_four_six(self, file_path: str) -> None:
         """Add figure to the report with certain size."""
 
-        if os.path.isfile(file_path):
-            image = Image(file_path, width=4 * inch, height=6 * inch)
+        path = Path(file_path)
+        if path.is_file():
+            image = Image(str(path), width=4 * inch, height=6 * inch)
             image.hAlign = "CENTER"
             self.story.append(image)
         else:
@@ -235,8 +237,9 @@ class ReportGenerator:
     def write_figures_to_report_with_size_seven_four(self, file_path: str) -> None:
         """Add figure to the report with certain size."""
 
-        if os.path.isfile(file_path):
-            image = Image(file_path, width=7 * inch, height=4 * inch)
+        path = Path(file_path)
+        if path.is_file():
+            image = Image(str(path), width=7 * inch, height=4 * inch)
             image.hAlign = "CENTER"
             self.story.append(image)
         else:

@@ -131,7 +131,6 @@ def initialize_lpg_utsp_connector_and_return_results(
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([my_occupancy])
 
-    my_occupancy.i_simulate(0, stsv, False)
 
     timestep = 0
     my_occupancy.i_simulate(timestep, stsv, False)

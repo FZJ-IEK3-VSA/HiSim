@@ -1,4 +1,7 @@
 """ Tests for the household with gas heater. """
+from __future__ import annotations
+
+from typing import Any
 import os
 import shutil
 from pathlib import Path
@@ -12,8 +15,8 @@ from hisim.system_setup_starter import make_system_setup
 from hisim.hisim_main import main
 from tests.testing_utils import TestingUtils
 
-MY_PATH_TO_MODULE = "../system_setups/household_gas_heater.py"
-MY_SIMULATION_PARAMETERS = {
+MY_PATH_TO_MODULE: str = "../system_setups/household_gas_heater.py"
+MY_SIMULATION_PARAMETERS: dict[str, Any] = {
     "start_date": "2021-01-01T00:00:00",
     "end_date": "2021-01-02T00:00:00",
     "seconds_per_timestep": 900,
@@ -21,14 +24,14 @@ MY_SIMULATION_PARAMETERS = {
 }
 
 
-def create_results_directory(result_directory):
+def create_results_directory(result_directory: str | Path) -> None:
     """Create result directory."""
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory)
     Path(result_directory).mkdir(parents=True, exist_ok=True)
 
 
-def run_system(config_json, result_directory):
+def run_system(config_json: dict[str, Any], result_directory: str | Path) -> None:
     """Run with system setup starter."""
     (
         path_to_module,
@@ -45,14 +48,14 @@ def run_system(config_json, result_directory):
     )
 
 
-def remove_results_directory(result_directory):
+def remove_results_directory(result_directory: str | Path) -> None:
     """Remove result directory."""
     shutil.rmtree(result_directory)
 
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_gas_heater_main():
+def test_household_gas_heater_main() -> None:
     """Execute setup with default values with hisim main."""
 
     path = "../system_setups/household_gas_heater.py"
@@ -64,7 +67,7 @@ def test_household_gas_heater_main():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_gas_heater_system_setup_starter_default():
+def test_household_gas_heater_system_setup_starter_default() -> None:
     """Execute setup with hisim system setup starter."""
     my_config_json = {"path_to_module": MY_PATH_TO_MODULE, "simulation_parameters": MY_SIMULATION_PARAMETERS}
 
@@ -80,7 +83,7 @@ def test_household_gas_heater_system_setup_starter_default():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_gas_heater_system_setup_starter_pv():
+def test_household_gas_heater_system_setup_starter_pv() -> None:
     """Execute setup with hisim system setup starter."""
     my_config_json = {
         "path_to_module": MY_PATH_TO_MODULE,

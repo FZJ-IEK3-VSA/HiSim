@@ -75,7 +75,8 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
         dir_parts = Path(config_json_str["source_path"]).parts
         if "inputs" in dir_parts:
             idx = dir_parts.index("inputs")
-            config_json_str["source_path"] = '<<utils.get_input_directory()>>\\' + str(Path(*dir_parts[idx + 1:]))
+            relative_input_path = Path(*dir_parts[idx + 1:]).as_posix()
+            config_json_str["source_path"] = f"<<utils.get_input_directory()>>/{relative_input_path}"
         else:
             log.warning(f"Could not find 'inputs' in absolute weather source path {config_json_str['source_path']}, leaving it unchanged in JSON output...")
     # Car information can be generated using Occupancy (see class GenericCarInformation)

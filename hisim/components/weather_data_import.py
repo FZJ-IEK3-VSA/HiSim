@@ -3,6 +3,7 @@
 # pylint: disable=import-error
 
 import os
+from pathlib import Path
 import urllib.request as url
 import io
 import datetime
@@ -110,17 +111,16 @@ class WeatherDataImport:
         """
 
         csv_name = f"dwd_10min_{self.start_date_for_weather_data.year}-{self.end_date_for_weather_data.year}_{self.location}_{self.long_round}_{self.lat_round}.csv"
-        speicherpfad = os.path.join(self.path_input_folder, "weather", "dwd_10min_data")
+        speicherpfad = Path(self.path_input_folder) / "weather" / "dwd_10min_data"
 
         # Abfrage, ob csv schon vorhanden
 
-        if not os.path.exists(speicherpfad):
-            os.makedirs(speicherpfad)
-            print(f"Directory {speicherpfad} created.")
+        speicherpfad.mkdir(parents=True, exist_ok=True)
+        print(f"Directory {speicherpfad} created.")
 
-        csv_path = os.path.join(speicherpfad, csv_name)
+        csv_path = speicherpfad / csv_name
 
-        if os.path.isfile(csv_path):
+        if csv_path.is_file():
             print(f"CSV file  {csv_name} under  {speicherpfad} already exists.")
         else:
             print(f"Weather data is loaded from DWD and saved under {csv_path}.")
@@ -489,7 +489,7 @@ class WeatherDataImport:
 
             self.safe_as_csv(weather_df, csv_path)
         print("Safe Weatherdata successfully in .csv.")
-        self.csv_path = csv_path
+        self.csv_path = str(csv_path)
 
     def era5_request(
         self,

@@ -31,7 +31,7 @@ jobs:
       working-directory: ./tests/
       run: |
         sh -c '
-          markers="not base and not buildingtest and not system_setups"
+          markers="not base and not buildingtest and not system_setups and not extendedbase"
           markers="$markers and not utsp and not jsonconfig and not postprocessingoptions"
           coverage run --parallel-mode --source=../hisim -m pytest \
             -m "$markers" \

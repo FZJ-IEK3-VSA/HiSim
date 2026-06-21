@@ -4,6 +4,7 @@
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 import os
+from pathlib import Path
 from typing import List, Any
 import json
 from dataclasses import dataclass
@@ -81,8 +82,8 @@ class FuelCellConfig(cp.ConfigBase):
     @staticmethod
     def read_config(fuel_cell_name):
         """Read config."""
-        config_file = os.path.join(utils.HISIMPATH["inputs"], "fuel_cell_manufacturer_config.json")
-        with open(config_file, "r", encoding="utf-8") as json_file:
+        config_file = Path(utils.HISIMPATH["inputs"]) / "fuel_cell_manufacturer_config.json"
+        with config_file.open("r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
 
@@ -387,8 +388,8 @@ class FuelCell(cp.Component):
         based on the nominal current density.
         """
         # Load data from the JSON file
-        data_file = os.path.join(utils.HISIMPATH["inputs"], "polarization_curve_data_fc.json")
-        with open(data_file, "r", encoding="utf-8") as file:
+        data_file = Path(utils.HISIMPATH["inputs"]) / "polarization_curve_data_fc.json"
+        with data_file.open("r", encoding="utf-8") as file:
             data = json.load(file)
 
         # Check if the provided technology is valid

@@ -14,6 +14,12 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 
 
+# Heat pump configuration constants
+CO2_FOOTPRINT_COEFFICIENT = 165.84
+INVESTMENT_COST_COEFFICIENT = 1513.74
+MAINTENANCE_COST_FRACTION = 0.025
+
+
 @pytest.mark.base
 def test_heat_pump_hplib_new():
     """Test heat pump hplib."""
@@ -65,10 +71,10 @@ def test_heat_pump_hplib_new():
         electrical_input_power_brine_pump_in_watt=None,
         massflow_nominal_secondary_side_in_kg_per_s=0.333,
         specific_heat_capacity_of_primary_fluid=0,
-        device_co2_footprint_in_kg=p_th_set * 1e-3 * 165.84,
-        investment_costs_in_euro=p_th_set * 1e-3 * 1513.74,
+        device_co2_footprint_in_kg=p_th_set * 1e-3 * CO2_FOOTPRINT_COEFFICIENT,
+        investment_costs_in_euro=p_th_set * 1e-3 * INVESTMENT_COST_COEFFICIENT,
         lifetime_in_years=10,
-        maintenance_costs_in_euro_per_year=0.025 * p_th_set * 1e-3 * 1513.74,
+        maintenance_costs_in_euro_per_year=MAINTENANCE_COST_FRACTION * p_th_set * 1e-3 * INVESTMENT_COST_COEFFICIENT,
         subsidy_as_percentage_of_investment_costs=0.3
     )
     heatpump = MoreAdvancedHeatPumpHPLib(config=heatpump_config, my_simulation_parameters=simpars)

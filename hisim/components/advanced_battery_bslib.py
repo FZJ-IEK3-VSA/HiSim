@@ -361,6 +361,7 @@ class Battery(Component):
 
         else:
             log.warning("Capex calculation not valid. Check lifetime_in_cycles in Configuration of Battery.")
+            return capex_cost_data_class
 
         # overwrite capex and emission based on battery cycles
         capex_cost_data_class.capex_investment_cost_for_simulated_period_in_euro = capex_per_simulated_period

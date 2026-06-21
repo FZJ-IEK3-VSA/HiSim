@@ -17,7 +17,7 @@ from hisim import loadtypes as lt
 from hisim.components import controller_l1_chp
 from hisim.simulationparameters import SimulationParameters
 
-__authors__ = "Frank Burkrad, Maximilian Hillen,"
+__authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = ""

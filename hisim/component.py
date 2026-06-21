@@ -246,6 +246,11 @@ class Component:
     def add_default_connections(self, connections: List[ComponentConnection]) -> None:
         """Adds a default connection list definition."""
 
+        if not connections:
+            raise ValueError(
+                f"connections list is empty for component {self.component_name}. "
+                "Cannot add default connections from an empty list."
+            )
         component_name = connections[0].source_class_name
         for connection in connections:
             if connection.source_class_name != component_name:

@@ -1,4 +1,4 @@
-"""Test for generic pv system."""
+"""Test for generic air conditioner."""
 
 from typing import Any, Dict, Optional
 from unittest.mock import patch
@@ -31,7 +31,7 @@ from tests import functions_for_testing as fft
 def test_determine_mode_returns_correct_operation_mode_for_temperature(
     start_controller_mode, current_temperature_deg_c: float, mode: str
 ):
-    """Test generic pv system."""
+    """Test determine_operating_mode returns correct mode based on temperature."""
     """ GIVEN """
     testee = given_default_testee()
 

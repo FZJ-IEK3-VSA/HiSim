@@ -9,7 +9,7 @@ import pickle
 import string
 import sys
 from timeit import default_timer as timer
-from typing import Any, Optional, List, Dict, Tuple, TYPE_CHECKING
+from typing import Any, Optional, List, Dict, Tuple, TYPE_CHECKING, cast
 
 import pandas as pd
 
@@ -332,7 +332,7 @@ class PostProcessor:
         """Generates the network charts that show the connection of the elements."""
         system_chart_class = _load_attribute("hisim.postprocessing.system_chart", "SystemChart")
         systemchart = system_chart_class(ppdt)
-        return systemchart.make_chart()
+        return cast(List["SystemChartEntry"], systemchart.make_chart())
 
     def make_special_one_day_debugging_plots(
         self,

@@ -5,7 +5,7 @@ from __future__ import annotations
 # clean
 
 import os
-from typing import List, Optional
+from typing import List, Optional, cast
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -36,7 +36,7 @@ class PriceSignalConfig(cp.ConfigBase):
     @classmethod
     def get_main_classname(cls) -> str:
         """Return the full class name of the base class."""
-        return PriceSignal.get_full_classname()
+        return cast(str, PriceSignal.get_full_classname())
 
     building_name: str
     #: name of the price signal

@@ -299,6 +299,14 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
     )
 
 
+def get_required_config_value(config: dict[str, Optional[str]], key: str) -> str:
+    """Return a required command-line config value."""
+    value = config[key]
+    if value is None:
+        raise ValueError(f"Missing required command-line argument: {key}")
+    return value
+
+
 def main_cli() -> None:
     """Main function for command-line execution of HiSim, supporting both Python-based and JSON-based scenarios."""
 
@@ -312,23 +320,28 @@ def main_cli() -> None:
     ptm: str
     # Dispatching logic
     if config["mode"] == "python":
-        print(f"Calling setup_function from {config['module_file']}")
+        module_file = get_required_config_value(config, "module_file")
+        print(f"Calling setup_function from {module_file}")
         my_sim = initialize_from_python(
-            path_to_module=config["module_file"],
+            path_to_module=module_file,
             my_module_config=config["module_config"],
         )
-        ptm = config["module_file"]
+        ptm = module_file
 
     elif config["mode"] == "json":
-        print(f"Running simulation of scenario {config['scenario']} with simulation parameters {config['simulation']}"
-              + (f" and delta {config['delta']}" if config["delta"] else ""))
+        scenario = get_required_config_value(config, "scenario")
+        simulation = get_required_config_value(config, "simulation")
+        print(
+            f"Running simulation of scenario {scenario} with simulation parameters {simulation}"
+            + (f" and delta {config['delta']}" if config["delta"] else "")
+        )
         my_sim = initialize_from_json(
-            scenario=config["scenario"],
-            simulation_parameters=config["simulation"],
-            path_to_module=config["scenario"],
+            scenario=scenario,
+            simulation_parameters=simulation,
+            path_to_module=scenario,
             delta=config["delta"],
         )
-        ptm = config["scenario"]
+        ptm = scenario
 
     run_simulation(my_sim, path_to_module=ptm)
 

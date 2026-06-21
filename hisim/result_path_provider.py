@@ -337,7 +337,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
 
         return None
 
-    def _get_test_directory_name(self) -> Any:
+    def _get_test_directory_name(self) -> Optional[str]:
         """Build the result directory for a test run, identified by the test name alone."""
         if self.base_path is None or self.test_name is None:
             return None

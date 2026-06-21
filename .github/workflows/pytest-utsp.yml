@@ -14,7 +14,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - name: Set up Python 3.11
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v6
       with:
         python-version: "3.11"
     - name: Setup Graphviz
@@ -35,7 +35,7 @@ jobs:
         coverage run --parallel-mode --source=../hisim -m pytest -m "utsp" --durations=20
     - name: Upload coverage data
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: coverage-pytest-utsp
         path: tests/.coverage.*

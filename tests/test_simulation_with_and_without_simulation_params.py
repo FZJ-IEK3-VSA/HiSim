@@ -12,7 +12,7 @@ from hisim import utils
 from tests.testing_utils import TestingUtils
 
 
-BASIC_HOUSEHOLD_PATH = str(Path(__file__).resolve().parent.parent / "system_setups" / "basic_household.py")
+BASIC_HOUSEHOLD_PATH: str = str(Path(__file__).resolve().parent.parent / "system_setups" / "basic_household.py")
 
 
 @pytest.mark.extendedbase
@@ -28,7 +28,7 @@ def test_basic_household_with_simu_params() -> None:
 
 @pytest.mark.extendedbase
 @utils.measure_execution_time
-def test_basic_household_without_simu_params(monkeypatch: pytest.MonkeyPatch):
+def test_basic_household_without_simu_params(monkeypatch: pytest.MonkeyPatch) -> None:
     """No simulation params given. HiSim is often called this way."""
 
     def fast_default_parameters(

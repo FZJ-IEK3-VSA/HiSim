@@ -101,7 +101,7 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig(SystemSetupConfigBase):
         )
 
         household_config = HouseholdAdvancedHPDieselCarPVBatteryConfig(
-            building_type="blub",
+            building_type="advanced_hp_household",
             number_of_apartments=my_building_information.number_of_apartments,
             # dhw_controllable=False,
             # heatpump_controllable=False,

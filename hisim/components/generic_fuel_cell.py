@@ -3,7 +3,6 @@
 # clean
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-import os
 from pathlib import Path
 from typing import List, Any
 import json

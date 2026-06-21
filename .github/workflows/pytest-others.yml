@@ -15,7 +15,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - name: Set up Python 3.11
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v6
       with:
         python-version: "3.11"
     - name: Setup Graphviz
@@ -42,7 +42,7 @@ jobs:
         #        
     - name: Upload coverage data
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: coverage-pytest-others
         path: tests/.coverage.*

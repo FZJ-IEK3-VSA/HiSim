@@ -59,30 +59,18 @@ def test_example_storage():
     timestep = 300
 
     print("\n")
-    log.information("timestep = " + str(timestep))
-    log.information(
-        "fill state (in the beginning) = " + str(my_example_storage.state.fill)
-    )
-    log.information("storage capacity = " + str(my_example_storage.capacity) + "\n")
-    log.information(
-        "charging output = " + str(stsv.values[charging_output.global_index])
-    )
-    log.information(
-        "discharging output  = "
-        + str(stsv.values[discharging_output.global_index])
-        + "\n"
-    )
+    log.information(f"timestep = {timestep}")
+    log.information(f"fill state (in the beginning) = {my_example_storage.state.fill}")
+    log.information(f"storage capacity = {my_example_storage.capacity}\n")
+    log.information(f"charging output = {stsv.values[charging_output.global_index]}")
+    log.information(f"discharging output  = {stsv.values[discharging_output.global_index]}\n")
 
     # Test current storage fill state before running the simulation
     assert 0 == stsv.values[my_example_storage.current_fill.global_index]
     my_example_storage.i_restore_state()
     my_example_storage.i_simulate(timestep, stsv, False)
 
-    log.information(
-        "fill state (after charging and discharging) = "
-        + str(my_example_storage.state.fill)
-        + "\n"
-    )
+    log.information(f"fill state (after charging and discharging) = {my_example_storage.state.fill}\n")
     # Test charging of the storage
     assert 30 == stsv.values[charging_output.global_index]
     # Test discharging of the storage
@@ -91,12 +79,8 @@ def test_example_storage():
     assert 20 == stsv.values[my_example_storage.current_fill.global_index]
 
     timestep = 301
-    log.information("timestep = " + str(timestep))
+    log.information(f"timestep = {timestep}")
     my_example_storage.i_simulate(timestep, stsv, False)
-    log.information(
-        "fill state (after charging and discharging) = "
-        + str(my_example_storage.state.fill)
-        + "\n"
-    )
+    log.information(f"fill state (after charging and discharging) = {my_example_storage.state.fill}\n")
     # Test current storage fill state
     assert 40 == stsv.values[my_example_storage.current_fill.global_index]

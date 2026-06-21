@@ -37,9 +37,11 @@ def write_config(config: ModularHouseholdConfig) -> None:
         file.write(config.to_json())  # type: ignore
 
 
-def read_in_configs(pathname: str) -> ModularHouseholdConfig:
+def read_in_configs(pathname: Optional[str]) -> ModularHouseholdConfig:
     """Reads in ModularHouseholdConfig file and loads default if file cannot be found."""
     try:
+        if pathname is None:
+            raise FileNotFoundError("No modular household config path was provided.")
         with open(pathname, encoding="utf8") as config_file:
             household_config_dict = json.load(config_file)  # type: ignore
             household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_dict(

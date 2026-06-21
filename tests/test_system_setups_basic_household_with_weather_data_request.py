@@ -13,6 +13,7 @@ from hisim import utils
 @utils.measure_execution_time
 def test_basic_household() -> None:
     """Single day."""
+    pytest.importorskip("wetterdienst")
     path = "../system_setups/basic_household_with_weather_data_request.py"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     hisim_main.main(path, mysimpar)

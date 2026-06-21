@@ -11,7 +11,6 @@ from hisim.components.more_advanced_heat_pump_hplib import (
 )
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim import log
 
 
 # Heat pump configuration constants
@@ -141,7 +140,6 @@ def test_heat_pump_hplib_new():
 
     # Simulation
     heatpump.i_simulate(timestep=timestep, stsv=stsv, force_convergence=force_convergence)
-    log.information(str(stsv.values))
     # Check
     assert p_th_set == stsv.values[heatpump.p_th_sh.global_index]
     assert 7074.033573088874 == stsv.values[heatpump.p_el_sh.global_index]

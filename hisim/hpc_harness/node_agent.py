@@ -9,7 +9,7 @@ import time
 
 from hisim.hpc_harness.config import HarnessConfig
 from hisim.hpc_harness.pool import LocalPool, compute_max_slots
-from hisim.hpc_harness.protocol import GRANT, NONE, REPORT, REQUEST, SHUTDOWN, TAG
+from hisim.hpc_harness.protocol import GRANT, NO_WORK_AVAILABLE, REPORT, REQUEST, SHUTDOWN, TAG
 
 
 def run_agent(comm: "object", cfg: HarnessConfig) -> None:
@@ -45,7 +45,7 @@ def run_agent(comm: "object", cfg: HarnessConfig) -> None:
                 if msg["type"] == GRANT:
                     pool.add_tasks(msg["tasks"])
                     awaiting_grant = False
-                elif msg["type"] == NONE:
+                elif msg["type"] == NO_WORK_AVAILABLE:
                     awaiting_grant = False
                     next_request_at = time.time() + cfg.backoff_s
                 elif msg["type"] == SHUTDOWN:
@@ -67,6 +67,6 @@ def run_agent(comm: "object", cfg: HarnessConfig) -> None:
             time.sleep(cfg.sample_interval_s)
 
         print(f"[rank{rank}] shutdown on {host}", flush=True)
-    except BaseException:
+    except Exception:
         pool.kill_all()
         raise

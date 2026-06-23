@@ -20,7 +20,7 @@ Each report: {"id", "status", "exit_code", "duration_s", "peak_mem_mb",
 GRANT: str = "GRANT"
 """Head hands out work: {"type", "tasks": [{"id", "scenario_path"}, ...]}."""
 
-NONE: str = "NONE"
+NO_WORK_AVAILABLE: str = "NO_WORK_AVAILABLE"
 """No work available right now, but the run is not finished. Keep polling."""
 
 SHUTDOWN: str = "SHUTDOWN"

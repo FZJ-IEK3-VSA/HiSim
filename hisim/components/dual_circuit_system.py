@@ -125,13 +125,9 @@ class DiverterValve:
         elif daily_average_outside_temperature_in_celsius > set_heating_threshold_temperature_in_celsius:
             heating_mode = "off"
 
-        # it is cold enough for heating
-        elif daily_average_outside_temperature_in_celsius < set_heating_threshold_temperature_in_celsius:
+        # it is cold enough for heating (at or below threshold)
+        elif daily_average_outside_temperature_in_celsius <= set_heating_threshold_temperature_in_celsius:
             heating_mode = "on"
+        # (equality case is handled as "on" above)
 
-        else:
-            raise ValueError(
-                f"""Daily average temperature {daily_average_outside_temperature_in_celsius}°C
-                or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."""
-            )
         return heating_mode

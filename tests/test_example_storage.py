@@ -16,7 +16,7 @@ from tests import functions_for_testing as fft
 def test_example_storage():
     """Test for the Example Storage."""
 
-    mysim: SimulationParameters = SimulationParameters.full_year(
+    simulation_parameters: SimulationParameters = SimulationParameters.full_year(
         year=2021, seconds_per_timestep=60
     )
 
@@ -24,7 +24,7 @@ def test_example_storage():
         example_storage.SimpleStorageConfig.get_default_thermal_storage()
     )
     my_example_storage = example_storage.SimpleStorage(
-        config=my_example_storage_config, my_simulation_parameters=mysim
+        config=my_example_storage_config, my_simulation_parameters=simulation_parameters
     )
 
     # Define outputs

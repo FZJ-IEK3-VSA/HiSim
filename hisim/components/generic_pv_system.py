@@ -1,4 +1,14 @@
-"""PV system module."""
+"""PV system module.
+
+This module provides the :class:`PVSystem` component, which simulates
+the electricity generation of a photovoltaic (PV) installation based on
+weather data (ambient temperature and irradiance) and the peak power,
+orientation (azimuth and tilt), and module/inverter characteristics of
+the installation. The :class:`PVSystemConfig` dataclass holds the
+configuration parameters for a PV installation, including its location,
+module and inverter databases, nominal power, mounting geometry, and the
+economic and CO2-footprint figures used in post-processing.
+"""
 
 # clean
 

@@ -44,7 +44,18 @@ __status__: str = "development"
 
 
 def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
-    """Setup function."""
+    """Configure and wire a RES-to-electrolyzer simulation with PTX energy management.
+
+    Builds a simulation chain that loads renewable power from a CSV file,
+    transforms it, routes it through a PTX controller to an electrolyzer controller,
+    and finally to an electrolyzer model. Post-processing options for plotting and
+    reporting are enabled.
+
+    Args:
+        my_sim: The simulator instance to which components are added.
+        my_simulation_parameters: Optional simulation parameters. If None, defaults
+            to a full year (2021) simulation with 60-second timesteps.
+    """
     log.information("Starting basic electrolyzer system setup")
     # =================================================================================================================================
     # Set System Parameters

@@ -14,7 +14,7 @@ import time
 from hisim.hpc_harness import db
 from hisim.hpc_harness.config import HarnessConfig
 from hisim.hpc_harness.pool import LocalPool, compute_max_slots
-from hisim.hpc_harness.protocol import GRANT, NONE, REPORT, REQUEST, SHUTDOWN, TAG
+from hisim.hpc_harness.protocol import GRANT, NO_WORK_AVAILABLE, REPORT, REQUEST, SHUTDOWN, TAG
 
 
 # Reaper period constants
@@ -77,7 +77,7 @@ def run_head(comm: "object", cfg: HarnessConfig) -> None:
                         comm.send({"type": SHUTDOWN}, dest=src, tag=TAG)
                         shutdown_ranks.add(src)
                     else:
-                        comm.send({"type": NONE}, dest=src, tag=TAG)
+                        comm.send({"type": NO_WORK_AVAILABLE}, dest=src, tag=TAG)
                 elif msg["type"] == REPORT:
                     for report in msg["reports"]:
                         db.record_report(conn, report, cfg.max_attempts)

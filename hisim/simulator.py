@@ -314,7 +314,20 @@ class Simulator:
 
     @utils.measure_execution_time
     def prepare_post_processing(self, all_result_lines, start_counter):
-        """Prepares the post processing."""
+        """Assembles simulation results into a DataFrame and prepares data for post-processing.
+
+        Builds a pandas DataFrame from simulation outputs, assigns a datetime index based on
+        simulation start/end dates and timestep size, and optionally computes monthly, daily,
+        hourly, and cumulative aggregations. Returns a PostProcessingDataTransfer object
+        containing all results and metadata.
+
+        Args:
+            all_result_lines: List of result arrays, one per timestep.
+            start_counter: High-resolution time from before simulation started, used to compute execution time.
+
+        Returns:
+            PostProcessingDataTransfer: Object bundling results, outputs, parameters, and timing for post-processing.
+        """
         log.information("Preparing post processing")
         # Prepares the results from the simulation for the post processing.
         if len(all_result_lines) != self._simulation_parameters.timesteps:

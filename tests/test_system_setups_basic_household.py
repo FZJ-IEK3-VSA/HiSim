@@ -12,7 +12,12 @@ from hisim import utils
 @pytest.mark.system_setups
 @utils.measure_execution_time
 def test_basic_household() -> None:
-    """Single day."""
+    """Test basic household system setup for a single day simulation.
+
+    Runs a simulation of the basic household configuration for one day
+    using 60-second timesteps and verifies the simulation completes
+    without errors.
+    """
     path = "../system_setups/basic_household.py"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     hisim_main.main(path, mysimpar)

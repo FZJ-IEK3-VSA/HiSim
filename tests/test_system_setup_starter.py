@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 import time
 from pathlib import Path
@@ -57,8 +56,8 @@ def test_system_setup_starter() -> None:
         module_config_path,
     )
     # Check results
-    assert os.path.isfile(result_directory + "/finished.flag")
-    assert os.path.isfile(result_directory + "/results_for_webtool.json")
+    assert (Path(result_directory) / "finished.flag").is_file()
+    assert (Path(result_directory) / "results_for_webtool.json").is_file()
 
     assert (
         simulation_parameters.seconds_per_timestep  # type: ignore
@@ -150,8 +149,8 @@ def test_system_setup_starter_scaling() -> None:
         module_config_path,
     )
     # Check results
-    assert os.path.isfile(result_directory + "/finished.flag")
-    assert os.path.isfile(result_directory + "/results_for_webtool.json")
+    assert (Path(result_directory) / "finished.flag").is_file()
+    assert (Path(result_directory) / "results_for_webtool.json").is_file()
 
     assert (
         simulation_parameters.seconds_per_timestep  # type: ignore

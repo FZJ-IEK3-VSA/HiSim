@@ -1,6 +1,6 @@
 """Test for running multiple requests with lpg utsp connector and scaling up the results."""
 
-from typing import Union, List, Tuple, Any
+from typing import List, Tuple, Any
 import pytest
 import numpy as np
 from utspclient.helpers.lpgdata import (
@@ -78,13 +78,13 @@ def test_occupancy_scaling_with_utsp():
 
 
 def initialize_lpg_utsp_connector_and_return_results(
-    households: Union[JsonReference, List[JsonReference]]
+    households: JsonReference | List[JsonReference]
 ) -> Tuple[
-    Union[float, Any],
-    Union[float, Any],
-    Union[float, Any],
-    Union[float, Any],
-    Union[float, Any],
+    float | Any,
+    float | Any,
+    float | Any,
+    float | Any,
+    float | Any,
     loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode,
 ]:
     """Initialize the lpg utsp connector and simulate for one timestep."""

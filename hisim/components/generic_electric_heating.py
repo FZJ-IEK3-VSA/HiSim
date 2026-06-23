@@ -307,18 +307,18 @@ class ElectricHeating(Component):
 
         component_class = Building
         connections = []
-        hws_classname = component_class.get_classname()
+        building_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
                 ElectricHeating.TheoreticalHeatingDemand,
-                hws_classname,
+                building_classname,
                 component_class.TheoreticalHeatingDemand,
             )
         )
         connections.append(
             ComponentConnection(
                 ElectricHeating.TheoreticalHeatingEnergyDemand,
-                hws_classname,
+                building_classname,
                 component_class.TheoreticalHeatingEnergyDemand,
             )
         )

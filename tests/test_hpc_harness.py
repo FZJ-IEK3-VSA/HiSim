@@ -17,6 +17,8 @@ from hisim.hpc_harness import db
 from hisim.hpc_harness.config import HarnessConfig
 from hisim.hpc_harness.pool import LocalPool, compute_max_slots
 
+# Polling interval for pool tick loop in _drive().
+TICK_INTERVAL = 0.05
 
 # --------------------------------------------------------------------------- db
 @pytest.mark.base
@@ -173,12 +175,13 @@ def _drive(pool, max_seconds=15.0):
     deadline = time.time() + max_seconds
     while not pool.is_idle() and time.time() < deadline:
         reports.extend(pool.tick())
-        time.sleep(0.05)
+        time.sleep(TICK_INTERVAL)
     reports.extend(pool.tick())
     return reports
 
 
 def _make_pool(tmp_path, builder, timeout_s=60.0, max_slots=4):
+    """Create a LocalPool for testing with zero memory gate."""
     # per_sim_mem/headroom = 0 so the memory gate never blocks the test.
     return LocalPool(
         host="test", sim_params="ignored.json", result_root=str(tmp_path / "results"),

@@ -585,7 +585,15 @@ class PostProcessor:
         def write_image_entry_to_report_for_one_component(
             component: Any, report_image_entries_for_component: List[ReportImageEntry]
         ) -> None:
-            """Write image entry to report for one component."""
+            """Write image entries for a single component to the report.
+
+            Sorts entries by output type, optionally writes component configuration,
+            then iterates over sorted entries writing output descriptions and figures.
+
+            Args:
+                component: Component name to process.
+                report_image_entries_for_component: List of image entries for this component.
+            """
 
             sorted_entries: List[ReportImageEntry] = sorted(
                 report_image_entries_for_component, key=lambda x: x.output_type

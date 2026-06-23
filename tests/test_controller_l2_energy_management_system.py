@@ -168,7 +168,7 @@ def test_house(
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
         building_name=building_name,
-        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
         absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
         heating_system=my_hds_controller_information.hds_controller_config.heating_system,
     )
@@ -217,22 +217,22 @@ def test_house(
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
     )
 
-    my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
+    my_domestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+    my_domestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
         my_simulation_parameters=my_simulation_parameters,
         config=my_dhw_heatpump_controller_config,
     )
 
-    my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
+    my_domestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
         config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
     )
     # Add to simulator
-    my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
+    my_sim.add_component(my_domestic_hot_water_storage, connect_automatically=True)
+    my_sim.add_component(my_domestic_hot_water_heatpump_controller, connect_automatically=True)
+    my_sim.add_component(my_domestic_hot_water_heatpump, connect_automatically=True)
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(

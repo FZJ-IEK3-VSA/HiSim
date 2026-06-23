@@ -47,10 +47,10 @@ def _build_config(args: argparse.Namespace) -> HarnessConfig:
 def cmd_import(args: argparse.Namespace) -> int:
     """Import scenario files from a directory into the database (idempotent)."""
     conn = db.connect(args.db)
-    result = db.import_scenarios(conn, args.scenario_dir, args.glob)
+    import_stats = db.import_scenarios(conn, args.scenario_dir, args.glob)
     conn.close()
-    print(f"Found {result['found']} file(s) matching '{args.glob}', "
-          f"inserted {result['inserted']} new task(s).")
+    print(f"Found {import_stats['found']} file(s) matching '{args.glob}', "
+          f"inserted {import_stats['inserted']} new task(s).")
     return 0
 
 
@@ -129,7 +129,7 @@ def _add_run_overrides(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--sample-interval-s", dest="sample_interval_s", type=float,
                         help="Loop tick interval (seconds).")
     parser.add_argument("--backoff-s", dest="backoff_s", type=float,
-                        help="Wait after a NONE reply before re-requesting (seconds).")
+                        help="Wait after a NO_WORK_AVAILABLE reply before re-requesting (seconds).")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--head-runs-jobs", dest="head_runs_jobs", action="store_true", default=None,
                        help="Rank 0 also runs simulations (default).")

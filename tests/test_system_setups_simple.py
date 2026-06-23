@@ -10,7 +10,7 @@ from hisim import utils
 @pytest.mark.system_setups
 @utils.measure_execution_time
 def test_first_system_setup():
-    """Performes a simple test for the first system setup."""
+    """Performs a simple test for the first system setup."""
     path = "../system_setups/simple_system_setup_one.py"
 
     mysimpar = SimulationParameters.one_day_only_with_only_plots(

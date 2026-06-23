@@ -23,7 +23,20 @@ __email__ = "v.janser@fz-juelich.de"
 
 
 def import_from_string(full_classname: str):
-    """Import a class from a full module path string."""
+    """Import a class from a fully qualified dotted module path.
+
+    Args:
+        full_classname: Dotted path of the form ``module.submodule.ClassName``.
+
+    Returns:
+        The class object referenced by ``full_classname``.
+
+    Raises:
+        ValueError: If ``full_classname`` cannot be split into a module path
+            and class name.
+        ImportError: If the module cannot be imported, or if the named class
+            does not exist within the imported module.
+    """
     # This function was created with the help of ChatGPT
 
     try:
@@ -43,7 +56,33 @@ def import_from_string(full_classname: str):
 
 
 def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.Simulator, sim_params: sim.SimulationParameters) -> sim.Simulator:
-    """Given the scenario data from the JSON file, set up the components and connections in the simulator."""
+    """Set up components and connections in the simulator from JSON scenario data.
+
+    Iterates the ``components`` list in ``scenario_data``, instantiating each
+    component from its config class, registering inputs/outputs, and adding it
+    to the simulator. Then wires components together according to the
+    ``connections`` list. Special-case handling is applied for UTSP LPG
+    connector, EV charge controller, Weather, and Car components (e.g.
+    resolving path placeholders, pascal-casing JSON keys, generating car
+    info dicts).
+
+    Args:
+        scenario_data: Parsed scenario JSON containing ``components`` and
+            ``connections`` sections.
+        my_sim: The simulator instance to populate with components.
+        sim_params: Simulation parameters forwarded to each component
+            constructor.
+
+    Returns:
+        The same simulator instance, now populated with components and
+        connections.
+
+    Raises:
+        ValueError: If no components are defined in the scenario, if a
+            component fails to initialize, if a Car component cannot find
+            its associated UTSP connector, or if a connection entry is
+            malformed (missing required keys).
+    """
 
     component_dict = {}
 
@@ -87,13 +126,13 @@ def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.
             if comp_def["component_full_classname"] == "hisim.components.generic_car.Car":
                 # We have to generate the car_info_dict
                 car_info = None
-                found = False
+                utsp_connector_found = False
                 for comp in my_sim.wrapped_components:
                     if comp.my_component.get_full_classname() == "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector":
                         if config_dict["name"] in comp.my_component.config.cars:
-                            found = True
+                            utsp_connector_found = True
                             car_info = GenericCarInformation(cast(UtspLpgConnector, comp.my_component)).data_dict_for_car_component[config_dict["household_name"]]
-                if not found:
+                if not utsp_connector_found:
                     raise ValueError(f"The car '{config_dict['name']}' was not associated with any UTSP connector.")
                 component = component_class(
                     config=config,

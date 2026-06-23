@@ -1,4 +1,4 @@
-""" Tests for the basic household system setup. """
+"""Tests for household_5a: advanced HP, EV, PV, battery with car priority."""
 # clean
 import os
 from pathlib import Path
@@ -15,7 +15,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 @pytest.mark.utsp
 @utils.measure_execution_time
 def test_basic_household() -> None:
-    """Single day."""
+    """Run a one-day simulation of the advanced HP/EV/PV/battery system with car priority."""
 
     config_filename = "household_5_advanced_hp_ev_pv_battery_config.json"
     if Path(config_filename).is_file():
@@ -28,4 +28,3 @@ def test_basic_household() -> None:
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
     hisim_main.main(path, mysimpar)
-    log.information(os.getcwd())

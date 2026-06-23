@@ -1,4 +1,4 @@
-"""Test for generic pv system."""
+"""Tests for the solar thermal system component."""
 
 import datetime
 import pandas as pd

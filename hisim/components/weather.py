@@ -640,7 +640,6 @@ class Weather(Component):
         stsv.set_output_value(
             self.pressure_output, self.pressure_list[timestep] * 100
         )  # *100 umrechnung von hPA bzw mbar in PA
-        stsv.set_output_value(self.apparent_zenith_output, self.apparent_zenith_list[timestep])
         stsv.set_output_value(
             self.daily_average_outside_temperature_output,
             self.daily_average_outside_temperature_list_in_celsius[timestep],

@@ -14,6 +14,6 @@ def test_basic_household_with_default_connections() -> None:
     """Test basic household with default connections."""
     path = "../system_setups/automatic_default_connections.py"
 
-    mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    hisim_main.main(path, mysimpar)
+    simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    hisim_main.main(path, simulation_parameters)
     log.information(os.getcwd())

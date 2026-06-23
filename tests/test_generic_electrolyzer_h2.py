@@ -1,4 +1,9 @@
-"""Test for generic electrolyzer h2."""
+"""Tests for the generic electrolyzer component for hydrogen production.
+
+This module contains tests for the generic_electrolyzer_h2 component, which simulates
+green hydrogen production via electrolysis. Tests verify hydrogen flow rate calculations
+based on electrical load input and activation state.
+"""
 import pytest
 
 from hisim import component as cp

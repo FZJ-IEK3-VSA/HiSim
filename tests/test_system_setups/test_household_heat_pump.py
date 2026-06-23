@@ -26,7 +26,7 @@ MY_SIMULATION_PARAMETERS = {
 def create_results_directory(result_directory):
     """Create result directory."""
     if Path(result_directory).is_dir():
-        shutil.rmtree(result_directory)
+        shutil.rmtree(result_directory, ignore_errors=True)
     Path(result_directory).mkdir(parents=True, exist_ok=True)
 
 
@@ -49,7 +49,7 @@ def run_system(config_json, result_directory):
 
 def remove_results_directory(result_directory):
     """Remove result directory."""
-    shutil.rmtree(result_directory)
+    shutil.rmtree(result_directory, ignore_errors=True)
 
 
 @pytest.mark.system_setups
@@ -61,7 +61,7 @@ def test_household_heat_pump_main():
     my_simpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     my_simpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
     hisim_main.main(path, my_simpar)
-    log.information(os.getcwd())
+    log.information(str(Path.cwd()))
 
 
 @pytest.mark.system_setups

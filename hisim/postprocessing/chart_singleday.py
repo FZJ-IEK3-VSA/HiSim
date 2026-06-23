@@ -28,7 +28,21 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         output2: Any = None,
         figure_format: Any = None,
     ):
-        """Initializes the class."""
+        """Initializes a single-day chart.
+
+        Args:
+            output: The primary output data to plot.
+            component_name: Name of the component producing the data.
+            units: Units of the output values.
+            directory_path: Directory path for saving the chart.
+            time_correction_factor: Factor for time step correction.
+            output_description: Description of the output.
+            data: Time-series data to visualize.
+            day: Day of the month to display (default 0).
+            month: Month of the year to display (default 0).
+            output2: Optional secondary output data for comparison.
+            figure_format: Format for the output figure (e.g., '.png').
+        """
         if output2 is not None:
             super().__init__(
                 output=output,

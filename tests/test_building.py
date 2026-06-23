@@ -23,8 +23,8 @@ def test_building() -> None:
     """Test function for the building module."""
 
     starttime = datetime.datetime.now()
-    d_four = starttime.strftime("%d-%b-%Y %H:%M:%S")
-    log.profile("Test Building start @ " + d_four)
+    formatted_start_time = starttime.strftime("%d-%b-%Y %H:%M:%S")
+    log.profile("Test Building start @ " + formatted_start_time)
 
     t_one = time.perf_counter()
 
@@ -161,5 +161,5 @@ def test_building() -> None:
     t_seven = time.perf_counter()
     log.profile(f"T6: {t_seven - t_six}")
     starttime = datetime.datetime.now()
-    d_four = starttime.strftime("%d-%b-%Y %H:%M:%S")
-    log.profile("Finished @ " + d_four)
+    formatted_start_time = starttime.strftime("%d-%b-%Y %H:%M:%S")
+    log.profile("Finished @ " + formatted_start_time)

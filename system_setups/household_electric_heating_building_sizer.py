@@ -1,4 +1,11 @@
-"""Basic household new system setup."""
+"""Household electric heating system setup with building sizing.
+
+This module provides a `setup_function` that configures a HiSim simulation
+for a household with electric space heating and domestic hot water preparation.
+The setup includes occupancy profiles, weather data, PV system, electric heating
+elements, DHW storage, optional battery and EMS, and an electricity meter.
+Configuration is loaded from modular household config files or defaults are used.
+"""
 
 # clean
 

@@ -32,13 +32,13 @@ from hisim import utils, loadtypes
 from hisim.units import Quantity, Watt, Celsius
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 
-__authors__ = ["Katharina Rieck", "Kevin Knosala", "Markus Blasberg"]
-__copyright__ = "Copyright 2023, FZJ-IEK-3"
-__credits__ = ["Noah Pflugradt"]
-__license__ = "MIT"
-__version__ = "1.0"
-__maintainer__ = "Katharina Rieck", "Kevin Knosala"
-__status__ = "development"
+__authors__: list[str] = ["Katharina Rieck", "Kevin Knosala", "Markus Blasberg"]
+__copyright__: str = "Copyright 2023, FZJ-IEK-3"
+__credits__: list[str] = ["Noah Pflugradt"]
+__license__: str = "MIT"
+__version__: str = "1.0"
+__maintainer__: tuple[str, ...] = ("Katharina Rieck", "Kevin Knosala")
+__status__: str = "development"
 
 
 @dataclass
@@ -163,7 +163,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
             hds_controller_config=hds_controller_config,
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                     heating_system=hds_controller_config.heating_system,
                 )

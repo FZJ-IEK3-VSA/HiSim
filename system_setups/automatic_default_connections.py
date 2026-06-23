@@ -60,7 +60,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # Set Fix System Parameters
 
     # Set Heat Pump
-    heating_reference_temperature_in_celsius: float = -7  # t_in #TODO: get real heating ref temps according to location
+    heating_reference_temperature_in_celsius: float = -7  # heating_reference_temperature_in_celsius #TODO: get real heating ref temps according to location
 
     # =================================================================================================================================
     # Build Basic Components
@@ -132,7 +132,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )

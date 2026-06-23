@@ -35,7 +35,19 @@ PATH = "../system_setups/household_for_test_gas_meter.py"
 def test_house(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """The test should check if a normal simulation works with the electricity grid implementation."""
+    """Run a full-year simulation with a gas boiler and verify gas meter KPIs.
+
+    Builds a household energy system (weather, PV, building, occupancy,
+    heat distribution, gas boiler, hot water storage, electricity and gas
+    meters) and runs all timesteps. Then asserts that the gas meter's
+    total gas demand matches the gas boiler's consumption within a 5%
+    relative tolerance, and logs KPI values (total consumption, opex costs,
+    CO2 footprint).
+
+    Args:
+        my_simulation_parameters: Optional simulation parameters. If None,
+            defaults to a full-year simulation at 1-hour timesteps for 2021.
+    """
 
     # =========================================================================================================================================================
     # System Parameters
@@ -117,7 +129,7 @@ def test_house(
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )

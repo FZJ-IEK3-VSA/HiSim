@@ -31,11 +31,11 @@ class GenericBatteryState:
 
     def __init__(
         self,
-        init_stored_energy=0,
-        max_stored_energy=None,
-        min_stored_energy=None,
-        max_var_stored_energy=None,
-        min_var_stored_energy=None,
+        init_stored_energy: float = 0,
+        max_stored_energy: float | None = None,
+        min_stored_energy: float | None = None,
+        max_var_stored_energy: float | None = None,
+        min_var_stored_energy: float | None = None,
     ):
         """Initialize the class."""
         self.stored_energy = init_stored_energy
@@ -43,7 +43,7 @@ class GenericBatteryState:
         self.min_stored_energy = min_stored_energy
         self.max_var_stored_energy = max_var_stored_energy
         self.min_var_stored_energy = min_var_stored_energy
-        self.charge_wh: float
+        self.charge_wh: float = 0.0
 
     def charge(self, energy):
         """Charge."""
@@ -232,7 +232,7 @@ class GenericBattery(cp.Component):
                 break
 
         if battery is None or not battery_found:
-            raise Exception("Heat pump model not registered in the database")
+            raise Exception("Battery model not registered in the database")
 
         self.max_stored_energy = battery["Capacity"] * 1e3
         self.min_stored_energy = self.max_stored_energy * 0.0

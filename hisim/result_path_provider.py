@@ -276,18 +276,18 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                 path = self.base_path / self.model_name / self.variant_name / self.datetime_string
             elif self.sorting_option == SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION:
                 # schauen ob verzeichnis schon da und aufsteigende nummer anhängen
-                idx = 1
+                directory_index = 1
 
                 if self.further_result_folder_description is not None:
-                    path = self.base_path / self.model_name / self.further_result_folder_description / (self.variant_name + "_" + str(idx))
+                    path = self.base_path / self.model_name / self.further_result_folder_description / (self.variant_name + "_" + str(directory_index))
                     while path.exists():
-                        idx = idx + 1
-                        path = self.base_path / self.model_name / self.further_result_folder_description / (self.variant_name + "_" + str(idx))
+                        directory_index = directory_index + 1
+                        path = self.base_path / self.model_name / self.further_result_folder_description / (self.variant_name + "_" + str(directory_index))
                 else:
-                    path = self.base_path / self.model_name / (self.variant_name + "_" + str(idx))
+                    path = self.base_path / self.model_name / (self.variant_name + "_" + str(directory_index))
                     while path.exists():
-                        idx = idx + 1
-                        path = self.base_path / self.model_name / (self.variant_name + "_" + str(idx))
+                        directory_index = directory_index + 1
+                        path = self.base_path / self.model_name / (self.variant_name + "_" + str(directory_index))
             elif self.sorting_option == SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION:
                 if self.further_result_folder_description is not None:
                     path = self.base_path / self.model_name / self.further_result_folder_description / (self.variant_name + "_" + self.scenario_hash_string)

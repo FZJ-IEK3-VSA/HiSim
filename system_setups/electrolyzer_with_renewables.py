@@ -55,7 +55,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # Set CSV Parameters
     building_name = "CSV Loader"
     csv_filename = "wind_generated_power_1_min.csv"
-    column = 1  # The column number in the CSV file containing the load profile data
+    csv_data_column = 1  # The column number in the CSV file containing the load profile data
     loadtype = lt.LoadTypes.ELECTRICITY  # Replace with the desired load type
     unit = lt.Units.KILOWATT  # Replace with the desired unit
     column_name = "generated_power"
@@ -78,7 +78,6 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
             year=year, seconds_per_timestep=seconds_per_timestep
         )  # use a full year for testing
     my_sim.set_simulation_parameters(my_simulation_parameters)
-    # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
 
     # =================================================================================================================================
     # Build Components
@@ -88,7 +87,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         building_name=building_name,
         name="CSV",
         csv_filename=csv_filename,
-        column=column,  # The column number in the CSV file containing the load profile data
+        column=csv_data_column,  # The column number in the CSV file containing the load profile data
         loadtype=loadtype,  # Replace with the desired load type
         unit=unit,  # Replace with the desired unit
         column_name=column_name,

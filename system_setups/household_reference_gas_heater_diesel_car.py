@@ -60,7 +60,7 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
 
     @classmethod
     def get_default(cls):
-        """Get default HouseholdPVConfig."""
+        """Get default ReferenceHouseholdConfig."""
 
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
@@ -101,7 +101,7 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
             hds_controller_config=hds_controller_config,
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                     heating_system=hds_controller_config.heating_system,
                 )

@@ -78,7 +78,38 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig(SystemSetupConfigBase):
 
     @classmethod
     def get_default(cls):
-        """Get default HouseholdAdvancedHPDieselCarPVBatteryConfig."""
+        """Build a fully-wired ``HouseholdAdvancedHPDieselCarPVBatteryConfig`` with sensible defaults.
+
+        Returns a configuration for a German single-family home whose electricity and
+        heating needs are covered by an advanced (hplib) heat pump, supplemented by a
+        rooftop PV system, a home battery, and a diesel car. The building, heat
+        distribution system, simple buffer storage, domestic-hot-water (DHW) heat pump
+        and storage, PV array, battery, electricity meter, energy-management-system
+        (EMS) controller, and occupancy/load-profile-generator connector are all
+        constructed and cross-referenced from the underlying building information, so
+        the returned object can be fed straight into the corresponding ``setup_function``.
+
+        The occupancy profile is set to a couple both at work (``CHR01``) with
+        energy-saving behaviour and a 10 km commuting travel route. The advanced heat
+        pump is scaled to the building's maximum thermal demand at a heating reference
+        temperature of -7 °C, configured as a modulating unit (``group_id = 1``) that
+        operates in heating-and-cooling mode (``mode = 2``). A few defaults are then
+        overridden to keep the simulation numerically stable:
+
+        - ``minimum_idle_time_in_seconds`` and ``minimum_running_time_in_seconds`` of
+          the heat pump are both set to 900 s to prevent excessive on/off cycling.
+        - ``flow_temperature_in_celsius`` is set to 21 °C (note: flagged with a "Todo"
+          to re-check the value).
+        - The DHW storage ``volume`` is overridden to 250 L, because the default of
+          230 L leads to an error.
+        - ``set_heating_threshold_outside_temperature_in_celsius`` (16 °C) is applied
+          consistently to both the heat-distribution controller and the heat-pump
+          controller.
+
+        ``surplus_control`` and ``surplus_control_building_temperature_modifier`` are
+        both disabled, so the EMS does not actively steer the heat pump or building
+        temperature based on surplus PV electricity.
+        """
 
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
@@ -128,7 +159,7 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig(SystemSetupConfigBase):
             hds_controller_config=hds_controller_config,
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                     heating_system=hds_controller_config.heating_system,
                 )

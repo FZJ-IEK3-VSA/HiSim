@@ -1,4 +1,8 @@
-"""System setup configuration module."""
+"""System setup configuration module.
+
+Provides the base dataclass for household system-setup configurations,
+supporting JSON loading and default/scaled configuration generation.
+"""
 
 # clean
 
@@ -16,16 +20,39 @@ from hisim.components import building
 @dataclass
 class SystemSetupConfigBase(JSONWizard):
 
-    """Base class for system setup."""
+    """Base class for system-setup configurations.
+
+    A JSONWizard dataclass that provides JSON loading and default-value
+    generation for household system setups. Subclasses must implement
+    `get_default_options`, `get_default`, and `get_scaled_default`.
+    """
 
     @classmethod
     def load_from_json(cls, module_config_path: str) -> Self:
-        """Populate config from JSON."""
+        """Load a configuration instance from a JSON file.
+
+        Reads the JSON file, extracts optional `building_config`, `options`,
+        and `system_setup_config` sections, and builds a configuration from
+        scaled or unscaled defaults combined with any JSON overwrites.
+
+        Args:
+            module_config_path: Path to the JSON configuration file. If the
+                path is not found, a Windows line-ending workaround is tried.
+
+        Returns:
+            A configuration instance populated from the JSON file and defaults.
+
+        Raises:
+            FileNotFoundError: If the config file cannot be found even after
+                the line-ending workaround.
+            ValueError: If `options` are present in the JSON but no
+                `building_config` is provided.
+        """
 
         config_path = Path(module_config_path)
         if config_path.exists():
             with config_path.open("r", encoding="utf8") as file:
-                module_config_dict = json.loads(file.read())
+                module_config_dict: dict[str, Any] = json.loads(file.read())
         else:
             # Try with Windows line-ending workaround
             config_path_without_cr = Path(module_config_path.rstrip("\r"))
@@ -34,7 +61,7 @@ class SystemSetupConfigBase(JSONWizard):
                     module_config_dict = json.loads(file.read())
                 config_path = config_path_without_cr
             else:
-                raise FileExistsError(f"The module config file {module_config_path} could not be found.")
+                raise FileNotFoundError(f"The module config file {module_config_path} could not be found.")
         log.information(f"Read module config from {module_config_path}.")
 
         # Read building config overwrites. It is used to scale the system setup.
@@ -72,15 +99,40 @@ class SystemSetupConfigBase(JSONWizard):
 
     @classmethod
     def get_default_options(cls) -> Any:
-        """Get default options."""
+        """Return the default options for this system setup.
+
+        Returns:
+            An object holding default options for the configuration.
+
+        Raises:
+            NotImplementedError: Always; subclasses must override.
+        """
         raise NotImplementedError
 
     @classmethod
     def get_default(cls) -> Self:
-        """Get default."""
+        """Return the default (unscaled) configuration.
+
+        Returns:
+            A configuration instance with default values.
+
+        Raises:
+            NotImplementedError: Always; subclasses must override.
+        """
         raise NotImplementedError
 
     @classmethod
     def get_scaled_default(cls, building_config: building.BuildingConfig, options: Any) -> Self:
-        """Get scaled default."""
+        """Return a default configuration scaled to the given building.
+
+        Args:
+            building_config: Building configuration used to scale the setup.
+            options: Options controlling how defaults are scaled.
+
+        Returns:
+            A configuration instance with scaled default values.
+
+        Raises:
+            NotImplementedError: Always; subclasses must override.
+        """
         raise NotImplementedError

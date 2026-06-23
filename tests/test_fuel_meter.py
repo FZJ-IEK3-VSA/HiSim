@@ -36,7 +36,18 @@ PATH = "../system_setups/household_for_test_fuel_meter.py"
 def test_house(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """The test should check if a normal simulation works with the electricity grid implementation."""
+    """Integration test for FuelMeter with an oil boiler heating system.
+
+    Builds a complete household simulation including weather, PV, building,
+    heat distribution, oil boiler, and fuel meter. Verifies that the fuel
+    meter's total energy consumption matches the boiler's consumption within
+    a 5% relative tolerance, and checks KPI outputs for OPEX costs and CO2
+    footprint.
+
+    Args:
+        my_simulation_parameters: Optional simulation parameters. If None,
+            defaults to a one-day simulation with 1-hour timesteps.
+    """
 
     # =========================================================================================================================================================
     # System Parameters
@@ -114,7 +125,7 @@ def test_house(
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )

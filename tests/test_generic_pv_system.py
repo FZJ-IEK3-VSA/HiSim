@@ -11,7 +11,7 @@ from hisim import log
 
 
 @pytest.mark.extendedbase
-def test_photovoltaic_sandia():
+def test_photovoltaic_sandia() -> None:
     """Test generic pv system."""
     # Sets inputs
     seconds_per_timestep = 60
@@ -95,7 +95,7 @@ def test_photovoltaic_sandia():
 
 
 @pytest.mark.extendedbase
-def test_photovoltaic_cec():
+def test_photovoltaic_cec() -> None:
     """Test generic pv system."""
     # Sets inputs
     seconds_per_timestep = 60

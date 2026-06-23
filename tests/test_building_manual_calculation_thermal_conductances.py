@@ -5,7 +5,7 @@ Therefore some functions must be adjusted which are tested here before.
 """
 # clean
 import numpy as np
-import pytest
+from pytest import mark
 from hisim.components import building
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
@@ -27,10 +27,16 @@ from hisim import utils
 #         my_residence = building.Building(
 #             config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
 #         log.information(building_code)
-@pytest.mark.buildingtest
+@mark.buildingtest
 @utils.measure_execution_time
 def test_building_thermal_conductance_calculation():
-    """Test function for some functions of the building module."""
+    """Verify that thermal conductance H_tr values read from TABULA building data
+    match hand-calculated values using U * A * b_tr for windows/doors and
+    opaque surfaces.
+
+    This validates the building module's thermal conductance calculations
+    before scaling up building area for scalability testing.
+    """
 
     building_code = "DE.N.SFH.05.Gen.ReEx.001.001"
     building_heat_capacity_class = "medium"

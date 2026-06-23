@@ -2,8 +2,8 @@
 
 # clean
 
-from typing import Optional, Any
-from hisim.simulator import SimulationParameters
+from typing import Optional
+from hisim.simulator import Simulator, SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
@@ -28,7 +28,7 @@ __status__ = "development"
 
 
 def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
+    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
     """Basic household system setup.
 
@@ -147,7 +147,7 @@ def setup_function(
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
@@ -191,7 +191,7 @@ def setup_function(
         source_weight=4,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        output_description="Target electricity for Battery Control. ",
+        output_description="Target electricity for Battery Control.",
     )
 
     # -----------------------------------------------------------------------------------------------------------------
@@ -221,7 +221,7 @@ def setup_function(
         source_weight=2,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        output_description="Target electricity for Heating Heat Pump. ",
+        output_description="Target electricity for Heating Heat Pump.",
     )
 
     my_electricity_controller.add_component_input_and_connect(
@@ -242,7 +242,7 @@ def setup_function(
         source_weight=1,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        output_description="Target electricity for Occupancy. ",
+        output_description="Target electricity for Occupancy.",
     )
 
     my_electricity_controller.add_component_input_and_connect(

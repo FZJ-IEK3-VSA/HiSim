@@ -15,11 +15,14 @@ from hisim.postprocessingoptions import PostProcessingOptions
 @pytest.mark.utsp
 @utils.measure_execution_time
 def test_basic_household():
-    """Single day."""
+    """Test the household_1_advanced_hp_diesel_car system setup for a single day.
+
+    Runs a one-day simulation of the advanced heat pump + diesel car household
+    configuration and verifies that the simulation completes without error.
+    """
 
     config_filename = "household_1_advanced_hp_diesel_car_config.json"
-    if Path(config_filename).is_file():
-        os.remove(config_filename)
+    Path(config_filename).unlink(missing_ok=True)
 
     path = "../system_setups/household_1_advanced_hp_diesel_car.py"
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)

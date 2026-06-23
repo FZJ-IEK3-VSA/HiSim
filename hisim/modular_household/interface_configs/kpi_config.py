@@ -8,7 +8,27 @@ from dataclasses_json import dataclass_json
 @dataclass
 class KPIConfigModular:
 
-    """KPI config class."""
+    """Configuration container for household energy system KPIs.
+
+    Stores key performance indicators used to evaluate the performance
+    of a building/household energy configuration. These metrics are
+    computed during simulation and used by optimization algorithms
+    (e.g., evolutionary building sizer) to compare and rank configurations.
+
+    Attributes:
+        self_consumption_rate: Ratio of the portion of PV production
+            consumed by the loads to the total PV production, given in
+            percent.
+        autarky_rate: Ratio of the portion of PV production consumed by
+            the loads to the total load, given in percent.
+        injection: Amount of electricity injected to the grid during the
+            simulation period, given in kWh.
+        economic_investment_costs_in_euro: Annual cost for investment
+            and operation of the considered technology, given in euros.
+        co2_investment_costs_in_euro: Annual CO2 emissions due to the
+            construction and operation of the considered technology,
+            given in kg.
+    """
 
     #: ratio between the portion of the PV production consumed by the loads and the total PV production, given in %
     self_consumption_rate: float

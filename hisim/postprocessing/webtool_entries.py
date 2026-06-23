@@ -1,7 +1,7 @@
 """Webtool results with important kpis."""
 
 from dataclasses import dataclass, field, InitVar
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import re
 import pandas as pd
 from dataclass_wizard import JSONWizard
@@ -25,14 +25,19 @@ class ResultEntry(JSONWizard):
 class WebtoolDict(JSONWizard):
     """Class for storing results for hisim webtool."""
 
-    kpis: Dict
-    components: Dict = field(init=False)
+    kpis: Dict[str, Any]
+    components: Dict[str, Dict[str, Any]] = field(init=False)
 
     post_processing_data_transfer: InitVar[PostProcessingDataTransfer]
-    computed_opex: InitVar[List]
-    computed_capex: InitVar[List]
+    computed_opex: InitVar[List[List[Any]]]
+    computed_capex: InitVar[List[List[Any]]]
 
-    def __post_init__(self, post_processing_data_transfer, computed_opex, computed_capex):
+    def __post_init__(
+        self,
+        post_processing_data_transfer: PostProcessingDataTransfer,
+        computed_opex: List[List[Any]],
+        computed_capex: List[List[Any]],
+    ) -> None:
         """Build the dataclass from input data."""
         self.components = {}
         self.init_structure(post_processing_data_transfer)
@@ -40,7 +45,7 @@ class WebtoolDict(JSONWizard):
         self.add_technical_results(post_processing_data_transfer)
         self.add_configuration(post_processing_data_transfer)
 
-    def init_structure(self, post_processing_data_transfer):
+    def init_structure(self, post_processing_data_transfer: PostProcessingDataTransfer) -> None:
         """Initialize results dict for webtool with component names and categories.
 
         Only components with DisplayConfig.display_in_webtool=True are selected.
@@ -60,7 +65,7 @@ class WebtoolDict(JSONWizard):
                     "economics": {},
                 }
 
-    def add_opex_capex_results(self, computed_opex, computed_capex):
+    def add_opex_capex_results(self, computed_opex: List[List[Any]], computed_capex: List[List[Any]]) -> None:
         """Add results from the results of `opex_calculation()` and `capex_calculation()` to webtool dict."""
         categories_opex = ["economics", "operation", "economics"]
         categories_capex = ["economics", "operation", "economics"]

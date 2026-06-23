@@ -137,10 +137,10 @@ class ExampleTransformer(Component):
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the transformer."""
-        startval_1 = stsv.get_input_value(self.input1)
-        startval_2 = stsv.get_input_value(self.input2)
-        stsv.set_output_value(self.output1, startval_1 * 5)
-        stsv.set_output_value(self.output2, startval_2 * 1000)
+        input_value_1 = stsv.get_input_value(self.input1)
+        input_value_2 = stsv.get_input_value(self.input2)
+        stsv.set_output_value(self.output1, input_value_1 * 5)
+        stsv.set_output_value(self.output2, input_value_2 * 1000)
 
     def write_to_report(self) -> List[str]:
         """Writes a report."""

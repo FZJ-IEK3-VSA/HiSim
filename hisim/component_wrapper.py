@@ -1,7 +1,7 @@
 """Wraps components for use in the simulator."""
 
 # clean
-from typing import Dict, List
+from typing import List
 
 import hisim.component as cp
 import hisim.loadtypes as lt
@@ -87,7 +87,7 @@ class ComponentWrapper:
             if not self.component_outputs:
                 raise ValueError(f"The component {self.my_component.component_name} has no outputs registered.")
 
-    def register_component_inputs(self, global_column_dict: Dict[str, cp.ComponentInput]) -> None:
+    def register_component_inputs(self, global_column_dict: dict[str, cp.ComponentInput]) -> None:
         """Gets the inputs for the current component from the global column dict and puts them into component_inputs."""
 
         log.debug("Registering component inputs for " + self.my_component.component_name)

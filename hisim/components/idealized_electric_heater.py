@@ -83,12 +83,6 @@ class IdealizedElectricHeater(cp.Component):
             my_display_config=my_display_config,
         )
 
-        self.thermal_power_delivered_in_watt: float = 0
-        self.theoretical_thermal_building_in_watt: float = 0
-        self.heating_in_watt: float = 0
-        self.set_heating_temperature_for_building_in_celsius = config.set_heating_temperature_for_building_in_celsius
-        self.set_cooling_temperature_for_building_in_celsius = config.set_cooling_temperature_for_building_in_celsius
-
         # Inputs
 
         self.theoretical_thermal_building_channel: cp.ComponentInput = self.add_input(

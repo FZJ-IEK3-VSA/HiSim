@@ -81,11 +81,19 @@ class L1BuildingHeatControllerState:
     """Data class that saves the state of the controller."""
 
     def __init__(self, state: float = 0):
-        """Initializes the class."""
+        """Initialize the controller state.
+
+        Args:
+            state: Initial state value representing heating control percentage (0-1).
+        """
         self.state: float = state
 
     def clone(self) -> "L1BuildingHeatControllerState":
-        """Clones itself."""
+        """Create a copy of the current state.
+
+        Returns:
+            A new L1BuildingHeatControllerState instance with the same state value.
+        """
         return L1BuildingHeatControllerState(state=self.state)
 
 

@@ -1,4 +1,9 @@
-""" For setting the post processing options. """
+"""Module containing PostProcessingOptions enum for configuring post-processing features in HiSim.
+
+This module provides the PostProcessingOptions IntEnum class which defines various options
+for enabling or disabling specific post-processing features such as plotting, exporting,
+report generation, and KPI calculations.
+"""
 # clean
 from enum import IntEnum
 

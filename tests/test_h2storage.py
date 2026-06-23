@@ -14,15 +14,15 @@ from hisim.components import generic_hydrogen_storage
 
 
 @pytest.mark.base
-def test_chp_system() -> None:
-    """Test chp system."""
+def test_h2_storage() -> None:
+    """Test h2 storage."""
 
-    seconds_per_timestep = 60
+    seconds_per_timestep: int = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
         2017, seconds_per_timestep
     )
 
-    my_h2_storage_config = (
+    my_h2_storage_config: generic_hydrogen_storage.GenericHydrogenStorageConfig = (
         generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config()
     )
     my_h2_storage = generic_hydrogen_storage.GenericHydrogenStorage(
@@ -30,17 +30,17 @@ def test_chp_system() -> None:
     )
 
     # Set Fake Inputs
-    h2_input = cp.ComponentOutput(
+    h2_input: cp.ComponentOutput = cp.ComponentOutput(
         "FakeHydrogenInput", "HydrogenInput", lt.LoadTypes.GREEN_HYDROGEN, lt.Units.KG_PER_SEC
     )
-    h2_output = cp.ComponentOutput(
+    h2_output: cp.ComponentOutput = cp.ComponentOutput(
         "FakeHydrogenOutput",
         "HydrogenOutput",
         lt.LoadTypes.GREEN_HYDROGEN,
         lt.Units.KG_PER_SEC,
     )
 
-    number_of_outputs = fft.get_number_of_outputs([my_h2_storage, h2_input, h2_output])
+    number_of_outputs: int = fft.get_number_of_outputs([my_h2_storage, h2_input, h2_output])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     my_h2_storage.hydrogen_output_channel.source_output = h2_output

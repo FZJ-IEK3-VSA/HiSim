@@ -167,7 +167,9 @@ class GenericBuilding(cp.Component):
                 building_name=building_name,
             )
         )
-        my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP
+        my_occupancy_config.data_acquisition_mode = (
+            loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
+        )
         my_occupancy_config.household = lpg_households
 
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
@@ -314,7 +316,7 @@ class GenericBuilding(cp.Component):
 
         # Build Heat Distribution System
         my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             building_name=building_name,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,

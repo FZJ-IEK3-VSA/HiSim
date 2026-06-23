@@ -8,8 +8,8 @@ from pathlib import Path
 import hisim.hisim_main as hsm
 
 
-def maincall() -> None:
-    """For calling the Hisim main."""
+def run_simulation() -> None:
+    """Run the HiSim simulation by calling hsm.main()."""
     # change call here as needed
     # hsm.main("..\\system_setups\\modular_example.py")
     hsm.main(
@@ -26,7 +26,7 @@ if __name__ == "__main__":
 
     profiler = cProfile.Profile()
     profiler.enable()
-    maincall()
+    run_simulation()
     profiler.disable()
 
     results_path = Path("../system_setups/results/")

@@ -1,6 +1,5 @@
 """Controller l1 heat old module."""
 
-# clean
 
 # Generic/Built-in
 from typing import Any
@@ -35,7 +34,14 @@ class ControllerHeatConfig(cp.ConfigBase):
         cls,
         building_name: str = "BUI1",
     ) -> Any:
-        """Get a default Building."""
+        """Get a default ControllerHeatConfig for L1 heat controller.
+
+        Args:
+            building_name: Name of the building (default: 'BUI1').
+
+        Returns:
+            ControllerHeatConfig: Default configuration instance.
+        """
         config = ControllerHeatConfig(
             building_name=building_name,
             name="ControllerHeatL1",
@@ -182,7 +188,7 @@ class ControllerHeat(cp.Component):
             load_type=lt.LoadTypes.ANY,
             unit=lt.Units.PERCENT,
             sankey_flow_direction=False,
-            output_description=f"here a description for {self.ControlSignalGasHeater} will follow.",
+            output_description="Control signal for gas heater (0-1)",
         )
         self.control_signal_chp_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -190,7 +196,7 @@ class ControllerHeat(cp.Component):
             load_type=lt.LoadTypes.ANY,
             unit=lt.Units.PERCENT,
             sankey_flow_direction=False,
-            output_description=f"here a description for {self.ControlSignalChp} will follow.",
+            output_description="Control signal for CHP unit (0-1)",
         )
         self.control_signal_heat_pump_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -198,7 +204,7 @@ class ControllerHeat(cp.Component):
             load_type=lt.LoadTypes.ANY,
             unit=lt.Units.PERCENT,
             sankey_flow_direction=False,
-            output_description=f"here a description for {self.ControlSignalHeatPump} will follow.",
+            output_description="Control signal for heat pump (0-1)",
         )
         self.control_signal_choose_storage_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -206,7 +212,7 @@ class ControllerHeat(cp.Component):
             load_type=lt.LoadTypes.ANY,
             unit=lt.Units.ANY,
             sankey_flow_direction=False,
-            output_description=f"here a description for {self.ControlSignalChooseStorage} will follow.",
+            output_description="Control signal for storage selection (1: warm water storage, 2: heating water storage)",
         )
 
     def build(self, mode: Any) -> None:

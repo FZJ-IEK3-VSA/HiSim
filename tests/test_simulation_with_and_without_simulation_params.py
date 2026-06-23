@@ -1,5 +1,4 @@
 """ Tests for the basic household system setup with simulation params and without. """
-import os
 from pathlib import Path
 import shutil
 
@@ -23,7 +22,7 @@ def test_basic_household_with_simu_params() -> None:
     mysimpar.result_directory = TestingUtils.get_result_directory()
     shutil.rmtree(mysimpar.result_directory, ignore_errors=True)
     hisim_main.main(BASIC_HOUSEHOLD_PATH, mysimpar)
-    log.information(os.getcwd())
+    log.information(str(Path.cwd()))
 
 
 @pytest.mark.extendedbase
@@ -49,4 +48,4 @@ def test_basic_household_without_simu_params(monkeypatch: pytest.MonkeyPatch) ->
     )
     mysimpar = None
     hisim_main.main(BASIC_HOUSEHOLD_PATH, mysimpar)
-    log.information(os.getcwd())
+    log.information(str(Path.cwd()))

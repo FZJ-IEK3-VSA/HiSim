@@ -61,9 +61,9 @@ def test_json(system_setup: str) -> None:
         assert num_outputs_py == num_outputs_json
 
 
-def get_num_of_components_and_outputs(my_sim: sim.Simulator) -> tuple[int, int]:
+def get_num_of_components_and_outputs(simulator: sim.Simulator) -> tuple[int, int]:
     """Helper function to get the number of components and outputs in the current simulator."""
 
-    num_components = len(my_sim.wrapped_components)
-    num_outputs = len(my_sim.all_outputs)
+    num_components = len(simulator.wrapped_components)
+    num_outputs = len(simulator.all_outputs)
     return num_components, num_outputs

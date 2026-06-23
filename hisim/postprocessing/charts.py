@@ -41,8 +41,12 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             figure_format=figure_format,
         )
 
-    def plot(self, xdims: int, data: Any) -> ReportImageEntry:
-        """Makes a carpet plot."""
+    def plot(self, xdims: int, data: Any) -> "ReportImageEntry | None":
+        """Makes a carpet plot.
+
+        Returns:
+            ReportImageEntry or None -- None when data cannot be reshaped into entire days.
+        """
         log.trace("starting carpet plots")
         ydims = int(len(data) / xdims)  # number of calculated timesteps per day
         y_steps_per_hour = int(ydims / 24)
@@ -51,6 +55,7 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             database = data.values.reshape(xdims, ydims)
         except ValueError:
             log.error("Carpet plot can only deal with data containing entire days")
+            return
 
         if np.max(np.abs(data.values)) > 1.5e3:
             database = database * 1e-3
@@ -185,6 +190,7 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         422.51,
         366.83,
     ]
+    """Reference monthly PV production values (in kWh) used as a baseline for comparison."""
 
     def __init__(
         self,

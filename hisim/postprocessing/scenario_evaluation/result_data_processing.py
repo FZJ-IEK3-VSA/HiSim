@@ -22,7 +22,7 @@ class ScenarioDataProcessing:
         """Get csv data and create dataframes with the filtered and procesed scenario data."""
 
         if not Path(filepath_of_aggregated_dataframe).is_file():
-            raise FileExistsError(f"The file {filepath_of_aggregated_dataframe} could not be found.")
+            raise FileNotFoundError(f"The file {filepath_of_aggregated_dataframe} could not be found.")
         log.information(f"Read aggregated dataframe with all HiSim results from {filepath_of_aggregated_dataframe}.")
 
         if data_format_type == DataFormatEnum.CSV.name:

@@ -11,7 +11,7 @@ from tests import functions_for_testing as fft
 
 @pytest.mark.base
 def test_weather() -> None:
-    """Test weather."""
+    """Verify Weather component produces total annual DNI above sanity threshold over full-year simulation."""
     mysim: SimulationParameters = SimulationParameters.full_year(
         year=2021, seconds_per_timestep=60
     )

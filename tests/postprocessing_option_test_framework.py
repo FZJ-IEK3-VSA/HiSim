@@ -205,11 +205,11 @@ def _prepare_case(
     simulator.connect_all_components()
 
     all_result_lines: list[list[float]] = []
-    stsv = cp.SingleTimeStepValues(number_of_values=len(simulator.all_outputs))
+    single_timestep_values = cp.SingleTimeStepValues(number_of_values=len(simulator.all_outputs))
     start_counter = time.perf_counter()
     for step in range(simulation_parameters.timesteps):
-        stsv, _, _ = simulator.process_one_timestep(step, stsv)
-        all_result_lines.append(stsv.values.copy())
+        single_timestep_values, _, _ = simulator.process_one_timestep(step, single_timestep_values)
+        all_result_lines.append(single_timestep_values.values.copy())
 
     ppdt = simulator.prepare_post_processing(all_result_lines, start_counter)
     (

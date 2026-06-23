@@ -133,7 +133,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         (
             total_electricity_from_grid_in_kwh,
             total_electricity_to_grid_in_kwh,
-        ) = self.get_electricity_to_and_from_grid_from_electricty_meter(building_objects_in_district)
+        ) = self.get_electricity_to_and_from_grid_from_electricity_meter(building_objects_in_district)
         # get relative electricity demand
         relative_electricity_demand_from_grid_in_percent = self.compute_relative_electricity_demand(
             total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
@@ -159,7 +159,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         )
         # get self-sufficiency rate according to solar htw berlin
         self.compute_self_sufficiency_according_to_solar_htw_berlin(
-            relative_electricty_demand_in_percent=relative_electricity_demand_from_grid_in_percent,
+            relative_electricity_demand_in_percent=relative_electricity_demand_from_grid_in_percent,
             building_objects_in_district=building_objects_in_district,
             kpi_tag=(
                 KpiTagEnumClass.GENERAL
@@ -197,7 +197,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         (
             total_electricity_from_grid_in_kwh,
             total_electricity_to_grid_in_kwh,
-        ) = self.get_electricity_to_and_from_grid_from_electricty_meter(district_name)
+        ) = self.get_electricity_to_and_from_grid_from_electricity_meter(district_name)
         # get relative electricity demand
         relative_electricity_demand_from_grid_in_percent = self.compute_relative_electricity_demand(
             total_electricity_consumption_in_kilowatt_hour=overall_consumption_district_in_kilowatt_hour,
@@ -224,7 +224,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         )
 
         self.compute_self_sufficiency_according_to_solar_htw_berlin(
-            relative_electricty_demand_in_percent=relative_electricity_demand_from_grid_in_percent,
+            relative_electricity_demand_in_percent=relative_electricity_demand_from_grid_in_percent,
             building_objects_in_district=district_name,
             kpi_tag=KpiTagEnumClass.GENERAL,
             name="Overall self-sufficiency according to solar htw berlin in district",

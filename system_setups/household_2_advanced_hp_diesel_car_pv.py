@@ -76,7 +76,35 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
 
     @classmethod
     def get_default(cls):
-        """Get default HouseholdAdvancedHPDieselCarPVConfig."""
+        """Get a pre-configured :class:`HouseholdAdvancedHPDieselCarPVConfig`.
+
+        The returned configuration models a German single-family home with its
+        heating and domestic-hot-water (DHW) demand covered by an advanced
+        (hplib) heat pump, plus a rooftop photovoltaic system and a diesel car.
+        The building is taken from
+        :meth:`building.BuildingConfig.get_default_german_single_family_home`
+        (heating reference temperature -7 °C), occupancy follows the LPG
+        ``CHR01_Couple_both_at_Work`` profile in energy-saving mode, the PV
+        system is scaled to the building's roof area, and the car uses
+        :meth:`generic_car.CarConfig.get_default_diesel_config`.
+
+        A few non-obvious defaults are set on top of the component defaults:
+
+        - The advanced heat pump is switched to the **modulating** device
+          (``group_id = 1``) and the controller runs in **heating + cooling**
+          mode (``mode = 2``).
+        - The heat pump's ``minimum_idle_time_in_seconds`` and
+          ``minimum_running_time_in_seconds`` are both overridden to 900 s;
+          the hplib defaults cause the unit to switch on/off very frequently.
+        - ``flow_temperature_in_celsius`` is set to 21 °C (value still to be
+          checked).
+        - The DHW storage ``volume`` is raised from its default of 230 to 250,
+          because the default triggers an error in this setup.
+        - ``surplus_control`` (smart EMS control of the heat pump and DHW) and
+          the building temperature modifier are both disabled by default.
+        - The outside-temperature heating threshold (16 °C) is applied
+          consistently to the heat distribution and heat pump controllers.
+        """
 
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
@@ -125,7 +153,7 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
             hds_controller_config=hds_controller_config,
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                     heating_system=hds_controller_config.heating_system,
                 )

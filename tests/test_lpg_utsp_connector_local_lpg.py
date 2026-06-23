@@ -54,8 +54,6 @@ def test_occupancy_scaling_with_utsp():
         household_list = [
             Households.CHR02_Couple_30_64_age_with_work,
             Households.CHR02_Couple_30_64_age_with_work,
-            # Households.CHR02_Couple_30_64_age_with_work,
-            # Households.CHR02_Couple_30_64_age_with_work,
         ]
         (
             number_of_residents_two,
@@ -144,7 +142,7 @@ def initialize_lpg_utsp_connector_and_return_results(
 
     water_consumption = stsv.values[my_occupancy.water_consumption_channel.global_index]
 
-    print(number_of_residents, heating_by_residents, heating_by_devices, electricity_consumption)
+    log.information(f"{number_of_residents=}, {heating_by_residents=}, {heating_by_devices=}, {electricity_consumption=}")
     return (
         number_of_residents,
         heating_by_residents,

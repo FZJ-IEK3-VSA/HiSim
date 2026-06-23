@@ -10,7 +10,7 @@ from hisim import log
 
 
 @pytest.mark.base
-def test_windturbine():
+def test_windturbine() -> None:
     """Test generic windturbine."""
     # Sets inputs
     # weather_location = "Aachen"

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+import numpy as np
 import pandas as pd
 
 
@@ -33,7 +34,7 @@ class CSVLoaderConfig(cp.ConfigBase):
     output_description: str
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Return the full class name of the base class."""
         return CSVLoader.get_full_classname()
 
@@ -80,11 +81,11 @@ class CSVLoader(cp.Component):
         config: CSVLoaderConfig,
         my_simulation_parameters: SimulationParameters,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
-    ):
+    ) -> None:
         """Initialize the class."""
-        self.csvconfig = config
-        self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
+        self.csvconfig: CSVLoaderConfig = config
+        self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
+        self.config: CSVLoaderConfig = config
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -101,7 +102,7 @@ class CSVLoader(cp.Component):
             output_description="CSV loader output 1",
         )
         self.output1_channel.display_name = self.csvconfig.column_name
-        self.multiplier = self.csvconfig.multiplier
+        self.multiplier: float = self.csvconfig.multiplier
 
         dataframe = pd.read_csv(
             Path(utils.HISIMPATH["inputs"]) / self.csvconfig.csv_filename,
@@ -113,7 +114,7 @@ class CSVLoader(cp.Component):
                 f"Invalid column number for the csv file: {self.csvconfig.column}. Found {len(dataframe.columns)} columns."
             )
         dfcolumn = dataframe.iloc[:, self.csvconfig.column]
-        self.column_name = self.csvconfig.column_name
+        self.column_name: str = self.csvconfig.column_name
         if len(dfcolumn) < self.my_simulation_parameters.timesteps:
             raise Exception(
                 "Timesteps: "
@@ -124,7 +125,7 @@ class CSVLoader(cp.Component):
                 + str(len(dfcolumn))
             )
 
-        self.column = dfcolumn.to_numpy(dtype=float)
+        self.column: np.ndarray = dfcolumn.to_numpy(dtype=float)
         self.values: List[float] = []
 
     def i_restore_state(self) -> None:

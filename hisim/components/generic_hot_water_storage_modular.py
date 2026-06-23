@@ -483,7 +483,17 @@ class HotWaterStorage(cp.Component):
         self.state = self.previous_state.clone()
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulates iteration of hot water storage."""
+        """Simulates one timestep of the hot water storage.
+
+        Computes heat consumption based on storage type (BOILER or BUFFER),
+        applies heat losses to ambient, adds delivered thermal energy, and
+        updates the storage state temperature.
+
+        Args:
+            timestep: Current simulation timestep.
+            stsv: SingleTimeStepValues object for reading inputs and setting outputs.
+            force_convergence: Unused in this component; included for interface compatibility.
+        """
 
         thermal_energy_delivered = 0.0
         if self.thermal_power_delivered_channel.source_output is not None:

@@ -19,7 +19,9 @@ def test_district() -> None:
     """Single day."""
     path: str = "../system_setups/district_system_setup/simple_district.py"
 
-    my_simulation_parameters: SimulationParameters = SimulationParameters.one_week_only(year=2021, seconds_per_timestep=60)
+    my_simulation_parameters: SimulationParameters = SimulationParameters.one_day_only(
+        year=2021, seconds_per_timestep=60 * 15
+    )
 
     my_simulation_parameters.multiple_buildings = True
 
@@ -29,7 +31,6 @@ def test_district() -> None:
 
     my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
     my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
     my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
     my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON)
 

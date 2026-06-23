@@ -12,7 +12,16 @@ from tests import functions_for_testing as fft
 
 @pytest.mark.base
 def test_hds():
-    """Test for heat distribution system."""
+    """Test the heat distribution system across various scenarios.
+
+Verifies that the heat distribution system correctly handles:
+- Heating scenarios (positive thermal demand)
+- Cooling scenarios (negative thermal demand)
+- Zero-demand scenarios
+Across a range of water input temperatures and building thermal demands.
+Validates that water output temperatures and thermal power delivery
+are calculated correctly based on heat exchange physics.
+"""
 
     # theoretical building thermal demands to test
     theoretical_thermal_building_demands_in_watt = [0, -10, +10, -8000, +3000, +1000000]
@@ -98,7 +107,31 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     theoretical_building_demand_in_watt: float,
     water_input_temperature_in_celsius: float,
 ) -> Tuple[float, float, float, float, float, float]:
-    """Simulate and calculate hds outputs."""
+    """Simulate and calculate heat distribution system outputs for a given scenario.
+
+Sets up a minimal HiSim simulation with fake component outputs, runs one
+timestep, and returns both the expected and simulated heat distribution
+outputs for validation.
+
+Args:
+    theoretical_building_demand_in_watt: The theoretical thermal demand
+        from the building in watts. Positive values indicate heating demand,
+        negative values indicate cooling demand.
+    water_input_temperature_in_celsius: The temperature of the water
+        entering the heat distribution system in degrees Celsius.
+
+Returns:
+    A 6-tuple of floats containing:
+    - input_water_temperature_in_celsius: The water input temperature
+    - residence_temperature_in_celsius: The indoor air temperature of the residence
+    - theoretical_building_demand_in_watt: The theoretical building thermal demand
+    - calculated_water_output_temperature_in_celsius: The expected water output
+        temperature based on heat exchange calculations
+    - water_output_temperature_after_heat_exchange: The actual water output
+        temperature from the simulation
+    - effective_thermal_power_delivered_in_watt: The actual thermal power
+        delivered by the heat distribution system
+"""
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
@@ -132,7 +165,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         lifetime_in_years=50,
         maintenance_costs_in_euro_per_year=80,
         subsidy_as_percentage_of_investment_costs=0,
-        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
         position_hot_water_storage_in_system=1,
         absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
         heating_system=my_hds_controller_information.hds_controller_config.heating_system,
@@ -178,17 +211,17 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     )
     my_heat_distribution_system.state_channel.source_output = state_from_hds_controller
 
-    number_of_outputs = fft.get_number_of_outputs(
-        [
-            water_temperature_input_from_water_storage,
-            residence_temperature_indoor_air,
-            theoretical_thermal_building_demand,
-            state_from_hds_controller,
-            my_heat_distribution_system,
-        ]
+    stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(
+        fft.get_number_of_outputs(
+            [
+                water_temperature_input_from_water_storage,
+                residence_temperature_indoor_air,
+                theoretical_thermal_building_demand,
+                state_from_hds_controller,
+                my_heat_distribution_system,
+            ]
+        )
     )
-
-    stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components(
@@ -209,7 +242,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     stsv.values[residence_temperature_indoor_air.global_index] = 19
     timestep = 300
     water_mass_flow_of_hds_in_kg_per_second = (
-        my_hds_controller_information.water_mass_flow_rate_in_kp_per_second
+        my_hds_controller_information.water_mass_flow_rate_in_kg_per_second
     )
     # Simulate
 

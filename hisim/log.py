@@ -3,6 +3,8 @@
 # noqa: D400, D415, D413, D407
 # pylint: skip-file
 """ Logging functionality for all of HiSim. """
+from __future__ import annotations
+
 # clean
 from enum import IntEnum
 from pathlib import Path
@@ -25,7 +27,7 @@ class LogPrio(IntEnum):
     def get_prio_string(prio: int) -> str:
         """Get the string representation of the priority."""
 
-        prio_strings = {
+        prio_strings: dict[int, str] = {
             LogPrio.ERROR: "ERR",
             LogPrio.WARNING: "WRN",
             LogPrio.INFORMATION: "IFO",
@@ -33,7 +35,7 @@ class LogPrio(IntEnum):
             LogPrio.PROFILE: "PRF",
             LogPrio.TRACE: "TRC"
         }
-        return prio_strings.get(prio, "???")  # type: ignore
+        return prio_strings.get(prio, "???")
 
 
 class Logger:
@@ -159,7 +161,7 @@ class Logger:
 
 
 # this gets executed once per kernel when the module is first imported
-logger = Logger()
+logger: Logger = Logger()
 
 
 def error(message: str, logging_message_path: str|None = None) -> None:

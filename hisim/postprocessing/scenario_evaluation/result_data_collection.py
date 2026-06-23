@@ -238,13 +238,18 @@ class ResultDataCollection:
             with open(scenario_data_information_new_version, "r", encoding="utf-8") as data_info_file:
                 try:
                     simulation_configuration_data = json.load(data_info_file)
-                except Exception as exc:
+                except json.JSONDecodeError as exc:
+                    # json.load() consumed the file up to EOF, so reset the
+                    # pointer before re-reading to tell empty files apart from
+                    # malformed-but-non-empty ones.
+                    data_info_file.seek(0)
                     content = data_info_file.read()
                     if content.strip() == "":
                         raise ValueError(
                             "The json file is empty. Maybe run the simulation again. "
                             f"The concerned folder is {folder}"
                         ) from exc
+                    raise  # re-raise the original JSONDecodeError
                 component_entries = simulation_configuration_data["componentEntries"]
                 for component in component_entries:
                     if "Building" in component["componentName"]:
@@ -259,13 +264,18 @@ class ResultDataCollection:
             with open(scenario_data_information_old_version, "r", encoding="utf-8") as data_info_file:
                 try:
                     simulation_configuration_data = json.load(data_info_file)
-                except Exception as exc:
+                except json.JSONDecodeError as exc:
+                    # json.load() consumed the file up to EOF, so reset the
+                    # pointer before re-reading to tell empty files apart from
+                    # malformed-but-non-empty ones.
+                    data_info_file.seek(0)
                     content = data_info_file.read()
                     if content.strip() == "":
                         raise ValueError(
                             "The json file is empty. Maybe run the simulation again. "
                             f"The concerned folder is {folder}"
                         ) from exc
+                    raise  # re-raise the original JSONDecodeError
                 component_entries = simulation_configuration_data["componentEntries"]
                 for component in component_entries:
                     if "Building" in component["componentName"]:

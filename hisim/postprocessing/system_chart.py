@@ -18,7 +18,13 @@ class SystemChart:
     """Class for generating charts that show all the components."""
 
     def __init__(self, ppdt: PostProcessingDataTransfer) -> None:
-        """Initializes the class."""
+        """Initializes the SystemChart.
+
+        Args:
+            ppdt: PostProcessingDataTransfer object containing simulation
+                results, wrapped components, and parameters needed to build
+                the system flow chart.
+        """
         self.ppdt: PostProcessingDataTransfer = ppdt
 
     def make_chart(self) -> List[SystemChartEntry]:  # type: ignore
@@ -72,7 +78,6 @@ class SystemChart:
         system_chart_entry: Optional[SystemChartEntry] = SystemChartEntry(filename, caption)
 
         try:
-            """Visualizes the entire system with graphviz."""
             graph = pydot.Dot(graph_type="digraph")
             graph.set_node_defaults(
                 color="lightgray",

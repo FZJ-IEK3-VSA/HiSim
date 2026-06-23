@@ -9,7 +9,24 @@ from hisim.simulationparameters import SimulationParameters
 
 @pytest.mark.base
 def test_heat_source() -> None:
-    """Test heat source."""
+    """Test heat source component with L1 heat pump controller.
+
+    Sets up a heat source with default heating configuration and an L1 heat pump
+    controller, connects them to a fake building temperature signal, and verifies
+    that:
+    1. The controller outputs a target percentage of 1 (full heat demand signal).
+    2. The fuel delivered matches the configured thermal power divided by 60.
+    3. The thermal power delivered matches the configured thermal power in watts.
+
+    Args:
+        None (uses default configs and fake inputs).
+
+    Returns:
+        None.
+
+    Raises:
+        AssertionError: If any of the three assertions fail.
+    """
 
     # simulation parameters
     seconds_per_timestep = 60
@@ -68,7 +85,7 @@ def test_heat_source() -> None:
     my_heat_source.i_restore_state()
     my_heat_source.i_simulate(timestep, stsv, False)
 
-    # -> Did heat pump turn on?
+    # --> Did heat pump turn on?
     # Check if there is a signal to heat up the house
     assert 1 == stsv.values[1]
     # Check if the delivered heat is indeed that corresponded to the heat pump model

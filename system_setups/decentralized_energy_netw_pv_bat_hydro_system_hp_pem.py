@@ -38,13 +38,22 @@ from hisim.simulator import SimulationParameters, Simulator
 
 def setup_function(
     my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> None:  # first with bat
-    """Dynamic Components Demonstration.
+) -> None:
+    """Configure a decentralized energy network with PV, fuel cell, electrolyzer, and heat pump.
 
-    In this system setup a generic controller is added. The generic controller
-    makes it possible to add component generically.
-    Here two fuel_cell/chp_systems and two batteries
-    are added.
+    This setup wires together components for a hydrogen-based energy system:
+    - Weather and occupancy inputs for realistic demand/generation profiles
+    - PV system (200 kW) for renewable electricity
+    - Fuel cell (NedstackFCS10XXL) with L1/L2 controllers for CHP operation
+    - Electrolyzer (KYROS50) with L1/L2 controllers for hydrogen production
+    - Generic heat pump for building heating
+    - Building model with configurable thermal properties
+    - L2 Energy Management System (EMS) coordinating all components
+
+    Args:
+        my_sim: The simulator instance to configure.
+        my_simulation_parameters: Optional simulation parameters. If None,
+            defaults to a full year simulation at 60-second timesteps for year 2021.
     """
     year = 2021
     seconds_per_timestep = 60

@@ -5,7 +5,7 @@ such as pv system, battery, heat pumps, water storage, etc. need to be scaled up
 """
 # clean
 
-from typing import Tuple, Any
+from typing import Tuple
 import pytest
 import numpy as np
 from hisim.components import (
@@ -25,7 +25,7 @@ from hisim import utils
 
 @pytest.mark.buildingtest
 @utils.measure_execution_time
-def test_energy_system_scalability():
+def test_energy_system_scalability() -> None:
     """Test function for the scability of the whole energy system."""
 
     # calculate energy system sizes for original case (scaling factors = 1)
@@ -144,7 +144,7 @@ def test_energy_system_scalability():
 
 def simulation_for_one_timestep(
     scaling_factor_for_absolute_conditioned_floor_area: int,
-) -> Tuple[Any, float, float, float, float, float, float]:
+) -> Tuple[int, float, float, float, float, float, float]:
     """Test function for the system setup house for one timestep."""
 
     # Set building inputs

@@ -49,7 +49,7 @@ class SystemConfig:
     electrolyzer_power: Optional[float] = 0.5
     #: decision on the consideration of an electric vehicle
     ev_included: bool = False
-    #: choice of charging station related to the options available in LoadProfileGenerator
+    #: choice of charging station for the electric vehicle, selected from the options available in the LoadProfileGenerator
     charging_station: JsonReference = field(
         default_factory=lambda: ChargingStationSets.Charging_At_Home_with_03_7_kW  # type: ignore
     )

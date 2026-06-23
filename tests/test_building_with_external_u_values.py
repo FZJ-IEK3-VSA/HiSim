@@ -29,7 +29,23 @@ PATH = "../system_setups/household_for_test_building_u_values.py"
 def test_house_with_idealized_electric_heater_for_testing_u_values(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """Test for bulding with u values."""
+    """Test building U-values against TABULA reference values.
+
+    This test runs the simulation twice:
+    1. First run: Obtains TABULA reference U-values by passing None for all U-value parameters.
+    2. Second run: Uses the reference roof U-value from the first run to verify consistency.
+
+    The test asserts that calculated U-values (wall, window, door, roof), total heat
+    conductance transmission, and max thermal building demand match TABULA reference
+    values within a tolerance of 0.01.
+
+    Args:
+        my_simulation_parameters: Optional simulation parameters to override defaults.
+
+    Returns:
+        None. Raises AssertionError if any U-value or thermal demand differs from
+        TABULA reference by more than 0.01.
+    """
 
     (
         u_value_wall1_tabula,
@@ -104,7 +120,32 @@ def house_with_idealized_electric_heater_for_testing_u_values(
     u_value_window_in_watt_per_m2_per_kelvin=None,
     u_value_door_in_watt_per_m2_per_kelvin=None,
 ) -> Tuple[float, float, float, float, float, float]:  # noqa: too-many-statements
-    """Test for u values."""
+    """Build and run a simulator to extract building U-values and thermal demand.
+
+    Constructs a simulator with Building, Weather, Occupancy, and IdealizedElectricHeater
+    components, runs all timesteps, and extracts U-values and thermal demand from
+    my_building.my_building_information.
+
+    Args:
+        my_simulation_parameters: Optional simulation parameters to override defaults.
+        u_value_facade_in_watt_per_m2_per_kelvin: Optional U-value for facade in W/(m²·K).
+            If None, uses TABULA reference value.
+        u_value_roof_in_watt_per_m2_per_kelvin: Optional U-value for roof in W/(m²·K).
+            If None, uses TABULA reference value.
+        u_value_window_in_watt_per_m2_per_kelvin: Optional U-value for window in W/(m²·K).
+            If None, uses TABULA reference value.
+        u_value_door_in_watt_per_m2_per_kelvin: Optional U-value for door in W/(m²·K).
+            If None, uses TABULA reference value.
+
+    Returns:
+        Tuple[float, float, float, float, float, float]: A tuple containing:
+            - u_value_wall1: U-value of wall 1 in W/(m²·K)
+            - u_value_window1: U-value of window 1 in W/(m²·K)
+            - u_value_door1: U-value of door 1 in W/(m²·K)
+            - u_value_roof1: U-value of roof 1 in W/(m²·K)
+            - total_heat_conductance_transmission: Total heat conductance for transmission in W/K
+            - max_thermal_building_demand_in_watt: Maximum thermal building demand in W
+    """
 
     # =========================================================================================================================================================
     # System Parameters

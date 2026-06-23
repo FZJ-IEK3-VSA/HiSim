@@ -59,9 +59,9 @@ def test_household_gas_heater_main() -> None:
     """Execute setup with default values with hisim main."""
 
     path = "../system_setups/household_gas_heater.py"
-    my_simpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
-    my_simpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    hisim_main.main(path, my_simpar)
+    simulation_parameters = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
+    simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    hisim_main.main(path, simulation_parameters)
     log.information(os.getcwd())
 
 

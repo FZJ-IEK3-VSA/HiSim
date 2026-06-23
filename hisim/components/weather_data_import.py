@@ -24,6 +24,9 @@ __authors__ = "Jonas Hoppe"
 __copyright__ = ""
 __credits__ = [" Jonas Hoppe "]
 __license__ = ""
+
+# Number of 10-minute intervals in a year
+INTERVALS_PER_YEAR_10MIN = 60 * 24 * 365 // 10 + 1
 __version__ = ""
 __maintainer__ = "  "
 __email__ = ""
@@ -44,7 +47,52 @@ class WeatherDataImport:
         path_input_folder: str,
         weather_data_source: WeatherDataSourceEnum,
     ):
-        """Initializes Data Request."""
+        """Initialize a weather data import request.
+
+        Args:
+            start_date (datetime.datetime): Start datetime for the weather data
+                request. Only the calendar year is used; the date is rounded
+                down to January 1, 00:00:00 of that year
+                (`self.start_date_for_weather_data`).
+            end_date (datetime.datetime): End datetime for the weather data
+                request. Only the calendar year is used; the date is expanded to
+                January 1 of the end year (or January 1 of the following year
+                when `end_date` falls in the same year as `start_date`), so that
+                complete calendar years are covered
+                (`self.end_date_for_weather_data`).
+            location (str): Human-readable name/identifier for the location.
+            latitude (float): Geographic latitude of the location in decimal
+                degrees.
+            longitude (float): Geographic longitude of the location in decimal
+                degrees.
+            distance_weather_stations (float): Search radius in kilometers for
+                finding nearby weather stations.
+            path_input_folder (str): Base directory path where weather data CSV
+                files will be stored.
+            weather_data_source (WeatherDataSourceEnum): Enum selecting the data
+                source (DWD_10MIN or ERA5).
+
+        Note:
+            Date expansion: only the calendar year of `start_date` and
+            `end_date` is used. `start_date` is rounded down to January 1,
+            00:00:00 of its year, and `end_date` is expanded to January 1 of the
+            end year (or the following year when in the same year as
+            `start_date`), ensuring complete calendar years of data are
+            requested. When `end_date` is in a later year than `start_date`, the
+            end year itself is not included (data covers
+            [Jan 1 of start year, Jan 1 of end year)).
+
+            This method triggers data fetching based on the value of
+            `weather_data_source`. For DWD_10MIN, it fetches 10-minute resolution
+            data from the German Weather Service (DWD) API using inverse-distance
+            weighting across multiple stations. For ERA5, it fetches hourly
+            reanalysis data from the ECMWF CDS API. The fetched data is saved to
+            a CSV file and `self.csv_path` is set as a side effect.
+
+        Raises:
+            KeyError: If `end_date` year precedes `start_date` year, or if
+                `weather_data_source` is neither DWD_10MIN nor ERA5.
+        """
         self.location = location
         self.latitude = latitude
         self.longitude = longitude
@@ -92,7 +140,27 @@ class WeatherDataImport:
             raise KeyError("Unknown data source. Only DWD_10MIN and ERA5.")
 
     def safe_as_csv(self, weather_df, csv_path):
-        """Safe weather data as .csv in given path."""
+        """Save weather data as a CSV file at the given path.
+
+        Writes the location header (`self.location_df`) first, then appends the
+        weather DataFrame to the same file.
+
+        Args:
+            weather_df (pandas.DataFrame): DataFrame containing weather data
+                columns such as year, month, day, hour, minute, temperature,
+                pressure, wind_direction, wind_speed, and solar irradiance
+                columns. The DWD 10-minute source produces `diffuse_irradiance`
+                plus `global_irradiance`, while the ERA5 source produces
+                `direct_irradiance` plus `global_irradiance`.
+            csv_path (str): Full file path where the CSV file should be saved.
+
+        Returns:
+            None.
+
+        Note:
+            Side effect: writes the location header (`self.location_df`) and the
+            weather DataFrame to `csv_path` on disk.
+        """
         self.location_df.to_csv(csv_path, index=False)
 
         weather_df.to_csv(csv_path, mode="a", index=False)
@@ -102,12 +170,39 @@ class WeatherDataImport:
     def dwd_10min_request(
         self,
     ):
-        """Data request from "Deutschen Wetterdienst".
+        """Fetch weather data from the German Weather Service (DWD) 10-min API.
+
+        Retrieves temperature, pressure, wind direction, wind speed, and solar
+        radiation data from DWD observation stations. Uses inverse-distance
+        weighting across multiple nearby stations to interpolate values for the
+        target location.
 
         Based on:
-        https://wetterdienst.readthedocs.io/en/latest/data/coverage/dwd/observation/minute_10.html
+            https://wetterdienst.readthedocs.io/en/latest/data/coverage/dwd/observation/minute_10.html
+            http://www.hydrology.uni-freiburg.de/abschluss/Niederberger_J_2000_DA.pdf
 
-        Weighted average based on distance --> http://www.hydrology.uni-freiburg.de/abschluss/Niederberger_J_2000_DA.pdf .
+        This method takes no explicit arguments; it uses the instance attributes
+        set during `__init__` (latitude, longitude, distance_weather_stations,
+        start_date_for_weather_data, end_date_for_weather_data,
+        path_input_folder, and location).
+
+        Returns:
+            None.
+
+        Raises:
+            KeyError: If no weather station is found within the search radius, if
+                fewer than 3 stations are available, if too many time steps are
+                missing for the requested year, or if any of the interpolated
+                data frames (temperature, pressure, wind_direction, wind_speed,
+                diffuse_irradiance, global_irradiance) come back empty.
+
+        Note:
+            Side effect: sets `self.csv_path` to the path of the saved CSV file
+            and writes the weather data to disk.
+
+            The expected number of intervals per year is based on a 365-day year
+            (see `INTERVALS_PER_YEAR_10MIN`). A leap year (366 days) may trigger
+            the "too many time steps are missing" check falsely.
         """
 
         csv_name = f"dwd_10min_{self.start_date_for_weather_data.year}-{self.end_date_for_weather_data.year}_{self.location}_{self.long_round}_{self.lat_round}.csv"
@@ -200,11 +295,11 @@ class WeatherDataImport:
             time_df["minute"] = date_df.dt.minute
 
             missing_time_df = pd.DataFrame()
-            if len(time_df) == 60 * 24 * 365 / 10 + 1:
+            if len(time_df) == INTERVALS_PER_YEAR_10MIN:
                 print("All weather data for a year is available.")
             else:
-                if 60 * 24 * 365 / 10 - len(time_df) + 1 < 50:
-                    print(f"Note: {60 * 24 * 365 / 10 - len(time_df) + 1} entries for an entire year are missing.")
+                if INTERVALS_PER_YEAR_10MIN - len(time_df) < 50:
+                    print(f"Note: {INTERVALS_PER_YEAR_10MIN - len(time_df)} entries for an entire year are missing.")
 
                     time_index_full = pd.to_datetime(time_df[["year", "month", "day", "hour", "minute"]])
 
@@ -238,7 +333,7 @@ class WeatherDataImport:
 
                 else:
                     raise KeyError(
-                        f"Note: {60 * 24 * 365 / 10 - len(time_df) + 1} entries for an entire year are missing. Too much!"
+                        f"Note: {INTERVALS_PER_YEAR_10MIN - len(time_df)} entries for an entire year are missing. Too much!"
                     )
             print("Write Weather Data into Dataframe.")
             temperature_dwd_df = (
@@ -494,14 +589,40 @@ class WeatherDataImport:
     def era5_request(
         self,
     ):
-        """Data request from era5.
+        """Fetch weather data from ERA5 reanalysis via the ECMWF CDS API.
+
+        Retrieves hourly reanalysis data including 2m air temperature, 10m wind
+        components, surface pressure, and solar radiation. Converts units
+        (K to °C, Pa to hPa, J/m² to W/m²) and interpolates missing time
+        steps.
 
         Based on:
-        https://confluence.ecmwf.int/display/CKB/ERA5%3A+data+documentation
-        https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-single-levels?tab=overview
-        https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-single-levels?tab=form
+            https://confluence.ecmwf.int/display/CKB/ERA5%3A+data+documentation
+            https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-single-levels?tab=overview
 
-        warning: Necessary to set up an account and match URL and user key to storage for retrieval.
+        This method takes no explicit arguments; it uses the instance attributes
+        set during `__init__` (latitude, longitude,
+        start_date_for_weather_data, end_date_for_weather_data,
+        path_input_folder, and location).
+
+        Returns:
+            None.
+
+        Raises:
+            KeyError: If the `.cdsapirc` configuration file is missing (a valid
+                CDS API account is required, see
+                https://cds.climate.copernicus.eu/user/login), or if too many
+                time steps are missing for the requested year.
+
+        Note:
+            Side effect: sets `self.csv_path` to the path of the saved CSV file
+            and writes the weather data to disk.
+
+            The current implementation constructs the `.cdsapirc` lookup path
+            with a Windows-style home directory (`C:\\Users\\<username>`), so it
+            only works on Windows. On Linux/macOS this path will not exist and
+            the request will raise `KeyError` even when a valid config is
+            present.
         """
 
         # Check if .cdsapirc key for data request is available

@@ -4,7 +4,7 @@
 
 # Generic/Built-in
 import random
-from typing import List
+from typing import List, ClassVar
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -43,9 +43,22 @@ class RandomNumbersConfig(ConfigBase):
 
 
 class RandomNumbers(Component):
-    """Random number class."""
+    """Component that generates random numbers for simulation.
 
-    RandomOutput: str = "Random Numbers"
+    This component pre-generates a list of random numbers within a specified range
+    (minimum to maximum) for each timestep of the simulation. During simulation, it
+    outputs the pre-generated random value for the current timestep.
+
+    Key attributes:
+        - values: List of pre-generated random numbers for all timesteps
+        - minimum: Minimum value of the random number range (from config)
+        - maximum: Maximum value of the random number range (from config)
+
+    Key methods:
+        - i_simulate: Outputs the pre-generated random value for the current timestep
+    """
+
+    RandomOutput: ClassVar[str] = "Random Numbers"
 
     def __init__(
         self,

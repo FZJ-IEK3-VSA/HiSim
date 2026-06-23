@@ -1,4 +1,30 @@
-"""Basic household new system setup."""
+"""Household system setup with an oil-based heating system (building-sizer variant).
+
+This module provides :func:`setup_function`, the entry point that assembles a
+complete HiSim household simulation built around an oil-fired heating system.
+It is run through the documented HiSim entry points -- ``hisim_main.py`` (to
+execute a simulation) and ``hisim_convert_to_json.py`` (to export the setup to
+a JSON scenario) -- which import the module and invoke ``setup_function``.
+
+The setup wires together the following components:
+
+- occupancy profiles (residents' electricity and hot-water demands) via the
+  load-profile-generator UTSP connector,
+- weather data,
+- a photovoltaic (PV) system,
+- a building thermal model,
+- an oil heater with its controller,
+- a heat distribution system with its controller,
+- a hot-water storage,
+- a fuel meter,
+- a battery and an energy management system (EMS), and
+- an electricity meter.
+
+Sizing and system parameters are read from a
+:class:`~hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig`
+(archetype and energy-system configuration); when no config is supplied a
+default oil-household configuration is used instead.
+"""
 
 # clean
 
@@ -342,7 +368,7 @@ def setup_function(
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )

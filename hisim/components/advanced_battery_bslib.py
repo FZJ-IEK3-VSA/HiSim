@@ -231,7 +231,7 @@ class Battery(Component):
             postprocessing_flag=[InandOutputType.STORAGE_CONTENT],
             output_description=f"here a description for {self.StateOfCharge} will follow.",
         )
-        self.charing_power_channel: ComponentOutput = self.add_output(
+        self.charging_power_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ChargingPower,
             load_type=LoadTypes.ELECTRICITY,
@@ -300,7 +300,7 @@ class Battery(Component):
         stsv.set_output_value(self.ac_battery_power_channel, ac_battery_power_used_for_charging_or_discharging_in_watt)
         stsv.set_output_value(self.dc_battery_power_channel, dc_battery_power_used_for_charging_or_discharging_in_watt)
         stsv.set_output_value(self.state_of_charge_channel, state_of_charge)
-        stsv.set_output_value(self.charing_power_channel, charging_power_in_watt)
+        stsv.set_output_value(self.charging_power_channel, charging_power_in_watt)
         stsv.set_output_value(self.discharging_power_channel, discharging_power_in_watt)
 
         # write values to state

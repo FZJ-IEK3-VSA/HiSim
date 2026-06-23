@@ -472,21 +472,21 @@ class L1Controller(cp.Component):
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         list_of_kpi_entries = []
-        my_kpi_entry_4 = KpiEntry(
+        car_location_kpi_entry = KpiEntry(
             name="Car charging location",
             unit="-",
             value=self.location,
             tag=KpiTagEnumClass.CAR,
             description=self.component_name,
         )
-        list_of_kpi_entries.append(my_kpi_entry_4)
+        list_of_kpi_entries.append(car_location_kpi_entry)
 
-        my_kpi_entry_5 = KpiEntry(
+        charging_power_kpi_entry = KpiEntry(
             name="Power delivered at charging station",
             unit="kW",
             value=self.power_delivered_at_charging_station_in_watt * 1e-3,
             tag=KpiTagEnumClass.CAR,
             description=self.component_name,
         )
-        list_of_kpi_entries.append(my_kpi_entry_5)
+        list_of_kpi_entries.append(charging_power_kpi_entry)
         return list_of_kpi_entries

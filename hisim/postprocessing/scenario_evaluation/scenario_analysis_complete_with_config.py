@@ -76,7 +76,7 @@ class ScenarioAnalysisWithConfig:
         # Get input parameters from config
         try:
             config_name = scenario_analysis_config.name.split("_")[1]
-        except Exception:
+        except (IndexError, AttributeError):
             config_name = ""
 
         data_processing_mode = scenario_analysis_config.data_processing_mode

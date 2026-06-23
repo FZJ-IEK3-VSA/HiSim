@@ -1,6 +1,11 @@
-"""Basic household new system setup."""
+"""District heating household system setup with building sizing support.
 
-# clean
+This module provides a setup_function for simulating household energy systems
+connected to district heating. It configures components including building,
+occupancy profiles, weather, PV system, district heating, heat distribution,
+battery storage (optional), and energy management system. Supports building
+sizer workflows for scenario evaluation.
+"""
 
 from typing import Optional, Any, Union, List
 import re
@@ -47,9 +52,10 @@ __status__ = "development"
 def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Household system setup.
+    """Household system setup for district heating with building sizing support.
 
-    This setup function emulates an household including the following components:
+    This setup function emulates a household connected to district heating,
+    including the following components:
 
     - Simulation Parameters
     - Components
@@ -60,9 +66,33 @@ def setup_function(
         - District Heating
         - Heat Distribution System
         - Heat Distribution Controller
-        - Battery
-        - Energy Management System
+        - Battery (optional, only added when PV is configured and battery/EMS is enabled)
+        - Energy Management System (optional, only added when PV is configured and battery/EMS is enabled)
         - Electricity Meter
+
+    This setup is specifically intended for district heating scenarios. It
+    raises a ``ValueError`` when ``heating_system`` is not
+    ``HeatingSystems.DISTRICT_HEATING``. The battery and the Energy Management
+    System are only added when a non-zero PV share is configured and
+    ``use_battery_and_ems`` is enabled; otherwise the electricity meter is
+    connected directly to the simulation.
+
+    Args:
+        my_sim: The simulator instance to which components are added.
+        my_simulation_parameters: Optional simulation parameters. If ``None``,
+            defaults are created for a full-year simulation (year 2021) with
+            15-minute timesteps and post-processing options for KPI computation
+            and building sizer output.
+
+    Returns:
+        None. Components are added to ``my_sim`` via ``add_component()`` calls.
+
+    Raises:
+        ValueError: If ``heating_system`` is not
+            ``HeatingSystems.DISTRICT_HEATING``, if the configured heat
+            distribution system type is neither floor heating nor a radiator,
+            or if the ``lpg_households`` config list is empty.
+        TypeError: If ``lpg_households`` config is not a ``List[str]``.
     """
 
     # =================================================================================================================================
@@ -326,7 +356,7 @@ def setup_function(
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
@@ -425,12 +455,14 @@ def setup_function(
         try:
             scenario_hash_string = re.findall(r"\-?\d+", config_filename_splitted[-1])[0]
             sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
-        except Exception:
+        except IndexError:
+            # no numeric hash found in the config filename; fall back to index enumeration
             scenario_hash_string = "-"
             sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
         try:
             further_result_folder_description = config_filename_splitted[-2]
-        except Exception:
+        except IndexError:
+            # config filename has no parent folder; fall back to a placeholder
             further_result_folder_description = "-"
 
     # if config_filename is not given, make result path with index enumeration

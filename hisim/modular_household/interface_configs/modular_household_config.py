@@ -1,4 +1,10 @@
-"""Modular household config module."""
+"""Modular household configuration module.
+
+This module provides the :class:`ModularHouseholdConfig` dataclass, which combines
+system-level equipment configuration (:class:`system_config.SystemConfig`) with
+archetype-level framework configuration (:class:`archetype_config.ArcheTypeConfigModular`)
+for household energy simulations.
+"""
 
 # clean
 

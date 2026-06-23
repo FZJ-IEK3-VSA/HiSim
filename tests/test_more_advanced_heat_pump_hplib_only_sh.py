@@ -1,4 +1,9 @@
-"""Test for advanced heat pump hplib."""
+"""Tests for MoreAdvancedHeatPumpHPLib with space-heating-only configuration.
+
+Verifies component initialization, state management, and output values
+(thermal/electrical power, COP, mass flow, on/off timing) when domestic
+hot water preparation is disabled.
+"""
 
 import pytest
 from tests import functions_for_testing as fft

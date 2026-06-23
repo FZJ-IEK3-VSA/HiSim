@@ -53,7 +53,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     hp_mode = 1
 
     # Set photovoltaic system
-    time = 2021
+    pv_system_year = 2021
     pv_power = 200000.0
     pv_co2_footprint = pv_power * 1e-3 * 130.7
     pv_cost = pv_power * 1e-3 * 535.81
@@ -93,7 +93,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # buffer bat test start
     my_rsoc_controller_l2 = RsocBatteryController(
         my_simulation_parameters=my_simulation_parameters,
-        config=RsocBatteryControllerConfig.confic_rsoc_name(
+        config=RsocBatteryControllerConfig.config_rsoc(
             rsoc_name=rsoc_name,
             operation_mode=operation_mode_rsoc,
         ),
@@ -112,9 +112,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
     # buffer bat test end
 
-    my_cl2_config = cl2.EMSConfig.get_default_config_ems()
-    my_cl2 = cl2.L2GenericEnergyManagementSystem(
-        my_simulation_parameters=my_simulation_parameters, config=my_cl2_config
+    my_energy_management_system_config = cl2.EMSConfig.get_default_config_ems()
+    my_energy_management_system = cl2.L2GenericEnergyManagementSystem(
+        my_simulation_parameters=my_simulation_parameters, config=my_energy_management_system_config
     )
 
     # Build Occupancy
@@ -129,7 +129,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system(power_in_watt=pv_power)
-    my_photovoltaic_system_config.time = time
+    my_photovoltaic_system_config.time = pv_system_year
     my_photovoltaic_system_config.co2_footprint = pv_co2_footprint
     my_photovoltaic_system_config.investment_costs_in_euro = pv_cost
 
@@ -199,7 +199,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
-    my_cl2.add_component_inputs_and_connect(
+    my_energy_management_system.add_component_inputs_and_connect(
         source_component_classes=[my_occupancy],
         source_component_field_name=my_occupancy.ElectricalPowerConsumption,
         source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -207,7 +207,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
         source_weight=999,
     )
-    my_cl2.add_component_inputs_and_connect(
+    my_energy_management_system.add_component_inputs_and_connect(
         source_component_classes=[my_photovoltaic_system],
         source_component_field_name=my_photovoltaic_system.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -217,7 +217,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     # hp test start
-    my_cl2.add_component_input_and_connect(
+    my_energy_management_system.add_component_input_and_connect(
         source_object_name=my_heat_pump.component_name,
         source_component_output=my_heat_pump.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -241,13 +241,13 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,
-        my_cl2.component_name,
-        my_cl2.TotalElectricityToOrFromGrid,
+        my_energy_management_system.component_name,
+        my_energy_management_system.TotalElectricityToOrFromGrid,
     )
     my_heat_pump.connect_only_predefined_connections(my_weather, my_heat_pump_controller)
     my_heat_pump.get_default_connections_heatpump_controller()
 
-    my_cl2.add_component_input_and_connect(
+    my_energy_management_system.add_component_input_and_connect(
         source_object_name=my_rsoc.component_name,
         source_component_output=my_rsoc.SOFCCurrentOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -259,7 +259,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_weight=2,
     )
 
-    my_cl2.add_component_input_and_connect(
+    my_energy_management_system.add_component_input_and_connect(
         source_object_name=my_rsoc.component_name,
         source_component_output=my_rsoc.SOECCurrentLoad,
         source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -271,7 +271,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_weight=1,  # maybe change the weigth
     )
 
-    electricity_from_rsofc_target_1 = my_cl2.add_component_output(
+    electricity_from_rsofc_target_1 = my_energy_management_system.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
         source_tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_TARGET],
         source_weight=2,
@@ -279,7 +279,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_unit=lt.Units.WATT,
         output_description="Target electricity for rSOFC. ",
     )
-    electricity_to_electrolyzer_target = my_cl2.add_component_output(
+    electricity_to_electrolyzer_target = my_energy_management_system.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
         source_tags=[
             lt.ComponentType.ELECTROLYZER,
@@ -318,7 +318,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         my_rsoc_controller_l1.StateToRSOC,
     )
 
-    my_cl2.add_component_input_and_connect(
+    my_energy_management_system.add_component_input_and_connect(
         source_object_name=my_advanced_battery_1.component_name,
         source_component_output=my_advanced_battery_1.AcBatteryPowerUsed,
         source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -327,7 +327,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_weight=1,
     )
 
-    electricity_to_or_from_battery_target_1 = my_cl2.add_component_output(
+    electricity_to_or_from_battery_target_1 = my_energy_management_system.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
         source_weight=my_advanced_battery_1.source_weight,
@@ -346,7 +346,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_sim.add_component(my_advanced_battery_1)
     my_sim.add_component(my_rsoc_controller_l1)
     my_sim.add_component(my_rsoc)
-    my_sim.add_component(my_cl2)
+    my_sim.add_component(my_energy_management_system)
     my_sim.add_component(my_weather)
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_photovoltaic_system)

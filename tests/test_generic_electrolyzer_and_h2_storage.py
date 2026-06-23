@@ -1,4 +1,11 @@
-"""Test for generic electrolyzer and h2 storage."""
+"""Tests for generic electrolyzer and hydrogen storage components.
+
+This module contains pytest tests for the AdvancedElectrolyzer and
+HydrogenStorage components from
+hisim.components.generic_electrolyzer_and_h2_storage. It verifies
+hydrogen production, water consumption, unused power calculations, and
+storage charging behavior under a fixed-input single-timestep scenario.
+"""
 
 import pytest
 from tests import functions_for_testing as fft
@@ -10,7 +17,7 @@ from hisim import log
 
 
 @pytest.mark.base
-def test_hydrogen_generator():
+def test_hydrogen_generator() -> None:
     """Test hydrogen generator."""
 
     seconds_per_timestep = 60

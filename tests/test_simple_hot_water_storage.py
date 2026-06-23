@@ -33,9 +33,8 @@ def simulate_simple_water_storage(
 ) -> None:
     """Simulate and test simple hot water storage."""
 
-    seconds_per_timestep = sec_per_timesteps
     my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
+        2017, sec_per_timesteps
     )
 
     # Set Simple Heat Water Storage
@@ -153,11 +152,11 @@ def simulate_simple_water_storage(
     # test mean water temperature calculation in storage
     mass_water_hds_in_kg = (
         stsv.values[water_mass_flow_rate_hds.global_index]
-        * seconds_per_timestep
+        * sec_per_timesteps
     )
     mass_water_hp_in_kg = (
         stsv.values[water_mass_flow_rate_from_heat_generator.global_index]
-        * seconds_per_timestep
+        * sec_per_timesteps
     )
 
     calculated_mean_water_temperature_in_celsius = (

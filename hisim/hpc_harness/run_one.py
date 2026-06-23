@@ -22,7 +22,7 @@ def main() -> None:
                         help="Path to the *.simulation.json file.")
     parser.add_argument("--result-dir", required=True, dest="result_dir",
                         help="Directory this simulation must write its results into.")
-    args = parser.parse_args()
+    args: argparse.Namespace = parser.parse_args()
 
     # Suppress noisy third-party warnings, matching hisim_main's CLI behaviour.
     warnings.filterwarnings("ignore")

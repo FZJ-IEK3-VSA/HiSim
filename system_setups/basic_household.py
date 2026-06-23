@@ -1,6 +1,5 @@
 """Basic household system setup. Shows how to set up a standard system."""
 
-# clean
 
 from typing import Optional
 from hisim.simulator import SimulationParameters, Simulator

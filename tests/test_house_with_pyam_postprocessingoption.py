@@ -55,7 +55,7 @@ def test_house_with_pyam(
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 19.0
     temperature_air_cooling_in_celsius = 24.0
-    offset = 0.5
+    temperature_offset = 0.5
     hp_mode = 2
 
     # =================================================================================================================================
@@ -128,7 +128,7 @@ def test_house_with_pyam(
             name="GenericHeatPumpController",
             temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
             temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-            offset=offset,
+            offset=temperature_offset,
             mode=hp_mode,
         ),
         my_simulation_parameters=my_simulation_parameters,

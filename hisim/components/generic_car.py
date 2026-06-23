@@ -568,9 +568,6 @@ class Car(cp.Component):
                     )
                     for i in range(steps_desired)
                 ]
-            else:
-                self.meters_driven = self.meters_driven
-                self.car_location = self.car_location
 
             # save data in cache
             database = pd.DataFrame({"car_location": self.car_location, "meters_driven": self.meters_driven})

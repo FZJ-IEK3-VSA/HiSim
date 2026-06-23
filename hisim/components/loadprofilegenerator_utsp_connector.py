@@ -48,6 +48,10 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
+# Constants for warm water fallback values used in i_simulate
+DEFAULT_WW_TEMPERATURE_INPUT = 40.45  # °C - default warm water temperature fallback
+DEFAULT_WW_MASS_INPUT = 9.3  # kg/s - default warm water mass input fallback
+
 
 class LpgDataAcquisitionMode(enum.Enum):
     """Set LPG Data Acquisition Mode."""
@@ -278,8 +282,8 @@ class UtspLpgConnector(cp.Component):
 
             if ww_energy_demand > 0 and (ww_mass_input == 0 and ww_temperature_input == 0):
                 """first iteration --> random numbers"""
-                ww_temperature_input = 40.45
-                ww_mass_input = 9.3
+                ww_temperature_input = DEFAULT_WW_TEMPERATURE_INPUT
+                ww_mass_input = DEFAULT_WW_MASS_INPUT
 
             """
             Warm water is provided by the warmwater stoage.

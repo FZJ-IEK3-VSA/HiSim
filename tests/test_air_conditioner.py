@@ -32,7 +32,6 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature(
     start_controller_mode, current_temperature_deg_c: float, mode: str
 ):
     """Test determine_operating_mode returns correct mode based on temperature."""
-    """ GIVEN """
     testee = given_default_testee()
 
     testee.previous_state = AirConditionerControllerState(

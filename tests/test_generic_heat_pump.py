@@ -9,7 +9,14 @@ from hisim.simulationparameters import SimulationParameters
 
 @pytest.mark.base
 def test_generic_heat_pump():
-    """Test generic heat pump."""
+    """Test GenericHeatPump and GenericHeatPumpController with fake temperature inputs.
+
+    Verifies that:
+    - The controller sends a heating signal when mean house temperature (10°C) is below
+      the heating setpoint (18°C).
+    - The heat pump delivers the expected thermal power (7420 W) corresponding to
+      the configured model (Viessmann Vitocal 300-A).
+    """
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(

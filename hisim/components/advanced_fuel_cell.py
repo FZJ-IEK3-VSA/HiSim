@@ -28,6 +28,9 @@ __maintainer__ = "Maximilian Hillen"
 __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = "development"
 
+# Constants
+SPECIFIC_HEAT_CAPACITY_WATER = 4182  # J/(kg·K)
+
 
 @dataclass_json
 @dataclass
@@ -324,7 +327,7 @@ class CHP(Component):
     def simulate_chp(self, control_signal: float, stsv: SingleTimeStepValues, timestep: int) -> Any:
         """Simulates the component."""
 
-        specific_heat_capacity_water = 4182
+        specific_heat_capacity_water = SPECIFIC_HEAT_CAPACITY_WATER
         # Calculation.Electric Energy deliverd
         # CHP is on
         if self.state.activation != 0:

@@ -23,8 +23,8 @@ __version__ = "1.0"
 __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
-# PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../system_setups/household_for_test_building_theoretical_heat_demand.py"
+# SYSTEM_SETUP_SCRIPT_PATH and FUNC needed to build simulator, SYSTEM_SETUP_SCRIPT_PATH is fake
+SYSTEM_SETUP_SCRIPT_PATH = "../system_setups/household_for_test_building_theoretical_heat_demand.py"
 
 
 @pytest.mark.buildingtest
@@ -81,10 +81,10 @@ def test_house_with_idealized_electric_heater_for_heating_test(
 
     # this part is copied from hisim_main
     # Build Simulator
-    path_to_be_added = str(Path(PATH).resolve().parent)
+    system_setup_directory = str(Path(SYSTEM_SETUP_SCRIPT_PATH).resolve().parent)
 
     my_sim: sim.Simulator = sim.Simulator(
-        module_directory=path_to_be_added,
+        module_directory=system_setup_directory,
         my_simulation_parameters=my_simulation_parameters,
         module_filename="household_for_test_building_theoretical_heat_demand",
     )

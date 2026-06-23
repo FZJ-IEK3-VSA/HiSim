@@ -1,4 +1,4 @@
-"""Test for system setup modular housheold."""
+"""Test for system setup modular household."""
 
 import pytest
 

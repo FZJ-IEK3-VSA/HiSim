@@ -22,7 +22,7 @@ data_mono.loc[:, "eff"] = data_mono.loc[:, "P_max"] / (1000 * data_mono["A_c"])
 # %%
 # Select candidates, use most efficient by Trina Solar
 candidates = data_mono[(0.21 <= data_mono["eff"]) & (data_mono["eff"] <= 0.225) & (420 <= data_mono["P_max"]) & (data_mono["P_max"] <= 440)]
-selected = candidates[candidates["Manufacturer"] == "Trina Solar"].sort_values(by='eff').iloc[-1]
+selected_module = candidates[candidates["Manufacturer"] == "Trina Solar"].sort_values(by='eff').iloc[-1]
 
 # %%
 # Inverter
@@ -33,12 +33,12 @@ inverter_data = inverter_data.droplevel(level=[1, 2], axis=1)
 inverter_data["eff"] = inverter_data["Paco"] / inverter_data["Pdco"]
 
 candidate_inverters = inverter_data[
-    (inverter_data["Pdco"].astype(float) > selected["P_max"]) &
-    (inverter_data["Paco"].astype(float) > 0.8 * selected["P_max"]) &
-    (inverter_data["Paco"].astype(float) < 1.2 * selected["P_max"]) &
-    (inverter_data["Vdco"].astype(float) > 0.95 * selected["V_mp_ref"]) &
-    (inverter_data["Vdco"].astype(float) < 1.05 * selected["V_mp_ref"]) &
-    (inverter_data["Idcmax"].astype(float) > selected["I_mp_ref"])
+    (inverter_data["Pdco"].astype(float) > selected_module["P_max"]) &
+    (inverter_data["Paco"].astype(float) > 0.8 * selected_module["P_max"]) &
+    (inverter_data["Paco"].astype(float) < 1.2 * selected_module["P_max"]) &
+    (inverter_data["Vdco"].astype(float) > 0.95 * selected_module["V_mp_ref"]) &
+    (inverter_data["Vdco"].astype(float) < 1.05 * selected_module["V_mp_ref"]) &
+    (inverter_data["Idcmax"].astype(float) > selected_module["I_mp_ref"])
 ]
 
 selected_inverter = candidate_inverters.sort_values(by='eff').iloc[-1]

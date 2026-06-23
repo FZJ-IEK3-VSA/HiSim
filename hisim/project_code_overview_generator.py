@@ -116,7 +116,12 @@ class OverviewGenerator:
     """Generates an overview of all modules."""
 
     def __init__(self):
-        """Initializes the class."""
+        """Initialize the OverviewGenerator.
+
+        Sets up an empty list to track class names encountered during
+        file processing, used to detect and raise an error for duplicate
+        class definitions across modules.
+        """
         self.existing_classes: List[str] = []
 
     def add_to_cell(self, column: int, row: int, value: Any, worksheet: Workbook) -> int:

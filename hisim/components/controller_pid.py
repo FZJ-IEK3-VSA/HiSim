@@ -126,7 +126,6 @@ class PIDController(cp.Component):
             my_display_config=my_display_config,
         )
 
-        self.my_simulation_parameters = my_simulation_parameters
         self.build()
         proportional_gain, integral_gain, derivative_gain = self.pid_tuning()
         # --------------------------------------------------
@@ -367,7 +366,7 @@ class PIDController(cp.Component):
 
         return feed_forward_signal
 
-    def pid_tuning(self):
+    def pid_tuning(self) -> tuple[float, float, float]:
         """State space model of a building with 5R1C configuration.
 
         The model is used to:

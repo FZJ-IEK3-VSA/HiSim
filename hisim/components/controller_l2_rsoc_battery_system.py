@@ -55,7 +55,7 @@ class RsocBatteryControllerConfig(ConfigBase):
             return data.get("rSOC variants", {}).get(rsoc_name, {})
 
     @classmethod
-    def confic_rsoc(
+    def config_rsoc(
         cls,
         rsoc_name: str,
         operation_mode: float,

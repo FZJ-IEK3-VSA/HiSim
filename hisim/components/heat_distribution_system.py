@@ -1365,7 +1365,7 @@ class HeatDistributionControllerInformation:
             factor_of_oversizing_of_heat_distribution_system=1.0,
         )
 
-        self.water_mass_flow_rate_in_kp_per_second = self.calc_heating_distribution_system_water_mass_flow_rate(
+        self.water_mass_flow_rate_in_kg_per_second = self.calc_heating_distribution_system_water_mass_flow_rate(
             max_thermal_building_demand_in_watt=self.hds_controller_config.heating_load_of_building_in_watt
         )
 

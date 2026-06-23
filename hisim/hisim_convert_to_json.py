@@ -39,7 +39,24 @@ def main(
     my_module_config: Optional[str] = None,
     output_directory: Optional[str] = None,
 ) -> None:
-    """Core function."""
+    """Convert a Python-based system setup to JSON-based configuration files.
+
+    Loads a Python module containing a `setup_function`, initializes a
+    Simulator, and writes out `.simulation.json` and `.scenario.json` files
+    describing the configuration. Does not run the simulation.
+
+    Args:
+        path_to_module: Path or module name of the Python setup file
+            (without the `.py` extension).
+        my_simulation_parameters: Optional SimulationParameters passed to the
+            setup function.
+        my_module_config: Optional module configuration string.
+        output_directory: Optional directory for output JSON files.
+            Defaults to the directory containing the module.
+
+    Raises:
+        ValueError: If the module directory or the Python file cannot be found.
+    """
     # Suppress warnings (e.g., from pvlib)
     warnings.filterwarnings("ignore")
 

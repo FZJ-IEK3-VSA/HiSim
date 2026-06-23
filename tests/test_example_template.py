@@ -12,7 +12,13 @@ from tests import functions_for_testing as fft
 
 @pytest.mark.base
 def test_example_template():
-    """Test for the Example Template."""
+    """Test example template component behavior with stateful and stateless outputs.
+
+    Validates that the example template component correctly processes an input
+    signal (50 W electricity) and produces the expected stateful output
+    (3000 Wh at timestep 600, 6000 Wh at timestep 601) and stateless output
+    (51.0 at both timesteps) based on its internal logic.
+    """
 
     mysim: SimulationParameters = SimulationParameters.full_year(
         year=2021, seconds_per_timestep=60
@@ -40,7 +46,7 @@ def test_example_template():
         input_from_another_component_output
     )
 
-    number_of_outputs = fft.get_number_of_outputs(
+    number_of_outputs: int = fft.get_number_of_outputs(
         [my_example_template, input_from_another_component_output]
     )
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
@@ -52,7 +58,7 @@ def test_example_template():
     stsv.values[input_from_another_component_output.global_index] = 50  # fake input
 
     # Test Simulation
-    timestep = 10 * 60
+    timestep: int = 10 * 60
     log.information("timestep = " + str(timestep))
     log.information(
         "input_from_another_component_output = "
@@ -76,7 +82,7 @@ def test_example_template():
     assert 3000 == stsv.values[my_example_template.output_with_state.global_index]
     assert 51.0 == stsv.values[my_example_template.output_without_state.global_index]
 
-    timestep = 10 * 60 + 1
+    timestep: int = 10 * 60 + 1
     log.information("timestep = " + str(timestep))
     log.information(
         "input_from_another_component_output = "

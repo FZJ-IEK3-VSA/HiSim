@@ -14,14 +14,20 @@ from hisim.simulationparameters import SimulationParameters
 
 
 # Heat pump configuration constants
-CO2_FOOTPRINT_COEFFICIENT = 165.84
-INVESTMENT_COST_COEFFICIENT = 1513.74
-MAINTENANCE_COST_FRACTION = 0.025
+CO2_FOOTPRINT_COEFFICIENT = 165.84  # kg CO2 per kW thermal power over lifetime
+INVESTMENT_COST_COEFFICIENT = 1513.74  # EUR per kW thermal power
+MAINTENANCE_COST_FRACTION = 0.025  # Fraction of investment cost per year
 
 
 @pytest.mark.base
 def test_heat_pump_hplib_new():
-    """Test heat pump hplib."""
+    """Test MoreAdvancedHeatPumpHPLib with a generic model in heating mode.
+
+    Verifies that the heat pump correctly computes thermal power output,
+    electrical power consumption, COP, flow temperature, mass flow rate,
+    and state timers when operating in space heating mode with DHW preparation
+    enabled.
+    """
 
     # Definitions for HeatPump init
     model: str = "Generic"

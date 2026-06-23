@@ -304,7 +304,7 @@ class KpiPreparation:
         building_objects_in_district: str,
         kpi_tag: KpiTagEnumClass,
     ) -> pd.DataFrame:
-        """Computes the self consumption, grid injection, self-sufficiency and battery losses if electricty production is bigger than zero."""
+        """Computes the self consumption, grid injection, self-sufficiency and battery losses if electricity production is bigger than zero."""
 
         if electricity_production_in_kilowatt_hour > 0:
             # account for battery
@@ -416,7 +416,7 @@ class KpiPreparation:
             battery_losses_in_kilowatt_hour,
         )
 
-    def get_electricity_to_and_from_grid_from_electricty_meter(
+    def get_electricity_to_and_from_grid_from_electricity_meter(
         self,
         building_objects_in_district: str,
     ) -> Tuple[Optional[float], Optional[float]]:
@@ -477,7 +477,7 @@ class KpiPreparation:
 
     def compute_self_sufficiency_according_to_solar_htw_berlin(
         self,
-        relative_electricty_demand_in_percent: Optional[float],
+        relative_electricity_demand_in_percent: Optional[float],
         building_objects_in_district: str,
         kpi_tag: KpiTagEnumClass,
         name: str = "Self-sufficiency rate according to solar htw berlin",
@@ -486,14 +486,14 @@ class KpiPreparation:
 
         https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiedener-Kennzahlen-zur-Bewertung-von-PV-Batteriesystemen.pdf.
         """
-        if relative_electricty_demand_in_percent is None:
+        if relative_electricity_demand_in_percent is None:
             self_sufficiency_rate_in_percent = None
         else:
-            self_sufficiency_rate_in_percent = 100 - relative_electricty_demand_in_percent
+            self_sufficiency_rate_in_percent = 100 - relative_electricity_demand_in_percent
             if self_sufficiency_rate_in_percent > 100:
                 raise ValueError(
                     "The self-sufficiency rate should not be over 100 %. Something is wrong here. Please check your code. "
-                    f"The realtive electricity demand is {relative_electricty_demand_in_percent} %. "
+                    f"The relative electricity demand is {relative_electricity_demand_in_percent} %. "
                 )
 
         # make kpi entry

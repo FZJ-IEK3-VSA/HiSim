@@ -23,7 +23,7 @@ def test_basic_household() -> None:
 
     path = "../system_setups/household_5b_with_battery_priority_advanced_hp_ev_pv_battery.py"
 
-    mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
-    mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    hisim_main.main(path, mysimpar)
+    simulation_parameters = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
+    simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    hisim_main.main(path, simulation_parameters)
     log.information(os.getcwd())

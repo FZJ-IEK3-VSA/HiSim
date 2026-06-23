@@ -1,6 +1,5 @@
 """Basic household system setup. Shows how to set up a standard system and do weather data request in preprocessing."""
 
-# clean
 
 from typing import Optional, Any
 import datetime

@@ -17,9 +17,9 @@ def test_sum_builder_for_three_inputs():
         year=2021, seconds_per_timestep=60
     )
 
-    my_sum_config = sumbuilder.SumBuilderConfig.get_sumbuilder_default_config()
+    sum_builder_config = sumbuilder.SumBuilderConfig.get_sumbuilder_default_config()
     my_sum = sumbuilder.SumBuilderForThreeInputs(
-        config=my_sum_config, my_simulation_parameters=mysim
+        config=sum_builder_config, my_simulation_parameters=mysim
     )
 
     # Define fake inputs
@@ -87,9 +87,9 @@ def test_sum_builder_for_two_inputs():
         year=2021, seconds_per_timestep=60
     )
 
-    my_sum_config = sumbuilder.SumBuilderConfig.get_sumbuilder_default_config()
+    sum_builder_config = sumbuilder.SumBuilderConfig.get_sumbuilder_default_config()
     my_sum = sumbuilder.SumBuilderForTwoInputs(
-        config=my_sum_config, my_simulation_parameters=mysim
+        config=sum_builder_config, my_simulation_parameters=mysim
     )
 
     # Define fake inputs

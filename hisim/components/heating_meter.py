@@ -1,4 +1,4 @@
-"""Heating meter module to measure gas consumption, costs and co2 emission. """
+"""Heating meter module to measure district heating consumption, costs and co2 emission."""
 
 # clean
 from dataclasses import dataclass
@@ -21,6 +21,7 @@ from hisim.dynamic_component import (
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 
+DEFAULT_SOURCE_WEIGHT = 999
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
 __credits__ = ["Jonas Hoppe"]
@@ -48,7 +49,7 @@ class HeatingMeterConfig(cp.ConfigBase):
         cls,
         building_name: str = "BUI1",
     ) -> Any:
-        """Gets a default GasMeter."""
+        """Gets a default HeatingMeter config."""
         return HeatingMeterConfig(
             building_name=building_name,
             name="HeatingMeter",
@@ -180,7 +181,7 @@ class HeatingMeter(DynamicComponent):
     def get_default_connections_from_heat_distribution_system(
         self,
     ):
-        """Get gas heater default connections."""
+        """Get default connections from HeatDistribution system."""
 
         from hisim.components.heat_distribution_system import (  # pylint: disable=import-outside-toplevel
             HeatDistribution,
@@ -196,7 +197,7 @@ class HeatingMeter(DynamicComponent):
                 source_load_type=lt.LoadTypes.HEATING,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.InandOutputType.HEAT_CONSUMPTION],
-                source_weight=999,
+                source_weight=DEFAULT_SOURCE_WEIGHT,
             )
         )
         return dynamic_connections
@@ -204,7 +205,7 @@ class HeatingMeter(DynamicComponent):
     # def get_default_connections_from_simple_dhw_storage(
     #     self,
     # ):
-    #     """Get gas heater default connections."""
+    #     """Get default connections from SimpleDHWStorage."""
     #
     #     from hisim.components.simple_dhw_storage import (  # pylint: disable=import-outside-toplevel
     #         SimpleDHWStorage,
@@ -228,7 +229,7 @@ class HeatingMeter(DynamicComponent):
     def get_default_connections_from_more_advanced_heat_pump(
         self,
     ):
-        """Get gas heater default connections."""
+        """Get default connections from MoreAdvancedHeatPump."""
 
         from hisim.components.more_advanced_heat_pump_hplib import (  # pylint: disable=import-outside-toplevel
             MoreAdvancedHeatPumpHPLib,
@@ -244,7 +245,7 @@ class HeatingMeter(DynamicComponent):
                 source_load_type=lt.LoadTypes.HEATING,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.InandOutputType.HEAT_DELIVERED],
-                source_weight=999,
+                source_weight=DEFAULT_SOURCE_WEIGHT,
             )
         )
         return dynamic_connections
@@ -268,7 +269,7 @@ class HeatingMeter(DynamicComponent):
                 source_tags=[
                     lt.InandOutputType.HEAT_DELIVERED,
                 ],
-                source_weight=999,
+                source_weight=DEFAULT_SOURCE_WEIGHT,
             )
         )
         return dynamic_connections
@@ -377,7 +378,7 @@ class HeatingMeter(DynamicComponent):
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
-        """Calculate OPEX costs, consisting of gas costs and revenues."""
+        """Calculate OPEX costs for district heating consumption."""
         total_used_energy_in_kwh: float
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
@@ -403,7 +404,7 @@ class HeatingMeter(DynamicComponent):
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             total_consumption_in_kwh=total_used_energy_in_kwh,
-            loadtype=lt.LoadTypes.GAS,
+            loadtype=lt.LoadTypes.HEATING,
             kpi_tag=KpiTagEnumClass.HEATING_METER
         )
 
@@ -476,7 +477,7 @@ class HeatingMeterState:
     def self_copy(
         self,
     ):
-        """Copy the GasMeterState."""
+        """Copy the HeatingMeterState."""
         return HeatingMeterState(
             self.cumulative_production_in_watt_hour,
             self.cumulative_consumption_in_watt_hour,

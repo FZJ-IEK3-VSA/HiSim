@@ -36,7 +36,22 @@ __status__ = ""
 
 @dataclass
 class HouseholdMoreAdvancedHPDieselCarDHWStorageOptions:
-    """Set options for the system setup."""
+    """Optional configuration flags for the household system setup.
+
+    This dataclass holds the user-selectable options that toggle or
+    configure individual features of the "household with a more advanced
+    heat pump, domestic hot water (DHW) preparation, hot-water storage, and
+    a diesel car" system setup (see
+    :class:`HouseholdMoreAdvancedHPDieselCarDHWStorageConfig`). Instances are
+    created by
+    :meth:`HouseholdMoreAdvancedHPDieselCarDHWStorageConfig.get_default_options`
+    and may be overridden through the ``options`` key of a JSON scenario file
+    (see
+    :meth:`hisim.system_setup_configuration.SystemSetupConfigBase.load_from_json`).
+
+    No options are currently defined, so an instance carries no fields and
+    leaves every feature of the setup enabled with its default behaviour.
+    """
 
     pass
 
@@ -61,7 +76,14 @@ class HouseholdMoreAdvancedHPDieselCarDHWStorageConfig(SystemSetupConfigBase):
 
     @classmethod
     def get_default_options(cls):
-        """Get default options."""
+        """Return a default :class:`HouseholdMoreAdvancedHPDieselCarDHWStorageOptions` instance.
+
+        The returned options leave every feature of the household system setup
+        enabled with its default behaviour (the options dataclass currently
+        defines no fields). It is used as the starting point when loading a
+        configuration from JSON, where individual options may then be
+        overwritten via the ``options`` key.
+        """
         return HouseholdMoreAdvancedHPDieselCarDHWStorageOptions()
 
     @classmethod
@@ -125,7 +147,7 @@ class HouseholdMoreAdvancedHPDieselCarDHWStorageConfig(SystemSetupConfigBase):
             hds_controller_config=hds_controller_config,
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                     heating_system=hds_controller_config.heating_system,
                 )

@@ -121,7 +121,7 @@ class KpiGenerator(JSONWizard):
         (
             total_electricity_from_grid_in_kwh,
             total_electricity_to_grid_in_kwh,
-        ) = self.get_electricity_to_and_from_grid_from_electricty_meter()
+        ) = self.get_electricity_to_and_from_grid_from_electricity_meter()
         # get relative electricity demand
         relative_electricity_demand_from_grid_in_percent = self.compute_relative_electricity_demand(
             total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
@@ -134,7 +134,7 @@ class KpiGenerator(JSONWizard):
         )
         # get autarky rate according to solar htw berlin
         self.compute_autarky_according_to_solar_htw_berlin(
-            relative_electricty_demand_in_percent=relative_electricity_demand_from_grid_in_percent
+            relative_electricity_demand_in_percent=relative_electricity_demand_from_grid_in_percent
         )
 
         # get energy prices and co2 emissions
@@ -294,7 +294,7 @@ class KpiGenerator(JSONWizard):
         )
 
         # make kpi entry
-        total_consumtion_entry = KpiEntry(
+        total_consumption_entry = KpiEntry(
             name="Total electricity consumption",
             unit="kWh",
             value=total_electricity_consumption_in_kilowatt_hour,
@@ -328,7 +328,7 @@ class KpiGenerator(JSONWizard):
         # update kpi collection dict
         self.kpi_collection_dict_unsorted.update(
             {
-                total_consumtion_entry.name: total_consumtion_entry.to_dict(),
+                total_consumption_entry.name: total_consumption_entry.to_dict(),
                 total_production_entry.name: total_production_entry.to_dict(),
                 pv_production_entry.name: pv_production_entry.to_dict(),
                 battery_charging_entry.name: battery_charging_entry.to_dict(),
@@ -349,7 +349,7 @@ class KpiGenerator(JSONWizard):
         electricity_production_in_kilowatt_hour: float,
         electricity_consumption_in_kilowatt_hour: float,
     ) -> Tuple[float, float, pd.DataFrame]:
-        """Computes the self consumption, grid injection, autarky and battery losses if electricty production is bigger than zero."""
+        """Computes the self consumption, grid injection, autarky and battery losses if electricity production is bigger than zero."""
 
         if electricity_production_in_kilowatt_hour > 0:
             # account for battery
@@ -461,7 +461,7 @@ class KpiGenerator(JSONWizard):
             battery_losses_in_kilowatt_hour,
         )
 
-    def get_electricity_to_and_from_grid_from_electricty_meter(self) -> Tuple[Optional[float], Optional[float]]:
+    def get_electricity_to_and_from_grid_from_electricity_meter(self) -> Tuple[Optional[float], Optional[float]]:
         """Get the electricity injected into the grid or taken from grid measured by the electricity meter."""
         total_energy_from_grid_in_kwh = None
         total_energy_to_grid_in_kwh = None
@@ -551,27 +551,27 @@ class KpiGenerator(JSONWizard):
 
     def compute_autarky_according_to_solar_htw_berlin(
         self,
-        relative_electricty_demand_in_percent: Optional[float],
+        relative_electricity_demand_in_percent: Optional[float],
     ) -> None:
         """Return the autarky rate according to solar htw berlin.
 
         https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiedener-Kennzahlen-zur-Bewertung-von-PV-Batteriesystemen.pdf.
         """
-        if relative_electricty_demand_in_percent is None:
-            autraky_rate_in_percent = None
+        if relative_electricity_demand_in_percent is None:
+            autarky_rate_in_percent = None
         else:
-            autraky_rate_in_percent = 100 - relative_electricty_demand_in_percent
-            if autraky_rate_in_percent > 100:
+            autarky_rate_in_percent = 100 - relative_electricity_demand_in_percent
+            if autarky_rate_in_percent > 100:
                 raise ValueError(
                     "The autarky rate should not be over 100 %. Something is wrong here. Please check your code. "
-                    f"The realtive electricity demand is {relative_electricty_demand_in_percent} %. "
+                    f"The relative electricity demand is {relative_electricity_demand_in_percent} %. "
                 )
 
         # make kpi entry
         autarky_rate_entry = KpiEntry(
             name="Autarky rate according to solar htw berlin",
             unit="%",
-            value=autraky_rate_in_percent,
+            value=autarky_rate_in_percent,
             tag=KpiTagEnumClass.GENERAL,
         )
 
@@ -1542,7 +1542,7 @@ class KpiGenerator(JSONWizard):
         specific_heating_output_energy_of_heat_pump_in_kilowatt_hour_per_m2 = (
             output_heating_energy_in_kilowatt_hour / building_conditioned_floor_area_in_m2
         )
-        # calculate total electricty input energy
+        # calculate total electricity input energy
         total_electrical_energy_input_in_kilowatt_hour = (
             electrical_energy_for_cooling_in_kilowatt_hour + electrical_energy_for_heating_in_kilowatt_hour
         )

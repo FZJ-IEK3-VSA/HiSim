@@ -135,13 +135,13 @@ def test_house(
 
     my_sim.run_all_timesteps()
 
-    log.information("singelton sim repo" + str(SingletonSimRepository().my_dict))
+    log.information("singleton sim repo" + str(SingletonSimRepository().my_dict))
 
     # https://medium.com/analytics-vidhya/how-to-create-a-thread-safe-singleton-class-in-python-822e1170a7f6
-    first_singelton_sim_repository = SingletonSimRepository()
+    first_singleton_sim_repository = SingletonSimRepository()
     second_singleton_sim_repository = SingletonSimRepository()
 
-    assert first_singelton_sim_repository is second_singleton_sim_repository
+    assert first_singleton_sim_repository is second_singleton_sim_repository
 
     # Sanity check - a non-singleton class should create two separate instances
 

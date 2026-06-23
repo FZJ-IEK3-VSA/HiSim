@@ -391,7 +391,15 @@ class Windturbine(cp.Component):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
-        """Calculate OPEX costs, consisting of maintenance costs for PV."""
+        """Calculate OPEX costs, consisting of maintenance costs for the wind turbine.
+
+        Args:
+            all_outputs (List): All outputs of the simulation.
+            postprocessing_results (pd.DataFrame): Results of the postprocessing.
+
+        Returns:
+            OpexCostDataClass: OPEX costs of the wind turbine.
+        """
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),

@@ -143,7 +143,11 @@ class SingleTimeStepValues:
         return newstsv
 
     def get_input_value(self, component_input: ComponentInput) -> float:
-        """Gets a value for an input from the single time step values."""
+        """Gets a value for an input from the single time step values.
+
+        If no component output is connected to the specified input (this can
+        happen for non-mandatory inputs), this function returns 0.
+        """
         if component_input.source_output is None:
             return 0
         return self.values[component_input.source_output.global_index]
@@ -244,7 +248,13 @@ class Component:
         return name
 
     def add_default_connections(self, connections: List[ComponentConnection]) -> None:
-        """Adds a default connection list definition."""
+        r"""Adds a default connection list definition.
+
+        You can add multiple connections at once, but they all have to be from the same source.\\
+        In fact, you actually *have to* add all connections from on source at the same time\\
+        because this doesn't append but completely overwrites the list of default connections.
+        ##### Todo: Maybe improve this so that those limitations no longer apply? 
+        """
 
         if not connections:
             raise ValueError(
@@ -291,9 +301,9 @@ class Component:
         field_name: str,
         load_type: lt.LoadTypes,
         unit: lt.Units,
-        postprocessing_flag: Optional[List[Any]] = None,
-        sankey_flow_direction: Optional[bool] = None,
-        output_description: Optional[str] = None,
+        output_description: str,
+        postprocessing_flag: List[Any] | None = None,
+        sankey_flow_direction: bool | None = None,
     ) -> ComponentOutput:
         """Adds an output definition."""
         if output_description is None:

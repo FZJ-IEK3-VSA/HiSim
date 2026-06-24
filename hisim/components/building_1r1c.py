@@ -157,8 +157,10 @@ class Building1R1CConfig(cp.ConfigBase):
                 using this parameter. Otherwise, this parameter is ignored. Default: 42.0.
         """
         # set the easy values
-        self.building_name = building_name
-        self.name = name
+        super().__init__(
+            name = name,
+            building_name = building_name
+        )
         self.target_temperature = target_temperature
         self.solar_gain_reduction_factor = solar_gain_reduction_factor
         self.set_thermal_capacity(thermal_capacity, kwargs)
@@ -175,10 +177,10 @@ class Building1R1CConfig(cp.ConfigBase):
             raise TypeError(f"Type of parameter 'areas' does not match any legal option: {type(areas)}")
         # if lists were provided, fill missing values and turn them into dicts
         if isinstance(u_values, list):
-            if len(u_values) == 4: u_values.append(None)
+            if len(u_values) == 4: u_values.append(None)  # pylint: disable=multiple-statements
             u_values = {hp: u_values[i] for i, hp in enumerate(HULL_PARTS)}
         if isinstance(areas, list):
-            while len(areas) < 5: areas.append(None)
+            while len(areas) < 5: areas.append(None)  # pylint: disable=multiple-statements
             areas = {hp: areas[i] for i, hp in enumerate(HULL_PARTS)}
         # if None were provided, try to make dicts out of the kwargs (that should exist)
         if u_values is None:
@@ -186,6 +188,8 @@ class Building1R1CConfig(cp.ConfigBase):
         if areas is None:
             areas = self.fill_dict_from_kwargs("area", kwargs)
         # fill the dicts with standard values
+        assert isinstance(areas, dict), "'areas' was not successfully converted to a dictionary"
+        assert isinstance(u_values, dict), "'u_values' was not successfully converted to a dictionary"
         if "door" not in u_values or u_values["door"] is None:
             u_values["door"] = 1.0
         if "door" not in areas or areas["door"] is None:
@@ -200,12 +204,12 @@ class Building1R1CConfig(cp.ConfigBase):
             self.areas[hp] = (float)(areas[hp])  # type: ignore # the value is fine, see above
         # ----------------------------------------------------------------------------------------
         # set air volume after areas cause it's easier if the areas have been dealt with
-        if air_volume is not None: self.air_volume = air_volume
-        else: self.set_air_volume(areas, kwargs)
+        if air_volume is not None: self.air_volume = air_volume  # pylint: disable=multiple-statements
+        else: self.set_air_volume(areas, kwargs)  # pylint: disable=multiple-statements
 
     def set_thermal_capacity(self, thermal_capacity, kwargs):
         """Helper function of __init__ to set the thermal capacity in J/K based on the different input options."""
-        if isinstance(thermal_capacity, float) or isinstance(thermal_capacity, int):
+        if isinstance(thermal_capacity, (float, int)):
             self.thermal_capacity = (float)(thermal_capacity)
         elif isinstance(thermal_capacity, str):
             if thermal_capacity not in Building1R1C.get_heat_capacity_classes():
@@ -394,27 +398,27 @@ class Building1R1C(cp.Component):
         """Function to encapsulate the adding of input and output channels."""
         # List of all the inputs, loadtypes, units, and whether they are mandatory
         # These are exactly the parameters that self.add_input() needs.
-        inputs = [
-            ["TemperatureOutside", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, True],
-            ["ThermalPowerDelivered", lt.LoadTypes.HEATING, lt.Units.WATT, False],
-            ["HeatingByResidents", lt.LoadTypes.HEATING, lt.Units.WATT, False],
-            ["HeatingByDevices", lt.LoadTypes.HEATING, lt.Units.WATT, False],
-            ["Altitude", lt.LoadTypes.ANY, lt.Units.DEGREES, False],
-            ["Azimuth", lt.LoadTypes.ANY, lt.Units.DEGREES, False],
-            ["ApparentZenith", lt.LoadTypes.ANY, lt.Units.DEGREES, False],
-            ["DirectNormalIrradiance", lt.LoadTypes.IRRADIANCE, lt.Units.WATT_PER_SQUARE_METER, False],
-            ["DirectNormalIrradianceExtra", lt.LoadTypes.IRRADIANCE, lt.Units.WATT_PER_SQUARE_METER, False],
-            ["DiffuseHorizontalIrradiance", lt.LoadTypes.IRRADIANCE, lt.Units.WATT_PER_SQUARE_METER, False],
-            ["GlobalHorizontalIrradiance", lt.LoadTypes.IRRADIANCE, lt.Units.WATT_PER_SQUARE_METER, False],
+        inputs: list[tuple[str, lt.LoadTypes, lt.Units, bool]] = [
+            ("TemperatureOutside", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, True),
+            ("ThermalPowerDelivered", lt.LoadTypes.HEATING, lt.Units.WATT, False),
+            ("HeatingByResidents", lt.LoadTypes.HEATING, lt.Units.WATT, False),
+            ("HeatingByDevices", lt.LoadTypes.HEATING, lt.Units.WATT, False),
+            ("Altitude", lt.LoadTypes.ANY, lt.Units.DEGREES, False),
+            ("Azimuth", lt.LoadTypes.ANY, lt.Units.DEGREES, False),
+            ("ApparentZenith", lt.LoadTypes.ANY, lt.Units.DEGREES, False),
+            ("DirectNormalIrradiance", lt.LoadTypes.IRRADIANCE, lt.Units.WATT_PER_SQUARE_METER, False),
+            ("DirectNormalIrradianceExtra", lt.LoadTypes.IRRADIANCE, lt.Units.WATT_PER_SQUARE_METER, False),
+            ("DiffuseHorizontalIrradiance", lt.LoadTypes.IRRADIANCE, lt.Units.WATT_PER_SQUARE_METER, False),
+            ("GlobalHorizontalIrradiance", lt.LoadTypes.IRRADIANCE, lt.Units.WATT_PER_SQUARE_METER, False),
         ]
         # The same for the outputs except we don't need the mandatory flag
-        outputs = [
-            ["TheoreticalThermalBuildingDemand", lt.LoadTypes.HEATING, lt.Units.WATT,
-             "The theoretical heat demand to keep the building at the target temperature."],
-            ["InternalTemperature", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS,
-             "The current internal temperature of the building."],
-            ["SolarGainThroughWindows", lt.LoadTypes.HEATING, lt.Units.WATT,
-             "The total thermal power that is currently gained through solar radiation through windows."],
+        outputs: list[tuple[str, lt.LoadTypes, lt.Units, str]] = [
+            ("TheoreticalThermalBuildingDemand", lt.LoadTypes.HEATING, lt.Units.WATT,
+             "The theoretical heat demand to keep the building at the target temperature."),
+            ("InternalTemperature", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS,
+             "The current internal temperature of the building."),
+            ("SolarGainThroughWindows", lt.LoadTypes.HEATING, lt.Units.WATT,
+             "The total thermal power that is currently gained through solar radiation through windows."),
         ]
         # add the inputs and outputs
         for i in inputs:
@@ -473,7 +477,7 @@ class Building1R1C(cp.Component):
             areas = self.config.areas
         if u_values is None:
             u_values = self.config.u_values
-        result = 0
+        result = 0.0
         # summation
         for hp in HULL_PARTS:
             if hp == "floor":
@@ -548,7 +552,7 @@ class Building1R1C(cp.Component):
         b = 3.7337019  # stderr: 0.12951503
         c = 1.05360277  # stderr: 0.0043758
         # Calculate the overestimation ratio and return the inverse
-        overestimation_ratio = a * np.exp(-tau_hours / b) + c
+        overestimation_ratio = float(a * np.exp(-tau_hours / b) + c)
         return 1.0 / overestimation_ratio
 
     # --------------------------------------------------------------------------------------------
@@ -596,7 +600,7 @@ class Building1R1C(cp.Component):
         # get inputs and cache state. WARNING: the shorthand get_input_value() function relies on
         # stsv being cached to self.stsv - but this is otherwise highly obscure, therefore it gets
         # deleted immediately after use. DO NOT use this at ANY other point in this class!
-        self.stsv: cp.SingleTimeStepValues = stsv
+        self.stsv = stsv
         temperature_outside = self.get_input_value(self.TemperatureOutside)
         thermal_power_inputs = {s: self.get_input_value(s) for s in thermal_sources}
         solar_inputs = {s: self.get_input_value(s) for s in solar_sources}
@@ -682,18 +686,19 @@ class Building1R1C(cp.Component):
             z = kwargs["ApparentZenith"],
             a = self.config.areas["windows"],
         )
-        import pvlib
-        solar_power_pvlib = 0
-        for tilt, azimuth in [[0, 0], [0, 90], [0, 180], [0, 270]]:
-            solar_power_pvlib += pvlib.irradiance.get_total_irradiance(
-                surface_tilt = tilt,
-                surface_azimuth = azimuth,
-                solar_zenith = kwargs["ApparentZenith"],
-                solar_azimuth = kwargs["Azimuth"],
-                dhi = kwargs["DiffuseHorizontalIrradiance"],
-                dni = kwargs["DirectNormalIrradiance"],
-                ghi = kwargs["GlobalHorizontalIrradiance"]
-            )["poa_global"]
+        # for testing purposes:
+        # import pvlib
+        # solar_power_pvlib = 0
+        # for tilt, azimuth in [[0, 0], [0, 90], [0, 180], [0, 270]]:
+        #     solar_power_pvlib += pvlib.irradiance.get_total_irradiance(
+        #         surface_tilt = tilt,
+        #         surface_azimuth = azimuth,
+        #         solar_zenith = kwargs["ApparentZenith"],
+        #         solar_azimuth = kwargs["Azimuth"],
+        #         dhi = kwargs["DiffuseHorizontalIrradiance"],
+        #         dni = kwargs["DirectNormalIrradiance"],
+        #         ghi = kwargs["GlobalHorizontalIrradiance"]
+        #     )["poa_global"]
         return solar_power * self.config.solar_gain_reduction_factor
 
     def calc_new_internal_temperature(
@@ -880,7 +885,7 @@ class SolarGainsCalculator:
             10.08: [1.009, -0.708, -0.433, 0.287, -1.286, 0.166],
             None:  [0.936, -1.121, -0.352, 0.226, -2.449, 0.383],
         }
-        for val in table:
+        for val in table:  # pylint: disable=consider-using-dict-items
             if val is None or val <= epsilon:
                 return table[val]
-        raise IndexError(f"Something went really wrong, this should not have been reachable.")
+        raise IndexError("Something went really wrong, this should not have been reachable.")

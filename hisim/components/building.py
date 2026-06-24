@@ -1979,6 +1979,8 @@ class Building(cp.Component):
                 indoor_air_temperature_set_in_celsius = set_cooling_temperature_in_celsius
             elif indoor_air_temperature_zero_in_celsius < set_heating_temperature_in_celsius:
                 indoor_air_temperature_set_in_celsius = set_heating_temperature_in_celsius
+            else:
+                raise NotImplementedError("Behavior for indoor_air_temperature_zero_in_celsius == set_cooling_temperature_in_celsius is undefined.")
 
             theoretical_thermal_building_demand_in_watt = (
                 self.calc_theoretical_thermal_building_demand_when_heating_or_cooling_needed_step_two(
@@ -2136,7 +2138,7 @@ class Window:
         # Angles
         self.window_tilt_angle: float = window_tilt_angle  # this value is in degrees!
         if window_azimuth_angle is None:
-            self.window_azimuth_angle = 0
+            self.window_azimuth_angle = 0.0
             log.warning("Window azimuth angle was set to 0 south because no value was set.")
         else:
             self.window_azimuth_angle = window_azimuth_angle

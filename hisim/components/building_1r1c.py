@@ -739,7 +739,7 @@ class Building1R1C(cp.Component):
         if method == "analytical": # most accurate but slowest
             # Analytical solution of T' = P_heat/c - (T - T_amb) * H/c
             t_equilibrium = thermal_power_input/h_tr_coeff + t_outside
-            exp_term = np.exp(-(h_tr_coeff/cap_th) * seconds_per_timestep) 
+            exp_term = float(np.exp(-(h_tr_coeff/cap_th) * seconds_per_timestep))
             return (t_internal_previous - t_equilibrium) * exp_term + t_equilibrium
         elif method == "trapezoidal_rule": # about twice as fast as analytical method
             # Solve this on a piece of paper if you need to understand these calculations:
@@ -791,7 +791,7 @@ class SolarGainsCalculator:
     @staticmethod
     def calc_direct_irrad(dni: float, z: float) -> float:
         # dni * altitude angle factor * factor due to integrating over the azimuth angle
-        return max(dni * np.sin(z) / np.pi, 0)
+        return float(max(dni * np.sin(z) / np.pi, 0.0))
 
     @staticmethod
     def calc_diffuse_irrad(dhi: float, dni: float, dni_e: float, z: float) -> float:
@@ -823,8 +823,8 @@ class SolarGainsCalculator:
         # - altitude = 90 - zenith -> cos(altitude) = cos(90 - zenith) = -sin(-zenith) = sin(zenith)
         # - with tan = sin/cos, the entire term simplifies to tan(zenith)/pi
         f1, f2 = SolarGainsCalculator.get_f1_and_f2(dhi, dni, dni_e, z)
-        # to avoid explosion, z is clipped to 85° max - that is roughly 1.4835 in radiants
-        return max(dhi * (0.5*(1-f1) + (np.tan(min(1.4835, z)))/np.pi*f1 + f2), 0)
+        # to avoid explosion, z is clipped to 85° max - that is roughly 1.4835 in radians
+        return float(max(dhi * (0.5*(1-f1) + (np.tan(min(1.4835, z)))/np.pi*f1 + f2), 0.0))
 
     @staticmethod
     def get_f1_and_f2(dhi: float, dni: float, dni_e: float, z: float):
@@ -868,8 +868,8 @@ class SolarGainsCalculator:
             dni_e (float): The extraterrestrial direct normal irradiation in W/m².
             z (float): Solar zenith angle in radians.
         """
-        # to avoid div by zero, z is clipped to 85° max - that is roughly 1.4835 in radiants
-        m_a = 1 / np.cos(min(1.4835, z))  # very simplified formula for the air mass
+        # to avoid div by zero, z is clipped to 85° max - that is roughly 1.4835 in radians
+        m_a = float(1 / np.cos(min(1.4835, z)))  # very simplified formula for the air mass
         return dhi * m_a / dni_e
 
     @staticmethod

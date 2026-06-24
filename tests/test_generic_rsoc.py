@@ -1,4 +1,9 @@
-"""Test for generic rsoc."""
+"""Tests for the generic reversible Solid Oxide Cell (rSOC) component.
+
+This module verifies the behavior of the generic_rsoc component which models
+both SOEC (Solid Oxide Electrolysis Cell) for hydrogen production and SOFC
+(Solid Oxide Fuel Cell) for power generation modes.
+"""
 
 # clean
 import pytest
@@ -7,12 +12,16 @@ from hisim import component as cp
 from hisim.components import generic_rsoc
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim import log
 
 
 @pytest.mark.base
 def test_electrolyzer():
-    """Test for electrolyzer."""
+    """Test rSOC electrolyzer (SOEC) mode with ramp-up dynamics.
+
+    Simulates the rSOC component with a -10 kW power input to activate
+    SOEC mode. Verifies that hydrogen flow rates remain zero during the
+    initial timestep due to the system's slow ramp-up rate.
+    """
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
         2021, seconds_per_timestep
@@ -85,7 +94,6 @@ def test_electrolyzer():
     # Simulate
     my_rsoc.i_restore_state()
     my_rsoc.i_simulate(timestep, stsv, False)
-    log.information(str(stsv.values))
 
     # Checking differnt values
     assert (

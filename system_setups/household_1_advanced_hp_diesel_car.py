@@ -48,7 +48,12 @@ class HouseholdAdvancedHPDieselCarOptions:
 
 @dataclass
 class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
-    """Configuration for with advanced heat pump and diesel car."""
+    """Configuration for a household simulation with advanced heat pump and diesel car.
+
+    This configuration bundles all component configs for a single-family home simulation:
+    building, occupancy, advanced heat pump (space heating), DHW heat pump with storage,
+    heat distribution system, diesel car, and electricity meter.
+    """
 
     building_type: str
     number_of_apartments: int
@@ -111,7 +116,7 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
             config=hds_controller_config
         )
         household_config = HouseholdAdvancedHPDieselCarConfig(
-            building_type="blub",
+            building_type="single_family_home",
             number_of_apartments=int(my_building_information.number_of_apartments),
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
                 data_acquisition_mode=loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP,
@@ -131,7 +136,7 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
             hds_controller_config=hds_controller_config,
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                     heating_system=hds_controller_config.heating_system,
                 )

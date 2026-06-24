@@ -1,6 +1,6 @@
 """Basic household system setup. Shows how to set up a standard system."""
 
-from typing import Optional, Any, Union, List
+from typing import Optional, Union, List
 import os
 import re
 from utspclient.helpers.lpgdata import (
@@ -11,7 +11,7 @@ from hisim.building_sizer_utils.interface_configs.modular_household_config impor
     ModularHouseholdConfig,
     read_in_configs,
 )
-from hisim.simulator import SimulationParameters
+from hisim.simulator import SimulationParameters, Simulator
 from hisim.components import (
     more_advanced_heat_pump_hplib,
     heat_distribution_system,
@@ -43,7 +43,7 @@ __status__ = "development"
 
 
 def setup_function(
-    my_sim: Any,
+    my_sim: Simulator,
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
     """Basic household system setup.
@@ -338,7 +338,7 @@ def setup_function(
     # Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )

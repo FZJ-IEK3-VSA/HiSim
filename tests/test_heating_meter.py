@@ -1,8 +1,9 @@
-"""Test for electricity meter."""
+"""Test for heating meter component."""
 
 # clean
 
 import os
+from pathlib import Path
 import json
 from typing import Optional
 import pytest
@@ -24,7 +25,6 @@ from hisim.components import (
 from hisim import utils
 
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim import log
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -32,7 +32,7 @@ PATH = "../system_setups/household_for_test_gas_meter.py"
 
 
 @utils.measure_execution_time
-@pytest.mark.base
+@pytest.mark.extendedbase
 def test_house(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
@@ -61,10 +61,7 @@ def test_house(
 
     # this part is copied from hisim_main
     # Build Simulator
-    normalized_path = os.path.normpath(PATH)
-    path_in_list = normalized_path.split(os.sep)
-    if len(path_in_list) >= 1:
-        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
+    path_to_be_added = str(Path(PATH).resolve().parent)
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
@@ -119,7 +116,7 @@ def test_house(
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
@@ -247,16 +244,9 @@ def test_house(
         "CO2 footprint of heat consumption from grid"
     ].get("value")
 
-    log.information(
-        "Heat consumption for space heating [kWh] " + str(heat_consumption_for_space_heating_in_kilowatt_hour)
-    )
     # log.information(
     #     "Heat consumption for domestic hot water [kWh] " + str(heat_consumption_for_domestic_hot_water_in_kilowatt_hour)
     # )
-    log.information("Total heat consumption measured by heating meter [kWh] " + str(heat_consumption_in_kilowatt_hour))
-    log.information("Opex costs for total gas consumption [€] " + str(opex_costs_for_heat_in_euro))
-    log.information("CO2 footprint for total heat consumption [kg] " + str(co2_footprint_due_to_heat_use_in_kg))
-
     # test and compare with relative error of 5%
     # np.testing.assert_allclose(
     #     heat_consumption_in_kilowatt_hour,

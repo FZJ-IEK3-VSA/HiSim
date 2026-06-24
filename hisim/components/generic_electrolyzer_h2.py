@@ -1,7 +1,7 @@
 """Green hydrogen electrolyzer."""
 
 # clean
-import os
+from pathlib import Path
 from typing import List, Any
 import json
 from dataclasses import dataclass
@@ -41,7 +41,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
     electrolyzer_type: str
     nom_load: float  # [kW]
     max_load: float  # [kW]
-    nom_h2_flow_rate: float  # [m^3/h]
+    nom_h2_flow_rate: float  # [kg/h]
     faraday_eff: float
     i_cell_nom: float
     ramp_up_rate: float  # [%/s]
@@ -60,7 +60,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
             electrolyzer_type="Alkaline",
             nom_load=100.0,  # [kW]
             max_load=110.0,  # [kW]
-            nom_h2_flow_rate=100.0,  # [m^3/h]
+            nom_h2_flow_rate=100.0,  # [kg/h]
             faraday_eff=1.0,
             i_cell_nom=0.3,
             ramp_up_rate=0.1,  # [%/s]
@@ -73,8 +73,8 @@ class ElectrolyzerConfig(cp.ConfigBase):
     def read_config(electrolyzer_name):
         """Opens the according JSON-file, based on the electrolyzer_name."""
 
-        config_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json")
-        with open(config_file, "r", encoding="utf-8") as json_file:
+        config_file = Path(utils.HISIMPATH["inputs"]) / "electrolyzer_manufacturer_config.json"
+        with config_file.open("r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             electrolyzer_variants = data["Electrolyzer variants"]
             if electrolyzer_name not in electrolyzer_variants:
@@ -131,7 +131,7 @@ class Electrolyzer(cp.Component):
         Maximum load of the electrolyzer in [kW].
 
     nom_h2_flow_rate : float
-        Hydrogen flow rate at nominal conditions in [m^3/h].
+        Hydrogen flow rate at nominal conditions in [kg/h].
 
     faraday_eff : float
         Measure of the efficiency of the given electrochemical transformation.
@@ -181,7 +181,6 @@ class Electrolyzer(cp.Component):
     ):
         """Constructs all the neccessary attributes."""
         self.electrolyzerconfig = config
-        print(config)
 
         self.technology_type = config.electrolyzer_type
         if self.technology_type is None:
@@ -370,14 +369,30 @@ class Electrolyzer(cp.Component):
     def spec_el_stack_demand_and_polarization_data_config(
         electrolyzer_type, nominal_load, h2_flow_rate, faraday_eff, i_cell_nom
     ):
-        """Polarization curve data is provided corresponding to the used electrolyzer technology.
+        """Calculate polarization curve data and auxiliary power for the electrolyzer.
 
-        Following this, the auxiliary power of the system and the cell volatge is calculated,
+        Polarization curve data is provided corresponding to the used electrolyzer technology.
+        Following this, the auxiliary power of the system and the cell voltage is calculated,
         based on the nominal current density.
+
+        Args:
+            electrolyzer_type (str): Type of electrolyzer technology (e.g., "Alkaline", "PEM", "SolidOxide")
+            nominal_load (float): Nominal load of the electrolyzer [kW]
+            h2_flow_rate (float): Nominal hydrogen flow rate [kg/h]
+            faraday_eff (float): Faraday efficiency (dimensionless, 0-1)
+            i_cell_nom (float): Nominal current density [A/cm²]
+
+        Returns:
+            tuple: A 5-tuple containing:
+                - i_cell (list): Current density data points from polarization curve [A/cm²]
+                - u_cell (list): Cell voltage data points from polarization curve [V]
+                - i_cell_nom (float): Nominal current density [A/cm²]
+                - u_cell_nom (float): Cell voltage at nominal current density [V]
+                - aux_power (float): Auxiliary power consumption [kW]
         """
         # Load data from the JSON file
-        data_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_polarization_curve_data.json")
-        with open(data_file, "r", encoding="utf-8") as file:
+        data_file = Path(utils.HISIMPATH["inputs"]) / "electrolyzer_polarization_curve_data.json"
+        with data_file.open("r", encoding="utf-8") as file:
             data = json.load(file)
 
         # Check if the provided technology is valid
@@ -410,14 +425,25 @@ class Electrolyzer(cp.Component):
 
     @staticmethod
     def soec_efficiency(electrolyzer_type, current_load, max_load, state):
-        """Efficiency curve data is provided corresponding to the used electrolyzer technology.
+        """Calculate SOEC (Solid Oxide Electrolyzer Cell) efficiency and hydrogen production rate.
 
-        Following this, the auxiliary power of the system and the cell volatge is calculated,
-        based on the nominal current density.
+        Efficiency curve data is provided corresponding to the used electrolyzer technology.
+        The system efficiency and hydrogen production rate are calculated based on the current load.
+
+        Args:
+            electrolyzer_type (str): Type of electrolyzer technology (e.g., "SolidOxide")
+            current_load (float): Current electrical load [kW]
+            max_load (float): Maximum load capacity [kW]
+            state (int): Operating state (1 = on, 0 = off/standby)
+
+        Returns:
+            tuple: A 2-tuple containing:
+                - current_sys_eff_soec (float): Current system efficiency (dimensionless, 0-1)
+                - current_h2_production_rate (float): Hydrogen production rate [kg/h]
         """
         # Load data from the JSON file
-        data_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_efficiency_curve_data.json")
-        with open(data_file, "r", encoding="utf-8") as file:
+        data_file = Path(utils.HISIMPATH["inputs"]) / "electrolyzer_efficiency_curve_data.json"
+        with data_file.open("r", encoding="utf-8") as file:
             data = json.load(file)
 
         # Check if the provided technology is valid
@@ -453,11 +479,27 @@ class Electrolyzer(cp.Component):
         current_load,
         state,
     ):
-        """Hydrogen prodution rate.
+        """Calculate hydrogen production rate and efficiency based on polarization curve.
 
-        Based on the polarisation curve, the spec. electricity demand and
-        the current load, the H2 production and the spec. H2 production rate
-        is calculated.
+        Based on the polarization curve, the specific electricity demand and
+        the current load, the H2 production rate and the specific H2 production rate
+        are calculated.
+
+        Args:
+            i_cell_nom (float): Nominal current density [A/cm²]
+            u_cell_nom (float): Nominal cell voltage [V]
+            nominal_load (float): Nominal load of the electrolyzer [kW]
+            i_cell (list): Current density data points [A/cm²]
+            u_cell (list): Cell voltage data points [V]
+            h2_flow_rate (float): Nominal hydrogen flow rate [kg/h]
+            aux_power (float): Auxiliary power consumption [kW]
+            current_load (float): Current electrical load [kW]
+            state (int): Operating state (1 = on, 0 = off/standby)
+
+        Returns:
+            tuple: A 2-tuple containing:
+                - current_h2_production_rate (float): Current hydrogen production rate [kg/h]
+                - current_eff (float): Current efficiency (dimensionless, based on LHV of H2 = 33.33 kWh/kg)
         """
 
         nominal_power_density = i_cell_nom * u_cell_nom  # W/cm²
@@ -489,11 +531,17 @@ class Electrolyzer(cp.Component):
 
         return current_h2_production_rate, current_eff
 
-    def oxygen_productin(self, current_h2_production_rate):
-        """Oxygen production.
+    def oxygen_production(self, current_h2_production_rate):
+        """Calculate oxygen production rate based on hydrogen production.
 
         Returns the produced flow rate of oxygen,
-        based on the current hydrogen flow rate.
+        based on the current hydrogen flow rate using stoichiometric ratios.
+
+        Args:
+            current_h2_production_rate (float): Current hydrogen production rate [kg/h]
+
+        Returns:
+            float: Oxygen production rate [kg/h]
         """
         m_o2 = 31.9988
         m_h2 = 2.01588
@@ -501,10 +549,16 @@ class Electrolyzer(cp.Component):
         return m_dot_o2
 
     def water_demand(self, current_h2_production_rate):
-        """Water demand.
+        """Calculate water demand based on hydrogen production rate.
 
         Returns the water demand flow rate,
-        based on the current hydrogen flow rate.
+        based on the current hydrogen flow rate using stoichiometric ratios.
+
+        Args:
+            current_h2_production_rate (float): Current hydrogen production rate [kg/h]
+
+        Returns:
+            float: Water demand flow rate [kg/h]
         """
         m_h2o = 18.01528
         m_h2 = 2.01588
@@ -673,7 +727,7 @@ class Electrolyzer(cp.Component):
                 state,
             )
         # Current oxygen and water flow rate
-        current_flow_rate_oxygen = self.oxygen_productin(current_h2_production_rate)
+        current_flow_rate_oxygen = self.oxygen_production(current_h2_production_rate)
         current_flow_rate_water = self.water_demand(current_h2_production_rate)
 
         # Calculating total amount of hydrogen, oxygen and water

@@ -12,7 +12,6 @@ import pandas as pd
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.component_wrapper import ComponentWrapper
 from hisim import sim_repository
-from hisim.postprocessing import postprocessing_main as pp
 import hisim.component as cp
 import hisim.dynamic_component as dcp
 from hisim import log
@@ -49,7 +48,7 @@ class Simulator:
         self._simulation_parameters: SimulationParameters
         if my_simulation_parameters is not None:
             self._simulation_parameters = my_simulation_parameters
-            log.LOGGING_LEVEL = self._simulation_parameters.logging_level
+            log.logger.logging_level = self._simulation_parameters.logging_level
         self.wrapped_components: List[ComponentWrapper] = []
         self.all_outputs: List[cp.ComponentOutput] = []
 
@@ -66,7 +65,7 @@ class Simulator:
         """Sets the simulation parameters and the logging level at the same time."""
         self._simulation_parameters = my_simulation_parameters
         if self._simulation_parameters is not None:
-            log.LOGGING_LEVEL = self._simulation_parameters.logging_level
+            log.logger.logging_level = self._simulation_parameters.logging_level
 
     def get_simulation_parameters(self) -> SimulationParameters:
         """Returns the simulation parameters for exporting them to JSON."""
@@ -187,8 +186,9 @@ class Simulator:
         ):
 
             # check if result path is already set somewhere manually
-            if ResultPathProviderSingleton().get_result_directory_name() is not None:
-                self._simulation_parameters.result_directory = ResultPathProviderSingleton().get_result_directory_name()
+            result_directory = ResultPathProviderSingleton().get_result_directory_name()
+            if result_directory is not None:
+                self._simulation_parameters.result_directory = result_directory
                 log.information(
                     "Using result directory: "
                     + self._simulation_parameters.result_directory
@@ -203,7 +203,10 @@ class Simulator:
                     scenario_hash_string=None,
                     sorting_option=SortingOptionEnum.FLAT,
                 )
-                self._simulation_parameters.result_directory = ResultPathProviderSingleton().get_result_directory_name()
+                result_directory = ResultPathProviderSingleton().get_result_directory_name()
+                if result_directory is None:
+                    raise ValueError("Result path provider did not return a result directory.")
+                self._simulation_parameters.result_directory = result_directory
                 log.information(
                     f"Using result directory:  {self._simulation_parameters.result_directory}"
                     + " which is set by the simulator."
@@ -212,7 +215,6 @@ class Simulator:
         if not os.path.isdir(self._simulation_parameters.result_directory):
             os.makedirs(self._simulation_parameters.result_directory, exist_ok=True)
 
-        log.LOGGING_LEVEL = self._simulation_parameters.logging_level
         self.iteration_logging_path = os.path.join(
             self._simulation_parameters.result_directory, "Detailed_Iteration_Log.txt"
         )
@@ -230,8 +232,9 @@ class Simulator:
         if len(self.wrapped_components) == 0:
             raise ValueError("Not a single component was defined. Quitting.")
 
-        # call again because it might not have gotten executed depending on how it's called.
+        # prepare logging and simulation directory
         self.prepare_simulation_directory()
+        log.logger.setup(self._simulation_parameters.result_directory)
 
         flagfile = os.path.join(self._simulation_parameters.result_directory, "finished.flag")
         if self._simulation_parameters.skip_finished_results and os.path.exists(flagfile):
@@ -262,15 +265,14 @@ class Simulator:
         stsv = cp.SingleTimeStepValues(number_of_outputs)
 
         for step in range(self._simulation_parameters.timesteps):
-            if self._simulation_parameters.timesteps % 500 == 0:
-                log.information("Starting step " + str(step))
-
             (
                 resulting_stsv,
                 iteration_tries,
                 force_convergence,
             ) = self.process_one_timestep(step, stsv)
-            stsv = cp.SingleTimeStepValues(number_of_outputs)
+            # Comment this out to always begin the convergence process with the previously converged state
+            # stsv = cp.SingleTimeStepValues(number_of_outputs)
+
             # Accumulates iteration counter
             total_iteration_tries_since_last_msg += iteration_tries
 
@@ -296,6 +298,8 @@ class Simulator:
         if postprocessing_datatransfer is None:
             raise ValueError("postprocessing_datatransfer was none")
 
+        from hisim.postprocessing import postprocessing_main as pp  # pylint: disable=import-outside-toplevel
+
         my_post_processor = pp.PostProcessor()
         my_post_processor.run(ppdt=postprocessing_datatransfer, my_sim=self)
         for wrapped_component in self.wrapped_components:
@@ -310,7 +314,20 @@ class Simulator:
 
     @utils.measure_execution_time
     def prepare_post_processing(self, all_result_lines, start_counter):
-        """Prepares the post processing."""
+        """Assembles simulation results into a DataFrame and prepares data for post-processing.
+
+        Builds a pandas DataFrame from simulation outputs, assigns a datetime index based on
+        simulation start/end dates and timestep size, and optionally computes monthly, daily,
+        hourly, and cumulative aggregations. Returns a PostProcessingDataTransfer object
+        containing all results and metadata.
+
+        Args:
+            all_result_lines: List of result arrays, one per timestep.
+            start_counter: High-resolution time from before simulation started, used to compute execution time.
+
+        Returns:
+            PostProcessingDataTransfer: Object bundling results, outputs, parameters, and timing for post-processing.
+        """
         log.information("Preparing post processing")
         # Prepares the results from the simulation for the post processing.
         if len(all_result_lines) != self._simulation_parameters.timesteps:
@@ -327,7 +344,7 @@ class Simulator:
         df_index = pd.date_range(
             start=self._simulation_parameters.start_date,
             end=self._simulation_parameters.end_date,
-            freq=f"{self._simulation_parameters.seconds_per_timestep}S",
+            freq=f"{self._simulation_parameters.seconds_per_timestep}s",
         )[:-1]
         self.results_data_frame.index = df_index
         end_counter = time.perf_counter()
@@ -438,14 +455,14 @@ class Simulator:
             unit = self.all_outputs[i].unit
 
             if unit in units_mean:
-                monthly = col_data.resample("M").mean()
+                monthly = col_data.resample("ME").mean()
                 daily = col_data.resample("D").mean()
-                hourly = col_data.resample("60T").mean() if use_hourly_resample else col_data
+                hourly = col_data.resample("60min").mean() if use_hourly_resample else col_data
                 cumulative = col_data.mean()
             else:
-                monthly = col_data.resample("M").sum()
+                monthly = col_data.resample("ME").sum()
                 daily = col_data.resample("D").sum()
-                hourly = col_data.resample("60T").sum() if use_hourly_resample else col_data
+                hourly = col_data.resample("60min").sum() if use_hourly_resample else col_data
                 cumulative = col_data.sum()
 
             monthly_frames.append(monthly.rename(column_name))
@@ -530,18 +547,3 @@ class Simulator:
                 f"Automatic connection does not work for {target_component.component_name} because no default connections were found. "
                 + "Please check if a connection is needed and if yes, create the missing default connection in your component."
             )
-
-    def put_log_files_into_result_path(self) -> None:
-        """Put logging files from /logs path into result path."""
-
-        default_logging_path = log.LOGGING_DEFAULT_PATH
-        result_directory = self._simulation_parameters.result_directory
-
-        if os.path.exists(result_directory) is False:
-            raise NameError(f"The result directory {result_directory} could not be found.")
-
-        # move log files to result path
-        for file in os.listdir(default_logging_path):
-            # if logging file is not yet in result directory, move it from default directory /logs to result directory
-            if not os.path.isfile(os.path.join(result_directory, file)):
-                os.rename(os.path.join(default_logging_path, file), os.path.join(result_directory, file))

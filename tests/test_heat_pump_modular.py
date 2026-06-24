@@ -45,7 +45,7 @@ def test_heat_pump_modular():
         "FakeTemperatureOutside",
         "TemperatureAir",
         lt.LoadTypes.TEMPERATURE,
-        lt.Units.WATT,
+        lt.Units.CELSIUS,
     )
 
     # definition of building output
@@ -80,14 +80,14 @@ def test_heat_pump_modular():
     stsv.values[0] = 10
     stsv.values[1] = 0
     stsv.values[2] = 0
-    timestep = 60 * 60
+    time_in_seconds = 60 * 60
 
     # Simulate
     my_heat_pump_controller_l1.i_restore_state()
-    my_heat_pump_controller_l1.i_simulate(timestep, stsv, False)
+    my_heat_pump_controller_l1.i_simulate(time_in_seconds, stsv, False)
 
     my_heat_pump.i_restore_state()
-    my_heat_pump.i_simulate(timestep, stsv, False)
+    my_heat_pump.i_simulate(time_in_seconds, stsv, False)
 
     # -> Did heat pump turn on?
     # Check if there is a signal to heat up the house

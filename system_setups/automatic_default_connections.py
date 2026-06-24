@@ -60,7 +60,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # Set Fix System Parameters
 
     # Set Heat Pump
-    heating_reference_temperature_in_celsius: float = -7  # t_in #TODO: get real heating ref temps according to location
+    heating_reference_temperature_in_celsius: float = -7  # heating_reference_temperature_in_celsius #TODO: get real heating ref temps according to location
 
     # =================================================================================================================================
     # Build Basic Components
@@ -132,7 +132,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
@@ -173,16 +173,16 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
     )
 
-    my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
+    my_domestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+    my_domestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
         my_simulation_parameters=my_simulation_parameters,
         config=my_dhw_heatpump_controller_config,
     )
 
-    my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
+    my_domestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
         config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
     )
 
@@ -203,7 +203,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
     my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
+    my_sim.add_component(my_domestic_hot_water_storage, connect_automatically=True)
+    my_sim.add_component(my_domestic_hot_water_heatpump_controller, connect_automatically=True)
+    my_sim.add_component(my_domestic_hot_water_heatpump, connect_automatically=True)
     my_sim.add_component(my_electricity_meter, connect_automatically=True)

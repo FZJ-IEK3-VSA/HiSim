@@ -138,14 +138,18 @@ def generate_csv_for_database(
 ) -> None:
     """Extracts relevant data from the HiSIM simulation and puts it together in a .csv file.
 
-    :param all_outputs: List of all outputs
-    :type all_outputs: List
-    :param results: DataFrame containing all outputs at all time steps
-    :type results: pd.DataFrame
-    :param simulation_parameters: parameters of the simulation
-    :type simulation_parameters: SimulationParameters
-    :param building_data: tabula data of building type
-    :type building_data: pd.DataFrame
+    :param all_outputs: List of all outputs.
+    :param results: DataFrame containing all outputs at all time steps.
+    :param simulation_parameters: Parameters of the simulation.
+    :param building_data: Tabula data of building type.
+    :param occupancy_config: Configuration for the UTSP load-profile generator connector,
+        or None if not used.
+    :param wrapped_components: List of all wrapped components in the simulation,
+        used to locate the Weather component for day/night classification.
+
+    :returns: None. Writes two CSV files per building to the result directory:
+        - `csv_for_housing_data_base_annual_{building_object}.csv`
+        - `csv_for_housing_data_base_seasonal_{building_object}.csv`
     """
 
     fuels_heating = [

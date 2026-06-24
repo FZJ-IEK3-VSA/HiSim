@@ -1,6 +1,6 @@
 """Dynamic Components Module."""
 
-from typing import Any, Optional
+from typing import Optional
 
 from hisim import loadtypes as lt
 from hisim.components import controller_l2_energy_management_system as cl2
@@ -33,18 +33,27 @@ from hisim.components.generic_heat_pump import (
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
-from hisim.simulator import SimulationParameters
+from hisim.simulator import SimulationParameters, Simulator
 
 
 def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> None:  # first with bat
-    """Dynamic Components Demonstration.
+    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
+) -> None:
+    """Configure a decentralized energy network with PV, fuel cell, electrolyzer, and heat pump.
 
-    In this system setup a generic controller is added. The generic controller
-    makes it possible to add component generically.
-    Here two fuel_cell/chp_systems and two batteries
-    are added.
+    This setup wires together components for a hydrogen-based energy system:
+    - Weather and occupancy inputs for realistic demand/generation profiles
+    - PV system (200 kW) for renewable electricity
+    - Fuel cell (NedstackFCS10XXL) with L1/L2 controllers for CHP operation
+    - Electrolyzer (KYROS50) with L1/L2 controllers for hydrogen production
+    - Generic heat pump for building heating
+    - Building model with configurable thermal properties
+    - L2 Energy Management System (EMS) coordinating all components
+
+    Args:
+        my_sim: The simulator instance to configure.
+        my_simulation_parameters: Optional simulation parameters. If None,
+            defaults to a full year simulation at 60-second timesteps for year 2021.
     """
     year = 2021
     seconds_per_timestep = 60
@@ -342,7 +351,7 @@ def setup_function(
     my_fuel_cell.connect_input(
         my_fuel_cell.DemandProfile,
         my_fuel_cell_controller.component_name,
-        my_fuel_cell_controller.PowerTarger,
+        my_fuel_cell_controller.PowerTarget,
     )
     my_fuel_cell.connect_input(
         my_fuel_cell.ControlSignal,

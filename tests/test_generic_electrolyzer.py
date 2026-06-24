@@ -15,8 +15,17 @@ from hisim.components import generic_electrolyzer, controller_l1_electrolyzer
 
 
 @pytest.mark.base
-def test_chp_system():
-    """Test chp system."""
+def test_chp_system() -> None:
+    """Test the electrolyzer and its L1 controller in three scenarios.
+
+    Verifies that:
+    1. The electrolyzer produces hydrogen when electricity is available and
+       hydrogen storage state-of-charge (SOC) is below the threshold.
+    2. The electrolyzer shuts down when hydrogen storage SOC is high,
+       even if electricity is still available.
+    3. The electrolyzer shuts down when electricity is no longer available,
+       regardless of hydrogen storage SOC.
+    """
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(

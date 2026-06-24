@@ -73,60 +73,128 @@ class Quantity(InstanceCounter, Generic[V, U]):
     value: V
     unit: type[U]
 
-    def _is_valid_operand(self, other):
-        """Docstring missing."""
+    def _is_valid_operand(self, other) -> bool:
+        """Check if the other Quantity has the same unit.
+
+        Args:
+            other: The other Quantity to compare.
+
+        Returns:
+            True if units match, False otherwise.
+        """
+        if not isinstance(other, Quantity):
+            return False
         return other.unit == self.unit
 
     def __add__(self, other: Quantity[V, U]) -> Quantity[V, U]:
-        """Docstring missing."""
+        """Add two Quantities with the same unit.
+
+        Args:
+            other: The Quantity to add.
+
+        Returns:
+            A new Quantity with the summed value and same unit.
+
+        Raises:
+            TypeError: If ``other`` is not a Quantity with the same unit. This
+                method returns ``NotImplemented`` for incompatible operands and
+                Python's binary-operator machinery raises ``TypeError`` when no
+                fallback succeeds.
+        """
         if not self._is_valid_operand(other):
             return NotImplemented
         return Quantity(self.value + other.value, self.unit)
 
     def __radd__(self, other: Quantity[V, U]) -> Quantity[V, U]:
-        """Docstring missing."""
+        """Reverse addition — supports `other + quantity`.
+
+        Args:
+            other: The Quantity to add.
+
+        Returns:
+            A new Quantity with the summed value and same unit.
+
+        Raises:
+            TypeError: If ``other`` is not a Quantity with the same unit. This
+                method returns ``NotImplemented`` for incompatible operands and
+                Python's binary-operator machinery raises ``TypeError`` when no
+                fallback succeeds.
+        """
         if not self._is_valid_operand(other):
             return NotImplemented
         return Quantity(self.value + other.value, self.unit)
 
     def __sub__(self, other: Quantity[V, U]) -> Quantity[V, U]:
-        """Docstring missing."""
+        """Subtract two Quantities with the same unit.
+
+        Args:
+            other: The Quantity to subtract.
+
+        Returns:
+            A new Quantity with the difference and same unit.
+
+        Raises:
+            TypeError: If ``other`` is not a Quantity with the same unit. This
+                method returns ``NotImplemented`` for incompatible operands and
+                Python's binary-operator machinery raises ``TypeError`` when no
+                fallback succeeds.
+        """
         if not self._is_valid_operand(other):
             return NotImplemented
         return Quantity(self.value - other.value, self.unit)
 
     def __rsub__(self, other: Quantity[V, U]) -> Quantity[V, U]:
-        """Docstring missing."""
+        """Reverse subtraction — supports `other - quantity`.
+
+        Args:
+            other: The Quantity to subtract.
+
+        Returns:
+            A new Quantity with the difference and same unit.
+
+        Raises:
+            TypeError: If ``other`` is not a Quantity with the same unit. This
+                method returns ``NotImplemented`` for incompatible operands and
+                Python's binary-operator machinery raises ``TypeError`` when no
+                fallback succeeds.
+        """
         if not self._is_valid_operand(other):
             return NotImplemented
         return Quantity(self.value - other.value, self.unit)
 
-    def __eq__(self, other):
-        """Docstring missing."""
-        if not self._is_valid_operand(other):
-            return NotImplemented
-        return self.value == other.value
+    def __eq__(self, other: object) -> bool:
+        """Check equality with another Quantity.
 
-    def __lt__(self, other):
-        """Docstring missing."""
+        Args:
+            other: The object to compare.
+
+        Returns:
+            True if both Quantities have the same unit and value.
+        """
+        if not isinstance(other, Quantity) or other.unit != self.unit:
+            return False
+        return bool(self.value == other.value)
+
+    def __lt__(self, other: Quantity[V, U]) -> bool:
+        """Less-than comparison for Quantities with the same unit."""
         if not self._is_valid_operand(other):
             return NotImplemented
         return self.value < other.value
 
-    def __le__(self, other):
-        """Docstring missing."""
+    def __le__(self, other: Quantity[V, U]) -> bool:
+        """Less-than-or-equal comparison for Quantities with the same unit."""
         if not self._is_valid_operand(other):
             return NotImplemented
         return self.value <= other.value
 
-    def __gt__(self, other):
-        """Docstring missing."""
+    def __gt__(self, other: Quantity[V, U]) -> bool:
+        """Greater-than comparison for Quantities with the same unit."""
         if not self._is_valid_operand(other):
             return NotImplemented
         return self.value > other.value
 
-    def __ge__(self, other):
-        """Docstring missing."""
+    def __ge__(self, other: Quantity[V, U]) -> bool:
+        """Greater-than-or-equal comparison for Quantities with the same unit."""
         if not self._is_valid_operand(other):
             return NotImplemented
         return self.value >= other.value

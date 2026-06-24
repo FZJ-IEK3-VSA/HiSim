@@ -1,7 +1,7 @@
 """L2 Controller for PtX Buffer Battery operation."""
 
 # clean
-import os
+from pathlib import Path
 from typing import List, Any
 import json
 from dataclasses import dataclass
@@ -49,13 +49,13 @@ class RsocBatteryControllerConfig(ConfigBase):
     def read_config(rsoc_name):
         """Opens the according JSON-file, based on the rSOC_name."""
 
-        config_file = os.path.join(utils.HISIMPATH["inputs"], "rSOC_manufacturer_config.json")
+        config_file = Path(utils.HISIMPATH["inputs"]) / "rSOC_manufacturer_config.json"
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("rSOC variants", {}).get(rsoc_name, {})
 
     @classmethod
-    def confic_rsoc(
+    def config_rsoc(
         cls,
         rsoc_name: str,
         operation_mode: float,

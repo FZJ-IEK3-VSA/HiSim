@@ -69,7 +69,7 @@ class SingletonSimRepository(metaclass=SingletonMeta):
         self.my_dynamic_dict[component_type][source_weight] = entry
 
     def get_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int) -> Any:
-        """Gets a dynmaic entry."""
+        """Gets a dynamic entry."""
         component = self.my_dynamic_dict.get(component_type, None)
         if component is None:
             return None

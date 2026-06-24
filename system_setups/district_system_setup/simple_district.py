@@ -130,7 +130,18 @@ class DistrictConfig:
 def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Household system setup."""
+    """Assemble a district-level simulation on the given simulator.
+
+    Wires together weather, multiple GenericBuilding instances, a shared
+    PVSystem, an ElectricityMeter, and optionally an L2 district EMS.
+    SimulationParameters are created from DistrictConfig defaults if not
+    supplied.
+
+    Args:
+        my_sim: Simulator instance on which to register components.
+        my_simulation_parameters: Optional pre-built SimulationParameters;
+            if None, defaults are derived from DistrictConfig.
+    """
 
     # =================================================================================================================================
     # SETUP

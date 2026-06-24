@@ -235,8 +235,8 @@ class VehiclePure(cp.Component):
         else:
 
             def open_sql(path, table_name):
-                sql_file = sqlite3.connect(path)
-                return pd.read_sql(f"SELECT * FROM {table_name};", sql_file)
+                with sqlite3.connect(path) as sql_file:
+                    return pd.read_sql(f"SELECT * FROM {table_name};", sql_file)
 
             def open_ev_json(filepath):
                 with open(filepath, encoding="utf-8") as file:

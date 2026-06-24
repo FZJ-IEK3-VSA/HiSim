@@ -1,0 +1,427 @@
+{
+    "name": "Dynamic components",
+    "description": "Dynamic Components Module.",
+    "multiple_buildings": false,
+    "components": [
+        {
+            "component_full_classname": "hisim.components.advanced_battery_bslib.Battery",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Battery1",
+                "source_weight": 1,
+                "system_id": "SG1",
+                "custom_pv_inverter_power_generic_in_watt": 5.0,
+                "custom_battery_capacity_generic_in_kilowatt_hour": 10.0,
+                "charge_in_kwh": 0,
+                "discharge_in_kwh": 0,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null,
+                "lifetime_in_cycles": 5000.0
+            },
+            "config_full_classname": "hisim.components.advanced_battery_bslib.BatteryConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.advanced_battery_bslib.Battery",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Battery2",
+                "source_weight": 2,
+                "system_id": "SG1",
+                "custom_pv_inverter_power_generic_in_watt": 2.5,
+                "custom_battery_capacity_generic_in_kilowatt_hour": 5.0,
+                "charge_in_kwh": 0,
+                "discharge_in_kwh": 0,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null,
+                "lifetime_in_cycles": 5000.0
+            },
+            "config_full_classname": "hisim.components.advanced_battery_bslib.BatteryConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.advanced_fuel_cell.CHP",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "CHP1",
+                "min_operation_time": 60,
+                "min_idle_time": 15,
+                "gas_type": "Hydrogen",
+                "operating_mode": "both",
+                "is_modulating": true,
+                "p_el_min": 2000,
+                "p_th_min": 3000,
+                "eff_el_min": 0.2,
+                "eff_th_min": 0.5,
+                "mass_flow_max": 0.011,
+                "p_el_max": 3000,
+                "p_th_max": 4000,
+                "eff_el_max": 0.4,
+                "eff_th_max": 0.55,
+                "temperature_max": 80,
+                "delta_temperature": 10
+            },
+            "config_full_classname": "hisim.components.advanced_fuel_cell.CHPConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.advanced_fuel_cell.CHP",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "CHP2",
+                "min_operation_time": 60,
+                "min_idle_time": 15,
+                "gas_type": "Hydrogen",
+                "operating_mode": "both",
+                "is_modulating": true,
+                "p_el_min": 2000,
+                "p_th_min": 3000,
+                "eff_el_min": 0.2,
+                "eff_th_min": 0.5,
+                "mass_flow_max": 0.011,
+                "p_el_max": 3000,
+                "p_th_max": 4000,
+                "eff_el_max": 0.4,
+                "eff_th_max": 0.55,
+                "temperature_max": 80,
+                "delta_temperature": 10
+            },
+            "config_full_classname": "hisim.components.advanced_fuel_cell.CHPConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "L2EMSElectricityController",
+                "strategy": "optimize_own_consumption",
+                "limit_to_shave": 0,
+                "building_indoor_temperature_offset_value": 2,
+                "domestic_hot_water_storage_temperature_offset_value": 10,
+                "space_heating_water_storage_temperature_offset_value": 10,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.controller_l2_energy_management_system.EMSConfig",
+            "inputs": [
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricityOutput",
+                    "source_object_name": "PVSystem",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "ElectricityProduction"
+                    ],
+                    "source_weight": 999
+                },
+                {
+                    "dynamic": true,
+                    "source_component_output": "AcBatteryPowerUsed",
+                    "source_object_name": "Battery1",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "Battery",
+                        "Consumption with EMS control"
+                    ],
+                    "source_weight": 1
+                },
+                {
+                    "dynamic": true,
+                    "source_component_output": "AcBatteryPowerUsed",
+                    "source_object_name": "Battery2",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "Battery",
+                        "Consumption with EMS control"
+                    ],
+                    "source_weight": 2
+                },
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricityOutput",
+                    "source_object_name": "CHP1",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "FuelCell",
+                        "Consumption with EMS control"
+                    ],
+                    "source_weight": 3
+                },
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricityOutput",
+                    "source_object_name": "CHP2",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "FuelCell",
+                        "Consumption with EMS control"
+                    ],
+                    "source_weight": 4
+                }
+            ],
+            "outputs": [
+                {
+                    "dynamic": true,
+                    "source_output_name": "ElectricityTarget",
+                    "source_tags": [
+                        "Battery",
+                        "ElectricityTarget"
+                    ],
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_weight": 1,
+                    "output_description": "Target electricity for battery controller (I). ",
+                    "source_component_class": null
+                },
+                {
+                    "dynamic": true,
+                    "source_output_name": "ElectricityTarget",
+                    "source_tags": [
+                        "Battery",
+                        "ElectricityTarget"
+                    ],
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_weight": 2,
+                    "output_description": "Target electricity for battery controller (II). ",
+                    "source_component_class": null
+                },
+                {
+                    "dynamic": true,
+                    "source_output_name": "ElectricityTarget",
+                    "source_tags": [
+                        "FuelCell",
+                        "ElectricityTarget"
+                    ],
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_weight": 3,
+                    "output_description": "Target electricity for fuel cell (I). ",
+                    "source_component_class": null
+                },
+                {
+                    "dynamic": true,
+                    "source_output_name": "ElectricityTarget",
+                    "source_tags": [
+                        "FuelCell",
+                        "ElectricityTarget"
+                    ],
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_weight": 4,
+                    "output_description": "Target electricity for fuel cell (II). ",
+                    "source_component_class": null
+                }
+            ],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.weather.Weather",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Weather",
+                "location": "Aachen",
+                "source_path": "<<utils.get_input_directory()>>\\weather\\test-reference-years_1995-2012_1-location\\data_processed\\aachen_center",
+                "data_source": 1,
+                "predictive_control": false
+            },
+            "config_full_classname": "hisim.components.weather.WeatherConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "UTSPConnector",
+                "data_acquisition_mode": "use_predefined_profile",
+                "household": {
+                    "name": "CHR01 Couple both at Work",
+                    "guid": {
+                        "str_val": "516a33ab-79e1-4221-853b-967fc11cc85a"
+                    }
+                },
+                "energy_intensity": "EnergySaving",
+                "travel_route_set": {
+                    "name": "Travel Route Set for 10km Commuting Distance",
+                    "guid": {
+                        "str_val": "ca46be86-9cc7-47b5-9769-abff78ceca7a"
+                    }
+                },
+                "transportation_device_set": {
+                    "name": "Bus and one 30 km/h Car",
+                    "guid": {
+                        "str_val": "6ac74bd0-bacd-4b39-b84a-dc7ae16702c9"
+                    }
+                },
+                "charging_station_set": {
+                    "name": "Charging At Home with 11 kW",
+                    "guid": {
+                        "str_val": "78dae308-24c4-45cc-8bdf-b001d61f45c2"
+                    }
+                },
+                "profile_with_washing_machine_and_dishwasher": true,
+                "predictive_control": false,
+                "predictive": false,
+                "result_dir_path": "<<utils.HISIMPATH['utsp_results']>>",
+                "cache_dir_path": null,
+                "name_of_predefined_loadprofile": "CHR01 Couple both at Work",
+                "predefined_loadprofile_filepaths": null,
+                "guid": "",
+                "calculation_index_for_local_lpg": null,
+                "cars": null
+            },
+            "config_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.generic_pv_system.PVSystem",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "PVSystem",
+                "time": 2019,
+                "location": "Aachen",
+                "module_name": "Trina Solar TSM-435NE09RC.05",
+                "integrate_inverter": true,
+                "inverter_name": "Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]",
+                "module_database": 3,
+                "inverter_database": 4,
+                "power_in_watt": 10000.0,
+                "azimuth": 180,
+                "tilt": 30,
+                "share_of_maximum_pv_potential": 1.0,
+                "load_module_data": false,
+                "source_weight": 0,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null,
+                "predictive": false,
+                "predictive_control": false,
+                "prediction_horizon": null
+            },
+            "config_full_classname": "hisim.components.generic_pv_system.PVSystemConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        }
+    ],
+    "connections": [
+        {
+            "source": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "ElectricityTargetOutput16"
+            },
+            "target": {
+                "component_name": "Battery1",
+                "field_name": "LoadingPowerInput"
+            }
+        },
+        {
+            "source": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "ElectricityTargetOutput17"
+            },
+            "target": {
+                "component_name": "Battery2",
+                "field_name": "LoadingPowerInput"
+            }
+        },
+        {
+            "source": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "ElectricityTargetOutput18"
+            },
+            "target": {
+                "component_name": "CHP1",
+                "field_name": "ElectricityFromCHPTarget"
+            }
+        },
+        {
+            "source": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "ElectricityTargetOutput19"
+            },
+            "target": {
+                "component_name": "CHP2",
+                "field_name": "ElectricityFromCHPTarget"
+            }
+        },
+        {
+            "source": {
+                "component_name": "PVSystem",
+                "field_name": "ElectricityOutput"
+            },
+            "target": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "Input_PVSystem_ElectricityOutput_2"
+            }
+        },
+        {
+            "source": {
+                "component_name": "Battery1",
+                "field_name": "AcBatteryPowerUsed"
+            },
+            "target": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "Input_Battery1_AcBatteryPowerUsed_3"
+            }
+        },
+        {
+            "source": {
+                "component_name": "Battery2",
+                "field_name": "AcBatteryPowerUsed"
+            },
+            "target": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "Input_Battery2_AcBatteryPowerUsed_4"
+            }
+        },
+        {
+            "source": {
+                "component_name": "CHP1",
+                "field_name": "ElectricityOutput"
+            },
+            "target": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "Input_CHP1_ElectricityOutput_5"
+            }
+        },
+        {
+            "source": {
+                "component_name": "CHP2",
+                "field_name": "ElectricityOutput"
+            },
+            "target": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "Input_CHP2_ElectricityOutput_6"
+            }
+        }
+    ]
+}

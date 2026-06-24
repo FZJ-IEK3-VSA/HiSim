@@ -17,10 +17,12 @@ The values from `system_setup_config` overwrite specific values of the configura
 Arguments that are not present keep the (scaled) default value.
 """
 
+from __future__ import annotations
+
 import json
 import datetime
 from pathlib import Path
-from typing import Union, Tuple, Optional
+from typing import Any
 from copy import deepcopy
 
 from hisim import log
@@ -30,11 +32,28 @@ from hisim.simulator import SimulationParameters
 
 
 def make_system_setup(
-    parameters_json: Union[dict, list], result_directory: str
-) -> Tuple[str, Optional[SimulationParameters], str]:
-    """Read setup parameters from JSON and build a system setup for a specific system setup.
+    parameters_json: dict[str, Any] | list[Any], result_directory: str
+) -> tuple[str, SimulationParameters, str]:
+    """Read setup parameters from JSON and build a system setup.
 
-    The setup is simulated and result files are stored in `result_directory`.
+    Parses the JSON configuration, creates a SimulationParameters object,
+    and returns the module path and config paths needed to run the simulation.
+    The actual simulation is performed by `hisim.hisim_main.main()`.
+
+    Args:
+        parameters_json: Configuration dict (or list, currently unsupported) containing
+            path_to_module, simulation_parameters, and optional building/system_setup configs.
+        result_directory: Directory path where result files and config JSONs will be written.
+
+    Returns:
+        A tuple of (path_to_module, simulation_parameters, module_config_path) where:
+            - path_to_module: Module path string for the setup function to load.
+            - simulation_parameters: Configured SimulationParameters object.
+            - module_config_path: Path to the written module_config.json file.
+
+    Raises:
+        NotImplementedError: If parameters_json is a list (multi-setup not yet supported).
+        AttributeError: If parameters_json contains unrecognized top-level keys.
     """
     if isinstance(parameters_json, list):
         raise NotImplementedError("System Setup Starter can only handle one setup at a time for now.")
@@ -84,25 +103,24 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) == 1:
-        PARAMETERS_JSON_FILE = "input/request.json"
-        RESULT_DIRECTORY = "results"
+        PARAMETERS_JSON_FILE: str = "input/request.json"
+        RESULT_DIRECTORY: str = "results"
         if not Path(PARAMETERS_JSON_FILE).is_file():
             log.information("Please specify an input JSON file or place it in `input/request.json`.")
             sys.exit(1)
     elif len(sys.argv) == 2:
-        PARAMETERS_JSON_FILE = sys.argv[1]
-        RESULT_DIRECTORY = "results"
+        PARAMETERS_JSON_FILE: str = sys.argv[1]
+        RESULT_DIRECTORY: str = "results"
     elif len(sys.argv) == 3:
-        PARAMETERS_JSON_FILE = sys.argv[1]
-        RESULT_DIRECTORY = sys.argv[2]
+        PARAMETERS_JSON_FILE: str = sys.argv[1]
+        RESULT_DIRECTORY: str = sys.argv[2]
     else:
         log.information("HiSim from JSON received too many arguments.")
-        RESULT_DIRECTORY = ""
         sys.exit(1)
 
     log.information(f"Reading parameters from {PARAMETERS_JSON_FILE}.")
     with open(PARAMETERS_JSON_FILE, "r", encoding="utf8") as file:
-        my_parameters_json: Union[dict, list] = json.load(file)
+        my_parameters_json: dict[str, Any] | list[Any] = json.load(file)
 
     (
         my_path_to_module,

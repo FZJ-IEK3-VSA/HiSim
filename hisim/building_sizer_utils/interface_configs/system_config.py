@@ -16,7 +16,7 @@ class EnergySystemConfig:
     use_battery_and_ems: bool = True
 
     @classmethod
-    def get_default_config_for_energy_system_gas(cls):
+    def get_default_config_for_energy_system_gas(cls) -> "EnergySystemConfig":
         """Get default energy system config."""
         energy_system_config = EnergySystemConfig(
             heating_system=HeatingSystems.GAS_HEATING,
@@ -27,7 +27,7 @@ class EnergySystemConfig:
         return energy_system_config
 
     @classmethod
-    def get_default_config_for_energy_system_oil(cls):
+    def get_default_config_for_energy_system_oil(cls) -> "EnergySystemConfig":
         """Get default energy system config."""
         energy_system_config = EnergySystemConfig(
             heating_system=HeatingSystems.OIL_HEATING,
@@ -38,7 +38,7 @@ class EnergySystemConfig:
         return energy_system_config
 
     @classmethod
-    def get_default_config_for_energy_system_heatpump(cls):
+    def get_default_config_for_energy_system_heatpump(cls) -> "EnergySystemConfig":
         """Get default energy system config."""
         energy_system_config = EnergySystemConfig(
             heating_system=HeatingSystems.HEAT_PUMP,
@@ -49,7 +49,7 @@ class EnergySystemConfig:
         return energy_system_config
 
     @classmethod
-    def get_default_config_for_energy_system_district_heating(cls):
+    def get_default_config_for_energy_system_district_heating(cls) -> "EnergySystemConfig":
         """Get default energy system config."""
         energy_system_config = EnergySystemConfig(
             heating_system=HeatingSystems.DISTRICT_HEATING,
@@ -60,7 +60,7 @@ class EnergySystemConfig:
         return energy_system_config
 
     @classmethod
-    def get_default_config_for_energy_system_pellet_heating(cls):
+    def get_default_config_for_energy_system_pellet_heating(cls) -> "EnergySystemConfig":
         """Get default energy system config."""
         energy_system_config = EnergySystemConfig(
             heating_system=HeatingSystems.PELLET_HEATING,
@@ -71,7 +71,7 @@ class EnergySystemConfig:
         return energy_system_config
 
     @classmethod
-    def get_default_config_for_energy_system_wood_chip_heating(cls):
+    def get_default_config_for_energy_system_wood_chip_heating(cls) -> "EnergySystemConfig":
         """Get default energy system config."""
         energy_system_config = EnergySystemConfig(
             heating_system=HeatingSystems.WOOD_CHIP_HEATING,
@@ -82,7 +82,7 @@ class EnergySystemConfig:
         return energy_system_config
 
     @classmethod
-    def get_default_config_for_energy_system_hydrogen(cls):
+    def get_default_config_for_energy_system_hydrogen(cls) -> "EnergySystemConfig":
         """Get default energy system config."""
         energy_system_config = EnergySystemConfig(
             heating_system=HeatingSystems.HYDROGEN_HEATING,
@@ -93,7 +93,7 @@ class EnergySystemConfig:
         return energy_system_config
 
     @classmethod
-    def get_default_config_for_energy_system_electric(cls):
+    def get_default_config_for_energy_system_electric(cls) -> "EnergySystemConfig":
         """Get default energy system config."""
         energy_system_config = EnergySystemConfig(
             heating_system=HeatingSystems.ELECTRIC_HEATING,
@@ -104,7 +104,7 @@ class EnergySystemConfig:
         return energy_system_config
 
     @classmethod
-    def get_default_config_for_energy_system_gas_solar_thermal(cls):
+    def get_default_config_for_energy_system_gas_solar_thermal(cls) -> "EnergySystemConfig":
         """Get default energy system config."""
         energy_system_config = EnergySystemConfig(
             heating_system=HeatingSystems.GAS_SOLAR_THERMAL,
@@ -115,7 +115,7 @@ class EnergySystemConfig:
         return energy_system_config
 
     @classmethod
-    def get_default_config_for_energy_system_heatpump_solar_thermal(cls):
+    def get_default_config_for_energy_system_heatpump_solar_thermal(cls) -> "EnergySystemConfig":
         """Get default energy system config."""
         energy_system_config = EnergySystemConfig(
             heating_system=HeatingSystems.HEAT_PUMP_SOLAR_THERMAL,

@@ -28,7 +28,6 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         my_simulation_parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
 
-    # testmy_sim = copy.deepcopy(my_sim)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Create first RandomNumbers object and adds to simulator

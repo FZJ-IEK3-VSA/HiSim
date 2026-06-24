@@ -6,8 +6,9 @@ Investigate total consumption, total grid consumption and grid injection.
 
 # clean
 
-import os
+from pathlib import Path
 import json
+from uuid import uuid4
 from typing import Optional
 import pytest
 import numpy as np
@@ -33,13 +34,14 @@ import hisim.loadtypes as lt
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.units import Quantity, Celsius, Watt
+from tests.testing_utils import TestingUtils
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_ems.py"
 
 
 @utils.measure_execution_time
-@pytest.mark.base
+@pytest.mark.extendedbase
 def test_house(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
@@ -57,23 +59,18 @@ def test_house(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_week_only(
+        my_simulation_parameters = SimulationParameters.one_day_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+        my_simulation_parameters.result_directory = TestingUtils.get_result_directory(
+            test_name=f"test_house_district_ems_kpis_{uuid4().hex}"
+        )
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
 
     # this part is copied from hisim_main
     # Build Simulator
-    normalized_path = os.path.normpath(PATH)
-    path_in_list = normalized_path.split(os.sep)
-    if len(path_in_list) >= 1:
-        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
+    path_to_be_added = str(Path(PATH).resolve().parent)
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
@@ -177,7 +174,7 @@ def test_house(
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
             building_name=building_name,
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
@@ -226,22 +223,22 @@ def test_house(
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
     )
 
-    my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
+    my_domestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+    my_domestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
         my_simulation_parameters=my_simulation_parameters,
         config=my_dhw_heatpump_controller_config,
     )
 
-    my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
+    my_domestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
         config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
     )
     # Add to simulator
-    my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
+    my_sim.add_component(my_domestic_hot_water_storage, connect_automatically=True)
+    my_sim.add_component(my_domestic_hot_water_heatpump_controller, connect_automatically=True)
+    my_sim.add_component(my_domestic_hot_water_heatpump, connect_automatically=True)
 
     # Build Electricity Meter
     my_electricity_meter_config = electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(building_name=building_name,)
@@ -295,8 +292,8 @@ def test_house(
         my_electricity_controller.BuildingIndoorTemperatureModifier,
     )
 
-    my_domnestic_hot_water_heatpump_controller.connect_input(
-        my_domnestic_hot_water_heatpump_controller.StorageTemperatureModifier,
+    my_domestic_hot_water_heatpump_controller.connect_input(
+        my_domestic_hot_water_heatpump_controller.StorageTemperatureModifier,
         my_electricity_controller.component_name,
         my_electricity_controller.DomesticHotWaterStorageTemperatureModifier,
     )
@@ -339,7 +336,7 @@ def test_house(
 
     # Read kpi data
     with open(
-        os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"), "r", encoding="utf-8"  # pylint: disable=W0212
+        Path(my_sim._simulation_parameters.result_directory) / "all_kpis.json", "r", encoding="utf-8"  # pylint: disable=W0212
     ) as file:
         jsondata = json.load(file)
 

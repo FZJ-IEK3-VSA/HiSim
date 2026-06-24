@@ -1,4 +1,4 @@
-""" Tests for the basic household system setup. """
+""" Tests for the household system setup with advanced heat pump, hot water storage, heat distribution, PV, battery, and EMS. """
 # clean
 import os
 import pytest

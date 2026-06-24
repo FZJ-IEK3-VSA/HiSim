@@ -1,6 +1,5 @@
 """ Generic Heat Source. """
 
-# clean
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
@@ -42,7 +41,7 @@ class FluidMediaType(Enum):
     """ Sort of Media."""
 
     WATER = "Water"
-    ETHYLEN_GLYCOL = "EthyleneGlycol"
+    ETHYLENE_GLYCOL = "EthyleneGlycol"
     PROPYLEN_GLYCOL = "PropyleneGlycol"
     ETHANOL = "EthylAlcohol"
     METHANOL = "MethylAlcohol"
@@ -386,10 +385,10 @@ class SimpleHeatSource(cp.Component):
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.investment_costs_in_euro / config.lifetime) * (
+        capex_per_simulated_period = (config.investment_costs_in_euro / config.lifetime_in_years) * (
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
-        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
+        device_co2_footprint_per_simulated_period = (config.device_co2_footprint_in_kg / config.lifetime_in_years) * (
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
         capex_cost_data_class = CapexCostDataClass(

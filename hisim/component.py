@@ -256,6 +256,11 @@ class Component:
         ##### Todo: Maybe improve this so that those limitations no longer apply? 
         """
 
+        if not connections:
+            raise ValueError(
+                f"connections list is empty for component {self.component_name}. "
+                "Cannot add default connections from an empty list."
+            )
         component_name = connections[0].source_class_name
         for connection in connections:
             if connection.source_class_name != component_name:
@@ -353,13 +358,24 @@ class Component:
             "To": {"Component": input_to_set.component_name, "Field": input_to_set.field_name},
         }
 
-        if os.path.exists(file_name):
-            with open(file_name, mode="r+", encoding="utf-8") as file:
-                file.seek(os.stat(file_name).st_size - 1)
-                file.write(f",{json.dumps(dict_with_connection_information)}]")
-        else:
-            with open(file_name, "a", encoding="utf-8") as file:
-                json.dump([dict_with_connection_information], file)
+        try:
+            # Validate that result_directory exists, create if it doesn't
+            if not os.path.exists(self.my_simulation_parameters.result_directory):
+                os.makedirs(self.my_simulation_parameters.result_directory, exist_ok=True)
+            
+            if os.path.exists(file_name):
+                with open(file_name, mode="r+", encoding="utf-8") as file:
+                    file.seek(os.stat(file_name).st_size - 1)
+                    file.write(f",{json.dumps(dict_with_connection_information)}]")
+            else:
+                with open(file_name, "a", encoding="utf-8") as file:
+                    json.dump([dict_with_connection_information], file)
+        except (OSError, IOError) as e:
+            # Log warning instead of crashing
+            log.warning(
+                f"Failed to write component connections to {file_name}: {e}. "
+                "Component connections will not be logged to file."
+            )
 
     def connect_dynamic_input(self, input_fieldname: str, src_object: ComponentOutput) -> None:
         """For connecting an input to a dynamic output."""

@@ -1,4 +1,4 @@
-"""Test for system setup modular housheold."""
+"""Test for system setup modular household."""
 
 import pytest
 
@@ -9,7 +9,7 @@ from hisim.simulationparameters import SimulationParameters
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_modular_household_configurations_default():
+def test_modular_household_configurations_default() -> None:
     """Tests the modular households."""
     path = "../system_setups/modular_example.py"
 

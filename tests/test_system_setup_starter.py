@@ -1,9 +1,11 @@
 """Test system setup starter."""
 
-import os
+from __future__ import annotations
+
 import shutil
 import time
 from pathlib import Path
+from typing import Any
 import json
 
 import pytest
@@ -13,10 +15,10 @@ from hisim.system_setup_starter import make_system_setup
 
 
 @pytest.mark.utsp
-def test_system_setup_starter():
+def test_system_setup_starter() -> None:
     """Run a simulation from JSON."""
 
-    parameters_json = {
+    parameters_json: dict[str, Any] = {
         "path_to_module": "../system_setups/household_heat_pump.py",
         "simulation_parameters": {
             "start_date": "2021-01-01T00:00:00",
@@ -36,7 +38,7 @@ def test_system_setup_starter():
         },
     }
 
-    result_directory = "test_system_setup_starter_results"
+    result_directory: str = "test_system_setup_starter_results"
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory)
     Path(result_directory).mkdir(parents=True)
@@ -54,17 +56,17 @@ def test_system_setup_starter():
         module_config_path,
     )
     # Check results
-    assert os.path.isfile(result_directory + "/finished.flag")
-    assert os.path.isfile(result_directory + "/results_for_webtool.json")
+    assert (Path(result_directory) / "finished.flag").is_file()
+    assert (Path(result_directory) / "results_for_webtool.json").is_file()
 
     assert (
         simulation_parameters.seconds_per_timestep  # type: ignore
-        == parameters_json["simulation_parameters"]["seconds_per_timestep"]  # type: ignore
+        == parameters_json["simulation_parameters"]["seconds_per_timestep"]
     )
 
     if simulation_parameters:
         with open(Path(simulation_parameters.result_directory).joinpath("results_for_webtool.json"), "rb") as handle:
-            results_for_webtool = json.load(handle)
+            results_for_webtool: dict[str, Any] = json.load(handle)
         assert (
             99999
             == results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["configuration"][
@@ -85,10 +87,10 @@ def test_system_setup_starter():
 
 
 @pytest.mark.utsp
-def test_system_setup_starter_scaling():
+def test_system_setup_starter_scaling() -> None:
     """Run a simulation from JSON."""
 
-    parameters_json = {
+    parameters_json: dict[str, Any] = {
         "path_to_module": "../system_setups/household_heat_pump.py",
         "simulation_parameters": {
             "start_date": "2021-01-01T00:00:00",
@@ -129,7 +131,7 @@ def test_system_setup_starter_scaling():
         },
     }
 
-    result_directory = "test_system_setup_starter_scaling_results"
+    result_directory: str = "test_system_setup_starter_scaling_results"
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory)
     Path(result_directory).mkdir(parents=True)
@@ -147,12 +149,12 @@ def test_system_setup_starter_scaling():
         module_config_path,
     )
     # Check results
-    assert os.path.isfile(result_directory + "/finished.flag")
-    assert os.path.isfile(result_directory + "/results_for_webtool.json")
+    assert (Path(result_directory) / "finished.flag").is_file()
+    assert (Path(result_directory) / "results_for_webtool.json").is_file()
 
     assert (
         simulation_parameters.seconds_per_timestep  # type: ignore
-        == parameters_json["simulation_parameters"]["seconds_per_timestep"]  # type: ignore
+        == parameters_json["simulation_parameters"]["seconds_per_timestep"]
     )
 
     # TODO: Rewrite to the new data path.

@@ -203,7 +203,16 @@ class SmartDevice(cp.Component):
         self.state = self.previous_state.clone()
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
-        """Doublechecks."""
+        """Perform validation checks after simulation step.
+
+        This method is called after each simulation timestep to verify
+        state consistency. Currently a no-op placeholder.
+
+        :param timestep: Current simulation timestep.
+        :type timestep: int
+        :param stsv: Single time step values container.
+        :type stsv: cp.SingleTimeStepValues
+        """
         pass
 
     def i_prepare_simulation(self) -> None:

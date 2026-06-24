@@ -97,7 +97,7 @@ class GenericHydrogenStorage(cp.Component):
     HydrogenOutput = "HydrogenOutput"  # kg/s
 
     # output
-    HydrogenSOC = "HydrogenSOC"  # kg/s
+    HydrogenSOC = "HydrogenSOC"  # %
 
     def __init__(
         self,
@@ -143,7 +143,7 @@ class GenericHydrogenStorage(cp.Component):
             load_type=lt.LoadTypes.GREEN_HYDROGEN,
             unit=lt.Units.PERCENT,
             postprocessing_flag=[lt.InandOutputType.STORAGE_CONTENT],
-            output_description="Hydrogen SOC",
+            output_description="Hydrogen state of charge in %",
         )
 
         self.add_default_connections(self.get_default_connections_from_generic_electrolyzer())
@@ -184,7 +184,25 @@ class GenericHydrogenStorage(cp.Component):
         return connections
 
     def store(self, charging_rate: float) -> Tuple[float, float, float]:
-        """Store."""
+        """Store hydrogen in the tank for one simulation timestep.
+
+        The requested ``charging_rate`` is first clipped to the configured
+        ``max_charging_rate`` and then further reduced if the remaining free
+        capacity (``max_capacity - state.fill``) cannot hold the full amount
+        over one timestep. The state of charge (``state.fill`` in kg) is
+        increased by the amount actually stored, and the electrical power
+        demand of the charging process is computed from
+        ``energy_for_charge`` (Wh/kg).
+
+        :param charging_rate: requested hydrogen charging rate in kg/s.
+        :return: a tuple ``(actual_charging_rate, power_demand_W,
+            delta_not_stored_kg_s)`` where ``actual_charging_rate`` is the
+            rate in kg/s that was actually accepted, ``power_demand_W`` is the
+            resulting electrical power demand in W (charging_rate *
+            energy_for_charge * 3.6e3), and ``delta_not_stored_kg_s`` is the
+            portion of the requested rate in kg/s that could not be stored
+            because of the charging-rate or capacity limits.
+        """
 
         # limitation of charging rate
         delta_not_stored: float = 0
@@ -217,7 +235,26 @@ class GenericHydrogenStorage(cp.Component):
         return charging_rate, power_demand, delta_not_stored
 
     def withdraw(self, discharging_rate: float) -> Tuple[float, float, float]:
-        """Withdraw."""
+        """Withdraw hydrogen from the tank for one simulation timestep.
+
+        The requested ``discharging_rate`` is first clipped to the configured
+        ``max_discharging_rate`` and then further reduced if the available
+        hydrogen above the ``min_capacity`` floor cannot cover the full
+        request over one timestep. The state of charge (``state.fill`` in kg)
+        is decreased by the amount actually released, and the electrical
+        power demand of the discharging process is computed from
+        ``energy_for_discharge`` (Wh/kg).
+
+        :param discharging_rate: requested hydrogen discharging rate in kg/s.
+        :return: a tuple ``(actual_discharging_rate, power_demand_W,
+            delta_not_released_kg_s)`` where ``actual_discharging_rate`` is
+            the rate in kg/s that was actually provided, ``power_demand_W``
+            is the resulting electrical power demand in W (discharging_rate *
+            energy_for_discharge * 3.6e3), and ``delta_not_released_kg_s`` is
+            the portion of the requested rate in kg/s that could not be
+            released because of the discharging-rate limit or the
+            ``min_capacity`` floor.
+        """
 
         # limitations of discharging rate
         delta_not_released: float = 0
@@ -249,7 +286,14 @@ class GenericHydrogenStorage(cp.Component):
         return discharging_rate, power_demand, delta_not_released
 
     def storage_losses(self) -> None:
-        """Storage losses."""
+        """Apply the standing hydrogen losses for one simulation timestep.
+
+        Reduces ``self.state.fill`` (in kg) by the configured permanent daily
+        loss scaled to the timestep length, i.e. by
+        ``self.loss_factor`` (``loss_factor_per_day`` converted from a daily
+        percentage to a per-timestep fraction). This models the continuous
+        leakage/boil-off of the storage and returns nothing.
+        """
         self.state.fill -= self.state.fill * self.loss_factor
 
     def i_save_state(self) -> None:

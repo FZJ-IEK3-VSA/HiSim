@@ -82,7 +82,7 @@ def setup_function(
     my_simulation_parameters.surplus_control = (
         my_config.surplus_control_car
     )  # EV charger is controlled by simulation_parameters
-    clever = my_config.surplus_control
+    is_surplus_control_enabled = my_config.surplus_control
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build heat Distribution System Controller
@@ -205,7 +205,7 @@ def setup_function(
         my_car_battery_controller_config.source_weight = car.config.source_weight
         my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
         if my_config.surplus_control_car:
-            # lower threshold for soc of car battery in clever case. This enables more surplus charging
+            # lower threshold for soc of car battery in surplus control case. This enables more surplus charging
             # Todo: this is just to avoid errors in case config from json-file is used
             my_car_battery_controller_config.battery_set = 0.4
 
@@ -293,7 +293,7 @@ def setup_function(
     )
 
     # connect EMS with DHW
-    if clever:
+    if is_surplus_control_enabled:
         my_domnestic_hot_water_heatpump_controller.connect_input(
             my_domnestic_hot_water_heatpump_controller.StorageTemperatureModifier,
             my_electricity_controller.component_name,
@@ -336,7 +336,7 @@ def setup_function(
         )
 
     # connect EMS with Heatpump
-    if clever:
+    if is_surplus_control_enabled:
         my_heat_pump_controller.connect_input(
             my_heat_pump_controller.SimpleHotWaterStorageTemperatureModifier,
             my_electricity_controller.component_name,

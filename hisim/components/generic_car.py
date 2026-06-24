@@ -64,7 +64,11 @@ class GenericCarInformation:
         ):
             raise ValueError(
                 "The car data from occupancy contains only empty dictionaries in its value lists. "
-                "If you are using the predefined occupancy profile, no car data is currently available. "
+                "This is likely caused by one of the following reasons: "
+                "(1) You are using the predefined occupancy profile, no car data is currently available. "
+                "(2) The UTSP request failed (e.g., due to missing or incorrect UTSP configuration). "
+                "(3) USE_LOCAL_LPG is currently not supported on macOS (darwin). "
+                "Please switch to USE_UTSP with a reachable UTSP endpoint with correct UTSP configuration."
             )
 
         # get car names and household names
@@ -540,7 +544,7 @@ class Car(cp.Component):
                         end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1)
                         + dt.timedelta(days=simulation_time_span.days)
                         - dt.timedelta(seconds=60),
-                        freq="T",
+                        freq="min",
                     ),
                     "meters_driven": self.meters_driven[:steps_desired_in_minutes],
                     "car_location": [location_translator[elem] for elem in self.car_location][
@@ -564,9 +568,6 @@ class Car(cp.Component):
                     )
                     for i in range(steps_desired)
                 ]
-            else:
-                self.meters_driven = self.meters_driven
-                self.car_location = self.car_location
 
             # save data in cache
             database = pd.DataFrame({"car_location": self.car_location, "meters_driven": self.meters_driven})

@@ -167,21 +167,25 @@ def configure_cars(
     ev_included: bool,
     my_occupancy_instance: loadprofilegenerator_utsp_connector.UtspLpgConnector,
 ) -> Tuple[List[generic_car.Car], int]:
-    """Sets smart devices without controllers.
+    """Sets cars (EV or diesel) for the household.
 
     Parameters
     ----------
-    my_sim: str
-        filename of orginal built system setup.
+    my_sim: Any
+        Simulation instance.
     my_simulation_parameters: SimulationParameters
         The simulation parameters.
     count: int
-        Integer tracking component hierachy for EMS.
+        Integer tracking component hierarchy for EMS.
     ev_included: bool
-        True if Car is electric, False if it is diesel.
-    my_occupancy_instance: loadprofilegenerator_utsp_connector.UtspLpgConnector,
-        Instance of load profile generator giving the necessary mobility data (mobility is related!)
+        True if cars are electric, False if diesel.
+    my_occupancy_instance: UtspLpgConnector
+        Instance of load profile generator providing mobility data.
 
+    Returns
+    -------
+    Tuple[List[Car], int]
+        List of initialized car components and updated count.
     """
     # get data of all available cars
     my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy_instance)
@@ -1356,7 +1360,7 @@ def configure_electrolyzer_and_h2_storage(
 ) -> int:
     """Configures electrolyzer and h2 storage with fuel cell already defined.
 
-    (in configure_elctrolysis_h2storage_fuelcell_system (_with_buffer))
+    (in configure_electrolysis_h2storage_fuelcell_system (_with_buffer))
 
     :param my_sim: Simulation class.
     :type my_sim: Any
@@ -1403,7 +1407,6 @@ def configure_electrolyzer_and_h2_storage(
     )
     my_sim.add_component(my_electrolyzer_controller)
     my_electrolyzer.connect_only_predefined_connections(my_electrolyzer_controller)
-    print(my_electrolyzer)
 
     # electricity controller of fuel cell
     my_electricity_controller.add_component_input_and_connect(
@@ -1453,7 +1456,7 @@ def configure_electrolyzer_and_h2_storage(
     return count
 
 
-def configure_elctrolysis_h2storage_fuelcell_system(
+def configure_electrolysis_h2storage_fuelcell_system(
     my_sim: Any,
     my_simulation_parameters: SimulationParameters,
     my_building: building.Building,
@@ -1578,7 +1581,7 @@ def configure_elctrolysis_h2storage_fuelcell_system(
     return count
 
 
-def configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
+def configure_electrolysis_h2storage_fuelcell_system_with_buffer(
     my_sim: Any,
     my_simulation_parameters: SimulationParameters,
     my_buffer: generic_hot_water_storage_modular.HotWaterStorage,

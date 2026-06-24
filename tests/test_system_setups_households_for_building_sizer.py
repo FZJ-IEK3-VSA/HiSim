@@ -13,7 +13,7 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 
 # Set simulation parameters for tests
-my_simulation_parameters = SimulationParameters.one_day_only(year=2024, seconds_per_timestep=60 * 15)
+my_simulation_parameters: SimulationParameters = SimulationParameters.one_day_only(year=2024, seconds_per_timestep=60 * 15)
 my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION)
 my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
 my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
@@ -23,8 +23,8 @@ my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WR
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_gas():
-    """Single day."""
+def test_household_gas() -> None:
+    """Test household gas building sizer setup for a single day."""
     path = "../system_setups/household_gas_building_sizer.py"
 
     hisim_main.main(path, my_simulation_parameters)
@@ -33,8 +33,8 @@ def test_household_gas():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_oil():
-    """Single day."""
+def test_household_oil() -> None:
+    """Test household oil building sizer setup for a single day."""
     path = "../system_setups/household_oil_building_sizer.py"
 
     hisim_main.main(path, my_simulation_parameters)
@@ -43,8 +43,8 @@ def test_household_oil():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_heatpump():
-    """Single day."""
+def test_household_heatpump() -> None:
+    """Test household heat pump building sizer setup for a single day."""
     path = "../system_setups/household_heatpump_building_sizer.py"
 
     hisim_main.main(path, my_simulation_parameters)
@@ -53,8 +53,8 @@ def test_household_heatpump():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_pellet_heating():
-    """Single day."""
+def test_household_pellet_heating() -> None:
+    """Test household pellet heating building sizer setup for a single day."""
     path = "../system_setups/household_pellets_building_sizer.py"
 
     hisim_main.main(path, my_simulation_parameters)
@@ -63,8 +63,8 @@ def test_household_pellet_heating():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_district_heating():
-    """Single day."""
+def test_household_district_heating() -> None:
+    """Test household district heating building sizer setup for a single day."""
     path = "../system_setups/household_district_heating_building_sizer.py"
 
     hisim_main.main(path, my_simulation_parameters)
@@ -73,8 +73,8 @@ def test_household_district_heating():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_wood_chips_heating():
-    """Single day."""
+def test_household_wood_chips_heating() -> None:
+    """Test household wood chips heating building sizer setup for a single day."""
     path = "../system_setups/household_wood_chips_building_sizer.py"
 
     hisim_main.main(path, my_simulation_parameters)
@@ -83,8 +83,8 @@ def test_household_wood_chips_heating():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_hydrogen_heating():
-    """Single day."""
+def test_household_hydrogen_heating() -> None:
+    """Test household hydrogen boiler building sizer setup for a single day."""
     path = "../system_setups/household_hydrogen_boiler_building_sizer.py"
 
     hisim_main.main(path, my_simulation_parameters)
@@ -93,8 +93,8 @@ def test_household_hydrogen_heating():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_electric_heating():
-    """Single day."""
+def test_household_electric_heating() -> None:
+    """Test household electric heating building sizer setup for a single day."""
     path = "../system_setups/household_electric_heating_building_sizer.py"
 
     hisim_main.main(path, my_simulation_parameters)
@@ -103,8 +103,8 @@ def test_household_electric_heating():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_gas_solar_thermal_heating():
-    """Single day."""
+def test_household_gas_solar_thermal_heating() -> None:
+    """Test household gas with solar thermal building sizer setup for a single day."""
     path = "../system_setups/household_gas_solar_thermal_building_sizer.py"
 
     hisim_main.main(path, my_simulation_parameters)
@@ -113,8 +113,8 @@ def test_household_gas_solar_thermal_heating():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_heatpump_solar_thermal_heating():
-    """Single day."""
+def test_household_heatpump_solar_thermal_heating() -> None:
+    """Test household heat pump with solar thermal building sizer setup for a single day."""
     path = "../system_setups/household_heatpump_solar_thermal_building_sizer.py"
 
     hisim_main.main(path, my_simulation_parameters)
@@ -123,8 +123,8 @@ def test_household_heatpump_solar_thermal_heating():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_heatpump_car():
-    """Single day."""
+def test_household_heatpump_car() -> None:
+    """Test household heat pump with EV building sizer setup for a single day."""
     path = "../system_setups/household_heatpump_car_building_sizer.py"
 
     hisim_main.main(path, my_simulation_parameters)

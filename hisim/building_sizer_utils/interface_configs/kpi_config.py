@@ -31,8 +31,8 @@ class KPIForRatingInOptimization(str, enum.Enum):
     ANNUALIZED_ELECTRICITY_FROM_GRID = "Annualized Electricity From Grid [kWh/m2]"
     MIN_BUILDING_INDOOR_TEMP = "Minimum Indoor Temperature [°C]"
     MAX_BUILDING_INDOOR_TEMP = "Maximum Indoor Temperature [°C]"
-    DEV_FROM_MIN_BUILDING_INDOOR_TEMP = "Devation From Minimum Indoor Temperature [°C*h]"
-    DEV_FROM_MAX_BUILDING_INDOOR_TEMP = "Devation From Maximum Indoor Temperature [°C*h]"
+    DEV_FROM_MIN_BUILDING_INDOOR_TEMP = "Deviation From Minimum Indoor Temperature [°C*h]"
+    DEV_FROM_MAX_BUILDING_INDOOR_TEMP = "Deviation From Maximum Indoor Temperature [°C*h]"
 
 
 # pylint: disable=too-many-return-statements

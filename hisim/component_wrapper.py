@@ -1,7 +1,7 @@
 """Wraps components for use in the simulator."""
 
 # clean
-from typing import List, Dict, Any
+from typing import List
 
 import hisim.component as cp
 import hisim.loadtypes as lt
@@ -20,17 +20,17 @@ class ComponentWrapper:
         self.component_inputs: List[cp.ComponentInput] = []
         self.component_outputs: List[cp.ComponentOutput] = []
         # self.cachedict: = {}
-        self.is_cachable = is_cachable
-        self.connect_automatically = connect_automatically
+        self.is_cachable: bool = is_cachable
+        self.connect_automatically: bool = connect_automatically
 
-    def clear(self):
+    def clear(self) -> None:
         """Clears properties to help with saving memory."""
         del self.my_component
         del self.component_inputs
         del self.component_outputs
 
     def register_component_outputs(
-        self, all_outputs: List[cp.ComponentOutput], wrapped_components_so_far: List[Any]
+        self, all_outputs: List[cp.ComponentOutput], wrapped_components_so_far: List["ComponentWrapper"]
     ) -> None:
         """Registers component outputs in the global list of components."""
 
@@ -87,7 +87,7 @@ class ComponentWrapper:
             if not self.component_outputs:
                 raise ValueError(f"The component {self.my_component.component_name} has no outputs registered.")
 
-    def register_component_inputs(self, global_column_dict: Dict[str, Any]) -> None:
+    def register_component_inputs(self, global_column_dict: dict[str, cp.ComponentInput]) -> None:
         """Gets the inputs for the current component from the global column dict and puts them into component_inputs."""
 
         log.debug("Registering component inputs for " + self.my_component.component_name)
@@ -124,7 +124,7 @@ class ComponentWrapper:
         """Wrapper for the core simulation function in each component."""
         self.my_component.i_simulate(timestep, stsv, force_convergence)
 
-    def prepare_calculation(self):
+    def prepare_calculation(self) -> None:
         """Wrapper for i_prepare_calculation."""
         log.information("Preparing " + self.my_component.component_name + " for simulation.")
         self.my_component.i_prepare_simulation()

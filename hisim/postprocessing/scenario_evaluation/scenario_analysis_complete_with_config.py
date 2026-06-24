@@ -2,8 +2,8 @@
 
 # clean
 import time
-import os
 import sys
+from pathlib import Path
 from typing import List, Optional, Dict
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -76,18 +76,16 @@ class ScenarioAnalysisWithConfig:
         # Get input parameters from config
         try:
             config_name = scenario_analysis_config.name.split("_")[1]
-        except Exception:
+        except (IndexError, AttributeError):
             config_name = ""
 
         data_processing_mode = scenario_analysis_config.data_processing_mode
         data_format_type = scenario_analysis_config.data_format_type
-        folder_from_which_data_will_be_collected = os.path.join(
-            *[
-                scenario_analysis_config.cluster_storage_path,
-                scenario_analysis_config.module_results_directory,
-                scenario_analysis_config.result_folder_description_one,
-                scenario_analysis_config.result_folder_description_two,
-            ]
+        folder_from_which_data_will_be_collected = str(
+            Path(scenario_analysis_config.cluster_storage_path)
+            / scenario_analysis_config.module_results_directory
+            / scenario_analysis_config.result_folder_description_one
+            / scenario_analysis_config.result_folder_description_two
         )
         path_to_default_config = scenario_analysis_config.path_to_default_module_config
         time_resolution_of_data_set = scenario_analysis_config.time_resolution_of_data_set
@@ -139,17 +137,17 @@ def main():
 
     my_config: ScenarioAnalysisConfig
     if use_default_scenario_analysis_config is False:
-        if isinstance(scenario_analysis_config_path, str) and os.path.exists(
+        if isinstance(scenario_analysis_config_path, str) and Path(
             scenario_analysis_config_path.rstrip("\r")
-        ):
+        ).exists():
             with open(
-                scenario_analysis_config_path.rstrip("\r"), encoding="unicode_escape"
+                str(Path(scenario_analysis_config_path.rstrip("\r"))), encoding="unicode_escape"
             ) as scenario_analysis_config_file:
 
                 my_config = ScenarioAnalysisConfig.from_json(scenario_analysis_config_file.read())  # type: ignore
 
             log.information(f"Read scenario analysis config from {scenario_analysis_config_path}")
-            log.information("Config values: " + f"{my_config.to_dict}" + "\n")
+            log.information("Config values: " + f"{my_config.to_dict()}" + "\n")
         else:
             # cannot open file for scenario analysis config so default config will be used
             use_default_scenario_analysis_config = True

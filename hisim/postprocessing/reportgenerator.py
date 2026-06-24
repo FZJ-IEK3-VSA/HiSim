@@ -1,9 +1,9 @@
 """Module for generating reports."""
 
 # clean
+from pathlib import Path
 import copy
 import time
-import os
 from typing import Any, Optional, List, Union
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.lib.pagesizes import letter
@@ -57,10 +57,10 @@ class ReportGenerator:
         self.story: Any
         self.toc = TableOfContents()
 
-        self.filepath = os.path.join(dirpath, "report.pdf")
+        self.filepath = str(Path(dirpath) / "report.pdf")
         self.open()
         self.write_preamble()
-        self.write_table_of_content()
+        self.write_table_of_contents()
         self.close()
 
     def open(self):
@@ -90,8 +90,8 @@ class ReportGenerator:
         self.style_h1 = ParagraphStyle(name="Heading1", fontSize=12, leading=16, spaceBefore=20)
         self.style_h2 = ParagraphStyle(name="Heading2", fontSize=12, leading=14, spaceBefore=10)
 
-    def write_table_of_content(self):
-        """Write Table of Content."""
+    def write_table_of_contents(self):
+        """Write the table of contents."""
 
         # Create an instance of TableOfContents. Override the level styles (optional)
         # and add the object to the story
@@ -104,6 +104,17 @@ class ReportGenerator:
         self.story.append(self.toc)
         self.story.append(PageBreak())
 
+    @utils.deprecated("Use write_table_of_contents instead.")
+    def write_table_of_content(self):
+        """Deprecated alias for :meth:`write_table_of_contents`.
+
+        .. deprecated::
+            Renamed to ``write_table_of_contents`` to use the grammatically
+            correct plural form ("table of contents"). Will be removed in a
+            future version.
+        """
+        self.write_table_of_contents()
+
     def write_preamble(self):
         """Write the preamble."""
         # Configuration taken mostly from following tutorial
@@ -111,24 +122,24 @@ class ReportGenerator:
         story = []
 
         # Inserts HiSim logo
-        logo = os.path.join(utils.hisim_postprocessing_img, "hisim_logo.png")
-        im1 = Image(logo, 2 * inch, inch)
-        im1.hAlign = "LEFT"
+        logo = Path(utils.hisim_postprocessing_img) / "hisim_logo.png"
+        hisim_logo_image = Image(str(logo), 2 * inch, inch)
+        hisim_logo_image.hAlign = "LEFT"
 
         # Inserts FZJ logo
-        logo = os.path.join(utils.hisim_postprocessing_img, "fzj_logo.jpg")
-        im2 = Image(logo, 2 * inch, inch)
-        im2.hAlign = "RIGHT"
+        logo = Path(utils.hisim_postprocessing_img) / "fzj_logo.jpg"
+        fzj_logo_image = Image(str(logo), 2 * inch, inch)
+        fzj_logo_image.hAlign = "RIGHT"
 
-        data = [[im1, im2]]
+        data = [[hisim_logo_image, fzj_logo_image]]
         report_table = Table(data)
         story.append(report_table)
         story.append(Spacer(1, 50))
 
         # Insert Title
         titel = "HiSim Simulation Report"
-        ptext = f'<font size="30">{titel}</font>'
-        story.append(Paragraph(ptext, self.styles["Title"]))
+        paragraph_text = f'<font size="30">{titel}</font>'
+        story.append(Paragraph(paragraph_text, self.styles["Title"]))
         story.append(Spacer(1, 150))
 
         # Inserts authors
@@ -150,9 +161,9 @@ class ReportGenerator:
             "Markus Blasberg",
         ]
 
-        for part in authors:
-            ptext = f'<font size="16">{part.strip()}</font>'
-            story.append(Paragraph(ptext, self.styles["Normal"]))
+        for author in authors:
+            paragraph_text = f'<font size="16">{author.strip()}</font>'
+            story.append(Paragraph(paragraph_text, self.styles["Normal"]))
             story.append(Spacer(1, 10))
         story.append(Spacer(1, 30))
 
@@ -165,29 +176,40 @@ class ReportGenerator:
             "52428 Jülich",
             "Germany",
         ]
-        for part in address_parts:
-            ptext = f'<font size="16">{part.strip()}</font>'
-            story.append(Paragraph(ptext, self.styles["Normal"]))
+        for address_line in address_parts:
+            paragraph_text = f'<font size="16">{address_line.strip()}</font>'
+            story.append(Paragraph(paragraph_text, self.styles["Normal"]))
             story.append(Spacer(1, 10))
         story.append(Spacer(1, 30))
 
         # Inserts time
         formatted_time = time.ctime()
-        ptext = f'<font size="16">{formatted_time}</font>'
-        story.append(Paragraph(ptext, self.styles["Normal"]))
+        paragraph_text = f'<font size="16">{formatted_time}</font>'
+        story.append(Paragraph(paragraph_text, self.styles["Normal"]))
         story.append(Spacer(1, 30))
 
         if hasattr(self, "executation_time"):
             # formatted_time
-            ptext = f'<font size="16">{formatted_time}</font>'
-            story.append(Paragraph(ptext, self.styles["Normal"]))
+            paragraph_text = f'<font size="16">{formatted_time}</font>'
+            story.append(Paragraph(paragraph_text, self.styles["Normal"]))
             story.append(Spacer(1, 30))
         self.story = story
         self.story.append(PageBreak())
 
-    def get_story(self):
-        """Get the story."""
+    def copy_story(self):
+        """Replace the story with a deep copy of itself."""
         self.story = copy.deepcopy(self.story)
+
+    @utils.deprecated("Use copy_story instead.")
+    def get_story(self):
+        """Deprecated alias for :meth:`copy_story`.
+
+        .. deprecated::
+            Renamed to ``copy_story`` because the method replaces
+            ``self.story`` with a deep copy of itself instead of returning the
+            story. Will be removed in a future version.
+        """
+        self.copy_story()
 
     def write_with_normal_alignment(self, text: Union[List[str], List[Optional[str]]]) -> None:
         """Write a paragraph."""
@@ -196,8 +218,8 @@ class ReportGenerator:
                 if part is not None:
                     if not isinstance(part, str):
                         raise ValueError("Got a non-string somehow: " + str(part))
-                    ptext = f'<font size="12">{part.strip()}</font>'
-                    self.story.append(Paragraph(ptext, self.styles["Normal"]))
+                    paragraph_text = f'<font size="12">{part.strip()}</font>'
+                    self.story.append(Paragraph(paragraph_text, self.styles["Normal"]))
                 else:
                     raise ValueError("text contains Nones. Text was: " + str(text))
             self.story.append(Spacer(1, 10))
@@ -207,16 +229,17 @@ class ReportGenerator:
         """Write a paragraph."""
         if len(text) != 0:
             for part in text:
-                ptext = f'<font size="12">{part.strip()}</font>'
-                paragraph = Paragraph(ptext, self.styles["Normal_CENTER"])
+                paragraph_text = f'<font size="12">{part.strip()}</font>'
+                paragraph = Paragraph(paragraph_text, self.styles["Normal_CENTER"])
                 self.story.append(paragraph)
             self.story.append(Spacer(1, 10))
 
     def write_figures_to_report(self, file_path: str) -> None:
         """Add figure to the report."""
 
-        if os.path.isfile(file_path):
-            image = Image(file_path, useDPI=True)
+        path = Path(file_path)
+        if path.is_file():
+            image = Image(str(path), useDPI=True)
             image.hAlign = "CENTER"
             self.story.append(image)
         else:
@@ -225,8 +248,9 @@ class ReportGenerator:
     def write_figures_to_report_with_size_four_six(self, file_path: str) -> None:
         """Add figure to the report with certain size."""
 
-        if os.path.isfile(file_path):
-            image = Image(file_path, width=4 * inch, height=6 * inch)
+        path = Path(file_path)
+        if path.is_file():
+            image = Image(str(path), width=4 * inch, height=6 * inch)
             image.hAlign = "CENTER"
             self.story.append(image)
         else:
@@ -235,8 +259,9 @@ class ReportGenerator:
     def write_figures_to_report_with_size_seven_four(self, file_path: str) -> None:
         """Add figure to the report with certain size."""
 
-        if os.path.isfile(file_path):
-            image = Image(file_path, width=7 * inch, height=4 * inch)
+        path = Path(file_path)
+        if path.is_file():
+            image = Image(str(path), width=7 * inch, height=4 * inch)
             image.hAlign = "CENTER"
             self.story.append(image)
         else:
@@ -259,8 +284,8 @@ class ReportGenerator:
         """Write text as heading."""
         if len(text) != 0:
             for part in text:
-                ptext = f"<b>{part.strip()}</b>"
-                self.story.append(Paragraph(ptext, self.style_h1))
+                paragraph_text = f"<b>{part.strip()}</b>"
+                self.story.append(Paragraph(paragraph_text, self.style_h1))
             self.story.append(Spacer(1, 10))
         self.story.append(Spacer(1, 30))
 
@@ -268,8 +293,8 @@ class ReportGenerator:
         """Write text as heading."""
         if len(text) != 0:
             for part in text:
-                ptext = f"<b>{part.strip()}</b>"
-                self.story.append(Paragraph(ptext, self.style_h2))
+                paragraph_text = f"<b>{part.strip()}</b>"
+                self.story.append(Paragraph(paragraph_text, self.style_h2))
             self.story.append(Spacer(1, 10))
 
     def page_break(self):

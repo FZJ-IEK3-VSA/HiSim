@@ -1,4 +1,11 @@
-"""Basic household new system setup."""
+"""Household electric heating system setup with building sizing.
+
+This module provides a `setup_function` that configures a HiSim simulation
+for a household with electric space heating and domestic hot water preparation.
+The setup includes occupancy profiles, weather data, PV system, electric heating
+elements, DHW storage, optional battery and EMS, and an electricity meter.
+Configuration is loaded from modular household config files or defaults are used.
+"""
 
 # clean
 
@@ -104,8 +111,7 @@ def setup_function(
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.logging_level = 3
-    else:
-        simu_params_year = my_simulation_parameters.year
+    simu_params_year = my_simulation_parameters.year
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================

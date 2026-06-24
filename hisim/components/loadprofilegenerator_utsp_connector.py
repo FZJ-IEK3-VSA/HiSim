@@ -48,6 +48,10 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
+# Constants for warm water fallback values used in i_simulate
+DEFAULT_WW_TEMPERATURE_INPUT = 40.45  # °C - default warm water temperature fallback
+DEFAULT_WW_MASS_INPUT = 9.3  # kg/s - default warm water mass input fallback
+
 
 class LpgDataAcquisitionMode(enum.Enum):
     """Set LPG Data Acquisition Mode."""
@@ -278,8 +282,8 @@ class UtspLpgConnector(cp.Component):
 
             if ww_energy_demand > 0 and (ww_mass_input == 0 and ww_temperature_input == 0):
                 """first iteration --> random numbers"""
-                ww_temperature_input = 40.45
-                ww_mass_input = 9.3
+                ww_temperature_input = DEFAULT_WW_TEMPERATURE_INPUT
+                ww_mass_input = DEFAULT_WW_MASS_INPUT
 
             """
             Warm water is provided by the warmwater stoage.
@@ -1641,7 +1645,8 @@ class UtspLpgConnector(cp.Component):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-            ).loc[: (steps_desired_in_minutes - 1)]
+                nrows=steps_desired_in_minutes,
+            )
             electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
@@ -1652,7 +1657,8 @@ class UtspLpgConnector(cp.Component):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-            ).loc[: (steps_desired_in_minutes - 1)]
+                nrows=steps_desired_in_minutes,
+            )
             water_consumption_list = pd.to_numeric(pre_water_consumption["Sum [L]"]).tolist()
 
             inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains)
@@ -1661,7 +1667,8 @@ class UtspLpgConnector(cp.Component):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-            ).loc[: (steps_desired_in_minutes - 1)]
+                nrows=steps_desired_in_minutes,
+            )
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
@@ -1674,7 +1681,8 @@ class UtspLpgConnector(cp.Component):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Sum [kWh]"],
-            ).loc[: (steps_desired_in_minutes - 1)]
+                nrows=steps_desired_in_minutes,
+            )
             electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60 000 W / min
@@ -1685,7 +1693,8 @@ class UtspLpgConnector(cp.Component):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Sum [L]"],
-            ).loc[: (steps_desired_in_minutes - 1)]
+                nrows=steps_desired_in_minutes,
+            )
             water_consumption_list = pd.to_numeric(pre_water_consumption.loc[:, "Sum [L]"]).tolist()
 
             pre_inner_device_heat_gains = pd.read_csv(
@@ -1694,7 +1703,8 @@ class UtspLpgConnector(cp.Component):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Time", "Sum [kWh]"],
-            ).loc[: (steps_desired_in_minutes - 1)]
+                nrows=steps_desired_in_minutes,
+            )
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains.loc[:, "Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min

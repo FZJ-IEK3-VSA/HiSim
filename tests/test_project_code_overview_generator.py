@@ -4,9 +4,9 @@ from hisim.project_code_overview_generator import OverviewGenerator
 from hisim import utils
 
 
-@pytest.mark.base
+@pytest.mark.extendedbase
 @utils.measure_execution_time
-def test_project_code_overview_generator():
+def test_project_code_overview_generator() -> None:
     """Test project code overview generator."""
-    c_f = OverviewGenerator()
-    c_f.run()
+    overview_generator = OverviewGenerator()
+    overview_generator.run()

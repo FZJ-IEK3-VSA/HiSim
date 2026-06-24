@@ -4,7 +4,7 @@
 # Generic/Built-in
 
 # Owned
-from typing import List, Any, Dict, Optional
+from typing import List, Union, Dict, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.component import Component, SingleTimeStepValues, ConfigBase, DisplayConfig
@@ -29,7 +29,7 @@ class SmartControllerConfig(ConfigBase):
     name: str
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Return the full class name of the base class."""
         return SmartController.get_full_classname()
 
@@ -37,17 +37,20 @@ class SmartControllerConfig(ConfigBase):
     def get_default_config_ems(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "SmartControllerConfig":
         """Default Config for Energy Management System."""
         config = SmartControllerConfig(
             building_name=building_name,
-            name=" SmartController",
+            name="SmartController",
         )
         return config
 
 
 class SmartController(Component):
     """Smart Controller class."""
+
+    my_simulation_parameters: SimulationParameters
+    config: SmartControllerConfig
 
     def __init__(
         self,
@@ -68,7 +71,7 @@ class SmartController(Component):
         )
         if controllers is None:
             controllers = {"HeatPump": ["mode"], "EVCharger": ["mode"]}
-        self.wrapped_controllers: List[Any] = []
+        self.wrapped_controllers: List[Component] = []
         self.build(controllers)
 
     def build(self, controllers: Dict[str, List[str]]) -> None:
@@ -76,7 +79,7 @@ class SmartController(Component):
         for controller_name in controllers:
             if "HeatPump" in controller_name:
                 ghpcc = GenericHeatPumpControllerConfig(
-                    building_name="BUI1",
+                    building_name=self.config.building_name,
                     name="generic heat pump controller",
                     temperature_air_heating_in_celsius=15,
                     temperature_air_cooling_in_celsius=25,
@@ -100,7 +103,7 @@ class SmartController(Component):
 
         self.add_io()
 
-    def connect_similar_inputs(self, components: List[Any]) -> None:
+    def connect_similar_inputs(self, components: Union[List[Component], Component]) -> None:
         """Connect similar inputs."""
         if len(self.inputs) == 0:
             raise Exception("The component " + self.component_name + " has no inputs.")
@@ -112,7 +115,7 @@ class SmartController(Component):
             if isinstance(component, Component) is False:
                 raise Exception("Input variable is not a component")
             has_not_been_connected = True
-            index = None
+            index: Optional[int] = None
             for index, _ in enumerate(self.wrapped_controllers):
                 for input_channel in self.wrapped_controllers[index].inputs:
                     for output in component.outputs:
@@ -157,7 +160,7 @@ class SmartController(Component):
                 timestep=timestep, stsv=stsv, force_convergence=force_convergence
             )
 
-    def connect_electricity(self, component: Any) -> None:
+    def connect_electricity(self, component: Component) -> None:
         """Connect Electricity input."""
         for index, _ in enumerate(self.wrapped_controllers):
             if hasattr(self.wrapped_controllers[index], "ElectricityInput"):

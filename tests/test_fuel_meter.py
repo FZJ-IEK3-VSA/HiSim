@@ -3,6 +3,7 @@
 # clean
 
 import os
+from pathlib import Path
 import json
 from typing import Optional
 import pytest
@@ -31,11 +32,22 @@ PATH = "../system_setups/household_for_test_fuel_meter.py"
 
 
 @utils.measure_execution_time
-@pytest.mark.base
+@pytest.mark.extendedbase
 def test_house(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """The test should check if a normal simulation works with the electricity grid implementation."""
+    """Integration test for FuelMeter with an oil boiler heating system.
+
+    Builds a complete household simulation including weather, PV, building,
+    heat distribution, oil boiler, and fuel meter. Verifies that the fuel
+    meter's total energy consumption matches the boiler's consumption within
+    a 5% relative tolerance, and checks KPI outputs for OPEX costs and CO2
+    footprint.
+
+    Args:
+        my_simulation_parameters: Optional simulation parameters. If None,
+            defaults to a one-day simulation with 1-hour timesteps.
+    """
 
     # =========================================================================================================================================================
     # System Parameters
@@ -58,10 +70,7 @@ def test_house(
 
     # this part is copied from hisim_main
     # Build Simulator
-    normalized_path = os.path.normpath(PATH)
-    path_in_list = normalized_path.split(os.sep)
-    if len(path_in_list) >= 1:
-        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
+    path_to_be_added = str(Path(PATH).resolve().parent)
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
@@ -116,7 +125,7 @@ def test_house(
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )

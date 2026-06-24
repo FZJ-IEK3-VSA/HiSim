@@ -17,7 +17,7 @@ from hisim import loadtypes as lt
 from hisim.components import controller_l1_chp
 from hisim.simulationparameters import SimulationParameters
 
-__authors__ = "Frank Burkrad, Maximilian Hillen,"
+__authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = ""
@@ -126,8 +126,6 @@ class SimpleCHP(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-
-        self.config = config
         if self.config.use == lt.LoadTypes.GREEN_HYDROGEN:
             self.p_fuel = config.p_fuel / (3.6e3 * 3.939e4)  # converted to kg / s
         else:

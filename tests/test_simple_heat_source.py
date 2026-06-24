@@ -9,7 +9,19 @@ from tests import functions_for_testing as fft
 
 @pytest.mark.base
 def test_heat_source():
-    """Test heat source."""
+    """Test SimpleHeatSource with constant power configuration.
+
+    Verifies that the component correctly calculates thermal power delivered
+    when given mass flow and temperature inputs. Uses fake ComponentOutput
+    objects for mass flow (0.3 kg/s) and temperature (5°C) inputs, and
+    asserts that the thermal power delivered equals 5000.0 W.
+
+    Args:
+        None (uses default configuration and fake inputs).
+
+    Returns:
+        None (raises AssertionError if assertions fail).
+    """
 
     # simulation parameters
     seconds_per_timestep = 60

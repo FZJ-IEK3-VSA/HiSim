@@ -2,8 +2,11 @@
 
 # clean
 
+from __future__ import annotations
+
+
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-from typing import List, Any
+from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -20,9 +23,9 @@ class ExampleTransformerConfig(ConfigBase):
     """Configuration of the Example Transformer."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
-        return ExampleTransformer.get_full_classname()
+        return str(ExampleTransformer.get_full_classname())
 
     building_name: str
     # parameter_string: str
@@ -35,7 +38,7 @@ class ExampleTransformerConfig(ConfigBase):
     def get_default_transformer(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> ExampleTransformerConfig:
         """Gets a default Transformer."""
         return ExampleTransformerConfig(
             building_name=building_name,
@@ -65,10 +68,10 @@ class ExampleTransformer(Component):
 
     """
 
-    TransformerInput = "Input1"
-    TransformerInput2 = "Optional Input1"
-    TransformerOutput = "MyTransformerOutput"
-    TransformerOutput2 = "MyTransformerOutput2"
+    TransformerInput: str = "Input1"
+    TransformerInput2: str = "Optional Input1"
+    TransformerOutput: str = "MyTransformerOutput"
+    TransformerOutput2: str = "MyTransformerOutput2"
 
     def __init__(
         self,
@@ -76,7 +79,7 @@ class ExampleTransformer(Component):
         config: ExampleTransformerConfig,
         my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
-        """Constructs all the neccessary attributes."""
+        """Constructs all the necessary attributes."""
         self.transformerconfig = config
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -134,10 +137,10 @@ class ExampleTransformer(Component):
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the transformer."""
-        startval_1 = stsv.get_input_value(self.input1)
-        startval_2 = stsv.get_input_value(self.input2)
-        stsv.set_output_value(self.output1, startval_1 * 5)
-        stsv.set_output_value(self.output2, startval_2 * 1000)
+        input_value_1 = stsv.get_input_value(self.input1)
+        input_value_2 = stsv.get_input_value(self.input2)
+        stsv.set_output_value(self.output1, input_value_1 * 5)
+        stsv.set_output_value(self.output2, input_value_2 * 1000)
 
     def write_to_report(self) -> List[str]:
         """Writes a report."""

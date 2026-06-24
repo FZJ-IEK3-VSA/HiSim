@@ -2,7 +2,7 @@
 
 # clean
 
-from typing import List, Optional, Any
+from typing import List, Optional
 from dataclasses import dataclass
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
@@ -13,7 +13,7 @@ from utspclient.helpers.lpgdata import (
 )
 
 from hisim import loadtypes as lt
-from hisim.simulator import SimulationParameters
+from hisim.simulator import Simulator, SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import more_advanced_heat_pump_hplib
@@ -63,7 +63,7 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
 
     @classmethod
-    def get_default_options(cls):
+    def get_default_options(cls) -> HouseholdMoreAdvancedHPDHWHPNoStorageOptions:
         """Get default options."""
         return HouseholdMoreAdvancedHPDHWHPNoStorageOptions()
 
@@ -128,7 +128,7 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
             hds_controller_config=hds_controller_config,
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                     position_hot_water_storage_in_system=heat_distribution_system.PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR,
                     heating_system=hds_controller_config.heating_system,
@@ -183,7 +183,7 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
 
 
 def setup_function(
-    my_sim: Any,
+    my_sim: Simulator,
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
     """System setup with advanced hp and diesel car.

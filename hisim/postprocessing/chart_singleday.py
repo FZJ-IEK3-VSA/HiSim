@@ -1,8 +1,8 @@
 """Charts for a single day."""
 
 # clean
-import os
 from typing import Any
+from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.axis import Axis
 from matplotlib.dates import DateFormatter
@@ -28,7 +28,21 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         output2: Any = None,
         figure_format: Any = None,
     ):
-        """Initializes the class."""
+        """Initializes a single-day chart.
+
+        Args:
+            output: The primary output data to plot.
+            component_name: Name of the component producing the data.
+            units: Units of the output values.
+            directory_path: Directory path for saving the chart.
+            time_correction_factor: Factor for time step correction.
+            output_description: Description of the output.
+            data: Time-series data to visualize.
+            day: Day of the month to display (default 0).
+            month: Month of the year to display (default 0).
+            output2: Optional secondary output data for comparison.
+            figure_format: Format for the output figure (e.g., '.png').
+        """
         if output2 is not None:
             super().__init__(
                 output=output,
@@ -59,8 +73,8 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         self.plot_title: str
         self.filename = f"{self.type.lower()}_m" f"{self.month}_d{self.day}{self.figure_format}"
 
-        self.filepath = os.path.join(self.directory_path, self.filename)
-        self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)
+        self.filepath = str(Path(self.directory_path) / self.filename)
+        self.filepath2 = str(Path(self.component_output_folder_path) / self.filename)
 
     def get_day_data(self):
         """Extracts data for a single day."""

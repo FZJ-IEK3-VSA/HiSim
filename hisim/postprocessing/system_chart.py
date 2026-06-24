@@ -5,7 +5,7 @@
 from typing import Optional
 from typing import List
 
-import os
+from pathlib import Path
 import pydot
 
 from hisim import log
@@ -18,7 +18,13 @@ class SystemChart:
     """Class for generating charts that show all the components."""
 
     def __init__(self, ppdt: PostProcessingDataTransfer) -> None:
-        """Initizalizes the class."""
+        """Initializes the SystemChart.
+
+        Args:
+            ppdt: PostProcessingDataTransfer object containing simulation
+                results, wrapped components, and parameters needed to build
+                the system flow chart.
+        """
         self.ppdt: PostProcessingDataTransfer = ppdt
 
     def make_chart(self) -> List[SystemChartEntry]:  # type: ignore
@@ -72,7 +78,6 @@ class SystemChart:
         system_chart_entry: Optional[SystemChartEntry] = SystemChartEntry(filename, caption)
 
         try:
-            """Visualizes the entire system with graphviz."""
             graph = pydot.Dot(graph_type="digraph")
             graph.set_node_defaults(
                 color="lightgray",
@@ -130,7 +135,7 @@ class SystemChart:
                     graph.add_edge(pydot.Edge(node_key[0], node_key[1], label=label))
                 else:
                     graph.add_edge(pydot.Edge(node_key[0], node_key[1]))
-            fullpath = os.path.join(self.ppdt.simulation_parameters.result_directory, filename)
+            fullpath = Path(self.ppdt.simulation_parameters.result_directory) / filename
             graph.write_png(fullpath)  # noqa: no-member
         except Exception as exc:  # noqa
             log.error(

@@ -18,7 +18,7 @@ def test_storage():
     # Storage
     volume_sp_heating_water = 1000
     volume_sp_warm_water = 200
-    temperature_of_warm_water_extratcion = 32
+    temperature_of_warm_water_extraction = 32
     ambient_temperature = 15
 
     # ===================================================================================================================
@@ -29,8 +29,8 @@ def test_storage():
 
     my_storage_config.volume_sp_heating_water = volume_sp_heating_water
     my_storage_config.volume_sp_warm_water = volume_sp_warm_water
-    my_storage_config.temperature_of_warm_water_extratcion = (
-        temperature_of_warm_water_extratcion
+    my_storage_config.temperature_of_warm_water_extraction = (
+        temperature_of_warm_water_extraction
     )
     my_storage_config.ambient_temperature = ambient_temperature
 
@@ -59,7 +59,7 @@ def test_storage():
         lt.Units.CELSIUS,
     )
 
-    thermal_input_power1 = cp.ComponentOutput(
+    thermal_input_power_one = cp.ComponentOutput(
         "FakeThermalInputPower1",
         "ThermalInputPower1",
         lt.LoadTypes.WATER,
@@ -75,14 +75,14 @@ def test_storage():
     my_storage.control_signal_choose_storage_channel.source_output = (
         control_signal_choose_storage
     )
-    my_storage.thermal_input_power_one_channel.source_output = thermal_input_power1
+    my_storage.thermal_input_power_one_channel.source_output = thermal_input_power_one
 
     number_of_outputs = fft.get_number_of_outputs(
         [
             thermal_demand_heating_water,
             thermal_demand_warm_water,
             control_signal_choose_storage,
-            thermal_input_power1,
+            thermal_input_power_one,
             my_storage,
         ]
     )
@@ -94,7 +94,7 @@ def test_storage():
             thermal_demand_heating_water,
             thermal_demand_warm_water,
             control_signal_choose_storage,
-            thermal_input_power1,
+            thermal_input_power_one,
             my_storage,
         ]
     )
@@ -102,7 +102,7 @@ def test_storage():
     stsv.values[thermal_demand_heating_water.global_index] = 2000
     stsv.values[thermal_demand_warm_water.global_index] = 400
     stsv.values[control_signal_choose_storage.global_index] = 1
-    stsv.values[thermal_input_power1.global_index] = 800
+    stsv.values[thermal_input_power_one.global_index] = 800
 
     timestep = 300
     # Simulate

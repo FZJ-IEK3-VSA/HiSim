@@ -132,7 +132,7 @@ def setup_function(
     elif energy_system_config_.heat_distribution_system == ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR:
         my_hds_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
     else:
-        raise ValueError(f"Heat distrbution system not recognized: {energy_system_config_.heat_distribution_system}")
+        raise ValueError(f"Heat distribution system not recognized: {energy_system_config_.heat_distribution_system}")
     # Set Weather
     weather_location = arche_type_config_.weather_location
     if weather_location is None:
@@ -340,7 +340,7 @@ def setup_function(
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
@@ -439,12 +439,12 @@ def setup_function(
         try:
             scenario_hash_string = re.findall(r"\-?\d+", config_filename_splitted[-1])[0]
             sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
-        except Exception:
+        except IndexError:
             scenario_hash_string = "-"
             sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
         try:
             further_result_folder_description = config_filename_splitted[-2]
-        except Exception:
+        except IndexError:
             further_result_folder_description = "-"
 
     # if config_filename is not given, make result path with index enumeration

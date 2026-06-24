@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import List, Optional, Any
+from typing import List, Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -29,9 +29,9 @@ class GasMeterConfig(cp.ConfigBase):
     """Gas Meter Config."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
-        return GasMeter.get_full_classname()
+        return str(GasMeter.get_full_classname())
 
     building_name: str
     name: str
@@ -53,7 +53,7 @@ class GasMeterConfig(cp.ConfigBase):
         cls,
         building_name: str = "BUI1",
         gas_loadtype: lt.LoadTypes = lt.LoadTypes.GAS
-    ) -> Any:
+    ) -> "GasMeterConfig":
         """Gets a default GasMeter."""
         return GasMeterConfig(
             building_name=building_name,

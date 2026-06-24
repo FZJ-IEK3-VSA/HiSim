@@ -1,9 +1,8 @@
 """Basic household system setup. Shows how to set up a standard system."""
 
-# clean
 
-from typing import Optional, Any
-from hisim.simulator import SimulationParameters
+from typing import Optional
+from hisim.simulator import SimulationParameters, Simulator
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
@@ -23,7 +22,7 @@ __status__ = "development"
 
 
 def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
+    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
     """Basic household system setup.
 
@@ -46,7 +45,10 @@ def setup_function(
     year = 2021
     seconds_per_timestep = 60
 
+    # Default source weight for electricity meter connections
+    DEFAULT_SOURCE_WEIGHT = 999
     # Set Heat Pump Controller
+
     temperature_air_heating_in_celsius = 19.0
     temperature_air_cooling_in_celsius = 24.0
     offset = 0.5
@@ -125,7 +127,7 @@ def setup_function(
             loadtypes.ComponentType.PV,
             loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,
         ],
-        source_weight=999,
+        source_weight=DEFAULT_SOURCE_WEIGHT,
     )
 
     my_electricity_meter.add_component_input_and_connect(
@@ -134,7 +136,7 @@ def setup_function(
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
         source_unit=loadtypes.Units.WATT,
         source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-        source_weight=999,
+        source_weight=DEFAULT_SOURCE_WEIGHT,
     )
 
     my_electricity_meter.add_component_input_and_connect(
@@ -146,7 +148,7 @@ def setup_function(
             loadtypes.ComponentType.HEAT_PUMP,
             loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
         ],
-        source_weight=999,
+        source_weight=DEFAULT_SOURCE_WEIGHT,
     )
 
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)

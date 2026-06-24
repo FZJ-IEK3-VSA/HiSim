@@ -2,8 +2,8 @@
 
 # clean
 
-from typing import Optional, Any
-from hisim.simulator import SimulationParameters
+from typing import Optional
+from hisim.simulator import SimulationParameters, Simulator
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
@@ -24,25 +24,21 @@ __status__ = ""
 
 
 def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
+    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Basic household system setup.
+    """Advanced household system setup with heat pump and dual storage.
 
-    This setup function emulates an household including the basic components. Here the residents have their
-    electricity and heating needs covered by the photovoltaic system and the heat pump.
+    Wires together occupancy, weather, building, heat pump (with DHW and space-
+    heating controllers), heat distribution system, hot-water buffer, and DHW
+    storage tanks.
 
-    - Simulation Parameters
-    - Components
-        - Occupancy (Residents' Demands)
-        - Weather
-        - Building
-        - Heat Pump
-        - Heat Pump Controller for dhw
-        - Heat Pump Controller for building heating
-        - Heat Distribution System
-        - Heat Distribution Controller
-        - Hot Water Storage
-        - DHW Water Storage
+    Args:
+        my_sim: The simulator instance to register components with.
+        my_simulation_parameters: Optional simulation parameters; defaults to a
+            full-year, 60-second timestep run with plots enabled.
+
+    Raises:
+        KeyError: If the heat pump group ID is not 1 or 4 (outdoor-air source).
     """
 
     # =================================================================================================================================
@@ -156,7 +152,7 @@ def setup_function(
     # Build Heat Distribution System
     my_heat_distribution_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )

@@ -1,4 +1,9 @@
-"""Test for generic electrolyzer h2."""
+"""Tests for the generic electrolyzer component for hydrogen production.
+
+This module contains tests for the generic_electrolyzer_h2 component, which simulates
+green hydrogen production via electrolysis. Tests verify hydrogen flow rate calculations
+based on electrical load input and activation state.
+"""
 import pytest
 
 from hisim import component as cp
@@ -10,7 +15,7 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_electrolyzer():
+def test_electrolyzer() -> None:
     """Test electrolyzer."""
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(

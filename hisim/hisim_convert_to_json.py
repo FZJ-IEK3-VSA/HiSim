@@ -5,7 +5,7 @@ import importlib
 from pathlib import Path
 import sys
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Tuple
 # Third party imports
 from dotenv import load_dotenv
 # First party imports
@@ -37,19 +37,28 @@ def main(
     path_to_module: str,
     my_simulation_parameters: Optional[SimulationParameters] = None,
     my_module_config: Optional[str] = None,
+    output_directory: Optional[str] = None,
 ) -> None:
-    """Core function."""
+    """Convert a Python-based system setup to JSON-based configuration files.
+
+    Loads a Python module containing a `setup_function`, initializes a
+    Simulator, and writes out `.simulation.json` and `.scenario.json` files
+    describing the configuration. Does not run the simulation.
+
+    Args:
+        path_to_module: Path or module name of the Python setup file
+            (without the `.py` extension).
+        my_simulation_parameters: Optional SimulationParameters passed to the
+            setup function.
+        my_module_config: Optional module configuration string.
+        output_directory: Optional directory for output JSON files.
+            Defaults to the directory containing the module.
+
+    Raises:
+        ValueError: If the module directory or the Python file cannot be found.
+    """
     # Suppress warnings (e.g., from pvlib)
     warnings.filterwarnings("ignore")
-
-    # Delete old log files
-    logging_default_path = Path(log.LOGGING_DEFAULT_PATH)
-    if logging_default_path.exists() and logging_default_path.is_dir():
-        for file in logging_default_path.iterdir():
-            try:
-                file.unlink()
-            except Exception:
-                log.information("Logging default file could not be removed. This can occur when more than one simulation run simultaneously.")
 
     # Logging simulation start
     function_in_module = "setup_function"
@@ -69,10 +78,13 @@ def main(
 
     # Add parent directory to PYTHONPATH
     module_dir = path_obj.parent
-    if module_dir.exists():
-        sys.path.append(str(module_dir))
-    else:
-        raise ValueError(f"Directory of module does not exist: {module_dir}")
+    output_dir = Path(output_directory).resolve() if output_directory is not None else module_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for parent in path_obj.parents:
+        if parent.exists():
+            sys.path.append(str(parent))
+        else:
+            raise ValueError(f"Directory of module does not exist: {module_dir}")
 
     # Final check and import
     if not path_obj.is_file():
@@ -95,7 +107,7 @@ def main(
     # Pass setup function to simulator
     model_init_method(my_sim, my_simulation_parameters)
     # Write the simulation parameters now, then alter them to include advanced logging
-    write_standalone_simulation_json(my_sim, path=f"{module_dir}/{module_filename}.simulation.json")
+    write_standalone_simulation_json(my_sim, path=str(output_dir / f"{module_filename}.simulation.json"))
 
     my_simulation_parameters = my_sim.get_simulation_parameters()
     my_simulation_parameters.log_connections = True
@@ -112,9 +124,6 @@ def main(
 
     if my_sim2.my_module_config is not None:
         log.warning(f"Module config is not None but not exported to JSON: {my_sim2.my_module_config}")
-    # The config dictionary is already part of the components (under "configuration")
-    # if len(my_sim2.config_dictionary) > 0:
-    #     log.warning(f"Config dictionary is not empty but not exported to JSON: {my_sim2.config_dictionary}")
 
     # Do not run the simulation
     my_sim2.prepare_calculation()
@@ -122,7 +131,12 @@ def main(
 
     desc = get_description_from_py(path_obj)
 
-    write_standalone_scenario_json(module_filename=module_filename, my_sim=my_sim2, desc=desc, path=f"{module_dir}/{module_filename}.scenario.json")
+    write_standalone_scenario_json(
+        module_filename=module_filename,
+        my_sim=my_sim2,
+        desc=desc,
+        path=str(output_dir / f"{module_filename}.scenario.json"),
+    )
 
     log.information("#################################")
     endtime = datetime.now()
@@ -133,12 +147,45 @@ def main(
     log.information("#################################")
     log.information("")
 
-    # At the end put new logging files into result directory
+    log.logger.reset()
+
+
+def write_json_for_initialized_simulator(
+    path_to_module: str,
+    my_sim: sim.Simulator,
+    output_directory: Optional[str] = None,
+) -> Tuple[Path, Path]:
+    """Write JSON files for an already initialized simulator and return their paths."""
+    path_obj = Path(path_to_module).with_suffix(".py").resolve()
+    module_filename = path_obj.stem
+    output_dir = Path(output_directory).resolve() if output_directory is not None else path_obj.parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    simulation_parameters_path = output_dir / f"{module_filename}.simulation.json"
+    scenario_path = output_dir / f"{module_filename}.scenario.json"
+
+    my_simulation_parameters = my_sim.get_simulation_parameters()
+    original_log_connections = my_simulation_parameters.log_connections
     try:
-        my_sim2.put_log_files_into_result_path()
-    # sometimes when running many simulations at once this leads to errors, so ignore
-    except Exception:
-        pass
+        my_simulation_parameters.log_connections = False
+        write_standalone_simulation_json(my_sim, path=str(simulation_parameters_path))
+    finally:
+        my_simulation_parameters.log_connections = original_log_connections
+
+    if my_sim.my_module_config is not None:
+        log.warning(f"Module config is not None but not exported to JSON: {my_sim.my_module_config}")
+
+    my_sim.prepare_calculation()
+    my_sim.connect_all_components()
+
+    desc = get_description_from_py(path_obj)
+    write_standalone_scenario_json(
+        module_filename=module_filename,
+        my_sim=my_sim,
+        desc=desc,
+        path=str(scenario_path),
+    )
+    return scenario_path, simulation_parameters_path
 
 
 if __name__ == "__main__":

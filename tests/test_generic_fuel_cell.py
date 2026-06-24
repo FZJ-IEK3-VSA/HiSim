@@ -11,8 +11,13 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_electrolyzer():
-    """Test electrolyzer."""
+def test_electrolyzer() -> None:
+    """Validate the FuelCell component's hydrogen demand calculation.
+
+    This test simulates a single timestep with a fake electricity demand
+    (7.6 kW) and control signal (1), then asserts that the calculated
+    hydrogen demand matches the expected reference value of 0.3650165 kg/h.
+    """
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
         2021, seconds_per_timestep

@@ -1,9 +1,11 @@
 """Dummy class and configuration returning electricity prices (from grid) and returns (injection) in each time step. """
 
+from __future__ import annotations
+
 # clean
 
 import os
-from typing import List, Any, Optional
+from typing import List, Optional, cast
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -32,9 +34,9 @@ class PriceSignalConfig(cp.ConfigBase):
     """Price Signal config class."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Return the full class name of the base class."""
-        return PriceSignal.get_full_classname()
+        return cast(str, PriceSignal.get_full_classname())
 
     building_name: str
     #: name of the price signal
@@ -43,8 +45,8 @@ class PriceSignalConfig(cp.ConfigBase):
     pricing_scheme: str
     installed_capacity: float
     price_signal_type: str
-    fixed_price: list
-    static_tou_price: list
+    fixed_price: List[float]
+    static_tou_price: List[float]
     price_injection: float
     predictive_control: bool
     prediction_horizon: Optional[int]
@@ -53,7 +55,7 @@ class PriceSignalConfig(cp.ConfigBase):
     def get_default_price_signal_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> PriceSignalConfig:
         """Default configuration for price signal."""
         config = PriceSignalConfig(
             building_name=building_name,
@@ -234,6 +236,7 @@ class PriceSignal(cp.Component):
             ).tolist()
 
             fit_data = feed_in_tarrif.loc[self.price_signal_config.country]
+            price_injection = 0.0
             for i in range(len(fit_data)):
                 if (
                     fit_data["min_capacity (kW)"].values[i] < self.price_signal_config.installed_capacity

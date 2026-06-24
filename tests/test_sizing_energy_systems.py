@@ -5,7 +5,7 @@ such as pv system, battery, heat pumps, water storage, etc. need to be scaled up
 """
 # clean
 
-from typing import Tuple, Any
+from typing import Tuple
 import pytest
 import numpy as np
 from hisim.components import (
@@ -25,14 +25,14 @@ from hisim import utils
 
 @pytest.mark.buildingtest
 @utils.measure_execution_time
-def test_energy_system_scalability():
+def test_energy_system_scalability() -> None:
     """Test function for the scability of the whole energy system."""
 
     # calculate energy system sizes for original case (scaling factors = 1)
     (
         number_of_apartments,
         original_pv_electricity_output_in_watt,
-        original_hplib_thermal_outout_power_in_watt,
+        original_hplib_thermal_output_power_in_watt,
         original_storage_size_for_space_heating_in_liter,
         original_battery_size_in_kilowatt_hours,
         original_hp_modular_thermal_power_in_watt_for_dhw,
@@ -46,7 +46,7 @@ def test_energy_system_scalability():
     )
     log.information(
         "original size hplib in watt "
-        + str(original_hplib_thermal_outout_power_in_watt)
+        + str(original_hplib_thermal_output_power_in_watt)
     )
     log.information(
         "original size storage for space heating in liter "
@@ -70,7 +70,7 @@ def test_energy_system_scalability():
     (
         number_of_apartments,
         scaled_pv_electricity_output_in_watt,
-        scaled_hplib_thermal_outout_power_in_watt,
+        scaled_hplib_thermal_output_power_in_watt,
         scaled_storage_size_for_space_heating_in_liter,
         scaled_battery_size_in_kilowatt_hours,
         scaled_hp_modular_thermal_power_in_watt_for_dhw,
@@ -83,7 +83,7 @@ def test_energy_system_scalability():
         "original size pv in watt " + str(scaled_pv_electricity_output_in_watt)
     )
     log.information(
-        "original size hplib in watt " + str(scaled_hplib_thermal_outout_power_in_watt)
+        "original size hplib in watt " + str(scaled_hplib_thermal_output_power_in_watt)
     )
     log.information(
         "original size storage for space heating in liter "
@@ -110,8 +110,8 @@ def test_energy_system_scalability():
     )
 
     np.testing.assert_allclose(
-        scaled_hplib_thermal_outout_power_in_watt,
-        original_hplib_thermal_outout_power_in_watt * 5,
+        scaled_hplib_thermal_output_power_in_watt,
+        original_hplib_thermal_output_power_in_watt * 5,
         rtol=0.01,
     )
 
@@ -144,7 +144,7 @@ def test_energy_system_scalability():
 
 def simulation_for_one_timestep(
     scaling_factor_for_absolute_conditioned_floor_area: int,
-) -> Tuple[Any, float, float, float, float, float, float]:
+) -> Tuple[int, float, float, float, float, float, float]:
     """Test function for the system setup house for one timestep."""
 
     # Set building inputs

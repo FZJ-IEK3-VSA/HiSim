@@ -89,24 +89,24 @@ We provide some simplified examples to show the general principles of the simula
 You can run the simple system setups in the directory `HiSim/system_setups` with the following command:
 
 ```python
-python ../hisim/hisim_main.py simple_system_setup_one.py
+python ../hisim/hisim_main.py simple_system_setup_one.scenario.json 2021_minutely_none.simulation.json
 ```
 or
 
 ```python
-python ../hisim/hisim_main.py simple_system_setup_two.py
+python ../hisim/hisim_main.py simple_system_setup_two.scenario.json 2021_minutely_none.simulation.json
 ```
 
-This command executes `hisim_main.py` on the setup function `setup_function` implemented in the files `simple_system_setup_one.py` and `simple_system_setup_two.py` that are stored in `HiSim/system_setups`.
-The results can be visualized under directory `results` created under the same directory where the script with the setup function is located.
+This command executes `hisim_main.py` on the scenario configuration given by the first JSON file and the simulation configuration given by the second JSON file.
+The results can be visualized under directory `results` created under the same directory where the scenario configuration file is located.
 
 Run Basic Household System Setup
 -----------------------
-The directory `HiSim/system_setups` also contains a basic household configuration in the script `basic_household.py`.
+The directory `HiSim/system_setups` also contains a basic household configuration named `basic_household.scenario.json`.
 It can be executed with the following command:
 
 ```python
-python ../hisim/hisim_main.py basic_household.py
+python ../hisim/hisim_main.py basic_household.scenario.json 2021_minutely_plots.simulation.json
 ```
 
 The system is set up with the following elements:
@@ -118,23 +118,9 @@ The system is set up with the following elements:
 * Heat Pump
 
 Hence, photovoltaic modules and the heat pump are responsible for covering the electricity and thermal energy demands as
-best as possible. As the name of the setup function says, the components are explicitly connected to each other, binding
-inputs to their corresponding output sequentially. This is different from automatically connecting inputs and outputs
-based on similarity. For a better understanding of explicit connection, proceed to section `IO Connecting Functions`.
-
-Generic Setup Function Walkthrough
----------------------
-The basic structure of a setup function in the Household System Setups in `HiSim/system_setups` is as follows:
-
-1. Set the simulation parameters (See `SimulationParameters` class in `hisim/hisim/component.py`)
-2. Create a `Component` object and add it to `Simulator` object
-    1. Create a `Component` object from one of the child classes implemented in `hisim/hisim/components`
-    2. Check if `Component` class has been correctly imported
-    3. If necessary, connect your object's inputs with previous created `Component` objects' outputs. You can use manual or automatic default connections.
-    4. Finally, add your `Component` object to `Simulator` object
-3. Repeat step 2 while all the necessary components have been created, connected and added to the `Simulator` object.
-
-Once you are done, you can run the setup function according to the description in the simple system setup run.
+best as possible. The components are explicitly connected to each other, binding inputs to their corresponding output 
+sequentially. This is different from automatically connecting inputs and outputs based on similarity. For a better 
+understanding of explicit connection, proceed to section `IO Connecting Functions`.
 
 Package Structure
 -----------
@@ -155,22 +141,42 @@ A `Component` child class has to have the following methods implemented:
 
 These methods are used by `Simulator` to execute the simulation and generate the results.
 
+List of `Component` Children
+-----------
+Theses classes inherent from `Component` (`component.py`) class and can be used in your setup function to customize different configurations. All `Component` class children are stored in `hisim/hisim/components` directory. Some of these classes are:
+
+- `RandomNumbers` (`random_numbers.py`)
+- `SimpleWaterStorage` (`simple_water_storage.py`)
+- `NightSetbackController` (`night_setback_controller.py`)
+- `Transformer` (`transformer_rectifier.py`)
+- `PVSystem` (`generic_pv_system.py`)
+- `SimpleCHP` (`generic_chp.py`)
+- `CSVLoader` (`csvloader.py`)
+- `SumBuilderForTwoInputs` (`sumbuilder.py`)
+- `SumBuilderForThreeInputs` (`sumbuilder.py`)
+- ToDo: more components to be added
 
 Connecting Input/Outputs
 -----------
 In the following the basic principle of the `Component` connections is explained. 
 
-Let `my_home_electricity_grid` and `my_appliance` be `Component` objects used in the setup function. The object `my_apppliance` has an output `ElectricityOutput` that has to be connected to an object `ElectricityGrid`. The object `my_home_electricity_grid` has an input `ElectricityInput`, where this connection takes place. In the setup function, the connection is performed with the method `connect_input` from the `Simulator` class:
+Let `my_home_electricity_grid` and `my_appliance` be `Component` objects used in the scenario. The object `my_apppliance` has an output `ElectricityOutput` that has to be connected to an object `ElectricityGrid`. The object `my_home_electricity_grid` has an input `ElectricityInput`, where this connection takes place. In the `connections` list, the connection would be specified as:
 
-```python
-my_home_electricity_grid.connect_input(input_fieldname=my_home_electricity_grid.ELECTRICITY_INPUT,
-                                       src_object_name=my_appliance.component_name,
-                                       src_field_name=my_appliance.ELECTRICITY_OUTPUT)
+```{
+    "source": {
+        "component_name": "my_appliance",
+        "field_name": "ElectricityOutput"
+    },
+    "target": {
+        "component_name": "my_home_electricity_grid",
+        "field_name": "ElectricityInput"
+    }
+},
 ```
 
 Configuration Automator
 -----------
-A configuration automator is under development and has the goal to reduce connections calls among similar components.
+A configuration automator is under development and has the goal to reduce the amount of connections having to be specified among similar components.
 
 
 ## Contributions and Collaborations

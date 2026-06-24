@@ -27,7 +27,7 @@ typing_extensions
 python-dotenv
 windpowerlib # ==0.2.1
 timezonefinder<6.0
-wetterdienst==0.63.0 # TODO: migrate weather_data_import.py to new API before upgrading
+#wetterdienst==0.63.0 # TODO: migrate weather_data_import.py to new API before upgrading
 cdsapi
 xarray
 pygfunction

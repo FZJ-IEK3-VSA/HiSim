@@ -2,12 +2,13 @@
 
 # clean
 
-from typing import Optional, Any, Union, List
+from typing import Optional, Union, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import Households
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim import component as cp
+from hisim.simulator import Simulator
 from hisim.components import (
     loadprofilegenerator_utsp_connector,
     generic_pv_system,
@@ -57,7 +58,7 @@ class GenericBuildingConfig(ConfigBase):
     lpg_households: List[str]
 
     @classmethod
-    def get_default_generic_building_config(cls, building_name="BUI1"):
+    def get_default_generic_building_config(cls, building_name: str = "BUI1") -> "GenericBuildingConfig":
         """Get default BuildingPVConfig."""
 
         return GenericBuildingConfig(
@@ -79,10 +80,10 @@ class GenericBuildingConfig(ConfigBase):
 class GenericBuilding(cp.Component):
     """Simple Generic Building."""
 
-    electricity_meter_bui: Any
+    electricity_meter_bui: electricity_meter.ElectricityMeter
 
     def __init__(
-        self, my_sim: Any, my_simulation_parameters: Any, config: GenericBuildingConfig, location: Any
+        self, my_sim: Simulator, my_simulation_parameters: cp.SimulationParameters, config: GenericBuildingConfig, location: str
     ) -> None:
         """Simple Generic Building."""
 
@@ -166,7 +167,9 @@ class GenericBuilding(cp.Component):
                 building_name=building_name,
             )
         )
-        my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP
+        my_occupancy_config.data_acquisition_mode = (
+            loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
+        )
         my_occupancy_config.household = lpg_households
 
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
@@ -313,7 +316,7 @@ class GenericBuilding(cp.Component):
 
         # Build Heat Distribution System
         my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             building_name=building_name,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,

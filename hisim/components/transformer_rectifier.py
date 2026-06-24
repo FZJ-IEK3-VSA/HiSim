@@ -1,4 +1,5 @@
 """Example Transformer."""
+from __future__ import annotations
 
 # clean
 
@@ -20,9 +21,9 @@ class TransformerConfig(ConfigBase):
     """Configuration of the Example Transformer."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
-        return Transformer.get_full_classname()
+        return str(Transformer.get_full_classname())
 
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
@@ -31,7 +32,7 @@ class TransformerConfig(ConfigBase):
     efficiency: float
 
     @classmethod
-    def get_default_transformer(cls):
+    def get_default_transformer(cls) -> TransformerConfig:
         """Gets a default Transformer."""
         return TransformerConfig(building_name="BUI1", name="Generic Transformer and rectifier Unit", efficiency=0.95)
 
@@ -56,8 +57,8 @@ class Transformer(Component):
 
     """
 
-    TransformerInput = "Input1"
-    TransformerOutput = "MyTransformerOutput"
+    TransformerInput: str = "Input1"
+    TransformerOutput: str = "MyTransformerOutput"
 
     def __init__(
         self,

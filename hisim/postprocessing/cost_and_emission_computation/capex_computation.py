@@ -1,7 +1,7 @@
 """Module for capex and emission computation."""
 
-from typing import Optional, Any
-from hisim.component import CapexCostDataClass
+from typing import Optional
+from hisim.component import CapexCostDataClass, ConfigBase
 from hisim.components.configuration import EmissionFactorsAndCostsForDevicesConfig
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
@@ -19,7 +19,7 @@ class CapexComputationHelperFunctions:
         component_type: ComponentType,
         unit: Units,
         size_of_energy_system: float,
-        config: Any,  # these are component configs
+        config: ConfigBase,  # these are component configs
         kpi_tag: Optional[KpiTagEnumClass] = None,
     ) -> CapexCostDataClass:
         """Compute capex costs and emissions for a given component type."""
@@ -78,9 +78,11 @@ class CapexComputationHelperFunctions:
             else:
                 raise ValueError(f"Unit {unit} of the energy system is not valid or not implemented yet.")
 
-            # make assertion for safety
-            assert investment_costs_in_euro_per_size_unit is not None
-            assert co2_footprint_in_kg_per_size_unit is not None
+            # make safety checks explicit so they fire even under python -O
+            if investment_costs_in_euro_per_size_unit is None:
+                raise ValueError("investment_costs_in_euro_per_size_unit must not be None.")
+            if co2_footprint_in_kg_per_size_unit is None:
+                raise ValueError("co2_footprint_in_kg_per_size_unit must not be None.")
 
             # these values are independent of size unit of the energy system
             maintenance_costs_as_percentage_of_investment_per_year = (
@@ -115,7 +117,7 @@ class CapexComputationHelperFunctions:
                 maintenance_costs_in_euro = config.maintenance_costs_in_euro_per_year.value
                 subsidy_as_percentage_of_investment_costs = config.subsidy_as_percentage_of_investment_costs.value
             else:
-                raise ValueError("Config values have wrong type: ", [type(v) for v in list_of_config_capex_variables])
+                raise ValueError(f"Config values have wrong type: {[type(v) for v in list_of_config_capex_variables]}")
 
         # Calculate values per simulated period
         seconds_per_year = 365 * 24 * 60 * 60
@@ -142,7 +144,7 @@ class CapexComputationHelperFunctions:
         return capex_cost_data_class
 
     @staticmethod
-    def overwrite_config_values_with_new_capex_values(config: Any, capex_cost_data_class: CapexCostDataClass):
+    def overwrite_config_values_with_new_capex_values(config: ConfigBase, capex_cost_data_class: CapexCostDataClass):
         """Overwrite config values with new capex values and return."""
         log.debug(f"Overwriting {config.get_main_classname()} config values with new capex values.")
         config.investment_costs_in_euro = capex_cost_data_class.capex_investment_cost_in_euro

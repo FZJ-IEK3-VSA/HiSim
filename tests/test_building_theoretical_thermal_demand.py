@@ -1,7 +1,7 @@
 """Test for heat demand calculation in the building module."""
 
-# clean
-import os
+import shutil
+from pathlib import Path
 from typing import Optional
 import numpy as np
 import pytest
@@ -12,6 +12,7 @@ from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import idealized_electric_heater
+from tests.testing_utils import TestingUtils
 
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
@@ -22,8 +23,8 @@ __version__ = "1.0"
 __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
-# PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../system_setups/household_for_test_building_theoretical_heat_demand.py"
+# SYSTEM_SETUP_SCRIPT_PATH and FUNC needed to build simulator, SYSTEM_SETUP_SCRIPT_PATH is fake
+SYSTEM_SETUP_SCRIPT_PATH = "../system_setups/household_for_test_building_theoretical_heat_demand.py"
 
 
 @pytest.mark.buildingtest
@@ -48,7 +49,7 @@ def test_house_with_idealized_electric_heater_for_heating_test(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60
+    seconds_per_timestep = 60 * 60
 
     # Set Fake Heater
     set_heating_temperature_for_building_in_celsius = 20
@@ -59,9 +60,11 @@ def test_house_with_idealized_electric_heater_for_heating_test(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
+        my_simulation_parameters = SimulationParameters.one_week_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+    my_simulation_parameters.result_directory = TestingUtils.get_result_directory()
+    shutil.rmtree(my_simulation_parameters.result_directory, ignore_errors=True)
 
     # # in case ou want to check on all TABULA buildings -> run test over all building_codes
     # d_f = pd.read_csv(
@@ -78,14 +81,10 @@ def test_house_with_idealized_electric_heater_for_heating_test(
 
     # this part is copied from hisim_main
     # Build Simulator
-    normalized_path = os.path.normpath(PATH)
-    path_in_list = normalized_path.split(os.sep)
-    path_to_be_added = None
-    if len(path_in_list) >= 1:
-        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
+    system_setup_directory = str(Path(SYSTEM_SETUP_SCRIPT_PATH).resolve().parent)
 
     my_sim: sim.Simulator = sim.Simulator(
-        module_directory=path_to_be_added,
+        module_directory=system_setup_directory,
         my_simulation_parameters=my_simulation_parameters,
         module_filename="household_for_test_building_theoretical_heat_demand",
     )

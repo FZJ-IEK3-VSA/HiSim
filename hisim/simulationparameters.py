@@ -46,7 +46,37 @@ class SimulationParameters(JSONWizard):
         multiple_buildings: bool = False,
         log_connections: bool = False,
     ):
-        """Initializes the class."""
+        """Initialize the SimulationParameters.
+
+        Defines how the simulation will proceed, including time resolution, time span,
+        logging configuration, and various simulation options.
+
+        Args:
+            start_date: The start date and time of the simulation period.
+            end_date: The end date and time of the simulation period.
+            seconds_per_timestep: The duration of each simulation timestep in seconds.
+            country: Country code for location-specific data (e.g., weather, tariffs).
+                Defaults to 'DE' (Germany).
+            result_directory: Directory path where simulation results will be stored.
+                Defaults to empty string (will be set by the simulation runner).
+            post_processing_options: List of post-processing option flags to enable.
+                Each integer corresponds to a specific post-processing task.
+                Defaults to None (empty list).
+            logging_level: Logging verbosity level. Use values from log.LogPrio.
+                Defaults to log.LogPrio.INFORMATION.
+            skip_finished_results: If True, skip computation for timesteps that have
+                already been completed. Useful for resuming interrupted simulations.
+                Defaults to False.
+            surplus_control: If True, enable surplus energy control logic for managing
+                excess generation (e.g., from PV systems). Defaults to True.
+            cache_dir_path: Directory path for caching intermediate data (e.g., weather
+                data, processed inputs). Defaults to the 'inputs/cache' directory
+                within the hisim package.
+            multiple_buildings: If True, configure the simulation for multiple buildings.
+                Defaults to False (single building).
+            log_connections: If True, enable logging of component connections for
+                debugging and verification. Defaults to False.
+        """
         self.start_date: datetime.datetime = start_date
         self.end_date: datetime.datetime = end_date
         self.seconds_per_timestep = seconds_per_timestep

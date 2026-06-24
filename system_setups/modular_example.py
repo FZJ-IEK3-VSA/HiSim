@@ -487,7 +487,7 @@ def setup_function(
 
     # """hydrogen storage with fuel cell and electrolyzer"""
     if hydrogen_setup_included and not buffer_included:
-        count = component_connections.configure_elctrolysis_h2storage_fuelcell_system(
+        count = component_connections.configure_electrolysis_h2storage_fuelcell_system(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
             my_building=my_building,
@@ -501,7 +501,7 @@ def setup_function(
         )
 
     if hydrogen_setup_included and buffer_included:
-        count = component_connections.configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
+        count = component_connections.configure_electrolysis_h2storage_fuelcell_system_with_buffer(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
             my_buffer=my_buffer,

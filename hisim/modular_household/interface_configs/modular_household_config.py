@@ -1,10 +1,17 @@
-"""Modular household config module."""
+"""Modular household configuration module.
+
+This module provides the :class:`ModularHouseholdConfig` dataclass, which combines
+system-level equipment configuration (:class:`system_config.SystemConfig`) with
+archetype-level framework configuration (:class:`archetype_config.ArcheTypeConfigModular`)
+for household energy simulations.
+"""
 
 # clean
 
 from typing import Optional
 import json
 from dataclasses import dataclass
+from dataclass_wizard.errors import ParseError
 
 from hisim.modular_household.interface_configs import archetype_config, system_config
 from hisim import log
@@ -36,9 +43,11 @@ def write_config(config: ModularHouseholdConfig) -> None:
         file.write(config.to_json())  # type: ignore
 
 
-def read_in_configs(pathname: str) -> ModularHouseholdConfig:
+def read_in_configs(pathname: Optional[str]) -> ModularHouseholdConfig:
     """Reads in ModularHouseholdConfig file and loads default if file cannot be found."""
     try:
+        if pathname is None:
+            raise FileNotFoundError("No modular household config path was provided.")
         with open(pathname, encoding="utf8") as config_file:
             household_config_dict = json.load(config_file)  # type: ignore
             household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_dict(
@@ -47,7 +56,7 @@ def read_in_configs(pathname: str) -> ModularHouseholdConfig:
         log.information(f"Read modular household config from {pathname}")
         if (household_config.system_config_ is None) and (household_config.archetype_config_ is None):
             raise ValueError()
-    except Exception:
+    except (FileNotFoundError, OSError, json.JSONDecodeError, ParseError):
         household_config = ModularHouseholdConfig()
         log.warning(f"Could not read the modular household config from '{pathname}'. Using a default config instead.")
 

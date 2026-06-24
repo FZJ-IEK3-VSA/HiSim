@@ -248,7 +248,7 @@ class L2HeatSmartController(cp.Component):
         l1_classname = controller_l1_generic_runtime.L1GenericRuntimeController.get_classname()
         connections.append(
             cp.ComponentConnection(
-                L2HeatSmartController.l1_RunTimeSignal,
+                L2HeatSmartController.L1RunTimeSignal,
                 l1_classname,
                 controller_l1_generic_runtime.L1GenericRuntimeController.l1_RunTimeSignal,
             )

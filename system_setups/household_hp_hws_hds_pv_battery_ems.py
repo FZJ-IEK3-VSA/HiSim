@@ -117,7 +117,7 @@ def setup_function(
             my_config = BuildingPVWeatherConfig.from_json(system_config_file.read())  # type: ignore
 
         log.information(f"Read system config from {config_filename}")
-        log.information("Config values: " + f"{my_config.to_dict}" + "\n")
+        log.information("Config values: " + f"{my_config.to_dict()}" + "\n")
     else:
         my_config = BuildingPVWeatherConfig.get_default()
         log.information("No module config path from the simulator was given. Use default config.")
@@ -309,7 +309,7 @@ def setup_function(
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )

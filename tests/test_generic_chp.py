@@ -14,7 +14,7 @@ from hisim.simulationparameters import SimulationParameters
 
 
 @pytest.mark.base
-def test_chp_system():
+def test_chp_system() -> None:
     """Test chp system."""
     seconds_per_timestep = 60
     thermal_power = 500  # thermal power in Watt
@@ -44,7 +44,7 @@ def test_chp_system():
         "FakeBuffer", "BufferTemperature", lt.LoadTypes.TEMPERATURE, lt.Units.WATT
     )
     boiler_temperature = cp.ComponentOutput(
-        "FakeBoilerTemperatue",
+        "FakeBoilerTemperature",
         "HotWaterStorageTemperature",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.WATT,
@@ -69,7 +69,7 @@ def test_chp_system():
             hydrogensoc,
         ]
     )
-    stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
+    single_timestep_values: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     my_chp_controller.electricity_target_channel.source_output = electricity_target
     my_chp_controller.hydrogen_soc_channel.source_output = hydrogensoc
@@ -96,29 +96,29 @@ def test_chp_system():
     )
 
     # test if chp runs when hydrogen in storage and heat as well as electricity needed
-    stsv.values[electricity_target.global_index] = -2.5e3
-    stsv.values[hydrogensoc.global_index] = 50
-    stsv.values[buffer_temperature.global_index] = 30
-    stsv.values[boiler_temperature.global_index] = 55
+    single_timestep_values.values[electricity_target.global_index] = -2.5e3
+    single_timestep_values.values[hydrogensoc.global_index] = 50
+    single_timestep_values.values[buffer_temperature.global_index] = 30
+    single_timestep_values.values[boiler_temperature.global_index] = 55
 
     for timestep in range(
         int((chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2)
     ):
-        my_chp_controller.i_simulate(timestep, stsv, False)
-        my_chp.i_simulate(timestep, stsv, False)
+        my_chp_controller.i_simulate(timestep, single_timestep_values, False)
+        my_chp.i_simulate(timestep, single_timestep_values, False)
 
-    assert stsv.values[my_chp.thermal_power_output_building_channel.global_index] == 500
-    assert stsv.values[my_chp.thermal_power_output_dhw_channel.global_index] == 0
-    assert stsv.values[my_chp.electricity_output_channel.global_index] > 500
-    assert stsv.values[my_chp.fuel_consumption_channel.global_index] > 500 / (
+    assert single_timestep_values.values[my_chp.thermal_power_output_building_channel.global_index] == 500
+    assert single_timestep_values.values[my_chp.thermal_power_output_dhw_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.electricity_output_channel.global_index] > 500
+    assert single_timestep_values.values[my_chp.fuel_consumption_channel.global_index] > 500 / (
         3.6e3 * 3.939e4
     )
 
     # test if chp shuts down when too little hydrogen in storage and electricty as well as heat needed
-    stsv.values[electricity_target.global_index] = -2.5e3
-    stsv.values[hydrogensoc.global_index] = 0
-    stsv.values[buffer_temperature.global_index] = 30
-    stsv.values[boiler_temperature.global_index] = 40
+    single_timestep_values.values[electricity_target.global_index] = -2.5e3
+    single_timestep_values.values[hydrogensoc.global_index] = 0
+    single_timestep_values.values[buffer_temperature.global_index] = 30
+    single_timestep_values.values[boiler_temperature.global_index] = 40
 
     for timestep_t in range(
         timestep,
@@ -127,19 +127,19 @@ def test_chp_system():
             (chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2
         ),
     ):
-        my_chp_controller.i_simulate(timestep_t, stsv, False)
-        my_chp.i_simulate(timestep_t, stsv, False)
+        my_chp_controller.i_simulate(timestep_t, single_timestep_values, False)
+        my_chp.i_simulate(timestep_t, single_timestep_values, False)
 
-    assert stsv.values[my_chp.thermal_power_output_building_channel.global_index] == 0
-    assert stsv.values[my_chp.thermal_power_output_dhw_channel.global_index] == 0
-    assert stsv.values[my_chp.electricity_output_channel.global_index] == 0
-    assert stsv.values[my_chp.fuel_consumption_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.thermal_power_output_building_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.thermal_power_output_dhw_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.electricity_output_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.fuel_consumption_channel.global_index] == 0
 
     # test if chp shuts down when hydrogen is ok, electricity is needed, but heat not
-    stsv.values[electricity_target.global_index] = -2.5e3
-    stsv.values[hydrogensoc.global_index] = 50
-    stsv.values[buffer_temperature.global_index] = 40.5
-    stsv.values[boiler_temperature.global_index] = 40
+    single_timestep_values.values[electricity_target.global_index] = -2.5e3
+    single_timestep_values.values[hydrogensoc.global_index] = 50
+    single_timestep_values.values[buffer_temperature.global_index] = 40.5
+    single_timestep_values.values[boiler_temperature.global_index] = 40
 
     for timestep in range(
         int(
@@ -147,13 +147,13 @@ def test_chp_system():
             + 2
         )
     ):
-        my_chp_controller.i_simulate(timestep, stsv, False)
-        my_chp.i_simulate(timestep, stsv, False)
+        my_chp_controller.i_simulate(timestep, single_timestep_values, False)
+        my_chp.i_simulate(timestep, single_timestep_values, False)
 
-    stsv.values[electricity_target.global_index] = -2.5e3
-    stsv.values[hydrogensoc.global_index] = 50
-    stsv.values[buffer_temperature.global_index] = 40.5
-    stsv.values[boiler_temperature.global_index] = 61
+    single_timestep_values.values[electricity_target.global_index] = -2.5e3
+    single_timestep_values.values[hydrogensoc.global_index] = 50
+    single_timestep_values.values[buffer_temperature.global_index] = 40.5
+    single_timestep_values.values[boiler_temperature.global_index] = 61
 
     for ttt in range(
         timestep_t,
@@ -162,19 +162,19 @@ def test_chp_system():
             (chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2
         ),
     ):
-        my_chp_controller.i_simulate(ttt, stsv, False)
-        my_chp.i_simulate(ttt, stsv, False)
+        my_chp_controller.i_simulate(ttt, single_timestep_values, False)
+        my_chp.i_simulate(ttt, single_timestep_values, False)
 
-    assert stsv.values[my_chp.thermal_power_output_building_channel.global_index] == 0
-    assert stsv.values[my_chp.thermal_power_output_dhw_channel.global_index] == 0
-    assert stsv.values[my_chp.electricity_output_channel.global_index] == 0
-    assert stsv.values[my_chp.fuel_consumption_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.thermal_power_output_building_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.thermal_power_output_dhw_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.electricity_output_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.fuel_consumption_channel.global_index] == 0
 
     # test if chp shuts down when hydrogen is ok, heat is needed, but electricity not
-    stsv.values[electricity_target.global_index] = -2.5e3
-    stsv.values[hydrogensoc.global_index] = 50
-    stsv.values[buffer_temperature.global_index] = 40.5
-    stsv.values[boiler_temperature.global_index] = 40
+    single_timestep_values.values[electricity_target.global_index] = -2.5e3
+    single_timestep_values.values[hydrogensoc.global_index] = 50
+    single_timestep_values.values[buffer_temperature.global_index] = 40.5
+    single_timestep_values.values[boiler_temperature.global_index] = 40
 
     for timestep in range(
         int(
@@ -182,13 +182,13 @@ def test_chp_system():
             + 2
         )
     ):
-        my_chp_controller.i_simulate(timestep, stsv, False)
-        my_chp.i_simulate(timestep, stsv, False)
+        my_chp_controller.i_simulate(timestep, single_timestep_values, False)
+        my_chp.i_simulate(timestep, single_timestep_values, False)
 
-    stsv.values[electricity_target.global_index] = 2.5e3
-    stsv.values[hydrogensoc.global_index] = 50
-    stsv.values[buffer_temperature.global_index] = 40.5
-    stsv.values[boiler_temperature.global_index] = 61
+    single_timestep_values.values[electricity_target.global_index] = 2.5e3
+    single_timestep_values.values[hydrogensoc.global_index] = 50
+    single_timestep_values.values[buffer_temperature.global_index] = 40.5
+    single_timestep_values.values[boiler_temperature.global_index] = 61
 
     for ttt in range(
         timestep_t,
@@ -197,10 +197,98 @@ def test_chp_system():
             (chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2
         ),
     ):
-        my_chp_controller.i_simulate(ttt, stsv, False)
-        my_chp.i_simulate(ttt, stsv, False)
+        my_chp_controller.i_simulate(ttt, single_timestep_values, False)
+        my_chp.i_simulate(ttt, single_timestep_values, False)
 
-    assert stsv.values[my_chp.thermal_power_output_building_channel.global_index] == 0
-    assert stsv.values[my_chp.thermal_power_output_dhw_channel.global_index] == 0
-    assert stsv.values[my_chp.electricity_output_channel.global_index] == 0
-    assert stsv.values[my_chp.fuel_consumption_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.thermal_power_output_building_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.thermal_power_output_dhw_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.electricity_output_channel.global_index] == 0
+    assert single_timestep_values.values[my_chp.fuel_consumption_channel.global_index] == 0
+
+
+@pytest.mark.base
+def test_get_default_config_chp_basic() -> None:
+    """Test CHPConfig.get_default_config_chp with thermal_power=1000 and default building name."""
+    config = generic_chp.CHPConfig.get_default_config_chp(thermal_power=1000)
+    assert config.p_th == 1000
+    assert config.p_el == pytest.approx(660)
+    assert config.p_fuel == pytest.approx(2000)
+    assert config.use == lt.LoadTypes.GAS
+    assert config.name == "CHP"
+    assert config.source_weight == 1
+    assert config.building_name == "BUI1"
+
+
+@pytest.mark.base
+def test_get_default_config_chp_zero() -> None:
+    """Test CHPConfig.get_default_config_chp with thermal_power=0 (boundary case)."""
+    config = generic_chp.CHPConfig.get_default_config_chp(thermal_power=0)
+    assert config.p_th == 0
+    assert config.p_el == 0
+    assert config.p_fuel == 0
+
+
+@pytest.mark.base
+def test_get_default_config_chp_default_building_name() -> None:
+    """Omitting building_name uses the default 'BUI1'."""
+    config = generic_chp.CHPConfig.get_default_config_chp(thermal_power=1000)
+    assert config.building_name == "BUI1"
+
+
+@pytest.mark.base
+def test_get_default_config_chp_custom_building_and_powers() -> None:
+    """Test CHPConfig.get_default_config_chp with a custom building name and thermal_power=500."""
+    config = generic_chp.CHPConfig.get_default_config_chp(
+        thermal_power=500, building_name="Custom"
+    )
+    assert config.building_name == "Custom"
+    assert config.p_th == 500
+    assert config.p_el == pytest.approx(330)
+    assert config.p_fuel == pytest.approx(1000)
+
+
+@pytest.mark.base
+def test_get_default_config_fuelcell_basic() -> None:
+    """Test CHPConfig.get_default_config_fuelcell with thermal_power=1000."""
+    config = generic_chp.CHPConfig.get_default_config_fuelcell(thermal_power=1000)
+    assert config.p_th == 1000
+    assert config.p_el == pytest.approx((0.48 / 0.43) * 1000)
+    assert config.p_fuel == pytest.approx((1 / 0.43) * 1000)
+    assert config.use == lt.LoadTypes.GREEN_HYDROGEN
+
+
+@pytest.mark.base
+def test_get_default_config_fuelcell_zero() -> None:
+    """Test CHPConfig.get_default_config_fuelcell with thermal_power=0 (boundary case)."""
+    config = generic_chp.CHPConfig.get_default_config_fuelcell(thermal_power=0)
+    assert config.p_th == 0
+    assert config.p_el == 0
+    assert config.p_fuel == 0
+
+
+@pytest.mark.base
+def test_generic_chp_state_clone_state_one() -> None:
+    """GenericCHPState(state=1).clone() returns a new instance with the same state."""
+    original = generic_chp.GenericCHPState(state=1)
+    cloned = original.clone()
+    assert cloned.state == 1
+    assert cloned is not original
+
+
+@pytest.mark.base
+def test_generic_chp_state_clone_state_zero() -> None:
+    """GenericCHPState(state=0).clone() preserves the boundary state value."""
+    original = generic_chp.GenericCHPState(state=0)
+    cloned = original.clone()
+    assert cloned.state == 0
+    assert cloned is not original
+
+
+@pytest.mark.base
+def test_generic_chp_state_clone_independence() -> None:
+    """Mutating the clone's state does not affect the original (independence check)."""
+    original = generic_chp.GenericCHPState(state=1)
+    cloned = original.clone()
+    cloned.state = 5
+    assert original.state == 1
+    assert cloned.state == 5

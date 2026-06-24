@@ -75,7 +75,8 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
         dir_parts = Path(config_json_str["source_path"]).parts
         if "inputs" in dir_parts:
             idx = dir_parts.index("inputs")
-            config_json_str["source_path"] = '<<utils.get_input_directory()>>\\' + str(Path(*dir_parts[idx + 1:]))
+            relative_input_path = Path(*dir_parts[idx + 1:]).as_posix()
+            config_json_str["source_path"] = f"<<utils.get_input_directory()>>/{relative_input_path}"
         else:
             log.warning(f"Could not find 'inputs' in absolute weather source path {config_json_str['source_path']}, leaving it unchanged in JSON output...")
     # Car information can be generated using Occupancy (see class GenericCarInformation)
@@ -116,10 +117,10 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
                 match = re.match(r"^(.*?)(Output\d+)$", out.field_name)
                 if not match:
                     raise ValueError(f"Invalid field_name format: {out.field_name}")
-                son = match.group(1)
+                source_object_name = match.group(1)
                 outs.append({
                     "dynamic": True,
-                    "source_output_name": son,
+                    "source_output_name": source_object_name,
                     "source_tags": dyn_out.source_tags,
                     "source_load_type": dyn_out.source_load_type.value,
                     "source_unit": dyn_out.source_unit.value,
@@ -146,19 +147,19 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
             if len(matches) == 1:
                 # add_component_input(s)_and_connect has been used
                 dyn_inp = matches[0]
-                sco = dyn_inp.source_component_field_name
+                source_component_field_name = dyn_inp.source_component_field_name
 
                 # Extract source_object_name
-                pattern = rf"^Input_(.*?)_{re.escape(sco)}_\d+$"
+                pattern = rf"^Input_(.*?)_{re.escape(source_component_field_name)}_\d+$"
                 match = re.match(pattern, inp.field_name)
                 if not match:
                     raise ValueError(f"Label does not match expected format: {inp.field_name}")
-                son = match.group(1)
+                source_object_name = match.group(1)
 
                 ins.append({
                     "dynamic": True,
-                    "source_component_output": sco,
-                    "source_object_name": son,
+                    "source_component_output": source_component_field_name,
+                    "source_object_name": source_object_name,
                     "source_load_type": inp.loadtype.value,
                     "source_unit": inp.unit.value,
                     "source_tags": dyn_inp.source_tags,

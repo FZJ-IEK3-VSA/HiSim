@@ -12,7 +12,7 @@ from hisim import utils
 # @pytest.mark.system_setups
 @pytest.mark.utsp
 @utils.measure_execution_time
-def test_basic_household():
+def test_basic_household() -> None:
     """Single day."""
     path = "../system_setups/household_reference_gas_heater_diesel_car.py"
 

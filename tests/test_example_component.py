@@ -22,7 +22,6 @@ def test_example_component():
     my_example_component_config = (
         example_component.ExampleComponentConfig.get_default_example_component()
     )
-    print("\n")
     log.information(
         "default example component config " + str(my_example_component_config) + "\n"
     )

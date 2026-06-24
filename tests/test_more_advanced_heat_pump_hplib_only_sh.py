@@ -1,4 +1,9 @@
-"""Test for advanced heat pump hplib."""
+"""Tests for MoreAdvancedHeatPumpHPLib with space-heating-only configuration.
+
+Verifies component initialization, state management, and output values
+(thermal/electrical power, COP, mass flow, on/off timing) when domestic
+hot water preparation is disabled.
+"""
 
 import pytest
 from tests import functions_for_testing as fft
@@ -11,7 +16,6 @@ from hisim.components.more_advanced_heat_pump_hplib import (
 )
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim import log
 
 
 @pytest.mark.base
@@ -25,7 +29,7 @@ def test_heat_pump_hplib_new():
     t_out: float = 52
     p_th_set: float = 10000
     with_domestic_hot_water_preparation: bool = False
-    simpars = SimulationParameters.one_day_only(2017, 60)
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, 60)
     # Definitions for i_simulate
     timestep = 1
     force_convergence = False
@@ -65,7 +69,7 @@ def test_heat_pump_hplib_new():
         subsidy_as_percentage_of_investment_costs=0.3
     )
 
-    heatpump = MoreAdvancedHeatPumpHPLib(config=heatpump_config, my_simulation_parameters=simpars)
+    heatpump = MoreAdvancedHeatPumpHPLib(config=heatpump_config, my_simulation_parameters=my_simulation_parameters)
     heatpump.state = MoreAdvancedHeatPumpHPLibState(
         time_on_heating=0,
         time_off=0,
@@ -117,7 +121,6 @@ def test_heat_pump_hplib_new():
 
     # Simulation
     heatpump.i_simulate(timestep=timestep, stsv=stsv, force_convergence=force_convergence)
-    log.information(str(stsv.values))
     # Check
     assert p_th_set == stsv.values[heatpump.p_th_sh.global_index]
     assert 7074.033573088874 == stsv.values[heatpump.p_el_sh.global_index]

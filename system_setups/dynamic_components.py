@@ -2,10 +2,10 @@
 
 # clean
 
-from typing import Optional, Any
+from typing import Optional
 
 # import hisim.components.random_numbers
-from hisim.simulator import SimulationParameters
+from hisim.simulator import SimulationParameters, Simulator
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import advanced_battery_bslib
 from hisim.components import weather
@@ -27,7 +27,7 @@ from hisim import loadtypes as lt
 # from hisim import utils
 
 
-def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
+def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """Dynamic Components Demonstration.
 
     In this system setup a generic controller is added. The generic controller

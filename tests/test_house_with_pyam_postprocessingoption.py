@@ -1,7 +1,7 @@
 """  Basic household system setup adapted for pyam postprocessing test. """
 
 # clean
-import os
+from pathlib import Path
 from typing import Optional
 
 import pytest
@@ -27,10 +27,10 @@ __status__ = "development"
 PATH = "../system_setups/household_for_pyam_test.py"
 
 
-@pytest.mark.base
+@pytest.mark.extendedbase
 def test_house_with_pyam(
     my_simulation_parameters: Optional[SimulationParameters] = None,
-) -> None:  # noqa: too-many-statements
+) -> None:  # noqa: PLR0915
     """Basic household system setup.
 
     This setup function emulates an household including the basic components. Here the residents have their
@@ -55,7 +55,7 @@ def test_house_with_pyam(
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 19.0
     temperature_air_cooling_in_celsius = 24.0
-    offset = 0.5
+    temperature_offset = 0.5
     hp_mode = 2
 
     # =================================================================================================================================
@@ -70,11 +70,7 @@ def test_house_with_pyam(
     )
 
     # this part is copied from hisim_main
-    # Build Simulator
-    normalized_path = os.path.normpath(PATH)
-    path_in_list = normalized_path.split(os.sep)
-    if len(path_in_list) >= 1:
-        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
+    path_to_be_added = str(Path(PATH).resolve().parent)
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
@@ -132,7 +128,7 @@ def test_house_with_pyam(
             name="GenericHeatPumpController",
             temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
             temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-            offset=offset,
+            offset=temperature_offset,
             mode=hp_mode,
         ),
         my_simulation_parameters=my_simulation_parameters,

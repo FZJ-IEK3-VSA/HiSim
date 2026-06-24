@@ -1,9 +1,9 @@
-"""Test for singleton sim repostitory."""
+"""Test for singleton sim repository."""
 
 # clean
 
-import os
 from typing import Optional
+from pathlib import Path
 import pytest
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
@@ -16,7 +16,7 @@ from hisim import utils
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../system_setups/household_for_test_sim_repository.py"
+PATH: str = "../system_setups/household_for_test_sim_repository.py"
 
 
 @utils.measure_execution_time
@@ -46,11 +46,8 @@ def test_house(
         )
 
     # this part is copied from hisim_main
+    path_to_be_added = str(Path(PATH).resolve().parent)
     # Build Simulator
-    normalized_path = os.path.normpath(PATH)
-    path_in_list = normalized_path.split(os.sep)
-    if len(path_in_list) >= 1:
-        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
@@ -138,13 +135,13 @@ def test_house(
 
     my_sim.run_all_timesteps()
 
-    log.information("singelton sim repo" + str(SingletonSimRepository().my_dict))
+    log.information("singleton sim repo" + str(SingletonSimRepository().my_dict))
 
     # https://medium.com/analytics-vidhya/how-to-create-a-thread-safe-singleton-class-in-python-822e1170a7f6
-    first_singelton_sim_repository = SingletonSimRepository()
+    first_singleton_sim_repository = SingletonSimRepository()
     second_singleton_sim_repository = SingletonSimRepository()
 
-    assert first_singelton_sim_repository is second_singleton_sim_repository
+    assert first_singleton_sim_repository is second_singleton_sim_repository
 
     # Sanity check - a non-singleton class should create two separate instances
 

@@ -1,14 +1,19 @@
+# noqa
+# flake8: noqa
+# noqa: D400, D415, D413, D407
+# pylint: skip-file
 """ Logging functionality for all of HiSim. """
+from __future__ import annotations
+
 # clean
 from enum import IntEnum
-import os
+from pathlib import Path
 
-LOGGING_LEVEL = 3
+LOGGING_DEFAULT_LEVEL: int = 3
 LOGGING_DEFAULT_PATH: str = r"../logs/"
 
 
 class LogPrio(IntEnum):
-
     """Define a logging priority."""
 
     ERROR = 1
@@ -18,81 +23,183 @@ class LogPrio(IntEnum):
     PROFILE = 5
     TRACE = 6
 
+    @staticmethod
+    def get_prio_string(prio: int) -> str:
+        """Get the string representation of the priority."""
 
-def error(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+        prio_strings: dict[int, str] = {
+            LogPrio.ERROR: "ERR",
+            LogPrio.WARNING: "WRN",
+            LogPrio.INFORMATION: "IFO",
+            LogPrio.DEBUG: "DBG",
+            LogPrio.PROFILE: "PRF",
+            LogPrio.TRACE: "TRC"
+        }
+        return prio_strings.get(prio, "???")
+
+
+class Logger:
+    """Class that handles the logging.
+
+    A logger is created the first time this module is imported
+    in a kernel. Every time a simulation is started, the logger has to be set up for that
+    simulation using the setup() function. Every time a simulation ends, it should be reset with
+    the reset() function.
+    """
+
+    # --------------------------------------------------------------------------------------------
+    # ----- member variables ---------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------------
+
+    logging_path: str = LOGGING_DEFAULT_PATH
+    logging_level: int = LOGGING_DEFAULT_LEVEL
+    before_result_dir_created: bool = True
+    log_buffer: str = ""
+    profile_buffer: str = ""
+
+    # --------------------------------------------------------------------------------------------
+    # ----- setup functions ----------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------------
+
+    def setup(self, logging_path: str) -> None:
+        """Create actual logging path and files and move the buffered logs there.
+
+        Args:
+            logging_path: The output directory. Get from simulation parameters.
+        """
+        # safety checks
+        if not self.before_result_dir_created:
+            print("WARNING! Logging seems to be already initialized.")
+        # delete parts of file if it becomes too large
+        if self.before_result_dir_created:
+            for filename in ["hisim_simulation", "profiling_timeuse"]:
+                try:
+                    self.file_thanos(filename)
+                except:
+                    pass
+        # set path and make folder if it does not exist
+        self.logging_path = logging_path
+        if not Path(logging_path).exists():
+            Path(logging_path).mkdir(parents=True, exist_ok=True)
+        # write buffered logs to files
+        for filename, buffer in [["hisim_simulation", self.log_buffer],
+                                 ["profiling_timeuse", self.profile_buffer]]:
+            file_path = str(Path(logging_path) / (filename + ".log"))
+            try:
+                with open(file_path, "a", encoding="utf-8") as filestream:
+                    filestream.write(buffer)
+            except Exception:
+                print(filename + ".log could not be appended. "
+                    "This might happen when too many simultaneous simulations are running.")
+        # turn off buffering and clear buffers
+        self.before_result_dir_created = False
+        self.log_buffer = ""
+        self.profile_buffer = ""
+
+    def reset(self) -> None:
+        """Resets the logger at the end of a simulation to prepare it for the next one.
+
+        This is necessary because the logger gets initialized only once per kernel, when
+        log.py is first imported.
+        """
+        self.logging_path: str = LOGGING_DEFAULT_PATH
+        self.logging_level: int = LOGGING_DEFAULT_LEVEL
+        self.before_result_dir_created: bool = True
+        self.log_buffer: str = ""
+        self.profile_buffer: str = ""
+
+    def file_thanos(self, filename: str) -> None:
+        """Checks the size of a default logfile and halves it if it is too large."""
+        file_path = str(Path(LOGGING_DEFAULT_PATH) / (filename + ".log"))
+        if not Path(file_path).exists():
+            return
+        with open(file_path, "rb") as file:
+            num_lines = sum(1 for line in file)
+        if num_lines > 10000:
+            with open(file_path, "r", encoding="utf-8") as file:
+                lines = file.readlines()
+            with open(file_path, "w", encoding="utf-8") as file:
+                file.writelines(lines[-5000:])
+
+    # --------------------------------------------------------------------------------------------
+    # ----- logger class actual logging function -------------------------------------------------
+    # --------------------------------------------------------------------------------------------
+
+    def log(self, prio: int, message: str, logging_message_path: str|None = None,
+            use_profile_file: bool = False) -> None:
+        """Write and print a log message.
+
+        If the parameter logging_message_path is not provided, the instance attribute
+        self.logging_path, which is set during the Logger setup, is used.
+        """
+        if logging_message_path is None:
+            logging_message_path = self.logging_path
+        if prio > self.logging_level:
+            return
+        if not use_profile_file:
+            print(str(LogPrio.get_prio_string(prio)) + ":" + message)
+        # if logging path doesn't exist: create directory
+        if not Path(logging_message_path).exists():
+            Path(logging_message_path).mkdir(parents=True, exist_ok=True)
+        # log to file if possible
+        filename = "profiling_timeuse.log" if use_profile_file else "hisim_simulation.log"
+        file_path = str(Path(logging_message_path) / filename)
+        try:
+            with open(file_path, "a", encoding="utf-8") as filestream:
+                filestream.write(message + "\n")
+        except Exception:
+            print(f"{filename} could not be appended. "
+                "This might happen when too many simultaneous simulations are running.")
+        # if result directory and therefore actual log file not yet created: buffer logs
+        if self.before_result_dir_created:
+            self.log_buffer += message + "\n"
+
+
+# --------------------------------------------------------------------------------------------
+# ----- create the logger object and define the module-level functions -----------------------
+# --------------------------------------------------------------------------------------------
+
+
+# this gets executed once per kernel when the module is first imported
+logger: Logger = Logger()
+
+
+def error(message: str, logging_message_path: str|None = None) -> None:
     """Log an error message."""
-    log(LogPrio.ERROR, message, logging_message_path)
+    logger.log(LogPrio.ERROR, message, logging_message_path, False)
 
 
-def warning(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+def warning(message: str, logging_message_path: str|None = None) -> None:
     """Log a warning message."""
-    log(LogPrio.WARNING, message, logging_message_path)
+    logger.log(LogPrio.WARNING, message, logging_message_path, False)
 
 
-def information(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+def information(message: str, logging_message_path: str|None = None) -> None:
     """Log a information message."""
-    log(LogPrio.INFORMATION, message, logging_message_path)
+    logger.log(LogPrio.INFORMATION, message, logging_message_path, False)
 
 
-def trace(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+def trace(message: str, logging_message_path: str|None = None) -> None:
     """Log a trace message."""
-    log(LogPrio.TRACE, message, logging_message_path)
+    logger.log(LogPrio.TRACE, message, logging_message_path, False)
 
 
-def debug(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+def debug(message: str, logging_message_path: str|None = None) -> None:
     """Log a debug message."""
-    log(LogPrio.DEBUG, message, logging_message_path)
+    logger.log(LogPrio.DEBUG, message, logging_message_path, False)
 
 
-def profile(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+def profile(message: str, logging_message_path: str|None = None) -> None:
     """Log a profile message."""
-    log(LogPrio.PROFILE, message, logging_message_path)
-    log_profile_file(message, logging_message_path)
+    logger.log(LogPrio.PROFILE, message, logging_message_path, False)
+    logger.log(LogPrio.PROFILE, message, logging_message_path, True)
 
 
-def log(prio: int, message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+def log(prio: int, message: str, logging_message_path: str|None = None) -> None:
     """Write and print a log message."""
-    # if(prio < LogPrio.Debug):
-    prio_string: str
-    if prio == LogPrio.ERROR:
-        prio_string = "ERR"
-    elif prio == LogPrio.WARNING:
-        prio_string = "WRN"
-    elif prio == LogPrio.INFORMATION:
-        prio_string = "IFO"
-    elif prio == LogPrio.DEBUG:
-        prio_string = "DBG"
-    elif prio == LogPrio.PROFILE:
-        prio_string = "PRF"
-    elif prio == LogPrio.TRACE:
-        prio_string = "TRC"
-    else:
-        raise ValueError("Unknown log priority: " + str(prio))
-    if prio <= LOGGING_LEVEL:
-        print(str(prio_string) + ":" + message)
-
-    if not os.path.exists(logging_message_path):
-        os.makedirs(logging_message_path)
-
-    file_name = os.path.join(logging_message_path, "hisim_simulation.log")
-    try:
-        with open(file_name, "a", encoding="utf-8") as filestream:
-            filestream.write(message + "\n")
-    except Exception:
-        print("hisim_simulation.log could not be appended. "
-              "This might happen when too many simultaneous simulations are running.")
+    logger.log(prio, message, logging_message_path)
 
 
-def log_profile_file(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
+def log_profile_file(message: str, logging_message_path: str|None = None) -> None:
     """Write log message to logfile."""
-
-    if not os.path.exists(logging_message_path):
-        os.makedirs(logging_message_path)
-
-    file_name = os.path.join(logging_message_path, "profiling_timeuse.log")
-    try:
-        with open(file_name, "a", encoding="utf-8") as filestream:
-            filestream.write(message + "\n")
-    except Exception:
-        print("profiling_timeuse.log could not be appended. "
-              "This might happen when too many simultaneous simulations are running.")
+    logger.log(LogPrio.PROFILE, message, logging_message_path, True)

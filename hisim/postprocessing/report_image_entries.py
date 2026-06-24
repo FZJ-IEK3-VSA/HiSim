@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 
-@dataclass()
+@dataclass
 class SystemChartEntry:
     """Class for system charts entries."""
 

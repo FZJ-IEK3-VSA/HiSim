@@ -10,8 +10,8 @@ from hisim import log
 
 
 @pytest.mark.base
-def test_electrolyzer_controller():
-    """Test electrolzyer controller."""
+def test_electrolyzer_controller() -> None:
+    """Test electrolyzer controller."""
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
         2021, seconds_per_timestep

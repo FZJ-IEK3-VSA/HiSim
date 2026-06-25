@@ -120,6 +120,6 @@ def test_quantity_comparison_valid() -> None:
 def test_quantity_eq_invalid_type() -> None:
     """Equality with a non-Quantity returns False instead of raising."""
     quantity = Quantity(1, Watt)
-    assert quantity == quantity  # same object is fine
+    assert quantity == quantity  # pylint: disable=comparison-with-itself  # same object is fine
     assert (quantity == 1) is False
     assert (quantity == "1") is False

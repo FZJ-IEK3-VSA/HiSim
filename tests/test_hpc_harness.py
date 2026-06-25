@@ -10,17 +10,17 @@ command builder that launches trivial python subprocesses.
 
 import sys
 import time
+from pathlib import Path
 
 import pytest
 
 from hisim.hpc_harness import db
-from pathlib import Path
-
 from hisim.hpc_harness.config import HarnessConfig, _normalize_path
 from hisim.hpc_harness.pool import LocalPool, compute_max_slots
 
 # Polling interval for pool tick loop in _drive().
 TICK_INTERVAL = 0.05
+
 
 # --------------------------------------------------------------------------- db
 @pytest.mark.base
@@ -207,7 +207,7 @@ def test_normalize_path_defaults_match_expanduser_resolve(tmp_path, monkeypatch)
 
 
 @pytest.mark.base
-def test_normalize_path_only_cwd_or_only_home_injected(tmp_path, monkeypatch):
+def test_normalize_path_only_cwd_or_only_home_injected():
     """Injecting just one of cwd/home still yields deterministic output."""
     cwd = Path("/srv/harness_proj")
     home = Path("/srv/harness_home")

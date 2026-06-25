@@ -13,8 +13,8 @@ from tests.postprocessing_option_test_framework import PostProcessingOptionTestF
 pytestmark = pytest.mark.postprocessingoptions
 
 
-@pytest.fixture(scope="module")
-def postprocessing_option_framework() -> PostProcessingOptionTestFramework:
+@pytest.fixture(scope="module", name="postprocessing_option_framework")
+def fixture_postprocessing_option_framework() -> PostProcessingOptionTestFramework:
     """Shared framework that keeps the individual option tests small."""
     return PostProcessingOptionTestFramework()
 

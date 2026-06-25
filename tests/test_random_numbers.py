@@ -15,6 +15,9 @@ injected RNG through to ``self.values``.
 
 # clean
 
+# These tests deliberately exercise the private helper ``RandomNumbers._generate_values``.
+# pylint: disable=protected-access
+
 import random
 
 import pytest
@@ -68,7 +71,7 @@ def test_generate_values_respects_bounds() -> None:
 @pytest.mark.base
 def test_generate_values_count_matches_timesteps() -> None:
     """The helper returns exactly ``timesteps`` values (incl. zero)."""
-    assert RandomNumbers._generate_values(0.0, 1.0, 0, random.Random(0)) == []
+    assert not RandomNumbers._generate_values(0.0, 1.0, 0, random.Random(0))
     assert len(RandomNumbers._generate_values(0.0, 1.0, 7, random.Random(0))) == 7
 
 

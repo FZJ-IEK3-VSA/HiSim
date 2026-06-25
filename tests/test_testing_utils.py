@@ -46,10 +46,10 @@ class _RecordingProvider:
 class _NoneDirectoryProvider(_RecordingProvider):
     """A stub provider whose get_result_directory_name() returns None."""
 
-    def get_result_directory_name(self) -> Optional[str]:
+    def get_result_directory_name(self) -> Optional[str]:  # pylint: disable=useless-return
         """Return None to simulate an unset result directory."""
         self.get_calls += 1
-        return None  # pylint: disable=useless-return
+        return None
 
 
 @pytest.mark.base

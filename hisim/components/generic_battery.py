@@ -193,6 +193,9 @@ class GenericBattery(cp.Component):
         """Initialize the class.
 
         Args:
+            my_simulation_parameters: The global simulation parameters.
+            config: The battery configuration.
+            my_display_config: Controls visibility of the component in the webtool/report.
             battery_database: optional in-memory battery spec database (a list
                 of dicts, as produced by
                 :func:`hisim.utils.load_smart_appliance`). When ``None`` (the
@@ -263,6 +266,9 @@ class GenericBattery(cp.Component):
         """Build function.
 
         Args:
+            manufacturer: Battery manufacturer name used to look up the spec in the database.
+            model: Battery model name used to look up the spec in the database.
+            base: Base value stored on the component as ``self.base``.
             battery_database: optional in-memory battery spec database. When
                 ``None`` the database is loaded from the on-disk smart-appliance
                 input file via :func:`hisim.utils.load_smart_appliance`, keeping

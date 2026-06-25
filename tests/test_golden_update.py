@@ -107,8 +107,8 @@ def test_main_empty_setups_writes_nothing(tmp_path: Path) -> None:
     rc = main(run_setup_fn=run_setup_fn, ref_dir=tmp_path, setups=[])
 
     assert rc == 0
-    assert called == []
-    assert list(tmp_path.iterdir()) == []
+    assert not called
+    assert not list(tmp_path.iterdir())
 
 
 def test_main_defaults_bind_to_golden_check_collaborators() -> None:

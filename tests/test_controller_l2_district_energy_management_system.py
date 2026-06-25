@@ -22,10 +22,7 @@ from hisim.components import (
     generic_pv_system,
     heat_distribution_system,
     advanced_battery_bslib,
-    advanced_heat_pump_hplib,
     controller_l2_district_energy_management_system,
-    generic_heat_pump_modular,
-    controller_l1_heatpump,
     simple_water_storage,
     more_advanced_heat_pump_hplib
 )
@@ -33,8 +30,6 @@ from hisim import utils
 import hisim.loadtypes as lt
 
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.units import Quantity, Celsius, Watt
-from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 from tests.testing_utils import TestingUtils
 
 # PATH and FUNC needed to build simulator, PATH is fake

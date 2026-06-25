@@ -4,6 +4,7 @@ import type { Node, Edge, NodeChange, EdgeChange, Connection } from '@xyflow/rea
 import type { ComponentDb, EnumDb, ComponentNodeData } from '../types'
 import { getLoadTypeColor } from '../data/loadTypeColors'
 import { autoConnectNode as autoConnectNodeFn } from '../io/autoConnect'
+import { validateScenario } from '../io/validate'
 
 export type HiSimNode = Node<ComponentNodeData>
 
@@ -14,6 +15,8 @@ interface EditorState {
   edges: Edge[]
   selectedNodeId: string | null
   validationMessages: string[]
+  validationErrors: string[]
+  validationWarnings: string[]
   scenarioName: string
   scenarioDescription: string
   showAutoConnections: boolean
@@ -30,6 +33,7 @@ interface EditorActions {
   setSelectedNodeId: (id: string | null) => void
   updateNodeData: (nodeId: string, patch: Partial<ComponentNodeData>) => void
   setValidationMessages: (messages: string[]) => void
+  runValidation: () => void
   setScenarioMeta: (name: string, description: string) => void
   autoConnectNode: (nodeId: string) => void
   autoConnectAll: () => void
@@ -45,6 +49,8 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
   edges: [],
   selectedNodeId: null,
   validationMessages: [],
+  validationErrors: [],
+  validationWarnings: [],
   scenarioName: 'Untitled scenario',
   scenarioDescription: '',
   showAutoConnections: true,
@@ -88,6 +94,12 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
     })),
 
   setValidationMessages: (messages) => set({ validationMessages: messages }),
+
+  runValidation: () => {
+    const { nodes, edges } = get()
+    const { errors, warnings } = validateScenario(nodes, edges)
+    set({ validationErrors: errors, validationWarnings: warnings })
+  },
 
   setScenarioMeta: (name, description) => set({ scenarioName: name, scenarioDescription: description }),
 
@@ -143,6 +155,8 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
       edges: [],
       selectedNodeId: null,
       validationMessages: [],
+      validationErrors: [],
+      validationWarnings: [],
       scenarioName: 'Untitled scenario',
       scenarioDescription: '',
     }),

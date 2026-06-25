@@ -23,12 +23,34 @@ function CategoryBadge({ label }: { label: string }) {
 }
 
 // NodeProps must use the base Record type for compatibility with React Flow's NodeTypes registry.
-// We cast data to ComponentNodeData safely — only ComponentCard nodes carry this shape.
 export const ComponentCard = memo(function ComponentCard({ id, data: rawData, selected }: NodeProps) {
   const data = rawData as ComponentNodeData
   const updateNodeData = useEditorStore((s) => s.updateNodeData)
   const { entry, instanceName, config, collapsed, unresolvedPorts = [] } = data
   const dynamicInputs: DynamicInputPort[] = (data.dynamicInputs as DynamicInputPort[] | undefined) ?? []
+
+  // ── Real-time validation ──────────────────────────────────────────────────
+  // Return unconnected mandatory port names as a \0-separated string for stable
+  // equality comparison (avoids re-renders when the Set contents haven't changed).
+  const unconnectedMandatoryStr = useEditorStore((s) => {
+    const connected = new Set(
+      s.edges.filter((e) => e.target === id).map((e) => e.targetHandle),
+    )
+    return entry.input_ports
+      .filter((p) => p.mandatory && !connected.has(`input-${p.field_name}`))
+      .map((p) => p.field_name)
+      .join('\0')
+  })
+  const unconnectedMandatory = unconnectedMandatoryStr
+    ? new Set(unconnectedMandatoryStr.split('\0'))
+    : new Set<string>()
+
+  const isDuplicateName = useEditorStore((s) => {
+    const name = String(config.name ?? instanceName)
+    return s.nodes.filter((n) => String(n.data.config.name ?? n.data.instanceName) === name).length > 1
+  })
+
+  const hasRealTimeError = unconnectedMandatory.size > 0 || isDuplicateName
 
   const toggleCollapsed = useCallback(
     (e: React.MouseEvent) => {
@@ -38,12 +60,9 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
     [id, collapsed, updateNodeData],
   )
 
-  // Number of rows in the static port section
   const staticPortRows = Math.max(entry.input_ports.length, entry.output_ports.length)
 
   return (
-    // Outer div is the node's bounding box; handles are positioned relative to it.
-    // overflow: visible so handles render outside the white card border.
     <div style={{ width: 260 }} className="relative">
       {/* ── Static input handles ──────────────────────────────── */}
       {entry.input_ports.map((port, i) => (
@@ -55,7 +74,9 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
           style={{
             ...HANDLE_STYLE,
             top: HEADER_H + i * PORT_H + PORT_H / 2,
-            background: getLoadTypeColor(port.load_type),
+            background: unconnectedMandatory.has(port.field_name)
+              ? '#ef4444'
+              : getLoadTypeColor(port.load_type),
           }}
         />
       ))}
@@ -95,6 +116,8 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
         className={`bg-white rounded-lg overflow-hidden ${
           selected
             ? 'ring-2 ring-blue-400 shadow-md'
+            : hasRealTimeError
+            ? 'ring-2 ring-red-400 shadow-sm'
             : 'border border-gray-200 shadow-sm'
         }`}
       >
@@ -104,7 +127,14 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
           onClick={toggleCollapsed}
           title="Click to expand / collapse"
         >
-          <span className="font-semibold text-xs truncate">{instanceName}</span>
+          <span className={`font-semibold text-xs truncate ${hasRealTimeError ? 'text-red-600' : ''}`}>
+            {instanceName}
+          </span>
+          {isDuplicateName && (
+            <span className="shrink-0 text-[10px] text-red-500 font-medium" title="Duplicate component name">
+              dup
+            </span>
+          )}
           <CategoryBadge label={entry.category} />
         </div>
 
@@ -114,6 +144,7 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
             {Array.from({ length: staticPortRows }).map((_, i) => {
               const inp = entry.input_ports[i]
               const out = entry.output_ports[i]
+              const missingMandatory = inp && unconnectedMandatory.has(inp.field_name)
               return (
                 <div key={i} className="flex items-center" style={{ height: PORT_H }}>
                   {/* Input label */}
@@ -122,11 +153,23 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
                       <>
                         <span
                           className="text-[11px] truncate"
-                          style={{ color: getLoadTypeColor(inp.load_type) + 'cc' }}
-                          title={`${inp.field_name} — ${inp.load_type} [${inp.unit}]${inp.mandatory ? ' *required' : ''}`}
+                          style={{
+                            color: missingMandatory
+                              ? '#ef4444'
+                              : getLoadTypeColor(inp.load_type) + 'cc',
+                          }}
+                          title={`${inp.field_name} — ${inp.load_type} [${inp.unit}]${
+                            inp.mandatory ? ' *required' : ''
+                          }${missingMandatory ? ' — NOT CONNECTED' : ''}`}
                         >
                           {inp.field_name}
-                          {inp.mandatory && <span className="text-red-400 ml-0.5">*</span>}
+                          {inp.mandatory && (
+                            <span
+                              className={`ml-0.5 ${missingMandatory ? 'text-red-500' : 'text-red-400'}`}
+                            >
+                              *
+                            </span>
+                          )}
                         </span>
                         {unresolvedPorts.includes(inp.field_name) && (
                           <span
@@ -161,7 +204,7 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
           </div>
         )}
 
-        {/* Dynamic input rows (loaded from the scenario JSON's inputs[] array) */}
+        {/* Dynamic input rows */}
         {dynamicInputs.length > 0 && (
           <div className="border-b border-gray-100">
             {staticPortRows > 0 && (

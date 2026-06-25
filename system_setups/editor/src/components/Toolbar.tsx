@@ -33,6 +33,7 @@ export default function Toolbar() {
   const setSelectedNodeId = useEditorStore((s) => s.setSelectedNodeId)
   const setValidationMessages = useEditorStore((s) => s.setValidationMessages)
   const autoConnectAll = useEditorStore((s) => s.autoConnectAll)
+  const runValidation = useEditorStore((s) => s.runValidation)
   const showAutoConnections = useEditorStore((s) => s.showAutoConnections)
   const toggleShowAutoConnections = useEditorStore((s) => s.toggleShowAutoConnections)
 
@@ -78,7 +79,7 @@ export default function Toolbar() {
       <Button onClick={handleOpenJson}>Open JSON</Button>
       <Button onClick={handleSaveJson}>Save JSON</Button>
       <Separator />
-      <Button disabled title="Phase 8">Validate</Button>
+      <Button onClick={runValidation}>Validate</Button>
       <Button onClick={autoConnectAll}>Auto-connect all</Button>
       <button
         onClick={toggleShowAutoConnections}

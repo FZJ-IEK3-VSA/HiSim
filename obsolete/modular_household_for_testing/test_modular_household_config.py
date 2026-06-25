@@ -11,13 +11,13 @@ intentionally not exercised here.
 
 import pytest
 
-from hisim.modular_household.interface_configs import (
-    archetype_config,
+from repositories.HiSim.obsolete.modular_household.interface_configs import (
     system_config,
 )
-from hisim.modular_household.interface_configs.modular_household_config import (
+from repositories.HiSim.obsolete.modular_household.interface_configs.modular_household_config import (
     ModularHouseholdConfig,
 )
+from repositories.HiSim.obsolete.modular_household.interface_configs import archetype_config
 
 
 @pytest.mark.base

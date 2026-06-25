@@ -23,8 +23,8 @@ from hisim.components import (
     weather,
     generic_smart_device,
 )
-from hisim.modular_household import component_connections
-from hisim.modular_household.interface_configs.modular_household_config import read_in_configs
+from repositories.HiSim.obsolete.modular_household import component_connections
+from repositories.HiSim.obsolete.modular_household.interface_configs.modular_household_config import read_in_configs
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 

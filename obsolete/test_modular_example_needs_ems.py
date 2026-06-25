@@ -12,7 +12,7 @@ path and multiple triggers short-circuiting to ``True``).
 import pytest
 
 import hisim.loadtypes as lt
-from system_setups.modular_example import needs_ems
+from repositories.HiSim.obsolete.modular_example import needs_ems
 
 
 def _needs_ems(

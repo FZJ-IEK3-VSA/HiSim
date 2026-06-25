@@ -13,8 +13,9 @@ import json
 from dataclasses import dataclass
 from dataclass_wizard.errors import ParseError
 
-from hisim.modular_household.interface_configs import archetype_config, system_config
+from repositories.HiSim.obsolete.modular_household.interface_configs import system_config
 from hisim import log
+from repositories.HiSim.obsolete.modular_household.interface_configs import archetype_config
 from repositories.HiSim.obsolete.system_setup_configuration import SystemSetupConfigBase
 
 

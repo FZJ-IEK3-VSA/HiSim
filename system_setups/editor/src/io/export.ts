@@ -45,6 +45,10 @@ export function exportScenario(
     const tgtNode = nodeById.get(edge.target)
     if (!srcNode || !tgtNode) continue
 
+    // Omit auto-connect edges whose target has connect_automatically:true —
+    // HiSim recreates these at runtime, so writing them is redundant.
+    if (edge.data?.autoConnected && tgtNode.data.connectAutomatically) continue
+
     const srcField = edge.sourceHandle?.replace(/^output-/, '')
     const tgtField = edge.targetHandle?.replace(/^input-/, '')
     if (!srcField || !tgtField) continue

@@ -131,7 +131,6 @@ def initialize_lpg_utsp_connector_and_return_results(
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([my_occupancy])
 
-
     timestep = 0
     my_occupancy.i_simulate(timestep, stsv, False)
     number_of_residents = stsv.values[my_occupancy.number_of_residents_channel.global_index]

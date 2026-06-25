@@ -437,6 +437,7 @@ class _FakeSim:
         self.events: list[str] = []
 
     def get_simulation_parameters(self) -> _FakeSimParams:
+        """Return the stored fake simulation parameters."""
         return self.params
 
 
@@ -497,14 +498,12 @@ def test_run_one_does_not_import_hisim_main_when_seams_injected(tmp_path):
     supplies its own init/run functions must not pay the cost of importing the
     full simulator, and must not be coupled to itsim_main's I/O.
     """
-    import sys as _sys
-
     sim = _FakeSim()
 
-    def fake_init(scenario, simulation_parameters, path_to_module, delta):
+    def fake_init(scenario, simulation_parameters, path_to_module, delta):  # pylint: disable=unused-argument
         return sim
 
-    def fake_run(my_sim, path_to_module):
+    def fake_run(my_sim, path_to_module):  # pylint: disable=unused-argument
         return None
 
     scen_path = tmp_path / "case.scenario.json"
@@ -513,7 +512,7 @@ def test_run_one_does_not_import_hisim_main_when_seams_injected(tmp_path):
     scen_path.write_text("{}", encoding="utf-8")
     sim_params_path.write_text("{}", encoding="utf-8")
 
-    hisim_main_before = _sys.modules.get("hisim.hisim_main")
+    hisim_main_before = sys.modules.get("hisim.hisim_main")
     from hisim.hpc_harness import run_one
     run_one.main(
         argv=[
@@ -524,7 +523,7 @@ def test_run_one_does_not_import_hisim_main_when_seams_injected(tmp_path):
         init_fn=fake_init,
         run_fn=fake_run,
     )
-    hisim_main_after = _sys.modules.get("hisim.hisim_main")
+    hisim_main_after = sys.modules.get("hisim.hisim_main")
 
     # If hisim_main was already imported in this process (e.g. by another test),
     # that's fine — what matters is that run_one did not *newly* import it for a
@@ -539,10 +538,10 @@ def test_run_one_requires_scenario_and_result_dir():
 
     sim = _FakeSim()
 
-    def fake_init(scenario, simulation_parameters, path_to_module, delta):
+    def fake_init(scenario, simulation_parameters, path_to_module, delta):  # pylint: disable=unused-argument
         return sim
 
-    def fake_run(my_sim, path_to_module):
+    def fake_run(my_sim, path_to_module):  # pylint: disable=unused-argument
         return None
 
     with pytest.raises(SystemExit):
@@ -606,17 +605,15 @@ def test_run_single_does_not_import_hisim_main_when_seams_injected():
     supplies its own init/run functions must not pay the cost of importing the
     full simulator, and must not be coupled to hisim_main's I/O.
     """
-    import sys as _sys
-
     sim = _FakeSim()
 
-    def fake_init(scenario, simulation_parameters, path_to_module, delta):
+    def fake_init(scenario, simulation_parameters, path_to_module, delta):  # pylint: disable=unused-argument
         return sim
 
-    def fake_run(my_sim, path_to_module):
+    def fake_run(my_sim, path_to_module):  # pylint: disable=unused-argument
         return None
 
-    hisim_main_before = _sys.modules.get("hisim.hisim_main")
+    hisim_main_before = sys.modules.get("hisim.hisim_main")
     from hisim.hpc_harness import run_one
     run_one.run_single(
         scenario_path="/tmp/case.scenario.json",
@@ -625,7 +622,7 @@ def test_run_single_does_not_import_hisim_main_when_seams_injected():
         init_fn=fake_init,
         run_fn=fake_run,
     )
-    hisim_main_after = _sys.modules.get("hisim.hisim_main")
+    hisim_main_after = sys.modules.get("hisim.hisim_main")
 
     # If hisim_main was already imported in this process (e.g. by another test),
     # that's fine — what matters is that run_single did not *newly* import it for

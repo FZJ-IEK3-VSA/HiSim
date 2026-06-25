@@ -102,6 +102,43 @@ function FieldInput({
   )
 }
 
+// ── Scenario metadata (shown when nothing is selected) ────────────────────────
+function ScenarioMeta() {
+  const scenarioName = useEditorStore((s) => s.scenarioName)
+  const scenarioDescription = useEditorStore((s) => s.scenarioDescription)
+  const setScenarioMeta = useEditorStore((s) => s.setScenarioMeta)
+
+  return (
+    <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <p className="text-[11px] text-gray-400">
+        Set scenario metadata below, then drag components onto the canvas.
+      </p>
+      <div>
+        <label className="block text-[11px] font-medium text-gray-600 mb-0.5">
+          Scenario name
+        </label>
+        <input
+          type="text"
+          className="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
+          value={scenarioName}
+          onChange={(e) => setScenarioMeta(e.target.value, scenarioDescription)}
+        />
+      </div>
+      <div>
+        <label className="block text-[11px] font-medium text-gray-600 mb-0.5">
+          Description
+        </label>
+        <textarea
+          rows={3}
+          className="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 resize-none"
+          value={scenarioDescription}
+          onChange={(e) => setScenarioMeta(scenarioName, e.target.value)}
+        />
+      </div>
+    </div>
+  )
+}
+
 // ── Inspector panel ────────────────────────────────────────────────────────────
 export default function Inspector() {
   const enumDb = useEditorStore((s) => s.enumDb)
@@ -139,10 +176,10 @@ export default function Inspector() {
         </span>
       </div>
 
-      {!node || !enumDb ? (
-        <div className="flex-1 p-3 text-xs text-gray-400 italic flex items-start justify-center pt-6">
-          {node ? 'Loading…' : 'Select a component to inspect.'}
-        </div>
+      {!node ? (
+        <ScenarioMeta />
+      ) : !enumDb ? (
+        <div className="flex-1 p-3 text-xs text-gray-400 italic">Loading…</div>
       ) : (
         <div className="flex-1 overflow-y-auto p-3 space-y-3">
           {/* Class info */}

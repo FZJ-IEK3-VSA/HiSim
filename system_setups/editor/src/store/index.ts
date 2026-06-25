@@ -13,6 +13,8 @@ interface EditorState {
   edges: Edge[]
   selectedNodeId: string | null
   validationMessages: string[]
+  scenarioName: string
+  scenarioDescription: string
 }
 
 interface EditorActions {
@@ -26,6 +28,7 @@ interface EditorActions {
   setSelectedNodeId: (id: string | null) => void
   updateNodeData: (nodeId: string, patch: Partial<ComponentNodeData>) => void
   setValidationMessages: (messages: string[]) => void
+  setScenarioMeta: (name: string, description: string) => void
   reset: () => void
 }
 
@@ -36,6 +39,8 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
   edges: [],
   selectedNodeId: null,
   validationMessages: [],
+  scenarioName: 'Untitled scenario',
+  scenarioDescription: '',
 
   loadDatabases: (db, edb) => set({ componentDb: db, enumDb: edb }),
 
@@ -77,6 +82,15 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
 
   setValidationMessages: (messages) => set({ validationMessages: messages }),
 
+  setScenarioMeta: (name, description) => set({ scenarioName: name, scenarioDescription: description }),
+
   reset: () =>
-    set({ nodes: [], edges: [], selectedNodeId: null, validationMessages: [] }),
+    set({
+      nodes: [],
+      edges: [],
+      selectedNodeId: null,
+      validationMessages: [],
+      scenarioName: 'Untitled scenario',
+      scenarioDescription: '',
+    }),
 }))

@@ -41,7 +41,7 @@ def test_quantity_add_invalid_type() -> None:
     """
     quantity = Quantity(1, Watt)
     with pytest.raises(TypeError):
-        _ = quantity + 1
+        _ = quantity + 1  # type: ignore[operator]
 
 
 @pytest.mark.base
@@ -49,7 +49,7 @@ def test_quantity_radd_invalid_type() -> None:
     """Reverse-adding a non-Quantity raises TypeError via ``__radd__``."""
     quantity = Quantity(1, Watt)
     with pytest.raises(TypeError):
-        _ = 1 + quantity
+        _ = 1 + quantity  # type: ignore[operator]
 
 
 @pytest.mark.base
@@ -57,7 +57,7 @@ def test_quantity_sub_invalid_type() -> None:
     """Subtracting a non-Quantity raises TypeError, not AttributeError."""
     quantity = Quantity(1, Watt)
     with pytest.raises(TypeError):
-        _ = quantity - 1
+        _ = quantity - 1  # type: ignore[operator]
 
 
 @pytest.mark.base
@@ -65,7 +65,7 @@ def test_quantity_rsub_invalid_type() -> None:
     """Reverse-subtracting a non-Quantity raises TypeError via ``__rsub__``."""
     quantity = Quantity(1, Watt)
     with pytest.raises(TypeError):
-        _ = 1 - quantity
+        _ = 1 - quantity  # type: ignore[operator]
 
 
 @pytest.mark.base

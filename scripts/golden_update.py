@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Callable
 
 try:
-    from golden_check import REF_DIR, SETUPS, run_setup   # run as a script from scripts/
+    from golden_check import REF_DIR, SETUPS, run_setup   # type: ignore[import-not-found]  # run as a script from scripts/
 except ModuleNotFoundError:  # imported as scripts.golden_update (e.g. by the test suite)
     from scripts.golden_check import REF_DIR, SETUPS, run_setup
 

@@ -60,7 +60,7 @@ def test_report_image_entry_component_name_none_raises() -> None:
     """A None component_name raises ValueError mentioning the cause."""
     with pytest.raises(ValueError, match="Component name was None"):
         ReportImageEntry(
-            component_name=None,
+            component_name=None,  # type: ignore[arg-type]
             output_type="power",
             file_path="/tmp/x.png",
             component_output_folder_path="/tmp/",

@@ -78,11 +78,9 @@ def test_first_system_setup(isolated_result_directory: str) -> None:
     # Route results into the isolated, test-scoped directory provided by the fixture.
     sim_params.result_directory = isolated_result_directory
 
-    result = hisim_main.main(path, sim_params)
-
     # main() returns None once the simulation and post-processing have completed; a
     # failure would have raised before reaching this point.
-    assert result is None
+    hisim_main.main(path, sim_params)
 
     result_dir = Path(sim_params.result_directory)
     assert result_dir.is_dir(), f"Result directory was not created at {result_dir}"

@@ -64,7 +64,7 @@ def test_compute_total_energy_negative_power_feed_in() -> None:
 def test_compute_total_energy_float_timeresolution_boundary() -> None:
     """A float ``timeresolution`` of ``1.0`` s is accepted (``1000 / 3.6e6`` kWh)."""
     energy = KpiHelperClass.compute_total_energy_from_power_timeseries(
-        power_timeseries_in_watt=pd.Series([1000.0]), timeresolution=1.0
+        power_timeseries_in_watt=pd.Series([1000.0]), timeresolution=1.0  # type: ignore[arg-type]
     )
     assert energy == pytest.approx(1000.0 / 3.6e6)
 

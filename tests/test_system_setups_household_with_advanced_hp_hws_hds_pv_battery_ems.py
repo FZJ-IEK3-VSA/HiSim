@@ -73,11 +73,9 @@ def test_household_with_advanced_hp_hws_hds_pv_battery_ems(
     # cleans up after itself.
     mysimpar.result_directory = isolated_result_directory
 
-    result = hisim_main.main(path, mysimpar)
-
     # hisim_main.main returns None once the simulation and post-processing have completed;
     # a failure would have raised before reaching this point.
-    assert result is None
+    hisim_main.main(path, mysimpar)
 
     # The simulator populates ``result_directory`` while preparing the run (it is already
     # set above, but confirming it survived the run guards against accidental resets) and

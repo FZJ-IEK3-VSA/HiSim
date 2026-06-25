@@ -263,6 +263,8 @@ def test_config_from_file_accepts_deprecated_db_key(tmp_path):
     with pytest.warns(DeprecationWarning, match="'db' is deprecated"):
         cfg = HarnessConfig.from_file(str(cfg_path))
     cfg.finalize()
+    assert cfg.db_path is not None
+    assert cfg.sim_params_path is not None
     assert cfg.db_path.endswith("t.db")
     assert cfg.sim_params_path.endswith("s.json")
 
@@ -278,6 +280,8 @@ def test_config_from_file_accepts_deprecated_sim_params_key(tmp_path):
     with pytest.warns(DeprecationWarning, match="'sim_params' is deprecated"):
         cfg = HarnessConfig.from_file(str(cfg_path))
     cfg.finalize()
+    assert cfg.db_path is not None
+    assert cfg.sim_params_path is not None
     assert cfg.db_path.endswith("t.db")
     assert cfg.sim_params_path.endswith("s.json")
 

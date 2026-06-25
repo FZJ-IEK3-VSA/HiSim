@@ -21,9 +21,8 @@ def test_basic_household_with_simu_params() -> None:
     simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 60)
     simulation_parameters.result_directory = TestingUtils.get_result_directory()
     shutil.rmtree(simulation_parameters.result_directory, ignore_errors=True)
-    result = hisim_main.main(BASIC_HOUSEHOLD_PATH, simulation_parameters)
     # hisim_main.main runs the simulation for its side effects and returns None.
-    assert result is None
+    hisim_main.main(BASIC_HOUSEHOLD_PATH, simulation_parameters)
     result_directory = Path(simulation_parameters.result_directory)
     # The simulation should have (re)created its result directory.
     assert result_directory.is_dir()
@@ -65,9 +64,8 @@ def test_basic_household_without_simu_params(monkeypatch: pytest.MonkeyPatch) ->
         classmethod(fast_default_parameters),
     )
     simulation_parameters = None
-    result = hisim_main.main(BASIC_HOUSEHOLD_PATH, simulation_parameters)
     # hisim_main.main runs the simulation for its side effects and returns None.
-    assert result is None
+    hisim_main.main(BASIC_HOUSEHOLD_PATH, simulation_parameters)
     assert captured_result_directory, "Patched SimulationParameters factory was never called."
     result_directory = Path(captured_result_directory[-1])
     # The simulation should have (re)created its result directory.

@@ -12,6 +12,7 @@ as a pure method that only reads ``self.ppdt`` and returns the assembled
 # clean
 
 from types import SimpleNamespace
+from typing import Optional, cast
 
 import pandas as pd
 import pydot
@@ -19,6 +20,7 @@ import pytest
 
 from hisim.component import ComponentInput, ComponentOutput
 from hisim.loadtypes import LoadTypes, Units
+from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.system_chart import SystemChart
 
 
@@ -37,11 +39,14 @@ class _FakeWrapper:
         self.component_inputs = list(inputs)
 
 
-def _make_ppdt(wrapped_components, results_cumulative=None) -> SimpleNamespace:
+def _make_ppdt(wrapped_components, results_cumulative=None) -> PostProcessingDataTransfer:
     """Build a stub ``PostProcessingDataTransfer`` exposing only what ``_build_graph`` reads."""
-    return SimpleNamespace(
-        wrapped_components=wrapped_components,
-        results_cumulative=results_cumulative,
+    return cast(
+        PostProcessingDataTransfer,
+        SimpleNamespace(
+            wrapped_components=wrapped_components,
+            results_cumulative=results_cumulative,
+        ),
     )
 
 
@@ -51,7 +56,7 @@ def _make_input(
     unit: Units,
     src_object_name: str,
     src_field_name: str,
-    source_output: object = None,
+    source_output: Optional[ComponentOutput] = None,
 ) -> ComponentInput:
     """Create a fully-connected :class:`ComponentInput` for the tests."""
     cinput = ComponentInput(

@@ -1,8 +1,28 @@
 """Generic helper functions shared across tests."""
 # clean
-from typing import Optional, Type
+from typing import Optional, Protocol
 
 from hisim.result_path_provider import ResultPathProviderSingleton, RunMode, detect_test_name
+
+
+class _ResultPathProviderInstance(Protocol):
+    """Minimal instance surface that :meth:`TestingUtils.get_result_directory` drives."""
+
+    def configure(self, *, run_mode: RunMode, test_name: str) -> None:
+        ...
+
+    def get_result_directory_name(self) -> Optional[str]:
+        ...
+
+
+class _ResultPathProviderFactory(Protocol):
+    """Class-object surface of a result path provider (real singleton or test stub)."""
+
+    def reset(self) -> None:
+        ...
+
+    def __call__(self) -> _ResultPathProviderInstance:
+        ...
 
 
 class TestingUtils:
@@ -12,7 +32,7 @@ class TestingUtils:
     @staticmethod
     def get_result_directory(
         test_name: Optional[str] = None,
-        provider: Type[ResultPathProviderSingleton] = ResultPathProviderSingleton,
+        provider: _ResultPathProviderFactory = ResultPathProviderSingleton,
     ) -> str:
         """Build a clean result directory under ``results/test/<test_name>`` for the running test.
 

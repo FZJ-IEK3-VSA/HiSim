@@ -28,6 +28,7 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         time_correction_factor: float,
         output_description: str,
         figure_format: FigureFormat,
+        path_checker=None,
     ) -> None:
         """Initializes a carpet plot."""
         super().__init__(
@@ -39,6 +40,7 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             time_correction_factor=time_correction_factor,
             output_description=output_description,
             figure_format=figure_format,
+            path_checker=path_checker,
         )
 
     def plot(self, xdims: int, data: Any) -> "ReportImageEntry | None":
@@ -48,6 +50,7 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             ReportImageEntry or None -- None when data cannot be reshaped into entire days.
         """
         log.trace("starting carpet plots")
+        self.ensure_output_dir()
         ydims = int(len(data) / xdims)  # number of calculated timesteps per day
         y_steps_per_hour = int(ydims / 24)
 
@@ -118,6 +121,7 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         time_correction_factor: float,
         output_description: str,
         figure_format: FigureFormat,
+        path_checker=None,
     ):
         """Initializes a line chart."""
         if output_description is None:
@@ -132,6 +136,7 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             time_correction_factor=time_correction_factor,
             output_description=output_description,
             figure_format=figure_format,
+            path_checker=path_checker,
         )
 
     @utils.measure_memory_leak
@@ -139,6 +144,7 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         """Makes a line plot."""
 
         mpl.use("Agg")
+        self.ensure_output_dir()
 
         _fig, axis = plt.subplots(figsize=self.figsize, dpi=self.dpi)
         x_zero = data.index
@@ -201,6 +207,7 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         time_correction_factor: float,
         output_description: str,
         figure_format: FigureFormat,
+        path_checker=None,
     ):
         """Initializes the classes."""
         super().__init__(
@@ -212,12 +219,14 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             time_correction_factor=time_correction_factor,
             output_description=output_description,
             figure_format=figure_format,
+            path_checker=path_checker,
         )
         self.filename = f"monthly_{self.output}{self.figure_format}"
 
     def plot(self, data: Any) -> ReportImageEntry:
         """Plots the bar chart."""
         # Specify the values of blue bars (height)
+        self.ensure_output_dir()
 
         # Position of bars on x-axis
         ind = np.arange(12)

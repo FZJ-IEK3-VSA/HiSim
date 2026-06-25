@@ -24,7 +24,7 @@ from hisim.components import (
     generic_smart_device,
 )
 from hisim.modular_household import component_connections
-from hisim.modular_household.interface_configs.modular_household_config import read_in_configs
+from hisim.modular_household.interface_configs.modular_household_config import read_config
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 
@@ -93,7 +93,7 @@ def setup_function(
     year = 2021
     seconds_per_timestep = 60 * 60
 
-    household_config = read_in_configs(my_sim.my_module_config)
+    household_config = read_config(my_sim.my_module_config)
 
     assert household_config.archetype_config_ is not None
     assert household_config.system_config_ is not None

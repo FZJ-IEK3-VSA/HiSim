@@ -7,6 +7,7 @@ from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import numpy as np
+import numpy as np
 import pandas as pd
 
 
@@ -81,8 +82,30 @@ class CSVLoader(cp.Component):
         config: CSVLoaderConfig,
         my_simulation_parameters: SimulationParameters,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        inputs_dir: Path | None = None,
+        dataframe: pd.DataFrame | None = None,
     ) -> None:
-        """Initialize the class."""
+        """Initialize the class.
+
+        Parameters
+        ----------
+        config:
+            Configuration of the CSV loader.
+        my_simulation_parameters:
+            Simulation parameters used by the setup function.
+        my_display_config:
+            Display configuration for the component.
+        inputs_dir:
+            Optional directory that holds the CSV input file. Defaults to
+            ``Path(utils.HISIMPATH["inputs"])`` when ``dataframe`` is not
+            supplied. Ignored when ``dataframe`` is given.
+        dataframe:
+            Optional pre-loaded :class:`pandas.DataFrame` used instead of
+            reading the CSV file from disk. When provided, ``inputs_dir`` and
+            ``self.csvconfig.csv_filename`` are ignored and no file system
+            access is performed. This is the seam used by unit tests so that
+            :class:`CSVLoader` can be constructed without a real CSV file.
+        """
         self.csvconfig: CSVLoaderConfig = config
         self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
         self.config: CSVLoaderConfig = config
@@ -104,16 +127,17 @@ class CSVLoader(cp.Component):
         self.output1_channel.display_name = self.csvconfig.column_name
         self.multiplier: float = self.csvconfig.multiplier
 
-        dataframe = pd.read_csv(
-            Path(utils.HISIMPATH["inputs"]) / self.csvconfig.csv_filename,
-            sep=self.csvconfig.sep,
-            decimal=self.csvconfig.decimal,
-        )
-        if self.csvconfig.column >= len(dataframe.columns):
+        if dataframe is not None:
+            loaded_dataframe = dataframe
+        else:
+            if inputs_dir is None:
+                inputs_dir = Path(utils.HISIMPATH["inputs"])
+            loaded_dataframe = self._load_dataframe(inputs_dir)
+        if self.csvconfig.column >= len(loaded_dataframe.columns):
             raise RuntimeError(
-                f"Invalid column number for the csv file: {self.csvconfig.column}. Found {len(dataframe.columns)} columns."
+                f"Invalid column number for the csv file: {self.csvconfig.column}. Found {len(loaded_dataframe.columns)} columns."
             )
-        dfcolumn = dataframe.iloc[:, self.csvconfig.column]
+        dfcolumn = loaded_dataframe.iloc[:, self.csvconfig.column]
         self.column_name: str = self.csvconfig.column_name
         if len(dfcolumn) < self.my_simulation_parameters.timesteps:
             raise Exception(
@@ -127,6 +151,71 @@ class CSVLoader(cp.Component):
 
         self.column: np.ndarray = dfcolumn.to_numpy(dtype=float)
         self.values: List[float] = []
+
+    @staticmethod
+    def _read_csv(config: CSVLoaderConfig, inputs_dir: Path) -> pd.DataFrame:
+        """Read the CSV referenced by *config* from *inputs_dir*.
+
+        Shared helper so the file-system read lives in exactly one place and
+        can be reused by both :meth:`from_config_file` and
+        :meth:`_load_dataframe` without duplicating the ``pandas.read_csv``
+        arguments.
+        """
+        return pd.read_csv(
+            inputs_dir / config.csv_filename,
+            sep=config.sep,
+            decimal=config.decimal,
+        )
+
+    @classmethod
+    def from_config_file(
+        cls,
+        config: CSVLoaderConfig,
+        my_simulation_parameters: SimulationParameters,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        inputs_dir: Path | None = None,
+    ) -> "CSVLoader":
+        """Construct a :class:`CSVLoader` by reading its CSV file from disk.
+
+        This is the thin I/O factory that keeps file-system access out of
+        :meth:`__init__`: it reads the bytes referenced by *config* and then
+        delegates to :meth:`__init__` with the already-loaded
+        :class:`pandas.DataFrame`. Callers -- and in particular unit tests --
+        that already hold a loaded dataframe can pass it straight to
+        ``__init__`` via the ``dataframe`` argument and skip disk access
+        entirely, making :class:`CSVLoader` cheaply constructible without a
+        real CSV file.
+
+        Parameters
+        ----------
+        config:
+            Configuration of the CSV loader.
+        my_simulation_parameters:
+            Simulation parameters used by the setup function.
+        my_display_config:
+            Display configuration for the component.
+        inputs_dir:
+            Optional directory that holds the CSV input file. Defaults to
+            ``Path(utils.HISIMPATH["inputs"])`` when not supplied.
+        """
+        if inputs_dir is None:
+            inputs_dir = Path(utils.HISIMPATH["inputs"])
+        dataframe = cls._read_csv(config, inputs_dir)
+        return cls(
+            config=config,
+            my_simulation_parameters=my_simulation_parameters,
+            my_display_config=my_display_config,
+            dataframe=dataframe,
+        )
+
+    def _load_dataframe(self, inputs_dir: Path) -> pd.DataFrame:
+        """Read the configured CSV file into a :class:`pandas.DataFrame`.
+
+        Thin seam around :meth:`_read_csv` so the disk read can be replaced
+        (for example in unit tests) without touching the file system. Kept for
+        backward compatibility with :meth:`__init__`'s default read path.
+        """
+        return self._read_csv(self.csvconfig, inputs_dir)
 
     def i_restore_state(self) -> None:
         """Restores the state."""

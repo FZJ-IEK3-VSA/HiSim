@@ -19,6 +19,8 @@ Arguments that are not present keep the (scaled) default value.
 
 from __future__ import annotations
 
+from __future__ import annotations
+
 import json
 import datetime
 from pathlib import Path
@@ -34,26 +36,30 @@ from hisim.simulator import SimulationParameters
 def make_system_setup(
     parameters_json: dict[str, Any] | list[Any], result_directory: str
 ) -> tuple[str, SimulationParameters, str]:
-    """Read setup parameters from JSON and build a system setup.
+    """Build a system setup from a JSON parameter dict and prepare it for simulation.
 
-    Parses the JSON configuration, creates a SimulationParameters object,
-    and returns the module path and config paths needed to run the simulation.
-    The actual simulation is performed by `hisim.hisim_main.main()`.
+    Parses `parameters_json`, constructs a `SimulationParameters` instance from its
+    `simulation_parameters` section, and writes `module_config.json` and
+    `simulation_parameters.json` into `result_directory`. The simulation itself is
+    not executed here; the returned values are intended to be passed to
+    `hisim.hisim_main.main`.
 
     Args:
-        parameters_json: Configuration dict (or list, currently unsupported) containing
-            path_to_module, simulation_parameters, and optional building/system_setup configs.
-        result_directory: Directory path where result files and config JSONs will be written.
+        parameters_json: Mapping with the keys `path_to_module`, `simulation_parameters`,
+            and optionally `options`, `building_config`, `system_setup_config`.
+            A list is rejected (only a single setup is supported).
+        result_directory: Path to the directory where the generated JSON config files
+            are written. Created if it does not exist.
 
     Returns:
-        A tuple of (path_to_module, simulation_parameters, module_config_path) where:
-            - path_to_module: Module path string for the setup function to load.
-            - simulation_parameters: Configured SimulationParameters object.
-            - module_config_path: Path to the written module_config.json file.
+        A tuple `(path_to_module, simulation_parameters, module_config_path)` where
+        `path_to_module` is the module path for the setup function,
+        `simulation_parameters` is the constructed `SimulationParameters`, and
+        `module_config_path` is the path to the written `module_config.json`.
 
     Raises:
-        NotImplementedError: If parameters_json is a list (multi-setup not yet supported).
-        AttributeError: If parameters_json contains unrecognized top-level keys.
+        NotImplementedError: If `parameters_json` is a list.
+        AttributeError: If `parameters_json` contains keys other than the expected ones.
     """
     if isinstance(parameters_json, list):
         raise NotImplementedError("System Setup Starter can only handle one setup at a time for now.")
@@ -105,13 +111,19 @@ if __name__ == "__main__":
     if len(sys.argv) == 1:
         PARAMETERS_JSON_FILE: str = "input/request.json"
         RESULT_DIRECTORY: str = "results"
+        PARAMETERS_JSON_FILE: str = "input/request.json"
+        RESULT_DIRECTORY: str = "results"
         if not Path(PARAMETERS_JSON_FILE).is_file():
             log.information("Please specify an input JSON file or place it in `input/request.json`.")
             sys.exit(1)
     elif len(sys.argv) == 2:
         PARAMETERS_JSON_FILE: str = sys.argv[1]
         RESULT_DIRECTORY: str = "results"
+        PARAMETERS_JSON_FILE: str = sys.argv[1]
+        RESULT_DIRECTORY: str = "results"
     elif len(sys.argv) == 3:
+        PARAMETERS_JSON_FILE: str = sys.argv[1]
+        RESULT_DIRECTORY: str = sys.argv[2]
         PARAMETERS_JSON_FILE: str = sys.argv[1]
         RESULT_DIRECTORY: str = sys.argv[2]
     else:

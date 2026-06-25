@@ -1,6 +1,6 @@
 {
-  "db": "/scratch/myproject/run123/tasks.db",
-  "sim_params": "/scratch/myproject/run123/2021_15minutely_noplots.simulation.json",
+  "db_path": "/scratch/myproject/run123/tasks.db",
+  "sim_params_path": "/scratch/myproject/run123/2021_15minutely_noplots.simulation.json",
   "result_root": "/scratch/myproject/run123/results",
 
   "per_sim_mem_gb": 10.0,

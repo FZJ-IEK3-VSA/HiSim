@@ -19,6 +19,6 @@ def test_electrolyzer_with_renewables() -> None:
     verifies that the simulation completes without errors.
     """
     path = "../system_setups/electrolyzer_with_renewables.py"
-    mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    hisim_main.main(path, mysimpar)
+    simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    hisim_main.main(path, simulation_parameters)
     log.information(os.getcwd())

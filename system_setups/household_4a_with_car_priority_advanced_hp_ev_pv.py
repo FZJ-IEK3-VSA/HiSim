@@ -268,7 +268,7 @@ def setup_function(
     my_simulation_parameters.surplus_control = (
         my_config.surplus_control_car
     )  # EV charger is controlled by simulation_parameters
-    clever = my_config.surplus_control
+    surplus_control_enabled = my_config.surplus_control
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build heat Distribution System Controller
@@ -479,7 +479,7 @@ def setup_function(
     )
 
     # connect EMS with DHW
-    if clever:
+    if surplus_control_enabled:
         my_domestic_hot_water_heatpump_controller.connect_input(
             my_domestic_hot_water_heatpump_controller.StorageTemperatureModifier,
             my_electricity_controller.component_name,
@@ -522,7 +522,7 @@ def setup_function(
         )
 
     # connect EMS with Heatpump
-    if clever:
+    if surplus_control_enabled:
         my_heat_pump_controller.connect_input(
             my_heat_pump_controller.SimpleHotWaterStorageTemperatureModifier,
             my_electricity_controller.component_name,

@@ -1,6 +1,7 @@
 """Tests for household_5a: advanced HP, EV, PV, battery with car priority."""
 # clean
 import os
+import shutil
 from pathlib import Path
 import pytest
 
@@ -9,6 +10,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
+from tests.testing_utils import TestingUtils
 
 
 # @pytest.mark.system_setups
@@ -27,4 +29,13 @@ def test_basic_household() -> None:
 
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    # Use a deterministic result directory so the run's artifacts can be verified.
+    mysimpar.result_directory = TestingUtils.get_result_directory()
+    shutil.rmtree(mysimpar.result_directory, ignore_errors=True)
     hisim_main.main(path, mysimpar)
+
+    # Verify the simulation ran to completion and produced its output artifacts.
+    assert Path(mysimpar.result_directory).joinpath("finished.flag").is_file(), (
+        "Simulation did not produce 'finished.flag' in the result directory; "
+        "the one-day household_5a run did not complete successfully (post-processing unfinished)."
+    )

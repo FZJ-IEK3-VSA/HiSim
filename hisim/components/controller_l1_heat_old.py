@@ -241,18 +241,53 @@ class ControllerHeat(cp.Component):
 
     # Simulates and defines the control signals to heat up storages
     # work as a 2-point Ruler with Hysteresis
-    def simulate_storage(
-        self,
+    @staticmethod
+    def compute_storage_control(
         delta_temperature: float,
-        stsv: cp.SingleTimeStepValues,
-        timestep: int,
         temperature_storage: float,
         temperature_storage_target: float,
         temperature_storage_target_hysteresis: float,
         temperature_storage_target_c: float,
         timestep_of_hysteresis: int,
-    ) -> Any:
-        """Simulates the storage."""
+        timestep: int,
+        prev_control_signal_chp: float,
+        prev_control_signal_gas_heater: float,
+    ) -> tuple:
+        """Compute the 2-point hysteresis control signals for a single storage.
+
+        This is a pure, side-effect-free extraction of the core hysteresis
+        logic of :meth:`simulate_storage`. It derives the control signals for
+        the CHP, gas heater and heat pump as well as the updated hysteresis
+        bookkeeping (``temperature_storage_target_c`` and
+        ``timestep_of_hysteresis``) purely from its arguments, without touching
+        ``self`` or writing to a :class:`SingleTimeStepValues`. This makes every
+        branch unit-testable with plain floats/ints and without constructing a
+        full :class:`ControllerHeat` instance.
+
+        Args:
+            delta_temperature: Difference between the (current) storage target
+                temperature and the measured storage temperature
+                (``target - storage``).
+            temperature_storage: Currently measured storage temperature.
+            temperature_storage_target: Upper target temperature of the storage.
+            temperature_storage_target_hysteresis: Lower hysteresis target
+                temperature the storage is allowed to cool down to.
+            temperature_storage_target_c: The currently active storage target
+                temperature carried over from the previous timestep.
+            timestep_of_hysteresis: Timestep at which the hysteresis target was
+                last flipped.
+            timestep: The current simulation timestep.
+            prev_control_signal_chp: The CHP control signal of the previous
+                timestep.
+            prev_control_signal_gas_heater: The gas heater control signal of
+                the previous timestep.
+
+        Returns:
+            A tuple
+            ``(control_signal_chp, control_signal_gas_heater,
+            control_signal_heat_pump, temperature_storage_target_c,
+            timestep_of_hysteresis)``.
+        """
         control_signal_chp: float = 0
         control_signal_gas_heater: float = 0
         control_signal_heat_pump: float = 0
@@ -270,9 +305,9 @@ class ControllerHeat(cp.Component):
                 control_signal_chp = 1
                 control_signal_gas_heater = 1
 
-                if self.state.control_signal_chp < control_signal_chp:
+                if prev_control_signal_chp < control_signal_chp:
                     control_signal_chp = 1
-                elif self.state.control_signal_gas_heater < control_signal_gas_heater:
+                elif prev_control_signal_gas_heater < control_signal_gas_heater:
                     control_signal_gas_heater = 1
                 temperature_storage_target_c = temperature_storage_target
 
@@ -285,6 +320,49 @@ class ControllerHeat(cp.Component):
                     control_signal_heat_pump = 0
                     control_signal_gas_heater = 0
                     control_signal_chp = 0
+
+        return (
+            control_signal_chp,
+            control_signal_gas_heater,
+            control_signal_heat_pump,
+            temperature_storage_target_c,
+            timestep_of_hysteresis,
+        )
+
+    def simulate_storage(
+        self,
+        delta_temperature: float,
+        stsv: cp.SingleTimeStepValues,
+        timestep: int,
+        temperature_storage: float,
+        temperature_storage_target: float,
+        temperature_storage_target_hysteresis: float,
+        temperature_storage_target_c: float,
+        timestep_of_hysteresis: int,
+    ) -> Any:
+        """Simulates the storage.
+
+        Delegates the pure 2-point hysteresis control to
+        :meth:`compute_storage_control` and then applies the resulting control
+        signals to the controller state and the output values.
+        """
+        (
+            control_signal_chp,
+            control_signal_gas_heater,
+            control_signal_heat_pump,
+            temperature_storage_target_c,
+            timestep_of_hysteresis,
+        ) = ControllerHeat.compute_storage_control(
+            delta_temperature=delta_temperature,
+            temperature_storage=temperature_storage,
+            temperature_storage_target=temperature_storage_target,
+            temperature_storage_target_hysteresis=temperature_storage_target_hysteresis,
+            temperature_storage_target_c=temperature_storage_target_c,
+            timestep_of_hysteresis=timestep_of_hysteresis,
+            timestep=timestep,
+            prev_control_signal_chp=self.state.control_signal_chp,
+            prev_control_signal_gas_heater=self.state.control_signal_gas_heater,
+        )
 
         self.state.control_signal_gas_heater = control_signal_gas_heater
         self.state.control_signal_chp = control_signal_chp

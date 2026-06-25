@@ -4,6 +4,7 @@ These system setups can only be tested on cluster because so far they need acces
 """
 # clean
 import os
+import pathlib
 import pytest
 
 from hisim import hisim_main
@@ -36,3 +37,49 @@ def test_district() -> None:
 
     hisim_main.main(path, my_simulation_parameters)
     log.information(os.getcwd())
+
+    # The simulation configures its own result directory during the run
+    # (Simulator.prepare_simulation_directory writes it back onto the same
+    # SimulationParameters instance passed in here), so read it back from there
+    # rather than guessing a path.
+    results_dir = pathlib.Path(my_simulation_parameters.result_directory)
+    assert results_dir.is_dir(), (
+        f"results directory was not created at {results_dir!r}"
+    )
+
+    # WRITE_KPIS_TO_JSON (together with COMPUTE_KPIS) writes "all_kpis.json"
+    # directly into the result directory.
+    kpi_json = results_dir / "all_kpis.json"
+    assert kpi_json.is_file(), (
+        f"WRITE_KPIS_TO_JSON did not produce {kpi_json!r}"
+    )
+
+    # WRITE_COMPONENT_CONFIGS_TO_JSON writes "simulation.json" and "scenario.json"
+    # directly into the result directory.
+    simulation_json = results_dir / "simulation.json"
+    assert simulation_json.is_file(), (
+        f"WRITE_COMPONENT_CONFIGS_TO_JSON did not produce {simulation_json!r}"
+    )
+    scenario_json = results_dir / "scenario.json"
+    assert scenario_json.is_file(), (
+        f"WRITE_COMPONENT_CONFIGS_TO_JSON did not produce {scenario_json!r}"
+    )
+
+    # PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION creates a dedicated subfolder and
+    # writes the aggregated CSV results (hourly/daily/monthly/yearly) into it.
+    scenario_eval_dir = results_dir / "result_data_for_scenario_evaluation"
+    assert scenario_eval_dir.is_dir(), (
+        f"PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION did not create {scenario_eval_dir!r}"
+    )
+    scenario_eval_csvs = list(scenario_eval_dir.glob("*.csv"))
+    assert scenario_eval_csvs, (
+        f"no scenario-evaluation CSV outputs were written in {scenario_eval_dir!r}"
+    )
+
+    # MAKE_NETWORK_CHARTS renders the system flow charts (via Graphviz/pydot) as
+    # PNG files whose names start with "System_" directly into the result
+    # directory (see SystemChart.make_chart in hisim.postprocessing.system_chart).
+    network_charts = list(results_dir.glob("System_*.png"))
+    assert network_charts, (
+        f"MAKE_NETWORK_CHARTS did not produce any System_*.png network chart in {results_dir!r}"
+    )

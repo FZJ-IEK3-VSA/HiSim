@@ -137,8 +137,7 @@ def setup_function(
     SimulationParameters are created from DistrictConfig defaults if not
     supplied.
 
-    Args
-    ----
+    Args:
         my_sim: Simulator instance on which to register components.
         my_simulation_parameters: Optional pre-built SimulationParameters;
             if None, defaults are derived from DistrictConfig.

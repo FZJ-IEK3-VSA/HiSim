@@ -51,8 +51,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     and finally to an electrolyzer model. Post-processing options for plotting and
     reporting are enabled.
 
-    Args
-    ----
+    Args:
         my_sim: The simulator instance to which components are added.
         my_simulation_parameters: Optional simulation parameters. If None, defaults
             to a full year (2021) simulation with 60-second timesteps.

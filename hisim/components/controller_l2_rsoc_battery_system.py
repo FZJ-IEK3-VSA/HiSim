@@ -43,7 +43,7 @@ class RsocBatteryControllerConfig(ConfigBase):
     max_power_sofc: float
     # standby_load_sofc: float
 
-    operation_mode: float
+    operation_mode: str
 
     @staticmethod
     def read_config(
@@ -73,7 +73,7 @@ class RsocBatteryControllerConfig(ConfigBase):
     def config_rsoc(
         cls,
         rsoc_name: str,
-        operation_mode: float,
+        operation_mode: str,
         building_name: str = "BUI1",
         config_data: dict[str, Any] | None = None,
     ) -> Any:

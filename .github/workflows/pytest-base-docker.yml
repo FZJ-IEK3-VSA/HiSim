@@ -26,6 +26,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+    - name: Mark workspace as safe for git
+      # The container runs as a different user than the one that owns the
+      # checked-out workspace, so git would otherwise refuse with
+      # "detected dubious ownership" (exit 128) on every git invocation.
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
     - name: Install HiSim package
       run: |
         uv pip install --system -e .

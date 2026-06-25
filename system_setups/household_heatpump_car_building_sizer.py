@@ -583,7 +583,7 @@ def setup_function(
         ResultPathProviderSingleton().set_important_result_path_information(
             module_directory=my_sim.module_directory,
             model_name=my_sim.module_filename,
-            further_result_folder_description=Path(further_result_folder_description),
+            further_result_folder_description=further_result_folder_description,
             variant_name="_",
             scenario_hash_string=scenario_hash_string,
             sorting_option=sorting_option,

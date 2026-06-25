@@ -18,10 +18,6 @@ from tests.testing_utils import TestingUtils
 @utils.measure_execution_time
 def test_basic_household():
     """Test the advanced household setup with heat pump, diesel car, PV, and battery for a single day.
-    
-    Runs a one-day simulation using the household_3_advanced_hp_diesel_car_pv_battery
-    configuration and generates network charts as post-processing output.
-    """
 
     Runs a one-day simulation using the household_3_advanced_hp_diesel_car_pv_battery
     configuration and generates network charts as post-processing output. The simulator

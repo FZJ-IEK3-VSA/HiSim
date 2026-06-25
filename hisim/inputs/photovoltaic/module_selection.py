@@ -43,7 +43,7 @@ def select_pv_module(data: pd.DataFrame) -> pd.Series:
     # https://github.com/PV-Tutorials/pyData-2021-Solar-PV-Modeling/blob/main/Tutorial%20C%20-%20Modeling%20Module%27s%20Performance%20Advanced.ipynb
     data_mono = data[data["Technology"] == "Mono-c-Si"].copy()
     for c in ["V_mp_ref", "I_mp_ref", "V_oc_ref", "I_sc_ref", "A_c"]:
-        data_mono.loc[:, c] = data_mono[c].astype(float)
+        data_mono[c] = data_mono[c].astype(float)
 
     # https://www.pveducation.org/pvcdrom/solar-cell-operation/fill-factor
     data_mono.loc[:, "FF"] = (data_mono["V_mp_ref"] * data_mono["I_mp_ref"]) / (data_mono["V_oc_ref"] * data_mono["I_sc_ref"])

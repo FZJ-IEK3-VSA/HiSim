@@ -342,26 +342,6 @@ class GenericBuilding(cp.Component):
 
             # -----------------------------------------------------------------------------------------------------------------
             # Add outputs to EMS
-            # my_electricity_controller.add_component_input_and_connect(
-            #     source_object_name=my_advanced_battery.component_name,
-            #     source_component_output=my_advanced_battery.AcBatteryPowerUsed,
-            #     source_load_type=lt.LoadTypes.ELECTRICITY,
-            #     source_unit=lt.Units.WATT,
-            #     source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-            #     source_weight=6,
-            # )
-
-            # loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
-            #     source_output_name=f"ElectricityToOrFrom{my_advanced_battery.get_classname()}_",
-            #     source_tags=[
-            #         lt.ComponentType.BATTERY,
-            #         lt.InandOutputType.ELECTRICITY_TARGET,
-            #     ],
-            #     source_weight=6,
-            #     source_load_type=lt.LoadTypes.ELECTRICITY,
-            #     source_unit=lt.Units.WATT,
-            #     output_description="Target electricity for Battery Control. ",
-            # )
             # Add outputs to EMS (need to connect manually as several houses will be simulated)
             my_electricity_controller.add_component_input_and_connect(
                 source_object_name=my_photovoltaic_system.component_name,
@@ -404,11 +384,6 @@ class GenericBuilding(cp.Component):
                 output_description="Target electricity for Occupancy. ",
             )
 
-            # my_domnestic_hot_water_heatpump_controller.connect_input(
-            #     my_domnestic_hot_water_heatpump_controller.StorageTemperatureModifier,
-            #     my_electricity_controller.component_name,
-            #     my_electricity_controller.DomesticHotWaterStorageTemperatureModifier,
-            # )
             my_electricity_controller.add_component_input_and_connect(  # Anteil Heatpump für DHW erzeugung
                 source_object_name=my_heatpump.component_name,
                 source_component_output=my_heatpump.ElectricalInputPowerDHW,
@@ -429,12 +404,6 @@ class GenericBuilding(cp.Component):
                 source_unit=lt.Units.WATT,
                 output_description="ElectricityToOrFromGrid for dhw Heat Pump. ",
             )
-
-            # my_hea.connect_input(
-            #     my_heat_pump_controller.SimpleHotWaterStorageTemperatureModifier,
-            #     my_electricity_controller.component_name,
-            #     my_electricity_controller.SpaceHeatingWaterStorageTemperatureModifier,
-            # )
 
             my_electricity_controller.add_component_input_and_connect(  # Anteil Heatpump für Heizung erzeugung
                 source_object_name=my_heatpump.component_name,

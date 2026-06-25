@@ -39,7 +39,7 @@ def run_system(config_json: dict[str, Any], result_directory: str | Path) -> Non
         module_config_path,
     ) = make_system_setup(
         parameters_json=config_json,
-        result_directory=result_directory,
+        result_directory=str(result_directory),
     )
     main(
         path_to_module,

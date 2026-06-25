@@ -24,9 +24,7 @@ class SimRepository:
 
     def exist_entry(self, key: str) -> bool:
         """Checks if an entry exists."""
-        if key in self.my_dict:
-            return True
-        return False
+        return key in self.my_dict
 
     def delete_entry(self, key: str) -> None:
         """Deletes an existing entry."""

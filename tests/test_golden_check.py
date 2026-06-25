@@ -22,17 +22,17 @@ pytestmark = pytest.mark.base
 # --------------------------------------------------------------------------- #
 def test_compare_empty_inputs_returns_no_errors() -> None:
     """Two empty KPI dicts compare equal."""
-    assert compare("x", {}, {}) == []
+    assert not compare("x", {}, {})
 
 
 def test_compare_exact_match_returns_no_errors() -> None:
     """Identical KPI dicts compare equal."""
-    assert compare("x", {"a": 1.0}, {"a": 1.0}) == []
+    assert not compare("x", {"a": 1.0}, {"a": 1.0})
 
 
 def test_compare_within_relative_tolerance_returns_no_errors() -> None:
     """A ``got`` value within ``REL_TOL`` of the reference is accepted."""
-    assert compare("x", {"a": 1.0 + 1e-12}, {"a": 1.0}) == []
+    assert not compare("x", {"a": 1.0 + 1e-12}, {"a": 1.0})
 
 
 def test_compare_outside_tolerance_reports_change() -> None:
@@ -71,7 +71,7 @@ def test_compare_missing_precedes_new_with_ordering() -> None:
 
 def test_compare_zero_values_are_equal() -> None:
     """Two zero KPIs compare equal even with ``ABS_TOL == 0.0``."""
-    assert compare("x", {"a": 0.0}, {"a": 0.0}) == []
+    assert not compare("x", {"a": 0.0}, {"a": 0.0})
 
 
 def test_compare_abs_tol_zero_rejects_tiny_difference_from_zero() -> None:

@@ -38,7 +38,7 @@ class KPIConfigModular:
     injection: float
     #: annual cost for investment and operation in the considered technology, given in euros
     economic_investment_costs_in_euro: float
-    #: annual C02 emmissions due to the construction and operation of the considered technology, given in kg
+    #: annual CO2 emissions due to the construction and operation of the considered technology, given in kg
     co2_investment_costs_in_euro: float
 
     def get_kpi(self) -> float:

@@ -54,6 +54,7 @@ def setup_function(
         my_sim: The simulator instance to configure.
         my_simulation_parameters: Optional simulation parameters. If None,
             defaults to a full year simulation at 60-second timesteps for year 2021.
+
     """
     year = 2021
     seconds_per_timestep = 60

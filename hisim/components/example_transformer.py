@@ -28,8 +28,6 @@ class ExampleTransformerConfig(ConfigBase):
         return str(ExampleTransformer.get_full_classname())
 
     building_name: str
-    # parameter_string: str
-    # my_simulation_parameters: SimulationParameters
     name: str
     loadtype: lt.LoadTypes
     unit: lt.Units

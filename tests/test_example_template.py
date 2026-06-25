@@ -82,7 +82,7 @@ def test_example_template():
     assert 3000 == stsv.values[my_example_template.output_with_state.global_index]
     assert 51.0 == stsv.values[my_example_template.output_without_state.global_index]
 
-    timestep: int = 10 * 60 + 1
+    timestep = 10 * 60 + 1
     log.information("timestep = " + str(timestep))
     log.information(
         "input_from_another_component_output = "

@@ -111,16 +111,49 @@ def _stray_file_diagnostics(stray_status_lines: list[str], result_dir: Path) -> 
     return "\n".join(lines)
 
 
+def _compute_stray(before: Set[str], after: Set[str], result_dir: Path) -> list[str]:
+    """Compute the sorted stray status lines introduced between two git snapshots.
+
+    A line is "stray" when it shows up in ``after`` but not in ``before`` and its path
+    does not live inside the allowed ``result_dir``. This is the pure, side-effect-free
+    core of :func:`guard_against_stray_files`: it takes already-collected porcelain
+    status sets and a resolved result directory and returns the offending lines, so the
+    diffing/filtering decision can be unit-tested with canned inputs instead of spawning
+    real ``git`` and mutating the working tree.
+
+    Args:
+        before: porcelain status lines captured before the test ran.
+        after: porcelain status lines captured after the test ran.
+        result_dir: the allowed result directory (resolved), typically
+            ``ResultPathProviderSingleton().base_path``.
+
+    Returns:
+        The stray status lines, sorted lexicographically (mirrors the original fixture
+        output so error messages stay deterministic).
+    """
+    new_lines = after - before
+    return sorted(
+        line for line in new_lines if not _is_in_result_dir(_path_of(line), result_dir)
+    )
+
+
+def _should_fail(stray: list[str]) -> bool:
+    """Whether the guard should fail the test for the given stray lines.
+
+    Pure companion to :func:`_compute_stray`: the guard fails iff at least one stray
+    line was produced.
+    """
+    return bool(stray)
+
+
 @pytest.fixture(autouse=True)
 def guard_against_stray_files() -> Iterator[None]:
     """Fail the test if it leaves stray files outside the result directory."""
     before = _git_status()
     yield
     result_dir = _result_dir()
-    stray = sorted(
-        line for line in (_git_status() - before) if not _is_in_result_dir(_path_of(line), result_dir)
-    )
-    if stray:
+    stray = _compute_stray(before=before, after=_git_status(), result_dir=result_dir)
+    if _should_fail(stray):
         raise AssertionError(
             "Test left files outside the result directory (would pollute a merge request):\n"
             + "\n".join(stray)

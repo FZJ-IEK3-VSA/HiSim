@@ -15,7 +15,13 @@ from hisim.postprocessingoptions import PostProcessingOptions
 @pytest.mark.utsp
 @utils.measure_execution_time
 def test_basic_household() -> None:
-    """Single day."""
+    """Single day.
+
+    Runs a one-day simulation of the household_4b (heat-pump-priority) advanced
+    HP / EV / PV system setup and asserts that the simulation completed and wrote
+    its output artifacts to the results directory, rather than merely failing to
+    raise.
+    """
 
     config_filename = "household_4_advanced_hp_ev_pv_config.json"
     if Path(config_filename).is_file():
@@ -27,3 +33,16 @@ def test_basic_household() -> None:
     mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
     hisim_main.main(path, mysimpar)
     log.information(os.getcwd())
+
+    # hisim_main.main returns None; the simulator instead records the directory it
+    # wrote to on the simulation parameters object (see
+    # Simulator.prepare_simulation_directory) and writes a ``finished.flag`` file
+    # at the very end of run_all_timesteps, after post-processing. Asserting on
+    # both confirms the full simulation pipeline ran to completion and produced
+    # output artifacts rather than merely failing to raise.
+    results_dir = Path(mysimpar.result_directory)
+    assert results_dir.is_dir(), f"Result directory was not created: {results_dir}"
+    assert (results_dir / "finished.flag").is_file(), (
+        f"finished.flag was not written to {results_dir}"
+    )
+    assert any(results_dir.iterdir()), f"Results directory is empty: {results_dir}"

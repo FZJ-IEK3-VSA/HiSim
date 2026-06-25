@@ -6,9 +6,66 @@ over the defaults below.
 """
 
 import json
+import warnings
 from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Optional, Tuple, Union
+
+# Renamed public fields whose old JSON keys / override kwargs are still
+# accepted for backward compatibility (issue #614). Mapping: old name -> new name.
+_DEPRECATED_FIELD_ALIASES = {"db": "db_path", "sim_params": "sim_params_path"}
+
+
+def _normalize_path(
+    path: str,
+    *,
+    cwd: Optional[Path] = None,
+    home: Optional[Path] = None,
+) -> str:
+    """Normalise a path to an absolute, user-expanded, resolved string.
+
+    This is the pure seam behind :meth:`HarnessConfig.finalize`: it makes
+    ``Path(...).expanduser().resolve()`` testable without touching
+    process-global state (the current working directory and the ``HOME``
+    environment variable). With both ``cwd`` and ``home`` left as ``None`` it
+    reproduces ``str(Path(path).expanduser().resolve())`` exactly, so
+    production behaviour is unchanged. Supplying explicit ``cwd`` and/or
+    ``home`` decouples the result from that global state: a leading ``~`` (or
+    ``~/...``) is expanded against ``home`` and a relative ``path`` is joined
+    onto ``cwd`` before resolving, which lets tests assert on the normalised
+    string deterministically without ``monkeypatch.chdir``/``monkeypatch.setenv``.
+
+    Args:
+        path: The path string to normalise.
+        cwd: Base directory used to resolve relative ``path`` values. Defaults
+            to :meth:`Path.cwd` when needed.
+        home: Home directory substituted for a leading ``~``. Defaults to
+            :meth:`Path.home` when needed.
+
+    Returns:
+        The normalised absolute path as a string.
+
+    Note:
+        The explicit-argument form expands only a bare leading ``~`` (and
+        ``~/...``) against ``home``; the POSIX ``~user`` user-lookup form is
+        honoured solely on the default fast path (which delegates to
+        :meth:`Path.expanduser`). The harness never configures ``~user``
+        paths, so this keeps the seam simple and dependency-free.
+    """
+    # Fast path: no injection requested, reproduce today's behaviour verbatim.
+    if cwd is None and home is None:
+        return str(Path(path).expanduser().resolve())
+    if cwd is None:
+        cwd = Path.cwd()
+    if home is None:
+        home = Path.home()
+    parsed = Path(path)
+    parts = parsed.parts
+    if parts and parts[0] == "~":
+        parsed = home if len(parts) == 1 else home.joinpath(*parts[1:])
+    if not parsed.is_absolute():
+        parsed = cwd / parsed
+    return str(parsed.resolve())
 
 
 @dataclass
@@ -16,9 +73,9 @@ class HarnessConfig:
     """All parameters for a harness ``run``."""
 
     # --- required (via config file or CLI) ---
-    db: Optional[str] = None
+    db_path: Optional[str] = None
     """Path to the SQLite task database (on a shared filesystem)."""
-    sim_params: Optional[str] = None
+    sim_params_path: Optional[str] = None
     """Path to the single ``*.simulation.json`` used for every task in this run."""
     result_root: Optional[str] = None
     """Directory (shared filesystem) under which per-task result folders are created."""
@@ -49,6 +106,49 @@ class HarnessConfig:
     backoff_s: float = 5.0
     """How long an agent waits after a NO_WORK_AVAILABLE reply before requesting work again."""
 
+    # --- deprecated attribute aliases (issue #614) ---------------------------
+    # The fields above were renamed (db -> db_path, sim_params -> sim_params_path).
+    # These read-write properties keep direct attribute access working for any
+    # external consumer that has not yet migrated, emitting a DeprecationWarning.
+
+    @property
+    def db(self) -> Optional[str]:
+        """Deprecated alias for :attr:`db_path`."""
+        warnings.warn(
+            "HarnessConfig.db is deprecated; use db_path instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.db_path
+
+    @db.setter
+    def db(self, value: Optional[str]) -> None:
+        warnings.warn(
+            "HarnessConfig.db is deprecated; use db_path instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.db_path = value
+
+    @property
+    def sim_params(self) -> Optional[str]:
+        """Deprecated alias for :attr:`sim_params_path`."""
+        warnings.warn(
+            "HarnessConfig.sim_params is deprecated; use sim_params_path instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.sim_params_path
+
+    @sim_params.setter
+    def sim_params(self, value: Optional[str]) -> None:
+        warnings.warn(
+            "HarnessConfig.sim_params is deprecated; use sim_params_path instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        self.sim_params_path = value
+
     @classmethod
     def from_file(cls, path: str) -> "HarnessConfig":
         """Load a config from a JSON file, rejecting unknown keys.
@@ -61,12 +161,35 @@ class HarnessConfig:
 
         Raises:
             ValueError: If the JSON contains keys that are not
-                :class:`HarnessConfig` fields.
+                :class:`HarnessConfig` fields, or if both a deprecated key
+                (``db``, ``sim_params``) and its renamed form are present.
             json.JSONDecodeError: Propagated from parsing the file when its
                 contents are not valid JSON.
             OSError: Propagated from reading the file at ``path``.
+
+        Warns:
+            DeprecationWarning: If a deprecated JSON key (``db`` or
+                ``sim_params``) is used instead of its renamed form.
         """
         data = json.loads(Path(path).read_text(encoding="utf-8"))
+        # Accept the pre-rename JSON keys ("db", "sim_params") for backward
+        # compatibility, mapping them to the current field names with a
+        # DeprecationWarning so existing config files keep working (issue #614).
+        for old_name, new_name in _DEPRECATED_FIELD_ALIASES.items():
+            if old_name in data:
+                if new_name in data:
+                    raise ValueError(
+                        f"Harness config {path} sets both '{old_name}' and its "
+                        f"renamed form '{new_name}'; remove the deprecated "
+                        f"'{old_name}' key."
+                    )
+                warnings.warn(
+                    f"Harness config key '{old_name}' is deprecated; use "
+                    f"'{new_name}' instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                data[new_name] = data.pop(old_name)
         known = {f.name for f in fields(cls)}
         unknown = set(data) - known
         if unknown:
@@ -80,55 +203,102 @@ class HarnessConfig:
             **kwargs: Field-name/value pairs; any non-None value whose name
                 matches a :class:`HarnessConfig` field overwrites the current
                 value. Unknown names and ``None`` values are silently ignored.
+                The pre-rename names ``db`` and ``sim_params`` are still
+                accepted (with a :class:`DeprecationWarning`) and mapped to
+                ``db_path`` and ``sim_params_path`` (issue #614).
 
         Returns:
             ``self``, for chaining.
+
+        Raises:
+            ValueError: If both a deprecated name and its renamed form are
+                supplied at the same time.
         """
+        # Remap deprecated keyword names before applying (issue #614).
+        # A deprecated name passed as ``None`` means "no override" and is
+        # silently ignored, even if the renamed form is also present.
+        for old_name, new_name in _DEPRECATED_FIELD_ALIASES.items():
+            if old_name in kwargs:
+                value = kwargs.pop(old_name)
+                if value is not None:
+                    if new_name in kwargs:
+                        raise ValueError(
+                            f"apply_overrides received both '{old_name}' and its "
+                            f"renamed form '{new_name}'; use only '{new_name}'."
+                        )
+                    warnings.warn(
+                        f"apply_overrides keyword '{old_name}' is deprecated; "
+                        f"use '{new_name}' instead.",
+                        DeprecationWarning,
+                        stacklevel=2,
+                    )
+                    kwargs[new_name] = value
         for key, value in kwargs.items():
             if value is not None and hasattr(self, key):
                 setattr(self, key, value)
         return self
 
-    def finalize(self) -> "HarnessConfig":
+    def finalize(
+        self,
+        *,
+        cwd: Optional[Path] = None,
+        home: Optional[Path] = None,
+    ) -> "HarnessConfig":
         """Fill in derived defaults and validate required fields.
 
         When ``lease_timeout_s`` is unset it defaults to ``2 * timeout_s``.
-        The ``db``, ``sim_params`` and ``result_root`` path strings are then
+        The ``db_path``, ``sim_params_path`` and ``result_root`` path strings are then
         rewritten as absolute, user-expanded, resolved paths so every node
         resolves them identically.
+
+        Path normalisation is delegated to :func:`_normalize_path`. With both
+        ``cwd`` and ``home`` left as ``None`` (the production default) the
+        result matches ``Path(...).expanduser().resolve()``, i.e. it is taken
+        against the process's current working directory and ``HOME``. Passing
+        explicit ``cwd`` and/or ``home`` resolves the paths against fixed
+        locations instead, which is how tests assert on the normalised strings
+        deterministically without ``monkeypatch.chdir``/``monkeypatch.setenv``.
+
+        Args:
+            cwd: Optional base directory for resolving relative path strings.
+                Defaults to :meth:`Path.cwd`.
+            home: Optional home directory substituted for a leading ``~``.
+                Defaults to :meth:`Path.home`.
 
         Returns:
             ``self``, with derived defaults filled in and paths normalised.
 
         Raises:
-            ValueError: If ``db``, ``sim_params`` or ``result_root`` is not set
+            ValueError: If ``db_path``, ``sim_params_path`` or ``result_root`` is not set
                 (raised via :meth:`required_paths`).
         """
         db_path, sim_params_path, result_root_path = self.required_paths()
         if self.lease_timeout_s is None:
             self.lease_timeout_s = 2.0 * self.timeout_s
         # Normalise paths to absolute so every node resolves them identically.
-        self.db = str(Path(db_path).expanduser().resolve())
-        self.sim_params = str(Path(sim_params_path).expanduser().resolve())
-        self.result_root = str(Path(result_root_path).expanduser().resolve())
+        # _normalize_path keeps this independent of CWD/HOME when cwd/home are
+        # injected (e.g. by tests); the defaults reproduce expanduser().resolve().
+        self.db_path = _normalize_path(db_path, cwd=cwd, home=home)
+        self.sim_params_path = _normalize_path(sim_params_path, cwd=cwd, home=home)
+        self.result_root = _normalize_path(result_root_path, cwd=cwd, home=home)
         return self
 
     def required_paths(self) -> Tuple[str, str, str]:
         """Return required path settings after validating that all are configured.
 
         Returns:
-            The ``(db, sim_params, result_root)`` path strings.
+            The ``(db_path, sim_params_path, result_root)`` path strings.
 
         Raises:
-            ValueError: If any of ``db``, ``sim_params`` or ``result_root`` is
+            ValueError: If any of ``db_path``, ``sim_params_path`` or ``result_root`` is
                 ``None``.
         """
-        missing = [name for name in ("db", "sim_params", "result_root") if getattr(self, name) is None]
+        missing = [name for name in ("db_path", "sim_params_path", "result_root") if getattr(self, name) is None]
         if missing:
             raise ValueError(
                 f"Missing required harness settings: {missing}. "
                 "Provide them in the config file or via command-line flags."
             )
-        if self.db is None or self.sim_params is None or self.result_root is None:
+        if self.db_path is None or self.sim_params_path is None or self.result_root is None:
             raise ValueError("Harness path settings were not fully configured.")
-        return self.db, self.sim_params, self.result_root
+        return self.db_path, self.sim_params_path, self.result_root

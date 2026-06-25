@@ -30,12 +30,12 @@ from hisim import utils
 @mark.buildingtest
 @utils.measure_execution_time
 def test_building_thermal_conductance_calculation():
-    """Verify that thermal conductance H_tr values read from TABULA building data
-    match hand-calculated values using U * A * b_tr for windows/doors and
-    opaque surfaces.
+    """Verify thermal conductance H_tr values match hand-calculated values.
 
-    This validates the building module's thermal conductance calculations
-    before scaling up building area for scalability testing.
+    The H_tr values read from TABULA building data are compared against
+    hand-calculated values using U * A * b_tr for windows/doors and opaque
+    surfaces. This validates the building module's thermal conductance
+    calculations before scaling up building area for scalability testing.
     """
 
     building_code = "DE.N.SFH.05.Gen.ReEx.001.001"

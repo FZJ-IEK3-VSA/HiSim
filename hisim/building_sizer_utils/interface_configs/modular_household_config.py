@@ -222,8 +222,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
 
     @classmethod
     def get_default_config_for_household_gas_solar_thermal(cls) -> ModularHouseholdConfig:
-        """Create a default :class:`ModularHouseholdConfig` for a household with a gas heating system
-        combined with a solar thermal system.
+        """Create a default :class:`ModularHouseholdConfig` for a household with a gas heating system combined with a solar thermal system.
 
         The returned configuration pairs an
         :class:`~hisim.building_sizer_utils.interface_configs.system_config.EnergySystemConfig`
@@ -247,8 +246,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
 
     @classmethod
     def get_default_config_for_household_heatpump_solar_thermal(cls) -> ModularHouseholdConfig:
-        """Create a default :class:`ModularHouseholdConfig` for a household with a heat pump heating system
-        combined with a solar thermal system.
+        """Create a default :class:`ModularHouseholdConfig` for a household with a heat pump heating system combined with a solar thermal system.
 
         The returned configuration pairs an
         :class:`~hisim.building_sizer_utils.interface_configs.system_config.EnergySystemConfig`
@@ -293,7 +291,7 @@ def write_config(config: ModularHouseholdConfig) -> None:
         file.write(config.to_json())  # type: ignore
 
 
-def read_in_configs(pathname: str) -> Optional[ModularHouseholdConfig]:
+def read_in_configs(pathname: Optional[str]) -> Optional[ModularHouseholdConfig]:
     """Read a :class:`ModularHouseholdConfig` from a JSON file at the given path.
 
     The file is parsed with :meth:`ModularHouseholdConfig.from_dict`. If the file is read
@@ -312,6 +310,8 @@ def read_in_configs(pathname: str) -> Optional[ModularHouseholdConfig]:
     # try to read modular household config from path
     household_config: Optional[ModularHouseholdConfig]
     try:
+        if pathname is None:
+            raise ValueError("No modular household config path provided.")
         # use strip() in order to remove \r or \n signs from path
         with open(pathname.strip(), encoding="utf8") as config_file:
             household_config_dict = json.load(config_file)  # type: ignore

@@ -1,0 +1,122 @@
+# Static analysis and a basic execution smoke test, each as a parallel job
+# inside the prebuilt HiSim test image.
+
+name: quality
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  # Cancel superseded runs on feature branches, but let every push to main finish.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  mypy:
+    name: mypy
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+    - uses: actions/checkout@v6
+    - name: Mark workspace as safe for git
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+    - name: Install dependencies
+      run: |
+        uv pip install --system mypy
+        uv pip install --system pytest
+        uv pip install --system -r requirements.txt
+    - name: mypy hisim
+      run: mypy -p hisim --config-file mypy.ini
+    - name: mypy system_setups
+      if: always()
+      run: mypy --config-file mypy_moderate.ini system_setups/
+    - name: mypy tests
+      if: always()
+      run: mypy --config-file mypy_moderate.ini tests/
+
+  pylint:
+    name: pylint
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+    - uses: actions/checkout@v6
+    - name: Mark workspace as safe for git
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+    - name: Install dependencies
+      run: |
+        uv pip install --system pylint
+    - name: Analysing the code with pylint
+      run: |
+        pylint --rcfile pylintrc-critical-only $(git ls-files '*.py')
+
+  codequality:
+    name: prospector
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+    - uses: actions/checkout@v6
+    - name: Mark workspace as safe for git
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+    - name: Install dependencies
+      run: |
+        uv pip install --system prospector[with_everything]
+        uv pip install --system prospector[with-everything]
+        uv pip install --system prospector[with_bandit]
+        uv pip install --system prospector[with_mypy]
+        uv pip install --system prospector[with_pyroma]
+        uv pip install --system prospector[with_vulture]
+        uv pip install --system -r requirements.txt
+        uv pip install --system -e .
+    - name: Lint setup.py
+      run: prospector setup.py
+    - name: Lint system_setups
+      if: always()
+      run: prospector system_setups/
+    - name: Lint tests
+      if: always()
+      run: prospector tests/
+    - name: Lint hisim
+      if: always()
+      run: prospector hisim/
+    - name: Lint docs
+      if: always()
+      run: prospector docs/
+
+  basic-execution:
+    name: basic execution
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+    - uses: actions/checkout@v6
+    - name: Mark workspace as safe for git
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+    - name: Install HiSim package
+      run: |
+        uv pip install --system -e .
+    - name: Run hisim_main.py directly from the command line
+      working-directory: ./system_setups/
+      run: |
+        python ../hisim/hisim_main.py household_heatpump_building_sizer.py

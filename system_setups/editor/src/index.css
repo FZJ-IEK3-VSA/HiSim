@@ -6,3 +6,12 @@
 .react-flow__renderer {
   background: #f9fafb;
 }
+
+/* Strip the default React Flow node background/border/padding so
+   ComponentCard controls its own appearance entirely. */
+.react-flow__node-componentCard {
+  background: transparent;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+}

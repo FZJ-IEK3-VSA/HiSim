@@ -1,10 +1,42 @@
+import { useEffect, useState } from 'react'
 import Toolbar from './components/Toolbar'
 import Palette from './components/Palette'
 import Canvas from './components/Canvas'
 import Inspector from './components/Inspector'
 import StatusBar from './components/StatusBar'
+import { useEditorStore } from './store'
+import type { ComponentDb, EnumDb } from './types'
 
 export default function App() {
+  const loadDatabases = useEditorStore((s) => s.loadDatabases)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    Promise.all([
+      fetch('./data/component_db.json').then((r) => r.json() as Promise<ComponentDb>),
+      fetch('./data/enum_db.json').then((r) => r.json() as Promise<EnumDb>),
+    ])
+      .then(([compDb, eDb]) => loadDatabases(compDb, eDb))
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : String(e)
+        setError(
+          `Failed to load component databases: ${msg}. ` +
+          'Run: python tools/generate_component_db.py',
+        )
+      })
+  }, [loadDatabases])
+
+  if (error) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="max-w-md p-6 bg-white rounded-lg border border-red-200 shadow text-sm">
+          <p className="text-red-600 font-semibold mb-2">Database error</p>
+          <p className="text-gray-600">{error}</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="h-screen flex overflow-hidden bg-gray-50 text-sm text-gray-800 select-none">
       {/* Left sidebar — component palette */}

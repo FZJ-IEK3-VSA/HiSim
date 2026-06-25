@@ -9,7 +9,6 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.result_path_provider import ResultPathProviderSingleton
 
 
 # @pytest.mark.system_setups
@@ -25,7 +24,7 @@ def test_basic_household() -> None:
     ``hisim_main.main`` returns ``None`` and only raises on failure, so the implicit
     "does not crash" contract is not enough on its own: a run that silently produces
     no artifacts would still pass. The simulator records the result directory it used
-    on the :class:`ResultPathProviderSingleton` and writes a ``finished.flag`` marker
+    on the passed ``SimulationParameters`` instance and writes a ``finished.flag`` marker
     at the end of post-processing, so we assert on both to catch silent no-ops.
     """
 
@@ -38,13 +37,18 @@ def test_basic_household() -> None:
     hisim_main.main(path, mysimpar)
     log.information(os.getcwd())
 
-    # hisim_main.main returns None, so confirm the run produced tangible output
-    # rather than silently no-op'ing. The simulator stores the result directory it
-    # used on the ResultPathProviderSingleton; a completed run leaves a non-empty
-    # directory containing the "finished.flag" written at the end of post-processing.
-    results_dir = ResultPathProviderSingleton().get_result_directory_name()
-    assert results_dir is not None, "ResultPathProvider did not report a result directory."
-    results_path = Path(results_dir)
+    # hisim_main.main returns None, so confirm the run produced tangible output rather
+    # than silently no-op'ing. The simulator runs on the same SimulationParameters
+    # instance and records the directory it actually wrote to on result_directory; a
+    # completed run leaves a non-empty directory containing the "finished.flag" written
+    # at the end of post-processing.
+    #
+    # Note: do NOT re-query ResultPathProviderSingleton here. These households configure
+    # it for index-enumerated directories, so get_result_directory_name() returns the
+    # *next free* __N path on each call -- i.e. a different, non-existent directory once
+    # the run has created the one it used.
+    assert mysimpar.result_directory, "simulation did not set a result directory"
+    results_path = Path(mysimpar.result_directory)
     assert results_path.is_dir(), f"Results directory was not created: {results_path}"
     assert any(results_path.iterdir()), f"Results directory is empty: {results_path}"
     assert (results_path / "finished.flag").is_file(), (

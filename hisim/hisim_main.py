@@ -147,7 +147,6 @@ def initialize_from_json(
     sim_params_data['end_date'] = datetime.fromisoformat(sim_params_data['end_date'])
     sim_params_data['post_processing_options'] = [PostProcessingOptions[option] for option in sim_params_data.get('post_processing_options', [])]
     sim_params = SimulationParameters(**sim_params_data)
-    sim_params.log_connections = True  # For easy post-processing (and debugging)
 
     # Normalize module path and resolve absolute path
     path_obj = Path(path_to_module).with_suffix(".json").resolve()

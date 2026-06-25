@@ -77,22 +77,26 @@ def setup_function(
     ``use_battery_and_ems`` is enabled; otherwise the electricity meter is
     connected directly to the simulation.
 
-    Args:
+    Args
+    ----
         my_sim: The simulator instance to which components are added.
         my_simulation_parameters: Optional simulation parameters. If ``None``,
             defaults are created for a full-year simulation (year 2021) with
             15-minute timesteps and post-processing options for KPI computation
             and building sizer output.
 
-    Returns:
+    Returns
+    -------
         None. Components are added to ``my_sim`` via ``add_component()`` calls.
 
-    Raises:
+    Raises
+    ------
         ValueError: If ``heating_system`` is not
             ``HeatingSystems.DISTRICT_HEATING``, if the configured heat
             distribution system type is neither floor heating nor a radiator,
             or if the ``lpg_households`` config list is empty.
         TypeError: If ``lpg_households`` config is not a ``List[str]``.
+
     """
 
     # =================================================================================================================================

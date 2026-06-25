@@ -11,7 +11,7 @@ import pandas as pd
 # hardcoded ``data_processed/...`` path that only worked when the CWD was this
 # directory).
 _MODULE_DIR = Path(__file__).resolve().parent
-data = pd.read_csv(_MODULE_DIR / "data_processed" / "cec_modules.csv")
+modules_data = pd.read_csv(_MODULE_DIR / "data_processed" / "cec_modules.csv")
 
 # %%
 # Select the default PV module from the CEC database.
@@ -58,7 +58,7 @@ def select_pv_module(data: pd.DataFrame) -> pd.Series:
     return selected_module
 
 
-selected_module = select_pv_module(data)
+default_module = select_pv_module(modules_data)
 
 # %%
 # Inverter
@@ -69,12 +69,12 @@ inverter_data = inverter_data.droplevel(level=[1, 2], axis=1)
 inverter_data["eff"] = inverter_data["Paco"] / inverter_data["Pdco"]
 
 candidate_inverters = inverter_data[
-    (inverter_data["Pdco"].astype(float) > selected_module["P_max"]) &
-    (inverter_data["Paco"].astype(float) > 0.8 * selected_module["P_max"]) &
-    (inverter_data["Paco"].astype(float) < 1.2 * selected_module["P_max"]) &
-    (inverter_data["Vdco"].astype(float) > 0.95 * selected_module["V_mp_ref"]) &
-    (inverter_data["Vdco"].astype(float) < 1.05 * selected_module["V_mp_ref"]) &
-    (inverter_data["Idcmax"].astype(float) > selected_module["I_mp_ref"])
+    (inverter_data["Pdco"].astype(float) > default_module["P_max"]) &
+    (inverter_data["Paco"].astype(float) > 0.8 * default_module["P_max"]) &
+    (inverter_data["Paco"].astype(float) < 1.2 * default_module["P_max"]) &
+    (inverter_data["Vdco"].astype(float) > 0.95 * default_module["V_mp_ref"]) &
+    (inverter_data["Vdco"].astype(float) < 1.05 * default_module["V_mp_ref"]) &
+    (inverter_data["Idcmax"].astype(float) > default_module["I_mp_ref"])
 ]
 
 selected_inverter = candidate_inverters.sort_values(by='eff').iloc[-1]

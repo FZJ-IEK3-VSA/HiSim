@@ -19,8 +19,6 @@ Arguments that are not present keep the (scaled) default value.
 
 from __future__ import annotations
 
-from __future__ import annotations
-
 import json
 import datetime
 from pathlib import Path

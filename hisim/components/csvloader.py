@@ -7,7 +7,6 @@ from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import numpy as np
-import numpy as np
 import pandas as pd
 
 

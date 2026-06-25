@@ -50,10 +50,12 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     hydrogen production from RES. Configures full-year simulation with
     60-second timesteps and enables comprehensive post-processing.
 
-    Args:
+    Args
+    ----
         my_sim: Simulator instance to register components with.
         my_simulation_parameters: Optional SimulationParameters; if None,
             defaults to a full-year 2021 simulation at 60s per timestep.
+
     """
     log.information("Starting basic electrolyzer system setup")
     # =================================================================================================================================

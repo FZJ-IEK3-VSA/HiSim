@@ -11,7 +11,7 @@ import pytest
 
 from hisim.inputs.photovoltaic.module_selection import (
     select_pv_module,
-    selected_module as real_selected_module,
+    default_module as real_selected_module,
 )
 
 

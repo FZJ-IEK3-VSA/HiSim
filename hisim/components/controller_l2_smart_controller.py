@@ -131,7 +131,7 @@ class SmartController(Component):
         if len(self.inputs) == 0:
             raise Exception("The component " + self.component_name + " has no inputs.")
 
-        if isinstance(components, list) is False:
+        if not isinstance(components, list):
             components = [components]
 
         for component in components:

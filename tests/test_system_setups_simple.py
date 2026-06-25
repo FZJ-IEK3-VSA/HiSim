@@ -20,8 +20,8 @@ SIMPLE_SYSTEM_SETUP_ONE_PATH = str(
 )
 
 
-@pytest.fixture
-def isolated_result_directory() -> Iterator[str]:
+@pytest.fixture(name="isolated_result_directory")
+def fixture_isolated_result_directory() -> Iterator[str]:
     """Provide a clean, deterministic, test-scoped result directory and tear it down afterwards.
 
     ``TestingUtils.get_result_directory`` configures the global

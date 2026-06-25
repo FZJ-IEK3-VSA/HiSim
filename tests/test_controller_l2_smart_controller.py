@@ -84,12 +84,15 @@ class _FakeWrappedController:
         self.simulated = 0
 
     def i_save_state(self) -> None:
+        """Record that the state was saved."""
         self.saved = True
 
     def i_restore_state(self) -> None:
+        """Record that the state was restored."""
         self.restored = True
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """Count the number of simulation calls."""
         self.simulated += 1
 
 

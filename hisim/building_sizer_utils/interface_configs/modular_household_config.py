@@ -222,8 +222,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
 
     @classmethod
     def get_default_config_for_household_gas_solar_thermal(cls) -> ModularHouseholdConfig:
-        """Create a default :class:`ModularHouseholdConfig` for a household with a gas heating system
-        combined with a solar thermal system.
+        """Create a default :class:`ModularHouseholdConfig` for a household with a gas heating system combined with a solar thermal system.
 
         The returned configuration pairs an
         :class:`~hisim.building_sizer_utils.interface_configs.system_config.EnergySystemConfig`
@@ -247,8 +246,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
 
     @classmethod
     def get_default_config_for_household_heatpump_solar_thermal(cls) -> ModularHouseholdConfig:
-        """Create a default :class:`ModularHouseholdConfig` for a household with a heat pump heating system
-        combined with a solar thermal system.
+        """Create a default :class:`ModularHouseholdConfig` for a household with a heat pump heating system combined with a solar thermal system.
 
         The returned configuration pairs an
         :class:`~hisim.building_sizer_utils.interface_configs.system_config.EnergySystemConfig`

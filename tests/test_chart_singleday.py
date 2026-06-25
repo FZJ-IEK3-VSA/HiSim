@@ -107,7 +107,7 @@ def test_build_day_slice_ordinal_suffixes() -> None:
 
 
 def test_build_day_slice_month_label_and_offset_in_title() -> None:
-    """month index selects the label and the day offset is encoded in the title."""
+    """Month index selects the label and the day offset is encoded in the title."""
     data = _make_series(5)  # fall-through path
     _, plot_title = ChartSingleDay.build_day_slice(
         data=data,

@@ -30,12 +30,15 @@ class _RecordingProvider:
 
     @classmethod
     def reset(cls) -> None:
+        """Reset the recorded last instance."""
         cls.last_instance = None
 
     def configure(self, **kwargs) -> None:
+        """Record the configure call arguments."""
         self.configure_calls.append(dict(kwargs))
 
     def get_result_directory_name(self) -> Optional[str]:
+        """Return the stub directory and count the call."""
         self.get_calls += 1
         return self._directory
 
@@ -44,8 +47,8 @@ class _NoneDirectoryProvider(_RecordingProvider):
     """A stub provider whose get_result_directory_name() returns None."""
 
     def get_result_directory_name(self) -> Optional[str]:
+        """Return None to simulate an unset result directory."""
         self.get_calls += 1
-        return None
 
 
 @pytest.mark.base

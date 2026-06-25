@@ -56,8 +56,8 @@ def _assert_kpi_artefacts_written(result_directory: str, path: str) -> None:
     assert len(kpi_files) >= 1, f"no KPI JSON file written for {path}"
 
 
-@pytest.fixture
-def building_sizer_result_directory() -> Iterator[str]:
+@pytest.fixture(name="building_sizer_result_directory")
+def fixture_building_sizer_result_directory() -> Iterator[str]:
     """Yield a fresh, isolated result directory for a building-sizer test.
 
     Uses :func:`TestingUtils.get_result_directory` so each test gets its own

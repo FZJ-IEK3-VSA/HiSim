@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import tempfile
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from hisim.postprocessing.charts import Carpet
+from hisim.postprocessing.chartbase import Chart
 from hisim.simulationparameters import FigureFormat
 
 
@@ -47,12 +49,6 @@ def test_chart_constructor_creates_no_directory_and_uses_injected_path_checker(t
     (nor any subclass) could be constructed in a test without touching disk and the
     global provider. Both are now removed from ``__init__``.
     """
-    from pathlib import Path
-
-    import numpy as np
-
-    from hisim.postprocessing.chartbase import Chart
-
     checker_calls: list[str] = []
 
     def fake_path_checker(path: str) -> None:
@@ -97,10 +93,6 @@ def test_chart_constructor_defaults_to_global_path_checker(tmp_path) -> None:
     On non-Windows hosts ``check_path_length`` is a no-op, so this just confirms the
     default wiring still works and construction stays side-effect-free for the mkdir.
     """
-    from pathlib import Path
-
-    from hisim.postprocessing.chartbase import Chart
-
     target_subdir = tmp_path / "Comp" / "Out"
     chart = Chart(
         output="Comp # Out",

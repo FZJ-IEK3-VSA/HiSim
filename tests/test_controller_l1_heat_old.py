@@ -124,7 +124,7 @@ def test_compute_storage_control_small_positive_delta_turns_all_heaters_on() -> 
 
 @pytest.mark.base
 def test_compute_storage_control_small_delta_boundary_zero_excluded() -> None:
-    """delta == 0 must NOT enter the small-positive branch; it falls through to delta <= 0."""
+    """Delta == 0 must NOT enter the small-positive branch; it falls through to delta <= 0."""
     result = compute(
         delta_temperature=0.0,
         temperature_storage=50.0,
@@ -258,17 +258,17 @@ def test_compute_storage_control_warm_enough_hysteresis_target_same_timestep_kee
 @pytest.mark.base
 def test_compute_storage_control_is_static_and_pure() -> None:
     """Calling the staticmethod twice with identical arguments yields identical results."""
-    args = dict(
-        delta_temperature=6.0,
-        temperature_storage=40.0,
-        temperature_storage_target=50.0,
-        temperature_storage_target_hysteresis=45.0,
-        temperature_storage_target_c=45.0,
-        timestep_of_hysteresis=3,
-        timestep=9,
-        prev_control_signal_chp=0,
-        prev_control_signal_gas_heater=0,
-    )
+    args = {
+        "delta_temperature": 6.0,
+        "temperature_storage": 40.0,
+        "temperature_storage_target": 50.0,
+        "temperature_storage_target_hysteresis": 45.0,
+        "temperature_storage_target_c": 45.0,
+        "timestep_of_hysteresis": 3,
+        "timestep": 9,
+        "prev_control_signal_chp": 0,
+        "prev_control_signal_gas_heater": 0,
+    }
     first = compute(**args)
     second = compute(**args)
     assert first == second == (1, 1, 1, 50.0, 3)

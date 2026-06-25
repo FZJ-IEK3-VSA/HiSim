@@ -1,7 +1,6 @@
 """ Tests for the household with advanced heat pump. """
 
 import json
-import os
 import shutil
 from pathlib import Path
 

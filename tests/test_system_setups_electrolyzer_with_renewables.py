@@ -13,7 +13,7 @@ from hisim import utils
 @utils.measure_execution_time
 def test_electrolyzer_with_renewables() -> None:
     """Test the electrolyzer with renewables system setup for a single day.
-    
+
     Runs the system setup defined in ../system_setups/electrolyzer_with_renewables.py
     using one-day simulation parameters (year=2021, 60 seconds per timestep) and
     verifies that the simulation completes without errors.

@@ -2,6 +2,9 @@ import type { Edge } from '@xyflow/react'
 import type { HiSimNode } from '../store'
 import { getLoadTypeColor } from '../data/loadTypeColors'
 
+// Module-level counter — never resets, so IDs are unique across all calls in a session
+let _edgeSeq = 0
+
 export interface AutoConnectResult {
   newEdges: Edge[]
   /** Input port names for which no unique source could be found. */
@@ -29,7 +32,6 @@ export function autoConnectNode(
 ): AutoConnectResult {
   const newEdges: Edge[] = []
   const unresolvedPorts: string[] = []
-  let seq = Date.now()
 
   // default_connections: { "SourceClassName": [{target_input_name, source_output_name}] }
   const defaultConns = targetNode.data.entry.default_connections
@@ -72,7 +74,7 @@ export function autoConnectNode(
         const loadType = outPort?.load_type ?? 'Any'
 
         newEdges.push({
-          id: `ac-${seq++}`,
+          id: `ac-${++_edgeSeq}`,
           source: src.id,
           target: targetNode.id,
           sourceHandle,

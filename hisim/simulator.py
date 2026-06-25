@@ -80,6 +80,9 @@ class Simulator:
         """Adds component to simulator and wraps it up the output in the register."""
         if self._simulation_parameters is None:
             raise ValueError("Simulation Parameters were not initialized")
+        # ensure result directory exists before any connect_input calls log to it
+        if not self._simulation_parameters.result_directory:
+            self.prepare_simulation_directory()
         # set the repository
         component.set_sim_repo(self.simulation_repository)
 

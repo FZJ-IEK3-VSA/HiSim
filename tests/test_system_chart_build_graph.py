@@ -221,6 +221,7 @@ def test_build_graph_with_results_appends_cumulative_value() -> None:
     """``with_results`` appends the cumulative result from ``results_cumulative``."""
     ppdt = _two_component_setup()
     output = ppdt.wrapped_components[1].component_inputs[0].source_output
+    assert output is not None
     pretty_name = output.get_pretty_name()
     ppdt.results_cumulative = pd.DataFrame([{pretty_name: 1234.5678}])
 

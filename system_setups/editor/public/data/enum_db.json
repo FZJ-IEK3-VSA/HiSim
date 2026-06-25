@@ -1,0 +1,263 @@
+{
+  "load_types": [
+    "Any",
+    "Electricity",
+    "Irradiance",
+    "Speed",
+    "Heating",
+    "Cooling",
+    "Volume",
+    "Temperature",
+    "Pressure",
+    "Time",
+    "Price",
+    "Gas",
+    "Air",
+    "Green Hydrogen",
+    "Oxygen",
+    "Water",
+    "WarmWater",
+    "Diesel",
+    "Oil",
+    "Pellets",
+    "WoodChips",
+    "DistrictHeating",
+    "OnOff",
+    "Activation"
+  ],
+  "units": [
+    "-",
+    "%",
+    "W",
+    "kW",
+    "kWh per timestep",
+    "W per meter",
+    "W per square meter",
+    "Wh per square meter",
+    "m/s",
+    "m",
+    "m2",
+    "Wh",
+    "kWh",
+    "J",
+    "kJ",
+    "L",
+    "m3",
+    "Liter per timestep",
+    "Cubic meters per second",
+    "kg",
+    "kg/s",
+    "°C",
+    "K",
+    "Degrees",
+    "bar",
+    "Pa",
+    "s",
+    "h",
+    "timesteps",
+    "years",
+    "Euros per kWh",
+    "Euro",
+    "binary"
+  ],
+  "component_types": [
+    "PV",
+    "Windturbine",
+    "SmartDevice",
+    "SurplusController",
+    "SurplusControllerDistrict",
+    "PredictiveControllerforSmartDevices",
+    "HeatPump",
+    "GasHeater",
+    "OilHeater",
+    "PelletHeater",
+    "WoodChipHeater",
+    "HydrogenHeater",
+    "DistrictHeating",
+    "Battery",
+    "CarBattery",
+    "Car",
+    "FuelCell",
+    "Electrolyzer",
+    "CHP",
+    "H2Storage",
+    "ElectricVehicle",
+    "ElectricHeater",
+    "ElectricBoilerSH",
+    "ElectricBoilerDHW",
+    "Boiler",
+    "Buffer",
+    "ThermalEnergyStorage",
+    "Residents",
+    "Buildings",
+    "SolarThermalSystem",
+    "ElectricityMeter",
+    "GasMeter",
+    "EnergyManagementSystem",
+    "Floorheating",
+    "Conventional Radiator",
+    "Low Temperature Radiator",
+    "No HDS",
+    "HeatPumpBuilding",
+    "HeatPumpDHW"
+  ],
+  "in_and_output_types": [
+    "Massflow",
+    "ControlSignal",
+    "ElectricityTarget",
+    "LastActivation",
+    "LatestActivation",
+    "EarliestActivation",
+    "RecommendedActivation",
+    "ElectricityProduction",
+    "ElectricityInjection",
+    "ElectricityConsumption",
+    "Consumption with EMS control",
+    "Consumption without any EMS control",
+    "StorageContent",
+    "ChargeDischarge",
+    "Charge",
+    "Discharge",
+    "GasProduction",
+    "Gas consumption without any control",
+    "HEAT_DELIVERED",
+    "HEAT_CONSUMPTION",
+    "HeatToBuilding",
+    "HeatToBuffer",
+    "ThermalProduction",
+    "FuelConsumption",
+    "WaterHeating",
+    "Heating"
+  ],
+  "building_codes": [
+    "DE.N.SFH.05.Gen.ReEx.001.002"
+  ],
+  "locations": [
+    "Aachen",
+    "Madrid",
+    "FR"
+  ],
+  "post_processing_options": [
+    {
+      "name": "PLOT_LINE",
+      "value": 1
+    },
+    {
+      "name": "PLOT_CARPET",
+      "value": 2
+    },
+    {
+      "name": "PLOT_SANKEY",
+      "value": 3
+    },
+    {
+      "name": "PLOT_SINGLE_DAYS",
+      "value": 4
+    },
+    {
+      "name": "PLOT_MONTHLY_BAR_CHARTS",
+      "value": 5
+    },
+    {
+      "name": "OPEN_DIRECTORY_IN_EXPLORER",
+      "value": 6
+    },
+    {
+      "name": "EXPORT_TO_CSV",
+      "value": 7
+    },
+    {
+      "name": "MAKE_NETWORK_CHARTS",
+      "value": 8
+    },
+    {
+      "name": "GENERATE_PDF_REPORT",
+      "value": 9
+    },
+    {
+      "name": "WRITE_COMPONENTS_TO_REPORT",
+      "value": 10
+    },
+    {
+      "name": "WRITE_ALL_OUTPUTS_TO_REPORT",
+      "value": 11
+    },
+    {
+      "name": "WRITE_NETWORK_CHARTS_TO_REPORT",
+      "value": 12
+    },
+    {
+      "name": "PLOT_SPECIAL_TESTING_SINGLE_DAY",
+      "value": 13
+    },
+    {
+      "name": "GENERATE_CSV_FOR_HOUSING_DATA_BASE",
+      "value": 14
+    },
+    {
+      "name": "INCLUDE_CONFIGS_IN_PDF_REPORT",
+      "value": 15
+    },
+    {
+      "name": "INCLUDE_IMAGES_IN_PDF_REPORT",
+      "value": 16
+    },
+    {
+      "name": "PROVIDE_DETAILED_ITERATION_LOGGING",
+      "value": 17
+    },
+    {
+      "name": "COMPUTE_OPEX",
+      "value": 18
+    },
+    {
+      "name": "COMPUTE_CAPEX",
+      "value": 19
+    },
+    {
+      "name": "COMPUTE_KPIS",
+      "value": 20
+    },
+    {
+      "name": "PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION",
+      "value": 21
+    },
+    {
+      "name": "MAKE_RESULT_JSON_FOR_WEBTOOL",
+      "value": 22
+    },
+    {
+      "name": "WRITE_COMPONENT_CONFIGS_TO_JSON",
+      "value": 23
+    },
+    {
+      "name": "WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER",
+      "value": 24
+    },
+    {
+      "name": "WRITE_KPIS_TO_JSON",
+      "value": 25
+    },
+    {
+      "name": "MAKE_OPERATION_RESULTS_FOR_WEBTOOL",
+      "value": 26
+    },
+    {
+      "name": "EXPORT_TO_PKL",
+      "value": 27
+    },
+    {
+      "name": "WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON",
+      "value": 28
+    },
+    {
+      "name": "EXPORT_MONTHLY_RESULTS",
+      "value": 29
+    },
+    {
+      "name": "EXPORT_RESULTS_IN_ONE_FILE",
+      "value": 30
+    }
+  ],
+  "generated_at": "2026-06-25T17:00:25.688611"
+}

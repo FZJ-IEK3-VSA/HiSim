@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* React Flow fills whatever container it is placed in */
+.react-flow__renderer {
+  background: #f9fafb;
+}

@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -7,9 +7,12 @@ import {
   MiniMap,
   useReactFlow,
   type IsValidConnection,
+  type Node,
 } from '@xyflow/react'
 import { useEditorStore, type HiSimNode } from '../store'
+import type { DynamicInputPort } from '../types'
 import { nodeTypes } from '../nodes'
+import ContextMenu from './ContextMenu'
 
 // Counter for generating unique sequential instance names
 let nodeCounter = 0
@@ -20,11 +23,20 @@ function CanvasInner() {
   const componentDb = useEditorStore((s) => s.componentDb)
   const nodes = useEditorStore((s) => s.nodes)
   const edges = useEditorStore((s) => s.edges)
+  const showAutoConnections = useEditorStore((s) => s.showAutoConnections)
   const onNodesChange = useEditorStore((s) => s.onNodesChange)
   const onEdgesChange = useEditorStore((s) => s.onEdgesChange)
   const addNode = useEditorStore((s) => s.addNode)
   const connect = useEditorStore((s) => s.connect)
   const setSelectedNodeId = useEditorStore((s) => s.setSelectedNodeId)
+
+  const [contextMenu, setContextMenu] = useState<{
+    x: number
+    y: number
+    nodeId: string
+  } | null>(null)
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), [])
 
   // ── Drag-and-drop from palette ─────────────────────────────────
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -63,10 +75,9 @@ function CanvasInner() {
     [componentDb, screenToFlowPosition, addNode],
   )
 
-  // ── Connection validation (Phase 4) ───────────────────────────
+  // ── Connection validation ──────────────────────────────────────
   const isValidConnection: IsValidConnection = useCallback(
     (connection) => {
-      // Allow self-loops to be handled by React Flow (they're implicitly rejected)
       if (connection.source === connection.target) return false
 
       const allNodes = useEditorStore.getState().nodes
@@ -78,16 +89,35 @@ function CanvasInner() {
       const inName = connection.targetHandle?.replace('input-', '') ?? ''
 
       const outPort = src.data.entry.output_ports.find((p) => p.field_name === outName)
-      const inPort = tgt.data.entry.input_ports.find((p) => p.field_name === inName)
+      if (!outPort) return false
 
-      if (!outPort || !inPort) return false
+      // Check static input port first, then dynamic input port
+      const staticInPort = tgt.data.entry.input_ports.find((p) => p.field_name === inName)
+      const dynInput = !staticInPort
+        ? (tgt.data.dynamicInputs as DynamicInputPort[] | undefined)?.find(
+            (p) => p.field_name === inName,
+          )
+        : undefined
 
-      // Any port accepts any source
-      if (inPort.load_type === 'Any' || outPort.load_type === 'Any') return true
+      if (!staticInPort && !dynInput) return false
 
-      return outPort.load_type === inPort.load_type && outPort.unit === inPort.unit
+      const inLoadType = staticInPort?.load_type ?? dynInput?.load_type ?? 'Any'
+      const inUnit = staticInPort?.unit ?? dynInput?.unit ?? ''
+
+      if (inLoadType === 'Any' || outPort.load_type === 'Any') return true
+      return outPort.load_type === inLoadType && outPort.unit === inUnit
     },
     [],
+  )
+
+  // ── Right-click context menu ───────────────────────────────────
+  const onNodeContextMenu = useCallback(
+    (e: React.MouseEvent, node: Node) => {
+      e.preventDefault()
+      setSelectedNodeId(node.id)
+      setContextMenu({ x: e.clientX, y: e.clientY, nodeId: node.id })
+    },
+    [setSelectedNodeId],
   )
 
   return (
@@ -95,17 +125,19 @@ function CanvasInner() {
       className="w-full h-full"
       onDrop={onDrop}
       onDragOver={onDragOver}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={showAutoConnections ? edges : edges.filter((e) => !e.data?.autoConnected)}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={connect}
         isValidConnection={isValidConnection}
-        onNodeClick={(_e, node) => setSelectedNodeId(node.id)}
-        onPaneClick={() => setSelectedNodeId(null)}
+        onNodeClick={(_e, node) => { setSelectedNodeId(node.id); closeContextMenu() }}
+        onNodeContextMenu={onNodeContextMenu}
+        onPaneClick={() => { setSelectedNodeId(null); closeContextMenu() }}
         deleteKeyCode={['Delete', 'Backspace']}
         fitView
         proOptions={{ hideAttribution: false }}
@@ -114,6 +146,15 @@ function CanvasInner() {
         <Controls />
         <MiniMap nodeStrokeWidth={2} zoomable pannable />
       </ReactFlow>
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          nodeId={contextMenu.nodeId}
+          onClose={closeContextMenu}
+        />
+      )}
     </div>
   )
 }

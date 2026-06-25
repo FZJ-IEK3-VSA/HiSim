@@ -1,4 +1,5 @@
 import type { Edge } from '@xyflow/react'
+import type { DynamicInputPort } from '../types'
 import type { HiSimNode } from '../store'
 
 export interface ScenarioJson {
@@ -18,14 +19,25 @@ export function exportScenario(
   // Build a lookup from node id → instance name (= config.name)
   const nodeById = new Map(nodes.map((n) => [n.id, n]))
 
-  const components = nodes.map((node) => ({
-    component_full_classname: node.data.entry.component_full_classname,
-    configuration: node.data.config,
-    config_full_classname: node.data.entry.config_full_classname,
-    inputs: [],   // dynamic inputs not yet supported (Phase 9)
-    outputs: [],
-    connect_automatically: node.data.connectAutomatically,
-  }))
+  const components = nodes.map((node) => {
+    const dynInputs = (node.data.dynamicInputs as DynamicInputPort[] | undefined) ?? []
+    return {
+      component_full_classname: node.data.entry.component_full_classname,
+      configuration: node.data.config,
+      config_full_classname: node.data.entry.config_full_classname,
+      inputs: dynInputs.map((inp) => ({
+        dynamic: true,
+        source_component_output: inp.source_component_output,
+        source_object_name: inp.source_object_name,
+        source_load_type: inp.load_type,
+        source_unit: inp.unit,
+        source_tags: inp.source_tags,
+        source_weight: inp.source_weight,
+      })),
+      outputs: [],
+      connect_automatically: node.data.connectAutomatically,
+    }
+  })
 
   const connections: unknown[] = []
   for (const edge of edges) {

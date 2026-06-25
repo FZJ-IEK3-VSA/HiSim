@@ -1,6 +1,6 @@
 import { memo, useCallback } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import type { ComponentNodeData } from '../types'
+import type { ComponentNodeData, DynamicInputPort } from '../types'
 import { getLoadTypeColor } from '../data/loadTypeColors'
 import { useEditorStore } from '../store'
 
@@ -27,7 +27,8 @@ function CategoryBadge({ label }: { label: string }) {
 export const ComponentCard = memo(function ComponentCard({ id, data: rawData, selected }: NodeProps) {
   const data = rawData as ComponentNodeData
   const updateNodeData = useEditorStore((s) => s.updateNodeData)
-  const { entry, instanceName, config, collapsed } = data
+  const { entry, instanceName, config, collapsed, unresolvedPorts = [] } = data
+  const dynamicInputs: DynamicInputPort[] = (data.dynamicInputs as DynamicInputPort[] | undefined) ?? []
 
   const toggleCollapsed = useCallback(
     (e: React.MouseEvent) => {
@@ -37,13 +38,14 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
     [id, collapsed, updateNodeData],
   )
 
-  const portRows = Math.max(entry.input_ports.length, entry.output_ports.length)
+  // Number of rows in the static port section
+  const staticPortRows = Math.max(entry.input_ports.length, entry.output_ports.length)
 
   return (
     // Outer div is the node's bounding box; handles are positioned relative to it.
     // overflow: visible so handles render outside the white card border.
     <div style={{ width: 260 }} className="relative">
-      {/* ── Input handles ─────────────────────────────────────── */}
+      {/* ── Static input handles ──────────────────────────────── */}
       {entry.input_ports.map((port, i) => (
         <Handle
           key={`in-${port.field_name}`}
@@ -58,7 +60,7 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
         />
       ))}
 
-      {/* ── Output handles ────────────────────────────────────── */}
+      {/* ── Static output handles ─────────────────────────────── */}
       {entry.output_ports.map((port, i) => (
         <Handle
           key={`out-${port.field_name}`}
@@ -69,6 +71,21 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
             ...HANDLE_STYLE,
             top: HEADER_H + i * PORT_H + PORT_H / 2,
             background: getLoadTypeColor(port.load_type),
+          }}
+        />
+      ))}
+
+      {/* ── Dynamic input handles (below static rows) ─────────── */}
+      {dynamicInputs.map((inp, j) => (
+        <Handle
+          key={`dyn-${inp.field_name}`}
+          type="target"
+          position={Position.Left}
+          id={`input-${inp.field_name}`}
+          style={{
+            ...HANDLE_STYLE,
+            top: HEADER_H + staticPortRows * PORT_H + j * PORT_H + PORT_H / 2,
+            background: getLoadTypeColor(inp.load_type),
           }}
         />
       ))}
@@ -91,25 +108,35 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
           <CategoryBadge label={entry.category} />
         </div>
 
-        {/* Port rows */}
-        {portRows > 0 && (
-          <div className="border-b border-gray-100">
-            {Array.from({ length: portRows }).map((_, i) => {
+        {/* Static port rows */}
+        {staticPortRows > 0 && (
+          <div className={dynamicInputs.length > 0 ? '' : 'border-b border-gray-100'}>
+            {Array.from({ length: staticPortRows }).map((_, i) => {
               const inp = entry.input_ports[i]
               const out = entry.output_ports[i]
               return (
                 <div key={i} className="flex items-center" style={{ height: PORT_H }}>
                   {/* Input label */}
-                  <div className="flex-1 flex items-center pl-4 pr-1 min-w-0">
+                  <div className="flex-1 flex items-center pl-4 pr-1 min-w-0 gap-1">
                     {inp && (
-                      <span
-                        className="text-[11px] text-gray-600 truncate"
-                        style={{ color: getLoadTypeColor(inp.load_type) + 'cc' }}
-                        title={`${inp.field_name} — ${inp.load_type} [${inp.unit}]${inp.mandatory ? ' *required' : ''}`}
-                      >
-                        {inp.field_name}
-                        {inp.mandatory && <span className="text-red-400 ml-0.5">*</span>}
-                      </span>
+                      <>
+                        <span
+                          className="text-[11px] truncate"
+                          style={{ color: getLoadTypeColor(inp.load_type) + 'cc' }}
+                          title={`${inp.field_name} — ${inp.load_type} [${inp.unit}]${inp.mandatory ? ' *required' : ''}`}
+                        >
+                          {inp.field_name}
+                          {inp.mandatory && <span className="text-red-400 ml-0.5">*</span>}
+                        </span>
+                        {unresolvedPorts.includes(inp.field_name) && (
+                          <span
+                            className="shrink-0 text-[10px] text-amber-500"
+                            title="Auto-connect: no unique source found"
+                          >
+                            ⚠
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
 
@@ -131,6 +158,32 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* Dynamic input rows (loaded from the scenario JSON's inputs[] array) */}
+        {dynamicInputs.length > 0 && (
+          <div className="border-b border-gray-100">
+            {staticPortRows > 0 && (
+              <div className="border-t border-dashed border-gray-200" />
+            )}
+            {dynamicInputs.map((inp) => (
+              <div
+                key={inp.field_name}
+                className="flex items-center"
+                style={{ height: PORT_H }}
+              >
+                <div className="flex-1 flex items-center pl-4 pr-2 min-w-0">
+                  <span
+                    className="text-[11px] truncate italic"
+                    style={{ color: getLoadTypeColor(inp.load_type) + 'cc' }}
+                    title={`${inp.field_name} — ${inp.load_type} [${inp.unit}]`}
+                  >
+                    {inp.source_object_name}: {inp.source_component_output}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

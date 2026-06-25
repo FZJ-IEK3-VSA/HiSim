@@ -3,6 +3,7 @@ import { applyNodeChanges, applyEdgeChanges, addEdge as rfAddEdge } from '@xyflo
 import type { Node, Edge, NodeChange, EdgeChange, Connection } from '@xyflow/react'
 import type { ComponentDb, EnumDb, ComponentNodeData } from '../types'
 import { getLoadTypeColor } from '../data/loadTypeColors'
+import { autoConnectNode as autoConnectNodeFn } from '../io/autoConnect'
 
 export type HiSimNode = Node<ComponentNodeData>
 
@@ -15,6 +16,7 @@ interface EditorState {
   validationMessages: string[]
   scenarioName: string
   scenarioDescription: string
+  showAutoConnections: boolean
 }
 
 interface EditorActions {
@@ -29,6 +31,10 @@ interface EditorActions {
   updateNodeData: (nodeId: string, patch: Partial<ComponentNodeData>) => void
   setValidationMessages: (messages: string[]) => void
   setScenarioMeta: (name: string, description: string) => void
+  autoConnectNode: (nodeId: string) => void
+  autoConnectAll: () => void
+  deleteNode: (nodeId: string) => void
+  toggleShowAutoConnections: () => void
   reset: () => void
 }
 
@@ -41,6 +47,7 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
   validationMessages: [],
   scenarioName: 'Untitled scenario',
   scenarioDescription: '',
+  showAutoConnections: true,
 
   loadDatabases: (db, edb) => set({ componentDb: db, enumDb: edb }),
 
@@ -83,6 +90,52 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
   setValidationMessages: (messages) => set({ validationMessages: messages }),
 
   setScenarioMeta: (name, description) => set({ scenarioName: name, scenarioDescription: description }),
+
+  autoConnectNode: (nodeId) => {
+    const { nodes, edges } = get()
+    const target = nodes.find((n) => n.id === nodeId)
+    if (!target) return
+    const { newEdges, unresolvedPorts } = autoConnectNodeFn(target, nodes, edges)
+    set((s) => ({
+      edges: [...s.edges, ...newEdges],
+      nodes: s.nodes.map((n) =>
+        n.id === nodeId ? { ...n, data: { ...n.data, unresolvedPorts } } : n,
+      ),
+    }))
+  },
+
+  autoConnectAll: () => {
+    const { nodes } = get()
+    // Accumulate edges so each successive node sees the edges just created for prior nodes
+    let accEdges = [...get().edges]
+    const patches = new Map<string, string[]>()
+
+    for (const node of nodes) {
+      const { newEdges, unresolvedPorts } = autoConnectNodeFn(node, nodes, accEdges)
+      accEdges = [...accEdges, ...newEdges]
+      patches.set(node.id, unresolvedPorts)
+    }
+
+    set((s) => ({
+      edges: accEdges,
+      nodes: s.nodes.map((n) => {
+        const unresolved = patches.get(n.id)
+        return unresolved !== undefined
+          ? { ...n, data: { ...n.data, unresolvedPorts: unresolved } }
+          : n
+      }),
+    }))
+  },
+
+  deleteNode: (nodeId) =>
+    set((s) => ({
+      nodes: s.nodes.filter((n) => n.id !== nodeId),
+      edges: s.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
+      selectedNodeId: s.selectedNodeId === nodeId ? null : s.selectedNodeId,
+    })),
+
+  toggleShowAutoConnections: () =>
+    set((s) => ({ showAutoConnections: !s.showAutoConnections })),
 
   reset: () =>
     set({

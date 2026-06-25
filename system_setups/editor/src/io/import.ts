@@ -1,7 +1,8 @@
 import type { Edge } from '@xyflow/react'
-import type { ComponentDb, ComponentEntry } from '../types'
+import type { ComponentDb, ComponentEntry, DynamicInputPort } from '../types'
 import type { HiSimNode } from '../store'
 import { getLoadTypeColor } from '../data/loadTypeColors'
+import { autoConnectNode as autoConnectNodeFn } from './autoConnect'
 
 export interface ImportResult {
   nodes: HiSimNode[]
@@ -20,23 +21,41 @@ const COL_W = 320      // card width (260) + horizontal gap (60)
 const ORIGIN_X = 60
 const ORIGIN_Y = 60
 
-/** Estimated rendered height of a collapsed card (header + port rows). */
-function cardHeight(entry: ComponentEntry): number {
-  const portRows = Math.max(entry.input_ports.length, entry.output_ports.length)
-  return HEADER_H + portRows * PORT_ROW_H
+/** Parse a component's raw `inputs[]` array into typed DynamicInputPort objects. */
+function parseDynamicInputs(comp: Record<string, unknown>): DynamicInputPort[] {
+  const rawInputs = (comp.inputs as Array<Record<string, unknown>>) ?? []
+  return rawInputs
+    .filter((inp) => inp.dynamic === true)
+    .map((inp, i) => ({
+      field_name: `Input_${inp.source_object_name}_${inp.source_component_output}_${i}`,
+      load_type: String(inp.source_load_type ?? 'Any'),
+      unit: String(inp.source_unit ?? '-'),
+      source_object_name: String(inp.source_object_name ?? ''),
+      source_component_output: String(inp.source_component_output ?? ''),
+      source_tags: (inp.source_tags as string[]) ?? [],
+      source_weight: Number(inp.source_weight ?? 0),
+    }))
+}
+
+/** Estimated rendered height of a collapsed card (header + all port rows). */
+function cardHeight(entry: ComponentEntry, dynamicCount = 0): number {
+  const staticRows = Math.max(entry.input_ports.length, entry.output_ports.length)
+  return HEADER_H + (staticRows + dynamicCount) * PORT_ROW_H
 }
 
 /**
- * Compute non-overlapping positions for a list of entries.
+ * Compute non-overlapping positions for a list of cards.
  * Each column advances its Y cursor by the actual estimated card height,
  * so tall cards (many ports) don't overlap the next card below them.
  */
-function computePositions(entries: ComponentEntry[]): { x: number; y: number }[] {
+function computePositions(
+  items: Array<{ entry: ComponentEntry; dynamicCount: number }>,
+): { x: number; y: number }[] {
   const colY = Array<number>(COLS).fill(ORIGIN_Y)
-  return entries.map((entry, i) => {
+  return items.map(({ entry, dynamicCount }, i) => {
     const col = i % COLS
     const pos = { x: col * COL_W + ORIGIN_X, y: colY[col] }
-    colY[col] += cardHeight(entry) + CARD_GAP
+    colY[col] += cardHeight(entry, dynamicCount) + CARD_GAP
     return pos
   })
 }
@@ -65,8 +84,13 @@ export function importScenario(text: string, componentDb: ComponentDb): ImportRe
   const rawComponents = (json.components as Record<string, unknown>[]) ?? []
   let nodeSeq = Date.now()
 
-  // ── Pass 1: collect valid (comp, entry) pairs and warn about unknowns ────────
-  const valid: Array<{ comp: Record<string, unknown>; entry: ComponentEntry }> = []
+  // ── Pass 1: collect valid (comp, entry, dynamicInputs) triples ────────────
+  const valid: Array<{
+    comp: Record<string, unknown>
+    entry: ComponentEntry
+    dynamicInputs: DynamicInputPort[]
+  }> = []
+
   for (const comp of rawComponents) {
     const classname = comp.component_full_classname as string
     const entry = entryMap.get(classname)
@@ -74,14 +98,16 @@ export function importScenario(text: string, componentDb: ComponentDb): ImportRe
       warnings.push(`Not in registry (skipped): ${classname}`)
       continue
     }
-    valid.push({ comp, entry })
+    valid.push({ comp, entry, dynamicInputs: parseDynamicInputs(comp) })
   }
 
-  // ── Pass 2: compute height-aware auto-layout positions for all valid cards ──
-  const autoPositions = computePositions(valid.map((v) => v.entry))
+  // ── Pass 2: compute height-aware auto-layout positions ────────────────────
+  const autoPositions = computePositions(
+    valid.map((v) => ({ entry: v.entry, dynamicCount: v.dynamicInputs.length })),
+  )
 
-  // ── Pass 3: create nodes, preferring saved positions over auto-layout ────────
-  const nodes: HiSimNode[] = valid.map(({ comp, entry }, i) => {
+  // ── Pass 3: create nodes ──────────────────────────────────────────────────
+  const nodes: HiSimNode[] = valid.map(({ comp, entry, dynamicInputs }, i) => {
     const config = (comp.configuration ?? {}) as Record<string, unknown>
     const instanceName = String(config.name ?? entry.display_name)
     const position = savedPositions[instanceName] ?? autoPositions[i]
@@ -96,6 +122,7 @@ export function importScenario(text: string, componentDb: ComponentDb): ImportRe
         config,
         collapsed: true,
         connectAutomatically: Boolean(comp.connect_automatically ?? false),
+        dynamicInputs: dynamicInputs.length > 0 ? dynamicInputs : undefined,
       },
     }
   })
@@ -122,14 +149,21 @@ export function importScenario(text: string, componentDb: ComponentDb): ImportRe
       continue
     }
 
+    // Source must always be a static output port
     const outPort = srcNode.data.entry.output_ports.find((p) => p.field_name === src.field_name)
     if (!outPort) {
-      // Likely a dynamic port — skip silently to avoid noise for files with many dynamic inputs
+      // Dynamic-component outputs are not in the registry — skip silently
       continue
     }
 
-    const inPort = tgtNode.data.entry.input_ports.find((p) => p.field_name === tgt.field_name)
-    if (!inPort && !tgtNode.data.entry.is_dynamic) {
+    // Target may be a static input port OR a dynamic input port
+    const staticInPort = tgtNode.data.entry.input_ports.find((p) => p.field_name === tgt.field_name)
+    const dynInput = !staticInPort
+      ? tgtNode.data.dynamicInputs?.find((p) => p.field_name === tgt.field_name)
+      : undefined
+
+    if (!staticInPort && !dynInput) {
+      // Unknown target port — skip silently
       continue
     }
 
@@ -144,9 +178,18 @@ export function importScenario(text: string, componentDb: ComponentDb): ImportRe
     })
   }
 
+  // ── Pass 5: auto-connect nodes that have connect_automatically: true ─────────
+  // Run after explicit connections so already-wired ports are skipped correctly.
+  let accEdges = [...edges]
+  for (const node of nodes) {
+    if (!node.data.connectAutomatically) continue
+    const { newEdges } = autoConnectNodeFn(node, nodes, accEdges)
+    accEdges = [...accEdges, ...newEdges]
+  }
+
   return {
     nodes,
-    edges,
+    edges: accEdges,
     scenarioName: String(json.name ?? 'Untitled scenario'),
     scenarioDescription: String(json.description ?? ''),
     warnings,

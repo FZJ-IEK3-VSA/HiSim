@@ -15,9 +15,9 @@ export interface OutputPort {
   output_description: string
 }
 
-export interface DefaultConnection {
+/** One entry within a default_connections value list (source_class_name is the dict key). */
+export interface DefaultConnectionEntry {
   target_input_name: string
-  source_class_name: string
   source_output_name: string
 }
 
@@ -39,7 +39,8 @@ export interface ComponentEntry {
   config_fields: ConfigField[]
   input_ports: InputPort[]
   output_ports: OutputPort[]
-  default_connections: DefaultConnection[]
+  // { "SourceClassName": [{target_input_name, source_output_name}, ...] }
+  default_connections: Record<string, DefaultConnectionEntry[]>
 }
 
 export interface ComponentDb {
@@ -59,6 +60,21 @@ export interface EnumDb {
   generated_at: string
 }
 
+/**
+ * A dynamic input port synthesised from a component's `inputs[]` array in the scenario JSON.
+ * Dynamic components (e.g. ElectricityMeter) collect inputs at runtime rather than declaring
+ * them statically; the field_name follows the pattern Input_{source_object}_{output}_{index}.
+ */
+export interface DynamicInputPort {
+  field_name: string             // e.g. "Input_PVSystem_ElectricityOutput_0"
+  load_type: string
+  unit: string
+  source_object_name: string     // instance name of the source component
+  source_component_output: string
+  source_tags: string[]
+  source_weight: number
+}
+
 /** Data stored on each React Flow node. Must extend Record<string, unknown> for RF types. */
 export interface ComponentNodeData extends Record<string, unknown> {
   entry: ComponentEntry
@@ -66,4 +82,8 @@ export interface ComponentNodeData extends Record<string, unknown> {
   config: Record<string, unknown>
   collapsed: boolean
   connectAutomatically: boolean
+  /** Parsed from the scenario JSON's inputs[] — only present on dynamic components. */
+  dynamicInputs?: DynamicInputPort[]
+  /** Input port names that could not be auto-connected (zero or multiple candidates). */
+  unresolvedPorts?: string[]
 }

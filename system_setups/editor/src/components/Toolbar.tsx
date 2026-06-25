@@ -32,6 +32,9 @@ export default function Toolbar() {
   const setScenarioMeta = useEditorStore((s) => s.setScenarioMeta)
   const setSelectedNodeId = useEditorStore((s) => s.setSelectedNodeId)
   const setValidationMessages = useEditorStore((s) => s.setValidationMessages)
+  const autoConnectAll = useEditorStore((s) => s.autoConnectAll)
+  const showAutoConnections = useEditorStore((s) => s.showAutoConnections)
+  const toggleShowAutoConnections = useEditorStore((s) => s.toggleShowAutoConnections)
 
   const handleOpenJson = () => {
     const componentDb = useEditorStore.getState().componentDb
@@ -76,7 +79,18 @@ export default function Toolbar() {
       <Button onClick={handleSaveJson}>Save JSON</Button>
       <Separator />
       <Button disabled title="Phase 8">Validate</Button>
-      <Button disabled title="Phase 7">Auto-connect all</Button>
+      <Button onClick={autoConnectAll}>Auto-connect all</Button>
+      <button
+        onClick={toggleShowAutoConnections}
+        title={showAutoConnections ? 'Hide auto-connected edges (dashed)' : 'Show auto-connected edges (dashed)'}
+        className={`px-2 py-1 rounded text-xs transition-colors ${
+          showAutoConnections
+            ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+            : 'text-gray-400 hover:bg-gray-100'
+        }`}
+      >
+        {showAutoConnections ? 'Auto-edges ●' : 'Auto-edges ○'}
+      </button>
       <Separator />
       <Button disabled title="Phase 10">Simulation settings</Button>
     </header>

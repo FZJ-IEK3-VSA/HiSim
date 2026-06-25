@@ -247,18 +247,28 @@ export default function Inspector() {
             </button>
           </div>
 
-          {/* Port summary (read-only) */}
+          {/* Port summary (read-only) + unresolved-port explanations */}
           {(node.data.entry.input_ports.length > 0 ||
             node.data.entry.output_ports.length > 0) && (
             <div className="pt-1 border-t border-gray-100">
               <p className="text-[11px] font-medium text-gray-500 mb-1">Ports</p>
-              {node.data.entry.input_ports.map((p) => (
-                <div key={p.field_name} className="flex gap-1 text-[11px] text-gray-500 leading-5">
-                  <span className="text-gray-400">→</span>
-                  <span className="truncate">{p.field_name}</span>
-                  <span className="ml-auto text-gray-400 shrink-0">{p.load_type}</span>
-                </div>
-              ))}
+              {node.data.entry.input_ports.map((p) => {
+                const unresolved = node.data.unresolvedPorts?.includes(p.field_name)
+                return (
+                  <div
+                    key={p.field_name}
+                    className="flex gap-1 text-[11px] leading-5"
+                  >
+                    <span className={unresolved ? 'text-amber-500' : 'text-gray-400'}>
+                      {unresolved ? '⚠' : '→'}
+                    </span>
+                    <span className={`truncate ${unresolved ? 'text-amber-600' : 'text-gray-500'}`}>
+                      {p.field_name}
+                    </span>
+                    <span className="ml-auto text-gray-400 shrink-0">{p.load_type}</span>
+                  </div>
+                )
+              })}
               {node.data.entry.output_ports.map((p) => (
                 <div key={p.field_name} className="flex gap-1 text-[11px] text-gray-500 leading-5">
                   <span className="text-gray-400">←</span>
@@ -266,6 +276,12 @@ export default function Inspector() {
                   <span className="ml-auto text-gray-400 shrink-0">{p.load_type}</span>
                 </div>
               ))}
+              {(node.data.unresolvedPorts?.length ?? 0) > 0 && (
+                <p className="mt-1 text-[11px] text-amber-600 italic">
+                  ⚠ {node.data.unresolvedPorts!.length} input(s) could not be auto-connected
+                  — no unique source on canvas.
+                </p>
+              )}
             </div>
           )}
         </div>

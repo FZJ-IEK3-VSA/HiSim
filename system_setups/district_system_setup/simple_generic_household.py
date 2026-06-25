@@ -233,12 +233,11 @@ class GenericBuilding(cp.Component):
             config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
         )
         my_sim.add_component(my_heatpump_controller_sh, connect_automatically=True)
-
+        
+        # Build Heat Pump Controller for dhw
         my_heatpump_controller_dhw_config = (
             more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config(building_name=building_name)
         )
-
-        # Build Heat Pump Controller for dhw
         my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
             config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
         )

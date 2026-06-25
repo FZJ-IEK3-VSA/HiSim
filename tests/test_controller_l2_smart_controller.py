@@ -91,7 +91,9 @@ class _FakeWrappedController:
         """Record that the state was restored."""
         self.restored = True
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+    def i_simulate(  # pylint: disable=unused-argument
+        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
+    ) -> None:
         """Count the number of simulation calls."""
         self.simulated += 1
 
@@ -103,7 +105,7 @@ def _make_simulation_parameters() -> SimulationParameters:
 
 @pytest.mark.base
 def test_smart_controller_accepts_injected_wrapped_controllers() -> None:
-    """SmartController must accept injected wrapped controllers and skip internal build."""
+    """Ensure SmartController accepts injected wrapped controllers and skips the internal build."""
     sp = _make_simulation_parameters()
     config = SmartControllerConfig.get_default_config_ems()
 

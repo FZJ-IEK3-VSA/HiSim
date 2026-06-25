@@ -11,6 +11,9 @@ as a pure method that only reads ``self.ppdt`` and returns the assembled
 
 # clean
 
+# These tests deliberately exercise the private graph-assembly method ``_build_graph``.
+# pylint: disable=protected-access
+
 from types import SimpleNamespace
 from typing import Optional, cast
 
@@ -211,7 +214,7 @@ def test_build_graph_input_without_source_is_skipped() -> None:
     graph = chart._build_graph(
         with_labels=True, with_class_names=False, with_results=False
     )
-    assert graph.get_edges() == []
+    assert not graph.get_edges()
     # but the node itself is still present
     assert [n.get_name() for n in _real_nodes(graph)] == ["Controller"]
 
@@ -267,7 +270,7 @@ def test_build_graph_with_results_without_source_output_omits_value() -> None:
 
 @pytest.mark.base
 def test_build_graph_merges_parallel_edges_with_newline() -> None:
-    """Two inputs sharing the same source/target node pair share one edge label joined by \\n."""
+    r"""Two inputs sharing the same source/target node pair share one edge label joined by \n."""
     controller = _FakeComponent("Controller")
     boiler = _FakeComponent("Boiler")
     first = _make_input(

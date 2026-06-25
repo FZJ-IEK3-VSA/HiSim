@@ -144,4 +144,3 @@ def test_csvloader_from_config_file_reads_disk(tmp_path: Path) -> None:
     np.testing.assert_array_equal(loader.column, np.asarray(values, dtype=float))
     assert loader.multiplier == 1.0
     assert loader.column_name == "Profile"
-

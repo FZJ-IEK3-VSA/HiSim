@@ -10,11 +10,9 @@ class _ResultPathProviderInstance(Protocol):
 
     def configure(self, *, run_mode: RunMode, test_name: str) -> None:
         """Configure the provider for the given run mode and test name."""
-        ...
 
     def get_result_directory_name(self) -> Optional[str]:
         """Return the configured result directory name, if any."""
-        ...
 
 
 class _ResultPathProviderFactory(Protocol):
@@ -22,7 +20,6 @@ class _ResultPathProviderFactory(Protocol):
 
     def reset(self) -> None:
         """Reset the provider's class-level state."""
-        ...
 
     def __call__(self) -> _ResultPathProviderInstance:
         ...

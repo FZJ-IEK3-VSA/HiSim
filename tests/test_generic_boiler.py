@@ -40,7 +40,7 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature_and_time(
     water_temp_dhw: float,
     expected_mode: str,
 ):
-    """ GIVEN """
+    """GIVEN."""
     testee = given_default_testee(
         {
             "minimum_runtime_in_seconds": min_state_time,

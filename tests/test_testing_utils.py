@@ -49,6 +49,7 @@ class _NoneDirectoryProvider(_RecordingProvider):
     def get_result_directory_name(self) -> Optional[str]:
         """Return None to simulate an unset result directory."""
         self.get_calls += 1
+        return None  # pylint: disable=useless-return
 
 
 @pytest.mark.base

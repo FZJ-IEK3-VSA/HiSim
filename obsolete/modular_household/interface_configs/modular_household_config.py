@@ -16,7 +16,7 @@ from dataclass_wizard.errors import ParseError
 from repositories.HiSim.obsolete.modular_household.interface_configs import system_config
 from hisim import log
 from repositories.HiSim.obsolete.modular_household.interface_configs import archetype_config
-from repositories.HiSim.obsolete.system_setup_configuration import SystemSetupConfigBase
+from repositories.HiSim.hisim.system_setup_configuration import SystemSetupConfigBase
 
 
 @dataclass

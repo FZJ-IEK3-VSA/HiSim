@@ -1,8 +1,8 @@
 """Test for generic dhw boiler."""
 
 import pytest
-from hisim.components import generic_hot_water_storage_modular
-from hisim.components import generic_heat_source
+from repositories.HiSim.obsolete import generic_hot_water_storage_modular
+from repositories.HiSim.obsolete import generic_heat_source
 from hisim.components import controller_l1_heatpump
 
 from hisim import loadtypes as lt

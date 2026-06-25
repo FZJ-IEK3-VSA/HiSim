@@ -10,6 +10,7 @@ from os import path
 from typing import Any, List, Optional, Tuple
 
 import pandas as pd
+from repositories.HiSim.obsolete import generic_heat_source, generic_hot_water_storage_modular
 from utspclient.helpers.lpgpythonbindings import JsonReference
 
 import hisim.loadtypes as lt
@@ -29,8 +30,6 @@ from hisim.components import (
     generic_chp,
     generic_electrolyzer,
     generic_heat_pump_modular,
-    generic_heat_source,
-    generic_hot_water_storage_modular,
     generic_hydrogen_storage,
     generic_pv_system,
     generic_smart_device,

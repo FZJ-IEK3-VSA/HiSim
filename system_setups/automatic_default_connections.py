@@ -16,9 +16,9 @@ from hisim.components import (
     heat_distribution_system,
     generic_heat_pump_modular,
     controller_l1_heatpump,
-    generic_hot_water_storage_modular,
 )
 from hisim.units import Quantity, Celsius, Watt
+from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 
 
 def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> Any:

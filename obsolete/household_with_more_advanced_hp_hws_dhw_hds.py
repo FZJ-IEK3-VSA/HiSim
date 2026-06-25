@@ -10,7 +10,7 @@ from hisim.components import building
 from hisim.components import more_advanced_heat_pump_hplib
 from hisim.components import electricity_meter
 from hisim.components import simple_water_storage
-from hisim.components import generic_hot_water_storage_modular
+from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 from hisim.components import heat_distribution_system
 from hisim import loadtypes as lt
 

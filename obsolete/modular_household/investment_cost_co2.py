@@ -7,10 +7,8 @@ Functions from this file are called in Postprocessing option compute_kpis.
 from typing import List, Tuple
 import pandas as pd
 from hisim.components import (
-    generic_hot_water_storage_modular,
     generic_pv_system,
     generic_smart_device,
-    generic_heat_source,
     advanced_battery_bslib,
     generic_car,
     generic_chp,
@@ -20,6 +18,7 @@ from hisim.components import (
 from hisim.utils import HISIMPATH
 from hisim.loadtypes import LoadTypes
 from hisim.component_wrapper import ComponentWrapper
+from repositories.HiSim.obsolete import generic_heat_source, generic_hot_water_storage_modular
 
 
 def read_in_component_costs() -> pd.DataFrame:

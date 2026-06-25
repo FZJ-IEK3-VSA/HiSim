@@ -25,7 +25,6 @@ from hisim.components import (
     controller_l2_energy_management_system,
     generic_heat_pump_modular,
     controller_l1_heatpump,
-    generic_hot_water_storage_modular,
     simple_water_storage,
 )
 from hisim import utils
@@ -33,6 +32,7 @@ import hisim.loadtypes as lt
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.units import Quantity, Celsius, Watt
+from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_ems.py"

@@ -16,7 +16,7 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components import controller_l1_generic_runtime
 from hisim.components.building import Building
-from hisim.components import generic_hot_water_storage_modular
+from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 
 
 __authors__ = "edited Johanna Ganglbauer"

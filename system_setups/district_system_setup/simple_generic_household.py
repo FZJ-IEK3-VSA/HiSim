@@ -5,6 +5,7 @@
 from typing import Optional, Union, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 from utspclient.helpers.lpgdata import Households
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim import component as cp
@@ -19,7 +20,6 @@ from hisim.components import (
     simple_water_storage,
     heat_distribution_system,
     generic_heat_pump_modular,
-    generic_hot_water_storage_modular,
     controller_l1_heatpump,
     electricity_meter,
 )

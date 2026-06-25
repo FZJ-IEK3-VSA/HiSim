@@ -28,12 +28,12 @@ from hisim.components import (
     simple_water_storage,
     heat_distribution_system,
     generic_heat_pump_modular,
-    generic_hot_water_storage_modular,
     controller_l1_heatpump,
     electricity_meter,
 )
 from hisim.units import Quantity, Celsius, Watt
 from hisim import loadtypes as lt
+from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 from tests.testing_utils import TestingUtils
 
 

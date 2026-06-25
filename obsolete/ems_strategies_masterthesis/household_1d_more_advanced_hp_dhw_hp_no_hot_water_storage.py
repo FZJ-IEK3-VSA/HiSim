@@ -22,7 +22,7 @@ from hisim.components import building
 from hisim.components import generic_car
 from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
-from hisim.components import generic_hot_water_storage_modular
+from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 from hisim.components import electricity_meter
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.system_setup_configuration import SystemSetupConfigBase

@@ -17,7 +17,6 @@ from hisim.components import (
     electricity_meter,
     heating_meter,
     more_advanced_heat_pump_hplib,
-    generic_hot_water_storage_modular,
     simple_water_storage,
     heat_distribution_system,
     generic_pv_system,
@@ -25,6 +24,7 @@ from hisim.components import (
 from hisim import utils
 
 from hisim.postprocessingoptions import PostProcessingOptions
+from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 
 
 # PATH and FUNC needed to build simulator, PATH is fake

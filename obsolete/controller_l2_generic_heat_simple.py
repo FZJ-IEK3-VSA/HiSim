@@ -11,7 +11,7 @@ from dataclasses_json import dataclass_json
 
 from hisim import utils
 from hisim import component as cp
-from hisim.components import generic_hot_water_storage_modular
+from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 from hisim.components.building import Building
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters

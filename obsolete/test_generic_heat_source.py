@@ -1,7 +1,7 @@
 """Test for generic heat source."""
 import pytest
 from hisim import component as cp
-from hisim.components import generic_heat_source
+from repositories.HiSim.obsolete import generic_heat_source
 from hisim.components import controller_l1_heatpump
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters

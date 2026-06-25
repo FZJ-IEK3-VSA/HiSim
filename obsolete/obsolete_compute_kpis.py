@@ -16,9 +16,9 @@ from hisim.utils import HISIMPATH
 from hisim.component_wrapper import ComponentWrapper
 
 from hisim import log
-from hisim.postprocessing.investment_cost_co2 import compute_investment_cost
+from repositories.HiSim.obsolete.modular_household.investment_cost_co2 import compute_investment_cost
 
-from hisim.components import generic_hot_water_storage_modular
+from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 
 
 def compute_energy_from_power(

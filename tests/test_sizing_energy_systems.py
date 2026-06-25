@@ -15,12 +15,12 @@ from hisim.components import (
     advanced_battery_bslib,
     simple_water_storage,
     generic_heat_pump_modular,
-    generic_hot_water_storage_modular,
 )
 from hisim.units import Quantity, Watt
 
 from hisim import log
 from hisim import utils
+from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 
 
 @pytest.mark.buildingtest

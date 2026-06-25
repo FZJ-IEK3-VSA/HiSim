@@ -21,7 +21,7 @@ def run_single(
     result_dir: str,
     *,
     init_fn: Optional[Callable[..., Any]] = None,
-    run_fn: Optional[Callable[[Any, Optional[str]], None]] = None,
+    run_fn: Optional[Callable[..., None]] = None,
 ) -> Any:
     """Build a simulation from JSON, force the result dir onto it, and run it.
 
@@ -93,7 +93,7 @@ def run_single(
 def main(
     argv: Optional[List[str]] = None,
     init_fn: Optional[Callable[..., Any]] = None,
-    run_fn: Optional[Callable[[Any, Optional[str]], None]] = None,
+    run_fn: Optional[Callable[..., None]] = None,
 ) -> None:
     """Parse args and delegate the init->override->run sequence to :func:`run_single`.
 

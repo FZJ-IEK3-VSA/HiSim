@@ -199,7 +199,7 @@ class Component:
         return cls.__name__
 
     @classmethod
-    def get_full_classname(cls):
+    def get_full_classname(cls) -> str:
         """Gets the class name. Helper function for default connections."""
         return cls.__module__ + "." + cls.__name__
 

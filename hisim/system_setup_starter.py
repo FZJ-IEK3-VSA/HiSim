@@ -108,24 +108,20 @@ def make_system_setup(
 if __name__ == "__main__":
     import sys
 
+    PARAMETERS_JSON_FILE: str
+    RESULT_DIRECTORY: str
     if len(sys.argv) == 1:
-        PARAMETERS_JSON_FILE: str = "input/request.json"
-        RESULT_DIRECTORY: str = "results"
-        PARAMETERS_JSON_FILE: str = "input/request.json"
-        RESULT_DIRECTORY: str = "results"
+        PARAMETERS_JSON_FILE = "input/request.json"
+        RESULT_DIRECTORY = "results"
         if not Path(PARAMETERS_JSON_FILE).is_file():
             log.information("Please specify an input JSON file or place it in `input/request.json`.")
             sys.exit(1)
     elif len(sys.argv) == 2:
-        PARAMETERS_JSON_FILE: str = sys.argv[1]
-        RESULT_DIRECTORY: str = "results"
-        PARAMETERS_JSON_FILE: str = sys.argv[1]
-        RESULT_DIRECTORY: str = "results"
+        PARAMETERS_JSON_FILE = sys.argv[1]
+        RESULT_DIRECTORY = "results"
     elif len(sys.argv) == 3:
-        PARAMETERS_JSON_FILE: str = sys.argv[1]
-        RESULT_DIRECTORY: str = sys.argv[2]
-        PARAMETERS_JSON_FILE: str = sys.argv[1]
-        RESULT_DIRECTORY: str = sys.argv[2]
+        PARAMETERS_JSON_FILE = sys.argv[1]
+        RESULT_DIRECTORY = sys.argv[2]
     else:
         log.information("HiSim from JSON received too many arguments.")
         sys.exit(1)

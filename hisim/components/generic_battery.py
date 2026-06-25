@@ -47,6 +47,8 @@ class GenericBatteryState:
 
     def charge(self, energy):
         """Charge."""
+        assert self.max_stored_energy is not None
+        assert self.max_var_stored_energy is not None
         energy = abs(energy)
         if self.stored_energy + energy < self.max_stored_energy:
             charge = energy
@@ -61,6 +63,8 @@ class GenericBatteryState:
 
     def discharge(self, energy):
         """Discharge."""
+        assert self.min_stored_energy is not None
+        assert self.min_var_stored_energy is not None
         energy = -abs(energy)
         if self.stored_energy + energy > self.min_stored_energy:
             discharge = energy

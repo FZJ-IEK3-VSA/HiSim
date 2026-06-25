@@ -82,7 +82,7 @@ class ExtendedControllerSimulation:
                 state_chp = 1
 
             if state_chp == 0:
-                generated_electricity = 0
+                generated_electricity = 0.0
                 power_from_or_to_grid = demand - generated_electricity
             elif 0 < state_chp <= 1:
                 generated_electricity = chp.CHPConfig.p_el_min + power_per_step_size * (
@@ -242,7 +242,7 @@ class ExtendedControllerSimulation:
         power_available = -power_from_or_to_grid
 
         if power_available < AdvElectrolyzerConfig.min_power:
-            power_to_electrolyzer = 0
+            power_to_electrolyzer = 0.0
             # no change
             # power_from_or_to_grid = power_available
         elif AdvElectrolyzerConfig.min_power <= power_available <= AdvElectrolyzerConfig.max_power:

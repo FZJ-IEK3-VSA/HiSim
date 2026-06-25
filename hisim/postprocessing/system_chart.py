@@ -202,6 +202,7 @@ class SystemChart:
                 if with_results:
                     # result value is either sum or mean value, according to distinction in func "get_std_results()" in simulator.py
                     if isinstance(component_input.source_output, ComponentOutput):
+                        assert self.ppdt.results_cumulative is not None
                         output_cumulative_result = self.ppdt.results_cumulative.at[
                             0, component_input.source_output.get_pretty_name()
                         ]

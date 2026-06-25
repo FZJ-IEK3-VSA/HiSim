@@ -66,7 +66,8 @@ class RsocBatteryControllerConfig(ConfigBase):
         )
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
-            return data.get("rSOC variants", {}).get(rsoc_name, {})
+            variant: dict[str, Any] = data.get("rSOC variants", {}).get(rsoc_name, {})
+            return variant
 
     @classmethod
     def config_rsoc(

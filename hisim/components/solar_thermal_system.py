@@ -723,6 +723,7 @@ class SolarThermalSystem(Component):
 
         if timestep + 1 == self.my_simulation_parameters.timesteps:
             for i, df in enumerate(self.precalc_data_for_all_timesteps_data):
+                assert df is not None
                 df["timestep"] = i  # Add timestep column to each
 
             # Combine all into one large DataFrame

@@ -13,8 +13,6 @@ import hisim.hisim_main as hsm
 
 def run_simulation() -> None:
     """Run the HiSim simulation by calling hsm.main()."""
-def run_simulation() -> None:
-    """Run the HiSim simulation by calling hsm.main()."""
     # change call here as needed
     # hsm.main("..\\system_setups\\modular_example.py")
     hsm.main(

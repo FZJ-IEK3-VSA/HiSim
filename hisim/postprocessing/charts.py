@@ -58,7 +58,7 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             database = data.values.reshape(xdims, ydims)
         except ValueError:
             log.error("Carpet plot can only deal with data containing entire days")
-            return
+            return None
 
         if np.max(np.abs(data.values)) > 1.5e3:
             database = database * 1e-3

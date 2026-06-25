@@ -35,7 +35,7 @@ from hisim.components import (
     weather,
 )
 from hisim.simulator import SimulationParameters
-from hisim.system_setup_configuration import SystemSetupConfigBase
+from repositories.HiSim.obsolete.system_setup_configuration import SystemSetupConfigBase
 from hisim.units import Celsius, Quantity, Seconds, Watt
 
 __authors__ = "Markus Blasberg"

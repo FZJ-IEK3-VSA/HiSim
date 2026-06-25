@@ -12,7 +12,7 @@ from utspclient.helpers.lpgdata import (
     TravelRouteSets,
     EnergyIntensityType,
 )
-from hisim.system_setup_configuration import SystemSetupConfigBase
+from repositories.HiSim.obsolete.system_setup_configuration import SystemSetupConfigBase
 from hisim.simulator import SimulationParameters
 from hisim.component import DisplayConfig
 from hisim.components import loadprofilegenerator_utsp_connector

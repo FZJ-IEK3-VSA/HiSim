@@ -77,7 +77,7 @@ def _real_nodes(graph: pydot.Dot) -> list:
     return [n for n in graph.get_nodes() if n.get_name() != "node"]
 
 
-def _two_component_setup() -> SimpleNamespace:
+def _two_component_setup() -> PostProcessingDataTransfer:
     """A Source -> Controller wiring used by several tests."""
     source = _FakeComponent("Source")
     controller = _FakeComponent("Controller Thing")

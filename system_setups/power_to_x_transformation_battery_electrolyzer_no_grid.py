@@ -51,7 +51,6 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     60-second timesteps and enables comprehensive post-processing.
 
     Args:
-    ----
         my_sim: Simulator instance to register components with.
         my_simulation_parameters: Optional SimulationParameters; if None,
             defaults to a full-year 2021 simulation at 60s per timestep.

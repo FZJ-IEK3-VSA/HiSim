@@ -30,14 +30,25 @@ jobs:
         uv pip install --system prospector[with_vulture]
         if [ -f requirements.txt ]; then uv pip install --system -r requirements.txt; fi
         uv pip install --system -e .
-    - name: Lint with prospector
+    - name: Lint setup.py
       working-directory: ./
-      run: |
-        prospector setup.py
-        prospector system_setups/
-        prospector tests/
-        prospector hisim/
-        prospector docs/
+      run: prospector setup.py
+    - name: Lint system_setups
+      if: always()
+      working-directory: ./
+      run: prospector system_setups/
+    - name: Lint tests
+      if: always()
+      working-directory: ./
+      run: prospector tests/
+    - name: Lint hisim
+      if: always()
+      working-directory: ./
+      run: prospector hisim/
+    - name: Lint docs
+      if: always()
+      working-directory: ./
+      run: prospector docs/
 
 
 #        # pylint hisim/simulator.py --rcfile=hisim_pylint_config.rc

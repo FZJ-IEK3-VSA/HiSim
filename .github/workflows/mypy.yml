@@ -22,8 +22,11 @@ jobs:
         uv pip install --system mypy
         uv pip install --system pytest
         uv pip install --system -r requirements.txt
-    - name: mypy
-      run: |
-        mypy -p hisim --config-file mypy.ini
-        mypy --config-file mypy_moderate.ini system_setups/
-        mypy --config-file mypy_moderate.ini tests/
+    - name: mypy hisim
+      run: mypy -p hisim --config-file mypy.ini
+    - name: mypy system_setups
+      if: always()
+      run: mypy --config-file mypy_moderate.ini system_setups/
+    - name: mypy tests
+      if: always()
+      run: mypy --config-file mypy_moderate.ini tests/

@@ -12,7 +12,7 @@ that function with plain values and without constructing a full
 
 import pytest
 
-from hisim.components.controller_l1_heat_old import ControllerHeat
+from repositories.HiSim.obsolete.controller_l1_heat_old import ControllerHeat
 
 
 # Convenience alias for the (long) tuple layout returned by the function:

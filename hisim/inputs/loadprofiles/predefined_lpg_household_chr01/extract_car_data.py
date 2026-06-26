@@ -8,38 +8,20 @@ car_df = pd.read_csv(io.StringIO(data['car_data']), sep=',', decimal='.', encodi
  
 target_dir = '/fast/home/n-goelz/Repositories/HiSim/hisim/inputs/loadprofiles/predefined_lpg_household_chr01/data_processed'
  
-# CarLocations — braucht LoadTypeName und HouseKey
-col = 'car_locations'
-entry = {
-    'LoadTypeName': car_df.loc['Name', col],
-    'HouseKey': {'HouseholdName': 'CHR01 Couple both at Work'},
-    'TimeResolution': car_df.loc['TimeResolution', col],
-    'Values': ast.literal_eval(car_df.loc['Values', col]),
-}
-with open(f"{target_dir}/CarLocations.HH1.json", 'w', encoding='utf-8') as f:
-    json.dump(entry, f, indent=2)
-print("Geschrieben: CarLocations.HH1.json")
- 
-# CarStates — schauen wir welche Keys generic_car.py braucht
-col = 'car_states'
-entry = {
-    'LoadTypeName': car_df.loc['Name', col],
-    'HouseKey': {'HouseholdName': 'CHR01 Couple both at Work'},
-    'TimeResolution': car_df.loc['TimeResolution', col],
-    'Values': ast.literal_eval(car_df.loc['Values', col]),
-}
-with open(f"{target_dir}/CarStates.HH1.json", 'w', encoding='utf-8') as f:
-    json.dump(entry, f, indent=2)
-print("Geschrieben: CarStates.HH1.json")
- 
-# DrivingDistances — nur Values gebraucht laut generic_car.py
-col = 'driving_distances'
-entry = {
-    'LoadTypeName': car_df.loc['Name', col],
-    'HouseKey': {'HouseholdName': 'CHR01 Couple both at Work'},
-    'TimeResolution': car_df.loc['TimeResolution', col],
-    'Values': ast.literal_eval(car_df.loc['Values', col]),
-}
-with open(f"{target_dir}/DrivingDistances.HH1.json", 'w', encoding='utf-8') as f:
-    json.dump(entry, f, indent=2)
-print("Geschrieben: DrivingDistances.HH1.json")
+for col, filename in [
+    ('car_states',        'CarStates.HH1.json'),
+    ('car_locations',     'CarLocations.HH1.json'),
+    ('driving_distances', 'DrivingDistances.HH1.json'),
+]:
+    house_key = ast.literal_eval(car_df.loc['HouseKey', col])
+    entry = {
+        'LoadTypeName':   car_df.loc['LoadTypeName', col],
+        'HouseKey':       house_key,
+        'TimeResolution': car_df.loc['TimeResolution', col],
+        'StartTime':      car_df.loc['StartTime', col],
+        'Values':         ast.literal_eval(car_df.loc['Values', col]),
+    }
+    out_path = f"{target_dir}/{filename}"
+    with open(out_path, 'w', encoding='utf-8') as f:
+        json.dump(entry, f, indent=2)
+    print(f"Geschrieben: {out_path}")

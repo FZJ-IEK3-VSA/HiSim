@@ -3,6 +3,7 @@ import type { ComponentDb, ComponentEntry, DynamicInputPort } from '../types'
 import type { HiSimNode } from '../store'
 import { getLoadTypeColor } from '../data/loadTypeColors'
 import { autoConnectNode as autoConnectNodeFn } from './autoConnect'
+import { autoLayout } from './layout'
 
 export interface ImportResult {
   nodes: HiSimNode[]
@@ -11,15 +12,6 @@ export interface ImportResult {
   scenarioDescription: string
   warnings: string[]
 }
-
-// Card layout constants — must match ComponentCard.tsx
-const HEADER_H = 37
-const PORT_ROW_H = 28
-const CARD_GAP = 24    // vertical gap between cards in the same column
-const COLS = 3
-const COL_W = 320      // card width (260) + horizontal gap (60)
-const ORIGIN_X = 60
-const ORIGIN_Y = 60
 
 /** Parse a component's raw `inputs[]` array into typed DynamicInputPort objects. */
 function parseDynamicInputs(comp: Record<string, unknown>): DynamicInputPort[] {
@@ -35,29 +27,6 @@ function parseDynamicInputs(comp: Record<string, unknown>): DynamicInputPort[] {
       source_tags: (inp.source_tags as string[]) ?? [],
       source_weight: Number(inp.source_weight ?? 0),
     }))
-}
-
-/** Estimated rendered height of a collapsed card (header + all port rows). */
-function cardHeight(entry: ComponentEntry, dynamicCount = 0): number {
-  const staticRows = Math.max(entry.input_ports.length, entry.output_ports.length)
-  return HEADER_H + (staticRows + dynamicCount) * PORT_ROW_H
-}
-
-/**
- * Compute non-overlapping positions for a list of cards.
- * Each column advances its Y cursor by the actual estimated card height,
- * so tall cards (many ports) don't overlap the next card below them.
- */
-function computePositions(
-  items: Array<{ entry: ComponentEntry; dynamicCount: number }>,
-): { x: number; y: number }[] {
-  const colY = Array<number>(COLS).fill(ORIGIN_Y)
-  return items.map(({ entry, dynamicCount }, i) => {
-    const col = i % COLS
-    const pos = { x: col * COL_W + ORIGIN_X, y: colY[col] }
-    colY[col] += cardHeight(entry, dynamicCount) + CARD_GAP
-    return pos
-  })
 }
 
 export function importScenario(text: string, componentDb: ComponentDb): ImportResult {
@@ -101,21 +70,14 @@ export function importScenario(text: string, componentDb: ComponentDb): ImportRe
     valid.push({ comp, entry, dynamicInputs: parseDynamicInputs(comp) })
   }
 
-  // ── Pass 2: compute height-aware auto-layout positions ────────────────────
-  const autoPositions = computePositions(
-    valid.map((v) => ({ entry: v.entry, dynamicCount: v.dynamicInputs.length })),
-  )
-
-  // ── Pass 3: create nodes ──────────────────────────────────────────────────
-  const nodes: HiSimNode[] = valid.map(({ comp, entry, dynamicInputs }, i) => {
+  // ── Pass 2: create nodes (positions resolved after edges are built) ──────
+  const nodes: HiSimNode[] = valid.map(({ comp, entry, dynamicInputs }) => {
     const config = (comp.configuration ?? {}) as Record<string, unknown>
     const instanceName = String(config.name ?? entry.display_name)
-    const position = savedPositions[instanceName] ?? autoPositions[i]
-
     return {
       id: `n-${nodeSeq++}`,
       type: 'componentCard',
-      position,
+      position: { x: 0, y: 0 },  // placeholder — overridden in the layout pass below
       data: {
         entry,
         instanceName,
@@ -178,8 +140,7 @@ export function importScenario(text: string, componentDb: ComponentDb): ImportRe
     })
   }
 
-  // ── Pass 5: auto-connect nodes that have connect_automatically: true ─────────
-  // Run after explicit connections so already-wired ports are skipped correctly.
+  // ── Pass 4: auto-connect nodes with connect_automatically: true ───────────
   let accEdges = [...edges]
   for (const node of nodes) {
     if (!node.data.connectAutomatically) continue
@@ -187,8 +148,17 @@ export function importScenario(text: string, componentDb: ComponentDb): ImportRe
     accEdges = [...accEdges, ...newEdges]
   }
 
+  // ── Pass 5: assign positions ──────────────────────────────────────────────
+  // Use DAG auto-layout as the base; override with any saved positions from
+  // a prior editor session (_editor_positions field written by export.ts).
+  const laidOut = autoLayout(nodes, accEdges)
+  const finalNodes = laidOut.map((n) => {
+    const saved = savedPositions[n.data.instanceName]
+    return saved ? { ...n, position: saved } : n
+  })
+
   return {
-    nodes,
+    nodes: finalNodes,
     edges: accEdges,
     scenarioName: String(json.name ?? 'Untitled scenario'),
     scenarioDescription: String(json.description ?? ''),

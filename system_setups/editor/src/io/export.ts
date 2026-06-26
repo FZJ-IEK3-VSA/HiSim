@@ -65,9 +65,17 @@ export function exportScenario(
     })
   }
 
-  const scenario: ScenarioJson = {
+  // Save canvas positions so the editor can restore them on re-import.
+  const _editor_positions: Record<string, { x: number; y: number }> = {}
+  for (const node of nodes) {
+    const name = String(node.data.config.name ?? node.data.instanceName)
+    _editor_positions[name] = { x: Math.round(node.position.x), y: Math.round(node.position.y) }
+  }
+
+  const scenario = {
     name: scenarioName,
     description: scenarioDescription,
+    _editor_positions,
     multiple_buildings: false,
     components,
     connections,

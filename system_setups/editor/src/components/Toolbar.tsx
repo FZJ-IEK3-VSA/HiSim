@@ -1,6 +1,7 @@
 import { useEditorStore } from '../store'
 import { importScenario } from '../io/import'
 import { exportScenario, triggerDownload } from '../io/export'
+import { autoLayout } from '../io/layout'
 
 const Separator = () => <div className="w-px h-4 bg-gray-200 mx-1" />
 
@@ -36,6 +37,12 @@ export default function Toolbar() {
   const runValidation = useEditorStore((s) => s.runValidation)
   const showAutoConnections = useEditorStore((s) => s.showAutoConnections)
   const toggleShowAutoConnections = useEditorStore((s) => s.toggleShowAutoConnections)
+  const undo = useEditorStore((s) => s.undo)
+  const redo = useEditorStore((s) => s.redo)
+  const resetHistory = useEditorStore((s) => s.resetHistory)
+  const pushHistory = useEditorStore((s) => s.pushHistory)
+  const canUndo = useEditorStore((s) => s.past.length > 0)
+  const canRedo = useEditorStore((s) => s.future.length > 0)
 
   const handleOpenJson = () => {
     const componentDb = useEditorStore.getState().componentDb
@@ -55,6 +62,7 @@ export default function Toolbar() {
         setEdges(result.edges)
         setScenarioMeta(result.scenarioName, result.scenarioDescription)
         setSelectedNodeId(null)
+        resetHistory()
         setValidationMessages(
           result.warnings.length > 0
             ? [`Import: ${result.warnings.length} warning(s) — ${result.warnings[0]}`]
@@ -73,14 +81,24 @@ export default function Toolbar() {
     triggerDownload(json, filename)
   }
 
+  const handleAutoLayout = () => {
+    const store = useEditorStore.getState()
+    pushHistory()
+    store.setNodes(autoLayout(store.nodes, store.edges))
+  }
+
   return (
     <header className="flex items-center gap-0.5 px-2 py-1 border-b border-gray-200 bg-white text-xs shrink-0">
       <Button onClick={reset}>New</Button>
       <Button onClick={handleOpenJson}>Open JSON</Button>
       <Button onClick={handleSaveJson}>Save JSON</Button>
       <Separator />
+      <Button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">↩ Undo</Button>
+      <Button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Y)">↪ Redo</Button>
+      <Separator />
       <Button onClick={runValidation}>Validate</Button>
       <Button onClick={autoConnectAll}>Auto-connect all</Button>
+      <Button onClick={handleAutoLayout} title="Arrange nodes left-to-right by data flow">Auto-layout</Button>
       <button
         onClick={toggleShowAutoConnections}
         title={showAutoConnections ? 'Hide auto-connected edges (dashed)' : 'Show auto-connected edges (dashed)'}

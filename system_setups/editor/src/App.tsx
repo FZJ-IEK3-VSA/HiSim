@@ -12,6 +12,29 @@ export default function App() {
   const loadCatalogDb = useEditorStore((s) => s.loadCatalogDb)
   const [error, setError] = useState<string | null>(null)
 
+  // Global keyboard shortcuts for undo/redo.
+  // Skipped when focus is inside a text input so native browser undo still works there.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT'
+      ) return
+      const meta = e.ctrlKey || e.metaKey
+      if (meta && !e.shiftKey && e.key === 'z') {
+        e.preventDefault()
+        useEditorStore.getState().undo()
+      } else if (meta && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+        e.preventDefault()
+        useEditorStore.getState().redo()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   useEffect(() => {
     Promise.all([
       fetch('./data/component_db.json').then((r) => r.json() as Promise<ComponentDb>),

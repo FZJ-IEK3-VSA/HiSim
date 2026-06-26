@@ -12,7 +12,10 @@ import {
 import { useEditorStore, type HiSimNode } from '../store'
 import type { DynamicInputPort } from '../types'
 import { nodeTypes } from '../nodes'
+import { HiSimEdge } from '../edges/HiSimEdge'
 import ContextMenu from './ContextMenu'
+
+const edgeTypes = { default: HiSimEdge }
 
 // Counter for generating unique sequential instance names
 let nodeCounter = 0
@@ -30,6 +33,7 @@ function CanvasInner() {
   const addNode = useEditorStore((s) => s.addNode)
   const connect = useEditorStore((s) => s.connect)
   const setSelectedNodeId = useEditorStore((s) => s.setSelectedNodeId)
+  const pushHistory = useEditorStore((s) => s.pushHistory)
 
   const [contextMenu, setContextMenu] = useState<{
     x: number
@@ -133,10 +137,12 @@ function CanvasInner() {
         nodes={nodes}
         edges={showAutoConnections ? edges : edges.filter((e) => !e.data?.autoConnected)}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={connect}
         isValidConnection={isValidConnection}
+        onNodeDragStart={() => { pushHistory() }}
         onNodeClick={(_e, node) => { setSelectedNodeId(node.id); closeContextMenu() }}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={() => { setSelectedNodeId(null); closeContextMenu() }}

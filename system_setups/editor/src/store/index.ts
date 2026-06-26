@@ -8,6 +8,11 @@ import { validateScenario } from '../io/validate'
 
 export type HiSimNode = Node<ComponentNodeData>
 
+interface HistoryEntry {
+  nodes: HiSimNode[]
+  edges: Edge[]
+}
+
 interface EditorState {
   componentDb: ComponentDb | null
   enumDb: EnumDb | null
@@ -21,6 +26,8 @@ interface EditorState {
   scenarioName: string
   scenarioDescription: string
   showAutoConnections: boolean
+  past: HistoryEntry[]
+  future: HistoryEntry[]
 }
 
 interface EditorActions {
@@ -42,6 +49,10 @@ interface EditorActions {
   deleteNode: (nodeId: string) => void
   toggleShowAutoConnections: () => void
   reset: () => void
+  pushHistory: () => void
+  undo: () => void
+  redo: () => void
+  resetHistory: () => void
 }
 
 export const useEditorStore = create<EditorState & EditorActions>()((set, get) => ({
@@ -57,6 +68,8 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
   scenarioName: 'Untitled scenario',
   scenarioDescription: '',
   showAutoConnections: true,
+  past: [],
+  future: [],
 
   loadDatabases: (db, edb) => set({ componentDb: db, enumDb: edb }),
   loadCatalogDb: (db) => set({ catalogDb: db }),
@@ -64,15 +77,23 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
 
-  onNodesChange: (changes) =>
-    set((s) => ({ nodes: applyNodeChanges(changes, s.nodes) })),
+  onNodesChange: (changes) => {
+    if (changes.some((c) => c.type === 'remove')) get().pushHistory()
+    set((s) => ({ nodes: applyNodeChanges(changes, s.nodes) }))
+  },
 
-  onEdgesChange: (changes) =>
-    set((s) => ({ edges: applyEdgeChanges(changes, s.edges) })),
+  onEdgesChange: (changes) => {
+    if (changes.some((c) => c.type === 'remove')) get().pushHistory()
+    set((s) => ({ edges: applyEdgeChanges(changes, s.edges) }))
+  },
 
-  addNode: (node) => set((s) => ({ nodes: [...s.nodes, node] })),
+  addNode: (node) => {
+    get().pushHistory()
+    set((s) => ({ nodes: [...s.nodes, node] }))
+  },
 
   connect: (connection) => {
+    get().pushHistory()
     const { nodes, edges } = get()
     const sourceNode = nodes.find((n) => n.id === connection.source)
     const portName = connection.sourceHandle?.replace('output-', '') ?? ''
@@ -108,6 +129,7 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
   setScenarioMeta: (name, description) => set({ scenarioName: name, scenarioDescription: description }),
 
   autoConnectNode: (nodeId) => {
+    get().pushHistory()
     const { nodes, edges } = get()
     const target = nodes.find((n) => n.id === nodeId)
     if (!target) return
@@ -121,8 +143,8 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
   },
 
   autoConnectAll: () => {
+    get().pushHistory()
     const { nodes } = get()
-    // Accumulate edges so each successive node sees the edges just created for prior nodes
     let accEdges = [...get().edges]
     const patches = new Map<string, string[]>()
 
@@ -143,12 +165,14 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
     }))
   },
 
-  deleteNode: (nodeId) =>
+  deleteNode: (nodeId) => {
+    get().pushHistory()
     set((s) => ({
       nodes: s.nodes.filter((n) => n.id !== nodeId),
       edges: s.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
       selectedNodeId: s.selectedNodeId === nodeId ? null : s.selectedNodeId,
-    })),
+    }))
+  },
 
   toggleShowAutoConnections: () =>
     set((s) => ({ showAutoConnections: !s.showAutoConnections })),
@@ -163,5 +187,40 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
       validationWarnings: [],
       scenarioName: 'Untitled scenario',
       scenarioDescription: '',
+      past: [],
+      future: [],
     }),
+
+  pushHistory: () => {
+    const { nodes, edges, past } = get()
+    set({ past: [...past.slice(-49), { nodes, edges }], future: [] })
+  },
+
+  undo: () => {
+    const { past, future, nodes, edges } = get()
+    if (past.length === 0) return
+    const prev = past[past.length - 1]
+    set({
+      nodes: prev.nodes.map((n) => ({ ...n, selected: false })),
+      edges: prev.edges,
+      past: past.slice(0, -1),
+      future: [{ nodes, edges }, ...future.slice(0, 49)],
+      selectedNodeId: null,
+    })
+  },
+
+  redo: () => {
+    const { past, future, nodes, edges } = get()
+    if (future.length === 0) return
+    const next = future[0]
+    set({
+      nodes: next.nodes.map((n) => ({ ...n, selected: false })),
+      edges: next.edges,
+      past: [...past.slice(-49), { nodes, edges }],
+      future: future.slice(1),
+      selectedNodeId: null,
+    })
+  },
+
+  resetHistory: () => set({ past: [], future: [] }),
 }))

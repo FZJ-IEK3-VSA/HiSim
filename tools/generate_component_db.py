@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate component_db.json and enum_db.json for the HiSim scenario editor.
+"""Generate component_db.json, enum_db.json, and catalog_db.json for the HiSim scenario editor.
 
 Run from the repository root:
     python tools/generate_component_db.py
@@ -7,6 +7,7 @@ Run from the repository root:
 Outputs:
     system_setups/editor/public/data/component_db.json
     system_setups/editor/public/data/enum_db.json
+    system_setups/editor/public/data/catalog_db.json
 
 Exits non-zero if any component fails to introspect, so CI can catch regressions.
 """
@@ -249,6 +250,8 @@ def _synthetic_default(hint: Any, field_name: str = "") -> Any:
             return "BUI1"
         if field_name == "name":
             return "default"
+        if field_name == "result_dir_path":
+            return "<<utils.HISIMPATH['utsp_results']>>"
         return ""
     if issubclass(hint, enum.Enum):
         members = [m for m in hint if isinstance(m.value, str) or not isinstance(m.value, list)]
@@ -488,6 +491,105 @@ def _build_enum_db() -> Dict:
 
 
 # ---------------------------------------------------------------------------
+# Domain catalogs (weather datasets, heat pump models, PV modules/inverters)
+# ---------------------------------------------------------------------------
+
+def _build_catalog_db(now: str) -> Dict:
+    """Build catalog_db.json with domain-specific data for the editor's field dropdowns."""
+    import glob as _glob
+
+    # ── Weather datasets ───────────────────────────────────────────────────
+    weather_root = os.path.join(REPO_ROOT, "hisim", "inputs", "weather")
+    inputs_root = os.path.join(REPO_ROOT, "hisim", "inputs")
+    weather_datasets = []
+    for dat in sorted(_glob.glob(os.path.join(weather_root, "**", "*.dat"), recursive=True)):
+        dat_fwd = dat.replace(os.sep, "/")
+        if "/data_raw/" in dat_fwd:
+            continue  # skip unprocessed raw files
+        no_ext = os.path.splitext(dat)[0]
+        rel = os.path.relpath(no_ext, inputs_root).replace(os.sep, "/")
+        name = os.path.splitext(os.path.basename(dat))[0]
+        if "/NSRDB/" in dat_fwd:
+            label = f"{name} (NSRDB)"
+        elif "1995-2012" in dat_fwd:
+            label = f"{name.replace('_', ' ').title()} (TRY 1995–2012)"
+        elif "2015-2045" in dat_fwd:
+            label = f"{name.replace('_', ' ').title()} (TRY 2015–2045)"
+        else:
+            label = name.replace("_", " ").title()
+        weather_datasets.append({"label": label, "path": f"<<utils.get_input_directory()>>/{rel}"})
+
+    # ── Heat pump models ───────────────────────────────────────────────────
+    heat_pump_models: List[Dict] = []
+    try:
+        from hisim import utils as _utils  # noqa: PLC0415
+        hp_db = _utils.load_smart_appliance("Heat Pump")
+        for entry in hp_db:
+            heat_pump_models.append({"manufacturer": entry["Manufacturer"], "name": entry["Name"]})
+    except Exception as exc:
+        print(f"  [WARN] Could not build heat pump catalog: {exc}", file=sys.stderr)
+
+    # ── PV modules & inverters (from local CSV files) ──────────────────────
+    pv_modules: Dict[str, List[str]] = {}
+    pv_inverters: Dict[str, List[str]] = {}
+    try:
+        import pandas as _pd  # noqa: PLC0415
+        from hisim import utils as _utils  # noqa: PLC0415, F811
+        pv_paths = _utils.HISIMPATH.get("photovoltaic", {})
+
+        # Sandia modules → database enum value 1 (525 entries)
+        sandia_path = pv_paths.get("sandia_modules_new")
+        if sandia_path and os.path.exists(sandia_path):
+            df = _pd.read_csv(sandia_path)
+            if "Name" in df.columns:
+                pv_modules["1"] = sorted(df["Name"].dropna().unique().tolist())
+
+        # CEC modules → database enum value 3 (20k+ entries, used via datalist)
+        cec_mod_path = pv_paths.get("cec_modules")
+        if cec_mod_path and os.path.exists(cec_mod_path):
+            df = _pd.read_csv(cec_mod_path)
+            if "Name" in df.columns:
+                pv_modules["3"] = sorted(df["Name"].dropna().unique().tolist())
+
+        # CEC inverters → database enum value 4
+        cec_inv_path = pv_paths.get("cec_inverters")
+        if cec_inv_path and os.path.exists(cec_inv_path):
+            df = _pd.read_csv(cec_inv_path)
+            if "Name" in df.columns:
+                pv_inverters["4"] = sorted(df["Name"].dropna().unique().tolist())
+    except Exception as exc:
+        print(f"  [WARN] Could not build PV catalog: {exc}", file=sys.stderr)
+
+    # ── Predefined LPG load profiles ──────────────────────────────────────
+    predefined_load_profiles: List[str] = []
+    try:
+        from hisim import utils as _utils  # noqa: PLC0415, F811
+        occupancy = _utils.HISIMPATH.get("occupancy", {})
+        predefined_load_profiles = sorted(occupancy.keys())
+    except Exception as exc:
+        print(f"  [WARN] Could not build predefined load profile catalog: {exc}", file=sys.stderr)
+
+    # ── Config field overrides for new nodes ──────────────────────────────
+    # Replaces absolute OS-specific paths in default_config with HiSim path placeholders.
+    # Applied in the editor when the user drops a new component onto the canvas.
+    config_overrides: Dict[str, Dict] = {
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig": {
+            "result_dir_path": "<<utils.HISIMPATH['utsp_results']>>",
+        },
+    }
+
+    return {
+        "generated_at": now,
+        "weather_datasets": weather_datasets,
+        "heat_pump_models": heat_pump_models,
+        "pv_modules": pv_modules,
+        "pv_inverters": pv_inverters,
+        "predefined_load_profiles": predefined_load_profiles,
+        "config_overrides": config_overrides,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -523,9 +625,11 @@ def main() -> int:
     }
     enum_db = _build_enum_db()
     enum_db["generated_at"] = now
+    catalog_db = _build_catalog_db(now)
 
     comp_path = os.path.join(OUTPUT_DIR, "component_db.json")
     enum_path = os.path.join(OUTPUT_DIR, "enum_db.json")
+    catalog_path = os.path.join(OUTPUT_DIR, "catalog_db.json")
 
     with open(comp_path, "w", encoding="utf-8") as fh:
         json.dump(component_db, fh, indent=2, ensure_ascii=False)
@@ -533,11 +637,19 @@ def main() -> int:
     with open(enum_path, "w", encoding="utf-8") as fh:
         json.dump(enum_db, fh, indent=2, ensure_ascii=False)
 
+    with open(catalog_path, "w", encoding="utf-8") as fh:
+        json.dump(catalog_db, fh, indent=2, ensure_ascii=False)
+
     ok_count = len(components)
     fail_count = len(failures)
     print(f"\nWrote {comp_path}")
     print(f"      {ok_count} components OK, {fail_count} failed")
     print(f"Wrote {enum_path}")
+    print(f"Wrote {catalog_path}")
+    print(f"      {len(catalog_db['weather_datasets'])} weather datasets, "
+          f"{len(catalog_db['heat_pump_models'])} heat pump models, "
+          f"{sum(len(v) for v in catalog_db['pv_modules'].values())} PV modules, "
+          f"{sum(len(v) for v in catalog_db['pv_inverters'].values())} PV inverters")
 
     if failures:
         print(f"\n{fail_count} component(s) failed — fix or investigate:")

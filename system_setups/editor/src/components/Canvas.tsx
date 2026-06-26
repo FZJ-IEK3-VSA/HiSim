@@ -21,6 +21,7 @@ function CanvasInner() {
   const { screenToFlowPosition } = useReactFlow()
 
   const componentDb = useEditorStore((s) => s.componentDb)
+  const catalogDb = useEditorStore((s) => s.catalogDb)
   const nodes = useEditorStore((s) => s.nodes)
   const edges = useEditorStore((s) => s.edges)
   const showAutoConnections = useEditorStore((s) => s.showAutoConnections)
@@ -58,6 +59,7 @@ function CanvasInner() {
       nodeCounter += 1
       const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
 
+      const configOverrides = catalogDb?.config_overrides?.[entry.config_full_classname] ?? {}
       const newNode: HiSimNode = {
         id: `node-${nodeCounter}-${Date.now()}`,
         type: 'componentCard',
@@ -65,14 +67,14 @@ function CanvasInner() {
         data: {
           entry,
           instanceName: `${entry.display_name}_${nodeCounter}`,
-          config: { ...entry.default_config },
+          config: { ...entry.default_config, ...configOverrides },
           collapsed: true,
           connectAutomatically: true,
         },
       }
       addNode(newNode)
     },
-    [componentDb, screenToFlowPosition, addNode],
+    [componentDb, catalogDb, screenToFlowPosition, addNode],
   )
 
   // ── Connection validation ──────────────────────────────────────

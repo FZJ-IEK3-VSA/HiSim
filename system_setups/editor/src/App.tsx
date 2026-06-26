@@ -5,10 +5,11 @@ import Canvas from './components/Canvas'
 import Inspector from './components/Inspector'
 import StatusBar from './components/StatusBar'
 import { useEditorStore } from './store'
-import type { ComponentDb, EnumDb } from './types'
+import type { CatalogDb, ComponentDb, EnumDb } from './types'
 
 export default function App() {
   const loadDatabases = useEditorStore((s) => s.loadDatabases)
+  const loadCatalogDb = useEditorStore((s) => s.loadCatalogDb)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -24,7 +25,12 @@ export default function App() {
           'Run: python tools/generate_component_db.py',
         )
       })
-  }, [loadDatabases])
+
+    fetch('./data/catalog_db.json')
+      .then((r) => r.json() as Promise<CatalogDb>)
+      .then((db) => loadCatalogDb(db))
+      .catch(() => { /* catalog not yet generated — editor still works without it */ })
+  }, [loadDatabases, loadCatalogDb])
 
   if (error) {
     return (

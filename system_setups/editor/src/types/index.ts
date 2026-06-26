@@ -75,6 +75,31 @@ export interface DynamicInputPort {
   source_weight: number
 }
 
+// ── Domain catalogs ──────────────────────────────────────────────────────────
+
+export interface WeatherDataset {
+  label: string
+  path: string
+}
+
+export interface HeatPumpModel {
+  manufacturer: string
+  name: string
+}
+
+export interface CatalogDb {
+  generated_at: string
+  weather_datasets: WeatherDataset[]
+  heat_pump_models: HeatPumpModel[]
+  /** module_database enum value (as string) → list of module names */
+  pv_modules: Record<string, string[]>
+  /** inverter_database enum value (as string) → list of inverter names */
+  pv_inverters: Record<string, string[]>
+  predefined_load_profiles: string[]
+  /** config_full_classname → { field_name: override_value } — applied on new node creation */
+  config_overrides: Record<string, Record<string, unknown>>
+}
+
 /** Data stored on each React Flow node. Must extend Record<string, unknown> for RF types. */
 export interface ComponentNodeData extends Record<string, unknown> {
   entry: ComponentEntry

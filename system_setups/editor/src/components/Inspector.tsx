@@ -1,5 +1,6 @@
+import { useState, useMemo } from 'react'
 import { useEditorStore } from '../store'
-import type { ConfigField, EnumDb } from '../types'
+import type { CatalogDb, ConfigField, EnumDb } from '../types'
 
 // ── Enum value lookup ──────────────────────────────────────────────────────────
 function getEnumValues(enumClass: string | null, enumDb: EnumDb): string[] | null {
@@ -16,16 +17,127 @@ function getEnumValues(enumClass: string | null, enumDb: EnumDb): string[] | nul
   return map[enumClass] ?? null
 }
 
+// ── Catalog option lookup ──────────────────────────────────────────────────────
+type CatalogOption = { label: string; value: string }
+
+function getCatalogOptions(
+  fieldName: string,
+  componentClassname: string,
+  config: Record<string, unknown>,
+  catalogDb: CatalogDb,
+): CatalogOption[] | null {
+  // Weather source_path
+  if (fieldName === 'source_path' && componentClassname.includes('.weather.')) {
+    return catalogDb.weather_datasets.map((d) => ({ label: d.label, value: d.path }))
+  }
+  // Heat pump manufacturer
+  if (fieldName === 'manufacturer' && componentClassname.includes('generic_heat_pump')) {
+    const manufacturers = [...new Set(catalogDb.heat_pump_models.map((m) => m.manufacturer))]
+    return manufacturers.map((m) => ({ label: m, value: m }))
+  }
+  // Heat pump model name (filtered by current manufacturer selection)
+  if (fieldName === 'heat_pump_name' && componentClassname.includes('generic_heat_pump')) {
+    const mfr = config['manufacturer'] as string | undefined
+    const models = mfr
+      ? catalogDb.heat_pump_models.filter((m) => m.manufacturer === mfr)
+      : catalogDb.heat_pump_models
+    return models.map((m) => ({ label: m.name, value: m.name }))
+  }
+  // PV module name — datalist; CEC (key "3") is large but filtered client-side
+  if (fieldName === 'module_name' && componentClassname.includes('generic_pv_system')) {
+    const db = String(config['module_database'] ?? '3')
+    const mods = catalogDb.pv_modules[db] ?? null
+    return mods ? mods.map((m) => ({ label: m, value: m })) : null
+  }
+  // PV inverter name
+  if (fieldName === 'inverter_name' && componentClassname.includes('generic_pv_system')) {
+    const db = String(config['inverter_database'] ?? '4')
+    const invs = catalogDb.pv_inverters[db] ?? null
+    return invs ? invs.map((m) => ({ label: m, value: m })) : null
+  }
+  // UTSP predefined load profile
+  if (
+    fieldName === 'name_of_predefined_loadprofile' &&
+    componentClassname.includes('loadprofilegenerator_utsp_connector')
+  ) {
+    return catalogDb.predefined_load_profiles.map((p) => ({ label: p, value: p }))
+  }
+  return null
+}
+
+// ── Catalog select: plain select for small lists, filter+select for large ones ─
+function CatalogSelect({
+  fieldName,
+  value,
+  options,
+  base,
+  onChange,
+}: {
+  fieldName: string
+  value: string
+  options: CatalogOption[]
+  base: string
+  onChange: (name: string, val: unknown) => void
+}) {
+  const [filter, setFilter] = useState('')
+
+  const displayOpts = useMemo(() => {
+    if (options.length <= 100) return options
+    const f = filter.toLowerCase()
+    const matched = f ? options.filter((o) => o.value.toLowerCase().includes(f)) : options
+    return matched.slice(0, 300)
+  }, [options, filter])
+
+  const currentInDisplay = !value || displayOpts.some((o) => o.value === value)
+
+  const selectEl = (
+    <select
+      className={base}
+      value={value}
+      onChange={(e) => onChange(fieldName, e.target.value)}
+    >
+      {!currentInDisplay && (
+        <option value={value}>
+          {value.length > 50 ? `…${value.slice(-47)}` : value}
+        </option>
+      )}
+      {!value && <option value="">— select —</option>}
+      {displayOpts.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  )
+
+  if (options.length <= 100) return selectEl
+
+  return (
+    <div className="space-y-0.5">
+      <input
+        type="text"
+        className={base}
+        value={filter}
+        placeholder="Filter list…"
+        onChange={(e) => setFilter(e.target.value)}
+      />
+      {selectEl}
+    </div>
+  )
+}
+
 // ── Individual field renderer ──────────────────────────────────────────────────
 function FieldInput({
   field,
   value,
   enumDb,
+  catalogOptions,
   onChange,
 }: {
   field: ConfigField
   value: unknown
   enumDb: EnumDb
+  catalogOptions: CatalogOption[] | null
   onChange: (name: string, val: unknown) => void
 }) {
   const strVal = value === null || value === undefined ? '' : String(value)
@@ -35,6 +147,18 @@ function FieldInput({
 
   const base =
     'w-full px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white'
+
+  if (catalogOptions) {
+    return (
+      <CatalogSelect
+        fieldName={field.name}
+        value={strVal}
+        options={catalogOptions}
+        base={base}
+        onChange={onChange}
+      />
+    )
+  }
 
   if (enumValues) {
     return (
@@ -142,6 +266,7 @@ function ScenarioMeta() {
 // ── Inspector panel ────────────────────────────────────────────────────────────
 export default function Inspector() {
   const enumDb = useEditorStore((s) => s.enumDb)
+  const catalogDb = useEditorStore((s) => s.catalogDb)
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
   const nodes = useEditorStore((s) => s.nodes)
   const updateNodeData = useEditorStore((s) => s.updateNodeData)
@@ -150,7 +275,27 @@ export default function Inspector() {
 
   const handleChange = (name: string, val: unknown) => {
     if (!node) return
-    const newConfig = { ...node.data.config, [name]: val }
+    let newConfig = { ...node.data.config, [name]: val }
+
+    if (catalogDb) {
+      const cls = node.data.entry.component_full_classname
+      // Weather: auto-update location when source_path changes
+      // Location is derived from the part of the label before the first " ("
+      if (name === 'source_path' && cls.includes('.weather.')) {
+        const dataset = catalogDb.weather_datasets.find((d) => d.path === String(val))
+        if (dataset) {
+          newConfig = { ...newConfig, location: dataset.label.split(' (')[0] }
+        }
+      }
+      // Heat pump: auto-select the first valid model when manufacturer changes
+      if (name === 'manufacturer' && cls.includes('generic_heat_pump')) {
+        const models = catalogDb.heat_pump_models.filter((m) => m.manufacturer === String(val))
+        if (models.length > 0) {
+          newConfig = { ...newConfig, heat_pump_name: models[0].name }
+        }
+      }
+    }
+
     // Keep instanceName in sync with the config 'name' field
     if (name === 'name') {
       updateNodeData(node.id, { config: newConfig, instanceName: String(val) })
@@ -205,21 +350,32 @@ export default function Inspector() {
           {/* Config fields */}
           {node.data.entry.config_fields
             .filter((f) => f.name !== 'name')
-            .map((field) => (
-              <div key={field.name}>
-                <label className="flex items-center gap-1 text-[11px] font-medium text-gray-600 mb-0.5">
-                  {field.name}
-                  {!field.is_optional && <span className="text-red-400">*</span>}
-                  <span className="ml-auto font-normal text-gray-400">{field.type}</span>
-                </label>
-                <FieldInput
-                  field={field}
-                  value={node.data.config[field.name]}
-                  enumDb={enumDb}
-                  onChange={handleChange}
-                />
-              </div>
-            ))}
+            .map((field) => {
+              const catOpts = catalogDb
+                ? getCatalogOptions(
+                    field.name,
+                    node.data.entry.component_full_classname,
+                    node.data.config,
+                    catalogDb,
+                  )
+                : null
+              return (
+                <div key={field.name}>
+                  <label className="flex items-center gap-1 text-[11px] font-medium text-gray-600 mb-0.5">
+                    {field.name}
+                    {!field.is_optional && <span className="text-red-400">*</span>}
+                    <span className="ml-auto font-normal text-gray-400">{field.type}</span>
+                  </label>
+                  <FieldInput
+                    field={field}
+                    value={node.data.config[field.name]}
+                    enumDb={enumDb}
+                    catalogOptions={catOpts}
+                    onChange={handleChange}
+                  />
+                </div>
+              )
+            })}
 
           {/* Connect automatically toggle */}
           <div className="flex items-center justify-between pt-1 border-t border-gray-100">

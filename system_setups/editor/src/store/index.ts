@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { applyNodeChanges, applyEdgeChanges, addEdge as rfAddEdge } from '@xyflow/react'
 import type { Node, Edge, NodeChange, EdgeChange, Connection } from '@xyflow/react'
-import type { ComponentDb, EnumDb, ComponentNodeData } from '../types'
+import type { CatalogDb, ComponentDb, EnumDb, ComponentNodeData } from '../types'
 import { getLoadTypeColor } from '../data/loadTypeColors'
 import { autoConnectNode as autoConnectNodeFn } from '../io/autoConnect'
 import { validateScenario } from '../io/validate'
@@ -11,6 +11,7 @@ export type HiSimNode = Node<ComponentNodeData>
 interface EditorState {
   componentDb: ComponentDb | null
   enumDb: EnumDb | null
+  catalogDb: CatalogDb | null
   nodes: HiSimNode[]
   edges: Edge[]
   selectedNodeId: string | null
@@ -24,6 +25,7 @@ interface EditorState {
 
 interface EditorActions {
   loadDatabases: (db: ComponentDb, edb: EnumDb) => void
+  loadCatalogDb: (db: CatalogDb) => void
   setNodes: (nodes: HiSimNode[]) => void
   setEdges: (edges: Edge[]) => void
   onNodesChange: (changes: NodeChange<HiSimNode>[]) => void
@@ -45,6 +47,7 @@ interface EditorActions {
 export const useEditorStore = create<EditorState & EditorActions>()((set, get) => ({
   componentDb: null,
   enumDb: null,
+  catalogDb: null,
   nodes: [],
   edges: [],
   selectedNodeId: null,
@@ -56,6 +59,7 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
   showAutoConnections: true,
 
   loadDatabases: (db, edb) => set({ componentDb: db, enumDb: edb }),
+  loadCatalogDb: (db) => set({ catalogDb: db }),
 
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),

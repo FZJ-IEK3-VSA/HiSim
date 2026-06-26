@@ -92,8 +92,6 @@ export default function Toolbar() {
       >
         {showAutoConnections ? 'Auto-edges ●' : 'Auto-edges ○'}
       </button>
-      <Separator />
-      <Button disabled title="Phase 10">Simulation settings</Button>
     </header>
   )
 }

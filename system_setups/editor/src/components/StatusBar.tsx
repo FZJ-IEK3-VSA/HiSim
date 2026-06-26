@@ -19,14 +19,16 @@ export default function StatusBar() {
         .filter(Boolean)
         .join(', ')
     : hasImport
-    ? importMessages[0]
+    ? importMessages.length === 1
+      ? `Import: ${importMessages[0]}`
+      : `Import: ${importMessages.length} warnings`
     : 'Ready'
 
   return (
     <div className="border-t border-gray-200 bg-white shrink-0">
       {/* Expanded list */}
       {expanded && hasAnything && (
-        <div className="max-h-40 overflow-y-auto border-b border-gray-100 px-3 py-2 space-y-0.5">
+        <div className="max-h-40 overflow-y-auto border-b border-gray-100 px-3 py-2 space-y-0.5 select-text">
           {errors.map((msg, i) => (
             <div key={`e${i}`} className="flex gap-1.5 text-xs text-red-600">
               <span className="shrink-0">✗</span>
@@ -40,8 +42,8 @@ export default function StatusBar() {
             </div>
           ))}
           {!hasValidation && importMessages.map((msg, i) => (
-            <div key={`m${i}`} className="flex gap-1.5 text-xs text-gray-500">
-              <span className="shrink-0">ℹ</span>
+            <div key={`m${i}`} className="flex gap-1.5 text-xs text-amber-600">
+              <span className="shrink-0">⚠</span>
               <span>{msg}</span>
             </div>
           ))}
@@ -64,9 +66,7 @@ export default function StatusBar() {
               className={
                 errors.length > 0
                   ? 'text-red-500 font-medium'
-                  : warnings.length > 0
-                  ? 'text-amber-500 font-medium'
-                  : 'text-gray-500'
+                  : 'text-amber-500 font-medium'
               }
             >
               {errors.length > 0 ? '✗' : '⚠'} {summary}

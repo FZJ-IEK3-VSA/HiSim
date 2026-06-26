@@ -63,11 +63,7 @@ export default function Toolbar() {
         setScenarioMeta(result.scenarioName, result.scenarioDescription)
         setSelectedNodeId(null)
         resetHistory()
-        setValidationMessages(
-          result.warnings.length > 0
-            ? [`Import: ${result.warnings.length} warning(s) — ${result.warnings[0]}`]
-            : [],
-        )
+        setValidationMessages(result.warnings)
       }
       reader.readAsText(file)
     }

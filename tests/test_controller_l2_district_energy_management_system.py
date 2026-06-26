@@ -275,17 +275,15 @@ def test_house(
         my_electricity_controller.component_name,
         my_electricity_controller.BuildingIndoorTemperatureModifier,
     )
-
-    my_domestic_hot_water_heatpump_controller.connect_input(
-        my_domestic_hot_water_heatpump_controller.StorageTemperatureModifier,
-        my_electricity_controller.component_name,
-        my_electricity_controller.DomesticHotWaterStorageTemperatureModifier,
-    )
-
-    my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.SimpleHotWaterStorageTemperatureModifier,
+    my_heatpump_controller_sh.connect_input(
+        my_heatpump_controller_sh.SimpleHotWaterStorageTemperatureModifier,
         my_electricity_controller.component_name,
         my_electricity_controller.SpaceHeatingWaterStorageTemperatureModifier,
+    )
+    my_heatpump_controller_dhw.connect_input(
+        my_heatpump_controller_dhw.DHWStorageTemperatureModifier,
+        my_electricity_controller.component_name,
+        my_electricity_controller.DomesticHotWaterStorageTemperatureModifier,
     )
 
     # -----------------------------------------------------------------------------------------------------------------

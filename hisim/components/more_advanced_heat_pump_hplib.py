@@ -2517,7 +2517,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
 
     # Inputs
     WaterTemperatureInputFromDHWStorage = "WaterTemperatureInputFromDHWStorage"
-    DHWStorageTemperatureModifier = "StorageTemperatureModifier"
+    DHWStorageTemperatureModifier = "DHWStorageTemperatureModifier"
 
     # Outputs
     State_dhw = "StateDHW"

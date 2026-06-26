@@ -362,6 +362,16 @@ class GenericBuilding(cp.Component):
                 my_electricity_controller.component_name,
                 my_electricity_controller.BuildingIndoorTemperatureModifier,
             )
+            my_heatpump_controller_sh.connect_input(
+                my_heatpump_controller_sh.SimpleHotWaterStorageTemperatureModifier,
+                my_electricity_controller.component_name,
+                my_electricity_controller.SpaceHeatingWaterStorageTemperatureModifier,
+            )
+            my_heatpump_controller_dhw.connect_input(
+                my_heatpump_controller_dhw.DHWStorageTemperatureModifier,
+                my_electricity_controller.component_name,
+                my_electricity_controller.DomesticHotWaterStorageTemperatureModifier,
+            )
 
             my_electricity_controller.add_component_input_and_connect(
                 source_object_name=my_occupancy.component_name,

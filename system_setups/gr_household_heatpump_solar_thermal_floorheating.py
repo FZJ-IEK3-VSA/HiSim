@@ -170,13 +170,7 @@ def setup_function(
         max_thermal_building_demand_in_watt = None
 
     # Set Occupancy
-    # try to get profiles from cluster directory
-    cache_dir_path_utsp: Optional[str] = "/benchtop/2024-k-rieck-hisim/lpg-utsp-cache"
-    if cache_dir_path_utsp is not None and os.path.exists(cache_dir_path_utsp):
-        pass
-    # else use default specific cache_dir_path
-    else:
-        cache_dir_path_utsp = None
+    cache_dir_path_utsp = None
 
     # get household attribute jsonreferences from list of strings
     lpg_households: Union[JsonReference, List[JsonReference]]
@@ -216,7 +210,7 @@ def setup_function(
 
     # Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
-    my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG
+    my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
     my_occupancy_config.household = lpg_households
     my_occupancy_config.cache_dir_path = cache_dir_path_utsp
 

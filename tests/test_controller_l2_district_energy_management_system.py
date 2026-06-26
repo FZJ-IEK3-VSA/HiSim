@@ -144,7 +144,6 @@ def test_house(
         heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
         set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
     )
-    my_heatpump_controller_sh_config.mode = hp_controller_mode
 
     my_heatpump_controller_sh = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters

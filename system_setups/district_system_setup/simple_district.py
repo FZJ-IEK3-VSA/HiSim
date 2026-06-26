@@ -232,6 +232,7 @@ def setup_function(
                 my_simulation_parameters=my_simulation_parameters,
                 config=bui_config,
                 location=my_config.location_district,
+                my_weather=my_weather_district
             )
         )
 

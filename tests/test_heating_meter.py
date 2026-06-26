@@ -17,7 +17,6 @@ from hisim.components import (
     electricity_meter,
     heating_meter,
     more_advanced_heat_pump_hplib,
-    generic_hot_water_storage_modular,
     simple_water_storage,
     heat_distribution_system,
     generic_pv_system,
@@ -168,12 +167,12 @@ def test_house(
     )
 
     # Build DHW Storage
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
+        number_of_apartments=my_building_information.number_of_apartments
+    )
 
-    my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
-
-    my_dhw_storage = generic_hot_water_storage_modular.HotWaterStorage(
-        config=my_dhw_storage_config,
-        my_simulation_parameters=my_simulation_parameters,
+    my_dhw_storage = simple_water_storage.SimpleDHWStorage(
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
     # Build Electricity Meter

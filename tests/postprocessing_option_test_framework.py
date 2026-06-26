@@ -53,11 +53,6 @@ DEPENDENCIES_BY_OPTION: dict[PostProcessingOptions, tuple[PostProcessingOptions,
         PostProcessingOptions.COMPUTE_KPIS,
     ),
     PostProcessingOptions.WRITE_KPIS_TO_JSON: (PostProcessingOptions.COMPUTE_KPIS,),
-    PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL: (
-        PostProcessingOptions.COMPUTE_OPEX,
-        PostProcessingOptions.COMPUTE_CAPEX,
-        PostProcessingOptions.COMPUTE_KPIS,
-    ),
     PostProcessingOptions.EXPORT_MONTHLY_RESULTS: (PostProcessingOptions.EXPORT_TO_CSV,),
     PostProcessingOptions.EXPORT_RESULTS_IN_ONE_FILE: (PostProcessingOptions.EXPORT_TO_CSV,),
 }
@@ -71,10 +66,8 @@ OPTIONS_USING_HOUSEHOLD_BASELINE = {
     PostProcessingOptions.COMPUTE_OPEX,
     PostProcessingOptions.COMPUTE_CAPEX,
     PostProcessingOptions.COMPUTE_KPIS,
-    PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
     PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER,
     PostProcessingOptions.WRITE_KPIS_TO_JSON,
-    PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL,
 }
 
 

@@ -28,8 +28,8 @@ def _build_config(args: argparse.Namespace) -> HarnessConfig:
     """Merge config file and CLI overrides into a finalized HarnessConfig."""
     cfg = HarnessConfig.from_file(args.config) if args.config else HarnessConfig()
     cfg.apply_overrides(
-        db=args.db,
-        sim_params=args.sim_params,
+        db_path=args.db,
+        sim_params_path=args.sim_params,
         result_root=args.result_root,
         per_sim_mem_gb=args.per_sim_mem_gb,
         min_headroom_gb=args.min_headroom_gb,
@@ -45,7 +45,16 @@ def _build_config(args: argparse.Namespace) -> HarnessConfig:
 
 
 def cmd_import(args: argparse.Namespace) -> int:
-    """Import scenario files from a directory into the database (idempotent)."""
+    """Import scenario files from a directory into the database (idempotent).
+
+    Args:
+        args: Parsed CLI namespace carrying ``db`` (path to the SQLite task
+            database), ``scenario_dir`` (directory to scan), and ``glob``
+            (filename pattern to match, default ``"*.json"``).
+
+    Returns:
+        0 on success.
+    """
     conn = db.connect(args.db)
     import_stats = db.import_scenarios(conn, args.scenario_dir, args.glob)
     conn.close()
@@ -55,7 +64,15 @@ def cmd_import(args: argparse.Namespace) -> int:
 
 
 def cmd_status(args: argparse.Namespace) -> int:
-    """Print task counts by status."""
+    """Print task counts by status.
+
+    Args:
+        args: Parsed CLI namespace carrying ``db`` (path to the SQLite task
+            database).
+
+    Returns:
+        0 on success.
+    """
     conn = db.connect(args.db)
     counts = db.counts(conn)
     conn.close()
@@ -68,7 +85,17 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 def cmd_reset(args: argparse.Namespace) -> int:
-    """Requeue leased and/or failed tasks."""
+    """Requeue leased and/or failed tasks.
+
+    Args:
+        args: Parsed CLI namespace carrying ``db`` (path to the SQLite task
+            database), ``leased`` (requeue stuck leased tasks), and
+            ``failed`` (revive failed/dead tasks).
+
+    Returns:
+        0 on success, or 2 if neither ``--leased`` nor ``--failed`` is set
+        (nothing to do).
+    """
     if not (args.leased or args.failed):
         print("Nothing to do: pass --leased and/or --failed.", file=sys.stderr)
         return 2
@@ -80,7 +107,21 @@ def cmd_reset(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    """Launch the MPI run. Rank 0 dispatches; other ranks are node-agents."""
+    """Launch the MPI run; rank 0 dispatches, other ranks run node agents.
+
+    Args:
+        args: Parsed CLI namespace; run overrides are merged into a
+            ``HarnessConfig`` via ``_build_config``.
+
+    Returns:
+        0 on success, or 1 if ``mpi4py`` is not installed.
+
+    Raises:
+        Exceptions raised by the dispatcher (``run_head``) or node agent
+        (``run_agent``) are printed via ``traceback.print_exc`` and then
+        ``comm.Abort(1)`` is called to tear down the entire MPI job
+        (restart resumes from the task database).
+    """
     cfg = _build_config(args)
 
     try:
@@ -138,7 +179,16 @@ def _add_run_overrides(parser: argparse.ArgumentParser) -> None:
 
 
 def main(argv: "list[str] | None" = None) -> int:
-    """Parse arguments and dispatch to the requested sub-command."""
+    """Parse arguments and dispatch to the requested sub-command.
+
+    Args:
+        argv: Optional list of command-line arguments; defaults to
+            ``sys.argv`` when ``None``.
+
+    Returns:
+        The integer exit code returned by the dispatched sub-command
+        (``cmd_import``, ``cmd_run``, ``cmd_status``, or ``cmd_reset``).
+    """
     parser = argparse.ArgumentParser(prog="python -m hisim.hpc_harness", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)

@@ -199,7 +199,7 @@ class Component:
         return cls.__name__
 
     @classmethod
-    def get_full_classname(cls):
+    def get_full_classname(cls) -> str:
         """Gets the class name. Helper function for default connections."""
         return cls.__module__ + "." + cls.__name__
 
@@ -352,7 +352,7 @@ class Component:
             # Validate that result_directory exists, create if it doesn't
             if not os.path.exists(self.my_simulation_parameters.result_directory):
                 os.makedirs(self.my_simulation_parameters.result_directory, exist_ok=True)
-            
+
             if os.path.exists(file_name):
                 with open(file_name, mode="r+", encoding="utf-8") as file:
                     file.seek(os.stat(file_name).st_size - 1)

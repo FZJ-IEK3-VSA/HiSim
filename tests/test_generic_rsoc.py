@@ -15,7 +15,7 @@ from hisim.simulationparameters import SimulationParameters
 
 
 @pytest.mark.base
-def test_electrolyzer():
+def test_rsoc():
     """Test rSOC electrolyzer (SOEC) mode with ramp-up dynamics.
 
     Simulates the rSOC component with a -10 kW power input to activate

@@ -39,7 +39,7 @@ class CapexComputationHelperFunctions:
             emissions_and_cost_factors_for_devices = EmissionFactorsAndCostsForDevicesConfig.get_values_for_year(
                 year=simulation_parameters.year, device=component_type, country=simulation_parameters.country
             )
-            # Dependend on unit of the energy system size, get respective capex and emissions value
+            # Depending on unit of the energy system size, get respective capex and emissions value
             if unit == Units.KILOWATT:
                 # Size of energy system is in kW
                 # Use the values in kW
@@ -80,9 +80,15 @@ class CapexComputationHelperFunctions:
 
             # make safety checks explicit so they fire even under python -O
             if investment_costs_in_euro_per_size_unit is None:
-                raise ValueError("investment_costs_in_euro_per_size_unit must not be None.")
+                raise ValueError(
+                    f"investment_costs_in_euro_per_size_unit for component {component_type} "
+                    f"with unit {unit} must not be None."
+                )
             if co2_footprint_in_kg_per_size_unit is None:
-                raise ValueError("co2_footprint_in_kg_per_size_unit must not be None.")
+                raise ValueError(
+                    f"co2_footprint_in_kg_per_size_unit for component {component_type} "
+                    f"with unit {unit} must not be None."
+                )
 
             # these values are independent of size unit of the energy system
             maintenance_costs_as_percentage_of_investment_per_year = (

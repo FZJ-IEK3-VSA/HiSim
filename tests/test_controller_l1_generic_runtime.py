@@ -75,7 +75,7 @@ def test_get_default_config_empty_name_concatenation() -> None:
 # --------------------------------------------------------------------------- #
 @pytest.mark.base
 def test_activate_sets_on_off_and_activation_time_step() -> None:
-    """activate flips the state on and records the activation timestep."""
+    """Activate flips the state on and records the activation timestep."""
     state = L1GenericRuntimeControllerState(
         on_off=0, activation_time_step=0, deactivation_time_step=0
     )
@@ -88,7 +88,7 @@ def test_activate_sets_on_off_and_activation_time_step() -> None:
 
 @pytest.mark.base
 def test_deactivate_sets_on_off_and_deactivation_time_step() -> None:
-    """deactivate flips the state off and records the deactivation timestep."""
+    """Deactivate flips the state off and records the deactivation timestep."""
     state = L1GenericRuntimeControllerState(
         on_off=1, activation_time_step=3, deactivation_time_step=0
     )
@@ -101,7 +101,7 @@ def test_deactivate_sets_on_off_and_deactivation_time_step() -> None:
 
 @pytest.mark.base
 def test_clone_returns_distinct_instance_with_equal_fields() -> None:
-    """clone produces an independent copy; mutating it does not affect the original."""
+    """Clone produces an independent copy; mutating it does not affect the original."""
     original = L1GenericRuntimeControllerState(
         on_off=1, activation_time_step=7, deactivation_time_step=4
     )

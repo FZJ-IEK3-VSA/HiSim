@@ -388,6 +388,7 @@ class PostProcessor:
         report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Make bar charts."""
+        assert ppdt.results_monthly is not None
         charts_module = importlib.import_module("hisim.postprocessing.charts")
         for index, output in enumerate(ppdt.all_outputs):
             my_bar = charts_module.BarChart(
@@ -496,6 +497,7 @@ class PostProcessor:
                 ppdt.results[column].to_csv(csvfilename, sep=",", decimal=".")
 
             if PostProcessingOptions.EXPORT_MONTHLY_RESULTS in ppdt.post_processing_options:
+                assert ppdt.results_monthly is not None
                 for column in ppdt.results_monthly:
                     csvfilename = os.path.join(
                         ppdt.simulation_parameters.result_directory,
@@ -529,6 +531,7 @@ class PostProcessor:
                 with open(pickle_filename, "wb") as f:
                     pickle.dump(ppdt.results[column], f)
             if PostProcessingOptions.EXPORT_MONTHLY_RESULTS in ppdt.post_processing_options:
+                assert ppdt.results_monthly is not None
                 for column in ppdt.results_monthly:
                     pickle_filename_monthly = os.path.join(
                         ppdt.simulation_parameters.result_directory,
@@ -879,6 +882,9 @@ class PostProcessor:
         self.year = ppdt.simulation_parameters.year
 
         # Time series
+        assert ppdt.results_hourly is not None
+        assert ppdt.results_daily is not None
+        assert ppdt.results_monthly is not None
         time_configs = [
             ("hourly", ppdt.results_hourly, ppdt.results_hourly.index),
             ("daily", ppdt.results_daily, ppdt.results_daily.index),
@@ -895,6 +901,7 @@ class PostProcessor:
             )
 
         # got through all components and read output values, variables and units for simple_dict_cumulative_data
+        assert ppdt.results_cumulative is not None
         for column in ppdt.results_cumulative:
             value = ppdt.results_cumulative[column].values[0]
 
@@ -1098,6 +1105,7 @@ class PostProcessor:
                 if output_postprocessing_rules.DISPLAY_IN_WEBTOOL in output.postprocessing_flag:
                     component_display_in_webtool.append(output.get_pretty_name())
 
+        assert ppdt.results_daily is not None
         results_daily = ppdt.results_daily[component_display_in_webtool]
         data = results_daily.to_json(date_format="iso")
 

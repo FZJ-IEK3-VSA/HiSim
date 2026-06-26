@@ -1,10 +1,13 @@
 """  Basic household system setup adapted for pyam postprocessing test. """
 
 # clean
+import shutil
 from pathlib import Path
 from typing import Optional
 
 import pytest
+
+import pandas as pd
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -169,4 +172,100 @@ def test_house_with_pyam(
     my_sim.add_component(my_heat_pump_controller)
     my_sim.add_component(my_heat_pump)
 
+    # Remove any stale scenario-evaluation output from a previous run of this
+    # test so that the assertions below genuinely verify *this* run's output and
+    # cannot pass against leftover files should the postprocessing silently become
+    # a no-op.  The result directory path is deterministic within a single process
+    # (the singleton's datetime_string is fixed at import time), so re-running the
+    # test in the same session would otherwise reuse the same directory.
+    _stale_result_dir = ResultPathProviderSingleton().get_result_directory_name()
+    if _stale_result_dir is not None:
+        _stale_scenario_eval_dir = Path(_stale_result_dir) / "result_data_for_scenario_evaluation"
+        if _stale_scenario_eval_dir.exists():
+            shutil.rmtree(_stale_scenario_eval_dir)
+
     my_sim.run_all_timesteps()
+
+    # =================================================================================================================================
+    # Verify the PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION postprocessing actually produced
+    # its expected pyam-style output artifacts. Without these assertions the option could
+    # silently become a no-op and this test would still pass.
+    # =================================================================================================================================
+    # The simulation writes its artifacts to the directory reported by
+    # ResultPathProviderSingleton. SimulationParameters.result_directory starts empty and is
+    # only populated from the singleton inside run_all_timesteps(), so reading the singleton
+    # directly is the authoritative source (see simulator.prepare_simulation_directory).
+    result_directory_name = ResultPathProviderSingleton().get_result_directory_name()
+    assert result_directory_name is not None, (
+        "ResultPathProviderSingleton did not return a result directory after the simulation ran."
+    )
+    result_dir = Path(result_directory_name)
+    scenario_eval_dir = result_dir / "result_data_for_scenario_evaluation"
+    assert scenario_eval_dir.is_dir(), (
+        f"Scenario-evaluation output directory was not created at {scenario_eval_dir}."
+    )
+
+    # The scenario-evaluation CSVs are named "<resolution>_<duration_in_days>_days.csv".
+    # The simulation uses one_day_only_with_only_plots, so duration.days == 1 here.
+    # (timedelta.days truncates sub-day durations to 0; the naming pattern assumes a
+    # duration of at least one day, which holds for the one-day simulation above.)
+    duration_days = my_simulation_parameters.duration.days
+    expected_csv_paths = {
+        resolution: scenario_eval_dir / f"{resolution}_{duration_days}_days.csv"
+        for resolution in ("hourly", "daily", "monthly", "yearly")
+    }
+    for resolution, csv_path in expected_csv_paths.items():
+        assert csv_path.is_file(), (
+            f"Scenario-evaluation {resolution} CSV was not produced at {csv_path}."
+        )
+
+    # Time-series CSVs (hourly/daily/monthly) follow the pyam long format with
+    # columns: model, scenario, region, variable, unit, time, value.
+    # Verified against the actual output of PrepareResultsForScenarioEvaluation
+    # (see postprocessing_main.iterate_over_results_and_add_values_to_dict).
+    # A set comparison is used so the test is not brittle to column reordering.
+    expected_timeseries_columns = {
+        "model", "scenario", "region", "variable", "unit", "time", "value",
+    }
+    for resolution in ("hourly", "daily", "monthly"):
+        df = pd.read_csv(expected_csv_paths[resolution])
+        assert not df.empty, f"Scenario-evaluation {resolution} CSV is empty."
+        assert set(df.columns) == expected_timeseries_columns, (
+            f"Scenario-evaluation {resolution} CSV has unexpected columns: "
+            f"{list(df.columns)}, expected (in any order) {sorted(expected_timeseries_columns)}."
+        )
+
+    # The yearly CSV uses 'year' instead of 'time' (verified against the
+    # simple_dict_cumulative_data structure in prepare_results_for_scenario_evaluation).
+    expected_yearly_columns = {
+        "model", "scenario", "region", "variable", "unit", "year", "value",
+    }
+    yearly_df = pd.read_csv(expected_csv_paths["yearly"])
+    assert not yearly_df.empty, "Scenario-evaluation yearly CSV is empty."
+    assert set(yearly_df.columns) == expected_yearly_columns, (
+        f"Scenario-evaluation yearly CSV has unexpected columns: "
+        f"{list(yearly_df.columns)}, expected (in any order) {sorted(expected_yearly_columns)}."
+    )
+
+    # The model name is derived from the module filename and the region from the weather location.
+    assert (yearly_df["model"] == f"HiSim_{my_sim.module_filename}").all(), (
+        f"Unexpected model name in scenario-evaluation output: "
+        f"{sorted(set(yearly_df['model']))}."
+    )
+    # The region comes from the weather location set via SingletonSimRepository
+    # (see weather.py: set_entry(LOCATION, weather_config.location)).  my_weather_config.location
+    # is a plain str (the first element of the LocationEnum value tuple, e.g. "Aachen" for
+    # LocationEnum.AACHEN), which is exactly the value the postprocessing writes to the CSV's
+    # "region" column, so a direct equality comparison is correct.
+    assert (yearly_df["region"] == my_weather_config.location).all(), (
+        f"Unexpected region in scenario-evaluation output: "
+        f"{sorted(set(yearly_df['region']))}."
+    )
+
+    # The scenario-evaluation folder also contains the standalone config JSONs.
+    assert (scenario_eval_dir / "simulation.json").is_file(), (
+        "simulation.json was not produced in the scenario-evaluation directory."
+    )
+    assert (scenario_eval_dir / "scenario.json").is_file(), (
+        "scenario.json was not produced in the scenario-evaluation directory."
+    )

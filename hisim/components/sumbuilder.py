@@ -257,7 +257,6 @@ class SumBuilderForThreeInputs(Component):
             output_description="Sum of values",
         )
 
-
     def i_save_state(self) -> None:
         """Saves the current state."""
         pass

@@ -3,7 +3,7 @@
 These tests cover ``ModularHouseholdConfig.get_default`` -- the only deterministic,
 side-effect-free function in
 ``hisim.modular_household.interface_configs.modular_household_config``. The
-``write_config`` and ``read_in_configs`` helpers perform file I/O and are
+``write_config`` and ``read_config`` helpers perform file I/O and are
 intentionally not exercised here.
 """
 

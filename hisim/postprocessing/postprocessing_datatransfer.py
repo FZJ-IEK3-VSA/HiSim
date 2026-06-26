@@ -10,7 +10,7 @@ from hisim.simulationparameters import SimulationParameters
 
 
 class PostProcessingDataTransfer:  # noqa: too-few-public-methods
-    """Data class for transfering the result data to this class."""
+    """Data class for transferring the result data to this class."""
 
     def __init__(
         self,
@@ -68,6 +68,6 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         self.post_processing_options = simulation_parameters.post_processing_options
         self.kpi_collection_dict = kpi_collection_dict
 
-        log.information("Selected " + str(len(self.post_processing_options)) + " post processing options:")
+        log.information(f"Selected {len(self.post_processing_options)} post processing options:")
         for option in self.post_processing_options:
-            log.information("Selected post processing option: " + str(option))
+            log.information(f"Selected post processing option: {option}")

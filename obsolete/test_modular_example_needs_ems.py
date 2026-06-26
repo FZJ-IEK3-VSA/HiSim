@@ -30,14 +30,16 @@ def _needs_ems(
     default to a non-electric system (``GAS_HEATING``) so that only the single
     trigger under test is exercised in each parametrized case.
     """
-    return needs_ems(
-        battery_included=battery_included,
-        chp_included=chp_included,
-        hydrogen_setup_included=hydrogen_setup_included,
-        ev_included=ev_included,
-        heating_system_installed=heating_system_installed,
-        smart_devices_included=smart_devices_included,
-        water_heating_system_installed=water_heating_system_installed,
+    return bool(
+        needs_ems(
+            battery_included=battery_included,
+            chp_included=chp_included,
+            hydrogen_setup_included=hydrogen_setup_included,
+            ev_included=ev_included,
+            heating_system_installed=heating_system_installed,
+            smart_devices_included=smart_devices_included,
+            water_heating_system_installed=water_heating_system_installed,
+        )
     )
 
 

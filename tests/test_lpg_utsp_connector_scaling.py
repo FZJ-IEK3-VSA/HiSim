@@ -41,8 +41,8 @@ def test_occupancy_scaling_with_utsp():
         data_acquisition_mode_after_initialization
         == loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
     ):
-        log.warning(
-            "This test makes only sense if the UTSP can be used for data acquisition. Here the use of the UTSP was not possible. Therefore this test will be ignored."
+        pytest.skip(
+            "UTSP not available for data acquisition; scaling test requires UTSP"
         )
 
     else:
@@ -130,7 +130,6 @@ def initialize_lpg_utsp_connector_and_return_results(
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([my_occupancy])
-
 
     timestep = 0
     my_occupancy.i_simulate(timestep, stsv, False)

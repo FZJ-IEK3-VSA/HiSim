@@ -21,9 +21,9 @@ def test_basic_household() -> None:
     if Path(config_filename).is_file():
         os.remove(config_filename)
 
-    path = "../system_setups/household_5b_with_battery_priority_advanced_hp_ev_pv_battery.py"
+    setup_path = "../system_setups/household_5b_with_battery_priority_advanced_hp_ev_pv_battery.py"
 
     simulation_parameters = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    hisim_main.main(path, simulation_parameters)
+    hisim_main.main(setup_path, simulation_parameters)
     log.information(os.getcwd())

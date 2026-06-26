@@ -32,13 +32,16 @@ def setup_function(
     heating controllers), heat distribution system, hot-water buffer, and DHW
     storage tanks.
 
-    Args:
+    Args
+    ----
         my_sim: The simulator instance to register components with.
         my_simulation_parameters: Optional simulation parameters; defaults to a
             full-year, 60-second timestep run with plots enabled.
 
-    Raises:
+    Raises
+    ------
         KeyError: If the heat pump group ID is not 1 or 4 (outdoor-air source).
+
     """
 
     # =================================================================================================================================

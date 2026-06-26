@@ -4,7 +4,8 @@ Functions from this file are called in Postprocessing option compute_kpis.
 """
 
 # clean
-from typing import List, Tuple
+from functools import lru_cache
+from typing import List, Optional, Tuple
 import pandas as pd
 from hisim.components import (
     generic_pv_system,
@@ -21,6 +22,7 @@ from hisim.component_wrapper import ComponentWrapper
 from repositories.HiSim.obsolete import generic_heat_source, generic_hot_water_storage_modular
 
 
+@lru_cache(maxsize=1)
 def read_in_component_costs() -> pd.DataFrame:
     """Reads data for cost and co2 emissions of component installation/investment from csv.
 
@@ -35,18 +37,25 @@ def read_in_component_costs() -> pd.DataFrame:
 
 def compute_investment_cost(
     components: List[ComponentWrapper],
+    price_frame: Optional[pd.DataFrame] = None,
 ) -> Tuple[float, float]:
     """Iterates over all components and computes annual investment cost and annual C02 footprint respectively.
 
     :param components: List of all configured components in the HiSIM system setup.
     :type components: List[ComponentWrapper]
+    :param price_frame: optional DataFrame with price and co2 footprint information.
+        When None (the default for production callers) the data is read from
+        the component_costs CSV via read_in_component_costs(). Tests can
+        pass a small synthetic DataFrame to exercise individual branches without
+        relying on a real CSV file on disk.
+    :type price_frame: Optional[pd.DataFrame]
     :return: annual investment cost for considered equipment and annual C02 footprint.
     :rtype: Tuple[float, float]
     """
     # initialize values
     investment_cost = 0.0
     co2_emissions = 0.0
-    price_frame = read_in_component_costs()
+    price_frame = price_frame if price_frame is not None else read_in_component_costs()
 
     for component in components:
         if isinstance(component.my_component, generic_smart_device.SmartDevice):

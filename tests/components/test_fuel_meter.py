@@ -79,7 +79,7 @@ def test_get_cost_capex_returns_default_capex_and_ignores_none_inputs() -> None:
     passing ``None`` must not raise and must yield the default capex data class.
     """
     # Should not raise with None inputs - pins the "unused argument" contract.
-    capex = FuelMeter.get_cost_capex(config=None, simulation_parameters=None)
+    capex = FuelMeter.get_cost_capex(config=None, simulation_parameters=None)  # type: ignore[arg-type]
 
     expected = cp.CapexCostDataClass.get_default_capex_cost_data_class()
     # CapexCostDataClass is a dataclass, so == compares field-by-field.

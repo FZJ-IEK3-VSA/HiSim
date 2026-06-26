@@ -1,6 +1,6 @@
 # clean
 
-"""Classes to provide the structure for the KPi generation."""
+"""Classes to provide the structure for the KPI generation."""
 from typing import Optional, Union, List, Tuple
 from enum import Enum
 from dataclasses import dataclass
@@ -81,8 +81,12 @@ class KpiHelperClass:
     def calc_mean_max_min_value(list_or_pandas_series: Union[List, pd.Series]) -> Tuple[float, float, float]:
         """Calc mean, max and min values from List or pd.Series with numpy."""
 
-        mean_value = float(np.mean(list_or_pandas_series))
-        max_value = float(np.max(list_or_pandas_series))
-        min_value = float(np.min(list_or_pandas_series))
+        # Convert the input to an ndarray once and reuse it. Passing a plain
+        # ``list`` to ``np.mean``/``np.max``/``np.min`` would internally call
+        # ``np.asarray`` three times, building the same array each time.
+        arr = np.asarray(list_or_pandas_series)
+        mean_value = float(arr.mean())
+        max_value = float(arr.max())
+        min_value = float(arr.min())
 
         return mean_value, max_value, min_value

@@ -24,7 +24,7 @@ END_DATE = datetime.datetime(year=2024, month=1, day=1, hour=0, minute=0, second
 
 weather_input_directory = utils.hisim_inputs
 
-weather_data = WeatherDataImport(
+weather_data_import = WeatherDataImport(
     start_date=START_DATE,
     end_date=END_DATE,
     location=LOCATION,

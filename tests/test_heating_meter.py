@@ -228,18 +228,18 @@ def test_house(
 
     jsondata = jsondata["BUI1"]
 
-    heat_consumption_in_kilowatt_hour = jsondata["Heating Meter"]["Total heat consumption from grid"].get("value")
+    heat_consumption_in_kilowatt_hour = jsondata["Heating Meter"]["Total heat consumption from grid"].get("value")  # pylint: disable=unused-variable
 
-    heat_consumption_for_space_heating_in_kilowatt_hour = jsondata["Heat Distribution System"][
+    heat_consumption_for_space_heating_in_kilowatt_hour = jsondata["Heat Distribution System"][  # pylint: disable=unused-variable
         "Thermal output energy of heat distribution system"
     ].get("value")
     # heat_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Residents"][
     #     "Residents' total thermal dhw consumption"
     # ].get("value")
 
-    opex_costs_for_heat_in_euro = jsondata["Heating Meter"]["Opex costs of heat consumption from grid"].get("value")
+    opex_costs_for_heat_in_euro = jsondata["Heating Meter"]["Opex costs of heat consumption from grid"].get("value")  # pylint: disable=unused-variable
 
-    co2_footprint_due_to_heat_use_in_kg = jsondata["Heating Meter"][
+    co2_footprint_due_to_heat_use_in_kg = jsondata["Heating Meter"][  # pylint: disable=unused-variable
         "CO2 footprint of heat consumption from grid"
     ].get("value")
 

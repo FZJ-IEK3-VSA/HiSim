@@ -44,7 +44,7 @@ def test_heat_source():
             temperature_input,
         ]
     )
-    stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
+    time_step_values: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     my_heat_source.massflow_input_channel.source_output = massflow
     my_heat_source.temperature_input_channel.source_output = temperature_input
@@ -57,12 +57,12 @@ def test_heat_source():
         ]
     )
 
-    stsv.values[massflow.global_index] = 0.3
-    stsv.values[temperature_input.global_index] = 5
+    time_step_values.values[massflow.global_index] = 0.3
+    time_step_values.values[temperature_input.global_index] = 5
 
     timestep = 1
 
     # Simulate
-    my_heat_source.i_simulate(timestep, stsv, False)
+    my_heat_source.i_simulate(timestep, time_step_values, False)
 
-    assert 5000.0 == stsv.values[my_heat_source.thermal_power_delivered_channel.global_index]
+    assert 5000.0 == time_step_values.values[my_heat_source.thermal_power_delivered_channel.global_index]

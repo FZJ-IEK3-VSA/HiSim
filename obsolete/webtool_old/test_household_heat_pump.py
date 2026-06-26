@@ -1,7 +1,6 @@
 """ Tests for the household with advanced heat pump. """
 
 import json
-import os
 import shutil
 from pathlib import Path
 
@@ -58,10 +57,16 @@ def test_household_heat_pump_main():
     """Execute setup with default values with hisim main."""
 
     path = "../system_setups/household_heat_pump.py"
-    my_simpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
-    my_simpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    hisim_main.main(path, my_simpar)
+    my_simulation_parameters = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    hisim_main.main(path, my_simulation_parameters)
     log.information(str(Path.cwd()))
+
+    # Verify the simulation actually completed and produced its result artifacts.
+    # hisim_main.main mutates result_directory in place on the same
+    # SimulationParameters object, and writes finished.flag only on success.
+    finished = Path(my_simulation_parameters.result_directory).joinpath("finished.flag")
+    assert finished.is_file(), f"Simulation did not produce {finished}"
 
 
 @pytest.mark.system_setups

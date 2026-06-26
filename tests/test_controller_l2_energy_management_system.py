@@ -420,8 +420,8 @@ def test_house(
 
     print("\n")
     np.testing.assert_allclose(
-        ems_grid_consumption_in_kilowatt_hour,
-        electricity_from_grid_kpi_in_kilowatt_hour,
+        ems_grid_injection_in_kilowatt_hour,
+        electricity_to_grid_kpi_in_kilowatt_hour,
         rtol=0.05,
     )
     np.testing.assert_allclose(

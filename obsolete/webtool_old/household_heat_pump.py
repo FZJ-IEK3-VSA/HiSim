@@ -443,7 +443,7 @@ def setup_function(
 
     # Set result directory, this is useful when you run the system setup with different module configurations
     try:
-        scenario_hash_string = re.findall(r"\-?\d+", my_sim.my_module_config)[-1]
+        scenario_hash_string = re.findall(r"\-?\d+", str(my_sim.my_module_config))[-1]
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
     except Exception:
         scenario_hash_string = ""

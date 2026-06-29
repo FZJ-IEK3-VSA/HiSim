@@ -141,6 +141,8 @@ def setup_function(
         my_simulation_parameters.logging_level = 3
     else:
         simu_params_year = my_simulation_parameters.year
+
+    my_simulation_parameters.country = "DE"
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================

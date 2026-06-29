@@ -11,7 +11,6 @@ import re
 import os
 from utspclient.helpers.lpgdata import (
     Households,
-    ChargingStationSets, # Remove later
 )
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters
@@ -214,10 +213,9 @@ def setup_function(
 
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
-    my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG
+    my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
     my_occupancy_config.household = lpg_households
     my_occupancy_config.cache_dir_path = cache_dir_path_utsp
-    my_occupancy_config.charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW  # Remove later
 
     if my_simulation_parameters.year > 2025:
 

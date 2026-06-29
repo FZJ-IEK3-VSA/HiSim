@@ -446,13 +446,13 @@ def setup_function(
         try:
             scenario_hash_string = re.findall(r"\-?\d+", config_filename_splitted[-1])[0]
             sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
-        except IndexError:
+        except Exception:
             # no numeric hash found in the config filename; fall back to index enumeration
             scenario_hash_string = "-"
             sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
         try:
             further_result_folder_description = config_filename_splitted[-2]
-        except IndexError:
+        except Exception:
             # config filename has no parent folder; fall back to a placeholder
             further_result_folder_description = "-"
 

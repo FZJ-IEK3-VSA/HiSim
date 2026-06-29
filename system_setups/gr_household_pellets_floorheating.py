@@ -438,12 +438,12 @@ def setup_function(
         try:
             scenario_hash_string = re.findall(r"\-?\d+", config_filename_splitted[-1])[0]
             sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
-        except IndexError:
+        except Exception:
             scenario_hash_string = "-"
             sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
         try:
             further_result_folder_description = config_filename_splitted[-2]
-        except IndexError:
+        except Exception:
             further_result_folder_description = "-"
 
     # if config_filename is not given, make result path with index enumeration

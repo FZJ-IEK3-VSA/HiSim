@@ -134,9 +134,8 @@ class Logger:
         """
         if logging_message_path is None:
             logging_message_path = self.logging_path
-        if prio > self.logging_level:
-            return
-        if not use_profile_file:
+        # if prio high enough: print to stdout
+        if not use_profile_file and prio <= self.logging_level:
             print(str(LogPrio.get_prio_string(prio)) + ":" + message)
         # if logging path doesn't exist: create directory
         if not Path(logging_message_path).exists():

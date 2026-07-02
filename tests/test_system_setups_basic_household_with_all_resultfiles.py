@@ -31,8 +31,6 @@ def test_basic_household_with_all_resultfiles() -> None:
             PostProcessingOptions.COMPUTE_CAPEX,
             PostProcessingOptions.COMPUTE_KPIS,
             PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION,
-            PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
-            PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL,
             PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON,
             PostProcessingOptions.WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON,
             PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER,

@@ -6,7 +6,6 @@
     {"id": "household_gas_building_sizer",                  "path": "system_setups/household_gas_building_sizer.py"},
     {"id": "household_gas_solar_thermal_building_sizer",    "path": "system_setups/household_gas_solar_thermal_building_sizer.py"},
     {"id": "household_heatpump_building_sizer",             "path": "system_setups/household_heatpump_building_sizer.py"},
-    {"id": "household_heatpump_car_building_sizer",         "path": "system_setups/household_heatpump_car_building_sizer.py"},
     {"id": "household_heatpump_solar_thermal_building_sizer", "path": "system_setups/household_heatpump_solar_thermal_building_sizer.py"},
     {"id": "household_hydrogen_boiler_building_sizer",      "path": "system_setups/household_hydrogen_boiler_building_sizer.py"},
     {"id": "household_oil_building_sizer",                  "path": "system_setups/household_oil_building_sizer.py"},

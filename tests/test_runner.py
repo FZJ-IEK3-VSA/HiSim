@@ -109,10 +109,10 @@ def test_load_config_unknown_option_raises(tmp_path: Path) -> None:
         load_config(_write_config(tmp_path, data))
 
 
-def test_load_config_real_file_11_setups_2_params() -> None:
-    """The shipped config declares 11 setups and 2 parameter sets."""
+def test_load_config_real_file_10_setups_2_params() -> None:
+    """The shipped config declares 10 setups and 2 parameter sets."""
     cfg = load_config(REAL_CONFIG)
-    assert len(cfg.setups) == 11
+    assert len(cfg.setups) == 10
     assert len(cfg.parameter_sets) == 2
     factories = {p.factory for p in cfg.parameter_sets}
     assert factories == {"one_week_only", "full_year"}

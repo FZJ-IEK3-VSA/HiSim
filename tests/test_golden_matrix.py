@@ -72,9 +72,9 @@ def test_horizon_factories_cover_config_factories() -> None:
     assert used <= set(HORIZON_FACTORIES.values())
 
 
-def test_build_matrix_real_config_has_22_pairs() -> None:
-    """The shipped config expands to the expected 22 setup/param pairs."""
+def test_build_matrix_real_config_has_20_pairs() -> None:
+    """The shipped config expands to the expected 20 setup/param pairs."""
     config = json.loads(REAL_CONFIG.read_text())
     matrix = build_matrix(config)
     assert len(matrix["include"]) == len(config["setups"]) * len(config["parameter_sets"])
-    assert len(matrix["include"]) == 22
+    assert len(matrix["include"]) == 20

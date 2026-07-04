@@ -9,7 +9,63 @@ import json
 import warnings
 from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union
+
+# Renamed public fields whose old JSON keys / override kwargs are still
+# accepted for backward compatibility (issue #614). Mapping: old name -> new name.
+_DEPRECATED_FIELD_ALIASES = {"db": "db_path", "sim_params": "sim_params_path"}
+
+
+def _normalize_path(
+    path: str,
+    *,
+    cwd: Optional[Path] = None,
+    home: Optional[Path] = None,
+) -> str:
+    """Normalise a path to an absolute, user-expanded, resolved string.
+
+    This is the pure seam behind :meth:`HarnessConfig.finalize`: it makes
+    ``Path(...).expanduser().resolve()`` testable without touching
+    process-global state (the current working directory and the ``HOME``
+    environment variable). With both ``cwd`` and ``home`` left as ``None`` it
+    reproduces ``str(Path(path).expanduser().resolve())`` exactly, so
+    production behaviour is unchanged. Supplying explicit ``cwd`` and/or
+    ``home`` decouples the result from that global state: a leading ``~`` (or
+    ``~/...``) is expanded against ``home`` and a relative ``path`` is joined
+    onto ``cwd`` before resolving, which lets tests assert on the normalised
+    string deterministically without ``monkeypatch.chdir``/``monkeypatch.setenv``.
+
+    Args:
+        path: The path string to normalise.
+        cwd: Base directory used to resolve relative ``path`` values. Defaults
+            to :meth:`Path.cwd` when needed.
+        home: Home directory substituted for a leading ``~``. Defaults to
+            :meth:`Path.home` when needed.
+
+    Returns:
+        The normalised absolute path as a string.
+
+    Note:
+        The explicit-argument form expands only a bare leading ``~`` (and
+        ``~/...``) against ``home``; the POSIX ``~user`` user-lookup form is
+        honoured solely on the default fast path (which delegates to
+        :meth:`Path.expanduser`). The harness never configures ``~user``
+        paths, so this keeps the seam simple and dependency-free.
+    """
+    # Fast path: no injection requested, reproduce today's behaviour verbatim.
+    if cwd is None and home is None:
+        return str(Path(path).expanduser().resolve())
+    if cwd is None:
+        cwd = Path.cwd()
+    if home is None:
+        home = Path.home()
+    parsed = Path(path)
+    parts = parsed.parts
+    if parts and parts[0] == "~":
+        parsed = home if len(parts) == 1 else home.joinpath(*parts[1:])
+    if not parsed.is_absolute():
+        parsed = cwd / parsed
+    return str(parsed.resolve())
 
 # Renamed public fields whose old JSON keys / override kwargs are still
 # accepted for backward compatibility (issue #614). Mapping: old name -> new name.
@@ -153,6 +209,12 @@ class HarnessConfig:
     def from_file(cls, path: str) -> "HarnessConfig":
         """Load a config from a JSON file, rejecting unknown keys.
 
+        Thin I/O wrapper around :meth:`from_dict`: it reads and parses the
+        JSON file at ``path`` and delegates all parsing/validation
+        (deprecated-key aliasing, both-old-and-new-key conflict check,
+        unknown-key rejection) to :meth:`from_dict`, passing ``path`` as the
+        ``source`` label used in error/warning messages.
+
         Args:
             path: Filesystem path to a JSON config file.
 
@@ -171,7 +233,49 @@ class HarnessConfig:
             DeprecationWarning: If a deprecated JSON key (``db`` or
                 ``sim_params``) is used instead of its renamed form.
         """
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        return cls.from_dict(
+            json.loads(Path(path).read_text(encoding="utf-8")),
+            source=path,
+        )
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any], *, source: str = "<dict>") -> "HarnessConfig":
+        """Build a config from a parsed JSON ``dict``, rejecting unknown keys.
+
+        This is the pure, filesystem-free parsing/validation seam behind
+        :meth:`from_file`: it performs the deprecated-key aliasing (with a
+        :class:`DeprecationWarning`), the both-old-and-new-key conflict check
+        and the unknown-key rejection, then constructs the instance with
+        ``cls(**data)``. Because it takes an already-parsed ``dict`` it can be
+        unit-tested directly -- no ``tmp_path`` / JSON file required -- which
+        is the only reason it exists separately from :meth:`from_file`.
+
+        ``data`` is mutated in place when a deprecated key is remapped to its
+        current name (mirroring the historical behaviour of
+        :meth:`from_file`). ``source`` is used solely inside error/warning
+        messages to identify where ``data`` came from (the file path when
+        called via :meth:`from_file`, or any label a caller chooses when
+        invoking :meth:`from_dict` directly); it never affects the constructed
+        config.
+
+        Args:
+            data: A parsed JSON config (the mapping that ``json.loads`` would
+                return). Modified in place when a deprecated key is remapped.
+            source: Human-readable label for the origin of ``data``, included
+                in :class:`ValueError` messages. Defaults to ``"<dict>"``.
+
+        Returns:
+            A new :class:`HarnessConfig` populated from ``data``.
+
+        Raises:
+            ValueError: If ``data`` contains keys that are not
+                :class:`HarnessConfig` fields, or if both a deprecated key
+                (``db``, ``sim_params``) and its renamed form are present.
+
+        Warns:
+            DeprecationWarning: If a deprecated key (``db`` or ``sim_params``)
+                is used instead of its renamed form.
+        """
         # Accept the pre-rename JSON keys ("db", "sim_params") for backward
         # compatibility, mapping them to the current field names with a
         # DeprecationWarning so existing config files keep working (issue #614).
@@ -179,7 +283,7 @@ class HarnessConfig:
             if old_name in data:
                 if new_name in data:
                     raise ValueError(
-                        f"Harness config {path} sets both '{old_name}' and its "
+                        f"Harness config {source} sets both '{old_name}' and its "
                         f"renamed form '{new_name}'; remove the deprecated "
                         f"'{old_name}' key."
                     )
@@ -193,7 +297,7 @@ class HarnessConfig:
         known = {f.name for f in fields(cls)}
         unknown = set(data) - known
         if unknown:
-            raise ValueError(f"Unknown keys in harness config {path}: {sorted(unknown)}")
+            raise ValueError(f"Unknown keys in harness config {source}: {sorted(unknown)}")
         return cls(**data)
 
     def apply_overrides(self, **kwargs: Optional[Union[str, float, int, bool]]) -> "HarnessConfig":
@@ -272,16 +376,58 @@ class HarnessConfig:
             ValueError: If ``db_path``, ``sim_params_path`` or ``result_root`` is not set
                 (raised via :meth:`required_paths`).
         """
-        db_path, sim_params_path, result_root_path = self.required_paths()
+        # Finalisation is split into two single-purpose steps (issue #698):
+        # a pure, filesystem-free default-derivation pass followed by the path
+        # normalisation I/O. Splitting them lets the derived-default rule be
+        # unit-tested in isolation (see _apply_derived_defaults) without having
+        # to supply three real, resolvable paths.
+        self._apply_derived_defaults()
+        self._resolve_paths(cwd=cwd, home=home)
+        return self
+
+    def _apply_derived_defaults(self) -> None:
+        """Fill in derived-default fields that depend on other settings.
+
+        Pure: this touches only ``self`` and performs no filesystem access, so
+        it can be exercised without the three resolvable paths that
+        :meth:`required_paths` / :meth:`_resolve_paths` demand. Currently it
+        derives ``lease_timeout_s = 2.0 * timeout_s`` when unset; any future
+        derived field belongs here so it stays independently testable.
+
+        Idempotent: a second call leaves an already-set ``lease_timeout_s``
+        untouched.
+        """
         if self.lease_timeout_s is None:
             self.lease_timeout_s = 2.0 * self.timeout_s
+
+    def _resolve_paths(
+        self,
+        *,
+        cwd: Optional[Path] = None,
+        home: Optional[Path] = None,
+    ) -> None:
+        """Normalise the three required path strings to absolute form in place.
+
+        Thin I/O seam around :func:`_normalize_path`: this is the only place
+        :meth:`finalize` (and tests) touch the filesystem for path
+        normalisation, keeping that mutation localised. It first validates via
+        :meth:`required_paths` (raising ``ValueError`` if any required path is
+        unset) and then rewrites ``db_path``, ``sim_params_path`` and
+        ``result_root`` to their resolved string form.
+
+        Args:
+            cwd: Optional base directory for resolving relative path strings.
+                Defaults to :meth:`Path.cwd`.
+            home: Optional home directory substituted for a leading ``~``.
+                Defaults to :meth:`Path.home`.
+        """
+        db_path, sim_params_path, result_root_path = self.required_paths()
         # Normalise paths to absolute so every node resolves them identically.
         # _normalize_path keeps this independent of CWD/HOME when cwd/home are
         # injected (e.g. by tests); the defaults reproduce expanduser().resolve().
         self.db_path = _normalize_path(db_path, cwd=cwd, home=home)
         self.sim_params_path = _normalize_path(sim_params_path, cwd=cwd, home=home)
         self.result_root = _normalize_path(result_root_path, cwd=cwd, home=home)
-        return self
 
     def required_paths(self) -> Tuple[str, str, str]:
         """Return required path settings after validating that all are configured.

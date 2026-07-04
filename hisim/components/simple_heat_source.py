@@ -183,7 +183,7 @@ class SimpleHeatSource(cp.Component):
         """Initialize the class."""
 
         self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
+        self.config: SimpleHeatSourceConfig = config
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -202,11 +202,11 @@ class SimpleHeatSource(cp.Component):
             )
 
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER:  # type: ignore
-            self.power_th_in_watt = self.config.power_th_in_watt
+            self.power_th_in_watt: Optional[float] = self.config.power_th_in_watt
             if self.power_th_in_watt is None or str(self.power_th_in_watt) == "nan":
                 raise ValueError("Undefined value for constant power")
         elif self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE:  # type: ignore
-            self.temperature_out_in_celsius = self.config.temperature_out_in_celsius
+            self.temperature_out_in_celsius: Optional[float] = self.config.temperature_out_in_celsius
             if self.temperature_out_in_celsius is None or str(self.temperature_out_in_celsius) == "nan":
                 raise ValueError("Undefined value for constant temperature")
         elif self.config.const_source == SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE:  # type: ignore
@@ -214,13 +214,14 @@ class SimpleHeatSource(cp.Component):
         else:
             raise ValueError("Invalid const_source value.")
 
-        self.fluid_type = config.fluid_type
-        self.mass_fraction_of_fluid_mixed_in_water = config.mass_fraction_of_fluid_mixed_in_water
+        self.fluid_type: FluidMediaType = config.fluid_type
+        self.mass_fraction_of_fluid_mixed_in_water: float = config.mass_fraction_of_fluid_mixed_in_water
 
+        self.cp_f: float = 0.0
         self.fluid_props()
 
-        self.state = SimpleHeatSourceState()
-        self.previous_state = SimpleHeatSourceState()
+        self.state: SimpleHeatSourceState = SimpleHeatSourceState()
+        self.previous_state: SimpleHeatSourceState = SimpleHeatSourceState()
 
         # Inputs
         self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(

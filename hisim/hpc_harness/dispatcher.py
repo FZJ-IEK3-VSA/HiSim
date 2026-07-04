@@ -10,11 +10,17 @@ It is the only process that touches the SQLite database.
 """
 
 import time
+from typing import TYPE_CHECKING
 
 from hisim.hpc_harness import db
 from hisim.hpc_harness.config import HarnessConfig
 from hisim.hpc_harness.pool import LocalPool, compute_max_slots
 from hisim.hpc_harness.protocol import GRANT, NO_WORK_AVAILABLE, REPORT, REQUEST, SHUTDOWN, TAG
+
+if TYPE_CHECKING:
+    # mpi4py is imported lazily inside ``run_head`` to avoid a hard import
+    # dependency at module load; it is only needed here for type checking.
+    from mpi4py import MPI
 
 
 # Reaper period constants
@@ -26,8 +32,19 @@ def _log(message: str) -> None:
     print(f"[head] {message}", flush=True)
 
 
-def run_head(comm: "object", cfg: HarnessConfig) -> None:
-    """Run the dispatcher loop on rank 0 until every task is finished."""
+def run_head(comm: "MPI.Comm", cfg: HarnessConfig) -> None:
+    """Run the dispatcher loop on rank 0 until every task is finished.
+
+    Args:
+        comm: MPI communicator for exchanging request/grant/report/shutdown
+            messages with worker ranks.
+        cfg: Harness configuration providing the database path, simulation
+            parameters, result root, lease timeout, and optional local-pool
+            settings.
+
+    Raises:
+        ValueError: If ``cfg.lease_timeout_s`` is not set.
+    """
     from mpi4py import MPI  # pylint: disable=import-outside-toplevel,import-error
 
     size = comm.Get_size()
@@ -69,7 +86,7 @@ def run_head(comm: "object", cfg: HarnessConfig) -> None:
                 src = status.Get_source()
                 msg = comm.recv(source=src, tag=TAG)
                 if msg["type"] == REQUEST:
-                    tasks = db.lease_tasks(conn, msg["n_free"], leased_by=f"rank{src}@{msg['host']}")
+                    tasks = db.lease_tasks(conn, msg["num_free_slots"], leased_by=f"rank{src}@{msg['host']}")
                     if tasks:
                         conn.commit()
                         comm.send({"type": GRANT, "tasks": tasks}, dest=src, tag=TAG)

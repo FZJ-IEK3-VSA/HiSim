@@ -12,6 +12,7 @@ Additionally it contains examples for doc strings according to the sphinx format
 from copy import deepcopy
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+from typing import Optional
 
 # Import modules from HiSim
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
@@ -96,9 +97,11 @@ class ComponentName(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ComponentNameConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: Optional[DisplayConfig] = None,
     ) -> None:
         """Constructs all the neccessary attributes."""
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
         self.componentnameconfig: ComponentNameConfig = config
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config

@@ -1,39 +1,72 @@
 #!/usr/bin/env python3
-"""Regenerate golden references. DELIBERATE, HUMAN-ONLY — never run by the agent.
-Review the resulting diff in git before committing."""
+"""Regenerate the golden-reference snapshot for HiSim.
+
+Loads ``scripts/golden_config.json``, runs every ``(setup, parameter_set)``
+pair through HiSim via :func:`scripts.runner.run_all`, inventories the output
+artifacts, and writes a ``manifest.json`` into ``results/golden_references/``.
+
+This is the deliberate, human-only "bless new golden" button — never run it
+automatically. Review the resulting snapshot before relying on it.
+"""
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 from typing import Callable
 
 try:
-    from golden_check import REF_DIR, SETUPS, run_setup   # type: ignore[import-not-found]  # run as a script from scripts/
+    from runner import (  # type: ignore[import-not-found]  # run as a script from scripts/
+        GoldenConfig,
+        RunResult,
+        collect_manifest,
+        load_config,
+        run_all,
+        write_manifest,
+    )
 except ModuleNotFoundError:  # imported as scripts.golden_update (e.g. by the test suite)
-    from scripts.golden_check import REF_DIR, SETUPS, run_setup
+    from scripts.runner import (
+        GoldenConfig,
+        RunResult,
+        collect_manifest,
+        load_config,
+        run_all,
+        write_manifest,
+    )
+
+DEFAULT_CONFIG_PATH = Path(__file__).parent / "golden_config.json"
+DEFAULT_RESULTS_ROOT = Path(__file__).resolve().parent.parent / "results"
+DEFAULT_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def main(
-    run_setup_fn: Callable[[str], dict[str, float]] = run_setup,
-    ref_dir: Path = REF_DIR,
-    setups: list[str] = SETUPS,
+    config_path: Path = DEFAULT_CONFIG_PATH,
+    results_root: Path = DEFAULT_RESULTS_ROOT,
+    repo_root: Path = DEFAULT_REPO_ROOT,
+    run_fn: Callable[[GoldenConfig, Path, Path, str], list[RunResult]] = run_all,
 ) -> int:
-    """Regenerate one ``<name>.json`` reference per setup under ``ref_dir``.
+    """Load config, run all ``(setup, parameter_set)`` pairs, write manifest, return 0.
 
-    The three collaborators default to the module-level values imported from
-    ``golden_check`` so that running this script unchanged reproduces the previous
-    behaviour exactly. Tests inject a fake ``run_setup_fn``, a temporary
-    ``ref_dir`` and a small ``setups`` list to exercise the orchestration — the
-    filename pattern, JSON formatting and return code — without running real
-    HiSim simulations or writing to the committed ``scripts/golden_refs/``.
+    Fail hard (raise :exc:`FileNotFoundError`) if ``config_path`` does not exist.
+    Never reads a previous snapshot — always writes a clean one.
+
+    The ``run_fn`` parameter is injectable so tests can pass a fake that returns
+    synthetic :class:`RunResult` lists without running HiSim.
     """
-    ref_dir.mkdir(parents=True, exist_ok=True)
-    for name in setups:
-        setup_results = run_setup_fn(name)
-        (ref_dir / f"{name}.json").write_text(json.dumps(setup_results, indent=2, sort_keys=True))
-        print(f"wrote {name}.json: {setup_results}")
-    print("Done. Review `git diff scripts/golden_refs/` before committing.")
+    config = load_config(config_path)
+    golden_root = results_root / config.golden_subdir
+    results = run_fn(config, results_root, repo_root, config.golden_subdir)
+    manifest = collect_manifest(config, results, config_path)
+    write_manifest(manifest, golden_root / "manifest.json")
+
+    succeeded = sum(1 for r in results if r.error is None)
+    errored = sum(1 for r in results if r.error is not None)
+    total_artifacts = sum(len(r.artifacts) for r in results)
+    manifest_path = golden_root / "manifest.json"
+    print(
+        f"Golden update: {len(results)} pair(s) — "
+        f"{succeeded} succeeded, {errored} errored, "
+        f"{total_artifacts} artifact(s). Manifest: {manifest_path}"
+    )
     return 0
 
 

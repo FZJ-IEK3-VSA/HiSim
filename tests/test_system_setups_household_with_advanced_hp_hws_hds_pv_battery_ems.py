@@ -14,8 +14,8 @@ from hisim import utils
 from tests.testing_utils import TestingUtils
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-HOUSEHOLD_SETUP_PATH = str(
+REPO_ROOT: Path = Path(__file__).resolve().parent.parent
+HOUSEHOLD_SETUP_PATH: str = str(
     REPO_ROOT / "system_setups" / "household_with_advanced_hp_hws_hds_pv_battery_ems.py"
 )
 

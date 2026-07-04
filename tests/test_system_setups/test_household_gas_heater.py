@@ -25,14 +25,32 @@ MY_SIMULATION_PARAMETERS: dict[str, Any] = {
 
 
 def create_results_directory(result_directory: str | Path) -> None:
-    """Create result directory."""
+    """Create a clean result directory.
+
+    If the directory already exists it is recursively removed first, then
+    (re)created along with any missing parents.
+
+    Args:
+        result_directory: Path to the directory to (re)create.
+    """
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory)
     Path(result_directory).mkdir(parents=True, exist_ok=True)
 
 
 def run_system(config_json: dict[str, Any], result_directory: str | Path) -> None:
-    """Run with system setup starter."""
+    """Build and execute a system setup from a config dict.
+
+    Uses `make_system_setup` to materialise the module path, simulation
+    parameters, and module config from `config_json`, then invokes
+    `hisim_main.main` to run the simulation, writing outputs into
+    `result_directory`.
+
+    Args:
+        config_json: Configuration mapping with at least `path_to_module`
+            and `simulation_parameters` keys.
+        result_directory: Directory where simulation results are written.
+    """
     (
         path_to_module,
         simulation_parameters,
@@ -49,7 +67,11 @@ def run_system(config_json: dict[str, Any], result_directory: str | Path) -> Non
 
 
 def remove_results_directory(result_directory: str | Path) -> None:
-    """Remove result directory."""
+    """Recursively remove the result directory.
+
+    Args:
+        result_directory: Path to the directory to delete.
+    """
     shutil.rmtree(result_directory)
 
 
@@ -61,8 +83,20 @@ def test_household_gas_heater_main() -> None:
     path = "../system_setups/household_gas_heater.py"
     simulation_parameters = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+
+    # Route results into a clean, test-scoped directory (mirroring the sibling tests below)
+    # so the run's completion can be verified instead of only checking that nothing raised.
+    result_directory = TestingUtils.get_result_directory()
+    create_results_directory(result_directory)
+    simulation_parameters.result_directory = result_directory
+
     hisim_main.main(path, simulation_parameters)
     log.information(os.getcwd())
+
+    # Check if calculation has finished without errors.
+    assert Path(result_directory).joinpath("finished.flag").is_file()
+
+    remove_results_directory(result_directory)
 
 
 @pytest.mark.system_setups
@@ -84,7 +118,12 @@ def test_household_gas_heater_system_setup_starter_default() -> None:
 @pytest.mark.system_setups
 @utils.measure_execution_time
 def test_household_gas_heater_system_setup_starter_pv() -> None:
-    """Execute setup with hisim system setup starter."""
+    """Run the gas-heater household via the system setup starter with PV enabled and verify PV wiring.
+
+    Builds the household with the ``photovoltaic`` option enabled, executes the
+    simulation, and asserts that a ``PVSystem``→``ElectricityMeter`` connection
+    is present in the produced ``component_connections.json``.
+    """
     my_config_json = {
         "path_to_module": MY_PATH_TO_MODULE,
         "simulation_parameters": MY_SIMULATION_PARAMETERS,

@@ -44,10 +44,10 @@ class DiverterValve:
         """Set conditions for the district heating controller mode."""
 
         def dhw_heating_needed(
-            controller_mode,
-            actual_water_temperature,
-            set_water_temperature,
-        ):
+            controller_mode: HeatingMode,
+            actual_water_temperature: Optional[float],
+            set_water_temperature: Optional[float],
+        ) -> bool:
             if not with_domestic_hot_water_preparation:
                 return False
 
@@ -64,7 +64,10 @@ class DiverterValve:
 
             return False
 
-        def space_heating_needed(current_water_temperature, target_water_temperature):
+        def space_heating_needed(
+            current_water_temperature: float,
+            target_water_temperature: float,
+        ) -> bool:
             if (
                 DiverterValve.determine_summer_heating_mode(
                     daily_average_outside_temperature,

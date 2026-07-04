@@ -1366,7 +1366,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     dhw_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=dhw_hp_electricity_from_grid_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                     dhw_heatpump_electricity_from_grid_entry = KpiEntry(
@@ -1385,7 +1385,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         sh_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
                             KpiHelperClass.compute_total_energy_from_power_timeseries(
                                 power_timeseries_in_watt=sh_electricity_from_grid_in_watt_series,
-                                timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                                time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                             )
                         )
                         # make kpi entry
@@ -1404,7 +1404,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         dhw_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
                             KpiHelperClass.compute_total_energy_from_power_timeseries(
                                 power_timeseries_in_watt=dhw_hp_electricity_from_grid_in_watt_series,
-                                timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                                time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                             )
                         )
                         dhw_heatpump_electricity_from_grid_entry = KpiEntry(
@@ -1424,7 +1424,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     sh_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=sh_electricity_from_grid_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                     # make kpi entry
@@ -1444,7 +1444,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     occupancy_electricity_from_grid_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=occupancy_electricity_from_grid_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                     occupancy_electricity_from_grid_entry = KpiEntry(
@@ -1462,7 +1462,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     total_electricity_consumption_ems_controlled_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=total_electricity_consumption_ems_controlled_in_watt,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                     electricity_consumption_ems_controlled_entry = KpiEntry(
@@ -1480,7 +1480,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     total_electricity_consumption_ems_uncontrolled_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=total_electricity_consumption_ems_uncontrolled_in_watt,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                     electricity_consumption_ems_uncontrolled_entry = KpiEntry(
@@ -1498,7 +1498,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     total_electricity_consumption_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=total_electricity_consumption_in_watt,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                     electricity_consumption_total_entry = KpiEntry(
@@ -1516,7 +1516,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     total_electricity_surplus_from_district_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=total_electricity_surplus_from_district_in_watt,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                     electricity_surplus_from_district_entry = KpiEntry(
@@ -1534,7 +1534,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     total_production_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=total_production_in_watt,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                     electricity_production_entry = KpiEntry(
@@ -1552,7 +1552,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     total_electricity_from_grid_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=total_electricity_from_grid_in_watt,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                     electricity_from_grid_entry = KpiEntry(
@@ -1570,7 +1570,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     total_electricity_to_grid_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=total_electricity_to_grid_in_watt,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                     electricity_to_grid_entry = KpiEntry(

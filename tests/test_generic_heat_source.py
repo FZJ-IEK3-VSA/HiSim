@@ -89,5 +89,5 @@ def test_heat_source() -> None:
     # Check if there is a signal to heat up the house
     assert 1 == stsv.values[1]
     # Check if the delivered heat is indeed that corresponded to the heat pump model
-    assert my_heat_source_config.thermal_power_in_watt / 60 == stsv.values[2]
+    assert stsv.values[2] == pytest.approx(my_heat_source_config.thermal_power_in_watt / 60)
     assert my_heat_source_config.thermal_power_in_watt == stsv.values[3]

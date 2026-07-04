@@ -7,7 +7,7 @@ from pathlib import Path
 import json
 from typing import Optional
 import pytest
-# import numpy as np
+import numpy as np
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -36,7 +36,19 @@ PATH = "../system_setups/household_for_test_gas_meter.py"
 def test_house(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """The test should check if a normal simulation works with the electricity grid implementation."""
+    """Run a household simulation with a heating meter and verify heat-consumption KPIs.
+
+    Builds a full household system (building, heat pump, heat distribution system,
+    hot-water and DHW storages, PV, electricity meter, and heating meter), runs the
+    simulation, and asserts that the heating meter's total heat consumption matches
+    the heat distribution system output (within 5% relative tolerance) and that
+    OPEX costs and CO2 footprint KPIs are non-negative.
+
+    Args:
+        my_simulation_parameters: Optional simulation parameters. If None, a
+            one-day simulation for 2021 with hourly timesteps is used, with CSV
+            export and KPI computation enabled.
+    """
 
     # =========================================================================================================================================================
     # System Parameters
@@ -234,9 +246,19 @@ def test_house(
     heat_consumption_for_space_heating_in_kilowatt_hour = jsondata["Heat Distribution System"][  # pylint: disable=unused-variable
         "Thermal output energy of heat distribution system"
     ].get("value")
-    # heat_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Residents"][
-    #     "Residents' total thermal dhw consumption"
-    # ].get("value")
+
+    # The residents' domestic-hot-water thermal consumption is published under the
+    # "Residents' total warm water energy consumption" KPI (the thermal energy needed to heat
+    # the tapped warm water, in kWh). It is read here so a regression that drops or breaks this
+    # KPI is caught. Note: in this system setup the domestic-hot-water circuit is served by a
+    # dedicated heat pump and storage and is NOT wired into the HeatingMeter (its
+    # SimpleDHWStorage connection is disabled in heating_meter.py). The HeatingMeter therefore
+    # only measures the space-heating circuit, so its "Total heat consumption from grid" must
+    # match the heat distribution system output and must NOT include the domestic-hot-water
+    # energy below.
+    heat_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Residents"][
+        "Residents' total warm water energy consumption"
+    ].get("value")
 
     opex_costs_for_heat_in_euro = jsondata["Heating Meter"]["Opex costs of heat consumption from grid"].get("value")  # pylint: disable=unused-variable
 
@@ -244,12 +266,19 @@ def test_house(
         "CO2 footprint of heat consumption from grid"
     ].get("value")
 
-    # log.information(
-    #     "Heat consumption for domestic hot water [kWh] " + str(heat_consumption_for_domestic_hot_water_in_kilowatt_hour)
-    # )
-    # test and compare with relative error of 5%
-    # np.testing.assert_allclose(
-    #     heat_consumption_in_kilowatt_hour,
-    #     heat_consumption_for_space_heating_in_kilowatt_hour + heat_consumption_for_domestic_hot_water_in_kilowatt_hour,
-    #     rtol=0.05,
-    # )
+    # The HeatingMeter measures only the space-heating circuit (see comment above), so its
+    # total heat consumption has to match the thermal energy delivered by the heat distribution
+    # system. The domestic-hot-water energy is tracked separately and is not part of this
+    # balance. Compare with a relative tolerance of 5%.
+    np.testing.assert_allclose(
+        heat_consumption_in_kilowatt_hour,
+        heat_consumption_for_space_heating_in_kilowatt_hour,
+        rtol=0.05,
+    )
+
+    # Guard against regressions that silently produce zero/None KPIs.
+    assert heat_consumption_in_kilowatt_hour > 0
+    assert heat_consumption_for_space_heating_in_kilowatt_hour > 0
+    assert heat_consumption_for_domestic_hot_water_in_kilowatt_hour >= 0
+    assert opex_costs_for_heat_in_euro >= 0
+    assert co2_footprint_due_to_heat_use_in_kg >= 0

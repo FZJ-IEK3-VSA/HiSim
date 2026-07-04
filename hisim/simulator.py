@@ -18,7 +18,7 @@ from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import postprocessingoptions
-from hisim.loadtypes import Units
+from hisim.loadtypes import UNITS_USING_MEAN_AGGREGATION, Units
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 
 
@@ -379,7 +379,7 @@ class Simulator:
             mode=1,
             setup_function=self.setup_function,
             module_filename=self.module_filename,
-            my_module_config=self.my_module_config,
+            module_config=self.my_module_config,
             execution_time=execution_time,
             results_monthly=results_merged_monthly,
             results_cumulative=results_merged_cumulative,
@@ -428,19 +428,7 @@ class Simulator:
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Converts results into a pretty dataframe for post processing."""
 
-        units_mean = {
-            Units.CELSIUS,
-            Units.KELVIN,
-            Units.ANY,
-            Units.METER_PER_SECOND,
-            Units.DEGREES,
-            Units.WATT,
-            Units.KILOWATT,
-            Units.WATT_PER_SQUARE_METER,
-            Units.KG_PER_SEC,
-            Units.PERCENT,
-            Units.PASCAL,
-        }
+        units_mean = UNITS_USING_MEAN_AGGREGATION
 
         monthly_frames = []
         daily_frames = []

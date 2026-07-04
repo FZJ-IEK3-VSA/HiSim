@@ -26,7 +26,13 @@ from hisim import utils
 @pytest.mark.buildingtest
 @utils.measure_execution_time
 def test_energy_system_scalability() -> None:
-    """Test function for the scability of the whole energy system."""
+    """Verify energy-system components scale linearly with building floor area.
+
+    Sizes the energy system with a scaling factor of 1 and again with 5, then asserts
+    that PV output, hplib thermal power, space-heating storage volume, and battery
+    capacity scale by ~5×, while the DHW heat pump and DHW storage scale with the
+    number of apartments (within 1 % relative tolerance).
+    """
 
     # calculate energy system sizes for original case (scaling factors = 1)
     (
@@ -145,7 +151,28 @@ def test_energy_system_scalability() -> None:
 def simulation_for_one_timestep(
     scaling_factor_for_absolute_conditioned_floor_area: int,
 ) -> Tuple[int, float, float, float, float, float, float]:
-    """Test function for the system setup house for one timestep."""
+    """Build a scaled energy system and return the sized component values for one timestep.
+
+    Constructs a German single-family-home building scaled by the given factor, then
+    sizes the PV system, hplib heat pump, space-heating hot-water storage, battery,
+    DHW heat pump, and DHW storage against the scaled building, returning the
+    resulting component sizes without running a full simulation.
+
+    Args:
+        scaling_factor_for_absolute_conditioned_floor_area: Multiplier applied to the
+            baseline 121.2 m² conditioned floor area; also drives rooftop area and
+            number of apartments via the building config.
+
+    Returns:
+        A tuple of:
+          number_of_apartments: Number of apartments in the scaled building.
+          pv_power_in_watt: Rated electric power of the scaled PV system [W].
+          hplib_thermal_power_in_watt: Thermal output power set for the hplib heat pump [W].
+          simple_hot_water_storage_size_in_liter: Volume of the space-heating water storage [L].
+          battery_capacity_in_kilowatt_hours: Battery capacity [kWh].
+          hp_for_dhw_thermal_power_in_watt: Thermal power of the DHW heat pump [W].
+          water_storage_size_for_dhw_in_liter: Volume of the DHW storage [L].
+    """
 
     # Set building inputs
     absolute_conditioned_floor_area_in_m2 = (

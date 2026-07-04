@@ -1,4 +1,11 @@
-""" Tests for the basic household system setup. """
+"""Tests for the household_4a system setup with car priority.
+
+Runs the advanced heat-pump / EV / PV setup defined in
+``system_setups/household_4a_with_car_priority_advanced_hp_ev_pv.py``
+for a single simulated day and asserts that the run produced its
+output artifacts. This test is marked ``utsp`` and is therefore not
+part of the fast ``base`` gate.
+"""
 # clean
 import os
 from pathlib import Path

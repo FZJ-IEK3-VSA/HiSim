@@ -51,7 +51,9 @@ def setup_function(
 
     temperature_air_heating_in_celsius = 19.0
     temperature_air_cooling_in_celsius = 24.0
-    offset = 0.5
+    # hysteresis band around the heating/cooling setpoints, in K
+    # (a temperature difference: e.g. heating turns off above setpoint + offset)
+    temperature_offset_in_kelvin = 0.5
     hp_mode = 2
 
     # =================================================================================================================================
@@ -100,7 +102,7 @@ def setup_function(
             name="GenericHeatPumpController",
             temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
             temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-            offset=offset,
+            offset=temperature_offset_in_kelvin,
             mode=hp_mode,
         ),
         my_simulation_parameters=my_simulation_parameters,

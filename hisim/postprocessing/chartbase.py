@@ -50,6 +50,7 @@ class Chart:  # noqa: too-few-public-methods
         units,
         directory_path,
         time_correction_factor,
+        *,
         output2=None,
         figure_format=None,
         path_checker=None,
@@ -81,17 +82,17 @@ class Chart:  # noqa: too-few-public-methods
         matches = re.finditer(".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$|#)", self.output)
         matches = [m.group(0) for m in matches]  # type: ignore
 
-        pass_sign = False
+        passed_hash_delimiter = False
         chart_property = ""
         chart_object = ""
         for single_match in matches:
-            if pass_sign:
+            if passed_hash_delimiter:
                 chart_property = f"{chart_property}{single_match}"
             else:
                 chart_object = f"{chart_object}{single_match}"
 
             if single_match.find("#"):  # type: ignore
-                pass_sign = True
+                passed_hash_delimiter = True
 
             if len(self.title) == 0:
                 self.title = str(single_match)

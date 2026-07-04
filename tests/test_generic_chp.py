@@ -1,4 +1,9 @@
-"""Basic test for fuel cell."""
+"""Tests for the generic CHP system and CHPConfig factory methods.
+
+Covers integration of ``generic_chp.SimpleCHP`` with ``controller_l1_chp.L1CHPController``
+under various demand/hydrogen scenarios, plus unit checks of ``CHPConfig``
+default-config builders and ``GenericCHPState.clone``.
+"""
 
 # -*- coding: utf-8 -*-
 import pytest
@@ -15,7 +20,17 @@ from hisim.simulationparameters import SimulationParameters
 
 @pytest.mark.base
 def test_chp_system() -> None:
-    """Test chp system."""
+    """Test the CHP+controller integration across four demand/hydrogen scenarios.
+
+    Sets up a ``SimpleCHP`` with an ``L1CHPController`` and fake inputs for buffer
+    temperature, boiler temperature, electricity target, and hydrogen SOC, then
+    simulates multiple timesteps and asserts expected thermal, electrical, and fuel
+    outputs for each case:
+      - CHP runs when hydrogen SOC is sufficient and both heat and electricity are needed.
+      - CHP shuts down when hydrogen SOC is zero.
+      - CHP shuts down when heat is not needed (temperatures above thresholds).
+      - CHP shuts down when electricity is not needed (electricity target positive).
+    """
     seconds_per_timestep = 60
     thermal_power = 500  # thermal power in Watt
     my_simulation_parameters = SimulationParameters.one_day_only(

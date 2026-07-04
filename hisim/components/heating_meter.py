@@ -388,7 +388,7 @@ class HeatingMeter(DynamicComponent):
                     ]
                     total_used_energy_in_kwh = KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=total_used_energy_in_watt,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     )
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
@@ -426,7 +426,7 @@ class HeatingMeter(DynamicComponent):
                     ]
                     total_used_energy_in_kwh = KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=total_used_energy_in_watt,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     )
 
                     break

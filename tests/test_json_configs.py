@@ -39,7 +39,18 @@ SYSTEM_SETUPS: list[tuple[str]] = discover_system_setups()
 @pytest.mark.parametrize(["system_setup"], SYSTEM_SETUPS)
 @utils.measure_execution_time
 def test_json(system_setup: str) -> None:
-    """Test generation and execution of JSON configs."""
+    """Verify a system setup yields equivalent simulators via Python and JSON.
+
+    Initializes a simulator from the given Python setup module, exports its
+    JSON configuration, re-initializes a second simulator from that JSON, and
+    asserts both wrap the same number of components and register the same
+    number of outputs. The test is skipped when the Python initialization
+    raises an exception, so only setups that successfully initialize are
+    exercised.
+
+    Args:
+        system_setup: Path to the system setup ``.py`` module to test.
+    """
 
     system_setup_path = Path(system_setup)
     output_directory = Path(TestingUtils.get_result_directory(test_name="test_json_configs")) / system_setup_path.stem
@@ -78,7 +89,18 @@ def test_json(system_setup: str) -> None:
 
 
 def get_num_of_components_and_outputs(simulator: sim.Simulator) -> tuple[int, int]:
-    """Helper function to get the number of components and outputs in the current simulator."""
+    """Return the number of wrapped components and registered outputs in a simulator.
+
+    Args:
+        simulator: An initialized ``Simulator`` whose ``wrapped_components``
+            and ``all_outputs`` collections have been populated (e.g. after
+            ``connect_all_components``).
+
+    Returns:
+        A ``(num_components, num_outputs)`` tuple where ``num_components`` is
+        ``len(simulator.wrapped_components)`` and ``num_outputs`` is
+        ``len(simulator.all_outputs)``.
+    """
 
     num_components = len(simulator.wrapped_components)
     num_outputs = len(simulator.all_outputs)

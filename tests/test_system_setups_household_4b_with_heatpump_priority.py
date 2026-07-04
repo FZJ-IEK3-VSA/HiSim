@@ -1,4 +1,9 @@
-""" Tests for the basic household system setup. """
+"""Tests for the household_4b system setup with heat-pump priority.
+
+Runs a one-day simulation of the advanced heat-pump / EV / PV household
+configuration in which the heat pump is prioritized, and asserts that the
+full simulation pipeline completes and writes output artifacts.
+"""
 # clean
 import os
 from pathlib import Path

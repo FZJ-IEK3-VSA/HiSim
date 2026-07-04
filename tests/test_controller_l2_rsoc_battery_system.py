@@ -10,6 +10,7 @@ the controller built on top of it -- is testable even when the
 
 # clean
 import json
+import pathlib
 
 import pytest
 
@@ -20,7 +21,7 @@ from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 
 
-def _make_rsoc_config_dict() -> dict:
+def _make_rsoc_config_dict() -> dict[str, float]:
     """Return a representative in-memory rSOC manufacturer config variant."""
     return {
         "nom_load_soec": 40.0,
@@ -75,7 +76,7 @@ def test_config_rsoc_building_name_override_and_defaults() -> None:
 
 
 @pytest.mark.base
-def test_read_config_with_explicit_path(tmp_path) -> None:
+def test_read_config_with_explicit_path(tmp_path: pathlib.Path) -> None:
     """read_config reads a variant from an explicit path (no HISIMPATH coupling)."""
     variant = _make_rsoc_config_dict()
     config_file = tmp_path / "rSOC_manufacturer_config.json"
@@ -89,7 +90,7 @@ def test_read_config_with_explicit_path(tmp_path) -> None:
 
 
 @pytest.mark.base
-def test_read_config_with_explicit_path_missing_variant(tmp_path) -> None:
+def test_read_config_with_explicit_path_missing_variant(tmp_path: pathlib.Path) -> None:
     """read_config returns an empty dict for an unknown variant name."""
     config_file = tmp_path / "rSOC_manufacturer_config.json"
     config_file.write_text(

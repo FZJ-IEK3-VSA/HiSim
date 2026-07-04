@@ -20,7 +20,7 @@ from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 
 
-def _make_rsoc_config_dict() -> dict:
+def _make_rsoc_config_dict() -> dict[str, float]:
     """Return a representative in-memory rSOC manufacturer config variant."""
     return {
         "nom_load_soec": 40.0,

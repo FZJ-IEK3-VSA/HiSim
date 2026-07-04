@@ -9,6 +9,8 @@ path and multiple triggers short-circuiting to ``True``).
 
 # clean
 
+from __future__ import annotations
+
 import pytest
 
 import hisim.loadtypes as lt
@@ -109,6 +111,6 @@ def _needs_ems(
         ),
     ],
 )
-def test_needs_ems(expected: bool, kwargs: dict) -> None:
+def test_needs_ems(expected: bool, kwargs: dict[str, bool | lt.HeatingSystems]) -> None:
     """Assert ``needs_ems`` returns ``expected`` for the given keyword triggers."""
     assert _needs_ems(**kwargs) is expected

@@ -14,9 +14,12 @@ from hisim import utils
 from tests.testing_utils import TestingUtils
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-SIMPLE_SYSTEM_SETUP_ONE_PATH = str(
+REPO_ROOT: Path = Path(__file__).resolve().parent.parent
+SIMPLE_SYSTEM_SETUP_ONE_PATH: str = str(
     REPO_ROOT / "system_setups" / "simple_system_setup_one.py"
+)
+SIMPLE_SYSTEM_SETUP_TWO_PATH: str = str(
+    REPO_ROOT / "system_setups" / "simple_system_setup_two.py"
 )
 
 
@@ -99,11 +102,46 @@ def test_first_system_setup(isolated_result_directory: str) -> None:
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_second_system_setup():
-    """Test second system setup."""
-    path = "../system_setups/simple_system_setup_two.py"
+def test_second_system_setup(isolated_result_directory: str) -> None:
+    """Run the second simple system setup and assert it produced a valid result.
+
+    Mirrors :func:`test_first_system_setup`: ``hisim_main.main`` runs the full simulation
+    (time-stepping plus post-processing) and returns ``None`` on success; any failure
+    propagates as an exception. Beyond merely "not raising", the test pins the concrete
+    outcome: the configured result directory is created, the simulator writes its
+    ``finished.flag`` after post-processing completes, and the plots-only post-processing
+    emits at least one plot artifact in the configured figure format. This turns a silent
+    no-op-pass into a real check that ``simple_system_setup_two`` actually produces a
+    simulation result.
+
+    The result directory is routed into the ``isolated_result_directory`` fixture so no
+    artefacts leak outside the test-scoped results directory, and the setup path is taken
+    from the repo-rooted ``SIMPLE_SYSTEM_SETUP_TWO_PATH`` constant (the previous
+    ``"../system_setups/..."`` relative form depends on the process current working
+    directory and is fragile).
+    """
+    path = SIMPLE_SYSTEM_SETUP_TWO_PATH
 
     sim_params = SimulationParameters.one_day_only_with_only_plots(
         year=2021, seconds_per_timestep=60
     )
+    # Route results into the isolated, test-scoped directory provided by the fixture.
+    sim_params.result_directory = isolated_result_directory
+
+    # main() returns None once the simulation and post-processing have completed; a
+    # failure would have raised before reaching this point.
     hisim_main.main(path, sim_params)
+
+    result_dir = Path(sim_params.result_directory)
+    assert result_dir.is_dir(), f"Result directory was not created at {result_dir}"
+
+    # The simulator writes finished.flag after post-processing completes successfully.
+    finished_flag = result_dir / "finished.flag"
+    assert finished_flag.is_file(), f"finished.flag missing in {result_dir}"
+
+    # Plots are written with the SimulationParameters.figure_format extension (PNG by
+    # default) into per-component subdirectories, so search recursively. At least one
+    # plot file in the configured format must have been produced.
+    figure_suffix = sim_params.figure_format.value
+    plot_files = list(result_dir.rglob(f"*{figure_suffix}"))
+    assert plot_files, f"No {figure_suffix} plot files were produced in {result_dir}"

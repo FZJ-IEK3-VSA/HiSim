@@ -27,7 +27,7 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 # PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../system_setups/household_for_test_building_heat_demand.py"
+PATH: str = "../system_setups/household_for_test_building_heat_demand.py"
 
 
 @pytest.mark.xfail(
@@ -42,17 +42,22 @@ PATH = "../system_setups/household_for_test_building_heat_demand.py"
 def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """Test for heating energy demand.
+    """Test annual heating energy demand against TABULA reference values.
 
-    This setup function emulates an household including the basic components. Here the residents have their
-    heating needs covered by the heat pump.
+    Builds a household simulation with occupancy (LPG UTSP connector), weather
+    (Aachen), a German single-family-home building, and an idealized electric
+    heater, then runs a full year and compares the calculated floor-area-
+    normalised heating demand against the TABULA reference value with a 10 %
+    relative tolerance.
 
-    - Simulation Parameters
-    - Components
-        - Occupancy (Residents' Demands)
-        - Weather
-        - Building
-        - Idealized Electric Heater
+    Currently marked ``xfail`` because heating-by-devices was integrated into
+    internal heat gains, causing the calculated demand to diverge from the
+    TABULA reference (see issue #637).
+
+    Args:
+        my_simulation_parameters: Optional pre-built simulation parameters.
+            If ``None``, a full-year simulation for 2021 with hourly
+            (3600 s) timesteps is constructed automatically.
     """
 
     # =========================================================================================================================================================

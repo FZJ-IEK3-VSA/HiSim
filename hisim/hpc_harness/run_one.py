@@ -55,7 +55,7 @@ def run_single(
     Returns:
         The simulator object returned by ``init_fn`` (after the result directory
         has been overridden and the simulation has been run). Exposed so tests can
-        assert ``my_sim.get_simulation_parameters().result_directory`` without
+        assert ``simulator.get_simulation_parameters().result_directory`` without
         parsing argv or spinning up a real simulation.
 
     The defaults reproduce the original ``main`` behaviour exactly: the real
@@ -73,7 +73,7 @@ def run_single(
         if run_fn is None:
             run_fn = run_simulation
 
-    my_sim = init_fn(
+    simulator = init_fn(
         scenario=scenario_path,
         simulation_parameters=sim_params_path,
         path_to_module=scenario_path,
@@ -83,11 +83,11 @@ def run_single(
     # JSON mode otherwise auto-derives a result path next to the scenario file
     # (see result_path_provider.py). Force the harness-assigned per-task directory;
     # Simulator.prepare_simulation_directory honours a non-empty result_directory.
-    my_sim.get_simulation_parameters().result_directory = result_dir
+    simulator.get_simulation_parameters().result_directory = result_dir
 
-    run_fn(my_sim, path_to_module=scenario_path)
+    run_fn(simulator, path_to_module=scenario_path)
 
-    return my_sim
+    return simulator
 
 
 def main(

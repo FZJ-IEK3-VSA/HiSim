@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 from copy import deepcopy
 
 from hisim import log
@@ -31,9 +31,23 @@ from hisim.utils import set_attributes_of_dataclass_from_dict
 from hisim.simulator import SimulationParameters
 
 
+class SystemSetupResult(NamedTuple):
+    """Result of :func:`make_system_setup`.
+
+    A named 3-tuple so callers can either unpack positionally
+    (``path_to_module, simulation_parameters, module_config_path = make_system_setup(...)``)
+    or access the fields by name (``result.module_config_path``). It is
+    backward-compatible with code that already unpacks the plain tuple.
+    """
+
+    path_to_module: str
+    simulation_parameters: SimulationParameters
+    module_config_path: str
+
+
 def make_system_setup(
-    parameters_json: dict[str, Any] | list[Any], result_directory: str
-) -> tuple[str, SimulationParameters, str]:
+    parameters_json: dict[str, Any], result_directory: str
+) -> SystemSetupResult:
     """Build a system setup from a JSON parameter dict and prepare it for simulation.
 
     Parses `parameters_json`, constructs a `SimulationParameters` instance from its
@@ -50,7 +64,8 @@ def make_system_setup(
             are written. Created if it does not exist.
 
     Returns:
-        A tuple `(path_to_module, simulation_parameters, module_config_path)` where
+        A :class:`SystemSetupResult` named tuple
+        `(path_to_module, simulation_parameters, module_config_path)` where
         `path_to_module` is the module path for the setup function,
         `simulation_parameters` is the constructed `SimulationParameters`, and
         `module_config_path` is the path to the written `module_config.json`.
@@ -59,7 +74,12 @@ def make_system_setup(
         NotImplementedError: If `parameters_json` is a list.
         AttributeError: If `parameters_json` contains keys other than the expected ones.
     """
-    if isinstance(parameters_json, list):
+    # Defensive runtime guard: the type annotation promises a dict, but this
+    # function is also fed directly from `json.load` (which returns `Any`) in
+    # `__main__`; reject a list up front with a clear error instead of failing
+    # later inside `pop`. Statically unreachable per the annotation, hence the
+    # explicit type ignore.
+    if isinstance(parameters_json, list):  # type: ignore[unreachable]
         raise NotImplementedError("System Setup Starter can only handle one setup at a time for now.")
 
     _parameters_json = deepcopy(parameters_json)
@@ -96,10 +116,10 @@ def make_system_setup(
     with open(module_config_path, "w", encoding="utf8") as out_file:
         out_file.write(json.dumps(module_config_dict))  # ignore: type
 
-    return (
-        path_to_module,
-        simulation_parameters,
-        module_config_path,
+    return SystemSetupResult(
+        path_to_module=path_to_module,
+        simulation_parameters=simulation_parameters,
+        module_config_path=module_config_path,
     )
 
 
@@ -126,7 +146,7 @@ if __name__ == "__main__":
 
     log.information(f"Reading parameters from {PARAMETERS_JSON_FILE}.")
     with open(PARAMETERS_JSON_FILE, "r", encoding="utf8") as file:
-        my_parameters_json: dict[str, Any] | list[Any] = json.load(file)
+        my_parameters_json: dict[str, Any] = json.load(file)
 
     (
         my_path_to_module,

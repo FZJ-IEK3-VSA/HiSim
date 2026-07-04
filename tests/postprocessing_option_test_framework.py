@@ -256,7 +256,7 @@ def _clone_ppdt(
         mode=case.ppdt.mode,
         setup_function=case.ppdt.setup_function,
         module_filename=case.ppdt.module_filename,
-        my_module_config=case.ppdt.my_module_config,
+        module_config=case.ppdt.module_config,
         execution_time=case.ppdt.execution_time,
         results_monthly=case.ppdt.results_monthly,
         results_hourly=case.ppdt.results_hourly,

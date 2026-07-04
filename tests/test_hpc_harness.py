@@ -253,6 +253,57 @@ def test_finalize_default_uses_process_cwd_and_home(tmp_path, monkeypatch):
 
 
 @pytest.mark.base
+def test_apply_derived_defaults_is_pure_no_filesystem():
+    """_apply_derived_defaults sets lease_timeout_s with no filesystem access.
+
+    Issue #698: the derived-default rule (lease_timeout_s = 2 * timeout_s when
+    unset) must be exercisable in isolation, i.e. without supplying the three
+    real, resolvable paths that finalize/required_paths demand. It must also
+    leave an explicit lease_timeout_s untouched and be idempotent.
+    """
+    # No db_path/sim_params_path/result_root set: finalize would raise, but
+    # _apply_derived_defaults must succeed because it does no path I/O.
+    cfg = HarnessConfig(timeout_s=42.0)
+    assert cfg.lease_timeout_s is None
+    cfg._apply_derived_defaults()
+    assert cfg.lease_timeout_s == 84.0
+
+    # An explicit value is preserved (no clobbering).
+    cfg2 = HarnessConfig(timeout_s=42.0, lease_timeout_s=7.0)
+    cfg2._apply_derived_defaults()
+    assert cfg2.lease_timeout_s == 7.0
+
+    # Idempotent: a second call does not double the timeout.
+    cfg._apply_derived_defaults()
+    assert cfg.lease_timeout_s == 84.0
+    # The path fields are still untouched (no I/O happened).
+    assert cfg.db_path is None
+    assert cfg.sim_params_path is None
+    assert cfg.result_root is None
+
+
+@pytest.mark.base
+def test_resolve_paths_normalises_in_place():
+    """_resolve_paths rewrites the three required paths in place via _normalize_path."""
+    cfg = HarnessConfig(
+        db_path="tasks.db",
+        sim_params_path="~/configs/runs.json",
+        result_root="out",
+    )
+    cfg._resolve_paths(cwd=Path("/srv/harness_proj"), home=Path("/srv/harness_home"))
+    assert cfg.db_path == "/srv/harness_proj/tasks.db"
+    assert cfg.sim_params_path == "/srv/harness_home/configs/runs.json"
+    assert cfg.result_root == "/srv/harness_proj/out"
+
+
+@pytest.mark.base
+def test_resolve_paths_validates_required_paths():
+    """_resolve_paths raises when a required path is missing, just like finalize."""
+    with pytest.raises(ValueError):
+        HarnessConfig(db_path="only.db")._resolve_paths()
+
+
+@pytest.mark.base
 def test_config_from_file_accepts_deprecated_db_key(tmp_path):
     """Test that the pre-rename JSON key 'db' is accepted with a deprecation warning."""
     cfg_path = tmp_path / "harness.json"
@@ -296,6 +347,74 @@ def test_config_from_file_rejects_both_old_and_new_key(tmp_path):
     )
     with pytest.raises(ValueError, match="both 'db' and its renamed form 'db_path'"):
         HarnessConfig.from_file(str(cfg_path))
+
+
+@pytest.mark.base
+def test_config_from_dict_builds_from_plain_dict_no_filesystem():
+    """`from_dict` is the pure seam: parsing rules are testable with a plain dict."""
+    cfg = HarnessConfig.from_dict(
+        {"db_path": "t.db", "sim_params_path": "s.json", "result_root": "out", "timeout_s": 100}
+    )
+    assert cfg.db_path == "t.db"
+    assert cfg.sim_params_path == "s.json"
+    assert cfg.result_root == "out"
+    assert cfg.timeout_s == 100
+
+
+@pytest.mark.base
+def test_config_from_dict_rejects_unknown_keys_and_uses_source_label():
+    """`from_dict` rejects unknown keys and surfaces the `source` label in the error."""
+    with pytest.raises(ValueError, match=r"Unknown keys in harness config <mem>: \['bogus'\]"):
+        HarnessConfig.from_dict({"db_path": "t.db", "bogus": 1}, source="<mem>")
+
+
+@pytest.mark.base
+def test_config_from_dict_accepts_deprecated_db_key():
+    """`from_dict` remaps the deprecated `db` key with a DeprecationWarning."""
+    with pytest.warns(DeprecationWarning, match="'db' is deprecated"):
+        cfg = HarnessConfig.from_dict({"db": "t.db", "sim_params_path": "s.json", "result_root": "out"})
+    assert cfg.db_path == "t.db"
+    assert cfg.sim_params_path == "s.json"
+    assert cfg.result_root == "out"
+
+
+@pytest.mark.base
+def test_config_from_dict_accepts_deprecated_sim_params_key():
+    """`from_dict` remaps the deprecated `sim_params` key with a DeprecationWarning."""
+    with pytest.warns(DeprecationWarning, match="'sim_params' is deprecated"):
+        cfg = HarnessConfig.from_dict({"db_path": "t.db", "sim_params": "s.json", "result_root": "out"})
+    assert cfg.db_path == "t.db"
+    assert cfg.sim_params_path == "s.json"
+    assert cfg.result_root == "out"
+
+
+@pytest.mark.base
+def test_config_from_dict_rejects_both_old_and_new_key_with_source_label():
+    """`from_dict` rejects conflicting deprecated/new keys and names `source` in the error."""
+    with pytest.raises(ValueError, match=r"Harness config <mem> sets both 'db' and its renamed form 'db_path'"):
+        HarnessConfig.from_dict({"db": "a.db", "db_path": "b.db"}, source="<mem>")
+
+
+@pytest.mark.base
+def test_config_from_dict_defaults_source_label_in_error(tmp_path):
+    """`from_dict` falls back to the `<dict>` source label when none is supplied."""
+    with pytest.raises(ValueError, match=r"Unknown keys in harness config <dict>: \['bogus'\]"):
+        HarnessConfig.from_dict({"db_path": "t.db", "bogus": 1})
+
+
+@pytest.mark.base
+def test_config_from_file_delegates_to_from_dict(tmp_path):
+    """`from_file` and `from_dict` agree for identical inputs (same warnings/errors)."""
+    cfg_path = tmp_path / "harness.json"
+    cfg_path.write_text(
+        '{"db_path": "t.db", "sim_params_path": "s.json", "result_root": "out", "timeout_s": 100}',
+        encoding="utf-8",
+    )
+    from_file_cfg = HarnessConfig.from_file(str(cfg_path))
+    from_dict_cfg = HarnessConfig.from_dict(
+        {"db_path": "t.db", "sim_params_path": "s.json", "result_root": "out", "timeout_s": 100}
+    )
+    assert from_file_cfg == from_dict_cfg
 
 
 @pytest.mark.base

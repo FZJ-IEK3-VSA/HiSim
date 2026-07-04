@@ -345,8 +345,25 @@ def main_cli() -> None:
     run_simulation(my_sim, path_to_module=ptm)
 
 
-def main(path_to_module: str, my_simulation_parameters: Optional[SimulationParameters] = None, my_module_config: Optional[str] = None) -> None:
-    """Main function only needed for legacy functionality, such as system setup tests."""
+def main(path_to_module: str, my_simulation_parameters: Optional[SimulationParameters] = None, my_module_config: Optional[str] = None) -> str:
+    """Run a Python-based system setup and return the directory it wrote results to.
+
+    This is the legacy entry point used by the system-setup tests. It initializes
+    the simulator from the setup ``setup_function`` at *path_to_module*, runs every
+    time step and the post-processing, and returns the filesystem path of the
+    result directory the simulator actually wrote to.
+
+    The directory is the one recorded on the ``SimulationParameters`` instance by
+    :meth:`Simulator.prepare_simulation_directory` -- which, when no directory was
+    pre-set, configures it via the :class:`ResultPathProviderSingleton`. The
+    returned value is therefore authoritative regardless of how the directory was
+    configured, and callers should prefer it over re-querying the singleton, whose
+    state is a mutable side channel. The singleton continues to be populated
+    exactly as before, so existing callers that still read it are unaffected.
+
+    Returns:
+        The absolute path of the directory the simulation wrote its results to.
+    """
 
     my_sim = initialize_from_python(
         path_to_module=path_to_module,
@@ -354,6 +371,7 @@ def main(path_to_module: str, my_simulation_parameters: Optional[SimulationParam
         my_module_config=my_module_config,
     )
     run_simulation(my_sim, path_to_module=path_to_module)
+    return my_sim.get_simulation_parameters().result_directory
 
 
 if __name__ == "__main__":

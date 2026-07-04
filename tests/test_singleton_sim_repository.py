@@ -152,6 +152,12 @@ def test_house(
     assert SingletonDictKeyEnum.THERMALCAPACITYENVELOPE in repo.my_dict
     assert SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING in repo.my_dict
     assert SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION in repo.my_dict
+    # The thermal parameters must carry real, positive computed values -- not just
+    # be present -- to confirm the building genuinely pushed its 5R1C results
+    # through the singleton sim repository during the run.
+    assert repo.my_dict[SingletonDictKeyEnum.THERMALCAPACITYENVELOPE] > 0
+    assert repo.my_dict[SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING] > 0
+    assert repo.my_dict[SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION] > 0
     assert len(repo.my_dict) >= 7
 
     # https://medium.com/analytics-vidhya/how-to-create-a-thread-safe-singleton-class-in-python-822e1170a7f6

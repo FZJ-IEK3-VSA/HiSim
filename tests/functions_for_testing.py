@@ -4,7 +4,20 @@ from hisim.component import ComponentOutput
 
 
 def get_number_of_outputs(list_of_components: list) -> int:
-    """Calculates the number of outputs for a list of components or individual outputs."""
+    """Calculates the number of outputs for a list of components or individual outputs.
+
+    Iterates over the list and, for each entry, either counts it as a single
+    output (if it is a ``ComponentOutput`` instance) or sums the length of the
+    component's ``.outputs`` collection.
+
+    Args:
+        list_of_components (list): Mixed list of component instances (which
+            expose an ``.outputs`` attribute) and individual ``ComponentOutput``
+            objects.
+
+    Returns:
+        int: Total number of outputs across all entries in the list.
+    """
     number_of_outputs = 0
     for component in list_of_components:
         if isinstance(component, ComponentOutput):

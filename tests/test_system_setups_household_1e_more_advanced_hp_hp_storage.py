@@ -13,7 +13,7 @@ from hisim import utils
 # @pytest.mark.system_setups
 @pytest.mark.utsp
 @utils.measure_execution_time
-def test_basic_household():
+def test_basic_household() -> None:
     """Single day."""
 
     config_filename = "household_1e_advanced_hp_hp_storage_config.json"

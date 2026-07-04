@@ -13,7 +13,24 @@ from hisim.hpc_harness.protocol import GRANT, NO_WORK_AVAILABLE, REPORT, REQUEST
 
 
 def run_agent(comm: "object", cfg: HarnessConfig) -> None:
-    """Run the node-agent loop on a worker rank until the head signals shutdown."""
+    """Run the node-agent loop on a worker rank until the head signals shutdown.
+
+    Maintains a local pool of concurrent simulations, requesting work from the
+    head (rank 0) when spare capacity is available and reporting completed
+    tasks back. Exits when the head sends SHUTDOWN and the local pool has
+    drained. On any exception, all running simulations are killed before the
+    exception is re-raised.
+
+    Args:
+        comm: MPI communicator for messaging the head node (rank 0). Must
+            support ``Get_rank``, ``send``, ``recv``, and ``iprobe``.
+        cfg: HarnessConfig providing required paths, memory limits, timing
+            parameters, and slot configuration for the local pool.
+
+    Raises:
+        Exception: Any error raised during the agent loop; all running
+            simulations are killed before the exception propagates.
+    """
     from mpi4py import MPI  # pylint: disable=import-outside-toplevel,import-error
 
     rank = comm.Get_rank()
@@ -57,7 +74,7 @@ def run_agent(comm: "object", cfg: HarnessConfig) -> None:
             if not shutting_down and not awaiting_grant and now >= next_request_at:
                 free = pool.free_slots()
                 if free > 0:
-                    comm.send({"type": REQUEST, "host": host, "rank": rank, "n_free": free},
+                    comm.send({"type": REQUEST, "host": host, "rank": rank, "num_free_slots": free},
                               dest=0, tag=TAG)
                     awaiting_grant = True
 

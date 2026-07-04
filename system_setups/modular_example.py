@@ -129,8 +129,8 @@ def setup_function(
     floor_area = arche_type_config_.absolute_conditioned_floor_area
     water_heating_system_installed = arche_type_config_.water_heating_system_installed  # Electricity, Hydrogen or False
     heating_system_installed = arche_type_config_.heating_system_installed
-    mobility_set = arche_type_config_.mobility_set
-    mobility_distance = arche_type_config_.mobility_distance
+    transportation_device_set = arche_type_config_.transportation_device_set
+    commuting_travel_route_set = arche_type_config_.commuting_travel_route_set
 
     # select if utsp is needed based on defined occupancy_profile:
     if occupancy_profile_utsp is None and occupancy_profile is None:
@@ -223,16 +223,16 @@ def setup_function(
 
     # build occupancy
     if utsp_connected:
-        if mobility_set is None:
-            this_mobility_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car
-            hisim.log.information("Default is used for mobility set, because None was defined.")
+        if transportation_device_set is None:
+            this_transportation_device_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car
+            hisim.log.information("Default is used for transportation device set, because None was defined.")
         else:
-            this_mobility_set = mobility_set
-        if mobility_distance is None:
-            this_mobility_distance = TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
-            hisim.log.information("Default is used for mobility distance, because None was defined.")
+            this_transportation_device_set = transportation_device_set
+        if commuting_travel_route_set is None:
+            this_commuting_travel_route_set = TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
+            hisim.log.information("Default is used for commuting travel route set, because None was defined.")
         else:
-            this_mobility_distance = mobility_distance
+            this_commuting_travel_route_set = commuting_travel_route_set
 
         my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
             name="UTSPConnector",
@@ -240,8 +240,8 @@ def setup_function(
             household=occupancy_profile_utsp,  # type: ignore
             energy_intensity=EnergyIntensityType.EnergySaving,
             result_dir_path=hisim.utils.HISIMPATH["utsp_results"],
-            travel_route_set=this_mobility_distance,
-            transportation_device_set=this_mobility_set,
+            travel_route_set=this_commuting_travel_route_set,
+            transportation_device_set=this_transportation_device_set,
             charging_station_set=charging_station,
             profile_with_washing_machine_and_dishwasher=not smart_devices_included,
             predictive_control=False,
@@ -291,7 +291,7 @@ def setup_function(
         )
 
     # """CARS"""
-    if mobility_set is not None:
+    if transportation_device_set is not None:
         my_cars, count = component_connections.configure_cars(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
@@ -348,14 +348,14 @@ def setup_function(
 
     # """ EV BATTERY """
     if ev_included:
-        if mobility_set is None:
-            raise Exception("If EV should be simulated mobility set needs to be defined.")
+        if transportation_device_set is None:
+            raise Exception("If EV should be simulated a transportation device set needs to be defined.")
         _ = component_connections.configure_ev_batteries(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,  # noqa
             my_cars=my_cars,
             charging_station_set=charging_station,
-            mobility_set=mobility_set,
+            mobility_set=transportation_device_set,
             my_electricity_controller=my_electricity_controller,
             controllable=controllable,
         )  # could return ev_capacities if needed

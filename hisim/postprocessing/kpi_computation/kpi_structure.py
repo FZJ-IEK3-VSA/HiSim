@@ -69,12 +69,12 @@ class KpiHelperClass:
     """Class for providing some helper fucntions for calculating KPIs."""
 
     @staticmethod
-    def compute_total_energy_from_power_timeseries(power_timeseries_in_watt: pd.Series, timeresolution: int) -> float:
+    def compute_total_energy_from_power_timeseries(power_timeseries_in_watt: pd.Series, time_resolution_in_seconds: float) -> float:
         """Computes the energy in kWh from a power timeseries in W."""
         if power_timeseries_in_watt.empty:
             return 0.0
 
-        energy_in_kilowatt_hour = float(power_timeseries_in_watt.sum() * timeresolution / 3.6e6)
+        energy_in_kilowatt_hour = float(power_timeseries_in_watt.sum() * time_resolution_in_seconds / 3.6e6)
         return energy_in_kilowatt_hour
 
     @staticmethod

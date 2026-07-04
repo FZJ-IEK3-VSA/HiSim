@@ -83,7 +83,7 @@ def test_main_returns_zero_with_valid_config(tmp_path: Path) -> None:
     config_path = _write_config(tmp_path)
 
     def fake_run_fn(
-        config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
+        _config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
     ) -> list[RunResult]:
         return [_fake_run_result()]
 
@@ -102,7 +102,7 @@ def test_main_writes_manifest_json(tmp_path: Path) -> None:
     injected = [_fake_run_result(n_artifacts=2)]
 
     def fake_run_fn(
-        config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
+        _config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
     ) -> list[RunResult]:
         return injected
 
@@ -134,7 +134,7 @@ def test_main_fails_hard_on_missing_config(tmp_path: Path) -> None:
     assert not missing.exists()
 
     def fake_run_fn(
-        config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
+        _config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
     ) -> list[RunResult]:  # pragma: no cover - should never be called
         raise AssertionError("run_fn must not be called when config is missing")
 
@@ -158,7 +158,7 @@ def test_main_overwrites_stale_manifest(tmp_path: Path) -> None:
     assert stale_path.read_text() == stale_content
 
     def fake_run_fn(
-        config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
+        _config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
     ) -> list[RunResult]:
         return [_fake_run_result()]
 
@@ -184,7 +184,7 @@ def test_main_passes_golden_subdir_to_run_fn(tmp_path: Path) -> None:
     recorded: dict[str, str] = {}
 
     def recording_run_fn(
-        config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
+        _config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
     ) -> list[RunResult]:
         recorded["subdir"] = subdir
         return [_fake_run_result()]
@@ -209,7 +209,7 @@ def test_main_passes_results_root_and_repo_root_to_run_fn(tmp_path: Path) -> Non
     recorded: dict[str, Path] = {}
 
     def recording_run_fn(
-        config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
+        _config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
     ) -> list[RunResult]:
         recorded["results_root"] = results_root
         recorded["repo_root"] = repo_root
@@ -235,7 +235,7 @@ def test_main_handles_run_result_with_error(tmp_path: Path) -> None:
     errored = _fake_run_result(error="Traceback (most recent call last):\n  boom")
 
     def fake_run_fn(
-        config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
+        _config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
     ) -> list[RunResult]:
         return [errored]
 
@@ -260,7 +260,7 @@ def test_main_prints_summary_with_pair_count_and_manifest_path(
     config_path = _write_config(tmp_path)
 
     def fake_run_fn(
-        config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
+        _config: GoldenConfig, results_root: Path, repo_root: Path, subdir: str
     ) -> list[RunResult]:
         return [_fake_run_result(), _fake_run_result(setup_id="setup_b", param_id="ps_b")]
 

@@ -110,7 +110,7 @@ def test_get_dynamic_entry_unknown_component_type_returns_none() -> None:
 def test_get_dynamic_component_weights_empty_on_fresh_repo() -> None:
     """A freshly constructed repo has no weights for any component type."""
     repo = SimRepository()
-    assert repo.get_dynamic_component_weights(_CT) == []
+    assert not repo.get_dynamic_component_weights(_CT)
 
 
 def test_get_dynamic_component_weights_preserves_insertion_order() -> None:

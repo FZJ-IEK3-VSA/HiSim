@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from openpyxl import load_workbook
+from openpyxl import load_workbook  # type: ignore[import-untyped]
 
 from hisim import utils
 from hisim.project_code_overview_generator import OverviewGenerator

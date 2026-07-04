@@ -264,17 +264,18 @@ def test_apply_derived_defaults_is_pure_no_filesystem():
     # No db_path/sim_params_path/result_root set: finalize would raise, but
     # _apply_derived_defaults must succeed because it does no path I/O.
     cfg = HarnessConfig(timeout_s=42.0)
-    assert cfg.lease_timeout_s is None
-    cfg._apply_derived_defaults()
+    lease_before = cfg.lease_timeout_s
+    assert lease_before is None
+    cfg._apply_derived_defaults()  # pylint: disable=protected-access
     assert cfg.lease_timeout_s == 84.0
 
     # An explicit value is preserved (no clobbering).
     cfg2 = HarnessConfig(timeout_s=42.0, lease_timeout_s=7.0)
-    cfg2._apply_derived_defaults()
+    cfg2._apply_derived_defaults()  # pylint: disable=protected-access
     assert cfg2.lease_timeout_s == 7.0
 
     # Idempotent: a second call does not double the timeout.
-    cfg._apply_derived_defaults()
+    cfg._apply_derived_defaults()  # pylint: disable=protected-access
     assert cfg.lease_timeout_s == 84.0
     # The path fields are still untouched (no I/O happened).
     assert cfg.db_path is None
@@ -290,7 +291,7 @@ def test_resolve_paths_normalises_in_place():
         sim_params_path="~/configs/runs.json",
         result_root="out",
     )
-    cfg._resolve_paths(cwd=Path("/srv/harness_proj"), home=Path("/srv/harness_home"))
+    cfg._resolve_paths(cwd=Path("/srv/harness_proj"), home=Path("/srv/harness_home"))  # pylint: disable=protected-access
     assert cfg.db_path == "/srv/harness_proj/tasks.db"
     assert cfg.sim_params_path == "/srv/harness_home/configs/runs.json"
     assert cfg.result_root == "/srv/harness_proj/out"
@@ -300,7 +301,7 @@ def test_resolve_paths_normalises_in_place():
 def test_resolve_paths_validates_required_paths():
     """_resolve_paths raises when a required path is missing, just like finalize."""
     with pytest.raises(ValueError):
-        HarnessConfig(db_path="only.db")._resolve_paths()
+        HarnessConfig(db_path="only.db")._resolve_paths()  # pylint: disable=protected-access
 
 
 @pytest.mark.base
@@ -396,7 +397,7 @@ def test_config_from_dict_rejects_both_old_and_new_key_with_source_label():
 
 
 @pytest.mark.base
-def test_config_from_dict_defaults_source_label_in_error(tmp_path):
+def test_config_from_dict_defaults_source_label_in_error():
     """`from_dict` falls back to the `<dict>` source label when none is supplied."""
     with pytest.raises(ValueError, match=r"Unknown keys in harness config <dict>: \['bogus'\]"):
         HarnessConfig.from_dict({"db_path": "t.db", "bogus": 1})

@@ -5,7 +5,7 @@ import time
 import sys
 import warnings
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, TypeVar
+from typing import Any, Dict, List, Optional, Type, TypeVar, cast
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from dataclasses_json.core import _decode_dataclass
@@ -152,7 +152,7 @@ def _scenario_analysis_config_from_dict(
     ``cls.from_dict`` internally, so JSON deserialization is covered as well.
     """
     kvs = _migrate_legacy_field_names(kvs)
-    return _decode_dataclass(cls, kvs, infer_missing)
+    return cast(_A, _decode_dataclass(cls, kvs, infer_missing))
 
 
 ScenarioAnalysisConfig.from_dict = _scenario_analysis_config_from_dict  # type: ignore[assignment]

@@ -11,11 +11,7 @@ from pathlib import Path
 import pytest
 
 from hisim.components import building
-from hisim.system_setup_configuration import SystemSetupConfigBase
-from system_setups.household_gas_heater import (
-    HouseholdGasHeaterConfig,
-    HouseholdGasHeaterOptions,
-)
+from system_setups.household_gas_heater import HouseholdGasHeaterConfig
 
 
 # A concrete subclass with simple defaults is used to exercise the base class.

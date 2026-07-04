@@ -22,7 +22,7 @@ modules_data: pd.DataFrame = pd.read_csv(_MODULE_DIR / "data_processed" / "cec_m
 # call below keeps the original behaviour identical.
 
 
-def select_pv_module(modules_data: pd.DataFrame) -> pd.Series:
+def select_pv_module(modules_df: pd.DataFrame) -> pd.Series:
     """Select the default PV module from a CEC-modules ``DataFrame``.
 
     Filters the ``Mono-c-Si`` rows, computes the fill factor (``FF``), the
@@ -31,7 +31,7 @@ def select_pv_module(modules_data: pd.DataFrame) -> pd.Series:
     and whose ``P_max`` lies in ``[420, 440]``.
 
     Args:
-        modules_data: A ``DataFrame`` with the CEC modules columns
+        modules_df: A ``DataFrame`` with the CEC modules columns
             (``Technology``, ``V_mp_ref``, ``I_mp_ref``, ``V_oc_ref``,
             ``I_sc_ref``, ``A_c`` and ``Manufacturer``).
 
@@ -41,7 +41,7 @@ def select_pv_module(modules_data: pd.DataFrame) -> pd.Series:
     """
     # #Calculate additional indicators
     # https://github.com/PV-Tutorials/pyData-2021-Solar-PV-Modeling/blob/main/Tutorial%20C%20-%20Modeling%20Module%27s%20Performance%20Advanced.ipynb
-    data_mono = modules_data[modules_data["Technology"] == "Mono-c-Si"].copy()
+    data_mono = modules_df[modules_df["Technology"] == "Mono-c-Si"].copy()
     for c in ["V_mp_ref", "I_mp_ref", "V_oc_ref", "I_sc_ref", "A_c"]:
         data_mono[c] = data_mono[c].astype(float)
 
@@ -70,7 +70,7 @@ default_module: pd.Series = select_pv_module(modules_data)
 # module-level call below keeps the original behaviour identical.
 
 
-def select_inverter(inverter_data: pd.DataFrame, default_module: pd.Series) -> pd.Series:
+def select_inverter(inverter_df: pd.DataFrame, module: pd.Series) -> pd.Series:
     """Select the default inverter from a CEC-inverters ``DataFrame``.
 
     Computes the inverter efficiency (``eff`` = ``Paco`` / ``Pdco``) and keeps
@@ -85,9 +85,9 @@ def select_inverter(inverter_data: pd.DataFrame, default_module: pd.Series) -> p
       (``I_mp_ref``).
 
     Args:
-        inverter_data: A ``DataFrame`` with the CEC inverter columns
+        inverter_df: A ``DataFrame`` with the CEC inverter columns
             (``Pdco``, ``Paco``, ``Vdco``, ``Idcmax``).
-        default_module: The selected PV module as a ``Series``, providing
+        module: The selected PV module as a ``Series``, providing
             ``P_max``, ``V_mp_ref`` and ``I_mp_ref``.
 
     Returns:
@@ -98,19 +98,19 @@ def select_inverter(inverter_data: pd.DataFrame, default_module: pd.Series) -> p
         IndexError: if no inverter satisfies all the constraints (the
             filtered frame is empty), mirroring the original inline behaviour.
     """
-    inverter_data = inverter_data.copy()
-    inverter_data["eff"] = inverter_data["Paco"] / inverter_data["Pdco"]
+    inverter_df = inverter_df.copy()
+    inverter_df["eff"] = inverter_df["Paco"] / inverter_df["Pdco"]
 
-    candidate_inverters = inverter_data[
-        (inverter_data["Pdco"].astype(float) > default_module["P_max"]) &
-        (inverter_data["Paco"].astype(float) > 0.8 * default_module["P_max"]) &
-        (inverter_data["Paco"].astype(float) < 1.2 * default_module["P_max"]) &
-        (inverter_data["Vdco"].astype(float) > 0.95 * default_module["V_mp_ref"]) &
-        (inverter_data["Vdco"].astype(float) < 1.05 * default_module["V_mp_ref"]) &
-        (inverter_data["Idcmax"].astype(float) > default_module["I_mp_ref"])
+    candidate_inverters = inverter_df[
+        (inverter_df["Pdco"].astype(float) > module["P_max"]) &
+        (inverter_df["Paco"].astype(float) > 0.8 * module["P_max"]) &
+        (inverter_df["Paco"].astype(float) < 1.2 * module["P_max"]) &
+        (inverter_df["Vdco"].astype(float) > 0.95 * module["V_mp_ref"]) &
+        (inverter_df["Vdco"].astype(float) < 1.05 * module["V_mp_ref"]) &
+        (inverter_df["Idcmax"].astype(float) > module["I_mp_ref"])
     ]
-    selected_inverter = candidate_inverters.sort_values(by='eff').iloc[-1]
-    return selected_inverter
+    chosen_inverter = candidate_inverters.sort_values(by='eff').iloc[-1]
+    return chosen_inverter
 
 
 inverter_data: pd.DataFrame = pd.read_csv(_MODULE_DIR / "data_processed" / "cec_inverters.csv", header=[0, 1, 2])

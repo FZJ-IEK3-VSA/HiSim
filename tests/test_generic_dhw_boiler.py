@@ -90,11 +90,11 @@ def boiler_setup():
     my_boiler_controller_l1.heat_pump_target_percentage_channel.global_index = 3
     my_heater.fuel_delivered_channel.global_index = 4
 
-    rig = namedtuple(
+    BoilerRig = namedtuple(  # pylint: disable=invalid-name
         "BoilerRig",
         ["boiler", "heater", "controller", "stsv", "warm_water_use"],
     )
-    return rig(
+    return BoilerRig(
         boiler=my_boiler,
         heater=my_heater,
         controller=my_boiler_controller_l1,
@@ -104,7 +104,9 @@ def boiler_setup():
 
 
 @pytest.mark.base
-def test_boiler_heat_loss_matches_draw_off_and_standing_losses(boiler_setup) -> None:
+def test_boiler_heat_loss_matches_draw_off_and_standing_losses(  # pylint: disable=redefined-outer-name
+    boiler_setup,
+) -> None:
     """With a 1 L draw-off the mean boiler temperature settles in [59.6, 59.7) °C.
 
     The temperature drop matches the heat losses from the 1 L hot-water draw-off
@@ -132,7 +134,9 @@ def test_boiler_heat_loss_matches_draw_off_and_standing_losses(boiler_setup) -> 
 
 
 @pytest.mark.base
-def test_heater_delivers_full_power_when_boiler_cold(boiler_setup) -> None:
+def test_heater_delivers_full_power_when_boiler_cold(  # pylint: disable=redefined-outer-name
+    boiler_setup,
+) -> None:
     """Forcing the storage temperature to 20 °C makes the heater deliver full power.
 
     With the boiler forced cold (well below the controller's lower threshold) the
@@ -161,7 +165,9 @@ def test_heater_delivers_full_power_when_boiler_cold(boiler_setup) -> None:
 
 
 @pytest.mark.base
-def test_heater_off_when_boiler_hot(boiler_setup) -> None:
+def test_heater_off_when_boiler_hot(  # pylint: disable=redefined-outer-name
+    boiler_setup,
+) -> None:
     """Forcing the storage temperature to 100 °C makes the heater shut off.
 
     With the boiler forced hot (above the controller's upper threshold) the L1

@@ -26,7 +26,8 @@ from hisim.postprocessing.scenario_evaluation.scenario_analysis_complete_with_co
 
 def _default_dict() -> dict:
     """Return the default config as a plain dict (new field name)."""
-    return ScenarioAnalysisConfig.get_default().to_dict()
+    config_dict: dict = ScenarioAnalysisConfig.get_default().to_dict()
+    return config_dict
 
 
 @pytest.mark.base

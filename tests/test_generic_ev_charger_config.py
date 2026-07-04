@@ -93,7 +93,7 @@ def test_config_rejects_none_mode() -> None:
         EVChargerControllerConfig(
             building_name="BUI1",
             name="Controller",
-            mode=None,
+            mode=None,  # type: ignore[arg-type]  # intentionally invalid to test runtime validation
         )
 
 
@@ -104,7 +104,7 @@ def test_config_rejects_non_numeric_string() -> None:
         EVChargerControllerConfig(
             building_name="BUI1",
             name="Controller",
-            mode="not-a-mode",
+            mode="not-a-mode",  # type: ignore[arg-type]  # intentionally invalid to test runtime validation
         )
 
 

@@ -1,6 +1,8 @@
-"""Unit tests for ``scripts/runner.py`` (config schema, SimulationParameters
-construction, setup-path resolution, artifact inventory, manifest round-trip,
-and the ``run_all`` orchestrator with an injected fake ``run_one``).
+"""Unit tests for ``scripts/runner.py``.
+
+Cover the config schema, SimulationParameters construction, setup-path
+resolution, artifact inventory, manifest round-trip, and the ``run_all``
+orchestrator with an injected fake ``run_one``.
 
 All tests are tagged ``pytest.mark.base`` and run without executing any HiSim
 simulation. Filesystem tests use the ``tmp_path`` fixture so nothing leaks into
@@ -301,7 +303,7 @@ def test_inventory_directory_lists_files_sorted_with_kind_and_hash(tmp_path: Pat
 
 def test_inventory_directory_nonexistent_returns_empty_list(tmp_path: Path) -> None:
     """A nonexistent directory yields an empty list (no error)."""
-    assert inventory_directory(tmp_path / "nope") == []
+    assert not inventory_directory(tmp_path / "nope")
 
 
 # --------------------------------------------------------------------------- #
@@ -423,7 +425,7 @@ def test_run_all_produces_one_result_per_pair(tmp_path: Path, monkeypatch: pytes
         setup: SetupConfig,
         parameter_set: ParameterSetConfig,
         result_directory: str,
-        repo_root: Path,
+        _repo_root: Path,
     ) -> RunResult:
         calls.append((setup.id, parameter_set.id, result_directory))
         return RunResult(setup.id, parameter_set.id, result_directory, [])
@@ -500,4 +502,4 @@ def test_run_one_captures_error_for_nonexistent_setup(tmp_path: Path) -> None:
     assert result.parameter_set_id == "ps"
     assert result.error is not None
     assert "FileNotFoundError" in result.error
-    assert result.artifacts == []
+    assert not result.artifacts

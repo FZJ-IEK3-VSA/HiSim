@@ -7,7 +7,6 @@ contains no usable sub-configurations.
 
 # clean
 
-import json
 import warnings
 from pathlib import Path
 

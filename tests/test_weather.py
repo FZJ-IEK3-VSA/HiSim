@@ -50,10 +50,10 @@ def test_weather() -> None:
     # across timesteps gives W/m^2*timesteps; multiply by the timestep
     # length (seconds) to get W*s/m^2, then convert W*s to kWh so the
     # compared quantity is an annual energy density in kWh/m^2/year.
-    SECONDS_PER_HOUR: int = 3600
-    WATT_SECOND_TO_KWH: float = 1 / (1000 * SECONDS_PER_HOUR)  # W*s -> kWh
+    seconds_per_hour: int = 3600
+    watt_second_to_kwh: float = 1 / (1000 * seconds_per_hour)  # W*s -> kWh
     annual_dni_kwh_per_m2: float = (
-        sum(dni) * mysim.seconds_per_timestep * WATT_SECOND_TO_KWH
+        sum(dni) * mysim.seconds_per_timestep * watt_second_to_kwh
     )
     assert annual_dni_kwh_per_m2 > 950  # kWh/m^2/year
 
@@ -196,7 +196,7 @@ def test_weather_cache_pressure_non_keyerror_propagates(
     class _PressureCorruptDataFrame(pd.DataFrame):
         """DataFrame whose ``'Pressure'`` access raises ``ValueError``."""
 
-        _metadata = pd.DataFrame._metadata
+        _metadata = pd.DataFrame._metadata  # pylint: disable=protected-access
 
         def __getitem__(self, key: object) -> pd.Series:  # type: ignore[override]
             if key == "Pressure":

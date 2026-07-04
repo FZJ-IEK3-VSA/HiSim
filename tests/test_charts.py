@@ -82,14 +82,14 @@ def chart_with_injected_checker(tmp_path: Path) -> _ChartFixture:
     return _ChartFixture(chart=chart, checker_calls=checker_calls, target_subdir=target_subdir)
 
 
-def test_chart_constructor_does_not_create_output_directory(
+def test_chart_constructor_does_not_create_output_directory(  # pylint: disable=redefined-outer-name
     chart_with_injected_checker: _ChartFixture,
 ) -> None:
     """Chart.__init__ must not create the per-component output directory."""
     assert not chart_with_injected_checker.target_subdir.exists()
 
 
-def test_chart_constructor_uses_injected_path_checker(
+def test_chart_constructor_uses_injected_path_checker(  # pylint: disable=redefined-outer-name
     chart_with_injected_checker: _ChartFixture,
 ) -> None:
     """Chart.__init__ must invoke the injected path_checker (not the global singleton) for both paths."""
@@ -97,7 +97,7 @@ def test_chart_constructor_uses_injected_path_checker(
     assert chart_with_injected_checker.checker_calls == [chart.filepath, chart.filepath2]
 
 
-def test_ensure_output_dir_creates_directory_lazily(
+def test_ensure_output_dir_creates_directory_lazily(  # pylint: disable=redefined-outer-name
     chart_with_injected_checker: _ChartFixture,
 ) -> None:
     """ensure_output_dir creates the per-component directory on demand, not in __init__."""
@@ -106,7 +106,7 @@ def test_ensure_output_dir_creates_directory_lazily(
     assert chart_with_injected_checker.target_subdir.is_dir()
 
 
-def test_rescale_y_axis_scales_watts_to_megawatts(
+def test_rescale_y_axis_scales_watts_to_megawatts(  # pylint: disable=redefined-outer-name
     chart_with_injected_checker: _ChartFixture,
 ) -> None:
     """rescale_y_axis rescales watt-scale values to megawatts without filesystem side effects."""

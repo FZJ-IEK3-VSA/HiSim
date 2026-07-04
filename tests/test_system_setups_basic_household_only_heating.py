@@ -11,7 +11,6 @@ from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
-from hisim.result_path_provider import ResultPathProviderSingleton
 
 
 @pytest.mark.system_setups

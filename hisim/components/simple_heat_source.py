@@ -300,6 +300,7 @@ class SimpleHeatSource(cp.Component):
         lines.append(f"Name: {self.config.name}")
         lines.append(f"Source: {self.config.const_source}")
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER:
+            assert self.config.power_th_in_watt is not None
             lines.append(f"Power: {self.config.power_th_in_watt * 1e-3:4.0f} kW")
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE:
             lines.append(f"Temperature : {self.config.temperature_out_in_celsius} °C")
@@ -339,6 +340,7 @@ class SimpleHeatSource(cp.Component):
         )
 
         if self.config.use_external_massflow_as_signal_input_for_nominal_massflow and massflow_in_kg_per_sec != 0:
+            assert self.config.massflow_nominal_in_kg_per_s is not None
             massflow_in_kg_per_sec = self.config.massflow_nominal_in_kg_per_s
 
         temperature_input_in_celsius = stsv.get_input_value(
@@ -346,11 +348,13 @@ class SimpleHeatSource(cp.Component):
         )
 
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER:
+            assert self.power_th_in_watt is not None
             thermal_power_in_watt = self.power_th_in_watt
 
             temperature_output = (thermal_power_in_watt / (massflow_in_kg_per_sec * self.cp_f)) + temperature_input_in_celsius
 
         elif self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE:
+            assert self.temperature_out_in_celsius is not None
             temperature_output = self.temperature_out_in_celsius
 
             thermal_power_in_watt = (massflow_in_kg_per_sec * self.cp_f *

@@ -113,4 +113,5 @@ def _needs_ems(
 )
 def test_needs_ems(expected: bool, kwargs: dict[str, bool | lt.HeatingSystems]) -> None:
     """Assert ``needs_ems`` returns ``expected`` for the given keyword triggers."""
-    assert _needs_ems(**kwargs) is expected
+    # mypy cannot match the union-valued **kwargs to the per-parameter types.
+    assert _needs_ems(**kwargs) is expected  # type: ignore[arg-type]

@@ -14,7 +14,7 @@ that still use the deprecated field names ``mobility_set`` and
 # -*- coding: utf-8 -*-
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, Optional, Type, TypeVar
+from typing import Any, Optional, Type, TypeVar, cast
 
 from dataclasses_json import dataclass_json
 from dataclasses_json.core import _decode_dataclass
@@ -28,7 +28,7 @@ from hisim.loadtypes import HeatingSystems
 #: ``mobility_set`` was renamed to ``transportation_device_set`` and
 #: ``mobility_distance`` was renamed to ``commuting_travel_route_set`` so that
 #: the field names match their ``JsonReference`` types.  Existing JSON config
-#: files may still use the old keys; :func:`_migrate_legacy_field_names` maps
+#: files may still use the old keys; :func:`migrate_legacy_field_names` maps
 #: them to the new names during deserialization so the values are not silently
 #: dropped.
 _LEGACY_FIELD_NAMES: "dict[str, str]" = {
@@ -39,7 +39,7 @@ _LEGACY_FIELD_NAMES: "dict[str, str]" = {
 _A = TypeVar("_A")
 
 
-def _migrate_legacy_field_names(kvs: Any) -> Any:
+def migrate_legacy_field_names(kvs: Any) -> Any:
     """Rename legacy JSON keys to their current field names.
 
     ``ArcheTypeConfigModular`` was previously serialized with the field names
@@ -141,8 +141,8 @@ def _archetype_config_modular_from_dict(
     *after* the ``@dataclass_json`` decorator has run.  ``from_json`` calls
     ``cls.from_dict`` internally, so JSON deserialization is covered as well.
     """
-    kvs = _migrate_legacy_field_names(kvs)
-    return _decode_dataclass(cls, kvs, infer_missing)
+    kvs = migrate_legacy_field_names(kvs)
+    return cast(_A, _decode_dataclass(cls, kvs, infer_missing))
 
 
 ArcheTypeConfigModular.from_dict = _archetype_config_modular_from_dict  # type: ignore[assignment]

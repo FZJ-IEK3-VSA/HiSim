@@ -1,7 +1,8 @@
 """Unit tests for :func:`hisim.hisim_convert_to_json.get_description_from_py`.
 
 ``get_description_from_py`` reads only the first line of a Python setup file and
-strips a leading ``\"\"\"``/``'''`` delimiter. It is the only self-contained,
+strips a leading triple-double-quote or triple-single-quote delimiter. It is the
+only self-contained,
 deterministic function in ``hisim_convert_to_json`` (the others require a full
 simulator), so these are pure-function tests using pytest's ``tmp_path`` fixture:
 no mocking, no simulator, no network.
@@ -37,11 +38,11 @@ def _write_first_line(tmp_path: Path, first_line: str) -> Path:
 
 @pytest.mark.base
 def test_double_quoted_one_line_docstring(tmp_path: Path) -> None:
-    """A one-line ``\"\"\"...\"\"\"`` docstring keeps its inner text.
+    """A one-line triple-double-quoted docstring keeps its inner text.
 
-    Both the leading and trailing ``\"\"\"`` are removed because ``replace``
-    substitutes every occurrence, so the returned description has no surrounding
-    quotes.
+    Both the leading and trailing triple-double-quotes are removed because
+    ``replace`` substitutes every occurrence, so the returned description has no
+    surrounding quotes.
     """
     setup_py = _write_first_line(tmp_path, '"""A household setup."""')
     assert get_description_from_py(setup_py) == "A household setup."
@@ -56,10 +57,11 @@ def test_single_quoted_one_line_docstring(tmp_path: Path) -> None:
 
 @pytest.mark.base
 def test_double_quoted_with_trailing_comment(tmp_path: Path) -> None:
-    """A leading ``\"\"\"`` followed by a closing ``\"\"\"`` and a comment.
+    """A leading triple-double-quote followed by a closing one and a comment.
 
-    Every ``\"\"\"`` on the line is removed and the remainder is stripped, so the
-    closing delimiter and the trailing comment survive as plain text.
+    Every triple-double-quote on the line is removed and the remainder is
+    stripped, so the closing delimiter and the trailing comment survive as plain
+    text.
     """
     setup_py = _write_first_line(
         tmp_path, '"""Description with trailing content""" # comment'
@@ -79,9 +81,10 @@ def test_line_without_quote_marker_is_unchanged(tmp_path: Path) -> None:
 
 @pytest.mark.base
 def test_lone_opening_triple_quotes(tmp_path: Path) -> None:
-    """A first line that is only the opening ``\"\"\"`` yields an empty string.
+    """A first line that is only the opening triple-double-quote yields an empty string.
 
-    ``replace('\"\"\"', '')`` on ``'\"\"\"'`` produces ``''``.
+    Removing every triple-double-quote from a line that contains only one
+    produces an empty string.
     """
     setup_py = _write_first_line(tmp_path, '"""')
     assert get_description_from_py(setup_py) == ""

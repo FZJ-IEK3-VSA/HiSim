@@ -16,7 +16,7 @@ import warnings
 import pytest
 
 from hisim.modular_household.interface_configs.archetype_config import (
-    _migrate_legacy_field_names,
+    migrate_legacy_field_names as _migrate_legacy_field_names,
 )
 
 
@@ -47,7 +47,8 @@ def test_empty_dict_passthrough() -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         result = _migrate_legacy_field_names({})
-    assert result == {}
+    assert isinstance(result, dict)
+    assert not result
     assert not any(issubclass(w.category, DeprecationWarning) for w in caught)
 
 

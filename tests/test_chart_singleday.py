@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
-
-from pathlib import Path
 
 from hisim.postprocessing.chart_singleday import ChartSingleDay
 

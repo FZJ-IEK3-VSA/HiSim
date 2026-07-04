@@ -93,7 +93,7 @@ def _config_from_setup_dict(
     default-filling logic can be unit-tested with plain dicts:
 
     1. migrate any deprecated field names in the nested ``archetype_config_``
-       (see :func:`archetype_config._migrate_legacy_field_names`),
+       (see :func:`archetype_config.migrate_legacy_field_names`),
     2. deserialize the dict with :meth:`ModularHouseholdConfig.from_dict`,
     3. validate: if the result has neither a system nor an archetype config,
        fall back to a fresh :class:`ModularHouseholdConfig` and log a warning,
@@ -123,7 +123,7 @@ def _config_from_setup_dict(
         archetype_dict = setup_config_dict.get("archetype_config_")
         if isinstance(archetype_dict, dict):
             setup_config_dict["archetype_config_"] = (
-                archetype_config._migrate_legacy_field_names(archetype_dict)
+                archetype_config.migrate_legacy_field_names(archetype_dict)
             )
     household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_dict(
         setup_config_dict

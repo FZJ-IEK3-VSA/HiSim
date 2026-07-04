@@ -5,8 +5,6 @@ coming from an upstream component, which would otherwise silently propagate
 through ``abs``/division and the downstream control logic.
 """
 
-import math
-
 import pytest
 
 from hisim import component as cp

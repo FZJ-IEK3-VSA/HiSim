@@ -51,8 +51,9 @@ class DiverterValve:
             if not with_domestic_hot_water_preparation:
                 return False
 
-            assert water_temperature_input_dhw_in_celsius is not None
-            assert set_temperatures.set_temperature_dhw is not None
+            assert actual_water_temperature is not None
+            assert set_water_temperature is not None
+            assert set_temperatures.hysteresis_water_temperature_offset is not None
 
             if actual_water_temperature < (
                 set_water_temperature - set_temperatures.hysteresis_water_temperature_offset
@@ -68,6 +69,7 @@ class DiverterValve:
             current_water_temperature: float,
             target_water_temperature: float,
         ) -> bool:
+            assert set_temperatures.hysteresis_water_temperature_offset is not None
             if (
                 DiverterValve.determine_summer_heating_mode(
                     daily_average_outside_temperature,

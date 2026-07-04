@@ -4,7 +4,7 @@
 
 # Generic/Built-in
 import os
-from typing import Any, List, NamedTuple, Optional
+from typing import Any, List, NamedTuple, Optional, Union
 import json
 import copy
 import sqlite3
@@ -93,7 +93,7 @@ class EVChargerControllerConfig(cp.ConfigBase):
 
     building_name: str
     name: str
-    mode: EVChargerMode
+    mode: Union[EVChargerMode, int]
 
     def __post_init__(self) -> None:
         """Coerce a bare integer ``mode`` to :class:`EVChargerMode`.
@@ -1058,9 +1058,7 @@ class EVChargerController(cp.Component):
             # EVChargerMode member at construction time, so this branch is
             # unreachable for a properly constructed EVChargerControllerConfig.
             # Kept as a safety net in case the validation contract is bypassed.
-            if self.mode is None:
-                raise Exception("None mode is invalid.")
-            raise Exception(f"Mode {self.mode} has not been implemented yet.")
+            raise Exception(f"Mode {self.mode!r} is invalid or has not been implemented yet.")
 
         stsv.set_output_value(self.state_channel, state)
         stsv.set_output_value(self.min_soc_channel, minimum_state_of_charge)

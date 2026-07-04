@@ -1,0 +1,46 @@
+{
+  "db_path": "/var/lib/harness/run123/tasks.db",
+  "db_snapshot_path": "/project/run123/tasks.snapshot.db",
+  "db_snapshot_interval_s": 300,
+  "journal_mode": "WAL",
+  "logs_db_path": "/var/lib/harness/run123/logs.db",
+  "logs_archive_path": "/project/run123/logs.archive.db",
+  "bind_host": "0.0.0.0",
+  "bind_port": 8080,
+  "result_root": "/project/run123/results",
+  "url_publish_path": "/project/run123/server.url",
+
+  "max_retries": 3,
+  "success_file": "finished.flag",
+  "lease_timeout_s": 14400,
+  "worker_timeout_s": 900,
+  "orphan_strikes": 2,
+  "reaper_period_s": 45,
+  "release_idle_workers": true,
+
+  "per_job_mem_gb": 10.0,
+  "mem_autoraise": true,
+  "mem_autoraise_margin_gb": 1.0,
+  "mem_min_samples": 20,
+  "mem_validation_warn_gb": 1.0,
+
+  "circuit_breaker": {
+    "enabled": true,
+    "window": 100,
+    "min_samples": 20,
+    "failure_rate": 0.5,
+    "consecutive": 25
+  },
+
+  "autoscale": {
+    "enabled": false,
+    "worker_mode": "single_core",
+    "period_s": 60,
+    "standby_floor": 10,
+    "max_workers": 2000,
+    "worker_script": "/project/run123/slurm/worker_single_core.sbatch",
+    "partition": null,
+    "squeue_poll_s": 60,
+    "registration_grace_s": 900
+  }
+}

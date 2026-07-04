@@ -1,0 +1,29 @@
+{
+  "server_url_file": "/project/run123/server.url",
+  "runner": "hisim",
+  "result_root": "/project/run123/results",
+  "log_root": "/project/run123/logs",
+  "mode": "whole_node",
+
+  "min_headroom_gb": 12.0,
+  "cores_per_job": 1,
+  "reserved_cores": 0,
+  "max_slots": null,
+  "max_jobs_per_child": 50,
+
+  "node_gate": "auto",
+  "max_node_cpu_percent": 95.0,
+  "node_safety_buffer_gb": 16.0,
+  "gate_warn_s": 600,
+  "gate_max_wait_s": 3600,
+
+  "preflight_retries": 3,
+  "preflight_window_s": 60,
+
+  "timeout_s": 7200,
+  "heartbeat_interval_s": 30,
+  "console_follow_interval_s": 2,
+  "sample_interval_s": 10,
+  "log_ship_level": "WARNING",
+  "backoff_s": 5.0
+}

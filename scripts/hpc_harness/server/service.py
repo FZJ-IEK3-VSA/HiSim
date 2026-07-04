@@ -401,6 +401,12 @@ class HarnessService:
         self._counts_cache = (0.0, {})
         return requeued
 
+    def clear_queue(self) -> int:
+        """Cancel every pending job (empty the queue); returns how many were cancelled."""
+        cancelled = self.writer.call(db.cancel_pending)
+        self._counts_cache = (0.0, {})
+        return cancelled
+
     def purge_logs(self) -> int:
         """Delete + recreate the logging DB (spec §6.8)."""
         return self.logdb.purge()
@@ -495,6 +501,15 @@ class HarnessService:
             "capacity_probe": cfg.capacity_probe or "sinfo -h -o %C (idle field)",
             "squeue_poll_s": cfg.squeue_poll_s,
             "registration_grace_s": cfg.registration_grace_s,
+            "fleets": [
+                {"name": p.name, "runner": p.runner, "worker_mode": p.worker_mode,
+                 "worker_script": p.worker_script, "worker_config": p.worker_config,
+                 "max_workers": p.max_workers, "standby_floor": p.standby_floor,
+                 "partition": p.partition}
+                for p in cfg.resolved_profiles()
+            ],
+            "profiles": [],
+            "unserved_runners": [],
             "trying_to_scale": False,
             "action": "disabled",
             "submission_state_counts": self.writer.call(db.submission_state_counts),
@@ -543,12 +558,18 @@ class HarnessService:
         )
 
     def workers(self) -> List[Dict[str, Any]]:
-        """Worker rows, enriched with in-memory liveness age."""
+        """Worker rows, enriched with in-memory liveness age and current lease info."""
         rows = self.writer.call(db.list_workers)
+        leases = self.writer.call(db.leases_by_worker)
         now = time.time()
         for row in rows:
             seen = self.liveness.get(row["worker_id"])
             row["heartbeat_age_s"] = round(now - seen, 1) if seen else None
+            lease = leases.get(row["worker_id"])
+            row["leased_job_ids"] = lease["job_ids"] if lease else []
+            row["leased_since_s"] = (
+                round(now - lease["since"], 1) if lease and lease["since"] is not None else None
+            )
         return rows
 
     # -------------------------------------------------------------------- reaper

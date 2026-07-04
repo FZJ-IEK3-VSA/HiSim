@@ -128,6 +128,18 @@ def test_job_goes_dead_after_max_attempts(conn):
     assert counts.get(db.PENDING, 0) == 0
 
 
+def test_cancel_pending_clears_queue_only(conn):
+    """cancel_pending cancels every PENDING task and leaves leased ones untouched."""
+    _submit(conn, 5)
+    db.lease_tasks(conn, "w1", 2, "l1")  # 2 leased, 3 still pending
+    assert db.cancel_pending(conn) == 3
+    counts = db.counts(conn)
+    assert counts.get(db.PENDING, 0) == 0
+    assert counts[db.LEASED] == 2
+    assert counts[db.CANCELLED] == 3
+    assert db.cancel_pending(conn) == 0  # nothing left to clear
+
+
 def test_reset_stale_leases_requeues(conn):
     """A lease older than the timeout is requeued back to PENDING."""
     _submit(conn, 1)

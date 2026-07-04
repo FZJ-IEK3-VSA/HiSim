@@ -10,7 +10,7 @@ import json
 import os
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, get_args, get_origin
 
 
 def _normalize_path(path: str) -> str:
@@ -18,12 +18,23 @@ def _normalize_path(path: str) -> str:
     return str(Path(path).expanduser().resolve())
 
 
+def _list_elem_dataclass(tp: Any) -> Optional[type]:
+    """If ``tp`` is ``List[SomeDataclass]`` return ``SomeDataclass``, else ``None``."""
+    if get_origin(tp) is list:
+        args = get_args(tp)
+        if args and dataclasses.is_dataclass(args[0]):
+            return args[0]
+    return None
+
+
 def _from_dict(cls: type, data: Dict[str, Any], *, source: str = "<dict>") -> Any:
     """Build a (possibly nested) config dataclass from a parsed JSON dict.
 
     Rejects unknown keys; recurses into fields whose type is itself a dataclass
-    (``autoscale``, ``circuit_breaker``).
+    (``autoscale``, ``circuit_breaker``) or a ``List`` of dataclasses (``profiles``).
     """
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected a JSON object at {source}, got {type(data).__name__}.")
     known = {f.name: f for f in fields(cls)}
     unknown = set(data) - set(known)
     if unknown:
@@ -31,11 +42,36 @@ def _from_dict(cls: type, data: Dict[str, Any], *, source: str = "<dict>") -> An
     kwargs: Dict[str, Any] = {}
     for key, value in data.items():
         f = known[key]
+        elem_cls = _list_elem_dataclass(f.type)
         if dataclasses.is_dataclass(f.type) and isinstance(value, dict):
             kwargs[key] = _from_dict(f.type, value, source=f"{source}.{key}")
+        elif elem_cls is not None and isinstance(value, list):
+            kwargs[key] = [
+                _from_dict(elem_cls, v, source=f"{source}.{key}[{i}]") for i, v in enumerate(value)
+            ]
         else:
             kwargs[key] = value
     return cls(**kwargs)
+
+
+@dataclass
+class WorkerProfileConfig:
+    """One autoscaled worker fleet: a runner served by a specific sbatch script/config/mode.
+
+    Listing several profiles under ``autoscale.profiles`` lets the autoscaler run several
+    fleets at once (e.g. one per software package / runner), each sized independently from
+    the pending work of *its* runner. ``None`` overrides inherit the top-level ``autoscale``
+    default. ``runner`` is required and must be unique across profiles.
+    """
+
+    name: str
+    runner: Optional[str] = None
+    worker_script: Optional[str] = None
+    worker_config: Optional[str] = None
+    worker_mode: str = "single_core"
+    max_workers: Optional[int] = None
+    standby_floor: Optional[int] = None
+    partition: Optional[str] = None
 
 
 @dataclass
@@ -63,6 +99,41 @@ class AutoscaleConfig:
     """Shared-FS directory (visible to the server and every compute node) for per-worker Slurm
     stdout/stderr. When set, the autoscaler submits with ``--output``/``--error`` pointing here and,
     when a worker ends without ever registering, reads the tail of its log onto the error page."""
+    worker_runner: Optional[str] = None
+    """Runner served by the single (legacy) fleet. ``None`` means "serve any runner" — the
+    catch-all behaviour that counts all pending work. Ignored when ``profiles`` is set."""
+    profiles: List[WorkerProfileConfig] = field(default_factory=list)
+    """Multi-fleet mode: one entry per runner to autoscale. When non-empty this replaces the
+    single top-level fleet; each profile is sized from *its own* runner's pending work."""
+
+    def resolved_profiles(self) -> List[WorkerProfileConfig]:
+        """The effective fleet list, with per-profile ``None`` overrides filled from the top level.
+
+        Returns ``profiles`` when given, else a single synthesized fleet from the legacy
+        top-level fields (whose ``runner`` is ``worker_runner`` — possibly ``None`` = catch-all).
+        """
+        base = self.profiles or [
+            WorkerProfileConfig(
+                name="default",
+                runner=self.worker_runner,
+                worker_script=self.worker_script,
+                worker_config=self.worker_config,
+                worker_mode=self.worker_mode,
+            )
+        ]
+        return [
+            WorkerProfileConfig(
+                name=p.name,
+                runner=p.runner,
+                worker_script=p.worker_script if p.worker_script is not None else self.worker_script,
+                worker_config=p.worker_config if p.worker_config is not None else self.worker_config,
+                worker_mode=p.worker_mode,
+                max_workers=p.max_workers if p.max_workers is not None else self.max_workers,
+                standby_floor=p.standby_floor if p.standby_floor is not None else self.standby_floor,
+                partition=p.partition if p.partition is not None else self.partition,
+            )
+            for p in base
+        ]
 
 
 @dataclass
@@ -169,11 +240,46 @@ class ServerConfig:
             self.autoscale.slurm_log_dir = _normalize_path(self.autoscale.slurm_log_dir)
         if self.autoscale.worker_config is not None:
             self.autoscale.worker_config = _normalize_path(self.autoscale.worker_config)
+        for profile in self.autoscale.profiles:
+            for name in ("worker_script", "worker_config"):
+                value = getattr(profile, name)
+                if value is not None:
+                    setattr(profile, name, _normalize_path(value))
+        self._validate_autoscale()
         if self.token is None:
             self.token = os.environ.get("HARNESS_TOKEN")
         if self.journal_mode not in ("WAL", "DELETE"):
             raise ValueError(f"journal_mode must be 'WAL' or 'DELETE', got {self.journal_mode!r}")
         return self
+
+    def _validate_autoscale(self) -> None:
+        """Validate the resolved autoscaler fleets (only when autoscaling is enabled)."""
+        if not self.autoscale.enabled:
+            return
+        profiles = self.autoscale.resolved_profiles()
+        explicit = bool(self.autoscale.profiles)
+        seen: set = set()
+        for profile in profiles:
+            if profile.worker_script is None:
+                raise ValueError(
+                    f"autoscale profile {profile.name!r} has no worker_script "
+                    "(set it on the profile or as autoscale.worker_script)."
+                )
+            if profile.worker_mode not in ("single_core", "whole_node"):
+                raise ValueError(
+                    f"autoscale profile {profile.name!r} worker_mode must be "
+                    f"'single_core' or 'whole_node', got {profile.worker_mode!r}."
+                )
+            # An explicit multi-fleet config must name the runner each fleet serves; the
+            # legacy single fleet may leave it None (catch-all: serves any runner).
+            if explicit and not profile.runner:
+                raise ValueError(f"autoscale profile {profile.name!r} must set a 'runner'.")
+            if profile.runner is not None:
+                if profile.runner in seen:
+                    raise ValueError(
+                        f"autoscale profiles must serve distinct runners; {profile.runner!r} is repeated."
+                    )
+                seen.add(profile.runner)
 
     @property
     def max_attempts(self) -> int:
@@ -222,6 +328,10 @@ class WorkerConfig:
     log_ship_level: str = "WARNING"
     lease_batch: Optional[int] = None
     backoff_s: float = 5.0
+    idle_timeout_s: float = 300.0
+    """Self-terminate (drain + deregister) after this many seconds without being leased a job.
+    Releases idle allocations back to Slurm; the autoscaler re-launches when work returns.
+    Set to 0 to disable."""
     token: Optional[str] = None
 
     @classmethod

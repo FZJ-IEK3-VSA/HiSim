@@ -7,6 +7,7 @@ by construction: leases replay via ``lease_id``, reports dedup on ``(id, attempt
 
 import logging
 import time
+import urllib.parse
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -65,20 +66,32 @@ class HarnessClient:
         tries = 0
         while True:
             tries += 1
+            url = self.base_url() + API + path  # re-resolved each try (the server may have moved)
+            last_error = ""
             try:
-                response = self._client.post(
-                    self.base_url() + API + path, json=body, headers=self._headers()
-                )
+                response = self._client.post(url, json=body, headers=self._headers())
                 if response.status_code < 500:
                     response.raise_for_status()
                     return response.json()
-                LOGGER.warning("Server 5xx on %s: %s", path, response.status_code)
+                last_error = f"HTTP {response.status_code}"
+                LOGGER.warning("Server 5xx on %s (%s): %s", path, url, response.status_code)
             except (httpx.TransportError, OSError) as exc:
-                LOGGER.warning("Connection error on %s: %s", path, exc)
+                last_error = str(exc)
+                LOGGER.warning("Connection error on %s (%s): %s — is the server up and is %s "
+                               "reachable from this node?", path, url, exc, self._host_of(url))
             if self.max_tries is not None and tries >= self.max_tries:
-                raise RuntimeError(f"POST {path} failed after {tries} tries")
+                raise RuntimeError(f"POST {path} to {url} failed after {tries} tries: {last_error}")
             time.sleep(backoff)
             backoff = min(backoff * 2, self.max_backoff_s)
+
+    @staticmethod
+    def _host_of(url: str) -> str:
+        """Return the ``host:port`` of ``url`` for diagnostics (best-effort)."""
+        try:
+            parsed = urllib.parse.urlsplit(url)
+            return parsed.netloc or url
+        except ValueError:
+            return url
 
     def _get(self, path: str) -> Any:
         response = self._client.get(self.base_url() + API + path)

@@ -61,6 +61,7 @@ class Worker:
         self.gate_blocked_since: Optional[float] = None
         self._terminate = False
         self._pending_reports: List[Dict[str, Any]] = []
+        self._last_active = 0.0  # last time a job was leased or was running (idle-timeout clock)
 
     # ------------------------------------------------------------------- setup
 
@@ -163,6 +164,7 @@ class Worker:
             signal.signal(signal.SIGINT, self._on_signal)
 
             last_heartbeat = 0.0
+            self._last_active = time.time()  # start the idle-timeout clock at first readiness
             while True:
                 if self._terminate:
                     exit_reason = "signal"
@@ -171,6 +173,8 @@ class Worker:
                 for result in self.pool.poll():
                     self._pending_reports.append(self._finalize(result))
                 self._flush_reports()
+                if self.pool.running():  # work in progress keeps the idle clock reset
+                    self._last_active = time.time()
 
                 interval = (
                     self.cfg.console_follow_interval_s if self.follow_console
@@ -191,6 +195,18 @@ class Worker:
                         break
                     if not self._lease_and_dispatch():
                         time.sleep(self.cfg.backoff_s)
+
+                # Release an idle allocation: no job leased or running for idle_timeout_s.
+                if self._idle_timed_out(
+                    time.time(), self._last_active, self.cfg.idle_timeout_s,
+                    bool(self.pool.running()), self.drain,
+                ):
+                    LOGGER.info(
+                        "No job for %.0f s (> idle_timeout %.0f s) — releasing the allocation",
+                        time.time() - self._last_active, self.cfg.idle_timeout_s,
+                    )
+                    exit_reason = "idle_timeout"
+                    break
                 time.sleep(min(self.cfg.sample_interval_s, 1.0))
         except Exception:  # pylint: disable=broad-except
             # Any startup or loop crash: LOGGER.exception feeds the ErrorReporter with a
@@ -199,7 +215,20 @@ class Worker:
             exit_reason = "crash"
         finally:
             self._shutdown(exit_reason)
-        return 0 if exit_reason in ("drained", "released") else 4
+        return 0 if exit_reason in ("drained", "released", "idle_timeout") else 4
+
+    @staticmethod
+    def _idle_timed_out(
+        now: float, last_active: float, idle_timeout_s: float, running: bool, draining: bool
+    ) -> bool:
+        """True when the worker should release its allocation for being idle too long.
+
+        Never fires while a job is running, while draining (already exiting), or when the
+        timeout is disabled (``idle_timeout_s <= 0``).
+        """
+        if idle_timeout_s <= 0 or running or draining:
+            return False
+        return now - last_active > idle_timeout_s
 
     def _on_signal(self, signum: int, _frame: Any) -> None:
         LOGGER.warning("Signal %d received — shutting down", signum)
@@ -277,6 +306,8 @@ class Worker:
         for job in jobs:
             self._clean_old_attempts(job)
             self.pool.dispatch(job)
+        if jobs:
+            self._last_active = time.time()  # received work — reset the idle-timeout clock
         return bool(jobs)
 
     @staticmethod

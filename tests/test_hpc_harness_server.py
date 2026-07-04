@@ -130,6 +130,7 @@ def test_mutations_need_token_reads_are_open(client):
 def test_dashboard_pages_render_and_link_each_other(client):
     """Each dashboard page renders with its title and the shared cross-links."""
     for path, title in [("/", "HPC Harness"),
+                        ("/jobs", "Jobs"),
                         ("/errors", "Errors"),
                         ("/autoscaler", "Autoscaler"),
                         ("/settings", "Settings")]:
@@ -137,7 +138,7 @@ def test_dashboard_pages_render_and_link_each_other(client):
         assert page.status_code == 200
         assert title in page.text
         # every page carries the shared nav linking to the others
-        assert 'href="/errors"' in page.text
+        assert 'href="/jobs"' in page.text and 'href="/errors"' in page.text
         assert 'href="/autoscaler"' in page.text and 'href="/settings"' in page.text
 
 
@@ -211,7 +212,7 @@ def test_autoscaler_tick_populates_status_snapshot(service, client):
     service.autoscaler = Autoscaler(
         service, service.cfg.autoscale,
         probe_fn=lambda: 50,
-        sbatch_fn=lambda n: [f"job{i}" for i in range(n)],
+        sbatch_fn=lambda n, profile: [f"job{i}" for i in range(n)],
         squeue_fn=lambda ids: {i: "queued" for i in ids},
         scancel_fn=lambda ids: None,
     )
@@ -238,7 +239,7 @@ def test_autoscaler_tick_populates_status_snapshot(service, client):
 def test_autoscaler_sbatch_failure_is_surfaced_not_crashed(service, client):
     """A rejected sbatch must not crash the loop; it lands on the dashboard instead."""
 
-    def failing_sbatch(_n):
+    def failing_sbatch(_n, _profile):
         raise RuntimeError("sbatch failed: Invalid partition specified")
 
     service.autoscaler = Autoscaler(
@@ -270,7 +271,7 @@ def test_autoscaler_surfaces_worker_that_died_before_registering(service, client
     service.autoscaler = Autoscaler(
         service, service.cfg.autoscale,
         probe_fn=lambda: 50,
-        sbatch_fn=lambda n: ["job0"],
+        sbatch_fn=lambda n, profile: ["job0"],
         # Mimic default_squeue: ids missing from squeue are reported "ended".
         squeue_fn=lambda ids: {i: phase["squeue"] for i in ids},
         scancel_fn=lambda ids: None,
@@ -299,7 +300,7 @@ def test_autoscaler_death_without_log_dir_still_surfaced(service, client):
     phase = {"squeue": "queued"}
     service.autoscaler = Autoscaler(
         service, service.cfg.autoscale,
-        probe_fn=lambda: 50, sbatch_fn=lambda n: ["jobX"],
+        probe_fn=lambda: 50, sbatch_fn=lambda n, profile: ["jobX"],
         squeue_fn=lambda ids: {i: phase["squeue"] for i in ids},
         scancel_fn=lambda ids: None,
     )
@@ -311,6 +312,64 @@ def test_autoscaler_death_without_log_dir_still_surfaced(service, client):
     errors = [e for e in client.get(f"{API}/errors").json() if e["error_type"] == "WorkerStartupDeath"]
     assert len(errors) == 1
     assert "slurm_log_dir is not set" in errors[0]["message"]
+
+
+def _submit_runner(client, runner, n):
+    """Submit ``n`` trivial jobs under an explicit runner (bypasses the hisim-only helper)."""
+    jobs = [{"payload": {}, "label": f"{runner}-{i}"} for i in range(n)]
+    r = client.post(f"{API}/jobs", json={"runner": runner, "jobs": jobs}, headers=AUTH)
+    assert r.status_code == 200
+
+
+def test_autoscaler_multifleet_sizes_each_runner_independently(service, client):
+    """Each fleet scales from its own runner's work — a hisim fleet never scales on hisim_setup work."""
+    from hpc_harness.config import WorkerProfileConfig
+
+    service.cfg.autoscale.profiles = [
+        WorkerProfileConfig(name="hisim", runner="hisim", worker_script="x"),
+        WorkerProfileConfig(name="setup", runner="hisim_setup", worker_script="x"),
+    ]
+    submitted: dict = {}
+
+    def fake_sbatch(n, profile):
+        submitted[profile.runner] = submitted.get(profile.runner, 0) + n
+        return [f"{profile.runner}-{i}" for i in range(n)]
+
+    service.autoscaler = Autoscaler(
+        service, service.cfg.autoscale,
+        probe_fn=lambda: 100, sbatch_fn=fake_sbatch,
+        squeue_fn=lambda ids: {i: "queued" for i in ids}, scancel_fn=lambda ids: None,
+    )
+    _submit_runner(client, "hisim", 3)
+    _submit_runner(client, "hisim_setup", 5)
+    service.autoscaler.tick()
+
+    assert submitted == {"hisim": 3, "hisim_setup": 5}  # each fleet sized to its own runner
+    fleets = {p["runner"]: p for p in client.get(f"{API}/autoscale").json()["profiles"]}
+    assert fleets["hisim"]["work"] == 3 and fleets["hisim_setup"]["work"] == 5
+
+
+def test_autoscaler_surfaces_runner_with_no_fleet(service, client):
+    """Pending work for a runner no fleet serves is surfaced (once) as a RunnerMismatch error."""
+    from hpc_harness.config import WorkerProfileConfig
+
+    service.cfg.autoscale.profiles = [WorkerProfileConfig(name="hisim", runner="hisim", worker_script="x")]
+    service.autoscaler = Autoscaler(
+        service, service.cfg.autoscale,
+        probe_fn=lambda: 50, sbatch_fn=lambda n, p: [f"j{i}" for i in range(n)],
+        squeue_fn=lambda ids: {i: "queued" for i in ids}, scancel_fn=lambda ids: None,
+    )
+    _submit_runner(client, "hisim_setup", 4)  # no fleet serves this runner
+    service.autoscaler.tick()
+
+    errs = [e for e in client.get(f"{API}/errors").json() if e["error_type"] == "RunnerMismatch"]
+    assert len(errs) == 1 and "hisim_setup" in errs[0]["message"]
+    a = client.get(f"{API}/autoscale").json()
+    assert any(u["runner"] == "hisim_setup" and u["pending"] == 4 for u in a["unserved_runners"])
+    assert a["submitted"] == 0  # the hisim fleet has no hisim work, so nothing is launched
+    # Reported once — a second tick does not spam the error page.
+    service.autoscaler.tick()
+    assert len([e for e in client.get(f"{API}/errors").json() if e["error_type"] == "RunnerMismatch"]) == 1
 
 
 # ------------------------------------------------------------------- happy path
@@ -331,6 +390,38 @@ def test_full_cycle_submit_lease_report_done(client):
     assert report(client, worker_id, job)["accepted"]
     status = client.get(f"{API}/status").json()
     assert status["counts"]["done"] == 1 and status["counts"]["leased"] == 1
+
+
+def test_workers_overview_reports_leased_job_and_since(client):
+    """The worker overview reports each worker's leased job id(s) and how long it has held them."""
+    submit(client, 1)
+    worker_id = register(client)["worker_id"]
+    (job,) = lease(client, worker_id)["jobs"]
+    row = next(w for w in client.get(f"{API}/workers").json() if w["worker_id"] == worker_id)
+    assert row["leased_job_ids"] == [job["id"]]
+    assert row["leased_since_s"] is not None and row["leased_since_s"] >= 0
+    # Once the job is reported done, the worker shows idle again (no lease, no 'since').
+    report(client, worker_id, job)
+    row = next(w for w in client.get(f"{API}/workers").json() if w["worker_id"] == worker_id)
+    assert row["leased_job_ids"] == [] and row["leased_since_s"] is None
+
+
+def test_clear_queue_cancels_pending_but_not_running(client):
+    """Clearing the queue cancels pending jobs, leaves a leased job running, and needs the token."""
+    submit(client, 4)
+    worker_id = register(client)["worker_id"]
+    (running,) = lease(client, worker_id, 1)["jobs"]  # one job now leased/running
+
+    assert client.post(f"{API}/admin/jobs/clear-pending").status_code == 401  # needs token
+    cleared = client.post(f"{API}/admin/jobs/clear-pending", headers=AUTH).json()
+    assert cleared["ok"] and cleared["cancelled"] == 3  # the 3 still-pending jobs
+
+    counts = client.get(f"{API}/status").json()["counts"]
+    assert counts.get("pending", 0) == 0
+    assert counts.get("leased", 0) == 1  # the running job survived
+    assert counts.get("cancelled", 0) == 3
+    # The running job can still be reported done after a queue clear.
+    assert report(client, worker_id, running)["accepted"]
 
 
 def test_lease_replay_same_lease_id(client):

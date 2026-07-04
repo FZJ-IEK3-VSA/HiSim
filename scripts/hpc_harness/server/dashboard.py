@@ -56,6 +56,8 @@ td.err { color:var(--err); max-width:340px; overflow:hidden; text-overflow:ellip
 button { background:var(--card); color:var(--accent); border:1px solid var(--line);
          border-radius:6px; padding:.15rem .5rem; cursor:pointer; font-size:.78rem; }
 button:hover { border-color:var(--accent); }
+button.danger { color:var(--err); }
+button.danger:hover { border-color:var(--err); background:color-mix(in srgb, var(--err) 12%, var(--card)); }
 pre#console { background:var(--card); border:1px solid var(--line); border-radius:10px;
               padding:.8rem; max-height:340px; overflow:auto; white-space:pre-wrap; font-size:.78rem; }
 tr.errrow { cursor:pointer; }
@@ -86,6 +88,8 @@ const fmt = (v, d=1) => v == null ? '–' : Number(v).toFixed(d);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const ts = t => t ? new Date(t*1000).toLocaleString() : '–';
 const ago = t => t ? Math.round(Date.now()/1000 - t) + ' s ago' : '–';
+const dur = s => s == null ? '–' : s < 90 ? Math.round(s)+' s'
+  : s < 5400 ? Math.round(s/60)+' min' : (s/3600).toFixed(1)+' h';
 async function get(path) { const r = await fetch(API+path); return r.ok ? r.json() : null; }
 function tile(k, v) { return `<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`; }
 """
@@ -100,6 +104,7 @@ def _nav(active: str) -> str:
     return (
         '<nav><span class="brand">HPC Harness</span>'
         + link("/", "Overview", "overview")
+        + link("/jobs", "Jobs", "jobs")
         + link("/errors", "Errors", "errors")
         + link("/autoscaler", "Autoscaler", "autoscaler")
         + link("/settings", "Settings", "settings")
@@ -131,7 +136,7 @@ _OVERVIEW_BODY = r"""
 <h2>Workers</h2>
 <div class="tablewrap"><table id="workers"><thead><tr>
 <th>id</th><th>host</th><th>mode</th><th>status</th><th>hb age</th><th>slots</th>
-<th>done</th><th>failed</th><th>slurm</th><th>error</th><th></th>
+<th>job</th><th>working for</th><th>done</th><th>failed</th><th>slurm</th><th>error</th><th></th>
 </tr></thead><tbody></tbody></table></div>
 
 <h2>Console <span id="console-target" class="muted"></span>
@@ -192,7 +197,10 @@ async function refreshWorkers() {
     <td>${esc(w.worker_id)}</td><td>${esc(w.host)}</td><td>${esc(w.mode)}</td>
     <td class="status-${esc(w.status)}">${esc(w.status)}</td>
     <td>${w.heartbeat_age_s == null ? '–' : Math.round(w.heartbeat_age_s)+' s'}</td>
-    <td>${w.slots ?? '–'}</td><td>${w.jobs_done}</td><td>${w.jobs_failed}</td>
+    <td>${w.slots ?? '–'}</td>
+    <td>${(w.leased_job_ids && w.leased_job_ids.length) ? esc(w.leased_job_ids.join(', ')) : '<span class="muted">idle</span>'}</td>
+    <td>${dur(w.leased_since_s)}</td>
+    <td>${w.jobs_done}</td><td>${w.jobs_failed}</td>
     <td>${esc(w.slurm_job_id ?? '')}</td><td class="err">${esc(w.last_error ?? '')}</td>
     <td><button onclick="showConsole('${esc(w.worker_id)}')">console</button>
         <button onclick="logFilterWorker('${esc(w.worker_id)}')">logs</button></td>
@@ -269,6 +277,12 @@ _AUTOSCALER_BODY = r"""
 <div id="banners"></div>
 <div class="tiles" id="tiles"></div>
 
+<h2>Fleets <span class="muted">(one per runner)</span></h2>
+<div class="tablewrap"><table id="fleets"><thead><tr>
+<th>fleet</th><th>runner</th><th>mode</th><th>work</th><th>current</th><th>alive</th>
+<th>in flight</th><th>queued</th><th>to submit</th><th>max</th><th>last action</th>
+</tr></thead><tbody></tbody></table></div>
+
 <h2>Last control period</h2>
 <div class="dl" id="lasttick"></div>
 
@@ -280,7 +294,7 @@ _AUTOSCALER_BODY = r"""
 
 <h2>Tracked submissions (newest first)</h2>
 <div class="tablewrap"><table id="subs"><thead><tr>
-<th>slurm job id</th><th>mode</th><th>state</th><th>submitted</th><th>registered worker</th>
+<th>slurm job id</th><th>runner</th><th>mode</th><th>state</th><th>submitted</th><th>registered worker</th>
 </tr></thead><tbody></tbody></table></div>
 """
 
@@ -303,7 +317,20 @@ async function refresh() {
     `Enable it in the server config (<code>autoscale.enabled = true</code>) or scale the ` +
     `fleet manually with submit-workers.sh.</div>`;
   if (a.error) banners += `<div class="banner err">Last tick error: ${esc(a.error)}</div>`;
+  (a.unserved_runners || []).forEach(u => banners += `<div class="banner err">` +
+    `${u.pending} pending job(s) need runner <code>${esc(u.runner)}</code>, but no fleet serves it — ` +
+    `add an autoscale profile for it, or submit under a served runner.</div>`);
   document.getElementById('banners').innerHTML = banners;
+
+  // Prefer the live per-tick fleet snapshot; fall back to the static fleet config.
+  const fleets = (a.profiles && a.profiles.length) ? a.profiles : (a.fleets || []).map(f =>
+    ({name:f.name, runner:f.runner, worker_mode:f.worker_mode, max_workers:f.max_workers}));
+  document.querySelector('#fleets tbody').innerHTML = fleets.length ? fleets.map(p => `<tr>
+    <td>${esc(p.name)}</td><td>${esc(p.runner ?? '(any)')}</td><td>${esc(p.worker_mode)}</td>
+    <td>${p.work ?? '–'}</td><td>${p.current ?? '–'}</td><td>${p.alive_workers ?? '–'}</td>
+    <td>${p.in_flight ?? '–'}</td><td>${p.slurm_queued ?? '–'}</td><td>${p.to_submit ?? '–'}</td>
+    <td>${p.max_workers ?? '–'}</td><td>${esc(p.action ?? '–')}</td></tr>`).join('')
+    : '<tr><td colspan="11" class="muted">no fleets configured</td></tr>';
 
   document.getElementById('tiles').innerHTML =
     tile('outstanding work', a.work ?? '–') +
@@ -347,10 +374,10 @@ async function refresh() {
 
   const subs = a.submissions || [];
   document.querySelector('#subs tbody').innerHTML = subs.length ? subs.map(s => `<tr>
-    <td>${esc(s.slurm_job_id)}</td><td>${esc(s.mode)}</td>
+    <td>${esc(s.slurm_job_id)}</td><td>${esc(s.runner ?? '')}</td><td>${esc(s.mode)}</td>
     <td class="st-${esc(s.state)}">${esc(s.state)}</td>
     <td>${ts(s.submitted_at)}</td><td>${esc(s.registered_worker_id ?? '')}</td></tr>`).join('')
-    : '<tr><td colspan="5" class="muted">no submissions recorded</td></tr>';
+    : '<tr><td colspan="6" class="muted">no submissions recorded</td></tr>';
 }
 refresh();
 setInterval(refresh, 5000);
@@ -475,6 +502,82 @@ async function refresh() {
 refresh();
 setInterval(refresh, 5000);
 """
+
+
+# --------------------------------------------------------------------------- jobs
+
+_JOBS_BODY = r"""
+<h1>Jobs</h1>
+<div class="tiles" id="counts"></div>
+
+<h2>Queue
+  <select id="state">
+    <option value="pending" selected>pending (queued)</option>
+    <option value="leased">leased (running)</option>
+    <option value="done">done</option>
+    <option value="failed">failed</option>
+    <option value="dead">dead</option>
+    <option value="cancelled">cancelled</option>
+    <option value="">all states</option>
+  </select>
+  <button onclick="refresh()">refresh</button>
+  <button class="danger" onclick="clearQueue()">clear queue (cancel all pending)</button></h2>
+<div id="note" class="muted"></div>
+
+<h2 id="tabletitle">Queued jobs</h2>
+<div class="tablewrap"><table id="jobs"><thead><tr>
+<th>id</th><th>runner</th><th>batch</th><th>label</th><th>prio</th><th>status</th>
+<th>attempts</th><th>worker</th><th>error</th>
+</tr></thead><tbody></tbody></table></div>
+"""
+
+_JOBS_SCRIPT = r"""
+async function clearQueue() {
+  if (!confirm('Cancel ALL pending (queued) jobs? Jobs already running are left alone.')) return;
+  const r = await fetch(API+'/admin/jobs/clear-pending', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:'{}'});
+  if (r.status === 401) { alert('Clearing the queue needs the bearer token (admin route).'); return; }
+  const j = await r.json().catch(() => ({}));
+  alert('Cancelled ' + (j.cancelled ?? 0) + ' pending job(s).');
+  refresh();
+}
+
+async function refresh() {
+  const s = await get('/status');
+  if (s) {
+    const c = s.counts || {};
+    const order = ['pending','leased','done','failed','dead','cancelled'];
+    document.getElementById('counts').innerHTML =
+      order.map(k => tile(k, c[k] || 0)).join('') + tile('total', c.total || 0);
+  }
+  const st = document.getElementById('state').value;
+  document.getElementById('tabletitle').textContent =
+    st === 'pending' ? 'Queued jobs (lease order)'
+    : st ? st.charAt(0).toUpperCase() + st.slice(1) + ' jobs' : 'All jobs';
+  const runners = new Set();
+  const q = st ? '/jobs?limit=500&state=' + encodeURIComponent(st) : '/jobs?limit=500';
+  const rows = await get(q) || [];
+  rows.forEach(j => runners.add(j.runner));
+  document.getElementById('note').textContent = rows.length
+    ? `${rows.length} job(s) shown` + (runners.size > 1 ? ` across runners: ${[...runners].join(', ')}` : '')
+    : 'no jobs in this state';
+  document.querySelector('#jobs tbody').innerHTML = rows.map(j => `<tr>
+    <td>${j.id}</td><td>${esc(j.runner)}</td><td>${esc(j.batch_id ?? '')}</td>
+    <td>${esc(j.label ?? '')}</td><td>${j.priority ?? 0}</td>
+    <td class="status-${esc(j.status)}">${esc(j.status)}</td>
+    <td>${j.attempts ?? 0}</td><td>${esc(j.leased_by ?? '')}</td>
+    <td class="err">${esc((j.error ?? '').slice(0,120))}</td>
+  </tr>`).join('');
+}
+document.getElementById('state').addEventListener('change', refresh);
+refresh();
+setInterval(refresh, 5000);
+"""
+
+
+def render_jobs() -> str:
+    """The jobs page HTML: queue counts, per-state job table, and a clear-queue action."""
+    return _page("HPC Harness — Jobs", "jobs", _JOBS_BODY, _JOBS_SCRIPT)
 
 
 def render_dashboard() -> str:

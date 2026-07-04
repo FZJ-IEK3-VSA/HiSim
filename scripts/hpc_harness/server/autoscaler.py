@@ -20,10 +20,10 @@ import os
 import shutil
 import subprocess
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from hpc_harness import db
-from hpc_harness.config import AutoscaleConfig
+from hpc_harness.config import AutoscaleConfig, WorkerProfileConfig
 
 LOGGER = logging.getLogger(__name__)
 
@@ -77,7 +77,11 @@ def shell_capacity_probe(command: str) -> int:
 
 
 def default_sbatch(
-    worker_script: str, n: int, log_dir: Optional[str] = None, worker_config: Optional[str] = None
+    worker_script: str,
+    n: int,
+    log_dir: Optional[str] = None,
+    worker_config: Optional[str] = None,
+    worker_runner: Optional[str] = None,
 ) -> List[str]:
     """Submit ``n`` worker jobs; returns the Slurm job ids actually submitted.
 
@@ -87,6 +91,8 @@ def default_sbatch(
     registering. When ``worker_config`` is set it is passed to the job as
     ``HARNESS_WORKER_CONFIG`` so the worker loads the right config by absolute path
     instead of a relative ``worker.json`` it cannot find from its Slurm working directory.
+    When ``worker_runner`` is set it is passed as ``HARNESS_WORKER_RUNNER`` so the launched
+    worker serves exactly the runner its fleet is accounted for (they can never disagree).
 
     A total failure raises ``RuntimeError`` carrying sbatch's **stderr** (so the reason
     is visible in the log and on the autoscaler dashboard, not just an opaque exit
@@ -105,8 +111,13 @@ def default_sbatch(
             f"--output={os.path.join(log_dir, 'worker-%j.out')}",
             f"--error={os.path.join(log_dir, 'worker-%j.err')}",
         ]
-    # Keep the submitter's environment (--export=ALL) and add the config path on top.
-    export_args = [f"--export=ALL,HARNESS_WORKER_CONFIG={worker_config}"] if worker_config else []
+    # Keep the submitter's environment (--export=ALL) and add the config/runner on top.
+    exports = ["ALL"]
+    if worker_config:
+        exports.append(f"HARNESS_WORKER_CONFIG={worker_config}")
+    if worker_runner:
+        exports.append(f"HARNESS_WORKER_RUNNER={worker_runner}")
+    export_args = [f"--export={','.join(exports)}"] if len(exports) > 1 else []
     job_ids: List[str] = []
     for _ in range(n):
         try:
@@ -189,13 +200,18 @@ class Autoscaler:
         service: "HarnessService",  # type: ignore[name-defined]  # noqa: F821
         cfg: AutoscaleConfig,
         probe_fn: Optional[Callable[[], int]] = None,
-        sbatch_fn: Optional[Callable[[int], List[str]]] = None,
+        sbatch_fn: Optional[Callable[[int, WorkerProfileConfig], List[str]]] = None,
         squeue_fn: Optional[Callable[[List[str]], Optional[Dict[str, str]]]] = None,
         scancel_fn: Optional[Callable[[List[str]], None]] = None,
     ) -> None:
-        """Wire the loop to the service; default Slurm commands unless injected."""
+        """Wire the loop to the service; default Slurm commands unless injected.
+
+        The fleet(s) come from ``cfg.resolved_profiles()`` — one per runner in multi-fleet
+        mode, or a single (possibly catch-all) fleet from the legacy top-level fields.
+        """
         self.service = service
         self.cfg = cfg
+        self.profiles = cfg.resolved_profiles()
         if probe_fn is not None:
             self.probe_fn = probe_fn
         elif cfg.capacity_probe:
@@ -203,11 +219,14 @@ class Autoscaler:
         else:
             self.probe_fn = lambda: default_capacity_probe(cfg.partition)
         self.sbatch_fn = sbatch_fn or (
-            lambda n: default_sbatch(cfg.worker_script, n, cfg.slurm_log_dir, cfg.worker_config)
+            lambda n, profile: default_sbatch(
+                profile.worker_script, n, cfg.slurm_log_dir, profile.worker_config, profile.runner
+            )
         )
         self.squeue_fn = squeue_fn or default_squeue
         self.scancel_fn = scancel_fn or default_scancel
         self._last_squeue = 0.0
+        self._reported_mismatch: set = set()  # runners already surfaced as unserved (dedupe)
         # Live snapshot of the last control period, surfaced on the autoscaler dashboard.
         self.snapshot: Dict[str, Any] = {
             "last_tick": None,
@@ -215,128 +234,229 @@ class Autoscaler:
             "reason": None,
             "error": None,
             "squeue_available": None,
-            "work": None,
-            "current": None,
-            "alive_workers": None,
-            "in_flight": None,
-            "slurm_queued": None,
+            "work": 0,
+            "current": 0,
+            "alive_workers": 0,
+            "in_flight": 0,
+            "slurm_queued": 0,
             "available_cores": None,
-            "to_submit": None,
+            "to_submit": 0,
             "submitted": 0,
             "cancelled": 0,
+            "profiles": [],
+            "unserved_runners": [],
         }
 
     def tick(self) -> Dict[str, int]:
-        """One control period: refresh Slurm states, compute the step, submit/cancel.
+        """One control period: refresh Slurm states, then size every fleet independently.
 
-        Every exit path records a full :attr:`snapshot` so the autoscaler dashboard
-        can explain exactly what the loop last saw and did.
+        Each configured fleet (profile) is sized from *its own* runner's pending work against
+        a shared idle-core budget, so a `hisim` fleet never scales up on `hisim_setup` work.
+        Pending work whose runner no fleet serves is surfaced on the error page. Every exit
+        path records a full :attr:`snapshot` so the dashboard can explain what the loop did.
         """
         writer = self.service.writer
         now = time.time()
-        snap: Dict[str, Any] = {"last_tick": now, "error": None, "reason": None,
-                                "available_cores": None, "to_submit": 0,
-                                "submitted": 0, "cancelled": 0}
+        snap: Dict[str, Any] = {
+            "last_tick": now, "error": None, "reason": None, "available_cores": None,
+            "to_submit": 0, "submitted": 0, "cancelled": 0, "work": 0, "current": 0,
+            "slurm_queued": 0, "in_flight": 0, "alive_workers": 0,
+            "profiles": [], "unserved_runners": [],
+        }
         try:
-            # 1. Refresh tracked submission states from squeue.
-            submissions = writer.call(db.open_submissions)
-            tracked_ids = [s["slurm_job_id"] for s in submissions]
-            states = self.squeue_fn(tracked_ids)
-            snap["squeue_available"] = states is not None
-            if states is not None:
-                self._last_squeue = now
-                writer.call(lambda c: db.update_submission_states(c, states))
-                submissions = writer.call(db.open_submissions)
-            else:
-                # squeue unavailable: age out via the registration grace fallback.
-                cutoff = now - self.cfg.registration_grace_s
-                expired = {
-                    s["slurm_job_id"]: "ended" for s in submissions if s["submitted_at"] < cutoff
-                }
-                if expired:
-                    writer.call(lambda c: db.update_submission_states(c, expired))
-                    submissions = writer.call(db.open_submissions)
-
+            # 1. Refresh tracked submission states from squeue (or age out via grace fallback).
+            submissions = self._refresh_submissions(writer, now, snap)
             # 1b. Surface workers that ended without ever registering (startup deaths).
             self._surface_startup_deaths(writer)
 
-            # 2. Fleet accounting.
-            alive = [
-                w for w in writer.call(db.alive_workers)
-                if w["mode"] == self.cfg.worker_mode and w["worker_id"] in self.service.liveness
+            # 2. Shared inputs, probed/read once and reused for every fleet.
+            alive_all = [
+                w for w in writer.call(db.alive_workers) if w["worker_id"] in self.service.liveness
             ]
-            slurm_queued = sum(1 for s in submissions if s["state"] in ("submitted", "queued"))
-            in_flight = len(submissions)
-            current = len(alive) + in_flight
-            counts = self.service.status()["counts"]
-            work = counts.get(db.PENDING, 0) + counts.get(db.LEASED, 0)
-            snap.update({"alive_workers": len(alive), "in_flight": in_flight,
-                         "slurm_queued": slurm_queued, "current": current, "work": work})
-
-            # 3. Scale down: cancel surplus still-queued submissions (safe), never running.
-            if work < current and slurm_queued > 0:
-                surplus = min(current - work, slurm_queued)
-                queued_ids = [s["slurm_job_id"] for s in submissions
-                              if s["state"] in ("submitted", "queued")]
-                to_cancel = queued_ids[:surplus]
-                self.scancel_fn(to_cancel)
-                writer.call(
-                    lambda c: db.update_submission_states(c, {j: "cancelled" for j in to_cancel})
-                )
-                LOGGER.info("Autoscaler cancelled %d queued surplus workers", len(to_cancel))
-                snap.update({"action": "scale_down", "cancelled": len(to_cancel)})
-                return self._finish(snap, current)
-
-            # 4. Scale up.
-            if self.service.paused or work == 0:
-                snap.update({"action": "idle",
-                             "reason": "leasing paused" if self.service.paused else "no work"})
-                return self._finish(snap, current)
+            counts_by_runner = writer.call(db.counts_by_runner)
+            paused = bool(self.service.paused)
             try:
                 available = self.probe_fn()
             except Exception as exc:  # pylint: disable=broad-except
                 LOGGER.exception("Capacity probe failed; skipping this period")
                 self.service.record_exception("autoscaler", "capacity_probe", exc)
                 snap.update({"action": "probe_failed", "error": str(exc)})
-                return self._finish(snap, current)
-            to_submit = compute_to_submit(
-                work, current, available, slurm_queued, self.cfg.standby_floor, self.cfg.max_workers
-            )
-            snap.update({"available_cores": available, "to_submit": to_submit})
-            if to_submit > 0:
-                try:
-                    job_ids = self.sbatch_fn(to_submit)
-                except Exception as exc:  # pylint: disable=broad-except
-                    # A bad worker_script / rejected sbatch must not crash-loop the
-                    # autoscaler; surface the reason on the dashboard and try again next tick.
-                    LOGGER.error("Autoscaler sbatch failed: %s", exc)
-                    self.service.record_exception("autoscaler", "sbatch", exc)
-                    snap.update({"action": "sbatch_failed", "error": str(exc)})
-                    return self._finish(snap, current)
-                if job_ids:
-                    writer.call(
-                        lambda c: [db.add_submission(c, j, self.cfg.worker_mode) for j in job_ids]
-                    )
-                    LOGGER.info(
-                        "Autoscaler submitted %d workers (work=%d current=%d idle_cores=%d)",
-                        len(job_ids), work, current, available,
-                    )
-                    snap.update({"action": "scale_up", "submitted": len(job_ids)})
-                else:
-                    snap.update({"action": "sbatch_failed", "error": "sbatch returned no job ids"})
-                return self._finish(snap, current)
-            snap.update({"action": "steady",
-                         "reason": "fleet already covers the backlog / no free cores"})
-            return self._finish(snap, current)
+                return self._finish(snap)
+            snap["available_cores"] = available
+
+            # 3. Size each fleet against the shared idle-core budget (in config order).
+            budget = available
+            errored: Optional[str] = None
+            for profile in self.profiles:
+                psnap, used = self._process_profile(
+                    profile, writer, budget, submissions, alive_all, counts_by_runner, paused
+                )
+                snap["profiles"].append(psnap)
+                for key in ("work", "current", "slurm_queued", "in_flight", "alive_workers",
+                            "to_submit", "submitted", "cancelled"):
+                    snap[key] += psnap[key]
+                budget = max(0, budget - used)
+                if psnap["error"] and errored is None:
+                    errored = psnap["error"]
+
+            # 4. Guard: pending work whose runner no fleet serves.
+            snap["unserved_runners"] = self._guard_runner_mismatch(counts_by_runner)
+            snap["error"] = errored
+            snap["action"] = self._summary_action(snap, paused, errored)
+            return self._finish(snap)
         except Exception as exc:  # pylint: disable=broad-except
             snap.update({"action": "error", "error": str(exc)})
             self.snapshot.update(snap)
             raise
 
-    def _finish(self, snap: Dict[str, Any], current: int) -> Dict[str, int]:
+    def _refresh_submissions(self, writer: Any, now: float, snap: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Update tracked submissions from squeue; fall back to the grace timeout if it's down."""
+        submissions = writer.call(db.open_submissions)
+        states = self.squeue_fn([s["slurm_job_id"] for s in submissions])
+        snap["squeue_available"] = states is not None
+        if states is not None:
+            self._last_squeue = now
+            writer.call(lambda c: db.update_submission_states(c, states))
+            return writer.call(db.open_submissions)
+        cutoff = now - self.cfg.registration_grace_s
+        expired = {s["slurm_job_id"]: "ended" for s in submissions if s["submitted_at"] < cutoff}
+        if expired:
+            writer.call(lambda c: db.update_submission_states(c, expired))
+            return writer.call(db.open_submissions)
+        return submissions
+
+    @staticmethod
+    def _work_for(runner: Optional[str], counts_by_runner: Dict[str, Dict[str, int]]) -> int:
+        """Pending+leased jobs for ``runner`` (or across all runners when ``runner`` is None)."""
+        if runner is None:  # catch-all fleet: all work is fair game
+            buckets = counts_by_runner.values()
+        else:
+            buckets = [counts_by_runner.get(runner, {})]
+        return sum(c.get(db.PENDING, 0) + c.get(db.LEASED, 0) for c in buckets)
+
+    def _process_profile(
+        self,
+        profile: WorkerProfileConfig,
+        writer: Any,
+        budget: int,
+        submissions: List[Dict[str, Any]],
+        alive_all: List[Dict[str, Any]],
+        counts_by_runner: Dict[str, Dict[str, int]],
+        paused: bool,
+    ) -> Tuple[Dict[str, Any], int]:
+        """Size one fleet; returns its snapshot and the idle cores it consumed from the budget."""
+        mode, runner = profile.worker_mode, profile.runner
+
+        def mine(row: Dict[str, Any]) -> bool:
+            return row["mode"] == mode and (runner is None or row.get("runner") == runner)
+
+        my_subs = [s for s in submissions if mine(s)]
+        alive = [w for w in alive_all if mine(w)]
+        slurm_queued = sum(1 for s in my_subs if s["state"] in ("submitted", "queued"))
+        in_flight = len(my_subs)
+        current = len(alive) + in_flight
+        work = self._work_for(runner, counts_by_runner)
+        psnap: Dict[str, Any] = {
+            "name": profile.name, "runner": runner, "worker_mode": mode,
+            "work": work, "current": current, "alive_workers": len(alive),
+            "in_flight": in_flight, "slurm_queued": slurm_queued,
+            "to_submit": 0, "submitted": 0, "cancelled": 0,
+            "action": "steady", "reason": None, "error": None,
+        }
+
+        # Scale down: cancel surplus still-queued submissions of this fleet (never running).
+        if work < current and slurm_queued > 0:
+            surplus = min(current - work, slurm_queued)
+            queued_ids = [s["slurm_job_id"] for s in my_subs
+                          if s["state"] in ("submitted", "queued")][:surplus]
+            self.scancel_fn(queued_ids)
+            writer.call(lambda c: db.update_submission_states(c, {j: "cancelled" for j in queued_ids}))
+            LOGGER.info("Autoscaler cancelled %d queued surplus workers for %s", len(queued_ids), profile.name)
+            psnap.update({"action": "scale_down", "cancelled": len(queued_ids)})
+            return psnap, 0
+
+        # Scale up.
+        if paused or work == 0:
+            psnap.update({"action": "idle", "reason": "leasing paused" if paused else "no work"})
+            return psnap, 0
+        to_submit = compute_to_submit(
+            work, current, budget, slurm_queued, profile.standby_floor, profile.max_workers
+        )
+        psnap["to_submit"] = to_submit
+        if to_submit <= 0:
+            psnap["reason"] = "fleet covers the backlog / no free cores"
+            return psnap, 0
+        try:
+            job_ids = self.sbatch_fn(to_submit, profile)
+        except Exception as exc:  # pylint: disable=broad-except
+            # A bad worker_script / rejected sbatch must not crash-loop the autoscaler;
+            # surface the reason on the dashboard and try again next tick.
+            LOGGER.error("Autoscaler sbatch failed for %s: %s", profile.name, exc)
+            self.service.record_exception("autoscaler", f"sbatch[{profile.name}]", exc)
+            psnap.update({"action": "sbatch_failed", "error": str(exc)})
+            return psnap, 0
+        if not job_ids:
+            psnap.update({"action": "sbatch_failed", "error": "sbatch returned no job ids"})
+            return psnap, 0
+        writer.call(lambda c: [db.add_submission(c, j, mode, runner) for j in job_ids])
+        LOGGER.info("Autoscaler submitted %d workers for %s (runner=%s work=%d current=%d)",
+                    len(job_ids), profile.name, runner, work, current)
+        psnap.update({"action": "scale_up", "submitted": len(job_ids)})
+        return psnap, len(job_ids)
+
+    def _guard_runner_mismatch(self, counts_by_runner: Dict[str, Dict[str, int]]) -> List[Dict[str, Any]]:
+        """Surface (once) any runner with pending work that no configured fleet serves."""
+        served = {p.runner for p in self.profiles if p.runner is not None}
+        has_catchall = any(p.runner is None for p in self.profiles)
+        unserved: List[Dict[str, Any]] = []
+        for runner, c in counts_by_runner.items():
+            pending = c.get(db.PENDING, 0)
+            is_served = has_catchall or runner in served
+            if pending > 0 and not is_served:
+                unserved.append({"runner": runner, "pending": pending})
+                if runner not in self._reported_mismatch:
+                    self._reported_mismatch.add(runner)
+                    LOGGER.warning("No autoscaler fleet serves runner %s (%d pending)", runner, pending)
+                    self.service.record_error(self._mismatch_error_record(runner, pending, served))
+            elif runner in self._reported_mismatch:
+                self._reported_mismatch.discard(runner)  # cleared — re-report if it recurs
+        return unserved
+
+    def _mismatch_error_record(self, runner: Optional[str], pending: int, served: set) -> Dict[str, Any]:
+        """Build the error-page record for pending work with no serving fleet."""
+        served_list = ", ".join(sorted(s for s in served if s)) or "(none)"
+        return {
+            "ts": time.time(), "source": "autoscaler", "location": f"runner {runner}",
+            "worker_id": None, "job_id": None, "host": None,
+            "error_type": "RunnerMismatch",
+            "message": (
+                f"{pending} pending job(s) need runner {runner!r}, but no autoscaler fleet serves it "
+                f"(fleets serve: {served_list}). Add an autoscale profile for {runner!r}, or submit "
+                f"these jobs under a served runner — otherwise they will never be leased."
+            )[:2000],
+            "traceback": "(no traceback — autoscaler fleet/runner mismatch)",
+        }
+
+    @staticmethod
+    def _summary_action(snap: Dict[str, Any], paused: bool, errored: Optional[str]) -> str:
+        """Collapse the per-fleet actions into one headline action for the dashboard."""
+        if errored:
+            return "sbatch_failed"
+        if snap["submitted"]:
+            return "scale_up"
+        if snap["cancelled"]:
+            return "scale_down"
+        if snap["unserved_runners"]:
+            return "runner_mismatch"
+        if paused:
+            return "idle"
+        return "idle" if snap["work"] == 0 else "steady"
+
+    def _finish(self, snap: Dict[str, Any]) -> Dict[str, int]:
         """Publish the snapshot and return the tick's action tally."""
         self.snapshot.update(snap)
-        return {"submitted": snap["submitted"], "cancelled": snap["cancelled"], "current": current}
+        return {"submitted": snap["submitted"], "cancelled": snap["cancelled"],
+                "current": snap["current"]}
 
     def _surface_startup_deaths(self, writer: Any) -> None:
         """Post any worker that ended without registering to the error page, with its log tail.
@@ -408,6 +528,13 @@ class Autoscaler:
             "capacity_probe": self.cfg.capacity_probe or "sinfo -h -o %C (idle field)",
             "squeue_poll_s": self.cfg.squeue_poll_s,
             "registration_grace_s": self.cfg.registration_grace_s,
+            "fleets": [
+                {"name": p.name, "runner": p.runner, "worker_mode": p.worker_mode,
+                 "worker_script": p.worker_script, "worker_config": p.worker_config,
+                 "max_workers": p.max_workers, "standby_floor": p.standby_floor,
+                 "partition": p.partition}
+                for p in self.profiles
+            ],
             "trying_to_scale": bool(result.get("to_submit") or 0),
             "submission_state_counts": writer.call(db.submission_state_counts),
             "submissions": writer.call(lambda c: db.recent_submissions(c, 100)),

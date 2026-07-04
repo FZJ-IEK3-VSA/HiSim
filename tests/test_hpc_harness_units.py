@@ -135,6 +135,28 @@ def test_default_sbatch_missing_worker_config_raises(tmp_path):
         default_sbatch(str(script), 1, None, str(tmp_path / "absent.json"))
 
 
+def test_default_sbatch_exports_worker_runner(tmp_path, monkeypatch):
+    """A worker_runner is passed to the job as HARNESS_WORKER_RUNNER (pinning the fleet's runner)."""
+    from hpc_harness.server import autoscaler as autoscaler_mod
+
+    script = tmp_path / "worker.sbatch"
+    script.write_text("#!/bin/bash\n")
+    captured = {}
+
+    class _Result:
+        returncode = 0
+        stdout = "9"
+        stderr = ""
+
+    def fake_run(cmd, **_kwargs):
+        captured["cmd"] = cmd
+        return _Result()
+
+    monkeypatch.setattr(autoscaler_mod.subprocess, "run", fake_run)
+    assert default_sbatch(str(script), 1, None, None, "hisim_setup") == ["9"]
+    assert "--export=ALL,HARNESS_WORKER_RUNNER=hisim_setup" in captured["cmd"]
+
+
 def test_read_log_tail_returns_last_lines_or_none(tmp_path):
     """read_log_tail returns None for a missing file and the last N lines otherwise."""
     assert read_log_tail(str(tmp_path / "absent.out")) is None
@@ -295,6 +317,33 @@ def test_worker_config_single_core_forces_one_slot(tmp_path):
                      node_gate="bogus").finalize()
 
 
+def test_autoscale_profiles_parse_inherit_and_validate(tmp_path):
+    """Profiles parse from JSON, inherit top-level defaults, and reject duplicate/blank runners."""
+    cfg = ServerConfig.from_dict({
+        "db_path": str(tmp_path / "t.db"), "result_root": str(tmp_path / "r"),
+        "autoscale": {"enabled": True, "worker_script": "w.sbatch", "max_workers": 7,
+                      "profiles": [{"name": "a", "runner": "hisim"},
+                                   {"name": "b", "runner": "hisim_setup", "max_workers": 3}]},
+    })
+    cfg.finalize()
+    profiles = {p.name: p for p in cfg.autoscale.resolved_profiles()}
+    assert profiles["a"].runner == "hisim" and profiles["a"].max_workers == 7  # inherited
+    assert profiles["b"].max_workers == 3  # per-profile override
+    assert profiles["a"].worker_script is not None  # inherited from top-level
+
+    with pytest.raises(ValueError, match="distinct runners"):
+        ServerConfig.from_dict({
+            "db_path": "x", "result_root": "y",
+            "autoscale": {"enabled": True, "worker_script": "w",
+                          "profiles": [{"name": "a", "runner": "r"}, {"name": "b", "runner": "r"}]},
+        }).finalize()
+    with pytest.raises(ValueError, match="must set a 'runner'"):
+        ServerConfig.from_dict({
+            "db_path": "x", "result_root": "y",
+            "autoscale": {"enabled": True, "worker_script": "w", "profiles": [{"name": "a"}]},
+        }).finalize()
+
+
 # --------------------------------------------------------------------- console ring
 
 
@@ -390,6 +439,31 @@ def test_find_setups_skips_init_and_excludes(tmp_path):
         (tmp_path / name).write_text("", encoding="utf-8")
     found = find_setups(tmp_path, exclude=["b_setup"])
     assert [p.name for p in found] == ["a_setup.py"]
+
+
+# ------------------------------------------------------------- worker idle timeout
+
+
+def test_worker_idle_timeout_decision():
+    """The worker releases its allocation only after idle_timeout_s with nothing running/draining."""
+    from hpc_harness.worker.worker import Worker
+
+    expired = Worker._idle_timed_out  # pylint: disable=protected-access
+    assert expired(1000.0, 100.0, 300.0, False, False) is True    # idle 900s > 300s
+    assert expired(1000.0, 900.0, 300.0, False, False) is False   # idle 100s < 300s
+    assert expired(1000.0, 100.0, 300.0, True, False) is False    # a job is running
+    assert expired(1000.0, 100.0, 300.0, False, True) is False    # already draining
+    assert expired(1000.0, 0.0, 0.0, False, False) is False       # disabled (idle_timeout_s=0)
+
+
+def test_worker_config_idle_timeout_default_five_minutes(tmp_path):
+    """idle_timeout_s defaults to 300 s (5 minutes) and is overridable from JSON."""
+    cfg = WorkerConfig(server_url="http://x", result_root=str(tmp_path)).finalize()
+    assert cfg.idle_timeout_s == 300.0
+    cfg2 = WorkerConfig.from_dict(
+        {"server_url": "http://x", "result_root": str(tmp_path), "idle_timeout_s": 120}
+    ).finalize()
+    assert cfg2.idle_timeout_s == 120
 
 
 # ------------------------------------------------------------------ run_one (moved)

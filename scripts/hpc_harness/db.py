@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS workers (
 CREATE TABLE IF NOT EXISTS slurm_submissions (
     slurm_job_id         TEXT PRIMARY KEY,
     mode                 TEXT,
+    runner               TEXT,
     submitted_at         REAL,
     registered_worker_id TEXT,
     state                TEXT NOT NULL DEFAULT 'submitted'
@@ -152,8 +153,16 @@ def connect(path: str, journal_mode: str = "WAL") -> sqlite3.Connection:
         conn.execute("PRAGMA journal_mode=DELETE;")
         conn.execute("PRAGMA synchronous=FULL;")
     conn.executescript(_SCHEMA)
+    _migrate(conn)
     conn.commit()
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Idempotent, additive migrations for DBs created by an older schema."""
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(slurm_submissions)")}
+    if "runner" not in cols:  # added for per-runner (multi-fleet) autoscaling
+        conn.execute("ALTER TABLE slurm_submissions ADD COLUMN runner TEXT")
 
 
 def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
@@ -439,6 +448,22 @@ def assume_fleet_dead_recovery(conn: sqlite3.Connection, max_attempts: int) -> i
     return len(rows)
 
 
+def cancel_pending(conn: sqlite3.Connection) -> int:
+    """Cancel every PENDING task (clear the queue); returns how many were cancelled.
+
+    Leased/running tasks are left alone — only the un-leased backlog is removed, so this is
+    the "empty the queue" action the dashboard exposes. Cancelled tasks can be revived later
+    via ``reset(failed=True)`` if needed.
+    """
+    now = time.time()
+    cur = conn.execute(
+        "UPDATE tasks SET status=?, leased_by=NULL, lease_id=NULL, error=?, finished_at=?,"
+        " updated_at=? WHERE status=?",
+        (CANCELLED, "cancelled by admin (queue cleared)", now, now, PENDING),
+    )
+    return cur.rowcount
+
+
 def reset(conn: sqlite3.Connection, leased: bool = False, failed: bool = False) -> int:
     """Manually requeue tasks: stuck leases and/or failed/dead/cancelled ones."""
     now = time.time()
@@ -466,6 +491,17 @@ def counts(conn: sqlite3.Connection) -> Dict[str, int]:
     result = {row["status"]: row["c"] for row in rows}
     result["total"] = sum(row["c"] for row in rows)
     return result
+
+
+def counts_by_runner(conn: sqlite3.Connection) -> Dict[str, Dict[str, int]]:
+    """Return ``{runner: {status: count}}`` — lets the autoscaler size each fleet by its runner."""
+    rows = conn.execute(
+        "SELECT runner, status, COUNT(*) AS c FROM tasks GROUP BY runner, status"
+    ).fetchall()
+    out: Dict[str, Dict[str, int]] = {}
+    for row in rows:
+        out.setdefault(row["runner"], {})[row["status"]] = row["c"]
+    return out
 
 
 def is_drained(conn: sqlite3.Connection) -> bool:
@@ -572,15 +608,37 @@ def alive_workers(conn: sqlite3.Connection) -> List[Dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def leases_by_worker(conn: sqlite3.Connection) -> Dict[str, Dict[str, Any]]:
+    """Map ``worker_id -> {'job_ids': [...], 'since': earliest leased_at}`` for leased tasks.
+
+    Lets the dashboard show, per worker, which job(s) it currently holds and how long it has
+    been working on them (a single_core worker holds at most one; a whole_node worker many).
+    """
+    rows = conn.execute(
+        "SELECT leased_by, id, leased_at FROM tasks"
+        " WHERE status=? AND leased_by IS NOT NULL ORDER BY leased_at",
+        (LEASED,),
+    ).fetchall()
+    out: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        entry = out.setdefault(row["leased_by"], {"job_ids": [], "since": row["leased_at"]})
+        entry["job_ids"].append(row["id"])
+        if row["leased_at"] is not None and (entry["since"] is None or row["leased_at"] < entry["since"]):
+            entry["since"] = row["leased_at"]
+    return out
+
+
 # --------------------------------------------------------------- slurm submissions
 
 
-def add_submission(conn: sqlite3.Connection, slurm_job_id: str, mode: str) -> None:
-    """Record an autoscaler sbatch submission."""
+def add_submission(
+    conn: sqlite3.Connection, slurm_job_id: str, mode: str, runner: Optional[str] = None
+) -> None:
+    """Record an autoscaler sbatch submission (``runner`` attributes it to a fleet)."""
     conn.execute(
-        "INSERT OR IGNORE INTO slurm_submissions(slurm_job_id, mode, submitted_at, state)"
-        " VALUES(?,?,?,?)",
-        (slurm_job_id, mode, time.time(), "submitted"),
+        "INSERT OR IGNORE INTO slurm_submissions(slurm_job_id, mode, runner, submitted_at, state)"
+        " VALUES(?,?,?,?,?)",
+        (slurm_job_id, mode, runner, time.time(), "submitted"),
     )
 
 

@@ -43,6 +43,9 @@
     "slurm_log_dir": "/projects2/2026_n-pflugradt_building_simulations/slurm_logs",
     "partition": null,
     "squeue_poll_s": 60,
-    "registration_grace_s": 900
+    "registration_grace_s": 900,
+    "profiles": [
+      {"name": "hisim_setup", "runner": "hisim_setup"}
+    ]
   }
 }

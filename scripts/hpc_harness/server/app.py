@@ -14,6 +14,7 @@ from hpc_harness.server.dashboard import (
     render_autoscaler,
     render_dashboard,
     render_errors,
+    render_jobs,
     render_settings,
 )
 from hpc_harness.server.service import HarnessService
@@ -123,6 +124,10 @@ def create_app(service: HarnessService) -> FastAPI:
     def cancel_job(job_id: int) -> Dict[str, Any]:
         return service.cancel_job(job_id)
 
+    @app.post(f"{API}/admin/jobs/clear-pending", dependencies=[auth])
+    def clear_pending() -> Dict[str, Any]:
+        return {"ok": True, "cancelled": service.clear_queue()}
+
     @app.post(f"{API}/admin/pause", dependencies=[auth])
     def pause() -> Dict[str, Any]:
         service.pause()
@@ -214,5 +219,9 @@ def create_app(service: HarnessService) -> FastAPI:
     @app.get("/errors", response_class=HTMLResponse)
     def errors_page() -> str:
         return render_errors()
+
+    @app.get("/jobs", response_class=HTMLResponse)
+    def jobs_page() -> str:
+        return render_jobs()
 
     return app

@@ -44,5 +44,9 @@ if [[ ! -f "$WORKER_CONFIG" ]]; then
     exit 1
 fi
 log "PYTHONPATH=${PYTHONPATH}"
-log "config=${WORKER_CONFIG} — handing off to the worker process (its logs follow)"
-exec python -m hpc_harness worker --config "$WORKER_CONFIG" --mode single_core
+
+# HARNESS_WORKER_RUNNER (exported by the autoscaler) pins the runner this fleet serves,
+# overriding the config's runner so accounting and execution can never disagree.
+RUNNER_ARG="${HARNESS_WORKER_RUNNER:+--runner ${HARNESS_WORKER_RUNNER}}"
+log "config=${WORKER_CONFIG} runner=${HARNESS_WORKER_RUNNER:-<from config>} — handing off to the worker (its logs follow)"
+exec python -m hpc_harness worker --config "$WORKER_CONFIG" --mode single_core ${RUNNER_ARG}

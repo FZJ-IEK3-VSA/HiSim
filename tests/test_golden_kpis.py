@@ -52,35 +52,42 @@ def test_flatten_value_that_is_dict_is_not_a_leaf() -> None:
 
 
 def test_flatten_empty() -> None:
-    assert flatten({}) == {}
+    """An empty KPI tree flattens to an empty mapping."""
+    assert not flatten({})
 
 
 # --------------------------------------------------------------------------- #
 # compare()
 # --------------------------------------------------------------------------- #
 def test_compare_exact_match_no_errors() -> None:
-    assert compare("x", {"a": 1.0}, {"a": 1.0}) == []
+    """Identical KPI maps compare without errors."""
+    assert not compare("x", {"a": 1.0}, {"a": 1.0})
 
 
 def test_compare_within_tolerance_no_errors() -> None:
-    assert compare("x", {"a": 1.0 + 1e-12}, {"a": 1.0}) == []
+    """A difference within tolerance is not reported."""
+    assert not compare("x", {"a": 1.0 + 1e-12}, {"a": 1.0})
 
 
 def test_compare_outside_tolerance_reports_change() -> None:
+    """A difference beyond tolerance is reported as a change."""
     assert compare("x", {"a": 2.0}, {"a": 1.0}) == ["x: KPI 'a' changed: ref=1.0 got=2.0"]
 
 
 def test_compare_missing_kpi() -> None:
+    """A KPI present in the reference but absent from the run is reported missing."""
     assert compare("x", {}, {"a": 1.0}) == ["x: missing KPI 'a' in current run"]
 
 
 def test_compare_new_kpi() -> None:
+    """A KPI present in the run but absent from the reference is reported new."""
     assert compare("x", {"a": 1.0}, {}) == [
         "x: new KPI 'a' not in reference (regenerate if intended)"
     ]
 
 
 def test_compare_missing_precede_new_and_new_sorted() -> None:
+    """Missing-KPI messages precede new-KPI ones, and new KPIs are sorted."""
     errs = compare("x", {"z": 1.0, "b": 2.0}, {"a": 1.0})
     assert errs == [
         "x: missing KPI 'a' in current run",
@@ -90,12 +97,14 @@ def test_compare_missing_precede_new_and_new_sorted() -> None:
 
 
 def test_compare_non_numeric_exact() -> None:
-    assert compare("x", {"a": "PEM"}, {"a": "PEM"}) == []
+    """Non-numeric KPI values are compared for exact equality."""
+    assert not compare("x", {"a": "PEM"}, {"a": "PEM"})
     assert compare("x", {"a": "AEM"}, {"a": "PEM"}) == ["x: KPI 'a' changed: ref='PEM' got='AEM'"]
 
 
 def test_compare_zero_values_equal() -> None:
-    assert compare("x", {"a": 0.0}, {"a": 0.0}) == []
+    """Two zero KPI values compare equal without a false relative-tolerance hit."""
+    assert not compare("x", {"a": 0.0}, {"a": 0.0})
 
 
 def test_compare_uses_module_tolerance_defaults() -> None:

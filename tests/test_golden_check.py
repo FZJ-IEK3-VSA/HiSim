@@ -51,10 +51,12 @@ def _run_fn(kpis: dict, error: str | None = None):
 
 
 def _read_report(tmp_path: Path) -> dict:
-    return json.loads((tmp_path / "golden-ref-check" / "report.json").read_text())
+    report: dict = json.loads((tmp_path / "golden-ref-check" / "report.json").read_text())
+    return report
 
 
 def test_pass_when_kpis_match(tmp_path: Path) -> None:
+    """Matching fresh and golden KPIs yield rc 0 and a passing report."""
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"
     _write_golden(golden_dir, {"a": 1.0, "b": 2.0})
@@ -70,6 +72,7 @@ def test_pass_when_kpis_match(tmp_path: Path) -> None:
 
 
 def test_fail_when_kpi_diverges(tmp_path: Path) -> None:
+    """A diverged KPI yields rc 1, a failing report, and recorded deviations."""
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"
     _write_golden(golden_dir, {"a": 1.0})
@@ -86,6 +89,7 @@ def test_fail_when_kpi_diverges(tmp_path: Path) -> None:
 
 
 def test_missing_golden_bails_before_running(tmp_path: Path) -> None:
+    """A missing golden file fails fast without invoking the run function."""
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"  # nothing written
 
@@ -102,6 +106,7 @@ def test_missing_golden_bails_before_running(tmp_path: Path) -> None:
 
 
 def test_run_error_is_failure(tmp_path: Path) -> None:
+    """A run that reports an error is surfaced as a ``run_error`` failure."""
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"
     _write_golden(golden_dir, {"a": 1.0})
@@ -116,6 +121,7 @@ def test_run_error_is_failure(tmp_path: Path) -> None:
 
 
 def test_nondeterministic_mismatch_is_advisory_not_failure(tmp_path: Path) -> None:
+    """A mismatch on a nondeterministic pair is advisory, still passing overall."""
     config_path = _write_config(tmp_path, nondeterministic=True)
     golden_dir = tmp_path / "golden_references"
     _write_golden(golden_dir, {"a": 1.0})
@@ -132,6 +138,7 @@ def test_nondeterministic_mismatch_is_advisory_not_failure(tmp_path: Path) -> No
 
 
 def test_setup_param_filter_narrows_to_one_pair(tmp_path: Path) -> None:
+    """The setup/param filter narrows the run to the single selected pair."""
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"
     _write_golden(golden_dir, {"a": 1.0})

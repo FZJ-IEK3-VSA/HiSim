@@ -46,6 +46,7 @@ def _run_fn_returning(results: list[RunResult]):
 
 
 def test_main_writes_golden_file_and_manifest(tmp_path: Path) -> None:
+    """A successful run writes one golden file per pair and a manifest with the commit."""
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"
     kpis = {"BUI1.General.x": 1.0, "BUI1.Battery.y": 2.5}
@@ -72,6 +73,7 @@ def test_main_writes_golden_file_and_manifest(tmp_path: Path) -> None:
 
 
 def test_main_errored_pair_returns_1_and_writes_no_golden(tmp_path: Path) -> None:
+    """An errored pair returns rc 1 and writes no golden, but still writes a manifest."""
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"
     run_fn = _run_fn_returning(
@@ -92,6 +94,7 @@ def test_main_errored_pair_returns_1_and_writes_no_golden(tmp_path: Path) -> Non
 
 
 def test_manifest_only_mode_scans_existing_goldens(tmp_path: Path) -> None:
+    """Manifest-only mode lists existing goldens on disk without running simulations."""
     config_path = _write_config(tmp_path)
     golden_dir = tmp_path / "golden_references"
     golden_dir.mkdir()
@@ -118,6 +121,7 @@ def test_manifest_only_mode_scans_existing_goldens(tmp_path: Path) -> None:
 
 
 def test_main_missing_config_raises(tmp_path: Path) -> None:
+    """A missing config path raises ``FileNotFoundError``."""
     with pytest.raises(FileNotFoundError):
         main(
             config_path=tmp_path / "nope.json",

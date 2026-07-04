@@ -30,6 +30,7 @@ def _config() -> dict:
 
 
 def test_build_matrix_all_pairs() -> None:
+    """With no horizon filter the matrix is the full setup x param cartesian product."""
     matrix = build_matrix(_config())
     assert matrix == {
         "include": [
@@ -42,6 +43,7 @@ def test_build_matrix_all_pairs() -> None:
 
 
 def test_build_matrix_horizon_week() -> None:
+    """The ``week`` horizon keeps only week-factory parameter sets."""
     matrix = build_matrix(_config(), horizon="week")
     assert matrix == {
         "include": [
@@ -52,11 +54,13 @@ def test_build_matrix_horizon_week() -> None:
 
 
 def test_build_matrix_horizon_year() -> None:
+    """The ``year`` horizon keeps only full-year parameter sets."""
     matrix = build_matrix(_config(), horizon="year")
     assert [e["param"] for e in matrix["include"]] == ["full_year_60s", "full_year_60s"]
 
 
 def test_build_matrix_unknown_horizon_raises() -> None:
+    """An unrecognised horizon name raises ``ValueError``."""
     with pytest.raises(ValueError, match="horizon"):
         build_matrix(_config(), horizon="fortnight")
 
@@ -69,6 +73,7 @@ def test_horizon_factories_cover_config_factories() -> None:
 
 
 def test_build_matrix_real_config_has_22_pairs() -> None:
+    """The shipped config expands to the expected 22 setup/param pairs."""
     config = json.loads(REAL_CONFIG.read_text())
     matrix = build_matrix(config)
     assert len(matrix["include"]) == len(config["setups"]) * len(config["parameter_sets"])

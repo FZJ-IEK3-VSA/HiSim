@@ -31,6 +31,14 @@ source "$VENV"
 log "venv activated: python=$(command -v python) ($(python --version 2>&1))"
 
 export PYTHONPATH="${SLURM_SUBMIT_DIR}/..:${PYTHONPATH:-}"   # scripts/ on the path
+
+# Absolute default so the config is found regardless of the job's working directory;
+# HARNESS_WORKER_CONFIG (exported by the autoscaler) overrides it when set.
+WORKER_CONFIG="${HARNESS_WORKER_CONFIG:-/projects2/2026_n-pflugradt_building_simulations/HiSim/scripts/hpc_harness/worker.iek2012.json}"
+if [[ ! -f "$WORKER_CONFIG" ]]; then
+    log "FATAL: worker config not found: $WORKER_CONFIG"
+    exit 1
+fi
 log "PYTHONPATH=${PYTHONPATH}"
-log "config=${HARNESS_WORKER_CONFIG:-worker.json} — handing off to the worker process (its logs follow)"
-exec python -m hpc_harness worker --config "${HARNESS_WORKER_CONFIG:-worker.json}" --mode whole_node
+log "config=${WORKER_CONFIG} — handing off to the worker process (its logs follow)"
+exec python -m hpc_harness worker --config "$WORKER_CONFIG" --mode whole_node

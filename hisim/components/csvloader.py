@@ -41,7 +41,7 @@ class CSVLoaderConfig(cp.ConfigBase):
 
 
 class CSVLoader(cp.Component):
-    """Csvloader class.
+    r"""Csvloader class.
 
     Class component loads CSV file containing some
     load profile relevant to the applied setup
@@ -92,7 +92,7 @@ class CSVLoader(cp.Component):
     ``column_values`` was previously named ``self.column``. That bare
     name was misleading because it collided with
     ``self.csvconfig.column`` (an ``int`` column index) -- see issue
-    #758. A repo-wide audit (``grep -rn "\\.column\\b" --include="*.py"``
+    #758. A repo-wide audit (``grep -rn "\.column\b" --include="*.py"``
     excluding ``csvconfig.column``, ``.columns``, and ``column_values``)
     found no remaining reads of ``.column`` on :class:`CSVLoader`
     instances, so the rename is safe in-tree. A deprecated ``column``

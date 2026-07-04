@@ -1,0 +1,69 @@
+# Tier 1 of the golden-reference gate: re-runs the short (one-week) pairs on every
+# PR and push to main, comparing KPIs against the committed golden references.
+# The heavier full-year pairs run separately (golden-year.yml), gated on all other
+# CI already being green.
+
+name: golden-check
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: golden-check-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  discover:
+    name: discover week pairs
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: gen
+        # golden_matrix.py is stdlib-only, so no dependency install is needed here.
+        run: echo "matrix=$(python3 scripts/golden_matrix.py --horizon week)" >> "$GITHUB_OUTPUT"
+
+  golden:
+    name: golden ${{ matrix.setup }} / ${{ matrix.param }}
+    needs: discover
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install HiSim package
+        run: uv pip install --system -e .
+      - name: Golden KPI check
+        run: python scripts/golden_check.py --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
+      - name: Upload deviation report
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: golden-report-${{ matrix.setup }}-${{ matrix.param }}
+          path: results/golden-ref-check/report.*
+          if-no-files-found: warn
+
+  summary:
+    name: golden-check summary
+    needs: golden
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any pair diverged
+        run: '[ "${{ needs.golden.result }}" = "success" ] || exit 1'

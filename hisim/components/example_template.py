@@ -11,8 +11,8 @@ Additionally it contains examples for doc strings according to the sphinx format
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from copy import deepcopy
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
 from typing import Optional
+from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig

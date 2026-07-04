@@ -1,21 +1,19 @@
-"""Config-driven execution and artifact-inventory core for the golden-reference system.
+"""Config-driven execution core for the golden-reference system.
 
 This module turns a JSON config (``scripts/golden_config.json``) into
 :class:`~hisim.simulationparameters.SimulationParameters`, runs a setup via
-:func:`hisim.hisim_main.main`, inventories the resulting output artifacts with
-SHA-256 hashes, and assembles a :class:`Manifest` describing the run.
+:func:`hisim.hisim_main.main`, reads the resulting ``all_kpis.json``, and
+flattens it into a ``{kpi: value}`` mapping.
 
 The pure helpers (``load_config``, ``build_simulation_parameters``,
-``resolve_setup_path``, ``classify_artifact``, ``compute_sha256``,
-``inventory_directory``, ``config_hash``, ``collect_manifest``,
-``write_manifest``/``load_manifest``) are fully unit-testable without running
-HiSim. Only :func:`run_one` executes a real simulation, and it is isolated so
-that :func:`run_all` (which drives every ``(setup, parameter_set)`` pair) can be
+``resolve_setup_path``, ``filter_config``, ``select_pairs``, ``config_hash``,
+``environment_metadata``) are fully unit-testable without running HiSim. Only
+:func:`run_one` executes a real simulation, and it is isolated so that
+:func:`run_all` (which drives every ``(setup, parameter_set)`` pair) can be
 unit-tested with a monkeypatched ``run_one``.
 """
 from __future__ import annotations
 
-import dataclasses
 import datetime
 import hashlib
 import json
@@ -27,6 +25,11 @@ from typing import Any, Callable, Optional, cast
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
+
+try:  # importable both as ``scripts.runner`` (tests) and ``runner`` (CLI from scripts/)
+    from golden_kpis import flatten  # type: ignore[import-not-found]
+except ModuleNotFoundError:
+    from scripts.golden_kpis import flatten
 
 
 # ---------------------------------------------------------------------------
@@ -54,23 +57,16 @@ class ParameterSetConfig:
 
 @dataclass
 class GoldenConfig:
-    """The full golden-reference config: output roots plus setups and parameter sets."""
+    """The golden-reference config: the check output subdir plus setups and parameter sets.
 
-    results_root: str
-    golden_subdir: str
+    The results root and the committed-golden directory are runtime paths (CLI
+    args / defaults), not config concerns — only ``check_subdir`` (the name of the
+    ephemeral fresh-run output directory) lives here.
+    """
+
     check_subdir: str
     setups: list[SetupConfig]
     parameter_sets: list[ParameterSetConfig]
-
-
-@dataclass
-class ArtifactEntry:
-    """One file produced by a simulation run, relative to the result directory."""
-
-    relative_path: str
-    sha256: str
-    size: int
-    kind: str
 
 
 @dataclass
@@ -80,26 +76,14 @@ class RunResult:
     setup_id: str
     parameter_set_id: str
     result_directory: str
-    artifacts: list[ArtifactEntry]
+    kpis: dict[str, Any]
     error: Optional[str] = None
-
-
-@dataclass
-class Manifest:
-    """Environment metadata + per-pair results, serialized to ``manifest.json``."""
-
-    hisim_commit: str
-    python_version: str
-    platform: str
-    config_sha256: str
-    generated_at: str
-    pairs: list[RunResult]
 
 
 # ---------------------------------------------------------------------------
 # Config loading and validation
 # ---------------------------------------------------------------------------
-_REQUIRED_TOP_LEVEL_KEYS = ("results_root", "golden_subdir", "check_subdir", "setups", "parameter_sets")
+_REQUIRED_TOP_LEVEL_KEYS = ("check_subdir", "setups", "parameter_sets")
 
 
 def _validate_factory(factory: str) -> None:
@@ -108,7 +92,7 @@ def _validate_factory(factory: str) -> None:
     if func is None or not callable(func):
         raise ValueError(
             f"Unknown SimulationParameters factory {factory!r}; "
-            f"must be a classmethod of SimulationParameters (e.g. 'one_day_only')."
+            f"must be a classmethod of SimulationParameters (e.g. 'one_week_only')."
         )
 
 
@@ -118,8 +102,7 @@ def _validate_option_names(option_names: list[str]) -> None:
     for name in option_names:
         if name not in valid:
             raise ValueError(
-                f"Unknown PostProcessingOptions member {name!r}; "
-                f"valid members: {sorted(valid)}."
+                f"Unknown PostProcessingOptions member {name!r}; valid members: {sorted(valid)}."
             )
 
 
@@ -176,12 +159,40 @@ def load_config(config_path: Path) -> GoldenConfig:
         )
 
     return GoldenConfig(
-        results_root=raw["results_root"],
-        golden_subdir=raw["golden_subdir"],
         check_subdir=raw["check_subdir"],
         setups=setups,
         parameter_sets=parameter_sets,
     )
+
+
+# ---------------------------------------------------------------------------
+# Filtering (CI slices: --setup / --param)
+# ---------------------------------------------------------------------------
+def filter_config(
+    config: GoldenConfig, setup_id: Optional[str] = None, param_id: Optional[str] = None
+) -> GoldenConfig:
+    """Return a copy of ``config`` restricted to the given setup and/or param id.
+
+    Raises:
+        ValueError: if a requested id matches no entry (a typo should fail loudly,
+            not silently run nothing).
+    """
+    setups = [s for s in config.setups if setup_id in (None, s.id)]
+    params = [p for p in config.parameter_sets if param_id in (None, p.id)]
+    if setup_id is not None and not setups:
+        raise ValueError(f"No setup with id {setup_id!r} in config.")
+    if param_id is not None and not params:
+        raise ValueError(f"No parameter set with id {param_id!r} in config.")
+    return GoldenConfig(
+        check_subdir=config.check_subdir,
+        setups=setups,
+        parameter_sets=params,
+    )
+
+
+def select_pairs(config: GoldenConfig) -> list[tuple[SetupConfig, ParameterSetConfig]]:
+    """Return every ``(setup, parameter_set)`` pair (cartesian product, config order)."""
+    return [(setup, param) for setup in config.setups for param in config.parameter_sets]
 
 
 # ---------------------------------------------------------------------------
@@ -228,55 +239,6 @@ def resolve_setup_path(setup: SetupConfig, repo_root: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# Artifact classification and inventory
-# ---------------------------------------------------------------------------
-def classify_artifact(relative_path: str) -> str:
-    """Return ``"csv"`` | ``"json"`` | ``"image"`` | ``"other"`` from the file extension.
-
-    Extension matching is case-insensitive.
-    """
-    suffix = Path(relative_path).suffix.lower()
-    if suffix == ".csv":
-        return "csv"
-    if suffix == ".json":
-        return "json"
-    if suffix in (".png", ".jpg", ".jpeg"):
-        return "image"
-    return "other"
-
-
-def compute_sha256(path: Path) -> str:
-    """Return the hex SHA-256 digest of a file's bytes."""
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def inventory_directory(result_directory: Path) -> list[ArtifactEntry]:
-    """Recursively walk ``result_directory`` and return one :class:`ArtifactEntry` per file.
-
-    Files are sorted by ``relative_path`` (POSIX-separated, relative to
-    ``result_directory``). Directories are skipped. Returns an empty list if
-    ``result_directory`` does not exist.
-    """
-    if not result_directory.exists():
-        return []
-    entries: list[ArtifactEntry] = []
-    for path in sorted(result_directory.rglob("*")):
-        if not path.is_file():
-            continue
-        rel = path.relative_to(result_directory).as_posix()
-        entries.append(
-            ArtifactEntry(
-                relative_path=rel,
-                sha256=compute_sha256(path),
-                size=path.stat().st_size,
-                kind=classify_artifact(rel),
-            )
-        )
-    entries.sort(key=lambda e: e.relative_path)
-    return entries
-
-
-# ---------------------------------------------------------------------------
 # Execution
 # ---------------------------------------------------------------------------
 def run_one(
@@ -285,12 +247,14 @@ def run_one(
     result_directory: str,
     repo_root: Path,
 ) -> RunResult:
-    """Run one ``(setup, parameter_set)`` pair and inventory the output.
+    """Run one ``(setup, parameter_set)`` pair and return its flattened KPIs.
 
     Builds :class:`SimulationParameters`, resolves the setup path, calls
-    :func:`hisim.hisim_main.main`, then inventories ``result_directory``.
-    Any exception is captured into :attr:`RunResult.error` as a traceback
-    string. **Never raises.**
+    :func:`hisim.hisim_main.main`, then reads and flattens
+    ``<result_directory>/all_kpis.json``. Any exception (including a missing
+    ``all_kpis.json``, which means the parameter set did not enable both
+    ``COMPUTE_KPIS`` and ``WRITE_KPIS_TO_JSON``) is captured into
+    :attr:`RunResult.error` as a traceback string. **Never raises.**
     """
     import traceback
 
@@ -302,19 +266,26 @@ def run_one(
         from hisim import hisim_main
 
         hisim_main.main(str(setup_path), params)
-        artifacts = inventory_directory(Path(result_directory))
+
+        kpi_path = Path(result_directory) / "all_kpis.json"
+        if not kpi_path.exists():
+            raise FileNotFoundError(
+                f"{kpi_path} was not produced — the parameter set must enable both "
+                "COMPUTE_KPIS and WRITE_KPIS_TO_JSON."
+            )
+        kpis = flatten(json.loads(kpi_path.read_text()))
         return RunResult(
             setup_id=setup.id,
             parameter_set_id=parameter_set.id,
             result_directory=result_directory,
-            artifacts=artifacts,
+            kpis=kpis,
         )
     except Exception:  # noqa: BLE001 - run_one must never raise
         return RunResult(
             setup_id=setup.id,
             parameter_set_id=parameter_set.id,
             result_directory=result_directory,
-            artifacts=[],
+            kpis={},
             error=traceback.format_exc(),
         )
 
@@ -322,23 +293,22 @@ def run_one(
 def run_all(
     config: GoldenConfig, base_root: Path, repo_root: Path, subdir: str
 ) -> list[RunResult]:
-    """Run every ``(setup, parameter_set)`` pair (cartesian product, config order).
+    """Run every ``(setup, parameter_set)`` pair in ``config``.
 
     For each pair, sets ``result_directory = base_root/subdir/<setup_id>/<param_id>/``,
     creates parent directories, and calls :func:`run_one`. Returns one
     :class:`RunResult` per pair.
     """
     results: list[RunResult] = []
-    for setup in config.setups:
-        for param_set in config.parameter_sets:
-            result_directory = str(base_root / subdir / setup.id / param_set.id)
-            Path(result_directory).mkdir(parents=True, exist_ok=True)
-            results.append(run_one(setup, param_set, result_directory, repo_root))
+    for setup, param_set in select_pairs(config):
+        result_directory = str(base_root / subdir / setup.id / param_set.id)
+        Path(result_directory).mkdir(parents=True, exist_ok=True)
+        results.append(run_one(setup, param_set, result_directory, repo_root))
     return results
 
 
 # ---------------------------------------------------------------------------
-# Manifest
+# Environment metadata (informational manifest sidecar)
 # ---------------------------------------------------------------------------
 def config_hash(config_path: Path) -> str:
     """Return the SHA-256 hex digest of the config file's bytes."""
@@ -359,60 +329,16 @@ def _git_commit() -> str:
         return "unknown"
 
 
-def collect_manifest(
-    config: GoldenConfig, results: list[RunResult], config_path: Path
-) -> Manifest:
-    """Assemble a :class:`Manifest` with environment metadata and per-pair results."""
-    return Manifest(
-        hisim_commit=_git_commit(),
-        python_version=platform.python_version(),
-        platform=platform.platform(),
-        config_sha256=config_hash(config_path),
-        generated_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        pairs=results,
-    )
+def environment_metadata(config_path: Path) -> dict[str, str]:
+    """Return environment metadata recorded alongside a blessed snapshot.
 
-
-def write_manifest(manifest: Manifest, path: Path) -> None:
-    """Write the manifest as JSON (``indent=2``, ``sort_keys=True``), creating parent dirs."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(dataclasses.asdict(manifest), indent=2, sort_keys=True))
-
-
-def load_manifest(path: Path) -> Manifest:
-    """Load a manifest JSON and reconstruct the dataclass tree.
-
-    Raises:
-        FileNotFoundError: if ``path`` does not exist.
+    Purely informational — the checker never reads it. Includes the HiSim git
+    commit, Python version, platform, config SHA-256, and an ISO-8601 timestamp.
     """
-    if not path.exists():
-        raise FileNotFoundError(f"Manifest not found: {path}")
-    data = json.loads(path.read_text())
-    pairs: list[RunResult] = []
-    for pair_data in data["pairs"]:
-        artifacts = [
-            ArtifactEntry(
-                relative_path=a["relative_path"],
-                sha256=a["sha256"],
-                size=a["size"],
-                kind=a["kind"],
-            )
-            for a in pair_data["artifacts"]
-        ]
-        pairs.append(
-            RunResult(
-                setup_id=pair_data["setup_id"],
-                parameter_set_id=pair_data["parameter_set_id"],
-                result_directory=pair_data["result_directory"],
-                artifacts=artifacts,
-                error=pair_data.get("error"),
-            )
-        )
-    return Manifest(
-        hisim_commit=data["hisim_commit"],
-        python_version=data["python_version"],
-        platform=data["platform"],
-        config_sha256=data["config_sha256"],
-        generated_at=data["generated_at"],
-        pairs=pairs,
-    )
+    return {
+        "hisim_commit": _git_commit(),
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "config_sha256": config_hash(config_path),
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }

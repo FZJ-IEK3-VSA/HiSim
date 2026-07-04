@@ -18,7 +18,7 @@ from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import postprocessingoptions
-from hisim.loadtypes import UNITS_USING_MEAN_AGGREGATION, Units
+from hisim.loadtypes import UNITS_USING_MEAN_AGGREGATION
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 
 

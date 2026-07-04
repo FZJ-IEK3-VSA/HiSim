@@ -337,6 +337,7 @@ async function refresh() {
     ['standby_floor', a.standby_floor],
     ['max_workers', a.max_workers],
     ['worker_script', esc(a.worker_script ?? '–')],
+    ['worker_config', esc(a.worker_config ?? '(sbatch default: worker.json)')],
     ['slurm_log_dir', esc(a.slurm_log_dir ?? '(server submit dir)')],
     ['partition', esc(a.partition ?? '(any)')],
     ['capacity_probe', esc(a.capacity_probe)],

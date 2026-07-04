@@ -49,6 +49,10 @@ class AutoscaleConfig:
     """Keep this many workers queued inside Slurm when the cluster is momentarily full."""
     max_workers: int = 2000
     worker_script: Optional[str] = None
+    worker_config: Optional[str] = None
+    """Absolute path to the worker JSON config, exported to each submitted job as
+    ``HARNESS_WORKER_CONFIG`` (the worker sbatch reads it). Without it the sbatch falls back
+    to a relative ``worker.json``, which the job cannot find from its Slurm working directory."""
     capacity_probe: Optional[str] = None
     """Override command printing the idle-core integer; default parses ``sinfo -h -o %C``."""
     partition: Optional[str] = None
@@ -163,6 +167,8 @@ class ServerConfig:
                 setattr(self, name, _normalize_path(value))
         if self.autoscale.slurm_log_dir is not None:
             self.autoscale.slurm_log_dir = _normalize_path(self.autoscale.slurm_log_dir)
+        if self.autoscale.worker_config is not None:
+            self.autoscale.worker_config = _normalize_path(self.autoscale.worker_config)
         if self.token is None:
             self.token = os.environ.get("HARNESS_TOKEN")
         if self.journal_mode not in ("WAL", "DELETE"):

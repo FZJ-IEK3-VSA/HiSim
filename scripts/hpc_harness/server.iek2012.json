@@ -39,6 +39,7 @@
     "standby_floor": 1,
     "max_workers": 20,
     "worker_script": "/projects2/2026_n-pflugradt_building_simulations/HiSim/scripts/hpc_harness/slurm/worker_single_core.sbatch",
+    "worker_config": "/projects2/2026_n-pflugradt_building_simulations/HiSim/scripts/hpc_harness/worker.iek2012.json",
     "slurm_log_dir": "/projects2/2026_n-pflugradt_building_simulations/slurm_logs",
     "partition": null,
     "squeue_poll_s": 60,

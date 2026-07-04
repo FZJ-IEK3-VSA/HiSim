@@ -76,13 +76,17 @@ def shell_capacity_probe(command: str) -> int:
     return int(out.stdout.strip())
 
 
-def default_sbatch(worker_script: str, n: int, log_dir: Optional[str] = None) -> List[str]:
+def default_sbatch(
+    worker_script: str, n: int, log_dir: Optional[str] = None, worker_config: Optional[str] = None
+) -> List[str]:
     """Submit ``n`` worker jobs; returns the Slurm job ids actually submitted.
 
     When ``log_dir`` is set, the directory is created (so Slurm can open the files)
     and each job's stdout/stderr is routed to ``<log_dir>/worker-<jobid>.out`` /
     ``.err``, which the autoscaler later reads to explain a worker that died before
-    registering.
+    registering. When ``worker_config`` is set it is passed to the job as
+    ``HARNESS_WORKER_CONFIG`` so the worker loads the right config by absolute path
+    instead of a relative ``worker.json`` it cannot find from its Slurm working directory.
 
     A total failure raises ``RuntimeError`` carrying sbatch's **stderr** (so the reason
     is visible in the log and on the autoscaler dashboard, not just an opaque exit
@@ -92,6 +96,8 @@ def default_sbatch(worker_script: str, n: int, log_dir: Optional[str] = None) ->
         raise RuntimeError("autoscale.worker_script is not set")
     if not os.path.isfile(worker_script):
         raise RuntimeError(f"autoscale.worker_script does not exist: {worker_script}")
+    if worker_config and not os.path.isfile(worker_config):
+        raise RuntimeError(f"autoscale.worker_config does not exist: {worker_config}")
     log_args: List[str] = []
     if log_dir:
         os.makedirs(log_dir, exist_ok=True)
@@ -99,11 +105,13 @@ def default_sbatch(worker_script: str, n: int, log_dir: Optional[str] = None) ->
             f"--output={os.path.join(log_dir, 'worker-%j.out')}",
             f"--error={os.path.join(log_dir, 'worker-%j.err')}",
         ]
+    # Keep the submitter's environment (--export=ALL) and add the config path on top.
+    export_args = [f"--export=ALL,HARNESS_WORKER_CONFIG={worker_config}"] if worker_config else []
     job_ids: List[str] = []
     for _ in range(n):
         try:
             out = subprocess.run(
-                ["sbatch", "--parsable", *log_args, worker_script],
+                ["sbatch", "--parsable", *log_args, *export_args, worker_script],
                 capture_output=True, text=True, timeout=60, check=False,
             )
         except FileNotFoundError as exc:  # sbatch itself not on PATH
@@ -195,7 +203,7 @@ class Autoscaler:
         else:
             self.probe_fn = lambda: default_capacity_probe(cfg.partition)
         self.sbatch_fn = sbatch_fn or (
-            lambda n: default_sbatch(cfg.worker_script, n, cfg.slurm_log_dir)
+            lambda n: default_sbatch(cfg.worker_script, n, cfg.slurm_log_dir, cfg.worker_config)
         )
         self.squeue_fn = squeue_fn or default_squeue
         self.scancel_fn = scancel_fn or default_scancel
@@ -394,6 +402,7 @@ class Autoscaler:
             "standby_floor": self.cfg.standby_floor,
             "max_workers": self.cfg.max_workers,
             "worker_script": self.cfg.worker_script,
+            "worker_config": self.cfg.worker_config,
             "slurm_log_dir": self.cfg.slurm_log_dir,
             "partition": self.cfg.partition,
             "capacity_probe": self.cfg.capacity_probe or "sinfo -h -o %C (idle field)",

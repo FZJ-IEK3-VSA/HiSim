@@ -103,6 +103,38 @@ def test_default_sbatch_routes_logs_into_log_dir(tmp_path, monkeypatch):
     assert f"--error={log_dir / 'worker-%j.err'}" in joined
 
 
+def test_default_sbatch_exports_worker_config(tmp_path, monkeypatch):
+    """A worker_config is passed to the job as HARNESS_WORKER_CONFIG (with --export=ALL)."""
+    from hpc_harness.server import autoscaler as autoscaler_mod
+
+    script = tmp_path / "worker.sbatch"
+    script.write_text("#!/bin/bash\n")
+    worker_cfg = tmp_path / "worker.json"
+    worker_cfg.write_text("{}")
+    captured = {}
+
+    class _Result:
+        returncode = 0
+        stdout = "77"
+        stderr = ""
+
+    def fake_run(cmd, **_kwargs):
+        captured["cmd"] = cmd
+        return _Result()
+
+    monkeypatch.setattr(autoscaler_mod.subprocess, "run", fake_run)
+    assert default_sbatch(str(script), 1, None, str(worker_cfg)) == ["77"]
+    assert f"--export=ALL,HARNESS_WORKER_CONFIG={worker_cfg}" in captured["cmd"]
+
+
+def test_default_sbatch_missing_worker_config_raises(tmp_path):
+    """A worker_config that does not exist fails fast with a clear error, before any sbatch."""
+    script = tmp_path / "worker.sbatch"
+    script.write_text("#!/bin/bash\n")
+    with pytest.raises(RuntimeError, match="worker_config does not exist"):
+        default_sbatch(str(script), 1, None, str(tmp_path / "absent.json"))
+
+
 def test_read_log_tail_returns_last_lines_or_none(tmp_path):
     """read_log_tail returns None for a missing file and the last N lines otherwise."""
     assert read_log_tail(str(tmp_path / "absent.out")) is None

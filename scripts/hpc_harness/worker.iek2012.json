@@ -1,15 +1,15 @@
 {
-  "server_url_file": "/project/run123/server.url",
+  "server_url_file": "/projects2/2026_n-pflugradt_building_simulations/server.url",
   "runner": "hisim",
-  "result_root": "/project/run123/results",
-  "log_root": "/project/run123/logs",
-  "mode": "whole_node",
+  "result_root": "/projects2/2026_n-pflugradt_building_simulations/results",
+  "log_root": "/projects2/2026_n-pflugradt_building_simulations/logs",
+  "mode": "single_core",
 
   "min_headroom_gb": 12.0,
   "cores_per_job": 1,
   "reserved_cores": 0,
   "max_slots": null,
-  "max_jobs_per_child": 50,
+  "max_jobs_per_child": 1,
 
   "node_gate": "auto",
   "max_node_cpu_percent": 95.0,

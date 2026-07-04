@@ -1,14 +1,14 @@
 {
-  "db_path": "/var/lib/harness/run123/tasks.db",
-  "db_snapshot_path": "/project/run123/tasks.snapshot.db",
+  "db_path": "/projects2/2026_n-pflugradt_building_simulations/tasks.db",
+  "db_snapshot_path": "/projects2/2026_n-pflugradt_building_simulations/tasks.snapshot.db",
   "db_snapshot_interval_s": 300,
   "journal_mode": "WAL",
-  "logs_db_path": "/var/lib/harness/run123/logs.db",
-  "logs_archive_path": "/project/run123/logs.archive.db",
+  "logs_db_path": "/projects2/2026_n-pflugradt_building_simulations/logs.db",
+  "logs_archive_path": "/projects2/2026_n-pflugradt_building_simulations/logs.archive.db",
   "bind_host": "0.0.0.0",
   "bind_port": 8080,
-  "result_root": "/project/run123/results",
-  "url_publish_path": "/project/run123/server.url",
+  "result_root": "/projects2/2026_n-pflugradt_building_simulations/results",
+  "url_publish_path": "/projects2/2026_n-pflugradt_building_simulations/server.url",
 
   "max_retries": 3,
   "success_file": "finished.flag",
@@ -33,12 +33,12 @@
   },
 
   "autoscale": {
-    "enabled": false,
+    "enabled": true,
     "worker_mode": "single_core",
     "period_s": 60,
-    "standby_floor": 10,
-    "max_workers": 2000,
-    "worker_script": "/project/run123/slurm/worker_single_core.sbatch",
+    "standby_floor": 1,
+    "max_workers": 20,
+    "worker_script": "/projects2/2026_n-pflugradt_building_simulations/worker_single_core.sbatch",
     "partition": null,
     "squeue_poll_s": 60,
     "registration_grace_s": 900

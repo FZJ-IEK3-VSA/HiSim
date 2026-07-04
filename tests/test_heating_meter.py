@@ -260,6 +260,19 @@ def test_house(
         "Residents' total warm water energy consumption"
     ].get("value")
 
+    # The residents' domestic-hot-water thermal consumption is published under the
+    # "Residents' total warm water energy consumption" KPI (the thermal energy needed to heat
+    # the tapped warm water, in kWh). It is read here so a regression that drops or breaks this
+    # KPI is caught. Note: in this system setup the domestic-hot-water circuit is served by a
+    # dedicated heat pump and storage and is NOT wired into the HeatingMeter (its
+    # SimpleDHWStorage connection is disabled in heating_meter.py). The HeatingMeter therefore
+    # only measures the space-heating circuit, so its "Total heat consumption from grid" must
+    # match the heat distribution system output and must NOT include the domestic-hot-water
+    # energy below.
+    heat_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Residents"][
+        "Residents' total warm water energy consumption"
+    ].get("value")
+
     opex_costs_for_heat_in_euro = jsondata["Heating Meter"]["Opex costs of heat consumption from grid"].get("value")  # pylint: disable=unused-variable
 
     co2_footprint_due_to_heat_use_in_kg = jsondata["Heating Meter"][  # pylint: disable=unused-variable

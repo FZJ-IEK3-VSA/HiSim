@@ -63,10 +63,6 @@ def test_basic_household_without_simu_params(monkeypatch: pytest.MonkeyPatch) ->
     # assertions below can verify the artifacts landed where the test expects.
     captured_result_directory: list[str] = []
 
-    # Capture the result directory that the patched factory hands to HiSim so the
-    # assertions below can verify the artifacts landed where the test expects.
-    captured_result_directory: list[str] = []
-
     def fast_default_parameters(
         cls: type[SimulationParameters],
         year: int,

@@ -67,62 +67,6 @@ def _normalize_path(
         parsed = cwd / parsed
     return str(parsed.resolve())
 
-# Renamed public fields whose old JSON keys / override kwargs are still
-# accepted for backward compatibility (issue #614). Mapping: old name -> new name.
-_DEPRECATED_FIELD_ALIASES = {"db": "db_path", "sim_params": "sim_params_path"}
-
-
-def _normalize_path(
-    path: str,
-    *,
-    cwd: Optional[Path] = None,
-    home: Optional[Path] = None,
-) -> str:
-    """Normalise a path to an absolute, user-expanded, resolved string.
-
-    This is the pure seam behind :meth:`HarnessConfig.finalize`: it makes
-    ``Path(...).expanduser().resolve()`` testable without touching
-    process-global state (the current working directory and the ``HOME``
-    environment variable). With both ``cwd`` and ``home`` left as ``None`` it
-    reproduces ``str(Path(path).expanduser().resolve())`` exactly, so
-    production behaviour is unchanged. Supplying explicit ``cwd`` and/or
-    ``home`` decouples the result from that global state: a leading ``~`` (or
-    ``~/...``) is expanded against ``home`` and a relative ``path`` is joined
-    onto ``cwd`` before resolving, which lets tests assert on the normalised
-    string deterministically without ``monkeypatch.chdir``/``monkeypatch.setenv``.
-
-    Args:
-        path: The path string to normalise.
-        cwd: Base directory used to resolve relative ``path`` values. Defaults
-            to :meth:`Path.cwd` when needed.
-        home: Home directory substituted for a leading ``~``. Defaults to
-            :meth:`Path.home` when needed.
-
-    Returns:
-        The normalised absolute path as a string.
-
-    Note:
-        The explicit-argument form expands only a bare leading ``~`` (and
-        ``~/...``) against ``home``; the POSIX ``~user`` user-lookup form is
-        honoured solely on the default fast path (which delegates to
-        :meth:`Path.expanduser`). The harness never configures ``~user``
-        paths, so this keeps the seam simple and dependency-free.
-    """
-    # Fast path: no injection requested, reproduce today's behaviour verbatim.
-    if cwd is None and home is None:
-        return str(Path(path).expanduser().resolve())
-    if cwd is None:
-        cwd = Path.cwd()
-    if home is None:
-        home = Path.home()
-    parsed = Path(path)
-    parts = parsed.parts
-    if parts and parts[0] == "~":
-        parsed = home if len(parts) == 1 else home.joinpath(*parts[1:])
-    if not parsed.is_absolute():
-        parsed = cwd / parsed
-    return str(parsed.resolve())
-
 
 @dataclass
 class HarnessConfig:

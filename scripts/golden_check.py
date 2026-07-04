@@ -31,6 +31,7 @@ try:  # run as a script from scripts/ ...
         filter_config,
         load_config,
         run_all,
+        run_all_json,
         select_pairs,
     )
 except ModuleNotFoundError:  # ... or imported as scripts.golden_check (tests)
@@ -41,6 +42,7 @@ except ModuleNotFoundError:  # ... or imported as scripts.golden_check (tests)
         filter_config,
         load_config,
         run_all,
+        run_all_json,
         select_pairs,
     )
 
@@ -109,6 +111,7 @@ def main(
     rel_tol: float = REL_TOL,
     abs_tol: float = ABS_TOL,
     run_fn: RunFn = run_all,
+    advisory: bool = False,
 ) -> int:
     """Run the (filtered) pairs and compare KPIs to committed goldens.
 
@@ -116,6 +119,12 @@ def main(
     ``nondeterministic`` pairs still pass), ``1`` otherwise. Bails **before**
     running any simulation if a required golden file is missing, so a missing
     reference never wastes compute.
+
+    When ``advisory`` is ``True`` the full comparison still runs and the reports
+    are written exactly as usual, but the process return code is forced to ``0`` so
+    the check can surface divergences without blocking (used by the JSON golden
+    check until JSON/Python parity is proven). The written ``report.json`` still
+    records the true ``passed`` verdict.
     """
     config = load_config(config_path)
     config = filter_config(config, setup_id=setup_id, param_id=param_id)
@@ -146,7 +155,7 @@ def main(
         )
         _write_reports(report, out_dir)
         print(report.summary_line())
-        return 1
+        return 0 if advisory else 1
 
     param_by_id = {p.id: p for p in config.parameter_sets}
     results = run_fn(config, results_root, repo_root, config.check_subdir)
@@ -187,7 +196,9 @@ def main(
                 print(f"  {pair.status.upper()} {pair.setup_id}/{pair.parameter_set_id}")
                 for dev in pair.deviations[:10]:
                     print(f"    - {dev}")
-    return 0 if passed else 1
+        if advisory:
+            print("(advisory mode: divergences reported but not blocking)")
+    return 0 if (passed or advisory) else 1
 
 
 def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -200,6 +211,18 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--param", dest="param_id", default=None, help="Only check this parameter-set id.")
     parser.add_argument("--rel-tol", type=float, default=REL_TOL)
     parser.add_argument("--abs-tol", type=float, default=ABS_TOL)
+    parser.add_argument(
+        "--mode",
+        choices=("python", "json"),
+        default="python",
+        help="Run the '.py' setups (python) or their '.scenario.json' siblings (json). "
+        "Both compare against the same committed golden references.",
+    )
+    parser.add_argument(
+        "--advisory",
+        action="store_true",
+        help="Report divergences but always exit 0 (never block). Used by the JSON check.",
+    )
     return parser.parse_args(argv)
 
 
@@ -215,5 +238,7 @@ if __name__ == "__main__":
             param_id=args.param_id,
             rel_tol=args.rel_tol,
             abs_tol=args.abs_tol,
+            run_fn=run_all_json if args.mode == "json" else run_all,
+            advisory=args.advisory,
         )
     )

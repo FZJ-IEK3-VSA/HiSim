@@ -25,8 +25,10 @@ from scripts.runner import (
     environment_metadata,
     filter_config,
     load_config,
+    resolve_scenario_path,
     resolve_setup_path,
     run_all,
+    run_all_json,
     run_one,
     select_pairs,
 )
@@ -209,6 +211,27 @@ def test_resolve_setup_path_missing_raises() -> None:
         resolve_setup_path(SetupConfig("ghost", "system_setups/nope.py"), REPO_ROOT)
 
 
+def test_resolve_scenario_path_finds_sibling() -> None:
+    """``resolve_scenario_path`` maps a ``.py`` setup to its ``.scenario.json`` sibling."""
+    setup = SetupConfig("gas", "system_setups/household_gas_building_sizer.py")
+    resolved = resolve_scenario_path(setup, REPO_ROOT)
+    assert resolved.exists() and resolved.name == "household_gas_building_sizer.scenario.json"
+
+
+def test_resolve_scenario_path_missing_raises() -> None:
+    """``resolve_scenario_path`` raises ``FileNotFoundError`` when no sibling exists."""
+    with pytest.raises(FileNotFoundError):
+        resolve_scenario_path(SetupConfig("ghost", "system_setups/nope.py"), REPO_ROOT)
+
+
+def test_all_golden_setups_have_scenario_json_siblings() -> None:
+    """Every setup in the shipped config has a ``.scenario.json`` sibling for JSON mode."""
+    cfg = load_config(REAL_CONFIG)
+    for setup in cfg.setups:
+        # Must not raise: the JSON golden check depends on every sibling existing.
+        resolve_scenario_path(setup, REPO_ROOT)
+
+
 # --------------------------------------------------------------------------- #
 # environment metadata
 # --------------------------------------------------------------------------- #
@@ -236,7 +259,7 @@ def test_run_all_one_result_per_pair(tmp_path: Path, monkeypatch: pytest.MonkeyP
     """``run_all`` invokes ``run_one`` once per pair, each with its own result dir."""
     calls: list[tuple[str, str, str]] = []
 
-    def fake_run_one(setup, param, result_directory, _repo_root):
+    def fake_run_one(setup, param, result_directory, _repo_root, mode="python"):
         calls.append((setup.id, param.id, result_directory))
         return RunResult(setup.id, param.id, result_directory, kpis={"k": 1.0})
 
@@ -246,6 +269,20 @@ def test_run_all_one_result_per_pair(tmp_path: Path, monkeypatch: pytest.MonkeyP
     for _, _, rd in calls:
         assert Path(rd).is_dir()
     assert results[0].kpis == {"k": 1.0}
+
+
+def test_run_all_json_passes_json_mode_to_run_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``run_all_json`` drives every pair through ``run_one`` with ``mode='json'``."""
+    modes: list[str] = []
+
+    def fake_run_one(setup, param, result_directory, _repo_root, mode="python"):
+        modes.append(mode)
+        return RunResult(setup.id, param.id, result_directory, kpis={"k": 1.0})
+
+    monkeypatch.setattr("scripts.runner.run_one", fake_run_one)
+    results = run_all_json(_sample_config(), tmp_path, REPO_ROOT, "golden-ref-check")
+    assert len(results) == 4
+    assert set(modes) == {"json"}
 
 
 def test_run_one_captures_error_for_missing_setup(tmp_path: Path) -> None:

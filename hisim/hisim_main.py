@@ -149,6 +149,29 @@ def initialize_from_json(
     sim_params = SimulationParameters(**sim_params_data)
     sim_params.log_connections = True  # For easy post-processing (and debugging)
 
+    my_sim = _build_simulator_from_scenario(scenario_data, path_to_module, sim_params)
+
+    if delta:
+        log.warning("====================================================================")
+        log.warning("== The delta file is currently not supported and will be ignored. ==")
+        log.warning("====================================================================")
+
+    return my_sim
+
+
+def _build_simulator_from_scenario(
+    scenario_data: dict[str, Any],
+    path_to_module: str,
+    sim_params: SimulationParameters,
+) -> sim.Simulator:
+    """Wire a JSON scenario onto a simulator using already-prepared simulation parameters.
+
+    Shared tail of :func:`initialize_from_json` (file-based sim params) and
+    :func:`initialize_from_json_with_parameters` (a pre-built
+    :class:`SimulationParameters`, e.g. from the golden-reference runner). Resolves
+    the scenario's ``.json`` path, puts its directory on ``sys.path``, constructs
+    the :class:`Simulator`, and builds the component graph from ``scenario_data``.
+    """
     # Normalize module path and resolve absolute path
     path_obj = Path(path_to_module).with_suffix(".json").resolve()
     # Get module name (filename without suffix)
@@ -161,21 +184,37 @@ def initialize_from_json(
         raise ValueError(f"Directory of module does not exist: {module_dir}")
 
     my_sim = sim.Simulator(
-        module_directory=module_dir,
+        module_directory=str(module_dir),
         module_filename=module_filename,
         setup_function="setup_function",  # In JSON mode we do not use a setup function; but must not be None for post-processing
         my_module_config=None,
         my_simulation_parameters=sim_params,
-    )  # type: ignore[no-any-return]
+    )
 
     my_sim = setup_components_and_connections(scenario_data, my_sim, sim_params)
+    return my_sim
 
-    if delta:
-        log.warning("====================================================================")
-        log.warning("== The delta file is currently not supported and will be ignored. ==")
-        log.warning("====================================================================")
 
-    return my_sim  # type: ignore[no-any-return]
+def initialize_from_json_with_parameters(
+    scenario: str,
+    my_simulation_parameters: SimulationParameters,
+) -> sim.Simulator:
+    """Initialize the simulator from a JSON scenario using a pre-built :class:`SimulationParameters`.
+
+    Unlike :func:`initialize_from_json`, the simulation parameters are supplied by
+    the caller instead of read from a ``.simulation.json`` file. This lets a caller
+    (the golden-reference runner) drive a JSON scenario with the *exact* same
+    :class:`SimulationParameters` object it would use for the Python setup — same
+    dates, timestep, post-processing options and ``result_directory`` — so the two
+    runs are comparable with no risk of parameter drift.
+    """
+    scenario_data = load_json_file(scenario)
+    SingletonSimRepository().set_entry(
+        key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}",
+    )
+    my_simulation_parameters.multiple_buildings = scenario_data.get("multiple_buildings", False)
+    my_simulation_parameters.log_connections = True  # For easy post-processing (and debugging)
+    return _build_simulator_from_scenario(scenario_data, scenario, my_simulation_parameters)
 
 
 def run_simulation(my_sim: sim.Simulator, path_to_module: Optional[str]) -> None:
@@ -371,6 +410,27 @@ def main(path_to_module: str, my_simulation_parameters: Optional[SimulationParam
         my_module_config=my_module_config,
     )
     run_simulation(my_sim, path_to_module=path_to_module)
+    return my_sim.get_simulation_parameters().result_directory
+
+
+def main_json(scenario: str, my_simulation_parameters: SimulationParameters) -> str:
+    """Run a JSON-based system setup and return the directory it wrote results to.
+
+    The JSON counterpart of :func:`main`: it wires the ``.scenario.json`` at
+    *scenario* onto a simulator using the caller-supplied *my_simulation_parameters*
+    (rather than a ``.simulation.json`` file), runs every time step and the
+    post-processing, and returns the filesystem path of the result directory the
+    simulator actually wrote to. Used by the golden-reference runner to execute a
+    JSON setup with the same parameters as its Python twin and compare KPIs.
+
+    Returns:
+        The absolute path of the directory the simulation wrote its results to.
+    """
+    my_sim = initialize_from_json_with_parameters(
+        scenario=scenario,
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    run_simulation(my_sim, path_to_module=scenario)
     return my_sim.get_simulation_parameters().result_directory
 
 

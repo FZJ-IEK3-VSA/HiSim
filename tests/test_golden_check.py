@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.golden_check import golden_filename, main
+from scripts.golden_check import _parse_args, golden_filename, main
 from scripts.runner import GoldenConfig, RunResult
 
 pytestmark = pytest.mark.base
@@ -135,6 +135,46 @@ def test_nondeterministic_mismatch_is_advisory_not_failure(tmp_path: Path) -> No
     assert report["passed"] is True
     assert report["pairs"][0]["status"] == "advisory"
     assert report["pairs"][0]["deviations"]  # still recorded
+
+
+def test_advisory_divergence_returns_zero_but_reports_failure(tmp_path: Path) -> None:
+    """In advisory mode a real divergence is recorded but the exit code is forced to 0."""
+    config_path = _write_config(tmp_path)
+    golden_dir = tmp_path / "golden_references"
+    _write_golden(golden_dir, {"a": 1.0})
+
+    rc = main(
+        config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
+        repo_root=tmp_path, run_fn=_run_fn({"a": 2.0}), advisory=True,
+    )
+    assert rc == 0
+    report = _read_report(tmp_path)
+    assert report["passed"] is False  # the report still tells the truth
+    assert report["pairs"][0]["status"] == "fail"
+
+
+def test_advisory_missing_golden_returns_zero(tmp_path: Path) -> None:
+    """In advisory mode a missing golden is reported without blocking (rc 0)."""
+    config_path = _write_config(tmp_path)
+    golden_dir = tmp_path / "golden_references"  # nothing written
+
+    rc = main(
+        config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
+        repo_root=tmp_path, run_fn=_run_fn({"a": 1.0}), advisory=True,
+    )
+    assert rc == 0
+    report = _read_report(tmp_path)
+    assert report["pairs"][0]["status"] == "missing_golden"
+
+
+def test_cli_mode_and_advisory_flags() -> None:
+    """``--mode json`` and ``--advisory`` parse; defaults stay python/blocking."""
+    default = _parse_args([])
+    assert default.mode == "python"
+    assert default.advisory is False
+    parsed = _parse_args(["--mode", "json", "--advisory"])
+    assert parsed.mode == "json"
+    assert parsed.advisory is True
 
 
 def test_setup_param_filter_narrows_to_one_pair(tmp_path: Path) -> None:

@@ -238,6 +238,27 @@ def resolve_setup_path(setup: SetupConfig, repo_root: Path) -> Path:
     return resolved
 
 
+def resolve_scenario_path(setup: SetupConfig, repo_root: Path) -> Path:
+    """Resolve the ``.scenario.json`` sibling of the setup's ``.py`` path.
+
+    The JSON system-setup design mirrors each ``<name>.py`` with a same-named
+    ``<name>.scenario.json`` in the same directory. This returns the absolute path
+    of that sibling so the JSON golden check can run the identical setup expressed
+    as JSON.
+
+    Raises:
+        FileNotFoundError: if the ``.scenario.json`` sibling does not exist.
+    """
+    py_path = Path(setup.path)
+    scenario_rel = py_path.parent / f"{py_path.stem}.scenario.json"
+    resolved = (repo_root / scenario_rel).resolve()
+    if not resolved.exists():
+        raise FileNotFoundError(
+            f"Scenario JSON not found for setup {setup.id!r}: {scenario_rel} (resolved to {resolved})"
+        )
+    return resolved
+
+
 # ---------------------------------------------------------------------------
 # Execution
 # ---------------------------------------------------------------------------
@@ -246,26 +267,35 @@ def run_one(
     parameter_set: ParameterSetConfig,
     result_directory: str,
     repo_root: Path,
+    mode: str = "python",
 ) -> RunResult:
     """Run one ``(setup, parameter_set)`` pair and return its flattened KPIs.
 
-    Builds :class:`SimulationParameters`, resolves the setup path, calls
-    :func:`hisim.hisim_main.main`, then reads and flattens
-    ``<result_directory>/all_kpis.json``. Any exception (including a missing
-    ``all_kpis.json``, which means the parameter set did not enable both
-    ``COMPUTE_KPIS`` and ``WRITE_KPIS_TO_JSON``) is captured into
-    :attr:`RunResult.error` as a traceback string. **Never raises.**
+    Builds :class:`SimulationParameters`, resolves the setup, runs it, then reads
+    and flattens ``<result_directory>/all_kpis.json``. With ``mode="python"``
+    (default) it runs the ``.py`` setup via :func:`hisim.hisim_main.main`; with
+    ``mode="json"`` it runs the same-named ``.scenario.json`` sibling via
+    :func:`hisim.hisim_main.main_json`, passing the *same* built
+    :class:`SimulationParameters` so the two runs are directly comparable.
+
+    Any exception (including a missing ``all_kpis.json``, which means the parameter
+    set did not enable both ``COMPUTE_KPIS`` and ``WRITE_KPIS_TO_JSON``) is captured
+    into :attr:`RunResult.error` as a traceback string. **Never raises.**
     """
     import traceback
 
     try:
         params = build_simulation_parameters(parameter_set, result_directory)
-        setup_path = resolve_setup_path(setup, repo_root)
         # Imported lazily so the pure helpers stay importable without the full
         # HiSim execution stack.
         from hisim import hisim_main
 
-        hisim_main.main(str(setup_path), params)
+        if mode == "json":
+            scenario_path = resolve_scenario_path(setup, repo_root)
+            hisim_main.main_json(str(scenario_path), params)
+        else:
+            setup_path = resolve_setup_path(setup, repo_root)
+            hisim_main.main(str(setup_path), params)
 
         kpi_path = Path(result_directory) / "all_kpis.json"
         if not kpi_path.exists():
@@ -291,20 +321,31 @@ def run_one(
 
 
 def run_all(
-    config: GoldenConfig, base_root: Path, repo_root: Path, subdir: str
+    config: GoldenConfig, base_root: Path, repo_root: Path, subdir: str, mode: str = "python"
 ) -> list[RunResult]:
     """Run every ``(setup, parameter_set)`` pair in ``config``.
 
     For each pair, sets ``result_directory = base_root/subdir/<setup_id>/<param_id>/``,
-    creates parent directories, and calls :func:`run_one`. Returns one
-    :class:`RunResult` per pair.
+    creates parent directories, and calls :func:`run_one` in the given ``mode``
+    (``"python"`` or ``"json"``). Returns one :class:`RunResult` per pair.
     """
     results: list[RunResult] = []
     for setup, param_set in select_pairs(config):
         result_directory = str(base_root / subdir / setup.id / param_set.id)
         Path(result_directory).mkdir(parents=True, exist_ok=True)
-        results.append(run_one(setup, param_set, result_directory, repo_root))
+        results.append(run_one(setup, param_set, result_directory, repo_root, mode=mode))
     return results
+
+
+def run_all_json(
+    config: GoldenConfig, base_root: Path, repo_root: Path, subdir: str
+) -> list[RunResult]:
+    """Run every pair via its ``.scenario.json`` sibling (JSON mode).
+
+    Thin ``mode="json"`` wrapper around :func:`run_all` so it can be injected as
+    ``golden_check.main``'s ``run_fn`` (which expects the 4-argument signature).
+    """
+    return run_all(config, base_root, repo_root, subdir, mode="json")
 
 
 # ---------------------------------------------------------------------------

@@ -167,6 +167,14 @@ _OVERVIEW_BODY = r"""
 _OVERVIEW_SCRIPT = r"""
 let consoleWorker = null, following = false;
 
+async function resetBreaker() {
+  if (!confirm('Reset the circuit breaker and resume leasing?')) return;
+  const r = await fetch(API+'/admin/resume', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:'{}'});
+  if (r.status === 401) { alert('Resuming needs the bearer token (admin route).'); return; }
+  refreshStatus();
+}
+
 async function refreshStatus() {
   const s = await get('/status'); if (!s) return;
   const c = s.counts || {};
@@ -185,7 +193,7 @@ async function refreshStatus() {
   let banners = '';
   if (s.paused) banners += `<div class="banner err">LEASING PAUSED — ${esc(s.paused)}` +
     (s.circuit_breaker && s.circuit_breaker.top_error ? `<br>top error: ${esc(s.circuit_breaker.top_error)}` : '') +
-    `</div>`;
+    `<br><button onclick="resetBreaker()">reset circuit breaker &amp; resume leasing</button></div>`;
   if (s.mem_warning) banners += `<div class="banner warn">${esc(s.mem_warning.message)}</div>`;
   document.getElementById('banners').innerHTML = banners;
   document.getElementById('drained').textContent = s.drained ? '— run complete' : '';

@@ -526,6 +526,9 @@ def test_circuit_breaker_pauses_and_resume_clears(client):
     assert client.post(f"{API}/admin/resume", headers=AUTH).json()["ok"]
     assert "paused" not in client.get(f"{API}/status").json()
     assert lease(client, worker_id, 1, "L-after")["jobs"]
+    # The overview page offers a one-click reset wired to that same admin endpoint.
+    overview = client.get("/").text
+    assert "resetBreaker" in overview and "/admin/resume" in overview
 
 
 def test_mem_autoraise_pushes_set_directive(client, service):

@@ -75,10 +75,18 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: golden-*
-          # Each artifact holds the file at its "golden_references/<pair>.json" path,
-          # so extract at the workspace root to land them back in golden_references/.
-          path: .
+          # upload-artifact strips the common leading dir, so each artifact holds a bare
+          # "<pair>.json" — download straight into golden_references/ to restore the layout.
+          path: golden_references
           merge-multiple: true
+      - name: Verify goldens landed
+        run: |
+          count=$(find golden_references -maxdepth 1 -name '*.json' ! -name manifest.json | wc -l)
+          echo "Downloaded $count golden reference file(s) into golden_references/."
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No golden reference files were downloaded — refusing to open an empty bless PR."
+            exit 1
+          fi
       - name: Install HiSim package
         run: uv pip install --system -e .
       - name: (Re)write manifest

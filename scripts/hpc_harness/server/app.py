@@ -10,7 +10,12 @@ from typing import Any, Dict, Optional
 from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from hpc_harness.server.dashboard import render_dashboard
+from hpc_harness.server.dashboard import (
+    render_autoscaler,
+    render_dashboard,
+    render_errors,
+    render_settings,
+)
 from hpc_harness.server.service import HarnessService
 
 API = "/api/v1"
@@ -30,6 +35,12 @@ def create_app(service: HarnessService) -> FastAPI:
             raise HTTPException(status_code=401, detail="missing or invalid bearer token")
 
     auth = Depends(require_token)
+
+    @app.exception_handler(Exception)
+    async def _record_unhandled(request: Request, exc: Exception) -> JSONResponse:
+        """Catch every unhandled route exception, persist it with a traceback (§4.7)."""
+        service.record_exception("server", f"{request.method} {request.url.path}", exc)
+        return JSONResponse(status_code=500, content={"detail": "internal server error"})
 
     # ------------------------------------------------------------- mutating API
 
@@ -73,6 +84,11 @@ def create_app(service: HarnessService) -> FastAPI:
         service.ship_logs(body.get("worker_id", "?"), body.get("records", []))
         return {"ok": True}
 
+    @app.post(f"{API}/errors", dependencies=[auth])
+    def report_errors(body: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+        service.report_errors(body.get("worker_id"), body.get("errors", []))
+        return {"ok": True}
+
     @app.post(f"{API}/workers/{{worker_id}}/console", dependencies=[auth])
     def console_upload(worker_id: str, body: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
         service.console_upload(
@@ -94,6 +110,10 @@ def create_app(service: HarnessService) -> FastAPI:
     @app.post(f"{API}/admin/logs/purge", dependencies=[auth])
     def purge_logs() -> Dict[str, Any]:
         return {"ok": True, "freed_bytes": service.purge_logs()}
+
+    @app.post(f"{API}/admin/errors/clear", dependencies=[auth])
+    def clear_errors() -> Dict[str, Any]:
+        return {"ok": True, "cleared": service.clear_errors()}
 
     @app.post(f"{API}/admin/reset", dependencies=[auth])
     def admin_reset(body: Dict[str, Any] = Body(default={})) -> Dict[str, Any]:
@@ -155,6 +175,26 @@ def create_app(service: HarnessService) -> FastAPI:
     ) -> JSONResponse:
         return JSONResponse(service.logdb.timeseries(worker, since))
 
+    @app.get(f"{API}/config")
+    def config() -> Dict[str, Any]:
+        return service.config_public()
+
+    @app.get(f"{API}/autoscale")
+    def autoscale() -> Dict[str, Any]:
+        return service.autoscale_status()
+
+    @app.get(f"{API}/errors")
+    def errors(
+        source: Optional[str] = Query(default=None),
+        since: Optional[float] = Query(default=None),
+        limit: int = Query(default=200, le=2000),
+    ) -> JSONResponse:
+        return JSONResponse(service.errors(source, since, limit))
+
+    @app.get(f"{API}/errors/summary")
+    def errors_summary() -> Dict[str, Any]:
+        return service.error_summary()
+
     @app.get("/healthz")
     def healthz() -> Dict[str, bool]:
         return {"ok": True}
@@ -162,5 +202,17 @@ def create_app(service: HarnessService) -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def dashboard() -> str:
         return render_dashboard()
+
+    @app.get("/autoscaler", response_class=HTMLResponse)
+    def autoscaler_page() -> str:
+        return render_autoscaler()
+
+    @app.get("/settings", response_class=HTMLResponse)
+    def settings_page() -> str:
+        return render_settings()
+
+    @app.get("/errors", response_class=HTMLResponse)
+    def errors_page() -> str:
+        return render_errors()
 
     return app

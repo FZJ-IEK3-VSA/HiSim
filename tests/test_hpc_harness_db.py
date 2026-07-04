@@ -176,6 +176,45 @@ def test_reset_failed_revives_dead_and_cancelled(conn):
     assert db.counts(conn)[db.PENDING] == 2
 
 
+def test_errors_record_list_summary_trim_clear(conn):
+    for i in range(5):
+        db.record_error(conn, {
+            "source": "worker" if i % 2 else "server",
+            "worker_id": f"w{i}",
+            "job_id": i,
+            "error_type": "ValueError" if i % 2 else "RuntimeError",
+            "message": f"boom {i}",
+            "traceback": f"Traceback...\nline {i}",
+        })
+    summary = db.error_summary(conn)
+    assert summary["total"] == 5
+    assert summary["by_source"] == {"server": 3, "worker": 2}
+    assert summary["by_type"]["RuntimeError"] == 3
+    assert summary["recent"] == 5 and summary["last_ts"] is not None
+
+    newest_first = db.list_errors(conn, limit=10)
+    assert newest_first[0]["message"] == "boom 4"  # newest first
+    assert newest_first[0]["traceback"].startswith("Traceback")
+    assert [e["message"] for e in db.list_errors(conn, source="worker")] == ["boom 3", "boom 1"]
+
+    assert db.trim_errors(conn, keep=2) == 3
+    assert db.error_summary(conn)["total"] == 2
+    assert db.clear_errors(conn) == 2
+    assert db.error_summary(conn)["total"] == 0
+
+
+def test_errors_persist_survives_reopen(tmp_path):
+    path = str(tmp_path / "core.db")
+    conn = db.connect(path)
+    db.record_error(conn, {"source": "server", "message": "durable", "traceback": "tb"})
+    conn.commit()
+    conn.close()
+    # Errors live in the core DB, so a fresh connection still sees them.
+    reopened = db.connect(path)
+    assert db.error_summary(reopened)["total"] == 1
+    reopened.close()
+
+
 def test_lease_filters_by_runner(conn):
     db.insert_jobs(conn, "hisim", [{"payload": {}, "label": "json-job"}], "b1")
     db.insert_jobs(conn, "hisim_setup", [{"payload": {}, "label": "setup-job"}], "b1")

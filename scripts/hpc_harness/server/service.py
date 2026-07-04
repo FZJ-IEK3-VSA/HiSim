@@ -14,7 +14,9 @@ import logging
 import os
 import re
 import threading
+import socket
 import time
+import traceback
 import uuid
 from collections import defaultdict
 from pathlib import Path
@@ -68,6 +70,7 @@ class HarnessService:
 
         self._counts_cache: Tuple[float, Dict[str, int]] = (0.0, {})
         self._archived = False
+        self._host = socket.gethostname()
         self._threads: List[threading.Thread] = []
         self._stop = threading.Event()
         self.autoscaler: Optional[Any] = None  # set by cli when autoscale.enabled
@@ -118,8 +121,9 @@ class HarnessService:
                 while not self._stop.wait(period):
                     try:
                         fn()
-                    except Exception:  # pylint: disable=broad-except
+                    except Exception as exc:  # pylint: disable=broad-except
                         LOGGER.exception("Background task %s failed", name)
+                        self.record_exception("server", f"background:{name}", exc)
 
             thread = threading.Thread(target=run, name=name, daemon=True)
             thread.start()
@@ -401,6 +405,100 @@ class HarnessService:
         """Delete + recreate the logging DB (spec §6.8)."""
         return self.logdb.purge()
 
+    # -------------------------------------------------------------------- errors
+
+    def record_error(self, error: Dict[str, Any]) -> None:
+        """Persist one error (fire-and-forget, never raises) — durable core DB (§4.7)."""
+        try:
+            self.writer.submit(lambda c: db.record_error(c, error))
+        except Exception:  # pylint: disable=broad-except
+            LOGGER.debug("Could not enqueue error record", exc_info=True)
+
+    def record_exception(
+        self,
+        source: str,
+        location: str,
+        exc: BaseException,
+        worker_id: Optional[str] = None,
+        job_id: Optional[int] = None,
+    ) -> None:
+        """Format an exception (with full traceback) and persist it (§4.7)."""
+        self.record_error({
+            "ts": time.time(),
+            "source": source,
+            "location": location,
+            "worker_id": worker_id,
+            "job_id": job_id,
+            "host": self._host,
+            "error_type": type(exc).__name__,
+            "message": str(exc)[:2000],
+            "traceback": "".join(
+                traceback.format_exception(type(exc), exc, exc.__traceback__)
+            )[:16000],
+        })
+
+    def report_errors(self, worker_id: Optional[str], records: List[Dict[str, Any]]) -> None:
+        """Ingest a batch of errors reported by a client (worker / submit CLI)."""
+        host = None
+        if worker_id:
+            worker = self.writer.call(lambda c: db.get_worker(c, worker_id))
+            host = worker.get("host") if worker else None
+        for record in records:
+            entry = dict(record)
+            entry.setdefault("source", "client")
+            if worker_id and not entry.get("worker_id"):
+                entry["worker_id"] = worker_id
+            if host and not entry.get("host"):
+                entry["host"] = host
+            self.record_error(entry)
+
+    def errors(self, source: Optional[str], since: Optional[float], limit: int) -> List[Dict[str, Any]]:
+        """Error records for the dashboard error page."""
+        return self.writer.call(lambda c: db.list_errors(c, source, since, limit))
+
+    def error_summary(self) -> Dict[str, Any]:
+        """Aggregate error counts for the error page."""
+        return self.writer.call(db.error_summary)
+
+    def clear_errors(self) -> int:
+        """Delete all persisted errors (admin)."""
+        return self.writer.call(db.clear_errors)
+
+    # ------------------------------------------------------------- config & scaling
+
+    def config_public(self) -> Dict[str, Any]:
+        """Server configuration for the settings page (token redacted)."""
+        import dataclasses  # pylint: disable=import-outside-toplevel
+
+        data = dataclasses.asdict(self.cfg)
+        if data.get("token"):
+            data["token"] = "••• (set, redacted)"
+        data["effective_per_job_mem_gb"] = self.membudget.effective
+        data["max_attempts"] = self.cfg.max_attempts
+        return data
+
+    def autoscale_status(self) -> Dict[str, Any]:
+        """Autoscaler state for its dashboard page (works whether enabled or not)."""
+        if self.autoscaler is not None:
+            return self.autoscaler.status()
+        cfg = self.cfg.autoscale
+        return {
+            "enabled": False,
+            "worker_mode": cfg.worker_mode,
+            "period_s": cfg.period_s,
+            "standby_floor": cfg.standby_floor,
+            "max_workers": cfg.max_workers,
+            "worker_script": cfg.worker_script,
+            "partition": cfg.partition,
+            "capacity_probe": cfg.capacity_probe or "sinfo -h -o %C (idle field)",
+            "squeue_poll_s": cfg.squeue_poll_s,
+            "registration_grace_s": cfg.registration_grace_s,
+            "trying_to_scale": False,
+            "action": "disabled",
+            "submission_state_counts": self.writer.call(db.submission_state_counts),
+            "submissions": self.writer.call(lambda c: db.recent_submissions(c, 100)),
+        }
+
     # -------------------------------------------------------------------- status
 
     def _counts(self) -> Dict[str, int]:
@@ -476,6 +574,7 @@ class HarnessService:
                 self._forget_worker(worker_id)
                 missing += 1
         self.writer.call(lambda c: db.flush_heartbeats(c, dict(self.liveness)))
+        self.writer.call(lambda c: db.trim_errors(c, self.cfg.error_retention))
         if stale or missing:
             self._counts_cache = (0.0, {})
         counts = self._counts()

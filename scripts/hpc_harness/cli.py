@@ -25,6 +25,7 @@ import os
 import socket
 import sys
 import tempfile
+import traceback
 from pathlib import Path
 from typing import Callable, List, Optional, cast
 
@@ -108,6 +109,27 @@ def _make_client(args: argparse.Namespace):  # noqa: ANN202
         token=args.token or os.environ.get("HARNESS_TOKEN"),
         max_tries=3,
     )
+
+
+def _report_cli_exception(args: argparse.Namespace, source: str, exc: BaseException) -> None:
+    """Best-effort: report a CLI command's exception to the server's error store (§4.7)."""
+    try:
+        client = _make_client(args)
+        try:
+            client.report_errors(None, [{
+                "source": source,
+                "error_type": type(exc).__name__,
+                "message": str(exc)[:2000],
+                "traceback": "".join(
+                    traceback.format_exception(type(exc), exc, exc.__traceback__)
+                )[:16000],
+                "location": f"cli:{source}",
+                "host": socket.gethostname(),
+            }])
+        finally:
+            client.close()
+    except Exception:  # pylint: disable=broad-except
+        pass
 
 
 def cmd_submit(args: argparse.Namespace) -> int:
@@ -229,7 +251,14 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     args = parser.parse_args(argv)
     command = cast(Callable[[argparse.Namespace], int], args.func)
-    return command(args)
+    try:
+        return command(args)
+    except Exception as exc:  # pylint: disable=broad-except
+        # Client commands report their failure to the server's persistent error store
+        # before propagating (server/worker record their own errors elsewhere).
+        if args.command in ("submit", "status", "reset"):
+            _report_cli_exception(args, args.command, exc)
+        raise
 
 
 if __name__ == "__main__":

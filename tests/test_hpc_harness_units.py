@@ -21,7 +21,7 @@ from hpc_harness.server.autoscaler import compute_to_submit, parse_sinfo_cpus  #
 from hpc_harness.server.circuit import CircuitBreaker  # noqa: E402
 from hpc_harness.server.eta import ThroughputTracker  # noqa: E402
 from hpc_harness.server.memcheck import MemBudget  # noqa: E402
-from hpc_harness.worker.logbuffer import ConsoleRing  # noqa: E402
+from hpc_harness.worker.logbuffer import ConsoleRing, ErrorReporter  # noqa: E402
 from hpc_harness.worker.warm_pool import compute_max_slots  # noqa: E402
 from hpc_harness import run_one  # noqa: E402
 
@@ -65,6 +65,15 @@ def test_autoscaler_respects_max_workers():
 def test_parse_sinfo_cpus_sums_idle_field():
     text = "4523/1234/89/5846\n0/56/0/56\nnot-a-line\n1/2/3\n"
     assert parse_sinfo_cpus(text) == 1234 + 56  # A/I/O/T format, idle is field 2
+
+
+def test_default_sbatch_missing_script_raises_clear_error(tmp_path):
+    from hpc_harness.server.autoscaler import default_sbatch
+
+    with pytest.raises(RuntimeError, match="does not exist"):
+        default_sbatch(str(tmp_path / "nope.sbatch"), 1)
+    with pytest.raises(RuntimeError, match="not set"):
+        default_sbatch("", 1)
 
 
 # --------------------------------------------------------------- circuit breaker
@@ -206,6 +215,34 @@ def test_worker_config_single_core_forces_one_slot(tmp_path):
 
 
 # --------------------------------------------------------------------- console ring
+
+
+def test_error_reporter_captures_logged_exceptions_and_explicit_adds():
+    import logging
+
+    reporter = ErrorReporter("worker")
+    logger = logging.getLogger("test.errorreporter")
+    logger.addHandler(reporter)
+    logger.setLevel(logging.DEBUG)
+    try:
+        logger.warning("just a warning")  # below ERROR: ignored
+        try:
+            raise ValueError("kaboom")
+        except ValueError:
+            logger.exception("caught it")
+    finally:
+        logger.removeHandler(reporter)
+
+    reporter.add(message="job 7 failed", error_type="JobFailure",
+                 traceback_text="Traceback...\nBoom", job_id=7)
+
+    records = reporter.drain()
+    assert len(records) == 2  # the warning was not captured
+    logged, explicit = records
+    assert logged["error_type"] == "ValueError"
+    assert "kaboom" in logged["traceback"] and logged["source"] == "worker"
+    assert explicit["job_id"] == 7 and explicit["error_type"] == "JobFailure"
+    assert reporter.drain() == []  # drained
 
 
 def test_console_ring_tail_and_incremental_offsets():

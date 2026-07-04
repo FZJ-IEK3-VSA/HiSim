@@ -78,12 +78,55 @@ class ComparisonReport:
     pairs: list[PairReport] = field(default_factory=list)
 
     def summary_line(self) -> str:
-        failing = [p for p in self.pairs if p.status in ("fail", "missing_golden", "run_error")]
+        total = len(self.pairs)
         if self.passed:
             advisory = sum(1 for p in self.pairs if p.status == "advisory")
             extra = f" ({advisory} advisory)" if advisory else ""
-            return f"GOLDEN CHECK OK ({len(self.pairs)} pair(s)){extra}"
-        return f"GOLDEN CHECK FAILED: {len(failing)} of {len(self.pairs)} pair(s) diverged/missing/errored"
+            return f"GOLDEN CHECK OK ({total} pair(s)){extra}"
+        diverged = sum(1 for p in self.pairs if p.status == "fail")
+        errored = sum(1 for p in self.pairs if p.status == "run_error")
+        missing = sum(1 for p in self.pairs if p.status == "missing_golden")
+        reasons = []
+        if errored:
+            reasons.append(f"{errored} failed to run")
+        if diverged:
+            reasons.append(f"{diverged} with KPI divergences")
+        if missing:
+            reasons.append(f"{missing} missing a golden reference")
+        return f"GOLDEN CHECK FAILED ({total} pair(s)): " + ", ".join(reasons)
+
+
+def _print_failure_details(report: ComparisonReport, out_dir: Path, advisory: bool) -> None:
+    """Print an explicit, per-pair explanation of every failing pair to stdout.
+
+    Each block names what actually happened — whether the run completed, whether
+    the golden reference was found, and (for divergences) which KPIs changed by
+    how much — so the console output alone answers "did it run?", "were the files
+    found?", and "what deviated?" without opening the report files.
+    """
+    for pair in report.pairs:
+        name = f"{pair.setup_id} / {pair.parameter_set_id}"
+        if pair.status == "run_error":
+            print(f"\n[RUN ERROR] {name}")
+            print("    The simulation did NOT run successfully. Traceback:")
+            for line in "".join(pair.deviations).splitlines():
+                print(f"      {line}")
+        elif pair.status == "fail":
+            print(f"\n[KPI DIVERGENCE] {name}")
+            print(
+                f"    The simulation ran successfully and the golden reference was found, "
+                f"but {len(pair.deviations)} KPI(s) differ from the golden:"
+            )
+            for dev in pair.deviations:
+                print(f"      - {dev}")
+        elif pair.status == "missing_golden":
+            print(f"\n[MISSING GOLDEN] {name}")
+            print("    No golden reference file was found to compare against:")
+            for dev in pair.deviations:
+                print(f"      - {dev}")
+    print(f"\nFull report written to {out_dir / 'report.txt'}")
+    if advisory:
+        print("(advisory mode: divergences reported but not blocking)")
 
 
 def _write_reports(report: ComparisonReport, out_dir: Path) -> None:
@@ -155,6 +198,7 @@ def main(
         )
         _write_reports(report, out_dir)
         print(report.summary_line())
+        _print_failure_details(report, out_dir, advisory)
         return 0 if advisory else 1
 
     param_by_id = {p.id: p for p in config.parameter_sets}
@@ -191,13 +235,7 @@ def main(
     _write_reports(report, out_dir)
     print(report.summary_line())
     if not passed:
-        for pair in pair_reports:
-            if pair.status in ("fail", "run_error"):
-                print(f"  {pair.status.upper()} {pair.setup_id}/{pair.parameter_set_id}")
-                for dev in pair.deviations[:10]:
-                    print(f"    - {dev}")
-        if advisory:
-            print("(advisory mode: divergences reported but not blocking)")
+        _print_failure_details(report, out_dir, advisory)
     return 0 if (passed or advisory) else 1
 
 

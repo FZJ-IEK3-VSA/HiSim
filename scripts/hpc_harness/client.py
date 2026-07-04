@@ -132,6 +132,19 @@ class HarnessClient:
         finally:
             self.max_tries = saved
 
+    def report_errors(self, worker_id: Optional[str], errors: List[Dict[str, Any]]) -> None:
+        """POST /errors (best effort) — persistent error reporting (§4.7)."""
+        if not errors:
+            return
+        try:
+            saved = self.max_tries
+            self.max_tries = 2
+            self._post("/errors", {"worker_id": worker_id, "errors": errors})
+        except Exception:  # pylint: disable=broad-except
+            pass
+        finally:
+            self.max_tries = saved
+
     def upload_console(self, worker_id: str, text: str, next_offset: int) -> None:
         """POST /workers/{id}/console."""
         try:

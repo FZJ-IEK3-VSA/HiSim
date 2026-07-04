@@ -7,6 +7,7 @@ failure regardless of level) for batched shipping to the server.
 
 import logging
 import time
+import traceback
 from collections import deque
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
@@ -108,6 +109,67 @@ class ShipBuffer(logging.Handler):
 
     def drain(self) -> List[Dict[str, Any]]:
         """Take all buffered records for shipping."""
+        records = list(self._records)
+        self._records.clear()
+        return records
+
+
+class ErrorReporter(logging.Handler):
+    """Captures ERROR/CRITICAL records (with tracebacks) for durable reporting (§4.7).
+
+    Every ``ERROR``+ log record — and any explicitly added job failure or uncaught
+    exception — is buffered here and shipped to ``POST /errors`` so it lands in the
+    server's persistent error store. ``source`` tags where it came from (``worker`` /
+    ``submit`` / ...).
+    """
+
+    def __init__(self, source: str, max_records: int = 1000) -> None:
+        """Buffer ERROR+ records tagged with ``source``."""
+        super().__init__(level=logging.ERROR)
+        self.source = source
+        self._records: Deque[Dict[str, Any]] = deque(maxlen=max_records)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """Queue one structured error record with its traceback (if any)."""
+        try:
+            tb = None
+            error_type = record.levelname
+            if record.exc_info and record.exc_info[0] is not None:
+                tb = "".join(traceback.format_exception(*record.exc_info))
+                error_type = record.exc_info[0].__name__
+            self._records.append({
+                "ts": record.created,
+                "source": self.source,
+                "location": f"{record.name}:{record.funcName}:{record.lineno}",
+                "error_type": error_type,
+                "message": record.getMessage()[:2000],
+                "traceback": tb[:16000] if tb else None,
+                "job_id": getattr(record, "job_id", None),
+            })
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+    def add(
+        self,
+        message: str,
+        error_type: str = "Error",
+        traceback_text: Optional[str] = None,
+        job_id: Optional[int] = None,
+        location: Optional[str] = None,
+    ) -> None:
+        """Explicitly record an error (job failure, caught exception)."""
+        self._records.append({
+            "ts": time.time(),
+            "source": self.source,
+            "location": location,
+            "error_type": error_type,
+            "message": message[:2000],
+            "traceback": (traceback_text or None) and traceback_text[:16000],
+            "job_id": job_id,
+        })
+
+    def drain(self) -> List[Dict[str, Any]]:
+        """Take all buffered error records for shipping."""
         records = list(self._records)
         self._records.clear()
         return records

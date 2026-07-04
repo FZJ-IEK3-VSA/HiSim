@@ -113,6 +113,21 @@ CREATE TABLE IF NOT EXISTS slurm_submissions (
     state                TEXT NOT NULL DEFAULT 'submitted'
 );
 
+CREATE TABLE IF NOT EXISTS errors (
+    id         INTEGER PRIMARY KEY,
+    ts         REAL NOT NULL,
+    source     TEXT,
+    worker_id  TEXT,
+    job_id     INTEGER,
+    host       TEXT,
+    location   TEXT,
+    error_type TEXT,
+    message    TEXT,
+    traceback  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_errors_ts ON errors(ts);
+CREATE INDEX IF NOT EXISTS idx_errors_source ON errors(source);
+
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT
@@ -584,3 +599,101 @@ def open_submissions(conn: sqlite3.Connection) -> List[Dict[str, Any]]:
         "SELECT * FROM slurm_submissions WHERE state IN ('submitted','queued','running')"
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def submission_state_counts(conn: sqlite3.Connection) -> Dict[str, int]:
+    """{state: count} across all tracked Slurm submissions (autoscaler dashboard)."""
+    rows = conn.execute(
+        "SELECT state, COUNT(*) AS c FROM slurm_submissions GROUP BY state"
+    ).fetchall()
+    return {row["state"]: row["c"] for row in rows}
+
+
+def recent_submissions(conn: sqlite3.Connection, limit: int = 100) -> List[Dict[str, Any]]:
+    """Most recent Slurm submissions, newest first (autoscaler dashboard table)."""
+    rows = conn.execute(
+        "SELECT * FROM slurm_submissions ORDER BY submitted_at DESC LIMIT ?", (limit,)
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+# ------------------------------------------------------------------------- errors
+
+
+def record_error(conn: sqlite3.Connection, error: Dict[str, Any]) -> None:
+    """Persist one error with its full traceback in the durable core DB (§4.7 extension).
+
+    Errors live here (not the disposable logging DB) so they survive a telemetry purge
+    and a server restart — they are the debugging record of record.
+    """
+    conn.execute(
+        "INSERT INTO errors(ts, source, worker_id, job_id, host, location, error_type,"
+        " message, traceback) VALUES(?,?,?,?,?,?,?,?,?)",
+        (
+            error.get("ts") or time.time(), error.get("source"), error.get("worker_id"),
+            error.get("job_id"), error.get("host"), error.get("location"),
+            error.get("error_type"), error.get("message"), error.get("traceback"),
+        ),
+    )
+
+
+def list_errors(
+    conn: sqlite3.Connection,
+    source: Optional[str] = None,
+    since: Optional[float] = None,
+    limit: int = 200,
+) -> List[Dict[str, Any]]:
+    """Error records, newest first, filterable by source and time (dashboard)."""
+    clauses: List[str] = []
+    params: Tuple[Any, ...] = ()
+    if source:
+        clauses.append("source=?")
+        params += (source,)
+    if since is not None:
+        clauses.append("ts>=?")
+        params += (since,)
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    rows = conn.execute(
+        f"SELECT * FROM errors {where} ORDER BY id DESC LIMIT ?", params + (limit,)
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def error_summary(conn: sqlite3.Connection, recent_s: float = 3600.0) -> Dict[str, Any]:
+    """Totals, per-source and per-type counts, recent rate for the error page."""
+    total = conn.execute("SELECT COUNT(*) AS c FROM errors").fetchone()["c"]
+    by_source = {
+        row["source"] or "?": row["c"]
+        for row in conn.execute(
+            "SELECT source, COUNT(*) AS c FROM errors GROUP BY source"
+        ).fetchall()
+    }
+    by_type = {
+        row["error_type"] or "?": row["c"]
+        for row in conn.execute(
+            "SELECT error_type, COUNT(*) AS c FROM errors GROUP BY error_type ORDER BY c DESC LIMIT 10"
+        ).fetchall()
+    }
+    recent = conn.execute(
+        "SELECT COUNT(*) AS c FROM errors WHERE ts>=?", (time.time() - recent_s,)
+    ).fetchone()["c"]
+    last = conn.execute("SELECT ts FROM errors ORDER BY id DESC LIMIT 1").fetchone()
+    return {
+        "total": total, "by_source": by_source, "by_type": by_type,
+        "recent": recent, "recent_window_s": recent_s,
+        "last_ts": last["ts"] if last else None,
+    }
+
+
+def clear_errors(conn: sqlite3.Connection) -> int:
+    """Delete every recorded error (admin). Returns rows removed."""
+    return conn.execute("DELETE FROM errors").rowcount
+
+
+def trim_errors(conn: sqlite3.Connection, keep: int) -> int:
+    """Bound growth: keep only the newest ``keep`` errors. Returns rows removed."""
+    cur = conn.execute(
+        "DELETE FROM errors WHERE id NOT IN (SELECT id FROM errors ORDER BY id DESC LIMIT ?)",
+        (keep,),
+    )
+    return cur.rowcount

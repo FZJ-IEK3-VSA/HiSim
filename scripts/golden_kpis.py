@@ -54,6 +54,18 @@ def _coerce(value: Any) -> Any:
     return float(value) if _is_number(value) else value
 
 
+def _format_numeric_change(name: str, key: str, ref_v: float, got_v: float, rel_tol: float, abs_tol: float) -> str:
+    """Explain a numeric KPI divergence, including the magnitude and the tolerance exceeded."""
+    abs_diff = abs(got_v - ref_v)
+    rel_diff = abs_diff / abs(ref_v) if ref_v != 0 else math.inf
+    rel_pct = "inf%" if math.isinf(rel_diff) else f"{rel_diff:.3%}"
+    return (
+        f"{name}: KPI '{key}' changed: ref={ref_v!r} got={got_v!r} "
+        f"(abs diff={abs_diff:.6g}, rel diff={rel_pct}; "
+        f"tolerance rel={rel_tol:g} abs={abs_tol:g})"
+    )
+
+
 def compare(
     name: str,
     got: dict[str, Any],
@@ -64,9 +76,11 @@ def compare(
     """Return a list of human-readable deviations between ``got`` and ``ref``.
 
     Numeric KPIs are compared with :func:`math.isclose`; non-numeric KPIs by
-    exact equality. Reports (in this order): KPIs missing from ``got``, KPIs
-    whose value changed, then KPIs present only in ``got``. Ordering is
-    deterministic (``ref`` insertion order, then sorted new keys).
+    exact equality. Numeric divergences report the absolute and relative delta
+    plus the tolerance that was exceeded, so a reader can see exactly how far off
+    each value is. Reports (in this order): KPIs missing from ``got``, KPIs whose
+    value changed, then KPIs present only in ``got``. Ordering is deterministic
+    (``ref`` insertion order, then sorted new keys).
     """
     errs: list[str] = []
     for key, ref_v in ref.items():
@@ -76,7 +90,7 @@ def compare(
         got_v = got[key]
         if _is_number(ref_v) and _is_number(got_v):
             if not math.isclose(got_v, ref_v, rel_tol=rel_tol, abs_tol=abs_tol):
-                errs.append(f"{name}: KPI '{key}' changed: ref={ref_v!r} got={got_v!r}")
+                errs.append(_format_numeric_change(name, key, ref_v, got_v, rel_tol, abs_tol))
         elif got_v != ref_v:
             errs.append(f"{name}: KPI '{key}' changed: ref={ref_v!r} got={got_v!r}")
     for key in sorted(got.keys() - ref.keys()):

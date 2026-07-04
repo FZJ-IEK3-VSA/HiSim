@@ -25,7 +25,7 @@ from hpc_harness.client import HarnessClient
 from hpc_harness.config import WorkerConfig
 from hpc_harness.worker import metrics
 from hpc_harness.worker.child import CONSOLE_LOG_NAME
-from hpc_harness.worker.logbuffer import ConsoleRing, RingHandler, ShipBuffer
+from hpc_harness.worker.logbuffer import ConsoleRing, ErrorReporter, RingHandler, ShipBuffer
 from hpc_harness.worker.spawner import Spawner
 from hpc_harness.worker.warm_pool import WarmPool, compute_max_slots
 
@@ -43,6 +43,7 @@ class Worker:
         self.cfg = cfg
         self.ring = ConsoleRing()
         self.shipper = ShipBuffer(cfg.log_ship_level)
+        self.errors = ErrorReporter("worker")
         self._setup_logging()
         self.client = HarnessClient(
             server_url=cfg.server_url,
@@ -68,6 +69,7 @@ class Worker:
         root.setLevel(logging.DEBUG)
         root.addHandler(RingHandler(self.ring))
         root.addHandler(self.shipper)
+        root.addHandler(self.errors)
         console = logging.StreamHandler()
         console.setLevel(logging.INFO)
         console.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
@@ -134,33 +136,33 @@ class Worker:
             return 3
 
         LOGGER.info("Python environment: %s", sys.executable)
-        self._register()
-        self._add_file_log()
-
-        # Fork-server BEFORE any threads exist (spec §4.3). The HarnessClient above
-        # uses blocking httpx without threads, so this ordering is safe.
-        # Pin BLAS/OpenMP to cores_per_job (from the old pool.py) so N concurrent
-        # sims never oversubscribe the node; applied before warmup so numpy sees it.
-        threads = str(max(cfg.cores_per_job, 1))
-        pin_env = {
-            var: threads
-            for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
-                        "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS")
-        }
-        self.spawner = Spawner(cfg.runner, env=pin_env)
-        slots = self._compute_slots()
-        self.pool = WarmPool(
-            self.spawner, slots, cfg.timeout_s, cfg.max_jobs_per_child, cfg.child_rss_ceiling_gb
-        )
-        self.pool.ensure()
-        LOGGER.info("Warm pool ready: %d slots (%s mode)", slots, cfg.mode)
-
-        signal.signal(signal.SIGTERM, self._on_signal)
-        signal.signal(signal.SIGINT, self._on_signal)
-
-        last_heartbeat = 0.0
         exit_reason = "drained"
         try:
+            self._register()
+            self._add_file_log()
+
+            # Fork-server BEFORE any threads exist (spec §4.3). The HarnessClient above
+            # uses blocking httpx without threads, so this ordering is safe.
+            # Pin BLAS/OpenMP to cores_per_job (from the old pool.py) so N concurrent
+            # sims never oversubscribe the node; applied before warmup so numpy sees it.
+            threads = str(max(cfg.cores_per_job, 1))
+            pin_env = {
+                var: threads
+                for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+                            "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS")
+            }
+            self.spawner = Spawner(cfg.runner, env=pin_env)
+            slots = self._compute_slots()
+            self.pool = WarmPool(
+                self.spawner, slots, cfg.timeout_s, cfg.max_jobs_per_child, cfg.child_rss_ceiling_gb
+            )
+            self.pool.ensure()
+            LOGGER.info("Warm pool ready: %d slots (%s mode)", slots, cfg.mode)
+
+            signal.signal(signal.SIGTERM, self._on_signal)
+            signal.signal(signal.SIGINT, self._on_signal)
+
+            last_heartbeat = 0.0
             while True:
                 if self._terminate:
                     exit_reason = "signal"
@@ -190,6 +192,11 @@ class Worker:
                     if not self._lease_and_dispatch():
                         time.sleep(self.cfg.backoff_s)
                 time.sleep(min(self.cfg.sample_interval_s, 1.0))
+        except Exception:  # pylint: disable=broad-except
+            # Any startup or loop crash: LOGGER.exception feeds the ErrorReporter with a
+            # full traceback, which _shutdown ships to the server's persistent error store.
+            LOGGER.exception("Worker crashed")
+            exit_reason = "crash"
         finally:
             self._shutdown(exit_reason)
         return 0 if exit_reason in ("drained", "released") else 4
@@ -309,6 +316,14 @@ class Worker:
         if not ok:
             tail = self._log_tail(Path(staging) / CONSOLE_LOG_NAME)
             self.shipper.add_failure(job["id"], error or "failed", result.get("traceback"), tail)
+            # Persist the failure with its traceback in the durable error store (§4.7).
+            self.errors.add(
+                message=f"job {job['id']} failed: {error or 'failed'}",
+                error_type="JobFailure",
+                traceback_text=result.get("traceback") or tail,
+                job_id=job["id"],
+                location=f"runner={self.cfg.runner}",
+            )
             if error and error not in ("timeout",) and tail:
                 error = f"{error}\n{tail[-1500:]}"
 
@@ -355,6 +370,9 @@ class Worker:
         records = self.shipper.drain()
         if records:
             self.client.ship_logs(self.worker_id, records)
+        errors = self.errors.drain()
+        if errors:
+            self.client.report_errors(self.worker_id, errors)
 
         if directives.get("reregister"):
             LOGGER.warning("Server asked us to re-register (we were presumed dead)")
@@ -425,6 +443,9 @@ class Worker:
             records = self.shipper.drain()
             if records and self.worker_id:
                 self.client.ship_logs(self.worker_id, records)
+            errors = self.errors.drain()
+            if errors:
+                self.client.report_errors(self.worker_id, errors)  # worker_id may be None
             if self.worker_id:
                 if getattr(self, "_gate_starved", False):
                     reason = "gate_starved"

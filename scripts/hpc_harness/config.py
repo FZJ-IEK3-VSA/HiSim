@@ -113,6 +113,8 @@ class ServerConfig:
     reaper_period_s: float = 45.0
     heartbeat_flush_s: float = 30.0
     release_idle_workers: bool = True
+    error_retention: int = 20000
+    """Keep at most this many persisted error records (trimmed by the reaper)."""
 
     # --- memory budget (§4.6) ---
     per_job_mem_gb: float = 10.0

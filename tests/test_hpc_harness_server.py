@@ -126,6 +126,133 @@ def test_mutations_need_token_reads_are_open(client):
     assert "<title>HPC Harness</title>" in client.get("/").text
 
 
+def test_dashboard_pages_render_and_link_each_other(client):
+    for path, title in [("/", "HPC Harness"),
+                        ("/errors", "Errors"),
+                        ("/autoscaler", "Autoscaler"),
+                        ("/settings", "Settings")]:
+        page = client.get(path)
+        assert page.status_code == 200
+        assert title in page.text
+        # every page carries the shared nav linking to the others
+        assert 'href="/errors"' in page.text
+        assert 'href="/autoscaler"' in page.text and 'href="/settings"' in page.text
+
+
+def test_config_endpoint_exposes_settings_with_redacted_token(client):
+    cfg = client.get(f"{API}/config").json()
+    assert cfg["result_root"] and cfg["max_retries"] == 3
+    assert cfg["max_attempts"] == 4
+    assert cfg["token"].startswith("•") and TOKEN not in cfg["token"]
+    # nested config objects come through for the settings page grouping
+    assert cfg["circuit_breaker"]["consecutive"] == 3
+    assert cfg["autoscale"]["standby_floor"] == 10
+    assert cfg["effective_per_job_mem_gb"] == 10.0
+
+
+def test_autoscale_endpoint_reports_disabled_by_default(client):
+    a = client.get(f"{API}/autoscale").json()
+    assert a["enabled"] is False and a["trying_to_scale"] is False
+    assert a["worker_mode"] == "single_core"
+    assert "submission_state_counts" in a and "submissions" in a
+
+
+def test_clients_report_errors_and_they_are_queryable(client):
+    worker_id = register(client)["worker_id"]
+    body = {"worker_id": worker_id, "errors": [
+        {"source": "worker", "job_id": 42, "error_type": "ValueError",
+         "message": "bad payload", "traceback": "Traceback (most recent call last): ..."},
+        {"source": "worker", "error_type": "RuntimeError", "message": "child died"},
+    ]}
+    assert client.post(f"{API}/errors", json=body, headers=AUTH).status_code == 200
+
+    summary = client.get(f"{API}/errors/summary").json()
+    assert summary["total"] == 2 and summary["by_source"]["worker"] == 2
+    assert summary["by_type"]["ValueError"] == 1
+
+    rows = client.get(f"{API}/errors?source=worker").json()
+    assert len(rows) == 2
+    top = rows[0]  # newest first
+    assert top["worker_id"] == worker_id  # server stamps the worker id
+    assert top["host"] == "node1"          # ... and its host
+    assert any(r["job_id"] == 42 and r["traceback"] for r in rows)
+
+    # reads are open; reporting/clearing need the token
+    assert client.post(f"{API}/errors", json=body).status_code == 401
+    assert client.post(f"{API}/admin/errors/clear", headers=AUTH).json()["cleared"] == 2
+    assert client.get(f"{API}/errors/summary").json()["total"] == 0
+
+
+def test_server_catches_and_persists_its_own_exceptions(service):
+    """An unhandled route exception is caught, returns 500, and is stored with a traceback."""
+    def boom():
+        raise RuntimeError("kaboom in status")
+
+    service.status = boom  # force a route to raise
+    crash_client = TestClient(create_app(service), raise_server_exceptions=False)
+    response = crash_client.get(f"{API}/status")
+    assert response.status_code == 500
+
+    errors = crash_client.get(f"{API}/errors?source=server").json()
+    hit = [e for e in errors if "kaboom" in (e.get("message") or "")]
+    assert hit, "server exception was not persisted"
+    assert hit[0]["error_type"] == "RuntimeError"
+    assert "Traceback" in (hit[0]["traceback"] or "")
+    assert hit[0]["location"] == "GET /api/v1/status"
+
+
+def test_autoscaler_tick_populates_status_snapshot(service, client):
+    from hpc_harness.server.autoscaler import Autoscaler
+
+    service.autoscaler = Autoscaler(
+        service, service.cfg.autoscale,
+        probe_fn=lambda: 50,
+        sbatch_fn=lambda n: [f"job{i}" for i in range(n)],
+        squeue_fn=lambda ids: {i: "queued" for i in ids},
+        scancel_fn=lambda ids: None,
+    )
+    submit(client, 20)  # 20 pending jobs, 50 idle cores -> submit 20
+    result = service.autoscaler.tick()
+    assert result["submitted"] == 20
+
+    a = client.get(f"{API}/autoscale").json()
+    assert a["enabled"] and a["action"] == "scale_up"
+    assert a["work"] == 20 and a["available_cores"] == 50 and a["to_submit"] == 20
+    assert a["trying_to_scale"] is True
+    assert a["submission_state_counts"].get("submitted") == 20  # squeue reclassifies next tick
+    assert len(a["submissions"]) == 20
+
+    # Second tick: squeue moves them to queued; fleet now covers the work -> steady.
+    assert service.autoscaler.tick()["submitted"] == 0
+    a2 = client.get(f"{API}/autoscale").json()
+    assert a2["action"] == "steady" and a2["to_submit"] == 0
+    assert a2["trying_to_scale"] is False
+    assert a2["submission_state_counts"].get("queued") == 20
+    assert a2["slurm_queued"] == 20
+
+
+def test_autoscaler_sbatch_failure_is_surfaced_not_crashed(service, client):
+    """A rejected sbatch must not crash the loop; it lands on the dashboard instead."""
+    from hpc_harness.server.autoscaler import Autoscaler
+
+    def failing_sbatch(_n):
+        raise RuntimeError("sbatch failed: Invalid partition specified")
+
+    service.autoscaler = Autoscaler(
+        service, service.cfg.autoscale,
+        probe_fn=lambda: 50, sbatch_fn=failing_sbatch,
+        squeue_fn=lambda ids: {}, scancel_fn=lambda ids: None,
+    )
+    submit(client, 5)
+    result = service.autoscaler.tick()  # must NOT raise
+    assert result["submitted"] == 0
+
+    a = client.get(f"{API}/autoscale").json()
+    assert a["action"] == "sbatch_failed"
+    assert "Invalid partition" in a["error"]
+    assert a["submission_state_counts"] == {}  # nothing recorded
+
+
 # ------------------------------------------------------------------- happy path
 
 

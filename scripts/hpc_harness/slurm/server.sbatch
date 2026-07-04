@@ -1,9 +1,9 @@
 #!/bin/bash
-# Queue server inside a Slurm "service" allocation — FALLBACK profile only (spec §4.1).
+# Queue server inside a Slurm "service" allocation -- FALLBACK profile only (spec 4.1).
 # Primary deployment is a plain service on a login node/VM:
 #   nohup python -m hpc_harness server --config server.json &
 # In this fallback profile the core DB must live on the shared FS: set
-# "journal_mode": "DELETE" and a shared-FS "db_path" in server.json (spec §6.5).
+# "journal_mode": "DELETE" and a shared-FS "db_path" in server.json (spec 6.5).
 #SBATCH --job-name=harness-server
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -13,9 +13,10 @@
 
 set -euo pipefail
 
-# Adjust to your site: module load Python / activate the venv that has hisim + [hpc] extras.
+# Adjust to your site: module load Python / activate the venv that has hisim installed.
 # module load Python
-# source /project/venvs/hisim/bin/activate
+source /projects2/2026_n-pflugradt_building_simulations/HiSim/hisimvenv/bin/activate
 
+echo "Using python: $(command -v python)"
 export PYTHONPATH="${SLURM_SUBMIT_DIR}/..:${PYTHONPATH:-}"   # scripts/ on the path
 exec python -m hpc_harness server --config "${HARNESS_SERVER_CONFIG:-server.json}"

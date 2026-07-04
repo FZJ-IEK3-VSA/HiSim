@@ -40,8 +40,9 @@ setup(
     },
     install_requires=requirements,
     extras_require={
-        # Optional: required only for the REST HPC harness (scripts/hpc_harness).
-        "hpc": ["fastapi", "uvicorn", "httpx", "psutil"],
+        # Kept for backward compatibility ('pip install -e .[hpc]'); the REST HPC
+        # harness dependencies now ship in requirements.txt / install_requires.
+        "hpc": [],
     },
     license="MIT license",
     long_description=readme,

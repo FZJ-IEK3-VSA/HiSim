@@ -48,6 +48,9 @@ class HiSimSetupRunner:
 
     def warmup(self) -> None:
         """Import the full simulator once (in the spawner, so children inherit it)."""
+        from hpc_harness.runners.hisim_runner import log_hisim_environment  # pylint: disable=import-outside-toplevel
+
+        log_hisim_environment()
         import hisim.hisim_main  # noqa: F401  pylint: disable=import-outside-toplevel,unused-import
 
     def on_fork(self) -> None:

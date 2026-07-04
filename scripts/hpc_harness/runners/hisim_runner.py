@@ -3,6 +3,24 @@
 Payload contract: ``{"scenario": "<*.scenario.json>", "sim_params": "<*.simulation.json>"}``.
 """
 
+import logging
+import sys
+
+LOGGER = logging.getLogger(__name__)
+
+
+def log_hisim_environment() -> None:
+    """Log interpreter + hisim install so a wrong venv is visible in the shipped logs.
+
+    ``hisim`` must be installed in the environment the worker was started with
+    (``pip install -e .`` in the venv activated by the sbatch script); a
+    ``ModuleNotFoundError`` here fails the warmup with a clear message instead of
+    failing every job later.
+    """
+    import hisim  # pylint: disable=import-outside-toplevel
+
+    LOGGER.info("Runner environment: python=%s hisim=%s", sys.executable, hisim.__file__)
+
 
 class HiSimRunner:
     """Runs one HiSim simulation per job inside a warm child."""
@@ -11,6 +29,7 @@ class HiSimRunner:
 
     def warmup(self) -> None:
         """Import the full simulator once (in the spawner, so children inherit it)."""
+        log_hisim_environment()
         import hisim.hisim_main  # noqa: F401  pylint: disable=import-outside-toplevel,unused-import
 
     def on_fork(self) -> None:

@@ -12,7 +12,7 @@ import logging
 import os
 import signal
 import socket
-from typing import Tuple
+from typing import Dict, Optional, Tuple
 
 from hpc_harness.runners import get_runner
 from hpc_harness.worker import ipc
@@ -28,10 +28,18 @@ class SpawnerError(RuntimeError):
 class Spawner:
     """Parent-side handle to the fork-server process."""
 
-    def __init__(self, runner_name: str, warmup_timeout_s: float = 600.0) -> None:
+    def __init__(
+        self,
+        runner_name: str,
+        warmup_timeout_s: float = 600.0,
+        env: Optional[Dict[str, str]] = None,
+    ) -> None:
         """Fork the spawner and wait for its warmup to finish.
 
         Must be called before the worker creates any threads or network connections.
+        ``env`` entries are applied in the spawner *before* ``warmup()`` runs, so
+        libraries that read them at import time (BLAS/OpenMP thread counts) see them;
+        every warm child inherits them.
         """
         if os.name != "posix":
             raise SpawnerError("the warm-child spawner requires POSIX (fork)")
@@ -41,7 +49,7 @@ class Spawner:
             parent_sock.close()
             exit_code = 0
             try:
-                _spawner_main(spawner_sock, runner_name)
+                _spawner_main(spawner_sock, runner_name, env or {})
             except BaseException:  # pylint: disable=broad-except
                 exit_code = 1
             finally:
@@ -84,11 +92,12 @@ class Spawner:
             pass
 
 
-def _spawner_main(sock: socket.socket, runner_name: str) -> None:
+def _spawner_main(sock: socket.socket, runner_name: str, env: Dict[str, str]) -> None:
     """The spawner process: warm up once, then fork children on request."""
     # Children are our children — auto-reap them so no zombies accumulate.
     signal.signal(signal.SIGCHLD, signal.SIG_IGN)
     _set_oom_score(-100)  # keep infrastructure alive when a job OOMs (best effort)
+    os.environ.update(env)  # before warmup: BLAS/OpenMP read these at import time
     try:
         runner = get_runner(runner_name)
         runner.warmup()

@@ -13,6 +13,7 @@ import os
 import shutil
 import signal
 import socket as socketmod
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -132,12 +133,21 @@ class Worker:
         if not self.preflight():
             return 3
 
+        LOGGER.info("Python environment: %s", sys.executable)
         self._register()
         self._add_file_log()
 
         # Fork-server BEFORE any threads exist (spec §4.3). The HarnessClient above
         # uses blocking httpx without threads, so this ordering is safe.
-        self.spawner = Spawner(cfg.runner)
+        # Pin BLAS/OpenMP to cores_per_job (from the old pool.py) so N concurrent
+        # sims never oversubscribe the node; applied before warmup so numpy sees it.
+        threads = str(max(cfg.cores_per_job, 1))
+        pin_env = {
+            var: threads
+            for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+                        "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS")
+        }
+        self.spawner = Spawner(cfg.runner, env=pin_env)
         slots = self._compute_slots()
         self.pool = WarmPool(
             self.spawner, slots, cfg.timeout_s, cfg.max_jobs_per_child, cfg.child_rss_ceiling_gb
@@ -191,6 +201,7 @@ class Worker:
     def _register(self) -> None:
         info = {
             "host": socketmod.gethostname(),
+            "python": sys.executable,  # for tracing wrong-venv problems in server logs
             "mode": self.cfg.mode,
             "slots": self.cfg.max_slots,
             "cores": psutil.cpu_count() or 1,

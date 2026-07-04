@@ -76,8 +76,13 @@ def shell_capacity_probe(command: str) -> int:
     return int(out.stdout.strip())
 
 
-def default_sbatch(worker_script: str, n: int) -> List[str]:
+def default_sbatch(worker_script: str, n: int, log_dir: Optional[str] = None) -> List[str]:
     """Submit ``n`` worker jobs; returns the Slurm job ids actually submitted.
+
+    When ``log_dir`` is set, the directory is created (so Slurm can open the files)
+    and each job's stdout/stderr is routed to ``<log_dir>/worker-<jobid>.out`` /
+    ``.err``, which the autoscaler later reads to explain a worker that died before
+    registering.
 
     A total failure raises ``RuntimeError`` carrying sbatch's **stderr** (so the reason
     is visible in the log and on the autoscaler dashboard, not just an opaque exit
@@ -87,11 +92,18 @@ def default_sbatch(worker_script: str, n: int) -> List[str]:
         raise RuntimeError("autoscale.worker_script is not set")
     if not os.path.isfile(worker_script):
         raise RuntimeError(f"autoscale.worker_script does not exist: {worker_script}")
+    log_args: List[str] = []
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+        log_args = [
+            f"--output={os.path.join(log_dir, 'worker-%j.out')}",
+            f"--error={os.path.join(log_dir, 'worker-%j.err')}",
+        ]
     job_ids: List[str] = []
     for _ in range(n):
         try:
             out = subprocess.run(
-                ["sbatch", "--parsable", worker_script],
+                ["sbatch", "--parsable", *log_args, worker_script],
                 capture_output=True, text=True, timeout=60, check=False,
             )
         except FileNotFoundError as exc:  # sbatch itself not on PATH
@@ -104,6 +116,25 @@ def default_sbatch(worker_script: str, n: int) -> List[str]:
             raise RuntimeError(f"sbatch failed: {detail}")
         job_ids.append(out.stdout.strip().split(";")[0])
     return job_ids
+
+
+def read_log_tail(path: str, max_lines: int = 40, max_bytes: int = 8000) -> Optional[str]:
+    """Return the last ``max_lines`` (≤ ``max_bytes``) of ``path``, or None if unreadable.
+
+    Used to pull a dead worker's Slurm stdout/stderr onto the error page. Reads at most
+    ``max_bytes`` from the end so a runaway log never blows up the error record.
+    """
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as fh:
+            if size > max_bytes:
+                fh.seek(size - max_bytes)
+            data = fh.read()
+    except OSError:
+        return None
+    text = data.decode("utf-8", errors="replace")
+    lines = text.splitlines()
+    return "\n".join(lines[-max_lines:]).strip()
 
 
 def default_squeue(job_ids: List[str]) -> Optional[Dict[str, str]]:
@@ -163,7 +194,9 @@ class Autoscaler:
             self.probe_fn = lambda: shell_capacity_probe(cfg.capacity_probe)
         else:
             self.probe_fn = lambda: default_capacity_probe(cfg.partition)
-        self.sbatch_fn = sbatch_fn or (lambda n: default_sbatch(cfg.worker_script, n))
+        self.sbatch_fn = sbatch_fn or (
+            lambda n: default_sbatch(cfg.worker_script, n, cfg.slurm_log_dir)
+        )
         self.squeue_fn = squeue_fn or default_squeue
         self.scancel_fn = scancel_fn or default_scancel
         self._last_squeue = 0.0
@@ -215,6 +248,9 @@ class Autoscaler:
                 if expired:
                     writer.call(lambda c: db.update_submission_states(c, expired))
                     submissions = writer.call(db.open_submissions)
+
+            # 1b. Surface workers that ended without ever registering (startup deaths).
+            self._surface_startup_deaths(writer)
 
             # 2. Fleet accounting.
             alive = [
@@ -294,6 +330,59 @@ class Autoscaler:
         self.snapshot.update(snap)
         return {"submitted": snap["submitted"], "cancelled": snap["cancelled"], "current": current}
 
+    def _surface_startup_deaths(self, writer: Any) -> None:
+        """Post any worker that ended without registering to the error page, with its log tail.
+
+        Each such submission is reported once and then marked 'died' so it never spams the
+        error page on later ticks. When ``slurm_log_dir`` is configured, the worker's Slurm
+        stdout/stderr (which lives on the shared FS the server can read) is tailed into the
+        error record so the root cause is visible without opening a shell on the cluster.
+        """
+        deaths = writer.call(db.unregistered_deaths)
+        for sub in deaths:
+            job_id = sub["slurm_job_id"]
+            LOGGER.warning("Worker Slurm job %s ended without ever registering", job_id)
+            self.service.record_error(self._death_error_record(job_id))
+            writer.call(lambda c, j=job_id: db.mark_submission_died(c, j))
+
+    def _death_error_record(self, job_id: str) -> Dict[str, Any]:
+        """Build the error-page record for a worker that died before registering."""
+        log_dir = self.cfg.slurm_log_dir
+        tail: Optional[str] = None
+        log_note = "autoscale.slurm_log_dir is not set, so the worker's Slurm log is unavailable"
+        if log_dir:
+            out_path = os.path.join(log_dir, f"worker-{job_id}.out")
+            err_path = os.path.join(log_dir, f"worker-{job_id}.err")
+            out_tail = read_log_tail(out_path)
+            err_tail = read_log_tail(err_path)
+            parts = []
+            if out_tail:
+                parts.append(f"--- {out_path} (tail) ---\n{out_tail}")
+            if err_tail:
+                parts.append(f"--- {err_path} (tail) ---\n{err_tail}")
+            if parts:
+                tail = "\n\n".join(parts)
+                log_note = f"Slurm log tail read from {log_dir}"
+            else:
+                log_note = (
+                    f"no readable Slurm log at {out_path} / {err_path} "
+                    "(the job may have been rejected by Slurm before it started)"
+                )
+        return {
+            "ts": time.time(),
+            "source": "autoscaler",
+            "location": f"worker Slurm job {job_id}",
+            "worker_id": None,
+            "job_id": None,
+            "host": None,
+            "error_type": "WorkerStartupDeath",
+            "message": (
+                f"Worker Slurm job {job_id} ended without ever registering with the server. "
+                f"{log_note}."
+            )[:2000],
+            "traceback": tail or "(no Slurm log captured)",
+        }
+
     def status(self) -> Dict[str, Any]:
         """Full autoscaler state for the dashboard: config + last tick + live submissions."""
         writer = self.service.writer
@@ -305,6 +394,7 @@ class Autoscaler:
             "standby_floor": self.cfg.standby_floor,
             "max_workers": self.cfg.max_workers,
             "worker_script": self.cfg.worker_script,
+            "slurm_log_dir": self.cfg.slurm_log_dir,
             "partition": self.cfg.partition,
             "capacity_probe": self.cfg.capacity_probe or "sinfo -h -o %C (idle field)",
             "squeue_poll_s": self.cfg.squeue_poll_s,

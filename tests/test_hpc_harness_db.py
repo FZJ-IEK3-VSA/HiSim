@@ -4,16 +4,9 @@ Covers spec §5.1 (attempt fencing, idempotent lease/report), §6.1 (batch-scope
 dedup), and the retry/dead/requeue transitions. Pure SQLite — no server, no network.
 """
 
-import sys
-from pathlib import Path
-
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
-
-from hpc_harness import db  # noqa: E402
+from hpc_harness import db
 
 pytestmark = pytest.mark.base
 
@@ -38,6 +31,7 @@ def _submit(conn, n=3, batch="b1", runner="hisim", priority=0):
 
 
 def test_dedup_within_batch_and_fresh_in_new_batch(conn):
+    """Dedup is batch-scoped: same keys re-inserted in a new batch are fresh (§6.1)."""
     first = _submit(conn, 3, batch="b1")
     assert first["inserted"] == 3
     again = _submit(conn, 3, batch="b1")
@@ -48,6 +42,7 @@ def test_dedup_within_batch_and_fresh_in_new_batch(conn):
 
 
 def test_lease_orders_by_priority_then_id(conn):
+    """Leasing hands out higher-priority jobs first, then by insertion id."""
     _submit(conn, 2, priority=0)
     db.insert_jobs(conn, "hisim", [{"payload": {}, "priority": 5, "label": "urgent"}], "b1")
     leased = db.lease_tasks(conn, "w1", 2, "lease-a")
@@ -56,6 +51,7 @@ def test_lease_orders_by_priority_then_id(conn):
 
 
 def test_lease_replay_returns_same_set_without_double_increment(conn):
+    """Replaying a lease id returns the same jobs without bumping the attempt (§5.1)."""
     _submit(conn, 5)
     first = db.lease_tasks(conn, "w1", 2, "lease-a")
     replay = db.lease_tasks(conn, "w1", 2, "lease-a")
@@ -65,6 +61,7 @@ def test_lease_replay_returns_same_set_without_double_increment(conn):
 
 
 def test_report_done_requires_matching_worker_and_attempt(conn):
+    """A done report is accepted only from the leasing worker and matching attempt (§5.1)."""
     _submit(conn, 1)
     (job,) = db.lease_tasks(conn, "w1", 1, "l1")
     report = {"id": job["id"], "attempt": job["attempt"], "status": db.DONE, "peak_mem_mb": 100}
@@ -81,6 +78,7 @@ def test_report_done_requires_matching_worker_and_attempt(conn):
 
 
 def test_duplicate_report_replay_is_absorbed(conn):
+    """A replayed report is absorbed as a duplicate without a second attempt row."""
     _submit(conn, 1)
     (job,) = db.lease_tasks(conn, "w1", 1, "l1")
     report = {"id": job["id"], "attempt": job["attempt"], "status": db.DONE}
@@ -93,6 +91,7 @@ def test_duplicate_report_replay_is_absorbed(conn):
 
 
 def test_late_report_after_requeue_is_stale_and_new_attempt_wins(conn):
+    """A late report from a revoked lease is rejected; the re-lease's next attempt completes."""
     _submit(conn, 1)
     (job,) = db.lease_tasks(conn, "w1", 1, "l1")
     assert db.requeue_task(conn, job["id"], MAX_ATTEMPTS, "orphaned")
@@ -113,6 +112,7 @@ def test_late_report_after_requeue_is_stale_and_new_attempt_wins(conn):
 
 
 def test_job_goes_dead_after_max_attempts(conn):
+    """A job repeatedly failing reaches DEAD once max attempts are exhausted."""
     _submit(conn, 1)
     for attempt in range(1, MAX_ATTEMPTS + 1):
         (job,) = db.lease_tasks(conn, "w1", 1, f"l{attempt}")
@@ -129,6 +129,7 @@ def test_job_goes_dead_after_max_attempts(conn):
 
 
 def test_reset_stale_leases_requeues(conn):
+    """A lease older than the timeout is requeued back to PENDING."""
     _submit(conn, 1)
     db.lease_tasks(conn, "w1", 1, "l1")
     assert db.reset_stale_leases(conn, lease_timeout_s=-1.0, max_attempts=MAX_ATTEMPTS) == 1
@@ -136,6 +137,7 @@ def test_reset_stale_leases_requeues(conn):
 
 
 def test_requeue_worker_leases_only_hits_that_worker(conn):
+    """Requeuing one worker's leases leaves other workers' leases untouched."""
     _submit(conn, 4)
     db.lease_tasks(conn, "w1", 2, "l1")
     db.lease_tasks(conn, "w2", 2, "l2")
@@ -145,6 +147,7 @@ def test_requeue_worker_leases_only_hits_that_worker(conn):
 
 
 def test_cancel_leased_job_reports_holder(conn):
+    """Cancelling a leased job reports its holder; done/dead jobs are not cancellable."""
     _submit(conn, 1)
     (job,) = db.lease_tasks(conn, "w1", 1, "l1")
     result = db.cancel_task(conn, job["id"])
@@ -155,6 +158,7 @@ def test_cancel_leased_job_reports_holder(conn):
 
 
 def test_assume_fleet_dead_recovery_requeues_everything(conn):
+    """Cold-start recovery requeues every leased job back to PENDING."""
     _submit(conn, 3)
     db.lease_tasks(conn, "w1", 3, "l1")
     assert db.assume_fleet_dead_recovery(conn, MAX_ATTEMPTS) == 3
@@ -162,6 +166,7 @@ def test_assume_fleet_dead_recovery_requeues_everything(conn):
 
 
 def test_reset_failed_revives_dead_and_cancelled(conn):
+    """Resetting failed jobs revives both DEAD and CANCELLED tasks to PENDING."""
     _submit(conn, 2)
     (job,) = db.lease_tasks(conn, "w1", 1, "l1")
     for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -170,13 +175,14 @@ def test_reset_failed_revives_dead_and_cancelled(conn):
         )
         if attempt < MAX_ATTEMPTS:
             db.lease_tasks(conn, "w1", 1, f"l{attempt + 1}")
-    (other,) = [r for r in db.list_jobs(conn, db.PENDING)]
+    (other,) = list(db.list_jobs(conn, db.PENDING))
     db.cancel_task(conn, other["id"])
     assert db.reset(conn, failed=True) == 2
     assert db.counts(conn)[db.PENDING] == 2
 
 
 def test_errors_record_list_summary_trim_clear(conn):
+    """Error records round-trip through summary, newest-first listing, source filter, trim and clear."""
     for i in range(5):
         db.record_error(conn, {
             "source": "worker" if i % 2 else "server",
@@ -204,6 +210,7 @@ def test_errors_record_list_summary_trim_clear(conn):
 
 
 def test_errors_persist_survives_reopen(tmp_path):
+    """Errors live in the durable core DB, so a reopened connection still sees them (§4.7)."""
     path = str(tmp_path / "core.db")
     conn = db.connect(path)
     db.record_error(conn, {"source": "server", "message": "durable", "traceback": "tb"})
@@ -216,6 +223,7 @@ def test_errors_persist_survives_reopen(tmp_path):
 
 
 def test_lease_filters_by_runner(conn):
+    """Leasing with a runner filter hands out only jobs for that runner."""
     db.insert_jobs(conn, "hisim", [{"payload": {}, "label": "json-job"}], "b1")
     db.insert_jobs(conn, "hisim_setup", [{"payload": {}, "label": "setup-job"}], "b1")
     leased = db.lease_tasks(conn, "w1", 5, "l1", runner="hisim_setup")
@@ -224,6 +232,7 @@ def test_lease_filters_by_runner(conn):
 
 
 def test_success_file_override_travels_with_lease(conn):
+    """A per-job success_file override (incl. explicit None) is carried on the lease."""
     db.insert_jobs(
         conn, "hisim",
         [{"payload": {}, "success_file": None},  # explicit: exit-code-only success

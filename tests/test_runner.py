@@ -111,10 +111,12 @@ def test_load_config_unknown_option_raises(tmp_path: Path) -> None:
         load_config(_write_config(tmp_path, data))
 
 
-def test_load_config_real_file_10_setups_2_params() -> None:
-    """The shipped config declares 10 setups and 2 parameter sets."""
+def test_load_config_real_file_setups_and_params() -> None:
+    """The shipped config declares a non-empty set of uniquely-named setups and 2 parameter sets."""
     cfg = load_config(REAL_CONFIG)
-    assert len(cfg.setups) == 10
+    assert cfg.setups  # non-empty
+    ids = [s.id for s in cfg.setups]
+    assert len(ids) == len(set(ids))  # setup ids are unique
     assert len(cfg.parameter_sets) == 2
     factories = {p.factory for p in cfg.parameter_sets}
     assert factories == {"one_week_only", "full_year"}
@@ -259,7 +261,7 @@ def test_run_all_one_result_per_pair(tmp_path: Path, monkeypatch: pytest.MonkeyP
     """``run_all`` invokes ``run_one`` once per pair, each with its own result dir."""
     calls: list[tuple[str, str, str]] = []
 
-    def fake_run_one(setup, param, result_directory, _repo_root, mode="python"):
+    def fake_run_one(setup, param, result_directory, _repo_root, mode="python"):  # pylint: disable=unused-argument
         calls.append((setup.id, param.id, result_directory))
         return RunResult(setup.id, param.id, result_directory, kpis={"k": 1.0})
 

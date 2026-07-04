@@ -1,6 +1,4 @@
-"""Unit tests for HPC-harness pieces that need no server: autoscaler law, circuit
-breaker, memory budget, ETA, config parsing, console ring, slot sizing, run_one seams.
-"""
+"""Unit tests for server-free HPC-harness pieces (autoscaler, circuit breaker, memory, ETA, config, console ring, slots, run_one)."""
 
 import sys
 import time
@@ -8,24 +6,23 @@ from pathlib import Path
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
-
-from hpc_harness.config import (  # noqa: E402
-    CircuitBreakerConfig,
-    ServerConfig,
-    WorkerConfig,
+from hpc_harness import run_one
+from hpc_harness.config import CircuitBreakerConfig, ServerConfig, WorkerConfig
+from hpc_harness.server.autoscaler import (
+    compute_to_submit,
+    default_sbatch,
+    parse_sinfo_cpus,
+    read_log_tail,
 )
-from hpc_harness.server.autoscaler import compute_to_submit, parse_sinfo_cpus  # noqa: E402
-from hpc_harness.server.circuit import CircuitBreaker  # noqa: E402
-from hpc_harness.server.eta import ThroughputTracker  # noqa: E402
-from hpc_harness.server.memcheck import MemBudget  # noqa: E402
-from hpc_harness.worker.logbuffer import ConsoleRing, ErrorReporter  # noqa: E402
-from hpc_harness.worker.warm_pool import compute_max_slots  # noqa: E402
-from hpc_harness import run_one  # noqa: E402
+from hpc_harness.server.circuit import CircuitBreaker
+from hpc_harness.server.eta import ThroughputTracker
+from hpc_harness.server.memcheck import MemBudget
+from hpc_harness.worker.logbuffer import ConsoleRing, ErrorReporter
+from hpc_harness.worker.warm_pool import compute_max_slots
 
 pytestmark = pytest.mark.base
+
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
 
 # ------------------------------------------------------------------ autoscaler law
@@ -54,26 +51,66 @@ pytestmark = pytest.mark.base
     ],
 )
 def test_autoscaler_control_law(work, current, available, queued, expected):
+    """The incremental control law sizes the submission step across the key scenarios."""
     assert compute_to_submit(work, current, available, queued, 10, 2000) == expected
 
 
 def test_autoscaler_respects_max_workers():
+    """The step never pushes the fleet past max_workers."""
     assert compute_to_submit(10_000, 1990, 500, 0, 10, 2000) == 10
     assert compute_to_submit(10_000, 2000, 500, 0, 10, 2000) == 0
 
 
 def test_parse_sinfo_cpus_sums_idle_field():
+    """parse_sinfo_cpus sums the idle field of each valid A/I/O/T line, ignoring junk."""
     text = "4523/1234/89/5846\n0/56/0/56\nnot-a-line\n1/2/3\n"
     assert parse_sinfo_cpus(text) == 1234 + 56  # A/I/O/T format, idle is field 2
 
 
 def test_default_sbatch_missing_script_raises_clear_error(tmp_path):
-    from hpc_harness.server.autoscaler import default_sbatch
-
+    """A missing or unset worker script raises a clear RuntimeError before any sbatch call."""
     with pytest.raises(RuntimeError, match="does not exist"):
         default_sbatch(str(tmp_path / "nope.sbatch"), 1)
     with pytest.raises(RuntimeError, match="not set"):
         default_sbatch("", 1)
+
+
+def test_default_sbatch_routes_logs_into_log_dir(tmp_path, monkeypatch):
+    """With a log_dir, sbatch is invoked with --output/--error into it, and the dir is created."""
+    from hpc_harness.server import autoscaler as autoscaler_mod
+
+    script = tmp_path / "worker.sbatch"
+    script.write_text("#!/bin/bash\n")
+    log_dir = tmp_path / "logs"  # deliberately absent up front
+    captured = {}
+
+    class _Result:
+        returncode = 0
+        stdout = "12345"
+        stderr = ""
+
+    def fake_run(cmd, **_kwargs):
+        captured["cmd"] = cmd
+        return _Result()
+
+    monkeypatch.setattr(autoscaler_mod.subprocess, "run", fake_run)
+    job_ids = default_sbatch(str(script), 1, str(log_dir))
+
+    assert job_ids == ["12345"]
+    assert log_dir.is_dir()  # created for Slurm to write into
+    joined = " ".join(captured["cmd"])
+    assert f"--output={log_dir / 'worker-%j.out'}" in joined
+    assert f"--error={log_dir / 'worker-%j.err'}" in joined
+
+
+def test_read_log_tail_returns_last_lines_or_none(tmp_path):
+    """read_log_tail returns None for a missing file and the last N lines otherwise."""
+    assert read_log_tail(str(tmp_path / "absent.out")) is None
+    log = tmp_path / "worker.out"
+    log.write_text("\n".join(f"line{i}" for i in range(100)) + "\n")
+    tail = read_log_tail(str(log), max_lines=5)
+    assert tail is not None
+    assert tail.splitlines() == ["line95", "line96", "line97", "line98", "line99"]
 
 
 # --------------------------------------------------------------- circuit breaker
@@ -86,6 +123,7 @@ def _cb(**kwargs):
 
 
 def test_circuit_trips_on_consecutive_failures():
+    """The breaker trips after enough consecutive failures and reports the top error."""
     breaker = _cb()
     assert not breaker.record(False, "err a")
     assert not breaker.record(False, "err a")
@@ -95,6 +133,7 @@ def test_circuit_trips_on_consecutive_failures():
 
 
 def test_circuit_trips_on_failure_rate_after_min_samples():
+    """The breaker trips on failure rate only once min_samples have accumulated."""
     breaker = _cb(consecutive=100)
     breaker.record(False)
     breaker.record(True)
@@ -105,6 +144,7 @@ def test_circuit_trips_on_failure_rate_after_min_samples():
 
 
 def test_circuit_success_resets_consecutive_and_reset_clears():
+    """A success resets the consecutive counter, and reset() clears a tripped breaker."""
     breaker = _cb(failure_rate=1.1)  # rate trip disabled: isolate the consecutive logic
     breaker.record(False)
     breaker.record(False)
@@ -119,6 +159,7 @@ def test_circuit_success_resets_consecutive_and_reset_clears():
 
 
 def test_circuit_disabled_never_trips():
+    """A disabled breaker records failures but never trips."""
     breaker = _cb(enabled=False, consecutive=1)
     assert not breaker.record(False)
     assert breaker.tripped is None
@@ -136,6 +177,7 @@ def _mem_cfg(**kwargs):
 
 
 def test_membudget_autoraise_only_after_min_samples():
+    """The budget auto-raises to the observed p99 only once min_samples are collected."""
     budget = MemBudget(_mem_cfg())
     assert not budget.observe(12 * 1024)
     assert not budget.observe(12 * 1024)
@@ -146,6 +188,7 @@ def test_membudget_autoraise_only_after_min_samples():
 
 
 def test_membudget_never_lowers_automatically_and_warns_when_too_high():
+    """The budget never auto-lowers, but warns when the configured value is far too high."""
     budget = MemBudget(_mem_cfg())
     for _ in range(5):
         budget.observe(2 * 1024)  # jobs use 2 GB against a 10 GB budget
@@ -155,7 +198,8 @@ def test_membudget_never_lowers_automatically_and_warns_when_too_high():
 
 
 def test_membudget_manual_set_lowers():
-    persisted = []
+    """A manual set lowers the effective budget and is persisted."""
+    persisted: list = []
     budget = MemBudget(_mem_cfg(), persist_fn=persisted.append)
     budget.set_manual(4.0)
     assert budget.effective == 4.0
@@ -163,6 +207,7 @@ def test_membudget_manual_set_lowers():
 
 
 def test_membudget_autoraise_disabled():
+    """With auto-raise disabled the budget stays put regardless of observed peaks."""
     budget = MemBudget(_mem_cfg(mem_autoraise=False))
     for _ in range(5):
         budget.observe(20 * 1024)
@@ -173,6 +218,7 @@ def test_membudget_autoraise_disabled():
 
 
 def test_throughput_and_eta():
+    """The tracker reports a positive throughput and a finite ETA for remaining work."""
     tracker = ThroughputTracker(window_s=600)
     now = time.time()
     for i in range(10):
@@ -186,6 +232,7 @@ def test_throughput_and_eta():
 
 
 def test_server_config_rejects_unknown_keys_and_parses_nested():
+    """Unknown keys (top-level and nested) are rejected while valid nested blocks parse."""
     with pytest.raises(ValueError, match="Unknown keys"):
         ServerConfig.from_dict({"db_pathh": "x"})
     cfg = ServerConfig.from_dict(
@@ -199,6 +246,7 @@ def test_server_config_rejects_unknown_keys_and_parses_nested():
 
 
 def test_server_config_finalize_derives_logs_db(tmp_path):
+    """finalize() derives the logs DB next to the core DB and computes max_attempts."""
     cfg = ServerConfig(db_path=str(tmp_path / "core" / "tasks.db"),
                        result_root=str(tmp_path / "res")).finalize()
     assert cfg.logs_db_path == str((tmp_path / "core" / "logs.db").resolve())
@@ -206,6 +254,7 @@ def test_server_config_finalize_derives_logs_db(tmp_path):
 
 
 def test_worker_config_single_core_forces_one_slot(tmp_path):
+    """single_core mode forces max_slots to 1, and an unknown node_gate is rejected."""
     cfg = WorkerConfig(server_url="http://x", result_root=str(tmp_path),
                        mode="single_core", max_slots=32).finalize()
     assert cfg.max_slots == 1
@@ -218,6 +267,7 @@ def test_worker_config_single_core_forces_one_slot(tmp_path):
 
 
 def test_error_reporter_captures_logged_exceptions_and_explicit_adds():
+    """The reporter captures ERROR-level log exceptions and explicit adds, then drains once."""
     import logging
 
     reporter = ErrorReporter("worker")
@@ -242,10 +292,11 @@ def test_error_reporter_captures_logged_exceptions_and_explicit_adds():
     assert logged["error_type"] == "ValueError"
     assert "kaboom" in logged["traceback"] and logged["source"] == "worker"
     assert explicit["job_id"] == 7 and explicit["error_type"] == "JobFailure"
-    assert reporter.drain() == []  # drained
+    assert not reporter.drain()  # drained
 
 
 def test_console_ring_tail_and_incremental_offsets():
+    """The console ring serves incremental slices by offset and a bounded tail on overflow."""
     ring = ConsoleRing(max_chars=20)
     ring.append("aaaaa")
     text, offset = ring.since(0)
@@ -263,6 +314,7 @@ def test_console_ring_tail_and_incremental_offsets():
 
 
 def test_compute_max_slots_is_min_of_memory_and_cores():
+    """Slot count is the min of memory- and core-derived limits, capped and floored at 1."""
     # 256 GB node, 10 GB/job, 12 GB headroom -> 24 memory slots; 128 cores -> min = 24.
     assert compute_max_slots(10.0, 12.0, cores=128, cores_per_job=1, reserved_cores=0,
                              total_mem_gb=256.0) == 24
@@ -280,6 +332,7 @@ def test_compute_max_slots_is_min_of_memory_and_cores():
 
 
 def test_setup_runner_builds_one_week_parameters():
+    """The setup runner builds one-week SimulationParameters and rejects unknown durations."""
     from hpc_harness.runners.hisim_setup_runner import _build_parameters
 
     params = _build_parameters({"duration": "one_week", "year": 2021, "seconds_per_timestep": 60})
@@ -290,14 +343,16 @@ def test_setup_runner_builds_one_week_parameters():
 
 
 def test_setup_runner_is_registered():
+    """The hisim_setup runner is discoverable through the runner registry."""
     from hpc_harness.runners import get_runner
 
     assert get_runner("hisim_setup").name == "hisim_setup"
 
 
 def test_find_setups_skips_init_and_excludes(tmp_path):
+    """find_setups returns *_setup.py files, skipping __init__.py, non-py, and excludes."""
     sys.path.insert(0, str(SCRIPTS / "hpc_harness"))
-    from submit_system_setups import find_setups
+    from submit_system_setups import find_setups  # pylint: disable=import-error
 
     for name in ("__init__.py", "a_setup.py", "b_setup.py", "notes.txt"):
         (tmp_path / name).write_text("", encoding="utf-8")
@@ -309,28 +364,36 @@ def test_find_setups_skips_init_and_excludes(tmp_path):
 
 
 class _FakeSimParams:
+    """Minimal stand-in for SimulationParameters exposing a settable result_directory."""
+
     def __init__(self):
         self.result_directory = ""
 
 
 class _FakeSimulator:
+    """Minimal stand-in for the Simulator that just hands back its parameters."""
+
     def __init__(self):
         self.params = _FakeSimParams()
 
     def get_simulation_parameters(self):
+        """Return the fake simulation parameters."""
         return self.params
 
 
 def test_run_single_overrides_result_dir_before_running():
+    """run_single sets result_directory before invoking run_fn, in init-then-run order."""
     order = []
     simulator = _FakeSimulator()
 
-    def fake_init(scenario, simulation_parameters, path_to_module, delta):
+    def fake_init(scenario, simulation_parameters, path_to_module, delta):  # pylint: disable=unused-argument
+        """Fake init_fn: assert the scenario/param args and return the fake simulator."""
         order.append("init")
         assert scenario == "scn.json" and simulation_parameters == "sim.json"
         return simulator
 
     def fake_run(sim, path_to_module):
+        """Fake run_fn: assert result_directory was set and the module path forwarded."""
         order.append("run")
         # The harness contract: result_directory is set BEFORE run_fn is invoked.
         assert sim.get_simulation_parameters().result_directory == "/results/000001"

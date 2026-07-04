@@ -489,6 +489,7 @@ class HarnessService:
             "standby_floor": cfg.standby_floor,
             "max_workers": cfg.max_workers,
             "worker_script": cfg.worker_script,
+            "slurm_log_dir": cfg.slurm_log_dir,
             "partition": cfg.partition,
             "capacity_probe": cfg.capacity_probe or "sinfo -h -o %C (idle field)",
             "squeue_poll_s": cfg.squeue_poll_s,

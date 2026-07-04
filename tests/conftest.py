@@ -13,6 +13,7 @@ explicitly via the ResultPathProviderSingleton.
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 from collections.abc import Iterator
 from typing import Set
@@ -22,6 +23,13 @@ import pytest
 from hisim.result_path_provider import ResultPathProviderSingleton
 
 REPO_ROOT: Path = Path(__file__).resolve().parent.parent
+
+# Make scripts/ importable so tests can ``from hpc_harness import ...`` at the module top.
+# The hpc_harness package uses absolute ``hpc_harness.*`` imports internally, so it must be
+# reachable as a top-level package rather than as ``scripts.hpc_harness``.
+_SCRIPTS_DIR = str(REPO_ROOT / "scripts")
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
 
 STATUS_DESCRIPTIONS: dict[str, str] = {
     "??": "untracked",

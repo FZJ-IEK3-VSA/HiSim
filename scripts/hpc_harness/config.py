@@ -55,6 +55,10 @@ class AutoscaleConfig:
     squeue_poll_s: float = 60.0
     registration_grace_s: float = 900.0
     """Fallback timeout for submitted-but-unregistered workers when squeue is unavailable."""
+    slurm_log_dir: Optional[str] = None
+    """Shared-FS directory (visible to the server and every compute node) for per-worker Slurm
+    stdout/stderr. When set, the autoscaler submits with ``--output``/``--error`` pointing here and,
+    when a worker ends without ever registering, reads the tail of its log onto the error page."""
 
 
 @dataclass
@@ -157,6 +161,8 @@ class ServerConfig:
             value = getattr(self, name)
             if value is not None:
                 setattr(self, name, _normalize_path(value))
+        if self.autoscale.slurm_log_dir is not None:
+            self.autoscale.slurm_log_dir = _normalize_path(self.autoscale.slurm_log_dir)
         if self.token is None:
             self.token = os.environ.get("HARNESS_TOKEN")
         if self.journal_mode not in ("WAL", "DELETE"):

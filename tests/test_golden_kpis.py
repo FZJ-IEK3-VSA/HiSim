@@ -71,7 +71,9 @@ def test_compare_within_tolerance_no_errors() -> None:
 
 def test_compare_outside_tolerance_reports_change() -> None:
     """A difference beyond tolerance is reported with its absolute and relative magnitude."""
-    (msg,) = compare("x", {"a": 2.0}, {"a": 1.0})
+    msgs = compare("x", {"a": 2.0}, {"a": 1.0})
+    assert len(msgs) == 1
+    msg = msgs[0]
     assert msg.startswith("x: KPI 'a' changed: ref=1.0 got=2.0")
     assert "abs diff=1" in msg
     assert "rel diff=100.000%" in msg

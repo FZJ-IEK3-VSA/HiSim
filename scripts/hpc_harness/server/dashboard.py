@@ -337,6 +337,7 @@ async function refresh() {
     ['standby_floor', a.standby_floor],
     ['max_workers', a.max_workers],
     ['worker_script', esc(a.worker_script ?? '–')],
+    ['slurm_log_dir', esc(a.slurm_log_dir ?? '(server submit dir)')],
     ['partition', esc(a.partition ?? '(any)')],
     ['capacity_probe', esc(a.capacity_probe)],
     ['squeue_poll_s', a.squeue_poll_s],

@@ -6,21 +6,14 @@ breaker, memory auto-raise propagation, the logs/console round trip, and warm-re
 recovery without blind requeue.
 """
 
-import sys
-from pathlib import Path
-
 import pytest
+from fastapi.testclient import TestClient
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
-
-from fastapi.testclient import TestClient  # noqa: E402
-
-from hpc_harness import db  # noqa: E402
-from hpc_harness.config import ServerConfig  # noqa: E402
-from hpc_harness.server.app import create_app  # noqa: E402
-from hpc_harness.server.service import HarnessService  # noqa: E402
+from hpc_harness import db
+from hpc_harness.config import ServerConfig
+from hpc_harness.server.app import create_app
+from hpc_harness.server.autoscaler import Autoscaler
+from hpc_harness.server.service import HarnessService
 
 pytestmark = pytest.mark.base
 
@@ -53,6 +46,7 @@ def make_service(tmp_path, **overrides) -> HarnessService:
 
 @pytest.fixture(name="service")
 def service_fixture(tmp_path):
+    """A started HarnessService over temp storage, shut down after the test."""
     service = make_service(tmp_path)
     yield service
     service.shutdown()
@@ -60,10 +54,12 @@ def service_fixture(tmp_path):
 
 @pytest.fixture(name="client")
 def client_fixture(service):
+    """A FastAPI TestClient wrapping the service's app."""
     return TestClient(create_app(service))
 
 
 def submit(client, n=3, batch="b1"):
+    """Submit ``n`` deduped jobs to a batch and return the response JSON."""
     jobs = [{"payload": {"scenario": f"s{i}.json"}, "label": f"s{i}", "dedup_key": f"s{i}"}
             for i in range(n)]
     response = client.post(f"{API}/jobs", json={"runner": "hisim", "batch": batch, "jobs": jobs},
@@ -73,6 +69,7 @@ def submit(client, n=3, batch="b1"):
 
 
 def register(client, mode="whole_node"):
+    """Register a worker and return the response JSON (incl. its worker_id)."""
     response = client.post(
         f"{API}/workers/register",
         json={"host": "node1", "mode": mode, "slots": 4, "cores": 8, "total_mem_gb": 64,
@@ -84,6 +81,7 @@ def register(client, mode="whole_node"):
 
 
 def lease(client, worker_id, n=1, lease_id="lease-1"):
+    """Lease up to ``n`` jobs for a worker under a lease id and return the response JSON."""
     response = client.post(
         f"{API}/lease",
         json={"worker_id": worker_id, "num_slots": n, "lease_id": lease_id},
@@ -94,6 +92,7 @@ def lease(client, worker_id, n=1, lease_id="lease-1"):
 
 
 def report(client, worker_id, job, status="done", **extra):
+    """Report a job outcome for a worker and return the single result record."""
     body = {"id": job["id"], "attempt": job["attempt"], "status": status,
             "exit_code": 0 if status == "done" else 1, "duration_s": 5.0,
             "peak_mem_mb": extra.pop("peak_mem_mb", 1000.0),
@@ -105,6 +104,7 @@ def report(client, worker_id, job, status="done", **extra):
 
 
 def heartbeat(client, worker_id, running=()):
+    """Send a worker heartbeat with the given running job ids and return the response JSON."""
     response = client.post(
         f"{API}/heartbeat",
         json={"worker_id": worker_id, "metrics": {"cpu_percent": 10.0}, "running": list(running)},
@@ -118,6 +118,7 @@ def heartbeat(client, worker_id, running=()):
 
 
 def test_mutations_need_token_reads_are_open(client):
+    """Mutating routes require the bearer token; reads and the dashboard are open."""
     assert client.post(f"{API}/jobs", json={"runner": "x", "jobs": []}).status_code == 401
     assert client.post(f"{API}/lease", json={}).status_code == 401
     assert client.get(f"{API}/status").status_code == 200
@@ -127,6 +128,7 @@ def test_mutations_need_token_reads_are_open(client):
 
 
 def test_dashboard_pages_render_and_link_each_other(client):
+    """Each dashboard page renders with its title and the shared cross-links."""
     for path, title in [("/", "HPC Harness"),
                         ("/errors", "Errors"),
                         ("/autoscaler", "Autoscaler"),
@@ -140,6 +142,7 @@ def test_dashboard_pages_render_and_link_each_other(client):
 
 
 def test_config_endpoint_exposes_settings_with_redacted_token(client):
+    """The config endpoint exposes settings (incl. nested blocks) with the token redacted."""
     cfg = client.get(f"{API}/config").json()
     assert cfg["result_root"] and cfg["max_retries"] == 3
     assert cfg["max_attempts"] == 4
@@ -151,6 +154,7 @@ def test_config_endpoint_exposes_settings_with_redacted_token(client):
 
 
 def test_autoscale_endpoint_reports_disabled_by_default(client):
+    """With no autoscaler wired, the autoscale endpoint reports disabled but still lists submissions."""
     a = client.get(f"{API}/autoscale").json()
     assert a["enabled"] is False and a["trying_to_scale"] is False
     assert a["worker_mode"] == "single_core"
@@ -158,6 +162,7 @@ def test_autoscale_endpoint_reports_disabled_by_default(client):
 
 
 def test_clients_report_errors_and_they_are_queryable(client):
+    """Errors reported by a client are aggregated in the summary and listed on the error page."""
     worker_id = register(client)["worker_id"]
     body = {"worker_id": worker_id, "errors": [
         {"source": "worker", "job_id": 42, "error_type": "ValueError",
@@ -202,8 +207,7 @@ def test_server_catches_and_persists_its_own_exceptions(service):
 
 
 def test_autoscaler_tick_populates_status_snapshot(service, client):
-    from hpc_harness.server.autoscaler import Autoscaler
-
+    """One tick submits for the backlog, then the next reports steady once the fleet covers it."""
     service.autoscaler = Autoscaler(
         service, service.cfg.autoscale,
         probe_fn=lambda: 50,
@@ -233,7 +237,6 @@ def test_autoscaler_tick_populates_status_snapshot(service, client):
 
 def test_autoscaler_sbatch_failure_is_surfaced_not_crashed(service, client):
     """A rejected sbatch must not crash the loop; it lands on the dashboard instead."""
-    from hpc_harness.server.autoscaler import Autoscaler
 
     def failing_sbatch(_n):
         raise RuntimeError("sbatch failed: Invalid partition specified")
@@ -253,10 +256,68 @@ def test_autoscaler_sbatch_failure_is_surfaced_not_crashed(service, client):
     assert a["submission_state_counts"] == {}  # nothing recorded
 
 
+def test_autoscaler_surfaces_worker_that_died_before_registering(service, client, tmp_path):
+    """A worker that ends without registering lands on the error page with its Slurm log tail."""
+    log_dir = tmp_path / "slurm_logs"
+    log_dir.mkdir()
+    (log_dir / "worker-job0.out").write_text(
+        "[2026-07-04 17:00:00] worker: === harness worker (single_core) starting ===\n"
+        "ModuleNotFoundError: No module named 'hisim'\n"
+    )
+    service.cfg.autoscale.slurm_log_dir = str(log_dir)
+
+    phase = {"squeue": "queued"}
+    service.autoscaler = Autoscaler(
+        service, service.cfg.autoscale,
+        probe_fn=lambda: 50,
+        sbatch_fn=lambda n: ["job0"],
+        # Mimic default_squeue: ids missing from squeue are reported "ended".
+        squeue_fn=lambda ids: {i: phase["squeue"] for i in ids},
+        scancel_fn=lambda ids: None,
+    )
+    submit(client, 5)
+    service.autoscaler.tick()  # records submission job0 (state 'submitted')
+
+    phase["squeue"] = "ended"   # job0 vanished from squeue without ever registering
+    service.autoscaler.tick()
+
+    errors = [e for e in client.get(f"{API}/errors").json() if e["error_type"] == "WorkerStartupDeath"]
+    assert len(errors) == 1
+    assert "job0" in errors[0]["message"]
+    assert "without ever registering" in errors[0]["message"]
+    assert "ModuleNotFoundError" in errors[0]["traceback"]  # the real Slurm log tail
+
+    # Reported exactly once, and the submission is now terminal 'died'.
+    service.autoscaler.tick()
+    again = [e for e in client.get(f"{API}/errors").json() if e["error_type"] == "WorkerStartupDeath"]
+    assert len(again) == 1
+    assert client.get(f"{API}/autoscale").json()["submission_state_counts"].get("died") == 1
+
+
+def test_autoscaler_death_without_log_dir_still_surfaced(service, client):
+    """Even with no slurm_log_dir configured, the death is surfaced (just without a log tail)."""
+    phase = {"squeue": "queued"}
+    service.autoscaler = Autoscaler(
+        service, service.cfg.autoscale,
+        probe_fn=lambda: 50, sbatch_fn=lambda n: ["jobX"],
+        squeue_fn=lambda ids: {i: phase["squeue"] for i in ids},
+        scancel_fn=lambda ids: None,
+    )
+    submit(client, 3)
+    service.autoscaler.tick()
+    phase["squeue"] = "ended"
+    service.autoscaler.tick()
+
+    errors = [e for e in client.get(f"{API}/errors").json() if e["error_type"] == "WorkerStartupDeath"]
+    assert len(errors) == 1
+    assert "slurm_log_dir is not set" in errors[0]["message"]
+
+
 # ------------------------------------------------------------------- happy path
 
 
 def test_full_cycle_submit_lease_report_done(client):
+    """The full submit -> lease -> report -> done cycle updates counts and staging paths."""
     assert submit(client, 2)["inserted"] == 2
     worker_id = register(client)["worker_id"]
     leased = lease(client, worker_id, 2)
@@ -273,6 +334,7 @@ def test_full_cycle_submit_lease_report_done(client):
 
 
 def test_lease_replay_same_lease_id(client):
+    """Replaying a lease id returns the same jobs without leasing more."""
     submit(client, 3)
     worker_id = register(client)["worker_id"]
     first = lease(client, worker_id, 2, "L1")["jobs"]
@@ -282,6 +344,7 @@ def test_lease_replay_same_lease_id(client):
 
 
 def test_stale_report_rejected_after_cancel(client):
+    """A report after cancel is rejected as stale, and the holder gets a kill directive."""
     submit(client, 1)
     worker_id = register(client)["worker_id"]
     (job,) = lease(client, worker_id)["jobs"]
@@ -294,6 +357,7 @@ def test_stale_report_rejected_after_cancel(client):
 
 
 def test_duplicate_report_replay_is_accepted_idempotently(client):
+    """A replayed report is accepted idempotently as a duplicate without double-counting."""
     submit(client, 1)
     worker_id = register(client)["worker_id"]
     (job,) = lease(client, worker_id)["jobs"]
@@ -304,11 +368,13 @@ def test_duplicate_report_replay_is_accepted_idempotently(client):
 
 
 def test_unknown_worker_gets_reregister(client):
+    """An unknown worker is told to re-register on both heartbeat and lease."""
     assert heartbeat(client, "ghost-worker") == {"reregister": True}
     assert lease(client, "ghost-worker").get("reregister")
 
 
 def test_orphaned_lease_requeued_after_strikes(client, service):
+    """A lease whose worker stops reporting it is requeued after the configured strikes."""
     submit(client, 1)
     worker_id = register(client)["worker_id"]
     (job,) = lease(client, worker_id)["jobs"]
@@ -321,6 +387,7 @@ def test_orphaned_lease_requeued_after_strikes(client, service):
 
 
 def test_drain_and_release_directives(client, service):
+    """An idle worker is released while work remains, and everyone drains once the queue empties."""
     submit(client, 1)
     worker_a = register(client)["worker_id"]
     worker_b = register(client)["worker_id"]
@@ -337,6 +404,7 @@ def test_drain_and_release_directives(client, service):
 
 
 def test_missing_worker_reaped_and_resurrection_cleans_up(client, service):
+    """A silent worker is reaped and requeued; on resurrection it re-registers and its stale job is killed."""
     submit(client, 1)
     worker_id = register(client)["worker_id"]
     (job,) = lease(client, worker_id)["jobs"]
@@ -353,6 +421,7 @@ def test_missing_worker_reaped_and_resurrection_cleans_up(client, service):
 
 
 def test_circuit_breaker_pauses_and_resume_clears(client):
+    """A failure storm trips the breaker (pausing leasing); admin resume clears it."""
     submit(client, 8)
     worker_id = register(client)["worker_id"]
     jobs = lease(client, worker_id, 4)["jobs"]
@@ -369,6 +438,7 @@ def test_circuit_breaker_pauses_and_resume_clears(client):
 
 
 def test_mem_autoraise_pushes_set_directive(client, service):
+    """A memory auto-raise (and later manual lowering) propagates once via a heartbeat set directive."""
     submit(client, 4)
     worker_id = register(client)["worker_id"]
     jobs = lease(client, worker_id, 3)["jobs"]
@@ -385,6 +455,7 @@ def test_mem_autoraise_pushes_set_directive(client, service):
 
 
 def test_logs_and_console_round_trip(client):
+    """Shipped logs are queryable, and the console capture directive round-trips (one-shot and follow)."""
     worker_id = register(client)["worker_id"]
     response = client.post(
         f"{API}/logs",
@@ -417,6 +488,7 @@ def test_logs_and_console_round_trip(client):
 
 
 def test_logging_db_purge_leaves_scheduling_intact(client, service):
+    """Purging the logging DB frees it while leaving core scheduling state untouched."""
     submit(client, 2)
     worker_id = register(client)["worker_id"]
     (job,) = lease(client, worker_id)["jobs"]
@@ -428,6 +500,7 @@ def test_logging_db_purge_leaves_scheduling_intact(client, service):
 
 
 def test_deregister_requeues_leases(client):
+    """Deregistering a worker requeues its leases and marks it dead with the reason."""
     submit(client, 2)
     worker_id = register(client)["worker_id"]
     lease(client, worker_id, 2)
@@ -439,6 +512,7 @@ def test_deregister_requeues_leases(client):
 
 
 def test_snapshot_writes_shared_fs_copy(client, service, tmp_path):
+    """snapshot() writes a readable shared-FS copy of the core DB."""
     submit(client, 1)
     service.snapshot()
     snapshot_path = tmp_path / "snapshot.db"
@@ -449,6 +523,7 @@ def test_snapshot_writes_shared_fs_copy(client, service, tmp_path):
 
 
 def test_warm_restart_keeps_live_leases_cold_restart_requeues(tmp_path):
+    """A warm restart preserves live leases (heartbeat re-confirms); a cold restart requeues them."""
     service = make_service(tmp_path)
     app_client = TestClient(create_app(service))
     submit(app_client, 2)

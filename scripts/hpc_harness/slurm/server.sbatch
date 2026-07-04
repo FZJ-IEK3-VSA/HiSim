@@ -10,13 +10,28 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
 #SBATCH --time=7-00:00:00
+#SBATCH --output=/projects2/2026_n-pflugradt_building_simulations/slurm_logs/server-%j.out
+#SBATCH --error=/projects2/2026_n-pflugradt_building_simulations/slurm_logs/server-%j.err
 
 set -euo pipefail
 
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] server: $*"; }
+
+log "=== harness server starting ==="
+log "job_id=${SLURM_JOB_ID:-?} node=$(hostname) submit_dir=${SLURM_SUBMIT_DIR:-?}"
+
 # Adjust to your site: module load Python / activate the venv that has hisim installed.
 # module load Python
-source /projects2/2026_n-pflugradt_building_simulations/HiSim/hisimvenv/bin/activate
+VENV="/projects2/2026_n-pflugradt_building_simulations/HiSim/hisimvenv/bin/activate"
+if [[ ! -f "$VENV" ]]; then
+    log "FATAL: venv activate script not found: $VENV"
+    exit 1
+fi
+# shellcheck disable=SC1090
+source "$VENV"
+log "venv activated: python=$(command -v python) ($(python --version 2>&1))"
 
-echo "Using python: $(command -v python)"
 export PYTHONPATH="${SLURM_SUBMIT_DIR}/..:${PYTHONPATH:-}"   # scripts/ on the path
+log "PYTHONPATH=${PYTHONPATH}"
+log "config=${HARNESS_SERVER_CONFIG:-server.json} — handing off to the server process (its logs follow)"
 exec python -m hpc_harness server --config "${HARNESS_SERVER_CONFIG:-server.json}"

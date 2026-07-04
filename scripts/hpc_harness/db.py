@@ -617,6 +617,27 @@ def recent_submissions(conn: sqlite3.Connection, limit: int = 100) -> List[Dict[
     return [dict(row) for row in rows]
 
 
+def unregistered_deaths(conn: sqlite3.Connection) -> List[Dict[str, Any]]:
+    """Submissions that reached 'ended' without ever registering a worker.
+
+    These are workers Slurm launched (or rejected) that died before signing up — a
+    bad venv, an import error, an OOM at startup. The autoscaler surfaces each on the
+    error page (with its Slurm log tail) and then marks it 'died' so it is not
+    re-reported on the next tick.
+    """
+    rows = conn.execute(
+        "SELECT * FROM slurm_submissions WHERE state='ended' AND registered_worker_id IS NULL"
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def mark_submission_died(conn: sqlite3.Connection, slurm_job_id: str) -> None:
+    """Terminal 'died' state for a submission already surfaced as a startup death."""
+    conn.execute(
+        "UPDATE slurm_submissions SET state='died' WHERE slurm_job_id=?", (slurm_job_id,)
+    )
+
+
 # ------------------------------------------------------------------------- errors
 
 

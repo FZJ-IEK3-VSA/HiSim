@@ -70,6 +70,10 @@ def cmd_server(args: argparse.Namespace) -> int:
         db_path=args.db, result_root=args.result_root, bind_port=args.port, token=args.token
     ).finalize()
 
+    if cfg.autoscale.slurm_log_dir:
+        # Create it up front so the very first (possibly manual) sbatch has somewhere to write.
+        os.makedirs(cfg.autoscale.slurm_log_dir, exist_ok=True)
+
     service = HarnessService(cfg)
     service.startup(assume_fleet_dead=args.assume_fleet_dead)
     if cfg.autoscale.enabled:

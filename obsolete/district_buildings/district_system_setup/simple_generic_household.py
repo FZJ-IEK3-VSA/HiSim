@@ -13,19 +13,22 @@ from hisim.components import (
     loadprofilegenerator_utsp_connector,
     generic_pv_system,
     building,
+    advanced_heat_pump_hplib,
     advanced_battery_bslib,
     controller_l2_energy_management_system,
     simple_water_storage,
     heat_distribution_system,
+    generic_heat_pump_modular,
+    generic_hot_water_storage_modular,
+    controller_l1_heatpump,
     electricity_meter,
-    more_advanced_heat_pump_hplib,
-    weather
 )
 from hisim.component import (
     ConfigBase,
     DisplayConfig,
 )
 from hisim import loadtypes as lt
+from hisim.units import Quantity, Celsius, Watt
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -80,7 +83,7 @@ class GenericBuilding(cp.Component):
     electricity_meter_bui: electricity_meter.ElectricityMeter
 
     def __init__(
-        self, my_sim: Simulator, my_simulation_parameters: cp.SimulationParameters, config: GenericBuildingConfig, location: str, my_weather: weather.Weather
+        self, my_sim: Simulator, my_simulation_parameters: cp.SimulationParameters, config: GenericBuildingConfig, location: str
     ) -> None:
         """Simple Generic Building."""
 
@@ -142,7 +145,6 @@ class GenericBuilding(cp.Component):
 
         # =================================================================================================================================
         # Build Basic Components
-
         # Build Building
         my_building_config = building.BuildingConfig.get_default_german_single_family_home(
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
@@ -210,6 +212,7 @@ class GenericBuilding(cp.Component):
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             building_name=building_name,
         )
+        # my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
         my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
             my_simulation_parameters=my_simulation_parameters,
@@ -221,78 +224,95 @@ class GenericBuilding(cp.Component):
         # Add to simulator
         my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-        # Build Heat Pump Controller for space heating
-        my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
-            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
-            set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
-            building_name=building_name
-        )
-        my_heatpump_controller_sh_config.mode = hp_controller_mode
+        # Set sizing option for Hot water Storage
+        sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
 
-        my_heatpump_controller_sh = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
-            config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
+        # Build Heat Pump Controller
+        my_heat_pump_controller_config = (
+            advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
+                heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
+                building_name=building_name,
+            )
         )
-        my_sim.add_component(my_heatpump_controller_sh, connect_automatically=True)
-        
-        # Build Heat Pump Controller for dhw
-        my_heatpump_controller_dhw_config = (
-            more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config(building_name=building_name)
-        )
-        my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
-            config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
-        )
-        my_sim.add_component(my_heatpump_controller_dhw, connect_automatically=True)
+        my_heat_pump_controller_config.mode = hp_controller_mode
 
-        # Build Heat Pump (for dhw and space heating)
-        my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            building_name=building_name
-        )
-        my_heatpump_config.with_domestic_hot_water_preparation = True
-
-        my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
-            config=my_heatpump_config,
+        my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
+            config=my_heat_pump_controller_config,
             my_simulation_parameters=my_simulation_parameters,
         )
-        # Verknüpfung mit Luft als Umgebungswärmeqzuelle
-        if my_heatpump.parameters["Group"].iloc[0] == 1.0 or my_heatpump.parameters["Group"].iloc[0] == 4.0:
-            my_heatpump.connect_input(
-                my_heatpump.TemperatureInputPrimary,
-                my_weather.component_name,
-                my_weather.DailyAverageOutsideTemperatures,
-            )
-        else:
-            raise KeyError(
-                "Wasser oder Sole als primäres Wärmeträgermedium muss über extra Wärmenetz-Modell noch bereitgestellt werden"
-            )
         # Add to simulator
-        my_sim.add_component(my_heatpump, connect_automatically=True)
+        my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
 
-        # DHW storage configs
-        my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
-            number_of_apartments=number_of_apartments,
-            building_name=building_name
+        # Build Heat Pump
+        my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
+            heating_load_of_building_in_watt=Quantity(
+                my_building_information.max_thermal_building_demand_in_watt, Watt
+            ),
+            heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
+            building_name=building_name,
         )
 
-        my_dhw_storage = simple_water_storage.SimpleDHWStorage(
+        my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
+            config=my_heat_pump_config,
+            my_simulation_parameters=my_simulation_parameters,
+        )
+        # Add to simulator
+        my_sim.add_component(my_heat_pump, connect_automatically=True)
+
+        # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
+        my_dhw_heatpump_config = (
+            generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
+                number_of_apartments=my_building_information.number_of_apartments,
+                default_power_in_watt=6000,
+                building_name=building_name,
+            )
+        )
+        my_dhw_heatpump_controller_config = (
+            controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
+                name="DHWHeatpumpController",
+                building_name=building_name,
+            )
+        )
+        my_dhw_storage_config = (
+            generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+                number_of_apartments=my_building_information.number_of_apartments,
+                default_volume_in_liter=450,
+                building_name=building_name,
+            )
+        )
+        my_dhw_storage_config.compute_default_cycle(
+            temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
+            - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
+        )
+        my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
             my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
         )
-
-        my_sim.add_component(my_dhw_storage, connect_automatically=True)
+        my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_dhw_heatpump_controller_config,
+        )
+        my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
+            config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
+        )
+        # Add to simulator
+        my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
+        my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
+        my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
 
         # Build Heat Water Storage
-        my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-            max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-            sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
-            building_name=building_name
+        my_simple_heat_water_storage_config = (
+            simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+                max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
+                sizing_option=sizing_option,
+                building_name=building_name,
+            )
         )
-        my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
+        my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
             config=my_simple_heat_water_storage_config,
             my_simulation_parameters=my_simulation_parameters,
         )
         # Add to simulator
-        my_sim.add_component(my_simple_water_storage, connect_automatically=True)
+        my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
 
         # Build Heat Distribution System
         my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
@@ -341,7 +361,6 @@ class GenericBuilding(cp.Component):
 
             # -----------------------------------------------------------------------------------------------------------------
             # Add outputs to EMS
-            # Add outputs to EMS (need to connect manually as several houses will be simulated)
             my_electricity_controller.add_component_input_and_connect(
                 source_object_name=my_photovoltaic_system.component_name,
                 source_component_output=my_photovoltaic_system.ElectricityOutput,
@@ -361,16 +380,6 @@ class GenericBuilding(cp.Component):
                 my_building.BuildingTemperatureModifier,
                 my_electricity_controller.component_name,
                 my_electricity_controller.BuildingIndoorTemperatureModifier,
-            )
-            my_heatpump_controller_sh.connect_input(
-                my_heatpump_controller_sh.SimpleHotWaterStorageTemperatureModifier,
-                my_electricity_controller.component_name,
-                my_electricity_controller.SpaceHeatingWaterStorageTemperatureModifier,
-            )
-            my_heatpump_controller_dhw.connect_input(
-                my_heatpump_controller_dhw.DHWStorageTemperatureModifier,
-                my_electricity_controller.component_name,
-                my_electricity_controller.DomesticHotWaterStorageTemperatureModifier,
             )
 
             my_electricity_controller.add_component_input_and_connect(
@@ -393,9 +402,14 @@ class GenericBuilding(cp.Component):
                 output_description="Target electricity for Occupancy. ",
             )
 
+            my_domnestic_hot_water_heatpump_controller.connect_input(
+                my_domnestic_hot_water_heatpump_controller.StorageTemperatureModifier,
+                my_electricity_controller.component_name,
+                my_electricity_controller.DomesticHotWaterStorageTemperatureModifier,
+            )
             my_electricity_controller.add_component_input_and_connect(  # Anteil Heatpump für DHW erzeugung
-                source_object_name=my_heatpump.component_name,
-                source_component_output=my_heatpump.ElectricalInputPowerDHW,
+                source_object_name=my_domnestic_hot_water_heatpump.component_name,
+                source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
@@ -403,7 +417,7 @@ class GenericBuilding(cp.Component):
             )
 
             my_electricity_controller.add_component_output(
-                source_output_name=f"ElectricityToOrFromGridOfDHW{my_heatpump.get_classname()}_",
+                source_output_name=f"ElectricityToOrFromGridOfDHW{my_domnestic_hot_water_heatpump.get_classname()}_",
                 source_tags=[
                     lt.ComponentType.HEAT_PUMP_DHW,
                     lt.InandOutputType.ELECTRICITY_TARGET,
@@ -414,9 +428,15 @@ class GenericBuilding(cp.Component):
                 output_description="ElectricityToOrFromGrid for dhw Heat Pump. ",
             )
 
+            my_heat_pump_controller.connect_input(
+                my_heat_pump_controller.SimpleHotWaterStorageTemperatureModifier,
+                my_electricity_controller.component_name,
+                my_electricity_controller.SpaceHeatingWaterStorageTemperatureModifier,
+            )
+
             my_electricity_controller.add_component_input_and_connect(  # Anteil Heatpump für Heizung erzeugung
-                source_object_name=my_heatpump.component_name,
-                source_component_output=my_heatpump.ElectricalInputPowerSH,
+                source_object_name=my_heat_pump.component_name,
+                source_component_output=my_heat_pump.ElectricalInputPower,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[
@@ -427,7 +447,7 @@ class GenericBuilding(cp.Component):
             )
 
             my_electricity_controller.add_component_output(
-                source_output_name=f"ElectricityToOrFromGridOfSH{my_heatpump.get_classname()}_",
+                source_output_name=f"ElectricityToOrFromGridOfSH{my_heat_pump.get_classname()}_",
                 source_tags=[
                     lt.ComponentType.HEAT_PUMP_BUILDING,
                     lt.InandOutputType.ELECTRICITY_TARGET,

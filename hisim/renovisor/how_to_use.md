@@ -38,7 +38,7 @@ python -m hisim.renovisor run <request.json> --variant {base|measures} [options]
 |---|---|
 | `--variant base` | Simulate the house exactly as described in `homeInputs`; `measures` are ignored. |
 | `--variant measures` | Apply **all** entries of `measures` to the inventory first, then simulate (one package, not one-by-one). |
-| `--result-dir DIR` | Keep results in `DIR` (never auto-deleted). Default: a temp dir, deleted after successful upload. |
+| `--result-dir DIR` | Keep results under `DIR` (never auto-deleted). Each run writes into its own `DIR/<jobId>_<variant>/` subdirectory, so the base and measures runs — and unrelated jobs — may share one `DIR`, even when running in parallel. Default: a temp dir, deleted after successful upload. |
 | `--no-upload` | Run everything but send no HTTP requests (local testing). Files stay on disk. |
 | `--keep-files` | Keep the temp result dir even after a successful upload. |
 
@@ -205,9 +205,9 @@ frontend request
   └─ backend receives 2 result sets, computes deltas (energy, cost, CO2) for the UI
 ```
 
-For local development, run with `--no-upload --result-dir ./out` and inspect `./out`
-directly; the directory then contains exactly the files that would have been uploaded, plus
-everything else the simulation produced.
+For local development, run with `--no-upload --result-dir ./out` and inspect
+`./out/<jobId>_<variant>/`; that directory contains exactly the files that would have been
+uploaded, plus everything else the simulation produced.
 
 ## 7. The mapping report — read it
 

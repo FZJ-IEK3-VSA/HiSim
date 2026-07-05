@@ -10,6 +10,7 @@ Exit codes: 0 success, 2 request validation failed, 3 simulation failed, 4 uploa
 import argparse
 import datetime
 import json
+import re
 import shutil
 import sys
 import tempfile
@@ -48,7 +49,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--result-dir",
         default=None,
-        help="Directory for HiSim results (never auto-deleted). Default: a temporary directory.",
+        help="Base directory for HiSim results (never auto-deleted); each run writes into its own "
+        "<jobId>_<variant> subdirectory, so concurrent runs may share it. Default: a temporary directory.",
     )
     run_parser.add_argument(
         "--no-upload",
@@ -137,12 +139,26 @@ def _load_and_validate(request_file: str) -> TranslatorInput:
 
 
 def _prepare_result_directory(arguments: argparse.Namespace, job_id: str) -> Tuple[Path, bool]:
-    """Return the result directory and whether the translator owns (may delete) it."""
+    """Return the result directory and whether the translator owns (may delete) it.
+
+    Each run gets its own ``<jobId>_<variant>`` subdirectory below ``--result-dir``. The module
+    config and the HiSim result files have fixed names, so base and measures runs (or different
+    jobs) sharing one ``--result-dir`` would otherwise overwrite each other's files — a parallel
+    run then simulates with the *other* run's config (e.g. a heat-pump setup rejecting a gas
+    config).
+    """
+    run_directory_name = f"{_sanitize_for_filesystem(job_id)}_{arguments.variant}"
     if arguments.result_dir is not None:
-        directory = Path(arguments.result_dir)
+        directory = Path(arguments.result_dir) / run_directory_name
         directory.mkdir(parents=True, exist_ok=True)
         return directory, False
-    return Path(tempfile.mkdtemp(prefix=f"renovisor_{job_id}_")), True
+    return Path(tempfile.mkdtemp(prefix=f"renovisor_{run_directory_name}_")), True
+
+
+def _sanitize_for_filesystem(value: str) -> str:
+    """Reduce an opaque job id to characters that are safe in a directory name."""
+    sanitized = re.sub(r"[^A-Za-z0-9._-]", "_", value)
+    return sanitized or "job"
 
 
 def _post_started_event(

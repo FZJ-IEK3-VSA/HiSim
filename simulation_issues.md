@@ -323,13 +323,83 @@ rejected upfront.
 1800 s and 3600 s asserting the DHW temperature stays within bounds; if option 2 is chosen,
 assert the clear early error instead.
 
+## 16. Unreadable module config silently replaced by the setup's default household — **silent wrong results**
+
+**Where:** `hisim/building_sizer_utils/interface_configs/modular_household_config.py`,
+`read_in_configs` (around line 294), plus the fallback block at the top of every
+`system_setups/household_*_building_sizer.py` (e.g. `household_heatpump_building_sizer.py`
+lines ~75–80).
+
+**What happens:** `read_in_configs` wraps the entire read in `try: ... except Exception:
+household_config = None`. Every setup then reacts to `None` with
+
+```python
+my_config = ModularHouseholdConfig().get_default_config_for_household_<own system>()
+log.warning("Could not read the modular household config from path '...'. Using the ... default config instead.")
+```
+
+and the simulation proceeds normally. So when a caller passes an **explicit** config path
+(building sizer, RenoVisor translator, HPC batch runs), any failure to read it is downgraded
+to a log warning and the run continues with the setup's built-in default household — the
+default `ArcheTypeConfig()` is the German default archetype (Aachen weather/TRY region,
+German building code and postal code, default floor area, occupants and PV; see issue 14).
+The process exits 0 and the results look legitimate.
+
+**Failure modes in detail:**
+
+1. **Config file missing** — wrong path, deleted, or not yet written by the orchestrating
+   process. Silent fallback; the simulated house has nothing to do with the request.
+2. **Truncated or corrupt JSON** — e.g. a concurrent writer (the pre-fix RenoVisor
+   shared-`--result-dir` race), a full disk, or a killed process mid-write.
+   `json.load` raises, the exception is swallowed, silent fallback. Note: in the observed
+   RenoVisor incident the reader got a *complete* foreign config, which failed loudly on the
+   heating-system check — a *partial* read of the same race would have taken this silent
+   path instead, uploading KPIs for the wrong house as `succeeded`.
+3. **Schema drift** — a config written by a newer/older code version. Two sub-cases:
+   an unknown **enum value** (e.g. a renamed `HeatingSystems` member) makes `from_dict`
+   raise → silent fallback to the full default household. A renamed/missing **field**,
+   however, does *not* raise: `dataclasses_json` fills it from the dataclass default, so the
+   config half-parses (e.g. `EnergySystemConfig.heating_system` silently becomes its default
+   `DISTRICT_HEATING`) — a third, partially-defaulted outcome that neither crashes nor
+   matches the caller's intent.
+4. **Both sub-configs `None` in a parseable file** — `read_in_configs` raises a `ValueError`
+   for this itself… inside its own `try`, so it is swallowed by the same `except` and
+   becomes the identical silent fallback. The check is effectively dead code.
+
+**Why the existing safety net cannot catch this:** each setup validates
+`heating_system` against its own expected value (e.g. "Heating system needs to be heat pump
+for this system setup") — but the fallback config is by construction that setup's *own*
+default, so the check always passes on the fallback path. The only trace is one `WRN` line in
+a log that batch/HPC contexts rarely surface; the exit code is 0 and, in the RenoVisor
+pipeline, the KPI files are uploaded as a successful result for a house the user never
+described.
+
+**Suggested fix:** distinguish "no config given" from "config given but unreadable":
+
+1. `read_in_configs(pathname)` returns `None` only when `pathname is None`; any other failure
+   (missing file, JSON error, enum/parse error, both sub-configs `None`) raises with a clear
+   message including the path.
+2. The setups keep their default-config fallback only for the `pathname is None` case
+   (interactive/manual runs), and let the exception propagate otherwise — the RenoVisor
+   translator then correctly reports exit 3 + a `failed` POST instead of a wrong success.
+3. Optional hardening against failure mode 3b: after parsing, verify the config dict
+   actually contained the fields that matter (`heating_system` present in
+   `energy_system_config_`), or log which fields were filled from defaults.
+
+**Testing:** unit tests for `read_in_configs`: `None` path → `None`; nonexistent path →
+raises; corrupt JSON → raises; valid file → config. Setup-level test: run a building-sizer
+setup with a corrupt config file and assert it fails fast with the clear message (instead of
+running the default household); regression test that a no-config invocation still uses the
+default. RenoVisor side: e2e test asserting a corrupt generated config yields exit 3 and a
+`failed` report rather than a `succeeded` upload.
+
 ---
 
 ### Suggested order
 
 | Priority | Items | Rationale |
 |---|---|---|
-| 1 (bugfix) | 1, 2, 3, 15 | Crashes/state corruption; item 1 currently forces the translator to substitute wrong age bands for common Irish houses. |
+| 1 (bugfix) | 1, 2, 3, 15, 16 | Crashes/state corruption/silent wrong results; item 1 currently forces the translator to substitute wrong age bands for common Irish houses; item 16 makes config-read failures pass as successful runs of a default German household. |
 | 2 (quick wins) | 6, 5, 9 | Small config extensions with large fidelity gains for baselines and retrofit comparisons. |
 | 3 (medium) | 4, 12, 13, 14 | Robustness/portability; no contract changes. |
 | 4 (larger) | 7, 8, 10, 11 | New physics/config surface; each removes a whole `ignored` block from the translator's mapping report. |

@@ -27,7 +27,7 @@ python -m hisim.renovisor run <request.json> --variant {base|measures} [options]
 | Option | Default | Meaning |
 |---|---|---|
 | `--variant base\|measures` | required | `base`: simulate the inventory as-is, ignore `measures`. `measures`: apply **all** measures to the inventory first, then simulate. One invocation = one simulation. |
-| `--result-dir DIR` | temp dir | Where HiSim writes results. |
+| `--result-dir DIR` | temp dir | Base directory for results; each run writes into its own `DIR/<jobId>_<variant>/` subdirectory so concurrent runs can share `DIR` without clobbering each other's module config or result files. |
 | `--no-upload` | off | Run everything but skip the REST submission (local testing). |
 | `--keep-files` | off | Don't delete the result dir after a successful upload. |
 

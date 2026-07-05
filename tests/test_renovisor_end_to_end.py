@@ -33,10 +33,12 @@ def test_full_pipeline_base_variant_no_upload(tmp_path: Path) -> None:
     )
 
     assert exit_code == EXIT_SUCCESS
-    report_path = result_dir / "renovisor_mapping_report.json"
+    # every run is isolated in its own <jobId>_<variant> subdirectory below --result-dir
+    run_dir = result_dir / "example-1-gas-to-heatpump_base"
+    report_path = run_dir / "renovisor_mapping_report.json"
     assert report_path.is_file()
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["selectedSetup"] == "household_gas_building_sizer.py"
-    assert (result_dir / "all_kpis.json").is_file()
-    kpi_files = list(result_dir.glob("*_kpi_config_for_building_sizer.json"))
+    assert (run_dir / "all_kpis.json").is_file()
+    kpi_files = list(run_dir.glob("*_kpi_config_for_building_sizer.json"))
     assert kpi_files, "expected the building-sizer KPI JSON in the result directory"

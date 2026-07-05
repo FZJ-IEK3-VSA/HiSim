@@ -16,6 +16,7 @@ from hpc_harness.server.dashboard import (
     render_errors,
     render_jobs,
     render_settings,
+    render_workers,
 )
 from hpc_harness.server.service import HarnessService
 
@@ -128,6 +129,10 @@ def create_app(service: HarnessService) -> FastAPI:
     def clear_pending() -> Dict[str, Any]:
         return {"ok": True, "cancelled": service.clear_queue()}
 
+    @app.post(f"{API}/admin/workers/clear-dead", dependencies=[auth])
+    def clear_dead_workers() -> Dict[str, Any]:
+        return {"ok": True, "removed": service.clear_dead_workers()}
+
     @app.post(f"{API}/admin/pause", dependencies=[auth])
     def pause() -> Dict[str, Any]:
         service.pause()
@@ -223,5 +228,9 @@ def create_app(service: HarnessService) -> FastAPI:
     @app.get("/jobs", response_class=HTMLResponse)
     def jobs_page() -> str:
         return render_jobs()
+
+    @app.get("/workers", response_class=HTMLResponse)
+    def workers_page() -> str:
+        return render_workers()
 
     return app

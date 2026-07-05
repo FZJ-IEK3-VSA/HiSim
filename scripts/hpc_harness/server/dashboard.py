@@ -105,6 +105,7 @@ def _nav(active: str) -> str:
         '<nav><span class="brand">HPC Harness</span>'
         + link("/", "Overview", "overview")
         + link("/jobs", "Jobs", "jobs")
+        + link("/workers", "Workers", "workers")
         + link("/errors", "Errors", "errors")
         + link("/autoscaler", "Autoscaler", "autoscaler")
         + link("/settings", "Settings", "settings")
@@ -133,16 +134,6 @@ _OVERVIEW_BODY = r"""
 <div class="tiles" id="tiles"></div>
 <div class="bar" id="bar"></div>
 
-<h2>Workers</h2>
-<div class="tablewrap"><table id="workers"><thead><tr>
-<th>id</th><th>host</th><th>mode</th><th>status</th><th>hb age</th><th>slots</th>
-<th>job</th><th>working for</th><th>done</th><th>failed</th><th>slurm</th><th>error</th><th></th>
-</tr></thead><tbody></tbody></table></div>
-
-<h2>Console <span id="console-target" class="muted"></span>
-  <button onclick="toggleFollow()" id="followbtn" style="display:none">follow</button></h2>
-<pre id="console" class="muted">select a worker's console above</pre>
-
 <h2>Next 50 jobs (lease order)</h2>
 <div class="tablewrap"><table id="next"><thead><tr>
 <th>id</th><th>label</th><th>prio</th><th>attempts</th>
@@ -152,21 +143,9 @@ _OVERVIEW_BODY = r"""
 <div class="tablewrap"><table id="last"><thead><tr>
 <th>id</th><th>label</th><th>status</th><th>attempt</th><th>dur s</th><th>peak MB</th><th>error</th>
 </tr></thead><tbody></tbody></table></div>
-
-<h2>Log explorer
-  <select id="loglevel"><option value="">all levels</option><option>WARNING</option>
-  <option>ERROR</option><option>CRITICAL</option></select>
-  <input id="logworker" placeholder="worker id" size="12">
-  <input id="logjob" placeholder="job id" size="8">
-  <button onclick="loadLogs()">filter</button></h2>
-<div class="tablewrap"><table id="logs"><thead><tr>
-<th>ts</th><th>level</th><th>worker</th><th>job</th><th>message</th>
-</tr></thead><tbody></tbody></table></div>
 """
 
 _OVERVIEW_SCRIPT = r"""
-let consoleWorker = null, following = false;
-
 async function resetBreaker() {
   if (!confirm('Reset the circuit breaker and resume leasing?')) return;
   const r = await fetch(API+'/admin/resume', {method:'POST',
@@ -199,22 +178,6 @@ async function refreshStatus() {
   document.getElementById('drained').textContent = s.drained ? '— run complete' : '';
 }
 
-async function refreshWorkers() {
-  const rows = await get('/workers'); if (!rows) return;
-  document.querySelector('#workers tbody').innerHTML = rows.map(w => `<tr>
-    <td>${esc(w.worker_id)}</td><td>${esc(w.host)}</td><td>${esc(w.mode)}</td>
-    <td class="status-${esc(w.status)}">${esc(w.status)}</td>
-    <td>${w.heartbeat_age_s == null ? '–' : Math.round(w.heartbeat_age_s)+' s'}</td>
-    <td>${w.slots ?? '–'}</td>
-    <td>${(w.leased_job_ids && w.leased_job_ids.length) ? esc(w.leased_job_ids.join(', ')) : '<span class="muted">idle</span>'}</td>
-    <td>${dur(w.leased_since_s)}</td>
-    <td>${w.jobs_done}</td><td>${w.jobs_failed}</td>
-    <td>${esc(w.slurm_job_id ?? '')}</td><td class="err">${esc(w.last_error ?? '')}</td>
-    <td><button onclick="showConsole('${esc(w.worker_id)}')">console</button>
-        <button onclick="logFilterWorker('${esc(w.worker_id)}')">logs</button></td>
-  </tr>`).join('');
-}
-
 async function refreshJobs() {
   const next = await get('/jobs?state=pending&limit=50');
   if (next) document.querySelector('#next tbody').innerHTML = next.map(j =>
@@ -228,53 +191,9 @@ async function refreshJobs() {
     <td class="err" title="${esc(j.error ?? '')}">${esc((j.error ?? '').slice(0,120))}</td></tr>`).join('');
 }
 
-async function loadLogs() {
-  const lvl = document.getElementById('loglevel').value;
-  const w = document.getElementById('logworker').value.trim();
-  const j = document.getElementById('logjob').value.trim();
-  let q = '/logs?limit=200';
-  if (lvl) q += '&level='+encodeURIComponent(lvl);
-  if (w) q += '&worker='+encodeURIComponent(w);
-  if (j) q += '&job='+encodeURIComponent(j);
-  const rows = await get(q); if (!rows) return;
-  document.querySelector('#logs tbody').innerHTML = rows.map(r => `<tr>
-    <td>${ts(r.ts)}</td><td>${esc(r.level)}</td><td>${esc(r.worker_id)}</td>
-    <td>${r.job_id ?? ''}</td>
-    <td class="err" title="${esc(r.traceback ?? '')}">${esc(r.message ?? '')}</td></tr>`).join('');
-}
-
-function logFilterWorker(w) {
-  document.getElementById('logworker').value = w; loadLogs();
-  document.getElementById('logs').scrollIntoView({behavior:'smooth'});
-}
-
-async function showConsole(w) {
-  consoleWorker = w;
-  document.getElementById('console-target').textContent = '('+w+')';
-  document.getElementById('followbtn').style.display = '';
-  await fetch(API+`/admin/workers/${w}/console`, {method:'POST',
-    headers:{'Content-Type':'application/json'}, body:'{}'});
-  pollConsole();
-}
-
-async function pollConsole() {
-  if (!consoleWorker) return;
-  const snap = await get(`/workers/${consoleWorker}/console`);
-  if (snap) document.getElementById('console').textContent = snap.text || '(empty)';
-}
-
-async function toggleFollow() {
-  following = !following;
-  document.getElementById('followbtn').textContent = following ? 'stop' : 'follow';
-  await fetch(API+`/admin/workers/${consoleWorker}/console`, {method:'POST',
-    headers:{'Content-Type':'application/json'}, body: JSON.stringify({follow: following})});
-}
-
-function refreshAll() { refreshStatus(); refreshWorkers(); refreshJobs(); }
-refreshAll(); loadLogs();
+function refreshAll() { refreshStatus(); refreshJobs(); }
+refreshAll();
 setInterval(refreshAll, 5000);
-setInterval(() => { if (consoleWorker && following) pollConsole(); }, 2000);
-setInterval(() => { if (consoleWorker && !following) pollConsole(); }, 10000);
 """
 
 
@@ -588,8 +507,119 @@ def render_jobs() -> str:
     return _page("HPC Harness — Jobs", "jobs", _JOBS_BODY, _JOBS_SCRIPT)
 
 
+# -------------------------------------------------------------------------- workers
+
+_WORKERS_BODY = r"""
+<h1>Workers</h1>
+<h2>Fleet
+  <button onclick="refreshWorkers()">refresh</button>
+  <button class="danger" onclick="clearDead()">clear dead workers</button>
+  <span class="muted">dead workers are auto-removed after 24 h</span></h2>
+<div class="tablewrap"><table id="workers"><thead><tr>
+<th>id</th><th>host</th><th>runner</th><th>mode</th><th>status</th><th>hb age</th><th>slots</th>
+<th>job</th><th>working for</th><th>done</th><th>failed</th><th>slurm</th><th>error</th><th></th>
+</tr></thead><tbody></tbody></table></div>
+
+<h2>Console <span id="console-target" class="muted"></span>
+  <button onclick="toggleFollow()" id="followbtn" style="display:none">follow</button></h2>
+<pre id="console" class="muted">select a worker's console above</pre>
+
+<h2>Log explorer
+  <select id="loglevel"><option value="">all levels</option><option>WARNING</option>
+  <option>ERROR</option><option>CRITICAL</option></select>
+  <input id="logworker" placeholder="worker id" size="12">
+  <input id="logjob" placeholder="job id" size="8">
+  <button onclick="loadLogs()">filter</button></h2>
+<div class="tablewrap"><table id="logs"><thead><tr>
+<th>ts</th><th>level</th><th>worker</th><th>job</th><th>message</th>
+</tr></thead><tbody></tbody></table></div>
+"""
+
+_WORKERS_SCRIPT = r"""
+let consoleWorker = null, following = false;
+
+async function clearDead() {
+  if (!confirm('Remove all dead worker rows from the table?')) return;
+  const r = await fetch(API+'/admin/workers/clear-dead', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:'{}'});
+  if (r.status === 401) { alert('Clearing dead workers needs the bearer token (admin route).'); return; }
+  const j = await r.json().catch(() => ({}));
+  alert('Removed ' + (j.removed ?? 0) + ' dead worker(s).');
+  refreshWorkers();
+}
+
+async function refreshWorkers() {
+  const rows = await get('/workers'); if (!rows) return;
+  document.querySelector('#workers tbody').innerHTML = rows.length ? rows.map(w => `<tr>
+    <td>${esc(w.worker_id)}</td><td>${esc(w.host)}</td><td>${esc(w.runner ?? '')}</td><td>${esc(w.mode)}</td>
+    <td class="status-${esc(w.status)}">${esc(w.status)}</td>
+    <td>${w.heartbeat_age_s == null ? '–' : Math.round(w.heartbeat_age_s)+' s'}</td>
+    <td>${w.slots ?? '–'}</td>
+    <td>${(w.leased_job_ids && w.leased_job_ids.length) ? esc(w.leased_job_ids.join(', ')) : '<span class="muted">idle</span>'}</td>
+    <td>${dur(w.leased_since_s)}</td>
+    <td>${w.jobs_done}</td><td>${w.jobs_failed}</td>
+    <td>${esc(w.slurm_job_id ?? '')}</td><td class="err">${esc(w.last_error ?? '')}</td>
+    <td><button onclick="showConsole('${esc(w.worker_id)}')">console</button>
+        <button onclick="logFilterWorker('${esc(w.worker_id)}')">logs</button></td>
+  </tr>`).join('') : '<tr><td colspan="14" class="muted">no workers registered</td></tr>';
+}
+
+async function loadLogs() {
+  const lvl = document.getElementById('loglevel').value;
+  const w = document.getElementById('logworker').value.trim();
+  const j = document.getElementById('logjob').value.trim();
+  let q = '/logs?limit=200';
+  if (lvl) q += '&level='+encodeURIComponent(lvl);
+  if (w) q += '&worker='+encodeURIComponent(w);
+  if (j) q += '&job='+encodeURIComponent(j);
+  const rows = await get(q); if (!rows) return;
+  document.querySelector('#logs tbody').innerHTML = rows.map(r => `<tr>
+    <td>${ts(r.ts)}</td><td>${esc(r.level)}</td><td>${esc(r.worker_id)}</td>
+    <td>${r.job_id ?? ''}</td>
+    <td class="err" title="${esc(r.traceback ?? '')}">${esc(r.message ?? '')}</td></tr>`).join('');
+}
+
+function logFilterWorker(w) {
+  document.getElementById('logworker').value = w; loadLogs();
+  document.getElementById('logs').scrollIntoView({behavior:'smooth'});
+}
+
+async function showConsole(w) {
+  consoleWorker = w;
+  document.getElementById('console-target').textContent = '('+w+')';
+  document.getElementById('followbtn').style.display = '';
+  await fetch(API+`/admin/workers/${w}/console`, {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:'{}'});
+  pollConsole();
+}
+
+async function pollConsole() {
+  if (!consoleWorker) return;
+  const snap = await get(`/workers/${consoleWorker}/console`);
+  if (snap) document.getElementById('console').textContent = snap.text || '(empty)';
+}
+
+async function toggleFollow() {
+  following = !following;
+  document.getElementById('followbtn').textContent = following ? 'stop' : 'follow';
+  await fetch(API+`/admin/workers/${consoleWorker}/console`, {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({follow: following})});
+}
+
+refreshWorkers(); loadLogs();
+setInterval(refreshWorkers, 5000);
+setInterval(() => { if (consoleWorker && following) pollConsole(); }, 2000);
+setInterval(() => { if (consoleWorker && !following) pollConsole(); }, 10000);
+"""
+
+
+def render_workers() -> str:
+    """The workers page HTML: fleet table (+ clear-dead), per-worker console, and log explorer."""
+    return _page("HPC Harness — Workers", "workers", _WORKERS_BODY, _WORKERS_SCRIPT)
+
+
 def render_dashboard() -> str:
-    """The overview page HTML (queue, workers, jobs, logs, console)."""
+    """The overview page HTML (queue counts, progress bar, next/last jobs)."""
     return _page("HPC Harness", "overview", _OVERVIEW_BODY, _OVERVIEW_SCRIPT)
 
 

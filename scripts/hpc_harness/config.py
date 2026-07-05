@@ -192,6 +192,8 @@ class ServerConfig:
     reaper_period_s: float = 45.0
     heartbeat_flush_s: float = 30.0
     release_idle_workers: bool = True
+    dead_worker_retention_s: float = 86400.0
+    """Auto-remove dead worker rows last seen more than this long ago (default 24h). 0 disables."""
     error_retention: int = 20000
     """Keep at most this many persisted error records (trimmed by the reaper)."""
 

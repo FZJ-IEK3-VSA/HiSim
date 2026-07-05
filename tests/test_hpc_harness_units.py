@@ -423,6 +423,19 @@ def test_setup_runner_builds_one_week_parameters():
         _build_parameters({"duration": "two_fortnights"})
 
 
+def test_setup_runner_applies_post_processing_options():
+    """Payload post_processing_options are appended (deduped); unknown names are rejected."""
+    from hisim.postprocessingoptions import PostProcessingOptions
+    from hpc_harness.runners.hisim_setup_runner import _build_parameters
+
+    params = _build_parameters({"duration": "one_day", "post_processing_options": ["PLOT_LINE", "COMPUTE_KPIS"]})
+    assert PostProcessingOptions.PLOT_LINE in params.post_processing_options
+    assert PostProcessingOptions.COMPUTE_KPIS in params.post_processing_options
+    assert params.post_processing_options.count(PostProcessingOptions.PLOT_LINE) == 1  # no dupes
+    with pytest.raises(ValueError, match="Unknown PostProcessingOptions"):
+        _build_parameters({"duration": "one_day", "post_processing_options": ["NOT_A_REAL_OPTION"]})
+
+
 def test_setup_runner_is_registered():
     """The hisim_setup runner is discoverable through the runner registry."""
     from hpc_harness.runners import get_runner
@@ -439,6 +452,20 @@ def test_find_setups_skips_init_and_excludes(tmp_path):
         (tmp_path / name).write_text("", encoding="utf-8")
     found = find_setups(tmp_path, exclude=["b_setup"])
     assert [p.name for p in found] == ["a_setup.py"]
+
+
+def test_find_json_setups_filters_by_name(tmp_path):
+    """find_json_setups keeps only *.scenario.json whose name contains the (case-insensitive) filter."""
+    sys.path.insert(0, str(SCRIPTS / "hpc_harness"))
+    from submit_json_setups import find_json_setups  # pylint: disable=import-error
+
+    for name in ("household_gas_building_sizer.scenario.json", "Household_HP_Building_Sizer.scenario.json",
+                 "basic_household.scenario.json", "household_gas_building_sizer.py",
+                 "notes.txt"):
+        (tmp_path / name).write_text("{}", encoding="utf-8")
+    found = {p.name for p in find_json_setups(tmp_path, "building_sizer")}
+    assert found == {"Household_HP_Building_Sizer.scenario.json",
+                     "household_gas_building_sizer.scenario.json"}  # case-insensitive; .py/non-matching excluded
 
 
 # ------------------------------------------------------------- worker idle timeout

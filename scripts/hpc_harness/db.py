@@ -602,6 +602,27 @@ def list_workers(conn: sqlite3.Connection) -> List[Dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def delete_dead_workers(
+    conn: sqlite3.Connection, older_than_s: Optional[float] = None, now: Optional[float] = None
+) -> int:
+    """Delete dead worker rows; returns how many were removed.
+
+    With ``older_than_s`` only dead workers last seen more than that many seconds ago are
+    removed (the reaper's 24h auto-clean, using last_heartbeat or registration as the clock);
+    without it every dead worker is removed (the dashboard's manual "clear dead" button).
+    Their leases were already requeued when they were marked dead, so deletion is safe.
+    """
+    if older_than_s is None:
+        cur = conn.execute("DELETE FROM workers WHERE status=?", (W_DEAD,))
+    else:
+        cutoff = (now if now is not None else time.time()) - older_than_s
+        cur = conn.execute(
+            "DELETE FROM workers WHERE status=? AND COALESCE(last_heartbeat, registered_at, 0) < ?",
+            (W_DEAD, cutoff),
+        )
+    return cur.rowcount
+
+
 def alive_workers(conn: sqlite3.Connection) -> List[Dict[str, Any]]:
     """Workers not marked dead (seed for the restart liveness grace window)."""
     rows = conn.execute("SELECT * FROM workers WHERE status != ?", (W_DEAD,)).fetchall()

@@ -407,6 +407,10 @@ class HarnessService:
         self._counts_cache = (0.0, {})
         return cancelled
 
+    def clear_dead_workers(self) -> int:
+        """Remove every dead worker row (dashboard button); returns how many were removed."""
+        return self.writer.call(db.delete_dead_workers)
+
     def purge_logs(self) -> int:
         """Delete + recreate the logging DB (spec §6.8)."""
         return self.logdb.purge()
@@ -598,6 +602,13 @@ class HarnessService:
                 missing += 1
         self.writer.call(lambda c: db.flush_heartbeats(c, dict(self.liveness)))
         self.writer.call(lambda c: db.trim_errors(c, self.cfg.error_retention))
+        if self.cfg.dead_worker_retention_s > 0:  # auto-clean long-dead workers (default 24h)
+            purged = self.writer.call(
+                lambda c: db.delete_dead_workers(c, self.cfg.dead_worker_retention_s, now)
+            )
+            if purged:
+                LOGGER.info("Reaper removed %d dead worker(s) older than %.0fs",
+                            purged, self.cfg.dead_worker_retention_s)
         if stale or missing:
             self._counts_cache = (0.0, {})
         counts = self._counts()

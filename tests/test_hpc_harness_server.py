@@ -131,6 +131,7 @@ def test_dashboard_pages_render_and_link_each_other(client):
     """Each dashboard page renders with its title and the shared cross-links."""
     for path, title in [("/", "HPC Harness"),
                         ("/jobs", "Jobs"),
+                        ("/workers", "Workers"),
                         ("/errors", "Errors"),
                         ("/autoscaler", "Autoscaler"),
                         ("/settings", "Settings")]:
@@ -138,8 +139,8 @@ def test_dashboard_pages_render_and_link_each_other(client):
         assert page.status_code == 200
         assert title in page.text
         # every page carries the shared nav linking to the others
-        assert 'href="/jobs"' in page.text and 'href="/errors"' in page.text
-        assert 'href="/autoscaler"' in page.text and 'href="/settings"' in page.text
+        assert 'href="/jobs"' in page.text and 'href="/workers"' in page.text
+        assert 'href="/errors"' in page.text and 'href="/settings"' in page.text
 
 
 def test_config_endpoint_exposes_settings_with_redacted_token(client):
@@ -422,6 +423,21 @@ def test_clear_queue_cancels_pending_but_not_running(client):
     assert counts.get("cancelled", 0) == 3
     # The running job can still be reported done after a queue clear.
     assert report(client, worker_id, running)["accepted"]
+
+
+def test_clear_dead_workers_removes_only_dead(client):
+    """The Workers page clear-dead button removes dead rows (needs token) and keeps alive ones."""
+    alive = register(client)["worker_id"]
+    dead = register(client)["worker_id"]
+    client.post(f"{API}/workers/{dead}/deregister", json={"reason": "done"}, headers=AUTH)
+    statuses = {w["worker_id"]: w["status"] for w in client.get(f"{API}/workers").json()}
+    assert statuses[dead] == "dead" and statuses[alive] == "alive"
+
+    assert client.post(f"{API}/admin/workers/clear-dead").status_code == 401  # needs token
+    removed = client.post(f"{API}/admin/workers/clear-dead", headers=AUTH).json()
+    assert removed["ok"] and removed["removed"] == 1
+    remaining = {w["worker_id"] for w in client.get(f"{API}/workers").json()}
+    assert alive in remaining and dead not in remaining
 
 
 def test_lease_replay_same_lease_id(client):

@@ -35,10 +35,27 @@ def _build_parameters(payload: dict):  # noqa: ANN202  (SimulationParameters, la
     duration = payload.get("duration", "one_week")
     if duration not in factories:
         raise ValueError(f"Unknown duration {duration!r}; pick one of {sorted(factories)}")
-    return factories[duration](
+    params = factories[duration](
         year=int(payload.get("year", 2021)),
         seconds_per_timestep=int(payload.get("seconds_per_timestep", 60)),
     )
+    _apply_post_processing(params, payload.get("post_processing_options") or [])
+    return params
+
+
+def _apply_post_processing(params, names) -> None:  # noqa: ANN001
+    """Append the named ``PostProcessingOptions`` (charts/reports/KPIs) not already enabled."""
+    if not names:
+        return
+    from hisim.postprocessingoptions import PostProcessingOptions  # pylint: disable=import-outside-toplevel
+
+    for name in names:
+        try:
+            option = PostProcessingOptions[name]
+        except KeyError as exc:
+            raise ValueError(f"Unknown PostProcessingOptions member {name!r}") from exc
+        if option not in params.post_processing_options:
+            params.post_processing_options.append(option)
 
 
 class HiSimSetupRunner:

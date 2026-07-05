@@ -128,6 +128,21 @@ def test_job_goes_dead_after_max_attempts(conn):
     assert counts.get(db.PENDING, 0) == 0
 
 
+def test_delete_dead_workers_manual_and_by_age(conn):
+    """Removes all dead rows on demand, or only those last seen beyond the cutoff; keeps alive ones."""
+    now = 1_000_000.0
+    for wid, hb, status in [("old", now - 90_000, db.W_DEAD),   # >24h dead
+                            ("recent", now - 100, db.W_DEAD),   # just died
+                            ("live", now, db.W_ALIVE)]:
+        db.register_worker(conn, wid, {"host": "h", "runner": "hisim"})
+        conn.execute("UPDATE workers SET status=?, last_heartbeat=? WHERE worker_id=?", (status, hb, wid))
+
+    assert db.delete_dead_workers(conn, older_than_s=86400, now=now) == 1  # only 'old'
+    assert {w["worker_id"] for w in db.list_workers(conn)} == {"recent", "live"}
+    assert db.delete_dead_workers(conn) == 1  # manual: the remaining dead one
+    assert {w["worker_id"] for w in db.list_workers(conn)} == {"live"}
+
+
 def test_cancel_pending_clears_queue_only(conn):
     """cancel_pending cancels every PENDING task and leaves leased ones untouched."""
     _submit(conn, 5)

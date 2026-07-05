@@ -1,0 +1,65 @@
+{
+  "job": {
+    "jobId": "example-2-oil-deep-retrofit",
+    "submission": {
+      "url": "https://renovisor.example/api/results",
+      "files": ["all_kpis.json", "*_kpi_config_for_building_sizer.json", "report.pdf"],
+      "authToken": "example-token-2"
+    },
+    "simulationOverrides": {
+      "postProcessingOptions": ["GENERATE_PDF_REPORT"]
+    }
+  },
+  "request": {
+    "contractVersion": "1.0.0",
+    "location": {
+      "countryCode": "IE",
+      "region": "Cork",
+      "eircodeOrPostcode": "T12 XY34"
+    },
+    "homeInputs": {
+      "dwellingType": "terraced_sfh",
+      "constructionYear": 1935,
+      "floorAreaM2": 96,
+      "storeys": 2,
+      "occupants": 4,
+      "targetTempC": 20,
+      "smartThermostats": false,
+      "roofAreaM2": 55,
+      "wallAreaM2": 62,
+      "groundFloorAreaM2": 48,
+      "windowAreaM2": 14,
+      "doorAreaM2": 4,
+      "envelopeState": "unrenovated",
+      "roof": { "construction": "pitched", "insulation": "none" },
+      "walls": { "construction": "solid_wall", "insulation": "none" },
+      "floor": { "construction": "suspended_timber", "insulation": "none" },
+      "windows": { "type": "single" },
+      "doors": { "type": "old_draughty" },
+      "heating": {
+        "primary": "oil",
+        "secondary": "open_fireplace",
+        "irishCookingRange": true,
+        "emitter": "cast_iron",
+        "seasonalEfficiencyPct": 78,
+        "flowTempC": 75
+      },
+      "solarThermal": { "mode": "none" },
+      "pv": { "kWp": 0, "sizePreset": "none" },
+      "battery": { "kWh": 0, "sizePreset": "none" },
+      "vehicles": []
+    },
+    "measures": [
+      { "type": "wall_insulation", "params": { "material": "eps", "mm": 100 } },
+      { "type": "roof_insulation", "params": { "material": "stone_wool", "mm": 300 } },
+      { "type": "floor_insulation", "params": { "mm": 100 } },
+      { "type": "windows", "params": { "glazing": "triple" } },
+      { "type": "doors", "params": {} },
+      { "type": "air_sealing", "params": { "targetN50": 3.0 } },
+      { "type": "ventilation", "params": { "system": "mvhr", "heatRecoveryPct": 85 } },
+      { "type": "solar_thermal", "params": {} },
+      { "type": "battery", "params": { "kWh": 5 } },
+      { "type": "pv", "params": { "kWp": 5 } }
+    ]
+  }
+}

@@ -18,7 +18,7 @@ from hisim.components.electricity_meter import (
 )
 
 
-_OPTIONAL_FIELDS = (
+_OPTIONAL_FIELDS: tuple[str, ...] = (
     "device_co2_footprint_in_kg",
     "investment_costs_in_euro",
     "lifetime_in_years",

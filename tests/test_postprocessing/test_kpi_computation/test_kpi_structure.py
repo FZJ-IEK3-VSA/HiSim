@@ -19,7 +19,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiHelperClass
 def test_compute_total_energy_empty_series_returns_zero() -> None:
     """An empty power series must short-circuit to ``0.0`` kWh."""
     energy = KpiHelperClass.compute_total_energy_from_power_timeseries(
-        power_timeseries_in_watt=pd.Series([], dtype=float), timeresolution=3600
+        power_timeseries_in_watt=pd.Series([], dtype=float), time_resolution_in_seconds=3600
     )
     assert energy == 0.0
 
@@ -28,7 +28,7 @@ def test_compute_total_energy_empty_series_returns_zero() -> None:
 def test_compute_total_energy_single_element_one_hour() -> None:
     """``[1000.0]`` W over a 3600 s step is ``1000 * 3600 / 3.6e6 = 1.0`` kWh."""
     energy = KpiHelperClass.compute_total_energy_from_power_timeseries(
-        power_timeseries_in_watt=pd.Series([1000.0]), timeresolution=3600
+        power_timeseries_in_watt=pd.Series([1000.0]), time_resolution_in_seconds=3600
     )
     assert energy == pytest.approx(1.0)
 
@@ -37,7 +37,7 @@ def test_compute_total_energy_single_element_one_hour() -> None:
 def test_compute_total_energy_two_elements_half_hour() -> None:
     """``[2000.0, 3000.0]`` W over 1800 s steps is ``5000 * 1800 / 3.6e6 = 2.5`` kWh."""
     energy = KpiHelperClass.compute_total_energy_from_power_timeseries(
-        power_timeseries_in_watt=pd.Series([2000.0, 3000.0]), timeresolution=1800
+        power_timeseries_in_watt=pd.Series([2000.0, 3000.0]), time_resolution_in_seconds=1800
     )
     assert energy == pytest.approx(2.5)
 
@@ -46,7 +46,7 @@ def test_compute_total_energy_two_elements_half_hour() -> None:
 def test_compute_total_energy_all_zeros_returns_zero() -> None:
     """A series of zeros consumes no energy regardless of the resolution."""
     energy = KpiHelperClass.compute_total_energy_from_power_timeseries(
-        power_timeseries_in_watt=pd.Series([0.0, 0.0, 0.0]), timeresolution=3600
+        power_timeseries_in_watt=pd.Series([0.0, 0.0, 0.0]), time_resolution_in_seconds=3600
     )
     assert energy == 0.0
 
@@ -55,16 +55,16 @@ def test_compute_total_energy_all_zeros_returns_zero() -> None:
 def test_compute_total_energy_negative_power_feed_in() -> None:
     """Negative power (feed-in) yields negative energy in kWh."""
     energy = KpiHelperClass.compute_total_energy_from_power_timeseries(
-        power_timeseries_in_watt=pd.Series([-1000.0]), timeresolution=3600
+        power_timeseries_in_watt=pd.Series([-1000.0]), time_resolution_in_seconds=3600
     )
     assert energy == pytest.approx(-1.0)
 
 
 @pytest.mark.base
-def test_compute_total_energy_float_timeresolution_boundary() -> None:
-    """A float ``timeresolution`` of ``1.0`` s is accepted (``1000 / 3.6e6`` kWh)."""
+def test_compute_total_energy_float_time_resolution_in_seconds_boundary() -> None:
+    """A float ``time_resolution_in_seconds`` of ``1.0`` s is accepted (``1000 / 3.6e6`` kWh)."""
     energy = KpiHelperClass.compute_total_energy_from_power_timeseries(
-        power_timeseries_in_watt=pd.Series([1000.0]), timeresolution=1.0  # type: ignore[arg-type]
+        power_timeseries_in_watt=pd.Series([1000.0]), time_resolution_in_seconds=1.0
     )
     assert energy == pytest.approx(1000.0 / 3.6e6)
 

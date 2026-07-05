@@ -1,4 +1,4 @@
-""" Tests for the basic household system setup. """
+"""Tests for the household_1b more-advanced heat-pump with diesel-car system setup."""
 # clean
 import os
 from pathlib import Path

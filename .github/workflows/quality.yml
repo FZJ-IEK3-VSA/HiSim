@@ -93,6 +93,10 @@ jobs:
       run: prospector system_setups/
     - name: Lint tests
       if: always()
+      # scripts/ on PYTHONPATH so the top-level hpc_harness package (imported by the
+      # harness tests, mirrored by tests/conftest.py at runtime) resolves for prospector.
+      env:
+        PYTHONPATH: scripts
       run: prospector tests/
     - name: Lint hisim
       if: always()

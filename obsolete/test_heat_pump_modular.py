@@ -11,7 +11,17 @@ from hisim.simulationparameters import SimulationParameters
 
 @pytest.mark.base
 def test_heat_pump_modular():
-    """Test heat pump modular."""
+    """Verify the modular heat pump turns on and delivers rated thermal power.
+
+    Sets up a one-day simulation with 60-second timesteps, a default heating
+    configuration for a modular heat pump, and an L1 heat pump controller.
+    Fake component outputs supply a low building mean temperature (10 °C),
+    zero outdoor temperature, and a zero electricity-surplus target. After
+    simulating a single one-hour timestep, asserts that the L1 controller
+    signals the heat pump to run (target percentage == 1) and that the
+    heat pump's delivered thermal power equals its configured rated value
+    (`my_hp_config.power_th`).
+    """
 
     # simulation parameters
     seconds_per_timestep = 60
@@ -76,7 +86,7 @@ def test_heat_pump_modular():
     my_heat_pump.thermal_power_delicered_channel.global_index = 4
     my_heat_pump.electricity_output_channel.global_index = 5
 
-    # test: after five hour temperature in building is 10 °C
+    # test: after one hour, temperature in building is 10 °C
     stsv.values[0] = 10
     stsv.values[1] = 0
     stsv.values[2] = 0

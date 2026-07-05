@@ -5,7 +5,7 @@ linarly. Recovery heat is not considered so far.
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, List
+from typing import ClassVar, List, Optional
 
 from dataclasses_json import dataclass_json
 
@@ -106,12 +106,14 @@ class GenericElectrolyzer(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericElectrolyzerConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: Optional[cp.DisplayConfig] = None,
     ):
         """Initialize an instance."""
 
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
+        if my_display_config is None:
+            my_display_config = cp.DisplayConfig()
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,

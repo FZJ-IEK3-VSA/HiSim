@@ -338,7 +338,7 @@ class PostProcessor:
                     component_name=output.component_name,
                     units=output.unit,
                     directory_path=ppdt.simulation_parameters.result_directory,
-                    time_correction_factor=ppdt.time_correction_factor,
+                    time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
                     data=ppdt.results.iloc[:, index],
                     day=0,
                     month=0,
@@ -352,7 +352,7 @@ class PostProcessor:
                     component_name=output.component_name,
                     units=output.unit,
                     directory_path=ppdt.simulation_parameters.result_directory,
-                    time_correction_factor=ppdt.time_correction_factor,
+                    time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
                     data=ppdt.results.iloc[:, index],
                     day=0,
                     month=0,
@@ -386,7 +386,7 @@ class PostProcessor:
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=os.path.join(ppdt.simulation_parameters.result_directory),
-                time_correction_factor=ppdt.time_correction_factor,
+                time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
@@ -407,7 +407,7 @@ class PostProcessor:
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
-                time_correction_factor=ppdt.time_correction_factor,
+                time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
                 day=days["day"],
                 month=days["month"],
                 data=ppdt.results.iloc[:, index],
@@ -431,7 +431,7 @@ class PostProcessor:
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
-                time_correction_factor=ppdt.time_correction_factor,
+                time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
@@ -458,7 +458,7 @@ class PostProcessor:
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
-                time_correction_factor=ppdt.time_correction_factor,
+                time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
@@ -861,12 +861,12 @@ class PostProcessor:
         self.model = f"HiSim_{ppdt.module_filename}"
         self.scenario = (
             SingletonSimRepository().get_entry(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
-            if SingletonSimRepository().exist_entry(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
+            if SingletonSimRepository().entry_exists(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
             else ""
         )
         self.region = (
             SingletonSimRepository().get_entry(SingletonDictKeyEnum.LOCATION)
-            if SingletonSimRepository().exist_entry(SingletonDictKeyEnum.LOCATION)
+            if SingletonSimRepository().entry_exists(SingletonDictKeyEnum.LOCATION)
             else ""
         )
         self.year = ppdt.simulation_parameters.year
@@ -941,19 +941,19 @@ class PostProcessor:
         self.model = "".join(["HiSim_", ppdt.module_filename])
 
         # set pyam scenario name
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME):
+        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME):
             self.scenario = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
         else:
             self.scenario = ""
 
         # set region
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):
+        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.LOCATION):
             self.region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
         else:
             self.region = ""
 
         # set description
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.DESCRIPTION):
+        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.DESCRIPTION):
             self.description = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.DESCRIPTION)
         else:
             self.description = ""

@@ -28,7 +28,7 @@ from hisim.simulationparameters import SimulationParameters
 
 
 # Mark every test in this module as a fast ``base`` test (see pytest.ini).
-pytestmark = pytest.mark.base
+pytestmark: pytest.MarkDecorator = pytest.mark.base
 
 
 def _make_battery_db() -> list[dict[str, Any]]:

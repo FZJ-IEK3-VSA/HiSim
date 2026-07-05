@@ -29,7 +29,7 @@ from hisim import utils
 #         log.information(building_code)
 @mark.buildingtest
 @utils.measure_execution_time
-def test_building_thermal_conductance_calculation():
+def test_building_thermal_conductance_calculation() -> None:
     """Verify thermal conductance H_tr values match hand-calculated values.
 
     The H_tr values read from TABULA building data are compared against
@@ -62,12 +62,12 @@ def test_building_thermal_conductance_calculation():
         "Window_2",
         "Door_1",
     ]
-    list_h_tr_window = []
-    list_h_tr_window_calculated = []
+    list_h_tr_window_in_watt_per_kelvin = []
+    list_h_tr_window_calculated_in_watt_per_kelvin = []
 
     k = 0
     for w_i in w_s:
-        list_h_tr_window.append(
+        list_h_tr_window_in_watt_per_kelvin.append(
             my_residence.my_building_information.buildingdata_ref[
                 "H_Transmission_" + w_i
             ].values[0]
@@ -80,11 +80,11 @@ def test_building_thermal_conductance_calculation():
             * my_residence.my_building_information.buildingdata_ref["A_" + w_i].values[0]
             * 1.0
         )
-        list_h_tr_window_calculated.append(h_tr_i)
+        list_h_tr_window_calculated_in_watt_per_kelvin.append(h_tr_i)
         k = k + 1
 
     # check if calculated H_tr is equal to H_tr which was read from buildingdata directly
-    np.testing.assert_allclose(list_h_tr_window, list_h_tr_window_calculated, atol=0.02)
+    np.testing.assert_allclose(list_h_tr_window_in_watt_per_kelvin, list_h_tr_window_calculated_in_watt_per_kelvin, atol=0.02)
 
     # building function: get_thermal_conductance_of_opaque_surfaces_in_watt_per_kelvin
     opaque_walls = [

@@ -1,5 +1,13 @@
-""" Tests for the household with advanced heat pump. """
+"""Integration tests for the household heat pump system setup.
 
+Exercises ``system_setups/household_heat_pump.py`` through both the direct
+:func:`hisim.hisim_main.main` entry point and the
+:func:`hisim.system_setup_starter.make_system_setup` JSON-config pathway.
+All tests are marked ``system_setups`` and are excluded from the fast ``base``
+test gate.
+"""
+
+import copy
 import json
 import shutil
 from pathlib import Path
@@ -23,14 +31,32 @@ MY_SIMULATION_PARAMETERS = {
 
 
 def create_results_directory(result_directory):
-    """Create result directory."""
+    """Ensure a fresh, empty results directory exists at the given path.
+
+    If a directory already exists at ``result_directory`` it is removed first
+    (ignoring errors), then a new directory is created including any parent
+    directories.
+
+    Args:
+        result_directory: Path to the desired results directory.
+    """
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory, ignore_errors=True)
     Path(result_directory).mkdir(parents=True, exist_ok=True)
 
 
 def run_system(config_json, result_directory):
-    """Run with system setup starter."""
+    """Build and execute a household heat pump system setup from a JSON config.
+
+    Translates ``config_json`` into a module path, simulation parameters, and
+    module config via :func:`hisim.system_setup_starter.make_system_setup`,
+    then runs the simulation with :func:`hisim.hisim_main.main`.
+
+    Args:
+        config_json: Configuration dictionary describing the system setup,
+            including the module path and simulation parameters.
+        result_directory: Directory where simulation results are written.
+    """
     (
         path_to_module,
         simulation_parameters,
@@ -47,14 +73,25 @@ def run_system(config_json, result_directory):
 
 
 def remove_results_directory(result_directory):
-    """Remove result directory."""
+    """Remove the results directory if it exists.
+
+    Errors during removal are ignored.
+
+    Args:
+        result_directory: Path to the results directory to remove.
+    """
     shutil.rmtree(result_directory, ignore_errors=True)
 
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
 def test_household_heat_pump_main():
-    """Execute setup with default values with hisim main."""
+    """Run the household heat pump setup with defaults via hisim_main.
+
+    Executes a one-day simulation at 60-second resolution with network-chart
+    post-processing enabled, then asserts that ``finished.flag`` was written to
+    the result directory.
+    """
 
     path = "../system_setups/household_heat_pump.py"
     my_simulation_parameters = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
@@ -72,8 +109,13 @@ def test_household_heat_pump_main():
 @pytest.mark.system_setups
 @utils.measure_execution_time
 def test_household_heat_pump_system_setup_starter_default():
-    """Execute setup with hisim system setup starter."""
-    my_config_json = {"path_to_module": MY_PATH_TO_MODULE, "simulation_parameters": MY_SIMULATION_PARAMETERS}
+    """Run the household heat pump setup via the system setup starter with defaults.
+
+    Builds the system from a JSON config using default simulation parameters
+    (one day, 900-second timesteps) and asserts that the simulation produced a
+    ``finished.flag`` file in the result directory.
+    """
+    my_config_json = {"path_to_module": MY_PATH_TO_MODULE, "simulation_parameters": copy.deepcopy(MY_SIMULATION_PARAMETERS)}
 
     result_directory = TestingUtils.get_result_directory()
     create_results_directory(result_directory)
@@ -88,10 +130,15 @@ def test_household_heat_pump_system_setup_starter_default():
 @pytest.mark.system_setups
 @utils.measure_execution_time
 def test_household_heat_pump_system_setup_starter_pv():
-    """Execute setup with hisim system setup starter."""
+    """Run the household heat pump setup with photovoltaic enabled.
+
+    Builds the system from a JSON config that enables the photovoltaic option and
+    provides a detailed building configuration, then asserts that the PV system is
+    connected to the electricity meter by inspecting ``component_connections.json``.
+    """
     my_config_json = {
         "path_to_module": MY_PATH_TO_MODULE,
-        "simulation_parameters": MY_SIMULATION_PARAMETERS,
+        "simulation_parameters": copy.deepcopy(MY_SIMULATION_PARAMETERS),
         "building_config": {
             "building_name": "BUI1",
             "name": "Building",

@@ -31,17 +31,17 @@ SYSTEM_SETUP_SCRIPT_PATH = "../system_setups/household_for_test_building_theoret
 def test_house_with_idealized_electric_heater_for_heating_test(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """Test for heating energy demand.
+    """Test that an idealized electric heater holds indoor temperature within setpoints.
 
-    This setup function emulates an household including the basic components. Here the residents have their
-    heating needs covered by a idealized electric heater that returns exactly the heat that the building needs.
+    Builds a one-week household simulation (weather, occupancy, building, and an
+    idealized electric heater that supplies exactly the building's theoretical
+    thermal demand) and asserts that the resulting indoor air temperature stays
+    between the configured heating and cooling set temperatures at every timestep.
 
-    - Simulation Parameters
-    - Components
-        - Occupancy (Residents' Demands)
-        - Weather
-        - Building
-        - Idealized Electric Heater
+    Args:
+        my_simulation_parameters: Optional pre-built simulation parameters. If
+            `None`, a one-week simulation for 2021 with hourly timesteps is
+            constructed and used.
     """
 
     # =========================================================================================================================================================

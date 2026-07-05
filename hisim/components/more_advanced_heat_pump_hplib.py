@@ -1564,7 +1564,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     # get energy from power
                     output_heating_energy_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=heating_output_power_values_in_watt,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     )
 
                     # take only output values for cooling
@@ -1575,7 +1575,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     output_cooling_energy_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=cooling_output_power_values_in_watt,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                 elif output.field_name == self.ThermalOutputPowerDHW:
@@ -1583,7 +1583,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     dhw_heat_pump_heating_energy_output_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=dhw_heat_pump_heating_power_output_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
 
@@ -1592,7 +1592,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     electrical_energy_for_heating_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                 elif output.field_name == self.ElectricalInputPowerDHW:
@@ -1600,7 +1600,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=dhw_heat_pump_total_electricity_consumption_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
 
@@ -1609,7 +1609,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     electrical_energy_for_cooling_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
 

@@ -67,22 +67,94 @@ def test_cluster_house_for_several_time_resolutions():
     # go through all results and compare if aggregated results are all the same
     print("\n")
     print("Yearly results including KPIs")
+    # The yearly-results CSV (yearly_<days>_days.csv in
+    # result_data_for_scenario_evaluation) keys its "variable" column by the
+    # configured component name (Component.component_name == config.name for this
+    # single-building simulation), not by the Python class name -- see
+    # PostProcessingChartController.get_variable_name_and_unit_from_ppdt_results_column,
+    # which builds the variable name from the component output's pretty name
+    # (object_name == component_name). The load-profile generator is configured
+    # with the name "UTSPConnector"
+    # (see UtspLpgConnectorConfig.get_default_utsp_connector_config), so its class
+    # name "UtspLpgConnector" does not appear in the yearly-result keys -- match
+    # the configured name instead. PVSystem's and Weather's configured names equal
+    # their class names, so their get_classname() matches their yearly-result keys.
+    utsp_connector_name = (
+        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config().name
+    )
+    # Predefined-input components whose aggregated yearly results must be stable
+    # across the three time resolutions (15/30/60 min).
+    invariant_yearly_component_names = [
+        utsp_connector_name,
+        generic_pv_system.PVSystem.get_classname(),
+        weather.Weather.get_classname(),
+    ]
+    # Track which invariant components were actually seen so the similarity
+    # checks below cannot silently go dead (e.g. if a component is renamed and the
+    # substring match no longer hits any yearly-result key).
+    seen_invariant_yearly_components = set()
     for key, values in result_dict.items():
         # for these components the outputs must be identical as they are predefined input data
-        if loadprofilegenerator_utsp_connector.UtspLpgConnector.get_classname() in key:
-            assert values_are_similar(lst=values)
-        if generic_pv_system.PVSystem.get_classname() in key:
-            assert values_are_similar(lst=values)
-        if weather.Weather.get_classname() in key:
-            assert values_are_similar(lst=values)
+        for component_name in invariant_yearly_component_names:
+            if component_name in key:
+                seen_invariant_yearly_components.add(component_name)
+                assert values_are_similar(lst=values), f"{key}: {values} not all similar."
         if not values_are_similar(lst=values):
             print(key, values, "not all similar. ")
+
+    missing_invariant_yearly_components = (
+        set(invariant_yearly_component_names) - seen_invariant_yearly_components
+    )
+    assert not missing_invariant_yearly_components, (
+        f"Expected invariant yearly-result components {sorted(missing_invariant_yearly_components)} not found in "
+        f"yearly results; available keys: {list(result_dict)}."
+    )
     # go through all opex consumptions and compare if results are all the same
     print("\n")
     print("Opex consumptions in kWh")
+    # The opex CSV (operational_costs_co2_footprint.csv) indexes components by their
+    # configured component name (Component.component_name == config.name for this
+    # single-building simulation), not by the Python class name. The load-profile
+    # generator is configured with the name "UTSPConnector"
+    # (see UtspLpgConnectorConfig.get_default_utsp_connector_config), so its class
+    # name "UtspLpgConnector" does not appear in the opex keys -- match the
+    # configured name instead. PVSystem's configured name equals its class name, so
+    # PVSystem.get_classname() matches its opex key. The opex CSV also contains
+    # empty separator rows whose index is read as NaN (a float); skip those before
+    # treating the key as a string so the substring checks below do not raise a
+    # TypeError.
+    # Predefined-input components whose opex "Total energy consumption [kWh]" must be
+    # stable across time resolutions. Weather is deliberately excluded here: it only
+    # provides input data and its get_cost_opex returns the default OpexCostDataClass
+    # (kpi_tag=None), so it is skipped when the opex CSV is written and therefore has
+    # no consumption row. Weather is still asserted in the yearly-results loop above.
+    # utsp_connector_name is defined above, next to the yearly-results loop, because
+    # both the yearly-results and opex CSVs key components by the configured name.
+    invariant_opex_component_names = [
+        utsp_connector_name,
+        generic_pv_system.PVSystem.get_classname(),
+    ]
+    # Track which invariant components were actually seen so the similarity checks
+    # below cannot silently go dead (e.g. if a component is renamed and the substring
+    # match no longer hits any opex key).
+    seen_invariant_components = set()
     for key, values in opex_consumption_dict.items():
+        if not isinstance(key, str):
+            continue
+        for component_name in invariant_opex_component_names:
+            if component_name in key:
+                seen_invariant_components.add(component_name)
+                # for these components the consumption must be similar as they are
+                # predefined input data
+                assert values_are_similar(lst=values), f"{key}: {values} not all similar."
         if not values_are_similar(lst=values):
             print(key, values, "not all similar. ")
+
+    missing_invariant_components = set(invariant_opex_component_names) - seen_invariant_components
+    assert not missing_invariant_components, (
+        f"Expected invariant opex components {sorted(missing_invariant_components)} not found in opex "
+        f"results; available keys: {list(opex_consumption_dict)}."
+    )
 
     print(
         "Please make sure that your data is correctly resampled. "

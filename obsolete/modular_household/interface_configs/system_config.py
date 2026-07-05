@@ -45,7 +45,8 @@ class SystemConfig:
     fuel_cell_power: Optional[float] = 0.5
     #: size of the hydrogen storage in kg hydrogen
     h2_storage_size: Optional[float] = 100
-    #: maximal power of the electroylzer in Watt
+    #: maximal power of the electrolyzer as a multiple of the PV peak power
+    #: (electrical power in W = electrolyzer_power * pv_peak_power)
     electrolyzer_power: Optional[float] = 0.5
     #: decision on the consideration of an electric vehicle
     ev_included: bool = False

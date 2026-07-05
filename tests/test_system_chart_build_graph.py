@@ -15,7 +15,7 @@ as a pure method that only reads ``self.ppdt`` and returns the assembled
 # pylint: disable=protected-access
 
 from types import SimpleNamespace
-from typing import Optional, cast
+from typing import Iterable, Optional, cast
 
 import pandas as pd
 import pydot
@@ -37,7 +37,7 @@ class _FakeComponent:
 class _FakeWrapper:
     """Minimal stand-in for a :class:`ComponentWrapper`."""
 
-    def __init__(self, component: _FakeComponent, inputs) -> None:
+    def __init__(self, component: _FakeComponent, inputs: Iterable[ComponentInput]) -> None:
         self.my_component = component
         self.component_inputs = list(inputs)
 
@@ -221,7 +221,12 @@ def test_build_graph_input_without_source_is_skipped() -> None:
 
 @pytest.mark.base
 def test_build_graph_with_results_appends_cumulative_value() -> None:
-    """``with_results`` appends the cumulative result from ``results_cumulative``."""
+    """``with_results`` appends the cumulative result with its own unit and aggregation kind.
+
+    The source output uses ``Units.WATT``, which is aggregated as a *mean* in
+    ``get_std_results``, so the label must show the value together with the
+    unit and a ``(mean)`` annotation rather than a bare number.
+    """
     ppdt = _two_component_setup()
     output = ppdt.wrapped_components[1].component_inputs[0].source_output
     assert output is not None
@@ -236,6 +241,94 @@ def test_build_graph_with_results_appends_cumulative_value() -> None:
     assert label is not None
     # value is rounded to 3 decimals
     assert ": 1234.568" in label
+    # WATT is a mean-aggregated unit, so the value carries its own unit and
+    # a "(mean)" annotation instead of relying on the "in W" input-field clause.
+    assert ": 1234.568 W (mean)" in label
+
+
+def _make_two_component_ppdt(output_unit: Units) -> PostProcessingDataTransfer:
+    """Build a Source -> Controller wiring whose output uses ``output_unit``."""
+    source = _FakeComponent("Source")
+    controller = _FakeComponent("Controller Thing")
+    output = ComponentOutput("Source", "Out", LoadTypes.ANY, output_unit)
+    controller_input = _make_input(
+        target_name="Controller Thing",
+        field_name="In",
+        unit=output_unit,
+        src_object_name="Source",
+        src_field_name="Out",
+        source_output=output,
+    )
+    return _make_ppdt(
+        wrapped_components=[
+            _FakeWrapper(source, []),
+            _FakeWrapper(controller, [controller_input]),
+        ],
+    )
+
+
+@pytest.mark.base
+def test_build_graph_with_results_sum_unit_annotates_sum() -> None:
+    """A sum-aggregated unit (e.g. Wh) is labelled ``(sum)`` with its own unit."""
+    ppdt = _make_two_component_ppdt(Units.WATT_HOUR)
+    output = ppdt.wrapped_components[1].component_inputs[0].source_output
+    assert output is not None
+    pretty_name = output.get_pretty_name()
+    ppdt.results_cumulative = pd.DataFrame([{pretty_name: 42.0}])
+
+    chart = SystemChart(ppdt)
+    graph = chart._build_graph(
+        with_labels=True, with_class_names=False, with_results=True
+    )
+    label = graph.get_edges()[0].get("label")
+    assert label is not None
+    # WATT_HOUR is summed, not averaged: the value must carry the unit and a
+    # "(sum)" annotation so it is not mistaken for an instantaneous value.
+    assert ": 42.0 Wh (sum)" in label
+    assert "(mean)" not in label
+
+
+@pytest.mark.base
+def test_build_graph_with_results_per_timestep_unit_strips_suffix() -> None:
+    """A 'per timestep' sum unit is shown in its base unit (e.g. kWh, not 'kWh per timestep')."""
+    ppdt = _make_two_component_ppdt(Units.KWH_PER_TIMESTEP)
+    output = ppdt.wrapped_components[1].component_inputs[0].source_output
+    assert output is not None
+    pretty_name = output.get_pretty_name()
+    ppdt.results_cumulative = pd.DataFrame([{pretty_name: 7.5}])
+
+    chart = SystemChart(ppdt)
+    graph = chart._build_graph(
+        with_labels=True, with_class_names=False, with_results=True
+    )
+    label = graph.get_edges()[0].get("label")
+    assert label is not None
+    # "kWh per timestep" summed over timesteps yields a total in "kWh".
+    assert ": 7.5 kWh (sum)" in label
+    assert "per timestep" not in label.split(": 7.5")[1]
+
+
+@pytest.mark.base
+def test_build_graph_with_results_celsius_mean_annotation() -> None:
+    """A mean-aggregated Celsius output is labelled ``(mean)`` and keeps the &#8451; entity."""
+    ppdt = _make_two_component_ppdt(Units.CELSIUS)
+    output = ppdt.wrapped_components[1].component_inputs[0].source_output
+    assert output is not None
+    pretty_name = output.get_pretty_name()
+    ppdt.results_cumulative = pd.DataFrame([{pretty_name: 21.5}])
+
+    chart = SystemChart(ppdt)
+    graph = chart._build_graph(
+        with_labels=True, with_class_names=False, with_results=True
+    )
+    label = graph.get_edges()[0].get("label")
+    assert label is not None
+    # The "in °C" input-field clause uses the HTML entity, and the cumulative
+    # value is annotated with its own unit and "(mean)".
+    assert ": 21.5" in label
+    assert "(mean)" in label
+    assert "&#8451;" in label
+    assert "°C" not in label
 
 
 @pytest.mark.base

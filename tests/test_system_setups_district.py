@@ -17,7 +17,21 @@ from hisim.postprocessingoptions import PostProcessingOptions
 @pytest.mark.system_setups
 @utils.measure_execution_time
 def test_district() -> None:
-    """Single day."""
+    """Run the simple district system setup for one day and verify post-processing outputs.
+
+    Executes ``../system_setups/district_system_setup/simple_district.py`` via
+    ``hisim_main.main`` with one-day simulation parameters (2021, 15-minute
+    time steps) and ``multiple_buildings`` enabled.  Several post-processing
+    options are turned on (KPI computation, KPI JSON, network charts, component
+    config JSON, scenario-evaluation preparation) and the test asserts that the
+    expected artefacts are written to the result directory:
+    ``all_kpis.json``, ``simulation.json``, ``scenario.json``, and the
+    ``result_data_for_scenario_evaluation`` subfolder with CSV files.
+
+    Raises:
+        AssertionError: If any expected result file or directory is missing
+            after the simulation completes.
+    """
     path: str = "../system_setups/district_system_setup/simple_district.py"
 
     my_simulation_parameters: SimulationParameters = SimulationParameters.one_day_only(

@@ -16,7 +16,15 @@ from hisim.units import Quantity, Watt, Celsius, Seconds, Kilogram, Euro, Years,
 
 @pytest.mark.base
 def test_heat_pump_hplib() -> None:
-    """Test heat pump hplib."""
+    """Simulate one timestep of a generic hplib heat pump and verify outputs.
+
+    Constructs a `HeatPumpHplib` with a generic model, a 10 kW thermal setpoint,
+    -7 °C source / 52 °C sink temperatures, and a one-day simulation at 60 s
+    resolution. Feeds fake component outputs (on/off, primary/secondary inlet
+    temperatures, ambient temperature) through `i_simulate` and asserts that
+    the resulting thermal power, electrical power, COP, output temperature,
+    mass flow, and state timers match expected deterministic values.
+    """
 
     # Definitions for HeatPump init
     model: str = "Generic"
@@ -24,19 +32,19 @@ def test_heat_pump_hplib() -> None:
     t_in: Quantity[float, Celsius] = Quantity(-7, Celsius)
     t_out: Quantity[float, Celsius] = Quantity(52, Celsius)
     p_th_set: Quantity[float, Watt] = Quantity(10000, Watt)
-    simpars = SimulationParameters.one_day_only(2017, 60)
+    simpars: SimulationParameters = SimulationParameters.one_day_only(2017, 60)
     # Definitions for i_simulate
-    timestep = 1
-    force_convergence = False
+    timestep: int = 1
+    force_convergence: bool = False
 
     # Create fake component outputs as inputs for simulation
-    on_off_switch = cp.ComponentOutput("Fake_on_off_switch", "Fake_on_off_switch", lt.LoadTypes.ANY, lt.Units.ANY)
-    t_in_primary = cp.ComponentOutput("Fake_t_in_primary", "Fake_t_in_primary", lt.LoadTypes.ANY, lt.Units.ANY)
-    t_in_secondary = cp.ComponentOutput("Fake_t_in_secondary", "Fake_t_in_secondary", lt.LoadTypes.ANY, lt.Units.ANY)
-    t_amb = cp.ComponentOutput("Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY)
+    on_off_switch: cp.ComponentOutput = cp.ComponentOutput("Fake_on_off_switch", "Fake_on_off_switch", lt.LoadTypes.ANY, lt.Units.ANY)
+    t_in_primary: cp.ComponentOutput = cp.ComponentOutput("Fake_t_in_primary", "Fake_t_in_primary", lt.LoadTypes.ANY, lt.Units.ANY)
+    t_in_secondary: cp.ComponentOutput = cp.ComponentOutput("Fake_t_in_secondary", "Fake_t_in_secondary", lt.LoadTypes.ANY, lt.Units.ANY)
+    t_amb: cp.ComponentOutput = cp.ComponentOutput("Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY)
 
     # Initialize component
-    heatpump_config = HeatPumpHplibConfig(
+    heatpump_config: HeatPumpHplibConfig = HeatPumpHplibConfig(
         building_name="BUI1",
         name="Heat Pump",
         model=model,
@@ -53,10 +61,10 @@ def test_heat_pump_hplib() -> None:
         maintenance_costs_in_euro_per_year=Quantity(0.025 * p_th_set.value * 1e-3 * 1513.74, Euro),
         subsidy_as_percentage_of_investment_costs=Quantity(0.3, Unitless)
     )
-    heatpump = HeatPumpHplib(config=heatpump_config, my_simulation_parameters=simpars)
+    heatpump: HeatPumpHplib = HeatPumpHplib(config=heatpump_config, my_simulation_parameters=simpars)
     heatpump.state = HeatPumpState(time_on_heating=0, time_off=0, time_on_cooling=0, on_off_previous=1)
 
-    number_of_outputs = fft.get_number_of_outputs([on_off_switch, t_in_primary, t_in_secondary, t_amb, heatpump])
+    number_of_outputs: int = fft.get_number_of_outputs([on_off_switch, t_in_primary, t_in_secondary, t_amb, heatpump])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     heatpump.on_off_switch.source_output = on_off_switch

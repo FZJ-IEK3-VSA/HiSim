@@ -613,12 +613,10 @@ class SolarThermalSystem(Component):
             ]
 
             if len(self.precalc_data_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:
-                raise Exception(
-                    "Reading the cached solar thermal precalc values seems to have failed. "
-                    + "Expected "
-                    + str(self.my_simulation_parameters.timesteps)
-                    + " values, but got "
-                    + str(len(self.precalc_data_for_all_timesteps_output))
+                raise ValueError(
+                    f"Reading the cached solar thermal precalc values seems to have failed. "
+                    f"Expected {self.my_simulation_parameters.timesteps} values, but got "
+                    f"{len(self.precalc_data_for_all_timesteps_output)}"
                 )
 
         # create placeholder list for per-timestep precalc DataFrames, filled in i_simulate

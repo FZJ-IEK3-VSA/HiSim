@@ -3,7 +3,7 @@
 # clean
 # -*- coding: utf-8 -*-
 # Owned
-from typing import List, Any, Tuple
+from typing import List, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -36,7 +36,7 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
     #: minimal fill state of the hydrogen storage in kg of hydrogen
     min_capacity: float
     #: maximal capacity of the hydrogen storage in kg of hydrogen
-    max_capacity: float
+    max_capacity_in_kg: float
     #: maximal charge rate of the hydrgoen storage in kg/s
     max_charging_rate: float
     #: maximal discharge rate of the hydrgoen storage in kg/s
@@ -55,14 +55,14 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
         max_discharging_rate: float = 2 / 3600,
         source_weight: int = 1,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "GenericHydrogenStorageConfig":
         """Returns default configuration for hydrogen storage."""
         config = GenericHydrogenStorageConfig(
             building_name=building_name,
             name="HydrogenStorage",
             source_weight=source_weight,
             min_capacity=0,
-            max_capacity=capacity,
+            max_capacity_in_kg=capacity,
             max_charging_rate=max_charging_rate,
             max_discharging_rate=max_discharging_rate,
             energy_for_charge=0,
@@ -79,7 +79,7 @@ class GenericHydrogenStorageState:
         """Initialize the class."""
         self.fill = fill
 
-    def clone(self) -> Any:
+    def clone(self) -> "GenericHydrogenStorageState":
         """Clones the state."""
         return GenericHydrogenStorageState(fill=self.fill)
 
@@ -188,7 +188,7 @@ class GenericHydrogenStorage(cp.Component):
 
         The requested ``charging_rate`` is first clipped to the configured
         ``max_charging_rate`` and then further reduced if the remaining free
-        capacity (``max_capacity - state.fill``) cannot hold the full amount
+        capacity (``max_capacity_in_kg - state.fill``) cannot hold the full amount
         over one timestep. The state of charge (``state.fill`` in kg) is
         increased by the amount actually stored, and the electrical power
         demand of the charging process is computed from
@@ -213,12 +213,12 @@ class GenericHydrogenStorage(cp.Component):
         # limitation of storage size
         if (
             self.state.fill + charging_rate * self.my_simulation_parameters.seconds_per_timestep
-            < self.config.max_capacity
+            < self.config.max_capacity_in_kg
         ):
             # fits completely
             self.state.fill = self.state.fill + charging_rate * self.my_simulation_parameters.seconds_per_timestep
 
-        elif self.state.fill >= self.config.max_capacity:
+        elif self.state.fill >= self.config.max_capacity_in_kg:
             # tank is already full
             delta_not_stored += charging_rate
             charging_rate = 0
@@ -226,7 +226,7 @@ class GenericHydrogenStorage(cp.Component):
         else:
             # fits partially
             # returns amount which an be put in
-            amount_stored = self.config.max_capacity - self.state.fill
+            amount_stored = self.config.max_capacity_in_kg - self.state.fill
             self.state.fill += amount_stored
             delta_not_stored = charging_rate - amount_stored / self.my_simulation_parameters.seconds_per_timestep
             charging_rate = amount_stored / self.my_simulation_parameters.seconds_per_timestep
@@ -312,20 +312,21 @@ class GenericHydrogenStorage(cp.Component):
         discharging_rate = stsv.get_input_value(self.hydrogen_output_channel)
 
         if charging_rate < 0:
-            raise Exception("trying to charge with negative amount" + str(charging_rate))
+            raise ValueError(f"trying to charge with negative amount: {charging_rate}")
         if discharging_rate < 0:
-            raise Exception("trying to discharge with negative amount: " + str(discharging_rate))
+            raise ValueError(f"trying to discharge with negative amount: {discharging_rate}")
 
         if charging_rate > 0 and discharging_rate > 0:
             # simultaneous charging and discharging has to be prevented
-            # hydrogen can be used directly
-            delta = charging_rate - discharging_rate
-            if delta >= 0:
-                charging_rate = delta
+            # hydrogen can be used directly: the net flow determines whether
+            # the storage effectively charges or discharges
+            net_hydrogen_rate = charging_rate - discharging_rate
+            if net_hydrogen_rate >= 0:
+                charging_rate = net_hydrogen_rate
                 discharging_rate = 0
             else:
                 charging_rate = 0
-                discharging_rate = -delta
+                discharging_rate = -net_hydrogen_rate
 
         if charging_rate > 0:
             _, _, _ = self.store(charging_rate)
@@ -336,7 +337,7 @@ class GenericHydrogenStorage(cp.Component):
         self.storage_losses()
 
         # delta not released and delta not stored is not used so far -> must be taken into account later
-        percent_fill = 100 * self.state.fill / self.config.max_capacity
+        percent_fill = 100 * self.state.fill / self.config.max_capacity_in_kg
 
         stsv.set_output_value(self.hydrogen_soc, percent_fill)
 

@@ -1421,7 +1421,7 @@ class KpiGenerator(JSONWizard):
                         if off_time != 0 and results[column].values[index + 1] == 0:
                             number_of_cycles = number_of_cycles + 1
 
-                    except Exception:
+                    except IndexError:
                         pass
 
         return number_of_cycles

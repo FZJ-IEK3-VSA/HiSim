@@ -4,12 +4,13 @@
 
 # Generic/Built-in
 import os
-from typing import Any, List, Optional
+from typing import Any, List, NamedTuple, Optional, Union
 import json
 import copy
 import sqlite3
 import datetime
 from dataclasses import dataclass
+from enum import IntEnum
 from dataclasses_json import dataclass_json
 import pandas as pd
 
@@ -63,14 +64,54 @@ class VehiclePureConfig(cp.ConfigBase):
         )
 
 
+class EVChargerMode(IntEnum):
+    """Charging strategies selectable by :class:`EVChargerControllerConfig`.
+
+    Replaces the bare integer codes (1-6) that used to be passed to
+    ``EVChargerControllerConfig.mode``. The integer values are preserved so
+    that existing callers (and serialized configs) keep working.
+    """
+
+    STRAIGHT_CHARGING = 1
+    CHARGE_ON_ELECTRICITY_SURPLUS = 2
+    VEHICLE_TO_GRID = 3
+    STEPPED_PRIORITIZED_CHARGING = 4
+    TIGHT_STEPPED_PRIORITIZED_CHARGING = 5
+    SUPER_TIGHT_STEPPED_PRIORITIZED_CHARGING = 6
+
+
 @dataclass_json
 @dataclass
 class EVChargerControllerConfig(cp.ConfigBase):
-    """Electrical vehicle charger controller config class."""
+    """Electrical vehicle charger controller config class.
+
+    ``mode`` selects the charging strategy and is typed as
+    :class:`EVChargerMode`. For backward compatibility a bare integer code
+    (1-6) is still accepted and coerced to the matching enum member in
+    :meth:`__post_init__`.
+    """
 
     building_name: str
     name: str
-    mode: int
+    mode: Union[EVChargerMode, int]
+
+    def __post_init__(self) -> None:
+        """Coerce a bare integer ``mode`` to :class:`EVChargerMode`.
+
+        Existing callers may still pass the historic integer codes (1-6);
+        this keeps them working while documenting the contract via the enum.
+        """
+        if isinstance(self.mode, EVChargerMode):
+            return
+        try:
+            self.mode = EVChargerMode(int(self.mode))
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                f"Invalid EVChargerControllerConfig.mode={self.mode!r}. "
+                "Expected an EVChargerMode member or an int in 1-6 ("
+                + ", ".join(f"{m.name}={m.value}" for m in EVChargerMode)
+                + ")."
+            ) from exc
 
     @classmethod
     def get_main_classname(cls):
@@ -85,7 +126,7 @@ class EVChargerControllerConfig(cp.ConfigBase):
         """Gets a default config."""
         return EVChargerControllerConfig(
             name="ElectricalChargerController",
-            mode=1,
+            mode=EVChargerMode.STRAIGHT_CHARGING,
             building_name=building_name,
         )
 
@@ -442,6 +483,21 @@ class Vehicle(cp.Component):
         stsv.set_output_value(self.max_capacity_channel, self.max_capacity)
 
 
+class StorageResult(NamedTuple):
+    """Result of a storage operation.
+
+    Attributes
+    ----------
+    amount : float
+        Energy charged (positive) or discharged (negative) in this step.
+    capacity : float
+        Storage capacity after the operation.
+    """
+
+    amount: float
+    capacity: float
+
+
 class SimpleStorageState:
     """Simple Storage State class.
 
@@ -489,7 +545,7 @@ class SimpleStorageState:
         current_capacity: float,
         val: float,
         efficiency: float = 1.0,
-    ) -> Any:
+    ) -> StorageResult:
         """Store."""
         if val < max_capacity - current_capacity:
             amount = val
@@ -508,9 +564,9 @@ class SimpleStorageState:
 
         current_capacity += amount
         self.stored_energy = current_capacity
-        return amount, current_capacity
+        return StorageResult(amount=amount, capacity=current_capacity)
 
-    def force_store(self, max_capacity: float, current_capacity: float) -> Any:
+    def force_store(self, max_capacity: float, current_capacity: float) -> StorageResult:
         """Force store."""
         amount = self.max_var_val
         if amount > max_capacity - current_capacity:
@@ -522,7 +578,7 @@ class SimpleStorageState:
 
         current_capacity += amount
         self.stored_energy = current_capacity
-        return amount, current_capacity
+        return StorageResult(amount=amount, capacity=current_capacity)
 
     def withdraw(
         self,
@@ -530,7 +586,7 @@ class SimpleStorageState:
         current_capacity: float,
         val: float,
         efficiency: float = 1.0,
-    ) -> Any:
+    ) -> StorageResult:
         """Withdraw."""
         val = abs(val)
         if current_capacity - min_capacity > val:
@@ -548,13 +604,13 @@ class SimpleStorageState:
 
         current_capacity += amount
         self.stored_energy = current_capacity
-        return amount, current_capacity
+        return StorageResult(amount=amount, capacity=current_capacity)
 
-    def keep_state(self, capacity: float) -> Any:
+    def keep_state(self, capacity: float) -> StorageResult:
         """Keep state."""
         charging_delta = 0
         # after_capacity = capacity
-        return charging_delta, capacity
+        return StorageResult(amount=charging_delta, capacity=capacity)
 
 
 class EVCharger(cp.Component):
@@ -862,35 +918,35 @@ class EVChargerController(cp.Component):
         )
         self.mode = config.mode
 
-        if self.mode == 1:
+        if self.mode == EVChargerMode.STRAIGHT_CHARGING:
             self.mode_description = "Straight Charging"
             self.mode_extended_description = "Charge the Electric Vehicle whenever is connected to EV Charger"
-        elif self.mode == 2:
+        elif self.mode == EVChargerMode.CHARGE_ON_ELECTRICITY_SURPLUS:
             self.mode_description = "Charge only on Electricity Surplus"
             self.mode_extended_description = (
                 "Charge the Electric Vehicle whenever the home grid is on electricity surplus"
             )
-        elif self.mode == 3:
+        elif self.mode == EVChargerMode.VEHICLE_TO_GRID:
             self.mode_description = "Operate on Vehicle-to-Grid"
             self.mode_extended_description = (
                 "Charge the Electric Vehicle whenever the home grid is on electricity surplus. "
                 "Discharge the Electric Vehicle whenenver the home grid is running on electricity deficit."
             )
-        elif self.mode == 4:
+        elif self.mode == EVChargerMode.STEPPED_PRIORITIZED_CHARGING:
             self.mode_description = "Stepped Prioritized Charging"
             self.mode_extended_description = (
                 "Charge only from the grid for SoC from 0% up to 60%. "
                 "Charge only from the grid only on the electricity surplus for SoC from 60% up to 80%. "
                 "Operate on Vehicle-to-Grid for SoC from 80% up to 100%"
             )
-        elif self.mode == 5:
+        elif self.mode == EVChargerMode.TIGHT_STEPPED_PRIORITIZED_CHARGING:
             self.mode_description = "Tight Stepped Prioritized Charging"
             self.mode_extended_description = (
                 "Charge only from the grid for SoC from 0% up to 40%. "
                 "Charge only from the grid only on the electricity surplus for SoC from 40% up to 70%. "
                 "Operate on Vehicle-to-Grid for SoC from 70% up to 100%"
             )
-        elif self.mode == 6:
+        elif self.mode == EVChargerMode.SUPER_TIGHT_STEPPED_PRIORITIZED_CHARGING:
             self.mode_description = "Super Tight Stepped Prioritized Charging"
             self.mode_extended_description = (
                 "Charge only from the grid for SoC from 0% up to 20%. "
@@ -951,16 +1007,16 @@ class EVChargerController(cp.Component):
         minimum_state_of_charge = 0.1
 
         # Straight Charging
-        if self.mode == 1:
+        if self.mode == EVChargerMode.STRAIGHT_CHARGING:
             state = 1
         # Charge only on Electricity Surplus
-        elif self.mode == 2:
+        elif self.mode == EVChargerMode.CHARGE_ON_ELECTRICITY_SURPLUS:
             state = 2
         # Operate on Vehicle-to-Grid
-        elif self.mode == 3:
+        elif self.mode == EVChargerMode.VEHICLE_TO_GRID:
             state = 3
         # Stepped Prioritized Charging
-        elif self.mode == 4:
+        elif self.mode == EVChargerMode.STEPPED_PRIORITIZED_CHARGING:
             # Under this condition, charge only from the grid
             if state_of_charge < 0.6:
                 state = 1
@@ -973,7 +1029,7 @@ class EVChargerController(cp.Component):
                 state = 3
 
         # Tight Stepped Prioritized Charging
-        elif self.mode == 5:
+        elif self.mode == EVChargerMode.TIGHT_STEPPED_PRIORITIZED_CHARGING:
             # Under this condition, charge only from the grid
             if state_of_charge < 0.4:
                 state = 1
@@ -986,7 +1042,7 @@ class EVChargerController(cp.Component):
                 state = 3
 
         # Super Tight Stepped Prioritized Charging
-        elif self.mode == 6:
+        elif self.mode == EVChargerMode.SUPER_TIGHT_STEPPED_PRIORITIZED_CHARGING:
             # Under this condition, charge only from the grid
             if state_of_charge < 0.2:
                 state = 1
@@ -998,18 +1054,20 @@ class EVChargerController(cp.Component):
                 minimum_state_of_charge = 0.6
                 state = 3
         else:
-            if self.mode is None:
-                raise Exception("None mode is invalid.")
-            raise Exception(f"Mode {self.mode} has not been implemented yet.")
+            # Defensive: __post_init__ already validates that mode is a valid
+            # EVChargerMode member at construction time, so this branch is
+            # unreachable for a properly constructed EVChargerControllerConfig.
+            # Kept as a safety net in case the validation contract is bypassed.
+            raise Exception(f"Mode {self.mode!r} is invalid or has not been implemented yet.")
 
         stsv.set_output_value(self.state_channel, state)
         stsv.set_output_value(self.min_soc_channel, minimum_state_of_charge)
-        stsv.set_output_value(self.mode_channel, self.mode)
+        stsv.set_output_value(self.mode_channel, int(self.mode))
 
     def write_to_report(self):
         """Write to report."""
         lines = []
-        lines.append(f"Mode Number: {self.mode}")
+        lines.append(f"Mode Number: {int(self.mode)}")
         lines.append(f"Mode: {self.mode_description}")
         try:
             lines.append(f"Extend Mode Description: {self.mode_extended_description}")

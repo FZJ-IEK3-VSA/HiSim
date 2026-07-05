@@ -693,7 +693,7 @@ class PVSystem(cp.Component):
             if timestep == 1:
                 # delete weather data for PV preprocessing from dictionary
                 # to save memory
-                if SingletonSimRepository().exist_entry(
+                if SingletonSimRepository().entry_exists(
                     key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST  # noqa: E501
                 ):
                     SingletonSimRepository().delete_entry(
@@ -748,15 +748,13 @@ class PVSystem(cp.Component):
             ].tolist()
 
             if len(self.ac_power_ratios_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:
-                raise Exception(
-                    "Reading the cached PV values seems to have failed. "
-                    + "Expected "
-                    + str(self.my_simulation_parameters.timesteps)
-                    + " values, but got "
-                    + str(len(self.ac_power_ratios_for_all_timesteps_output))
+                raise ValueError(
+                    f"Reading the cached PV values seems to have failed. "
+                    f"Expected {self.my_simulation_parameters.timesteps} values, "
+                    f"but got {len(self.ac_power_ratios_for_all_timesteps_output)}"
                 )
         else:
-            if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):
+            if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.LOCATION):
                 SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
             else:
                 raise KeyError(

@@ -2,6 +2,7 @@
 
 # clean
 
+import warnings
 from pathlib import Path
 from typing import List
 from dataclasses import dataclass
@@ -40,7 +41,7 @@ class CSVLoaderConfig(cp.ConfigBase):
 
 
 class CSVLoader(cp.Component):
-    """Csvloader class.
+    r"""Csvloader class.
 
     Class component loads CSV file containing some
     load profile relevant to the applied setup
@@ -71,6 +72,32 @@ class CSVLoader(cp.Component):
     multiplier: float
         Multiplication factor, in case an amplification of
         the data is required
+
+    Attributes
+    ----------
+    column_values: np.ndarray
+        The loaded profile values as a float array, indexed by the
+        simulation timestep. Read in :meth:`i_simulate` as
+        ``self.column_values[timestep] * self.multiplier``.
+    column_name: str
+        Name of the column the profile was read from (mirrors
+        ``CSVLoaderConfig.column_name``).
+    multiplier: float
+        Multiplication factor applied to every value in
+        :attr:`column_values` when producing the output (mirrors
+        ``CSVLoaderConfig.multiplier``).
+
+    Notes
+    -----
+    ``column_values`` was previously named ``self.column``. That bare
+    name was misleading because it collided with
+    ``self.csvconfig.column`` (an ``int`` column index) -- see issue
+    #758. A repo-wide audit (``grep -rn "\.column\b" --include="*.py"``
+    excluding ``csvconfig.column``, ``.columns``, and ``column_values``)
+    found no remaining reads of ``.column`` on :class:`CSVLoader`
+    instances, so the rename is safe in-tree. A deprecated ``column``
+    property is kept as a backward-compatible alias for any downstream
+    code that may still introspect component state.
 
     """
 
@@ -139,17 +166,49 @@ class CSVLoader(cp.Component):
         dfcolumn = loaded_dataframe.iloc[:, self.csvconfig.column]
         self.column_name: str = self.csvconfig.column_name
         if len(dfcolumn) < self.my_simulation_parameters.timesteps:
-            raise Exception(
-                "Timesteps: "
-                + str(self.my_simulation_parameters.timesteps)
-                + " vs. Lines in CSV "
-                + self.csvconfig.csv_filename
-                + ": "
-                + str(len(dfcolumn))
+            raise ValueError(
+                f"CSV \'{self.csvconfig.csv_filename}\' has {len(dfcolumn)} rows, "
+                f"which is fewer than the {self.my_simulation_parameters.timesteps} "
+                "simulation timesteps."
             )
 
-        self.column: np.ndarray = dfcolumn.to_numpy(dtype=float)
+        self.column_values: np.ndarray = dfcolumn.to_numpy(dtype=float)
         self.values: List[float] = []
+
+    @property
+    def column(self) -> np.ndarray:
+        """Deprecated alias for :attr:`column_values`.
+
+        The instance attribute previously named ``self.column`` held the
+        loaded profile values as a :class:`numpy.ndarray` (indexed by
+        timestep), which collided with ``self.csvconfig.column`` (an
+        ``int`` column index). It was renamed to :attr:`column_values`
+        for clarity (see issue #758). A repo-wide audit found no
+        remaining references to ``.column`` on :class:`CSVLoader`
+        instances, but this alias is kept as a backward-compatible shim
+        for any downstream code that may still introspect component
+        state.
+
+        Returns
+        -------
+        np.ndarray
+            The loaded profile values (same object as
+            :attr:`column_values`).
+
+        Warns
+        -----
+        DeprecationWarning
+            Always, on every access. Use :attr:`column_values` instead.
+        """
+        warnings.warn(
+            "CSVLoader.column is deprecated; use CSVLoader.column_values "
+            "instead. The attribute was renamed because the bare name "
+            "'column' was confused with the integer column index "
+            "CSVLoaderConfig.column.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.column_values
 
     @staticmethod
     def _read_csv(config: CSVLoaderConfig, inputs_dir: Path) -> pd.DataFrame:
@@ -222,7 +281,7 @@ class CSVLoader(cp.Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
-        stsv.set_output_value(self.output1_channel, float(self.column[timestep]) * self.multiplier)
+        stsv.set_output_value(self.output1_channel, float(self.column_values[timestep]) * self.multiplier)
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""

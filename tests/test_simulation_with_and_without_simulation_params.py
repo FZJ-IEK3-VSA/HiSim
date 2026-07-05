@@ -17,7 +17,12 @@ BASIC_HOUSEHOLD_PATH: str = str(Path(__file__).resolve().parent.parent / "system
 @pytest.mark.extendedbase
 @utils.measure_execution_time
 def test_basic_household_with_simu_params() -> None:
-    """Single day."""
+    """Run the basic household setup for a single day with explicit SimulationParameters.
+
+    Verifies that HiSim creates the result directory and writes the expected
+    artifacts (finished.flag, component_connections.json, hisim_simulation.log)
+    when called with a one-day SimulationParameters instance.
+    """
     simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 60)
     simulation_parameters.result_directory = TestingUtils.get_result_directory()
     shutil.rmtree(simulation_parameters.result_directory, ignore_errors=True)
@@ -40,7 +45,19 @@ def test_basic_household_with_simu_params() -> None:
 @pytest.mark.extendedbase
 @utils.measure_execution_time
 def test_basic_household_without_simu_params(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No simulation params given. HiSim is often called this way."""
+    """Run the basic household setup without explicit SimulationParameters.
+
+    Invokes HiSim with ``simulation_parameters=None`` so the default factory
+    path is exercised. ``SimulationParameters.full_year_with_only_plots`` is
+    monkeypatched to a fast one-day configuration, then the test verifies that
+    the result directory is (re)created and the expected artifacts
+    (finished.flag, component_connections.json, hisim_simulation.log) are
+    written.
+
+    Args:
+        monkeypatch: Pytest fixture used to patch the default
+            SimulationParameters factory onto a short one-day run.
+    """
 
     # Capture the result directory that the patched factory hands to HiSim so the
     # assertions below can verify the artifacts landed where the test expects.

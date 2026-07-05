@@ -95,9 +95,9 @@ class WebtoolDict(JSONWizard):
                             f"Index and value length mismatch: {len(selected_computed_values_row)} vs {len(categories)}."
                         )
                     # Get component name
-                    this_component = computed_values_row[0]
+                    this_component_name = computed_values_row[0]
                     # Skip components that should not be displayed
-                    if this_component not in self.components.keys():
+                    if this_component_name not in self.components.keys():
                         continue
                     # Get value key and reformat unit into brackets
                     computed_values_key = computed_values[0][idx_column + 1]
@@ -115,7 +115,7 @@ class WebtoolDict(JSONWizard):
                     )
 
                     # Save to dict
-                    self.components[this_component][categories[idx_column]].update({computed_values_name: result_entry})
+                    self.components[this_component_name][categories[idx_column]].update({computed_values_name: result_entry})
 
     def add_technical_results(self, post_processing_data_transfer: PostProcessingDataTransfer) -> None:
         """Add technical results from PostProcessingDataTransfer to results dataclass."""

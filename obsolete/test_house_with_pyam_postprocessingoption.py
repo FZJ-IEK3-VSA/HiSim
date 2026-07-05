@@ -1,4 +1,11 @@
-"""  Basic household system setup adapted for pyam postprocessing test. """
+"""Regression test for the pyam scenario-evaluation postprocessing option.
+
+Builds a basic household system setup and verifies that enabling the
+PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION postprocessing option produces the
+expected pyam-style CSV artifacts (hourly/daily/monthly/yearly) and the
+simulation.json / scenario.json files in the
+result_data_for_scenario_evaluation/ directory.
+"""
 
 # clean
 import shutil
@@ -34,10 +41,16 @@ PATH = "../system_setups/household_for_pyam_test.py"
 def test_house_with_pyam(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: PLR0915
-    """Basic household system setup.
+    """Run a one-day household setup and verify pyam-style scenario-evaluation output.
 
-    This setup function emulates an household including the basic components. Here the residents have their
-    electricity and heating needs covered by the photovoltaic system and the heat pump.
+    Builds a minimal household (occupancy, weather, PV, building, heat pump) with the
+    PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION postprocessing option enabled, runs the
+    simulation, and asserts that the scenario-evaluation directory and its expected
+    CSV/JSON artifacts are produced with the correct columns and metadata.
+
+    The household setup emulates an household including the basic components, where
+    the residents have their electricity and heating needs covered by the
+    photovoltaic system and the heat pump.
 
     - Simulation Parameters
     - Components
@@ -46,6 +59,13 @@ def test_house_with_pyam(
         - Photovoltaic System
         - Building
         - Heat Pump
+
+    Args:
+        my_simulation_parameters: Optional override for the simulation parameters;
+            defaults to a one-day-only run with plots enabled.
+
+    Returns:
+        None
     """
 
     # =================================================================================================================================
@@ -58,7 +78,7 @@ def test_house_with_pyam(
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 19.0
     temperature_air_cooling_in_celsius = 24.0
-    temperature_offset = 0.5
+    temperature_offset_in_celsius = 0.5
     hp_mode = 2
 
     # =================================================================================================================================
@@ -131,7 +151,7 @@ def test_house_with_pyam(
             name="GenericHeatPumpController",
             temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
             temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-            offset=temperature_offset,
+            offset=temperature_offset_in_celsius,
             mode=hp_mode,
         ),
         my_simulation_parameters=my_simulation_parameters,

@@ -157,12 +157,12 @@ class KpiGenerator(JSONWizard):
         self.get_heat_distribution_system_kpis(
             building_conditioned_floor_area_in_m2=building_conditioned_floor_area_in_m2
         )
-        # get heat pump grid consumption from energy management system kpis
-        (
-            sh_heatpump_electricity_from_grid_in_kilowatt_hour,
-            dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
-            occupancy_electricity_from_grid_in_kilowatt_hour,
-        ) = self.get_grid_consumptions_of_heat_pumps_via_energy_management_kpis()
+        # # get heat pump grid consumption from energy management system kpis
+        # (
+        #     sh_heatpump_electricity_from_grid_in_kilowatt_hour,
+        #     dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
+        #     occupancy_electricity_from_grid_in_kilowatt_hour,
+        # ) = self.get_grid_consumptions_of_heat_pumps_via_energy_management_kpis()
 
         # get space heating heat pump performance indicators
         self.get_space_heating_heat_pump_kpis(

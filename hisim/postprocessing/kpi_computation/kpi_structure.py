@@ -41,7 +41,7 @@ class KpiTagEnumClass(Enum):
     STORAGE_HOT_WATER_SPACE_HEATING = "Storage For Space Heating Hot Water"
     WINDTURBINE = "Wind Turbine"
     SMART_DEVICE = "Smart Device"
-    EMS = "Energy Management System"
+    # EMS = "Energy Management System"
     ELECTRICITY_GRID = "Electricity Grid"
     THERMAL_GRID = "Thermal Grid"
     COSTS_DISTRICT_GRID = "Costs Of District Grid"
@@ -51,6 +51,8 @@ class KpiTagEnumClass(Enum):
     GROUND_PROBE = "Ground Probe"
     ELECTRIC_HEATING = "Electric Heating"
     ENERGY_MANAGEMENT_SYSTEM = "Energy Management System"
+    DISTRICT_ENERGY_MANAGEMENT_SYSTEM = " District Energy Management System"
+
 
 
 @dataclass

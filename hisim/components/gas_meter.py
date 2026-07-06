@@ -16,7 +16,6 @@ from hisim.dynamic_component import (
     DynamicComponent,
     DynamicConnectionInput,
     DynamicConnectionOutput,
-    DynamicComponentConnection,
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
@@ -176,7 +175,6 @@ class GasMeter(DynamicComponent):
         )
 
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_gas_heater())
-        self.add_dynamic_default_connections(self.get_default_connections_from_generic_heat_source())
 
     def get_default_connections_from_generic_gas_heater(
         self,
@@ -213,29 +211,6 @@ class GasMeter(DynamicComponent):
         )
         return dynamic_connections
 
-    def get_default_connections_from_generic_heat_source(
-        self,
-    ):
-        """Get generic heat source default connections."""
-
-        from hisim.components.generic_heat_source import HeatSource  # pylint: disable=import-outside-toplevel
-
-        dynamic_connections = []
-        heat_source_class_name = HeatSource.get_classname()
-        dynamic_connections.append(
-            DynamicComponentConnection(
-                source_component_class=HeatSource,
-                source_class_name=heat_source_class_name,
-                source_component_field_name=HeatSource.FuelDelivered,
-                source_load_type=self.config.gas_loadtype,
-                source_unit=lt.Units.WATT_HOUR,
-                source_tags=[
-                    lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED,
-                ],
-                source_weight=999,
-            )
-        )
-        return dynamic_connections
 
     def write_to_report(self):
         """Writes relevant information to report."""

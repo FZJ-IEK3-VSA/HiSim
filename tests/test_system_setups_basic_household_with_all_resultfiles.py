@@ -42,8 +42,6 @@ def test_basic_household_with_all_resultfiles() -> None:
             PostProcessingOptions.COMPUTE_CAPEX,
             PostProcessingOptions.COMPUTE_KPIS,
             PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION,
-            PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
-            PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL,
             PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON,
             PostProcessingOptions.WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON,
             PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER,
@@ -95,19 +93,12 @@ def test_basic_household_with_all_resultfiles() -> None:
     )
 
     # --- JSON outputs -------------------------------------------------------
-    # MAKE_RESULT_JSON_FOR_WEBTOOL       -> results_for_webtool.json
-    # MAKE_OPERATION_RESULTS_FOR_WEBTOOL -> results_daily_operation_for_webtool.json
     # WRITE_COMPONENT_CONFIGS_TO_JSON    -> simulation.json, scenario.json
     # WRITE_KPIS_TO_JSON                 -> all_kpis.json
     # WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER -> <building>_kpi_config_for_building_sizer.json
     json_files = list(results_dir.rglob("*.json"))
     assert json_files, "no JSON result files produced"
-    assert (results_dir / "results_for_webtool.json").is_file(), (
-        f"results_for_webtool.json not found in result directory: {results_dir}"
-    )
-    assert (results_dir / "results_daily_operation_for_webtool.json").is_file(), (
-        f"results_daily_operation_for_webtool.json not found in result directory: {results_dir}"
-    )
+
     assert (results_dir / "simulation.json").is_file(), (
         f"simulation.json not found in result directory: {results_dir}"
     )

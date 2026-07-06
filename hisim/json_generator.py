@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field
 import humps
 # 1st party imports
 from hisim import log
-from hisim.components.controller_l2_district_energy_management_system import L2GenericDistrictEnergyManagementSystem
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.components.generic_car import GenericCarInformation
@@ -104,10 +103,6 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
                 # Handle special case for EMS
                 # For both cases, exactly 15 outputs are added during construction of the component
                 if isinstance(component, L2GenericEnergyManagementSystem):
-                    if number < 16:
-                        continue
-
-                if isinstance(component, L2GenericDistrictEnergyManagementSystem):
                     if number < 16:
                         continue
 

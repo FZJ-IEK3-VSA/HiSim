@@ -82,6 +82,17 @@ class EnergySystemConfig:
         return energy_system_config
 
     @classmethod
+    def get_default_config_for_energy_system_coal_heating(cls):
+        """Get default energy system config for coal heating."""
+        energy_system_config = EnergySystemConfig(
+            heating_system=HeatingSystems.COAL_HEATING,
+            heat_distribution_system=ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING,
+            share_of_maximum_pv_potential=1.0,
+            use_battery_and_ems=True,
+        )
+        return energy_system_config
+
+    @classmethod
     def get_default_config_for_energy_system_hydrogen(cls):
         """Get default energy system config."""
         energy_system_config = EnergySystemConfig(

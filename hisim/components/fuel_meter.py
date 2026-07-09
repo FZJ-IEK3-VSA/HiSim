@@ -97,10 +97,12 @@ class FuelMeter(DynamicComponent):
             lt.LoadTypes.PELLETS,
             lt.LoadTypes.WOOD_CHIPS,
             lt.LoadTypes.DISTRICTHEATING,
+            lt.LoadTypes.COAL,
         ]:
             raise ValueError(
                 f"FuelMeter {self.component_name} has invalid fuel loadtype: {self.config.fuel_loadtype}. "
-                f"Either use {lt.LoadTypes.OIL}, {lt.LoadTypes.PELLETS}, {lt.LoadTypes.WOOD_CHIPS} or {lt.LoadTypes.DISTRICTHEATING} "
+                f"Either use {lt.LoadTypes.OIL}, {lt.LoadTypes.PELLETS}, {lt.LoadTypes.WOOD_CHIPS}, "
+                f"{lt.LoadTypes.COAL} or {lt.LoadTypes.DISTRICTHEATING} "
                 "or add new fuel_type (except gas or electricity, for those there are already meters available)"
             )
 
@@ -297,6 +299,13 @@ class FuelMeter(DynamicComponent):
 
             co2_per_unit = emissions_and_cost_factors.wood_chip_footprint_in_kg_per_kwh
             euro_per_unit = emissions_and_cost_factors.wood_chip_costs_in_euro_per_t
+            co2_per_simulated_period_in_kg = total_heat_consumed_in_kwh * co2_per_unit
+            opex_cost_per_simulated_period_in_euro = fuel_consumption_in_kg / 1000 * euro_per_unit
+
+        elif self.config.fuel_loadtype == lt.LoadTypes.COAL:
+
+            co2_per_unit = emissions_and_cost_factors.coal_footprint_in_kg_per_kwh
+            euro_per_unit = emissions_and_cost_factors.coal_costs_in_euro_per_t
             co2_per_simulated_period_in_kg = total_heat_consumed_in_kwh * co2_per_unit
             opex_cost_per_simulated_period_in_euro = fuel_consumption_in_kg / 1000 * euro_per_unit
 

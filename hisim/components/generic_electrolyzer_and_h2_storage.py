@@ -411,7 +411,7 @@ class AdvancedElectrolyzer(Component):
         # maybe advance this to electricity_input >= ElectrolyzerConfig.min_power
         hydrogen_output = 0
         oxygen_output = 0
-        losses_this_timestep: float = 0
+        waste_energy_output: float = 0
         unused_power: float = 0
         power_level = 0
         # the following is already regulated in the electricity distributor
@@ -430,7 +430,7 @@ class AdvancedElectrolyzer(Component):
                 electricity_needed,
             ) = self.electrolyzer.convert_electricity(electricity_input, hydrogen_input / self.seconds_per_timestep)
             # the losses ae included in the efficiency providedd by supplyer and are not calculated separately
-            losses_this_timestep = self.waste_energy
+            waste_energy_output = self.waste_energy
             # unused_hydrogen = charging_amount - hydrogen_input  # add if needed?
             unused_power = unused_power + (electricity_input - electricity_needed)
         electricity_real_needed = stsv.get_input_value(self.electricity_input_channel) - unused_power
@@ -455,7 +455,7 @@ class AdvancedElectrolyzer(Component):
         stsv.set_output_value(self.water_demand_channel, water_consumption)
         stsv.set_output_value(self.hydrogen_output_channel, hydrogen_output)
         stsv.set_output_value(self.oxygen_output_channel, oxygen_output)
-        stsv.set_output_value(self.energy_losses_channel, losses_this_timestep)
+        stsv.set_output_value(self.energy_losses_channel, waste_energy_output)
 
         stsv.set_output_value(self.electricity_real_needed_channel, electricity_real_needed)
         stsv.set_output_value(self.unused_power_channel, unused_power)

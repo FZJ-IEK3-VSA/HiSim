@@ -1,6 +1,6 @@
 """Test for running multiple requests with lpg utsp connector and scaling up the results."""
 
-from typing import Union, List, Tuple, Any
+from typing import List, Tuple, Any
 import pytest
 import numpy as np
 from utspclient.helpers.lpgdata import (
@@ -41,8 +41,8 @@ def test_occupancy_scaling_with_utsp():
         data_acquisition_mode_after_initialization
         == loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
     ):
-        log.warning(
-            "This test makes only sense if the UTSP can be used for data acquisition. Here the use of the UTSP was not possible. Therefore this test will be ignored."
+        pytest.skip(
+            "UTSP not available for data acquisition; scaling test requires UTSP"
         )
 
     else:
@@ -78,16 +78,35 @@ def test_occupancy_scaling_with_utsp():
 
 
 def initialize_lpg_utsp_connector_and_return_results(
-    households: Union[JsonReference, List[JsonReference]]
+    households: JsonReference | List[JsonReference]
 ) -> Tuple[
-    Union[float, Any],
-    Union[float, Any],
-    Union[float, Any],
-    Union[float, Any],
-    Union[float, Any],
+    float | Any,
+    float | Any,
+    float | Any,
+    float | Any,
+    float | Any,
     loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode,
 ]:
-    """Initialize the lpg utsp connector and simulate for one timestep."""
+    """Initialize the LPG UTSP connector and simulate a single timestep.
+
+    Builds an `UtspLpgConnector` with the given household reference(s), runs one
+    simulation step, and reads back the occupancy-related output channels.
+
+    Args:
+        households: A single household reference or a list of household
+            references to simulate with the LPG UTSP connector.
+
+    Returns:
+        A tuple of:
+        - number_of_residents: Total number of residents across the household(s).
+        - heating_by_residents: Heating energy attributable to residents.
+        - heating_by_devices: Heating energy attributable to devices.
+        - electricity_consumption: Electricity consumption from the connector.
+        - water_consumption: Water consumption from the connector.
+        - data_acquisition_mode_after_initialization: The `LpgDataAcquisitionMode`
+          resolved after initialization (may differ from the requested mode when
+          UTSP is unavailable, e.g. falling back to `USE_PREDEFINED_PROFILE`).
+    """
     # Set Simu Params
     year = 2021
     seconds_per_timestep = 60
@@ -126,13 +145,10 @@ def initialize_lpg_utsp_connector_and_return_results(
     )
     my_occupancy_data_acquisition_mode_after_initialization = my_occupancy.utsp_config.data_acquisition_mode
 
-    number_of_outputs = fft.get_number_of_outputs([my_occupancy])
-    stsv = component.SingleTimeStepValues(number_of_outputs)
+    stsv = component.SingleTimeStepValues(fft.get_number_of_outputs([my_occupancy]))
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([my_occupancy])
-
-    my_occupancy.i_simulate(0, stsv, False)
 
     timestep = 0
     my_occupancy.i_simulate(timestep, stsv, False)
@@ -143,7 +159,6 @@ def initialize_lpg_utsp_connector_and_return_results(
 
     water_consumption = stsv.values[my_occupancy.water_consumption_channel.global_index]
 
-    print(number_of_residents, heating_by_residents, heating_by_devices, electricity_consumption)
     return (
         number_of_residents,
         heating_by_residents,

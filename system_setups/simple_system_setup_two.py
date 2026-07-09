@@ -64,7 +64,6 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_sim.add_component(my_rn2)
 
     # Create new Transformer object
-    # my_transformer = Transformer(name="MyTransformer", my_simulation_parameters=my_simulation_parameters)
     my_transformer = ExampleTransformer(
         config=ExampleTransformerConfig.get_default_transformer(),
         my_simulation_parameters=my_simulation_parameters,

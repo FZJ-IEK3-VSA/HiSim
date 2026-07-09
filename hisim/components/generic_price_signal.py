@@ -1,9 +1,11 @@
 """Dummy class and configuration returning electricity prices (from grid) and returns (injection) in each time step. """
 
+from __future__ import annotations
+
 # clean
 
 import os
-from typing import List, Any, Optional
+from typing import List, Optional, cast
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -29,12 +31,25 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class PriceSignalConfig(cp.ConfigBase):
-    """Price Signal config class."""
+    """Configuration for the PriceSignal component.
+
+    Holds all parameters required to configure the price signal component:
+    the building name it applies to, the country (used to select the
+    electricity-price data set), the pricing scheme (e.g. "fixed"), the
+    installed capacity used for feed-in tariff selection, the price-signal
+    type, the fixed and static time-of-use (TOU) price arrays, the price paid
+    for grid injection, and the flags/horizon for predictive control.
+    """
 
     @classmethod
-    def get_main_classname(cls):
-        """Return the full class name of the base class."""
-        return PriceSignal.get_full_classname()
+    def get_main_classname(cls) -> str:
+        """Return the fully-qualified class name of the PriceSignal component.
+
+        Returns:
+            The full class name string used by the framework to identify the
+            component type associated with this configuration.
+        """
+        return cast(str, PriceSignal.get_full_classname())
 
     building_name: str
     #: name of the price signal
@@ -43,8 +58,8 @@ class PriceSignalConfig(cp.ConfigBase):
     pricing_scheme: str
     installed_capacity: float
     price_signal_type: str
-    fixed_price: list
-    static_tou_price: list
+    fixed_price: List[float]
+    static_tou_price: List[float]
     price_injection: float
     predictive_control: bool
     prediction_horizon: Optional[int]
@@ -53,8 +68,16 @@ class PriceSignalConfig(cp.ConfigBase):
     def get_default_price_signal_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
-        """Default configuration for price signal."""
+    ) -> PriceSignalConfig:
+        """Return a default PriceSignalConfig for the given building.
+
+        Args:
+            building_name: Identifier of the building the price signal applies to.
+
+        Returns:
+            A PriceSignalConfig with German fixed pricing defaults, 10 kW installed
+            capacity, dummy price-signal type, and predictive control disabled.
+        """
         config = PriceSignalConfig(
             building_name=building_name,
             name="PriceSignal",
@@ -92,12 +115,12 @@ class PriceSignal(cp.Component):
         config: PriceSignalConfig,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
-        """Initialization of Price Signal class.
+        """Initialize the PriceSignal component.
 
-        :param my_simulation_parameters: _description_
-        :type my_simulation_parameters: SimulationParameters
-        :param config: _description_
-        :type config: PriceSignalConfig
+        Args:
+            my_simulation_parameters: Simulation parameters providing timestep info.
+            config: PriceSignalConfig with pricing scheme and price data.
+            my_display_config: Display configuration for the component.
         """
         self.price_signal_config = config
         self.my_simulation_parameters = my_simulation_parameters
@@ -140,19 +163,35 @@ class PriceSignal(cp.Component):
         )
 
     def i_save_state(self) -> None:
-        """Saves the state."""
+        """No-op; PriceSignal holds no mutable state across timesteps."""
         pass
 
     def i_restore_state(self) -> None:
-        """Restores the state."""
+        """No-op; PriceSignal holds no mutable state across timesteps."""
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
-        """Doublechecks."""
+        """No-op; no consistency checks are needed for this component.
+
+        Args:
+            timestep: Index of the current simulation time step (unused).
+            stsv: Single-time-step value container (unused).
+        """
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Outputs price signal of time step."""
+        """Provide the electricity purchase and injection prices for the timestep.
+
+        Depending on the configured pricing scheme, price-signal type, and
+        predictive-control settings, sets the purchase and injection price
+        outputs for the current step and, when predictive control is enabled,
+        stores the 24 h price forecasts in the shared simulation repository.
+
+        Args:
+            timestep: Index of the current simulation time step.
+            stsv: Single-time-step value container used to set the outputs.
+            force_convergence: Unused; kept for the component interface.
+        """
         priceinjectionforecast = [0.1]
         pricepurchaseforecast = [0.5]
         if self.config.predictive_control and self.config.prediction_horizon:
@@ -200,12 +239,35 @@ class PriceSignal(cp.Component):
         stsv.set_output_value(self.price_injection_channel, priceinjectionforecast[0])
 
     def build_dummy(self, start: int, end: int) -> None:
-        """Initialization of information if step function is used for prices."""
+        """Store the start and end timestep indices of a step-function price window.
+
+        Used when a dummy step-function price signal is enabled; the stored
+        `start` and `end` attributes delimit the high-price window within a day.
+
+        Args:
+            start: Timestep index marking the beginning of the high-price window.
+            end: Timestep index marking the end of the high-price window.
+        """
         self.start = start
         self.end = end
 
     def i_prepare_simulation(self) -> None:
-        """Prepares the simulation."""
+        """Load price data from CSV files and populate the config with per-timestep prices.
+
+        Reads the purchase-price and feed-in-tariff CSV tables for the configured
+        country, converts EUR/kWh values to cent per kW-timestep, expands hourly
+        prices to the simulation timestep resolution, and selects the feed-in
+        tariff band matching `installed_capacity`. Results are stored back on
+        `self.price_signal_config` (fixed_price, static_tou_price, price_injection,
+        and price_signal_type).
+
+        Raises:
+            KeyError: If the feed-in-tariff table has no entry for the configured
+                country (via the ``.loc`` lookup), or if the
+                "Static_TOU_Price_<country>" column is missing from the
+                price-signal data. Note: if "Fixed_Price_<country>" is absent,
+                the method silently returns without populating any prices.
+        """
         price_purchase = pd.read_csv(
             os.path.join(utils.HISIMPATH["price_signal"]["PricePurchase"]),
             index_col=0,
@@ -234,6 +296,7 @@ class PriceSignal(cp.Component):
             ).tolist()
 
             fit_data = feed_in_tarrif.loc[self.price_signal_config.country]
+            price_injection = 0.0
             for i in range(len(fit_data)):
                 if (
                     fit_data["min_capacity (kW)"].values[i] < self.price_signal_config.installed_capacity
@@ -244,5 +307,10 @@ class PriceSignal(cp.Component):
         pass
 
     def write_to_report(self) -> List[str]:
-        """Writes relevant information to report."""
+        """Return the price-signal configuration as a list of report strings.
+
+        Returns:
+            A list of human-readable strings describing the current
+            `PriceSignalConfig`, obtained from `self.price_signal_config.get_string_dict()`.
+        """
         return self.price_signal_config.get_string_dict()

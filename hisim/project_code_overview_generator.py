@@ -7,6 +7,7 @@ import importlib
 import importlib.util
 from dataclasses import dataclass, field
 import inspect
+import logging
 import os
 import sys
 from openpyxl import Workbook  # type: ignore
@@ -22,7 +23,7 @@ __maintainer__ = "Noah Pflugradt"
 __email__ = "n.pflugradt@fz-juelich.de"
 __status__ = "development"
 
-BuiltInAttributes = [
+BUILT_IN_ATTRIBUTES = [
     "__builtins__",
     "__cached__",
     "__doc__",
@@ -116,7 +117,12 @@ class OverviewGenerator:
     """Generates an overview of all modules."""
 
     def __init__(self):
-        """Initializes the class."""
+        """Initialize the OverviewGenerator.
+
+        Sets up an empty list to track class names encountered during
+        file processing, used to detect and raise an error for duplicate
+        class definitions across modules.
+        """
         self.existing_classes: List[str] = []
 
     def add_to_cell(self, column: int, row: int, value: Any, worksheet: Workbook) -> int:
@@ -274,7 +280,7 @@ class OverviewGenerator:
                 # this is an import from another module, therefore skip
                 if str(python_module_name) != str(module_member[1].__module__):
                     continue
-            if str(module_member[0]) in BuiltInAttributes:
+            if str(module_member[0]) in BUILT_IN_ATTRIBUTES:
                 continue
             mytype = type(module_member[1])
             strname = str(module_member[0])
@@ -316,7 +322,17 @@ class OverviewGenerator:
             module: Optional[ModuleType] = importlib.util.module_from_spec(spec)  # type: ignore
             spec.loader.exec_module(module)  # type: ignore
             sys.modules[myfi.module_name] = module  # type: ignore
-        except Exception:  # noqa: broad-except # pylint: disable=broad-except
+        except (Exception, SystemExit) as e:  # noqa: broad-except # pylint: disable=broad-except
+            # SystemExit is raised by files like setup.py that call setup() at
+            # import time; treat them as "could not be loaded as a module".
+            # Surface the failure so a real bug (SyntaxError, ImportError, ...)
+            # is diagnosable instead of silently dropping the module.
+            logging.getLogger(__name__).warning(
+                "Could not load %s as a module: %s: %s",
+                myfi.file_name,
+                type(e).__name__,
+                e,
+            )
             module = None
         return module
 

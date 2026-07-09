@@ -10,11 +10,16 @@ from hisim import simulator as sim
 from hisim import log
 
 
-@pytest.mark.base
-def test_photovoltaic_sandia():
-    """Test generic pv system."""
+@pytest.mark.extendedbase
+def test_photovoltaic_sandia() -> None:
+    """Test the generic PV system with the SANDIA module/inverter databases.
+
+    Configures a PVSystem using a Hanwha HSL60P6-PA-4-250T module and an ABB
+    MICRO-0.25 inverter from the SANDIA databases, wires it to an Aachen weather
+    component, and asserts the electricity output (~334.88 W) and energy output
+    at timestep 655.
+    """
     # Sets inputs
-    # weather_location = "Aachen"
     seconds_per_timestep = 60
     power_in_watt = 10 * 1e3
 
@@ -95,11 +100,15 @@ def test_photovoltaic_sandia():
     ) == 334.880014 * (seconds_per_timestep / 3600)
 
 
-@pytest.mark.base
-def test_photovoltaic_cec():
-    """Test generic pv system."""
+@pytest.mark.extendedbase
+def test_photovoltaic_cec() -> None:
+    """Test the generic PV system with the default CEC module/inverter databases.
+
+    Configures a PVSystem using the default PVLib module and inverter parameters,
+    wires it to an Aachen weather component, and asserts the electricity output
+    (~340.55 W) and energy output at timestep 655.
+    """
     # Sets inputs
-    # weather_location = "Aachen"
     seconds_per_timestep = 60
     power_in_watt = 10 * 1e3
 

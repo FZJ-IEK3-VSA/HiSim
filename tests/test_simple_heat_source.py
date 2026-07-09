@@ -1,4 +1,4 @@
-"""Test for generic heat source."""
+"""Tests for the SimpleHeatSource component with constant-power configuration."""
 import pytest
 from hisim import component as cp
 from hisim.components import simple_heat_source
@@ -8,8 +8,20 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_heat_source():
-    """Test heat source."""
+def test_heat_source() -> None:
+    """Test SimpleHeatSource with constant power configuration.
+
+    Verifies that the component correctly calculates thermal power delivered
+    when given mass flow and temperature inputs. Uses fake ComponentOutput
+    objects for mass flow (0.3 kg/s) and temperature (5°C) inputs, and
+    asserts that the thermal power delivered equals 5000.0 W.
+
+    Args:
+        None (uses default configuration and fake inputs).
+
+    Returns:
+        None (raises AssertionError if assertions fail).
+    """
 
     # simulation parameters
     seconds_per_timestep = 60
@@ -32,7 +44,7 @@ def test_heat_source():
             temperature_input,
         ]
     )
-    stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
+    time_step_values: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     my_heat_source.massflow_input_channel.source_output = massflow
     my_heat_source.temperature_input_channel.source_output = temperature_input
@@ -45,12 +57,12 @@ def test_heat_source():
         ]
     )
 
-    stsv.values[massflow.global_index] = 0.3
-    stsv.values[temperature_input.global_index] = 5
+    time_step_values.values[massflow.global_index] = 0.3
+    time_step_values.values[temperature_input.global_index] = 5
 
     timestep = 1
 
     # Simulate
-    my_heat_source.i_simulate(timestep, stsv, False)
+    my_heat_source.i_simulate(timestep, time_step_values, False)
 
-    assert 5000.0 == stsv.values[my_heat_source.thermal_power_delivered_channel.global_index]
+    assert time_step_values.values[my_heat_source.thermal_power_delivered_channel.global_index] == pytest.approx(5000.0, rel=1e-6)

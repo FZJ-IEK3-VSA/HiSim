@@ -135,6 +135,12 @@ def setup_function(
         raise ValueError(f"Heat distrbution system not recognized: {energy_system_config_.heat_distribution_system}")
     # Set Weather
     weather_location = arche_type_config_.weather_location
+    # testing AU weather data
+    weather_filepath = arche_type_config_.weather_filepath
+    weather_datasource_raw = arche_type_config_.weather_datasource
+    weather_datasource: Optional[weather.WeatherDataSourceEnum] = None
+    if isinstance(weather_datasource_raw, str):
+        weather_datasource = weather.WeatherDataSourceEnum[weather_datasource_raw]
 
     # Set Photovoltaic System
     azimuth = arche_type_config_.pv_azimuth
@@ -226,8 +232,14 @@ def setup_function(
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
+    # my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
+    my_weather_config = weather.WeatherConfig.get_default(
+        location_entry=weather_location,
+        weather_direct_filepath=weather_filepath,
+        weather_direct_data_source=weather_datasource,
+    )
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
+
     # Add to simulator
     my_sim.add_component(my_weather)
 
@@ -256,6 +268,16 @@ def setup_function(
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
     # Build Heat Distribution Controller
+    # Guard against a zero/negative/None scaled conditioned floor area which would
+    # otherwise produce a ZeroDivisionError or a silent inf that propagates into the
+    # heat distribution controller sizing. scaled_conditioned_floor_area_in_m2 is
+    # derived from the archetype/building config (absolute_conditioned_floor_area_in_m2,
+    # number_of_dwellings_per_building) and can collapse to zero for misconfigured or
+    # edge-case archetypes.
+    scaled_area = my_building_information.scaled_conditioned_floor_area_in_m2
+    assert scaled_area is not None and scaled_area > 0, (
+        f"scaled_conditioned_floor_area_in_m2 must be positive, got {scaled_area!r}"
+    )
     my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_config_based_on_building_efficiency(
         set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
@@ -263,7 +285,7 @@ def setup_function(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         heating_system=my_hds_system,
         specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt
-        / my_building_information.scaled_conditioned_floor_area_in_m2,
+        / scaled_area,
     )
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
@@ -329,7 +351,7 @@ def setup_function(
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
@@ -385,7 +407,7 @@ def setup_function(
         loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
             source_output_name="LoadingPowerInputForBattery_",
             source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-            source_weight=5,
+            source_weight=6,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Battery Control. ",

@@ -1,5 +1,7 @@
 """Generic heat water storage module."""
 
+from __future__ import annotations
+
 # clean
 
 # Generic/Built-in
@@ -47,7 +49,7 @@ class HeatStorageConfig(ConfigBase):
     def get_default_heat_storage_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> HeatStorageConfig:
         """Get default config."""
         config = HeatStorageConfig(
             building_name=building_name,
@@ -83,7 +85,7 @@ class HeatStorageControllerConfig(ConfigBase):
         cls,
         heating_load_of_building_in_watt: float,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> HeatStorageControllerConfig:
         """Get default config."""
         config = HeatStorageControllerConfig(
             building_name=building_name,
@@ -466,17 +468,17 @@ class HeatStorageController(cp.Component):
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
-        self.heatstoragecontroller_config = config
+        self.heat_storage_controller_config = config
         super().__init__(
-            name=self.heatstoragecontroller_config.name,
+            name=self.heat_storage_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.initial_temperature_heating_storage = self.heatstoragecontroller_config.initial_temperature_heating_storage
-        self.initial_temperature_building = self.heatstoragecontroller_config.initial_temperature_building
+        self.initial_temperature_heating_storage = self.heat_storage_controller_config.initial_temperature_heating_storage
+        self.initial_temperature_building = self.heat_storage_controller_config.initial_temperature_building
 
-        self.ref_max_thermal_build_demand_in_watt = self.heatstoragecontroller_config.heating_load_of_building_in_watt
+        self.ref_max_thermal_build_demand_in_watt = self.heat_storage_controller_config.heating_load_of_building_in_watt
         # ===================================================================================================================
         # Inputs
         # self.ref_max_thermal_build_demand: ComponentInput = self.add_input(
@@ -530,7 +532,7 @@ class HeatStorageController(cp.Component):
         lines.append("Name: HeatWaterStorage Controller")
         lines.append(f"Initial Temperature Building [°C]: {self.initial_temperature_building}")
         lines.append(f"Initial Temperature Heat Water Storage [°C]: {self.initial_temperature_heating_storage}")
-        return self.heatstoragecontroller_config.get_string_dict() + lines
+        return self.heat_storage_controller_config.get_string_dict() + lines
 
     def i_save_state(self) -> None:
         """Saves the state."""

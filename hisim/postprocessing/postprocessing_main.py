@@ -1,5 +1,6 @@
 """Main postprocessing module that starts all other modules."""
-
+from __future__ import annotations
+import importlib
 import json
 
 # clean
@@ -8,32 +9,26 @@ import pickle
 import string
 import sys
 from timeit import default_timer as timer
-from typing import Any, Optional, List, Dict, Tuple
+from typing import Any, Optional, List, Dict, Tuple, TYPE_CHECKING, cast
 
 import pandas as pd
 
 from hisim import log
 from hisim import utils
 from hisim.component import ComponentOutput
-from hisim.components import building, loadprofilegenerator_utsp_connector
-from hisim.json_generator import JsonConfigurationGenerator
-from hisim.building_sizer_utils.interface_configs.kpi_config import KPIConfig
-from hisim.postprocessing import charts
-from hisim.postprocessing import reportgenerator
-from hisim.postprocessing.chart_singleday import ChartSingleDay
-from hisim.postprocessing.kpi_computation.compute_kpis import KpiGenerator
-from hisim.postprocessing.generate_csv_for_housing_database import generate_csv_for_database
-from hisim.postprocessing.cost_and_emission_computation.opex_and_capex_cost_calculation import (
-    opex_calculation,
-    capex_calculation,
-)
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
-from hisim.postprocessing.system_chart import SystemChart
-from hisim.postprocessing.webtool_entries import WebtoolDict
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
-from hisim.loadtypes import OutputPostprocessingRules
+
+if TYPE_CHECKING:
+    from hisim.postprocessing import reportgenerator
+    from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
+    from hisim.simulator import Simulator
+
+
+def _load_attribute(module_name: str, attribute_name: str) -> Any:
+    """Import an optional postprocessing helper only when its feature is used."""
+    return getattr(importlib.import_module(module_name), attribute_name)
 
 
 class PostProcessor:
@@ -50,6 +45,7 @@ class PostProcessor:
         self.scenario: str = ""
         self.region: str = ""
         self.year: int = 2021
+        self.description: str = ""
 
     def set_dir_results(self, dirname: Optional[str] = None) -> None:
         """Sets the results directory."""
@@ -59,7 +55,7 @@ class PostProcessor:
 
     @utils.measure_execution_time
     @utils.measure_memory_leak
-    def run(self, ppdt: PostProcessingDataTransfer) -> None:  # noqa: MC0001
+    def run(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:  # noqa: MC0001
         """Runs the main post processing."""
         # Define the directory name
         log.information("Main post processing function")
@@ -74,8 +70,6 @@ class PostProcessor:
                 PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE,
                 PostProcessingOptions.COMPUTE_OPEX,
                 PostProcessingOptions.COMPUTE_CAPEX,
-                PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
-                PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL,
                 PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON,
                 PostProcessingOptions.WRITE_KPIS_TO_JSON,
                 PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER,
@@ -152,7 +146,11 @@ class PostProcessor:
         if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
             log.information("Making PDF report and writing simulation parameters to report.")
             start = timer()
-            report = reportgenerator.ReportGenerator(dirpath=ppdt.simulation_parameters.result_directory)
+            report_generator_class = _load_attribute(
+                "hisim.postprocessing.reportgenerator",
+                "ReportGenerator",
+            )
+            report = report_generator_class(dirpath=ppdt.simulation_parameters.result_directory)
             self.write_simulation_parameters_to_report(ppdt, report)
             end = timer()
             duration = end - start
@@ -233,10 +231,16 @@ class PostProcessor:
             log.information("Computing and writing KPIs to report took " + f"{duration:1.2f}s.")
 
         if PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE in ppdt.post_processing_options:
+            building_module = importlib.import_module("hisim.components.building")
+            lpg_connector_module = importlib.import_module("hisim.components.loadprofilegenerator_utsp_connector")
+            generate_csv_for_database = _load_attribute(
+                "hisim.postprocessing.generate_csv_for_housing_database",
+                "generate_csv_for_database",
+            )
             all_building_data = pd.DataFrame()
             occupancy_config = None
             for elem in ppdt.wrapped_components:
-                if isinstance(elem.my_component, building.Building):
+                if isinstance(elem.my_component, building_module.Building):
                     building_data = elem.my_component.my_building_information.buildingdata_ref
                     for building_object in building_objects_in_district_list:
                         if (
@@ -246,7 +250,7 @@ class PostProcessor:
                             building_data["Object_Name"] = building_object
                     all_building_data = pd.concat([all_building_data, building_data], ignore_index=True)
 
-                elif isinstance(elem.my_component, loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig):
+                elif isinstance(elem.my_component, lpg_connector_module.UtspLpgConnectorConfig):
                     occupancy_config = elem.my_component.occupancy_config
             if len(all_building_data) == 0:
                 log.warning("Building needs to be defined to generate csv for housing data base.")
@@ -284,7 +288,7 @@ class PostProcessor:
         if PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in ppdt.post_processing_options:
             log.information("Prepare results for scenario evaluation.")
             start = timer()
-            self.prepare_results_for_scenario_evaluation(ppdt)
+            self.prepare_results_for_scenario_evaluation(ppdt, my_sim=my_sim)
             end = timer()
             duration = end - start
             log.information("Preparing results for scenario evaluation took " + f"{duration:1.2f}s.")
@@ -294,23 +298,15 @@ class PostProcessor:
             log.information("Opening the explorer.")
             self.open_dir_in_file_explorer(ppdt)
 
-        # Prepare webtool results
-        if PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL in ppdt.post_processing_options:
-            log.information("Make JSON file for webtool.")
-            self.write_results_for_webtool_to_json_file(ppdt, building_objects_in_district_list)
-
-        # Prepare webtool operation results
-        if PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL in ppdt.post_processing_options:
-            log.information("Make JSON file for webtool (operation).")
-            self.write_operation_data_for_webtool(ppdt)
+        
 
         if PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON in ppdt.post_processing_options:
             log.information("Writing component configurations to JSON file.")
-            self.write_component_configurations_to_json(ppdt)
+            self.write_component_configurations_to_json(ppdt, my_sim=my_sim)
 
         if PostProcessingOptions.WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON in ppdt.post_processing_options:
             log.information("Writing component configurations for scenario evaluation to JSON file.")
-            self.write_config_data_for_scenario_evaluation(ppdt)
+            self.write_config_data_for_scenario_evaluation(ppdt, my_sim=my_sim)
 
         if PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER in ppdt.post_processing_options:
             log.information("Writing KPIs to JSON file for building sizer.")
@@ -324,8 +320,9 @@ class PostProcessor:
 
     def make_network_charts(self, ppdt: PostProcessingDataTransfer) -> List[SystemChartEntry]:
         """Generates the network charts that show the connection of the elements."""
-        systemchart = SystemChart(ppdt)
-        return systemchart.make_chart()
+        system_chart_class = _load_attribute("hisim.postprocessing.system_chart", "SystemChart")
+        systemchart = system_chart_class(ppdt)
+        return cast(List["SystemChartEntry"], systemchart.make_chart())
 
     def make_special_one_day_debugging_plots(
         self,
@@ -333,14 +330,15 @@ class PostProcessor:
         report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Makes special plots for debugging if only a single day was calculated."""
+        chart_single_day_class = _load_attribute("hisim.postprocessing.chart_singleday", "ChartSingleDay")
         for index, output in enumerate(ppdt.all_outputs):
             if output.full_name == "Dummy # Residence Temperature":
-                my_days = ChartSingleDay(
+                my_days = chart_single_day_class(
                     output=output.full_name,
                     component_name=output.component_name,
                     units=output.unit,
                     directory_path=ppdt.simulation_parameters.result_directory,
-                    time_correction_factor=ppdt.time_correction_factor,
+                    time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
                     data=ppdt.results.iloc[:, index],
                     day=0,
                     month=0,
@@ -349,12 +347,12 @@ class PostProcessor:
                     figure_format=ppdt.simulation_parameters.figure_format,
                 )
             else:
-                my_days = ChartSingleDay(
+                my_days = chart_single_day_class(
                     output=output.full_name,
                     component_name=output.component_name,
                     units=output.unit,
                     directory_path=ppdt.simulation_parameters.result_directory,
-                    time_correction_factor=ppdt.time_correction_factor,
+                    time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
                     data=ppdt.results.iloc[:, index],
                     day=0,
                     month=0,
@@ -380,13 +378,15 @@ class PostProcessor:
         report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Make bar charts."""
+        assert ppdt.results_monthly is not None
+        charts_module = importlib.import_module("hisim.postprocessing.charts")
         for index, output in enumerate(ppdt.all_outputs):
-            my_bar = charts.BarChart(
+            my_bar = charts_module.BarChart(
                 output=output.full_name,
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=os.path.join(ppdt.simulation_parameters.result_directory),
-                time_correction_factor=ppdt.time_correction_factor,
+                time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
@@ -400,13 +400,14 @@ class PostProcessor:
         report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Makes plots for selected days."""
+        chart_single_day_class = _load_attribute("hisim.postprocessing.chart_singleday", "ChartSingleDay")
         for index, output in enumerate(ppdt.all_outputs):
-            my_days = ChartSingleDay(
+            my_days = chart_single_day_class(
                 output=output.full_name,
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
-                time_correction_factor=ppdt.time_correction_factor,
+                time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
                 day=days["day"],
                 month=days["month"],
                 data=ppdt.results.iloc[:, index],
@@ -422,14 +423,15 @@ class PostProcessor:
         report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Make carpet plots."""
+        charts_module = importlib.import_module("hisim.postprocessing.charts")
         for index, output in enumerate(ppdt.all_outputs):
             log.trace("Making carpet plots")
-            my_carpet = charts.Carpet(
+            my_carpet = charts_module.Carpet(
                 output=output.full_name,
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
-                time_correction_factor=ppdt.time_correction_factor,
+                time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
@@ -447,15 +449,16 @@ class PostProcessor:
         report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Makes the line plots."""
+        charts_module = importlib.import_module("hisim.postprocessing.charts")
         for index, output in enumerate(ppdt.all_outputs):
             if output.output_description is None:
                 raise ValueError("Output description was missing for " + output.full_name)
-            my_line = charts.Line(
+            my_line = charts_module.Line(
                 output=output.full_name,
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
-                time_correction_factor=ppdt.time_correction_factor,
+                time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
@@ -484,6 +487,7 @@ class PostProcessor:
                 ppdt.results[column].to_csv(csvfilename, sep=",", decimal=".")
 
             if PostProcessingOptions.EXPORT_MONTHLY_RESULTS in ppdt.post_processing_options:
+                assert ppdt.results_monthly is not None
                 for column in ppdt.results_monthly:
                     csvfilename = os.path.join(
                         ppdt.simulation_parameters.result_directory,
@@ -517,6 +521,7 @@ class PostProcessor:
                 with open(pickle_filename, "wb") as f:
                     pickle.dump(ppdt.results[column], f)
             if PostProcessingOptions.EXPORT_MONTHLY_RESULTS in ppdt.post_processing_options:
+                assert ppdt.results_monthly is not None
                 for column in ppdt.results_monthly:
                     pickle_filename_monthly = os.path.join(
                         ppdt.simulation_parameters.result_directory,
@@ -573,7 +578,15 @@ class PostProcessor:
         def write_image_entry_to_report_for_one_component(
             component: Any, report_image_entries_for_component: List[ReportImageEntry]
         ) -> None:
-            """Write image entry to report for one component."""
+            """Write image entries for a single component to the report.
+
+            Sorts entries by output type, optionally writes component configuration,
+            then iterates over sorted entries writing output descriptions and figures.
+
+            Args:
+                component: Component name to process.
+                report_image_entries_for_component: List of image entries for this component.
+            """
 
             sorted_entries: List[ReportImageEntry] = sorted(
                 report_image_entries_for_component, key=lambda x: x.output_type
@@ -684,7 +697,11 @@ class PostProcessor:
     ) -> PostProcessingDataTransfer:
         """Computes KPI's and writes them to report and to ppdt kpi collection."""
         # initialize kpi data class and compute all kpi values
-        kpi_data_class = KpiGenerator(
+        kpi_generator_class = _load_attribute(
+            "hisim.postprocessing.kpi_computation.compute_kpis",
+            "KpiGenerator",
+        )
+        kpi_data_class = kpi_generator_class(
             post_processing_data_transfer=ppdt, building_objects_in_district_list=building_objects_in_district_list
         )
         # write kpi table to report if option is chosen
@@ -711,6 +728,10 @@ class PostProcessor:
         building_objects_in_district_list: list,
     ) -> None:
         """Computes OPEX costs and operational CO2-emissions and writes them to report and csv."""
+        opex_calculation = _load_attribute(
+            "hisim.postprocessing.cost_and_emission_computation.opex_and_capex_cost_calculation",
+            "opex_calculation",
+        )
         opex_compute_return = opex_calculation(
             components=ppdt.wrapped_components,
             all_outputs=ppdt.all_outputs,
@@ -744,6 +765,10 @@ class PostProcessor:
         building_objects_in_district_list: list,
     ) -> None:
         """Computes CAPEX costs and CO2-emissions for production of devices and writes them to report and csv."""
+        capex_calculation = _load_attribute(
+            "hisim.postprocessing.cost_and_emission_computation.opex_and_capex_cost_calculation",
+            "capex_calculation",
+        )
         capex_compute_return = capex_calculation(
             components=ppdt.wrapped_components,
             simulation_parameters=ppdt.simulation_parameters,
@@ -807,7 +832,7 @@ class PostProcessor:
         pass  # noqa: unnecessary-pass
 
     @utils.measure_execution_time
-    def prepare_results_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer) -> None:
+    def prepare_results_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
         """Prepare the results for the scenario evaluation."""
 
         # create result data folder
@@ -836,17 +861,20 @@ class PostProcessor:
         self.model = f"HiSim_{ppdt.module_filename}"
         self.scenario = (
             SingletonSimRepository().get_entry(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
-            if SingletonSimRepository().exist_entry(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
+            if SingletonSimRepository().entry_exists(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
             else ""
         )
         self.region = (
             SingletonSimRepository().get_entry(SingletonDictKeyEnum.LOCATION)
-            if SingletonSimRepository().exist_entry(SingletonDictKeyEnum.LOCATION)
+            if SingletonSimRepository().entry_exists(SingletonDictKeyEnum.LOCATION)
             else ""
         )
         self.year = ppdt.simulation_parameters.year
 
         # Time series
+        assert ppdt.results_hourly is not None
+        assert ppdt.results_daily is not None
+        assert ppdt.results_monthly is not None
         time_configs = [
             ("hourly", ppdt.results_hourly, ppdt.results_hourly.index),
             ("daily", ppdt.results_daily, ppdt.results_daily.index),
@@ -863,6 +891,7 @@ class PostProcessor:
             )
 
         # got through all components and read output values, variables and units for simple_dict_cumulative_data
+        assert ppdt.results_cumulative is not None
         for column in ppdt.results_cumulative:
             value = ppdt.results_cumulative[column].values[0]
 
@@ -894,11 +923,12 @@ class PostProcessor:
             simulation_duration=ppdt.simulation_parameters.duration.days,
         )
 
-        self.write_config_data_for_scenario_evaluation(ppdt)
+        self.write_config_data_for_scenario_evaluation(ppdt, my_sim)
 
-    def write_config_data_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer) -> None:
+    def write_config_data_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
         """Prepare the results for the scenario evaluation."""
         # create dictionary with all import data information
+
         if PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in ppdt.post_processing_options:
             result_data_folder_for_scenario_evaluation = os.path.join(
                 ppdt.simulation_parameters.result_directory, "result_data_for_scenario_evaluation"
@@ -911,53 +941,61 @@ class PostProcessor:
         self.model = "".join(["HiSim_", ppdt.module_filename])
 
         # set pyam scenario name
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME):
+        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME):
             self.scenario = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
         else:
             self.scenario = ""
 
         # set region
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):
+        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.LOCATION):
             self.region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
         else:
             self.region = ""
 
+        # set description
+        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.DESCRIPTION):
+            self.description = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.DESCRIPTION)
+        else:
+            self.description = ""
+
         # set year or timeseries
         self.year = ppdt.simulation_parameters.year
 
-        data_information_dict = {
-            "model": self.model,
-            "scenario": self.scenario,
-            "region": self.region,
-            "year": self.year,
-            "duration in days": ppdt.simulation_parameters.duration.days,
-        }
-
-        # write json config with all component configs, module config, pyam information dict and simulation parameters
-        json_generator_config = JsonConfigurationGenerator(name=f"{self.scenario}")
-        json_generator_config.set_simulation_parameters(my_simulation_parameters=ppdt.simulation_parameters)
-        if ppdt.my_module_config is not None:
-            json_generator_config.set_module_config(my_module_config=ppdt.my_module_config)
-        json_generator_config.set_scenario_data_information_dict(scenario_data_information_dict=data_information_dict)
-        for component in ppdt.wrapped_components:
-            json_generator_config.add_component(config=component.my_component.config)
-
-        # save the json config
-        json_generator_config.save_to_json(
-            filename=os.path.join(result_data_folder_for_scenario_evaluation, "data_for_scenario_evaluation.json")
+        # Write the two new JSON configuration files
+        # Here, the my_sim could be replace by ppdt.simulation_parameters
+        write_standalone_simulation_json = _load_attribute(
+            "hisim.json_generator",
+            "write_standalone_simulation_json",
         )
+        write_standalone_scenario_json = _load_attribute(
+            "hisim.json_generator",
+            "write_standalone_scenario_json",
+        )
+        write_standalone_simulation_json(my_sim, path=os.path.join(result_data_folder_for_scenario_evaluation, "simulation.json"))
 
-    def write_component_configurations_to_json(self, ppdt: PostProcessingDataTransfer) -> None:
+        # Here, the my_sim could maybe be replaced by an altered ppdt
+        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=self.description,
+                                       path=os.path.join(result_data_folder_for_scenario_evaluation, "scenario.json"))
+
+    def write_component_configurations_to_json(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:
         """Collect all component configurations and write into JSON file in result directory."""
-        json_generator_config = JsonConfigurationGenerator(name=f"{self.scenario}")
-        for component in ppdt.wrapped_components:
-            json_generator_config.add_component(config=component.my_component.config)
-        json_generator_config.save_to_json(
-            filename=os.path.join(
-                ppdt.simulation_parameters.result_directory,
-                "component_configurations.json",
-            )
+
+        write_standalone_simulation_json = _load_attribute(
+            "hisim.json_generator",
+            "write_standalone_simulation_json",
         )
+        write_standalone_scenario_json = _load_attribute(
+            "hisim.json_generator",
+            "write_standalone_scenario_json",
+        )
+        write_standalone_simulation_json(my_sim, path=os.path.join(
+            ppdt.simulation_parameters.result_directory,
+            "simulation.json",
+        ))
+        write_standalone_scenario_json(ppdt.module_filename, my_sim=my_sim, desc=self.description, path=os.path.join(
+            ppdt.simulation_parameters.result_directory,
+            "scenario.json",
+        ))
 
     def write_kpis_in_dict(
         self,
@@ -1045,84 +1083,6 @@ class PostProcessor:
         )
 
         dataframe.to_csv(path_or_buf=filename, index=None)  # type: ignore
-
-    def write_operation_data_for_webtool(self, ppdt: PostProcessingDataTransfer) -> None:
-        """Collect daily operation results and write into json for webtool."""
-
-        # Get bools that tells if the output should be displayed in webtool
-        component_display_in_webtool: list[str] = []
-        for output in ppdt.all_outputs:
-            if output.postprocessing_flag:
-                if OutputPostprocessingRules.DISPLAY_IN_WEBTOOL in output.postprocessing_flag:
-                    component_display_in_webtool.append(output.get_pretty_name())
-
-        results_daily = ppdt.results_daily[component_display_in_webtool]
-        data = results_daily.to_json(date_format="iso")
-
-        # Write to file
-        with open(
-            os.path.join(ppdt.simulation_parameters.result_directory, "results_daily_operation_for_webtool.json"),
-            "w",
-            encoding="utf-8",
-        ) as file:
-            file.write(data)
-
-    def write_results_for_webtool_to_json_file(
-        self, ppdt: PostProcessingDataTransfer, building_objects_in_district_list: list
-    ) -> None:
-        """Collect results and write into json for webtool."""
-
-        # Check if important options were set
-        if all(
-            option in ppdt.post_processing_options
-            for option in [
-                PostProcessingOptions.COMPUTE_KPIS,
-                PostProcessingOptions.COMPUTE_CAPEX,
-                PostProcessingOptions.COMPUTE_OPEX,
-            ]
-        ):
-            # Get KPIs from ppdt
-            kpi_collection_dict = ppdt.kpi_collection_dict
-
-            # Calculate capex
-            capex_compute_return = capex_calculation(
-                components=ppdt.wrapped_components,
-                simulation_parameters=ppdt.simulation_parameters,
-                building_objects_in_district_list=building_objects_in_district_list,
-            )
-
-            # Calculate opex
-            opex_compute_return = opex_calculation(
-                components=ppdt.wrapped_components,
-                all_outputs=ppdt.all_outputs,
-                postprocessing_results=ppdt.results,
-                simulation_parameters=ppdt.simulation_parameters,
-                building_objects_in_district_list=building_objects_in_district_list,
-            )
-
-            # Consolidate results into structured dataclass for webtool
-            webtool_results_dataclass = WebtoolDict(  # type: ignore
-                kpis=kpi_collection_dict,
-                post_processing_data_transfer=ppdt,
-                computed_opex=opex_compute_return,
-                computed_capex=capex_compute_return,
-            )
-
-            # Save dataclass as json file in results folder
-            json_file = webtool_results_dataclass.to_json(indent=4)
-            with open(
-                os.path.join(ppdt.simulation_parameters.result_directory, "results_for_webtool.json"),
-                "w",
-                encoding="utf-8",
-            ) as file:
-                file.write(json_file)
-
-        else:
-            raise ValueError(
-                "Some PostProcessingOptions are not set. Please check if "
-                f"{PostProcessingOptions.COMPUTE_KPIS}, {PostProcessingOptions.COMPUTE_CAPEX} and "
-                f"{PostProcessingOptions.COMPUTE_OPEX} are set in your system setup."
-            )
 
     def write_kpis_to_json_file(self, ppdt: PostProcessingDataTransfer) -> None:
         """Write all KPIs o json file."""
@@ -1262,7 +1222,11 @@ class PostProcessor:
                 )
 
                 # initialize json interface to pass kpi's to building_sizer
-                kpi_config = KPIConfig(
+                kpi_config_class = _load_attribute(
+                    "hisim.building_sizer_utils.interface_configs.kpi_config",
+                    "KPIConfig",
+                )
+                kpi_config = kpi_config_class(
                     self_sufficiency_rate_electricity_in_percent=self_sufficiency_rate_electricity_in_percent,
                     self_sufficiency_rate_all_energy_in_percent=self_sufficiency_rate_all_energy_in_percent,
                     annualized_total_costs_in_euro_per_m2=annualized_total_costs_in_euro / conditioned_floor_area_in_m2,
@@ -1319,38 +1283,6 @@ class PostProcessor:
                 "Some PostProcessingOptions are not set. Please check if "
                 f"{PostProcessingOptions.COMPUTE_KPIS} is set in your system setup."
             )
-
-    def get_dict_from_opex_capex_lists(self, value_list: List[str]) -> Dict[str, Any]:
-        """Get dict with values for webtool from opex capex lists."""
-
-        dict_with_cost_values = {}
-        dict_with_emission_values = {}
-        dict_with_lifetime_values = {}
-
-        total_dict = {}
-
-        name_one = value_list[0]
-
-        for value_unit in value_list:
-            if "---" not in value_unit:
-                variable_name = "".join(x for x in value_unit[0] if x != ":")
-                variable_value_investment = value_unit[1]
-                variable_value_emissions = value_unit[2]
-                variable_value_lifetime = value_unit[3]
-
-                dict_with_cost_values.update({f"{variable_name} [{name_one[1]}] ": variable_value_investment})
-                dict_with_emission_values.update({f"{variable_name} [{name_one[2]}] ": variable_value_emissions})
-                dict_with_lifetime_values.update({f"{variable_name} [{name_one[3]}] ": variable_value_lifetime})
-
-                total_dict.update(
-                    {
-                        "column 1": dict_with_cost_values,
-                        "column 2": dict_with_emission_values,
-                        "column 3": dict_with_lifetime_values,
-                    }
-                )
-
-        return total_dict
 
     def get_building_object_in_district(self, ppdt: PostProcessingDataTransfer) -> list[str]:
         """Get building names in district."""

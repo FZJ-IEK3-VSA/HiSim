@@ -1,4 +1,9 @@
-""" For setting the post processing options. """
+"""Module containing PostProcessingOptions enum for configuring post-processing features in HiSim.
+
+This module provides the PostProcessingOptions IntEnum class which defines various options
+for enabling or disabling specific post-processing features such as plotting, exporting,
+report generation, and KPI calculations.
+"""
 # clean
 from enum import IntEnum
 
@@ -28,12 +33,10 @@ class PostProcessingOptions(IntEnum):
     COMPUTE_CAPEX = 19
     COMPUTE_KPIS = 20
     PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION = 21
-    MAKE_RESULT_JSON_FOR_WEBTOOL = 22
-    WRITE_COMPONENT_CONFIGS_TO_JSON = 23
-    WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER = 24
-    WRITE_KPIS_TO_JSON = 25
-    MAKE_OPERATION_RESULTS_FOR_WEBTOOL = 26
-    EXPORT_TO_PKL = 27
-    WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON = 28
-    EXPORT_MONTHLY_RESULTS = 29
-    EXPORT_RESULTS_IN_ONE_FILE = 30
+    WRITE_COMPONENT_CONFIGS_TO_JSON = 22
+    WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER = 23
+    WRITE_KPIS_TO_JSON = 24
+    EXPORT_TO_PKL = 25
+    WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON = 26
+    EXPORT_MONTHLY_RESULTS = 27
+    EXPORT_RESULTS_IN_ONE_FILE = 38

@@ -1,0 +1,16 @@
+{
+    "start_date": "2021-01-01T00:00:00",
+    "end_date": "2022-01-01T00:00:00",
+    "seconds_per_timestep": 900,
+    "post_processing_options": [
+        "PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION",
+        "COMPUTE_OPEX",
+        "COMPUTE_CAPEX",
+        "COMPUTE_KPIS",
+        "WRITE_KPIS_TO_JSON",
+        "WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER"
+    ],
+    "logging_level": 3,
+    "skip_finished_results": false,
+    "log_connections": false
+}

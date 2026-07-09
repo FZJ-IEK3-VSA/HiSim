@@ -48,6 +48,10 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
+# Constants for warm water fallback values used in i_simulate
+DEFAULT_WW_TEMPERATURE_INPUT = 40.45  # °C - default warm water temperature fallback
+DEFAULT_WW_MASS_INPUT = 9.3  # kg/s - default warm water mass input fallback
+
 
 class LpgDataAcquisitionMode(enum.Enum):
     """Set LPG Data Acquisition Mode."""
@@ -79,6 +83,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     predefined_loadprofile_filepaths: Optional[str] = None
     guid: str = ""
     calculation_index_for_local_lpg: Optional[int] = None
+    cars: Optional[List[str]] = None
 
     @classmethod
     def get_main_classname(cls):
@@ -277,8 +282,8 @@ class UtspLpgConnector(cp.Component):
 
             if ww_energy_demand > 0 and (ww_mass_input == 0 and ww_temperature_input == 0):
                 """first iteration --> random numbers"""
-                ww_temperature_input = 40.45
-                ww_mass_input = 9.3
+                ww_temperature_input = DEFAULT_WW_TEMPERATURE_INPUT
+                ww_mass_input = DEFAULT_WW_MASS_INPUT
 
             """
             Warm water is provided by the warmwater stoage.
@@ -1640,7 +1645,8 @@ class UtspLpgConnector(cp.Component):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-            ).loc[: (steps_desired_in_minutes - 1)]
+                nrows=steps_desired_in_minutes,
+            )
             electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
@@ -1651,7 +1657,8 @@ class UtspLpgConnector(cp.Component):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-            ).loc[: (steps_desired_in_minutes - 1)]
+                nrows=steps_desired_in_minutes,
+            )
             water_consumption_list = pd.to_numeric(pre_water_consumption["Sum [L]"]).tolist()
 
             inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains)
@@ -1660,7 +1667,8 @@ class UtspLpgConnector(cp.Component):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-            ).loc[: (steps_desired_in_minutes - 1)]
+                nrows=steps_desired_in_minutes,
+            )
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
@@ -1673,7 +1681,8 @@ class UtspLpgConnector(cp.Component):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Sum [kWh]"],
-            ).loc[: (steps_desired_in_minutes - 1)]
+                nrows=steps_desired_in_minutes,
+            )
             electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60 000 W / min
@@ -1684,7 +1693,8 @@ class UtspLpgConnector(cp.Component):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Sum [L]"],
-            ).loc[: (steps_desired_in_minutes - 1)]
+                nrows=steps_desired_in_minutes,
+            )
             water_consumption_list = pd.to_numeric(pre_water_consumption.loc[:, "Sum [L]"]).tolist()
 
             pre_inner_device_heat_gains = pd.read_csv(
@@ -1693,7 +1703,8 @@ class UtspLpgConnector(cp.Component):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Time", "Sum [kWh]"],
-            ).loc[: (steps_desired_in_minutes - 1)]
+                nrows=steps_desired_in_minutes,
+            )
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains.loc[:, "Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
@@ -1874,7 +1885,7 @@ class UtspLpgConnector(cp.Component):
                     occupancy_total_electricity_consumption_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                 if output.field_name == self.WaterConsumption and output.unit == lt.Units.LITER:
@@ -1960,7 +1971,7 @@ class UtspLpgConnector(cp.Component):
                 occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
                 consumption_in_kwh = KpiHelperClass.compute_total_energy_from_power_timeseries(
                     power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
-                    timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                 )
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year, self.my_simulation_parameters.country

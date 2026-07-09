@@ -1,7 +1,7 @@
 """Wraps components for use in the simulator."""
 
 # clean
-from typing import List, Dict, Any
+from typing import List
 
 import hisim.component as cp
 import hisim.loadtypes as lt
@@ -20,20 +20,21 @@ class ComponentWrapper:
         self.component_inputs: List[cp.ComponentInput] = []
         self.component_outputs: List[cp.ComponentOutput] = []
         # self.cachedict: = {}
-        self.is_cachable = is_cachable
-        self.connect_automatically = connect_automatically
+        self.is_cachable: bool = is_cachable
+        self.connect_automatically: bool = connect_automatically
 
-    def clear(self):
+    def clear(self) -> None:
         """Clears properties to help with saving memory."""
         del self.my_component
         del self.component_inputs
         del self.component_outputs
 
     def register_component_outputs(
-        self, all_outputs: List[cp.ComponentOutput], wrapped_components_so_far: List[Any]
+        self, all_outputs: List[cp.ComponentOutput], wrapped_components_so_far: List["ComponentWrapper"]
     ) -> None:
         """Registers component outputs in the global list of components."""
-        log.information("Registering component outputs on " + self.my_component.component_name)
+
+        log.debug("Registering component outputs on " + self.my_component.component_name)
 
         # Collect classnames of already wrapped components once
         wrapped_class_names_so_far = {component.my_component.get_classname() for component in wrapped_components_so_far}
@@ -83,10 +84,13 @@ class ComponentWrapper:
             all_outputs.append(output)
             self.component_outputs.append(output)
             log.debug("Registered output " + output.full_name)
+            if not self.component_outputs:
+                raise ValueError(f"The component {self.my_component.component_name} has no outputs registered.")
 
-    def register_component_inputs(self, global_column_dict: Dict[str, Any]) -> None:
+    def register_component_inputs(self, global_column_dict: dict[str, cp.ComponentInput]) -> None:
         """Gets the inputs for the current component from the global column dict and puts them into component_inputs."""
-        log.information("Registering component inputs for " + self.my_component.component_name)
+
+        log.debug("Registering component inputs for " + self.my_component.component_name)
         # look up input columns and cache, so we only have the correct columns saved
         input_columns: List[cp.ComponentInput] = self.my_component.get_input_definitions()
         for col in input_columns:
@@ -120,7 +124,7 @@ class ComponentWrapper:
         """Wrapper for the core simulation function in each component."""
         self.my_component.i_simulate(timestep, stsv, force_convergence)
 
-    def prepare_calculation(self):
+    def prepare_calculation(self) -> None:
         """Wrapper for i_prepare_calculation."""
         log.information("Preparing " + self.my_component.component_name + " for simulation.")
         self.my_component.i_prepare_simulation()
@@ -161,7 +165,7 @@ class ComponentWrapper:
                             cinput.source_output = global_output
                             log.debug("Connected input '" + cinput.fullname + "' to '" + global_output.full_name + "'")
                         else:
-                            raise SystemError(
+                            raise ValueError(
                                 f"The input {cinput.field_name} (cp: {cinput.component_name}, unit: {cinput.unit}) and "
                                 f"output {global_output.field_name}(cp: {global_output.component_name}, unit: {global_output.unit}) "
                                 f"do not have the same unit!"
@@ -173,8 +177,16 @@ class ComponentWrapper:
 
             # Check if there are inputs that have been not connected
             if cinput.is_mandatory and cinput.source_output is None:
-                raise SystemError(
-                    f"The ComponentInput {cinput.field_name} (cp: {cinput.component_name}, "
-                    f"unit: {cinput.unit}) is not connected to any ComponentOutput. "
-                    "You could run debug mode (logging_level=4) to check all inputs, outputs and connections."
-                )  #
+                if cinput.src_object_name == "HeatPumpHPLib" and cinput.src_field_name == "ElectricalInputPowerDHW":
+                    log.warning(
+                        f"The input {cinput.field_name} (cp: {cinput.component_name}, unit: {cinput.unit}) is not connected to any ComponentOutput. "
+                        "Likely, the heat pump has DHW deactivated. Therefore, this is ignored for now."
+                    )
+                else:
+                    raise ValueError(
+                        f"The ComponentInput {cinput.field_name} (cp: {cinput.component_name}, "
+                        f"unit: {cinput.unit}) is not connected to any ComponentOutput. "
+                        "You could run debug mode (logging_level=4) to check all inputs, outputs and connections. "
+                        f"Likely, no match was found between {cinput.src_object_name} and {[a.component_name for a in all_outputs]} & "
+                        f"and between {cinput.src_field_name} and {[a.field_name for a in all_outputs]}."
+                    )  #

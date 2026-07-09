@@ -8,3 +8,5 @@ system_setups/finished.flag
 
 # cache folder for the inputs
 hisim/inputs/cache
+
+component_connections.json

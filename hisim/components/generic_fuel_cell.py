@@ -3,7 +3,7 @@
 # clean
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-import os
+from pathlib import Path
 from typing import List, Any
 import json
 from dataclasses import dataclass
@@ -81,8 +81,8 @@ class FuelCellConfig(cp.ConfigBase):
     @staticmethod
     def read_config(fuel_cell_name):
         """Read config."""
-        config_file = os.path.join(utils.HISIMPATH["inputs"], "fuel_cell_manufacturer_config.json")
-        with open(config_file, "r", encoding="utf-8") as json_file:
+        config_file = Path(utils.HISIMPATH["inputs"]) / "fuel_cell_manufacturer_config.json"
+        with config_file.open("r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
 
@@ -387,8 +387,8 @@ class FuelCell(cp.Component):
         based on the nominal current density.
         """
         # Load data from the JSON file
-        data_file = os.path.join(utils.HISIMPATH["inputs"], "polarization_curve_data_fc.json")
-        with open(data_file, "r", encoding="utf-8") as file:
+        data_file = Path(utils.HISIMPATH["inputs"]) / "polarization_curve_data_fc.json"
+        with data_file.open("r", encoding="utf-8") as file:
             data = json.load(file)
 
         # Check if the provided technology is valid
@@ -468,24 +468,24 @@ class FuelCell(cp.Component):
 
         if state == 1 and current_power > min_power:
             # Only consume hydrogen if the system is "on"
-            current_h2_demenad_rate = float(interp_function_h2_consumption_rate(current_power))
+            current_h2_demand_rate = float(interp_function_h2_consumption_rate(current_power))
 
             current_spec_h2_demand_rate = float(interp_function_spec_h2_demand_rate(current_power))
             current_eff = current_spec_h2_demand_rate / 33.33  # LHV H2 33.33 kWh/kg
         elif state == 0 and current_power >= min_power:
             # Only consume hydrogen if the system is "on"
-            current_h2_demenad_rate = float(interp_function_h2_consumption_rate(current_power))
+            current_h2_demand_rate = float(interp_function_h2_consumption_rate(current_power))
 
             current_eff = 0.0
 
         else:
             # No hydrogen consumption if the system is in "standby" or "off"
-            current_h2_demenad_rate = 0.0
+            current_h2_demand_rate = 0.0
             current_eff = 0.0
 
-        return current_h2_demenad_rate, current_eff
+        return current_h2_demand_rate, current_eff
 
-    def oxygen_demand(self, current_h2_demenad_rate):
+    def oxygen_demand(self, current_h2_demand_rate):
         """Oxygen demand.
 
         Returns the demand flow rate of oxygen,
@@ -493,10 +493,10 @@ class FuelCell(cp.Component):
         """
         m_o2 = 31.9988
         m_h2 = 2.01588
-        m_dot_o2 = (m_o2 / m_h2) * 0.5 * current_h2_demenad_rate  # Kurzweil (2018) - Elektrolyse von Wasser
+        m_dot_o2 = (m_o2 / m_h2) * 0.5 * current_h2_demand_rate  # Kurzweil (2018) - Elektrolyse von Wasser
         return m_dot_o2
 
-    def water_produced(self, current_h2_demenad_rate):
+    def water_produced(self, current_h2_demand_rate):
         """Water produced.
 
         Returns the produced water flow rate,
@@ -504,7 +504,7 @@ class FuelCell(cp.Component):
         """
         m_h2o = 18.01528
         m_h2 = 2.01588
-        m_dot_h2o = (m_h2o / m_h2) * current_h2_demenad_rate  # Kurzweil (2018) - Elektrolyse von Wasser
+        m_dot_h2o = (m_h2o / m_h2) * current_h2_demand_rate  # Kurzweil (2018) - Elektrolyse von Wasser
         return m_dot_h2o
 
     def i_save_state(self) -> None:
@@ -695,6 +695,6 @@ class FuelCell(cp.Component):
         lines.append("Total oxygen consumed during simulation: " + str(self.total_oxygen_consumed) + " [kg]")
         lines.append("Total water demand during simulation: " + str(self.total_water_produced) + " [kg]")
         lines.append("Total energy produced during simulation: " + str(self.total_energy) + " [kWh]")
-        lines.append("Total ramp-up time during simulation: " + str(self.total_ramp_up_count_state) + " [kg]")
-        lines.append("Total ramp-down time during simulation: " + str(self.total_ramp_down_count_state) + " [kg]")
+        lines.append("Total ramp-up time during simulation: " + str(self.total_ramp_up_count_state) + " [s]")
+        lines.append("Total ramp-down time during simulation: " + str(self.total_ramp_down_count_state) + " [s]")
         return lines

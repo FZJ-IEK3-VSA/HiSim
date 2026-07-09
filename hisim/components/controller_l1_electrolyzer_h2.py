@@ -1,8 +1,10 @@
 """ Controller for the generic_electrolyzer_h2 component. """
 
+from __future__ import annotations
+
 # clean
-import os
-from typing import List, Any
+from typing import Any, List
+from pathlib import Path
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -29,7 +31,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
     """Configutation of the Simple Electrolyzer Controller."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return ElectrolyzerController.get_full_classname()
 
@@ -46,7 +48,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
     def get_default_electrolyzer_controller_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "ElectrolyzerControllerConfig":
         """Get a default electrolyzer controller config."""
         config = ElectrolyzerControllerConfig(
             building_name=building_name,
@@ -61,20 +63,23 @@ class ElectrolyzerControllerConfig(ConfigBase):
         return config
 
     @staticmethod
-    def read_config(electrolyzer_name):
+    def read_config(electrolyzer_name: str) -> dict[str, Any]:
         """Opens the according JSON-file, based on the electrolyzer_name."""
 
-        config_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json")
-        with open(config_file, "r", encoding="utf-8") as json_file:
+        config_file = Path(utils.HISIMPATH["inputs"]) / "electrolyzer_manufacturer_config.json"
+        with config_file.open("r", encoding="utf-8") as json_file:
             data = json.load(json_file)
-            return data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
+            config = data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
+            if isinstance(config, dict):
+                return config
+            return {}
 
     @classmethod
     def control_electrolyzer(
         cls,
         electrolyzer_name: str,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "ElectrolyzerControllerConfig":
         """Initializes the config variables based on the JSON-file."""
 
         config_json = cls.read_config(electrolyzer_name)
@@ -97,15 +102,15 @@ class ElectrolyzerController(Component):
     """Electrolyzer Controller class."""
 
     # Inputs
-    ProvidedLoad = "ProvidedLoad"
+    ProvidedLoad: str = "ProvidedLoad"
 
     # Outputs
-    DistributedLoad = "DistributedLoad"
-    ShutdownCount = "ShutdownCount"
-    StandbyCount = "StandbyCount"
-    CurrentMode = "CurrentMode"
-    CurtailedLoad = "CurtailedLoad"
-    OffCount = "OffCount"
+    DistributedLoad: str = "DistributedLoad"
+    ShutdownCount: str = "ShutdownCount"
+    StandbyCount: str = "StandbyCount"
+    CurrentMode: str = "CurrentMode"
+    CurtailedLoad: str = "CurtailedLoad"
+    OffCount: str = "OffCount"
 
     def __init__(
         self,
@@ -114,17 +119,17 @@ class ElectrolyzerController(Component):
         my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
-        self.controllerconfig = config
+        self.controllerconfig: ElectrolyzerControllerConfig = config
 
-        self.nom_load = config.nom_load
-        self.min_load = config.min_load
-        self.max_load = config.max_load
-        self.standby_load = config.standby_load
-        self.warm_start_time = config.warm_start_time
-        self.cold_start_time = config.cold_start_time
+        self.nom_load: float = config.nom_load
+        self.min_load: float = config.min_load
+        self.max_load: float = config.max_load
+        self.standby_load: float = config.standby_load
+        self.warm_start_time: float = config.warm_start_time
+        self.cold_start_time: float = config.cold_start_time
 
         self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
+        self.config: ElectrolyzerControllerConfig = config
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -190,21 +195,27 @@ class ElectrolyzerController(Component):
         # =================================================================================================================================
         # Initialize variables
 
-        self.standby_count = 0.0
-        self.current_state = "OFF"  # standby
-        self.curtailed_load_count = 0.0
-        self.off_count = 0.0
-        self.activation_runtime = 0.0
+        self.standby_count: float = 0.0
+        self.current_state: str = "OFF"  # standby
+        self.curtailed_load_count: float = 0.0
+        self.off_count: float = 0.0
+        self.activation_runtime: float = 0.0
 
-        self.standby_count_previous = self.standby_count
-        self.current_state_previous = self.current_state
-        self.curtailed_load_count_previous = self.curtailed_load_count
-        self.off_count_previous = self.off_count
-        self.activation_runtime_previous = self.activation_runtime
+        self.standby_count_previous: float = self.standby_count
+        self.current_state_previous: str = self.current_state
+        self.curtailed_load_count_previous: float = self.curtailed_load_count
+        self.off_count_previous: float = self.off_count
+        self.activation_runtime_previous: float = self.activation_runtime
 
-    def load_check(self, current_load, min_load, max_load, standby_load):
+    def load_check(
+        self,
+        current_load: float | None,
+        min_load: float | None,
+        max_load: float | None,
+        standby_load: float | None,
+    ) -> tuple[float, str, float]:
         """Load check."""
-        if None in (current_load, min_load, max_load, standby_load):
+        if current_load is None or min_load is None or max_load is None or standby_load is None:
             raise ValueError(f"None type not accepted. {current_load}, {min_load}, {max_load}, {standby_load}")
         if current_load > max_load:
             current_load_to_system = max_load
@@ -228,7 +239,12 @@ class ElectrolyzerController(Component):
 
         return current_load_to_system, state, self.curtailed_load_count
 
-    def state_check(self, target_state, cold_start_time_to_min, warm_start_time_to_min):
+    def state_check(
+        self,
+        target_state: str,
+        cold_start_time_to_min: float,
+        warm_start_time_to_min: float,
+    ) -> tuple[str, float]:
         """State check."""
         if target_state == "OFF":
             # System switches OFF

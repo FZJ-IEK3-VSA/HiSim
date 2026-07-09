@@ -12,10 +12,10 @@ from hisim import utils
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_basic_household_network_chart():
+def test_basic_household_network_chart() -> None:
     """Makes only the network charts."""
     path = "../system_setups/basic_household.py"
-    mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    hisim_main.main(path, mysimpar)
+    simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    hisim_main.main(path, simulation_parameters)
     log.information(os.getcwd())

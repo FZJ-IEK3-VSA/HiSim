@@ -34,17 +34,29 @@ from hisim.components.generic_electrolyzer_h2 import (
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 
-__authors__ = "Franz Oldopp"
-__copyright__ = "Copyright 2023, FZJ-IEK-3"
-__credits__ = ["Franz Oldopp"]
-__license__ = "-"
-__version__ = "2.0"
-__maintainer__ = "Franz Oldopp"
-__status__ = "development"
+__authors__: str = "Franz Oldopp"
+__copyright__: str = "Copyright 2023, FZJ-IEK-3"
+__credits__: list[str] = ["Franz Oldopp"]
+__license__: str = "-"
+__version__: str = "2.0"
+__maintainer__: str = "Franz Oldopp"
+__status__: str = "development"
 
 
 def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
-    """Setup function."""
+    """Configure and wire a RES-to-electrolyzer simulation with PTX energy management.
+
+    Builds a simulation chain that loads renewable power from a CSV file,
+    transforms it, routes it through a PTX controller to an electrolyzer controller,
+    and finally to an electrolyzer model. Post-processing options for plotting and
+    reporting are enabled.
+
+    Args:
+        my_sim: The simulator instance to which components are added.
+        my_simulation_parameters: Optional simulation parameters. If None, defaults
+            to a full year (2021) simulation with 60-second timesteps.
+
+    """
     log.information("Starting basic electrolyzer system setup")
     # =================================================================================================================================
     # Set System Parameters
@@ -121,26 +133,6 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         my_simulation_parameters=my_simulation_parameters,
         config=TransformerConfig.get_default_transformer(),
     )
-    # Setup the battery
-    """
-    my_battery = Battery(
-        my_simulation_parameters=my_simulation_parameters,
-        config=BatteryConfig(
-        name="test buffer battery",
-        source_weight=1,
-        system_id="SG1",
-        custom_pv_inverter_power_generic_in_watt=100000.0,
-        custom_battery_capacity_generic_in_kilowatt_hour=5000.0,
-        charge_in_kwh=0.0,
-        discharge_in_kwh=0.0,
-        device_co2_footprint_in_kg=0.0,
-        investment_costs_in_euro=0.0,
-        lifetime_in_years=10.0,
-        lifetime_in_cycles=30000.0,
-        maintenance_costs_in_euro_per_year=0.04,
-        )
-    )
-    """
 
     my_ptx_controller = PTXController(
         my_simulation_parameters=my_simulation_parameters,
@@ -167,19 +159,6 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         my_transformer.component_name,
         my_transformer.TransformerOutput,
     )
-    """
-    my_ptx_controller.connect_input(
-        my_ptx_controller.StateOfCharge,
-        my_battery.component_name,
-        my_battery.StateOfCharge
-    )
-
-    my_battery.connect_input(
-        my_battery.LoadingPowerInput,
-        my_ptx_controller.component_name,
-        my_ptx_controller.PowerToThird
-    )
-    """
     my_electrolyzer_controller.connect_input(
         my_electrolyzer_controller.ProvidedLoad,
         my_ptx_controller.component_name,
@@ -203,7 +182,6 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     my_sim.add_component(csv_loader)  # Add csv_loader to simulator
     my_sim.add_component(my_transformer)
-    # my_sim.add_component(my_battery)
     my_sim.add_component(my_ptx_controller)
     my_sim.add_component(my_electrolyzer_controller)
     my_sim.add_component(my_electrolyzer)

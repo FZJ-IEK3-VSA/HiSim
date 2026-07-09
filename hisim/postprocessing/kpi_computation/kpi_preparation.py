@@ -83,7 +83,7 @@ class KpiPreparation:
                     ):
                         if ComponentType.BUILDINGS not in output.postprocessing_flag:
                             total_consumption_ids.append(index)
-                            log.debug(
+                            log.information(
                                 "Output considered in total electricity consumption "
                                 + output.full_name
                                 + " "
@@ -304,7 +304,7 @@ class KpiPreparation:
         building_objects_in_district: str,
         kpi_tag: KpiTagEnumClass,
     ) -> pd.DataFrame:
-        """Computes the self consumption, grid injection, self-sufficiency and battery losses if electricty production is bigger than zero."""
+        """Computes the self consumption, grid injection, self-sufficiency and battery losses if electricity production is bigger than zero."""
 
         if electricity_production_in_kilowatt_hour > 0:
             # account for battery
@@ -416,7 +416,7 @@ class KpiPreparation:
             battery_losses_in_kilowatt_hour,
         )
 
-    def get_electricity_to_and_from_grid_from_electricty_meter(
+    def get_electricity_to_and_from_grid_from_electricity_meter(
         self,
         building_objects_in_district: str,
     ) -> Tuple[Optional[float], Optional[float]]:
@@ -477,7 +477,7 @@ class KpiPreparation:
 
     def compute_self_sufficiency_according_to_solar_htw_berlin(
         self,
-        relative_electricty_demand_in_percent: Optional[float],
+        relative_electricity_demand_in_percent: Optional[float],
         building_objects_in_district: str,
         kpi_tag: KpiTagEnumClass,
         name: str = "Self-sufficiency rate according to solar htw berlin",
@@ -486,14 +486,14 @@ class KpiPreparation:
 
         https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiedener-Kennzahlen-zur-Bewertung-von-PV-Batteriesystemen.pdf.
         """
-        if relative_electricty_demand_in_percent is None:
+        if relative_electricity_demand_in_percent is None:
             self_sufficiency_rate_in_percent = None
         else:
-            self_sufficiency_rate_in_percent = 100 - relative_electricty_demand_in_percent
+            self_sufficiency_rate_in_percent = 100 - relative_electricity_demand_in_percent
             if self_sufficiency_rate_in_percent > 100:
                 raise ValueError(
                     "The self-sufficiency rate should not be over 100 %. Something is wrong here. Please check your code. "
-                    f"The realtive electricity demand is {relative_electricty_demand_in_percent} %. "
+                    f"The relative electricity demand is {relative_electricity_demand_in_percent} %. "
                 )
 
         # make kpi entry
@@ -602,6 +602,34 @@ class KpiPreparation:
         )
         return round(total_energy_self_sufficiency_in_percent, 2)
 
+    @staticmethod
+    def _read_cost_table_value(
+        cost_df: pd.DataFrame,
+        column_name: str,
+        preferred_row_name: str,
+        fallback_row_name: str,
+    ) -> float:
+        """Read a cost table value, falling back to global totals if per-building totals are missing."""
+        cost_series = cost_df[column_name]
+        if preferred_row_name in cost_series.index:
+            value = cost_series.loc[preferred_row_name]
+        elif fallback_row_name in cost_series.index:
+            log.warning(
+                f"Cost table row '{preferred_row_name}' is missing. "
+                f"Using fallback row '{fallback_row_name}' for column '{column_name}'."
+            )
+            value = cost_series.loc[fallback_row_name]
+        else:
+            log.warning(
+                f"Cost table rows '{preferred_row_name}' and '{fallback_row_name}' are missing "
+                f"for column '{column_name}'. Using 0."
+            )
+            return 0.0
+
+        if isinstance(value, pd.Series):
+            value = value.iloc[0]
+        return float(value)
+
     def read_opex_and_capex_costs_from_results(self, building_object: str) -> None:
         """Get CAPEX and OPEX costs for simulated period.
 
@@ -670,15 +698,24 @@ class KpiPreparation:
             opex_df = pd.read_csv(opex_results_path, index_col=0, sep=";")
             log.debug("Opex df " + str(opex_df) + "\n")
             if self.simulation_parameters.multiple_buildings:
-                total_maintenance_cost_per_simulated_period = opex_df["Maintenance costs per year [EUR]"].loc[
-                    building_object + "_Total"
-                ]
-                total_maintenance_cost_per_simulated_period_without_hp = opex_df[
-                    "Maintenance costs per year [EUR]"
-                ].loc[building_object + "_Total_without_heatpump"]
-                total_maintenance_cost_per_simulated_period_only_hp = opex_df["Maintenance costs per year [EUR]"].loc[
-                    building_object + "_Total_only_heatpump"
-                ]
+                total_maintenance_cost_per_simulated_period = self._read_cost_table_value(
+                    cost_df=opex_df,
+                    column_name="Maintenance costs per year [EUR]",
+                    preferred_row_name=building_object + "_Total",
+                    fallback_row_name="Total",
+                )
+                total_maintenance_cost_per_simulated_period_without_hp = self._read_cost_table_value(
+                    cost_df=opex_df,
+                    column_name="Maintenance costs per year [EUR]",
+                    preferred_row_name=building_object + "_Total_without_heatpump",
+                    fallback_row_name="Total_without_heatpump",
+                )
+                total_maintenance_cost_per_simulated_period_only_hp = self._read_cost_table_value(
+                    cost_df=opex_df,
+                    column_name="Maintenance costs per year [EUR]",
+                    preferred_row_name=building_object + "_Total_only_heatpump",
+                    fallback_row_name="Total_only_heatpump",
+                )
             if not self.simulation_parameters.multiple_buildings:
                 total_maintenance_cost_per_simulated_period = opex_df["Maintenance costs per year [EUR]"].loc["Total"]
                 total_maintenance_cost_per_simulated_period_without_hp = opex_df[
@@ -697,35 +734,67 @@ class KpiPreparation:
             capex_df = pd.read_csv(capex_results_path, index_col=0, sep=";")
             log.debug("Capex df " + str(capex_df) + "\n")
             if self.simulation_parameters.multiple_buildings:
-                total_investment_cost_per_simulated_period = capex_df["Investment for simulated period [EUR]"].loc[
-                    building_object + "_Total"
-                ]
+                total_investment_cost_per_simulated_period = self._read_cost_table_value(
+                    cost_df=capex_df,
+                    column_name="Investment for simulated period [EUR]",
+                    preferred_row_name=building_object + "_Total",
+                    fallback_row_name="Total",
+                )
                 # investment minus subsidies
-                total_rest_investment_cost_per_simulated_period = capex_df[
-                    "Rest-Investment for simulated period [EUR]"
-                ].loc[building_object + "_Total"]
-                total_rest_investment_cost_upfront = capex_df["Rest-Investment [EUR]"].loc[building_object + "_Total"]
-                total_device_co2_footprint_per_simulated_period = capex_df[
-                    "Device CO2-footprint for simulated period [kg]"
-                ].loc[building_object + "_Total"]
-                total_investment_cost_per_simulated_period_without_hp = capex_df[
-                    "Investment for simulated period [EUR]"
-                ].loc[building_object + "_Total_without_heatpump"]
-                total_rest_investment_cost_per_simulated_period_without_hp = capex_df[
-                    "Rest-Investment for simulated period [EUR]"
-                ].loc[building_object + "_Total"]
-                total_device_co2_footprint_per_simulated_period_without_hp = capex_df[
-                    "Device CO2-footprint for simulated period [kg]"
-                ].loc[building_object + "_Total_without_heatpump"]
-                total_investment_cost_per_simulated_period_only_hp = capex_df[
-                    "Investment for simulated period [EUR]"
-                ].loc[building_object + "_Total_only_heatpump"]
-                total_rest_investment_cost_per_simulated_period_only_hp = capex_df[
-                    "Rest-Investment for simulated period [EUR]"
-                ].loc[building_object + "_Total"]
-                total_device_co2_footprint_per_simulated_period_only_hp = capex_df[
-                    "Device CO2-footprint for simulated period [kg]"
-                ].loc[building_object + "_Total_only_heatpump"]
+                total_rest_investment_cost_per_simulated_period = self._read_cost_table_value(
+                    cost_df=capex_df,
+                    column_name="Rest-Investment for simulated period [EUR]",
+                    preferred_row_name=building_object + "_Total",
+                    fallback_row_name="Total",
+                )
+                total_rest_investment_cost_upfront = self._read_cost_table_value(
+                    cost_df=capex_df,
+                    column_name="Rest-Investment [EUR]",
+                    preferred_row_name=building_object + "_Total",
+                    fallback_row_name="Total",
+                )
+                total_device_co2_footprint_per_simulated_period = self._read_cost_table_value(
+                    cost_df=capex_df,
+                    column_name="Device CO2-footprint for simulated period [kg]",
+                    preferred_row_name=building_object + "_Total",
+                    fallback_row_name="Total",
+                )
+                total_investment_cost_per_simulated_period_without_hp = self._read_cost_table_value(
+                    cost_df=capex_df,
+                    column_name="Investment for simulated period [EUR]",
+                    preferred_row_name=building_object + "_Total_without_heatpump",
+                    fallback_row_name="Total_without_heatpump",
+                )
+                total_rest_investment_cost_per_simulated_period_without_hp = self._read_cost_table_value(
+                    cost_df=capex_df,
+                    column_name="Rest-Investment for simulated period [EUR]",
+                    preferred_row_name=building_object + "_Total_without_heatpump",
+                    fallback_row_name="Total_without_heatpump",
+                )
+                total_device_co2_footprint_per_simulated_period_without_hp = self._read_cost_table_value(
+                    cost_df=capex_df,
+                    column_name="Device CO2-footprint for simulated period [kg]",
+                    preferred_row_name=building_object + "_Total_without_heatpump",
+                    fallback_row_name="Total_without_heatpump",
+                )
+                total_investment_cost_per_simulated_period_only_hp = self._read_cost_table_value(
+                    cost_df=capex_df,
+                    column_name="Investment for simulated period [EUR]",
+                    preferred_row_name=building_object + "_Total_only_heatpump",
+                    fallback_row_name="Total_only_heatpump",
+                )
+                total_rest_investment_cost_per_simulated_period_only_hp = self._read_cost_table_value(
+                    cost_df=capex_df,
+                    column_name="Rest-Investment for simulated period [EUR]",
+                    preferred_row_name=building_object + "_Total_only_heatpump",
+                    fallback_row_name="Total_only_heatpump",
+                )
+                total_device_co2_footprint_per_simulated_period_only_hp = self._read_cost_table_value(
+                    cost_df=capex_df,
+                    column_name="Device CO2-footprint for simulated period [kg]",
+                    preferred_row_name=building_object + "_Total_only_heatpump",
+                    fallback_row_name="Total_only_heatpump",
+                )
             if not self.simulation_parameters.multiple_buildings:
                 total_investment_cost_per_simulated_period = capex_df["Investment for simulated period [EUR]"].loc[
                     "Total"

@@ -20,7 +20,16 @@ from hisim import log
 
 
 class ScenarioChartGeneration:
-    """ScenarioChartGeneration class."""
+    """Orchestrates chart generation for scenario comparison results.
+
+    Reads aggregated simulation result data, filters by output variable,
+    computes per-scenario mean values, writes statistics to Excel, and
+    produces multiple chart types (line, bar, box, histogram, scatter,
+    stacked-bar) saved under a structured output directory.
+
+    The specific chart types and output format are driven by the
+    `data_processing_mode` and `data_format_type` arguments.
+    """
 
     def __init__(
         self,

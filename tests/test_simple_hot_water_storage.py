@@ -10,8 +10,14 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_simple_storage():
-    """Test for simple hot water storage."""
+def test_simple_storage() -> None:
+    """Test the simple hot water storage across several timestep sizes.
+
+    Iterates over a range of seconds-per-timestep values (1 min to 2 h),
+    computes the expected water-storage mixing factor for each (linear up to
+    1 h, then clamped to 1.0), and delegates the actual simulation and
+    assertions to `simulate_simple_water_storage`.
+    """
 
     # calculate mixing factors and run simulation for different seconds per timestep
     seconds_per_timesteps_to_test = [60, 60 * 15, 60 * 30, 60 * 60, 60 * 120]
@@ -31,11 +37,28 @@ def test_simple_storage():
 def simulate_simple_water_storage(
     sec_per_timesteps: int, factor_for_water_storage_portion: float
 ) -> None:
-    """Simulate and test simple hot water storage."""
+    """Build a SimpleHotWaterStorage, run one simulation step, and assert outputs.
 
-    seconds_per_timestep = sec_per_timesteps
+    Constructs a `SimpleHotWaterStorage` (100 L, parallel-to-heat-source
+    setup) with fake input connections for mass flow rates and temperatures
+    from the heat distribution system and heat generator plus a state
+    controller, drives a single `i_simulate` call at timestep 300, and
+    checks the mean storage temperature and both output temperatures against
+    independently recomputed values.
+
+    Args:
+        sec_per_timesteps: Seconds represented by each simulation timestep;
+            used to size the `SimulationParameters` and to convert mass
+            flow rates (kg/s) into masses (kg) for the expected-temperature
+            calculation.
+        factor_for_water_storage_portion: Mixing fraction in [0.0, 1.0] of
+            the storage's mean temperature blended into each output
+            temperature; scales how strongly the storage temperature
+            influences the outputs versus the respective input temperatures.
+    """
+
     my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
+        2017, sec_per_timesteps
     )
 
     # Set Simple Heat Water Storage
@@ -153,11 +176,11 @@ def simulate_simple_water_storage(
     # test mean water temperature calculation in storage
     mass_water_hds_in_kg = (
         stsv.values[water_mass_flow_rate_hds.global_index]
-        * seconds_per_timestep
+        * sec_per_timesteps
     )
     mass_water_hp_in_kg = (
         stsv.values[water_mass_flow_rate_from_heat_generator.global_index]
-        * seconds_per_timestep
+        * sec_per_timesteps
     )
 
     calculated_mean_water_temperature_in_celsius = (
@@ -175,10 +198,14 @@ def simulate_simple_water_storage(
         + mass_water_hds_in_kg
     )
 
-    # test if calculated mean water temperature is equal to simulated water temperature
-    assert (
-        calculated_mean_water_temperature_in_celsius
-        == my_simple_heat_water_storage.mean_water_temperature_in_water_storage_in_celsius
+    # test if calculated mean water temperature is equal to simulated water temperature.
+    # A weighted average recomputed here from the same inputs may differ from the
+    # component's i_simulate result by float-reassociation noise, so compare with a
+    # tight tolerance instead of exact equality.
+    np.testing.assert_allclose(
+        calculated_mean_water_temperature_in_celsius,
+        my_simple_heat_water_storage.mean_water_temperature_in_water_storage_in_celsius,
+        rtol=1e-6,
     )
 
     # test water output temperature for hp

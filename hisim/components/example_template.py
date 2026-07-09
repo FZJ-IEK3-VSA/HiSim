@@ -10,8 +10,8 @@ Additionally it contains examples for doc strings according to the sphinx format
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from copy import deepcopy
-from typing import Any
 from dataclasses import dataclass
+from typing import Optional
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
@@ -36,7 +36,7 @@ class ComponentNameConfig(ConfigBase):
     """Configuration of the ComponentName."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return ComponentName.get_full_classname()
 
@@ -51,7 +51,7 @@ class ComponentNameConfig(ConfigBase):
     def get_default_template_component(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "ComponentNameConfig":
         """Gets a default ComponentName."""
         return ComponentNameConfig(
             building_name=building_name,
@@ -87,51 +87,22 @@ class ComponentName(Component):
     """
 
     # Inputs
-    InputFromOtherComponent = "InputFromState"
+    InputFromOtherComponent: str = "InputFromState"
 
     # Outputs
-    OutputWithState = "OutputWithState"
-    OutputWithoutState = "OutputWithoutState"
-
-    # def __init__(self, component_name: str, my_simulation_parameters: SimulationParameters) -> None:
-    #     """Constructs all the neccessary attributes for the ExampleStorage object."""
-    #     super().__init__(name=component_name, my_simulation_parameters=my_simulation_parameters)
-
-    #     # If a component requires states, this can be implemented here.
-    #     self.state = ComponentNameState()
-    #     self.previous_state = deepcopy(self.state)
-
-    #     self.input_from_other_component: ComponentInput = self.add_input(
-    #         object_name=self.component_name,
-    #         field_name=self.InputFromOtherComponent,
-    #         load_type=LoadTypes.ELECTRICITY,
-    #         unit=Units.WATT,
-    #         mandatory=True,
-    #     )
-
-    #     self.output_with_state: ComponentOutput = self.add_output(
-    #         object_name=self.component_name,
-    #         field_name=self.OutputWithState,
-    #         load_type=LoadTypes.ELECTRICITY,
-    #         unit=Units.WATT_HOUR,
-    #     )
-
-    #     self.output_without_state: ComponentOutput = self.add_output(
-    #         object_name=self.component_name,
-    #         field_name=self.OutputWithoutState,
-    #         load_type=LoadTypes.ELECTRICITY,
-    #         unit=Units.WATT,
-    #     )
-    #     self.factor = 1.0
+    OutputWithState: str = "OutputWithState"
+    OutputWithoutState: str = "OutputWithoutState"
 
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: ComponentNameConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: Optional[DisplayConfig] = None,
     ) -> None:
         """Constructs all the neccessary attributes."""
-        self.componentnameconfig = config
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
+        self.componentnameconfig: ComponentNameConfig = config
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()
@@ -143,10 +114,10 @@ class ComponentName(Component):
         )
 
         # If a component requires states, this can be implemented here.
-        self.state = ComponentNameState()
-        self.previous_state = deepcopy(self.state)
+        self.state: "ComponentNameState" = ComponentNameState()
+        self.previous_state: "ComponentNameState" = deepcopy(self.state)
         # Initialized variables
-        self.factor = 1.0
+        self.factor: float = 1.0
 
         self.input_from_other_component: ComponentInput = self.add_input(
             object_name=self.componentnameconfig.name,

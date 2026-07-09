@@ -1,4 +1,4 @@
-"""Heating meter module to measure gas consumption, costs and co2 emission. """
+"""Heating meter module to measure district heating consumption, costs and co2 emission."""
 
 # clean
 from dataclasses import dataclass
@@ -16,11 +16,11 @@ from hisim.dynamic_component import (
     DynamicComponent,
     DynamicConnectionInput,
     DynamicConnectionOutput,
-    DynamicComponentConnection,
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 
+DEFAULT_SOURCE_WEIGHT = 999
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
 __credits__ = ["Jonas Hoppe"]
@@ -48,7 +48,7 @@ class HeatingMeterConfig(cp.ConfigBase):
         cls,
         building_name: str = "BUI1",
     ) -> Any:
-        """Gets a default GasMeter."""
+        """Gets a default HeatingMeter config."""
         return HeatingMeterConfig(
             building_name=building_name,
             name="HeatingMeter",
@@ -173,14 +173,12 @@ class HeatingMeter(DynamicComponent):
         )
 
         self.add_dynamic_default_connections(self.get_default_connections_from_heat_distribution_system())
-        # self.add_dynamic_default_connections(self.get_default_connections_from_simple_dhw_storage())
         self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
-        self.add_dynamic_default_connections(self.get_default_connections_from_generic_heat_source())
 
     def get_default_connections_from_heat_distribution_system(
         self,
     ):
-        """Get gas heater default connections."""
+        """Get default connections from HeatDistribution system."""
 
         from hisim.components.heat_distribution_system import (  # pylint: disable=import-outside-toplevel
             HeatDistribution,
@@ -196,39 +194,16 @@ class HeatingMeter(DynamicComponent):
                 source_load_type=lt.LoadTypes.HEATING,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.InandOutputType.HEAT_CONSUMPTION],
-                source_weight=999,
+                source_weight=DEFAULT_SOURCE_WEIGHT,
             )
         )
         return dynamic_connections
 
-    # def get_default_connections_from_simple_dhw_storage(
-    #     self,
-    # ):
-    #     """Get gas heater default connections."""
-    #
-    #     from hisim.components.simple_dhw_storage import (  # pylint: disable=import-outside-toplevel
-    #         SimpleDHWStorage,
-    #     )
-    #
-    #     dynamic_connections = []
-    #     dhw_storage_class_name = SimpleDHWStorage.get_classname()
-    #     dynamic_connections.append(
-    #         dynamic_component.DynamicComponentConnection(
-    #             source_component_class=SimpleDHWStorage,
-    #             source_class_name=dhw_storage_class_name,
-    #             source_component_field_name=SimpleDHWStorage.ThermalPowerConsumptionDHW,
-    #             source_load_type=lt.LoadTypes.HEATING,
-    #             source_unit=lt.Units.WATT,
-    #             source_tags=[lt.InandOutputType.HEAT_CONSUMPTION],
-    #             source_weight=999,
-    #         )
-    #     )
-    #     return dynamic_connections
 
     def get_default_connections_from_more_advanced_heat_pump(
         self,
     ):
-        """Get gas heater default connections."""
+        """Get default connections from MoreAdvancedHeatPump."""
 
         from hisim.components.more_advanced_heat_pump_hplib import (  # pylint: disable=import-outside-toplevel
             MoreAdvancedHeatPumpHPLib,
@@ -244,34 +219,11 @@ class HeatingMeter(DynamicComponent):
                 source_load_type=lt.LoadTypes.HEATING,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.InandOutputType.HEAT_DELIVERED],
-                source_weight=999,
+                source_weight=DEFAULT_SOURCE_WEIGHT,
             )
         )
         return dynamic_connections
 
-    def get_default_connections_from_generic_heat_source(
-        self,
-    ):
-        """Get generic heat source default connections."""
-
-        from hisim.components.generic_heat_source import HeatSource  # pylint: disable=import-outside-toplevel
-
-        dynamic_connections = []
-        heat_source_class_name = HeatSource.get_classname()
-        dynamic_connections.append(
-            DynamicComponentConnection(
-                source_component_class=HeatSource,
-                source_class_name=heat_source_class_name,
-                source_component_field_name=HeatSource.ThermalPowerDelivered,
-                source_load_type=lt.LoadTypes.HEATING,
-                source_unit=lt.Units.WATT,
-                source_tags=[
-                    lt.InandOutputType.HEAT_DELIVERED,
-                ],
-                source_weight=999,
-            )
-        )
-        return dynamic_connections
 
     def write_to_report(self):
         """Writes relevant information to report."""
@@ -377,7 +329,7 @@ class HeatingMeter(DynamicComponent):
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
-        """Calculate OPEX costs, consisting of gas costs and revenues."""
+        """Calculate OPEX costs for district heating consumption."""
         total_used_energy_in_kwh: float
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
@@ -387,7 +339,7 @@ class HeatingMeter(DynamicComponent):
                     ]
                     total_used_energy_in_kwh = KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=total_used_energy_in_watt,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     )
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
@@ -403,7 +355,7 @@ class HeatingMeter(DynamicComponent):
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             total_consumption_in_kwh=total_used_energy_in_kwh,
-            loadtype=lt.LoadTypes.GAS,
+            loadtype=lt.LoadTypes.HEATING,
             kpi_tag=KpiTagEnumClass.HEATING_METER
         )
 
@@ -425,7 +377,7 @@ class HeatingMeter(DynamicComponent):
                     ]
                     total_used_energy_in_kwh = KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=total_used_energy_in_watt,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     )
 
                     break
@@ -476,7 +428,7 @@ class HeatingMeterState:
     def self_copy(
         self,
     ):
-        """Copy the GasMeterState."""
+        """Copy the HeatingMeterState."""
         return HeatingMeterState(
             self.cumulative_production_in_watt_hour,
             self.cumulative_consumption_in_watt_hour,

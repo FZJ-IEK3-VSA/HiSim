@@ -44,15 +44,16 @@ class DiverterValve:
         """Set conditions for the district heating controller mode."""
 
         def dhw_heating_needed(
-            controller_mode,
-            actual_water_temperature,
-            set_water_temperature,
-        ):
+            controller_mode: HeatingMode,
+            actual_water_temperature: Optional[float],
+            set_water_temperature: Optional[float],
+        ) -> bool:
             if not with_domestic_hot_water_preparation:
                 return False
 
-            assert water_temperature_input_dhw_in_celsius is not None
-            assert set_temperatures.set_temperature_dhw is not None
+            assert actual_water_temperature is not None
+            assert set_water_temperature is not None
+            assert set_temperatures.hysteresis_water_temperature_offset is not None
 
             if actual_water_temperature < (
                 set_water_temperature - set_temperatures.hysteresis_water_temperature_offset
@@ -64,7 +65,11 @@ class DiverterValve:
 
             return False
 
-        def space_heating_needed(current_water_temperature, target_water_temperature):
+        def space_heating_needed(
+            current_water_temperature: float,
+            target_water_temperature: float,
+        ) -> bool:
+            assert set_temperatures.hysteresis_water_temperature_offset is not None
             if (
                 DiverterValve.determine_summer_heating_mode(
                     daily_average_outside_temperature,
@@ -125,13 +130,9 @@ class DiverterValve:
         elif daily_average_outside_temperature_in_celsius > set_heating_threshold_temperature_in_celsius:
             heating_mode = "off"
 
-        # it is cold enough for heating
-        elif daily_average_outside_temperature_in_celsius < set_heating_threshold_temperature_in_celsius:
+        # it is cold enough for heating (at or below threshold)
+        elif daily_average_outside_temperature_in_celsius <= set_heating_threshold_temperature_in_celsius:
             heating_mode = "on"
+        # (equality case is handled as "on" above)
 
-        else:
-            raise ValueError(
-                f"""Daily average temperature {daily_average_outside_temperature_in_celsius}°C
-                or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."""
-            )
         return heating_mode

@@ -1,4 +1,14 @@
-"""PV system module."""
+"""PV system module.
+
+This module provides the :class:`PVSystem` component, which simulates
+the electricity generation of a photovoltaic (PV) installation based on
+weather data (ambient temperature and irradiance) and the peak power,
+orientation (azimuth and tilt), and module/inverter characteristics of
+the installation. The :class:`PVSystemConfig` dataclass holds the
+configuration parameters for a PV installation, including its location,
+module and inverter databases, nominal power, mounting geometry, and the
+economic and CO2-footprint figures used in post-processing.
+"""
 
 # clean
 
@@ -683,7 +693,7 @@ class PVSystem(cp.Component):
             if timestep == 1:
                 # delete weather data for PV preprocessing from dictionary
                 # to save memory
-                if SingletonSimRepository().exist_entry(
+                if SingletonSimRepository().entry_exists(
                     key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST  # noqa: E501
                 ):
                     SingletonSimRepository().delete_entry(
@@ -738,15 +748,13 @@ class PVSystem(cp.Component):
             ].tolist()
 
             if len(self.ac_power_ratios_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:
-                raise Exception(
-                    "Reading the cached PV values seems to have failed. "
-                    + "Expected "
-                    + str(self.my_simulation_parameters.timesteps)
-                    + " values, but got "
-                    + str(len(self.ac_power_ratios_for_all_timesteps_output))
+                raise ValueError(
+                    f"Reading the cached PV values seems to have failed. "
+                    f"Expected {self.my_simulation_parameters.timesteps} values, "
+                    f"but got {len(self.ac_power_ratios_for_all_timesteps_output)}"
                 )
         else:
-            if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):
+            if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.LOCATION):
                 SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
             else:
                 raise KeyError(
@@ -861,7 +869,7 @@ class PVSystem(cp.Component):
 
         pd_database = pd_database.append(lastday)
         pd_database = pd_database.sort_index()
-        return pd_database.resample("1T").asfreq().interpolate(method="linear").tolist()
+        return pd_database.resample("1min").asfreq().interpolate(method="linear").tolist()
 
     def get_modules_from_database(self, module_database: Any, load_module_data: bool, module_name: str) -> Any:
         """Get modules from pvlib module database."""
@@ -898,11 +906,13 @@ class PVSystem(cp.Component):
                 )
 
             # choose module from modules database
-            module = modules.loc[modules["Name"] == module_name]
+            module = modules.loc[modules["Name"] == module_name].copy()
 
             # transform column object types to numeric types
             for column in module.columns:
-                module.loc[:, column] = pd.to_numeric(module.loc[:, column], errors="coerce")
+                if column == "Name":
+                    continue
+                module[column] = pd.to_numeric(module[column], errors="coerce")
 
             # transform module dataframe to dict
             if len(module) != 1:
@@ -962,11 +972,13 @@ class PVSystem(cp.Component):
                     os.path.join(utils.HISIMPATH["photovoltaic"]["cec_inverters"]),
                 )
                 # choose inverter from inverters database
-                inverter = inverters.loc[inverters["Name"] == inverter_name]
+                inverter = inverters.loc[inverters["Name"] == inverter_name].copy()
 
                 # transform column object types to numeric types
                 for column in inverter.columns:
-                    inverter.loc[:, column] = pd.to_numeric(inverter.loc[:, column], errors="coerce")
+                    if column == "Name":
+                        continue
+                    inverter[column] = pd.to_numeric(inverter[column], errors="coerce")
 
                 # transform inverter dataframe to dict
                 if len(inverter) != 1:

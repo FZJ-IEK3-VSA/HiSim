@@ -40,8 +40,7 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature_and_time(
     water_temp_dhw: float,
     expected_mode: str,
 ):
-    """Test determine_mode."""
-    """ GIVEN """
+    """GIVEN."""
     testee = given_default_testee(
         {
             "minimum_runtime_in_seconds": min_state_time,
@@ -96,3 +95,48 @@ def given_default_testee(
         component.DisplayConfig(),
     )
     return testee
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    [
+        "daily_avg_outside_temperature_in_celsius",
+        "set_heating_threshold_temperature_in_celsius",
+        "expected_mode",
+    ],
+    [
+        # Equality: exactly at threshold → "on" (cold enough for heating)
+        (10.0, 10.0, "on"),
+        # Below threshold → "on"
+        (5.0, 10.0, "on"),
+        # Above threshold → "off"
+        (15.0, 10.0, "off"),
+        # No threshold set → "on"
+        (5.0, None, "on"),
+        (15.0, None, "on"),
+        # Equality with negative temperatures
+        (0.0, 0.0, "on"),
+        # Slightly above threshold
+        (10.1, 10.0, "off"),
+        # Slightly below threshold
+        (9.9, 10.0, "on"),
+    ],
+)
+def test_determine_summer_heating_mode_handles_equality_case(
+    daily_avg_outside_temperature_in_celsius: float,
+    set_heating_threshold_temperature_in_celsius: Optional[float],
+    expected_mode: str,
+):
+    """Test determine_summer_heating_mode with emphasis on the equality boundary case.
+
+    The original code used strict '>' and '<' comparisons, leaving an unreachable
+    else branch that raised ValueError when temperatures were exactly equal.
+    This test ensures the equality case returns 'on' (cold enough for heating).
+    """
+    from hisim.components.dual_circuit_system import DiverterValve
+
+    result = DiverterValve.determine_summer_heating_mode(
+        daily_avg_outside_temperature_in_celsius,
+        set_heating_threshold_temperature_in_celsius,
+    )
+    assert result == expected_mode

@@ -199,7 +199,7 @@ class Component:
         return cls.__name__
 
     @classmethod
-    def get_full_classname(cls):
+    def get_full_classname(cls) -> str:
         """Gets the class name. Helper function for default connections."""
         return cls.__module__ + "." + cls.__name__
 
@@ -230,6 +230,8 @@ class Component:
                 "Please check your components' configuration classes and inherit from ConfigBase class according to hisim/components/example_component.py.",
             )
         self.my_display_config: DisplayConfig = my_display_config
+        self.log_connections: List[Any] = []
+        self.enable_logging = my_simulation_parameters.log_connections
 
     def get_component_name(
         self,
@@ -244,6 +246,11 @@ class Component:
     def add_default_connections(self, connections: List[ComponentConnection]) -> None:
         """Adds a default connection list definition."""
 
+        if not connections:
+            raise ValueError(
+                f"connections list is empty for component {self.component_name}. "
+                "Cannot add default connections from an empty list."
+            )
         component_name = connections[0].source_class_name
         for connection in connections:
             if connection.source_class_name != component_name:
@@ -308,6 +315,12 @@ class Component:
         """Connecting an input to an output."""
         if len(self.inputs) == 0:
             raise ValueError("The component " + self.component_name + " has no inputs.")
+        if self.enable_logging:
+            self.log_connections += [{
+                "input_fieldname": input_fieldname,
+                "src_object_name": src_object_name,
+                "src_field_name": src_field_name,
+            }]
 
         component_input: ComponentInput
         input_to_set = None
@@ -335,13 +348,24 @@ class Component:
             "To": {"Component": input_to_set.component_name, "Field": input_to_set.field_name},
         }
 
-        if os.path.exists(file_name):
-            with open(file_name, mode="r+", encoding="utf-8") as file:
-                file.seek(os.stat(file_name).st_size - 1)
-                file.write(f",{json.dumps(dict_with_connection_information)}]")
-        else:
-            with open(file_name, "a", encoding="utf-8") as file:
-                json.dump([dict_with_connection_information], file)
+        try:
+            # Validate that result_directory exists, create if it doesn't
+            if not os.path.exists(self.my_simulation_parameters.result_directory):
+                os.makedirs(self.my_simulation_parameters.result_directory, exist_ok=True)
+
+            if os.path.exists(file_name):
+                with open(file_name, mode="r+", encoding="utf-8") as file:
+                    file.seek(os.stat(file_name).st_size - 1)
+                    file.write(f",{json.dumps(dict_with_connection_information)}]")
+            else:
+                with open(file_name, "a", encoding="utf-8") as file:
+                    json.dump([dict_with_connection_information], file)
+        except (OSError, IOError) as e:
+            # Log warning instead of crashing
+            log.warning(
+                f"Failed to write component connections to {file_name}: {e}. "
+                "Component connections will not be logged to file."
+            )
 
     def connect_dynamic_input(self, input_fieldname: str, src_object: ComponentOutput) -> None:
         """For connecting an input to a dynamic output."""

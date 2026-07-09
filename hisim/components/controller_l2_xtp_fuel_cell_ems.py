@@ -1,9 +1,12 @@
 """ L2 Controller for PtX Buffer Battery operation. """
 
+from __future__ import annotations
+
 # clean
-import os
-from typing import List, Any
+from pathlib import Path
+from typing import List, Any, cast
 import json
+import math
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
@@ -25,12 +28,12 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class XTPControllerConfig(ConfigBase):
-    """Configutation of the PtX  Controller."""
+    """Configuration of the PtX  Controller."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
-        return XTPController.get_full_classname()
+        return str(XTPController.get_full_classname())
 
     building_name: str
     name: str
@@ -41,12 +44,12 @@ class XTPControllerConfig(ConfigBase):
     operation_mode: str
 
     @staticmethod
-    def read_config(fuel_cell_name):
+    def read_config(fuel_cell_name: str) -> dict[str, Any]:
         """Read config."""
-        config_file = os.path.join(utils.HISIMPATH["inputs"], "fuel_cell_manufacturer_config.json")
-        with open(config_file, "r", encoding="utf-8") as json_file:
+        config_file = Path(utils.HISIMPATH["inputs"]) / "fuel_cell_manufacturer_config.json"
+        with config_file.open("r", encoding="utf-8") as json_file:
             data = json.load(json_file)
-            return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
+            return cast(dict[str, Any], data.get("Fuel Cell variants", {}).get(fuel_cell_name, {}))
 
     @classmethod
     def control_fuel_cell(
@@ -54,7 +57,7 @@ class XTPControllerConfig(ConfigBase):
         fuel_cell_name: str,
         operation_mode: str,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> XTPControllerConfig:
         """Sets the according parameters for the chosen fuel cell."""
         config_json = cls.read_config(fuel_cell_name)
 
@@ -146,15 +149,15 @@ class XTPController(Component):
 
         # =================================================================================================================================
         # Initialize variables
-        self.system_state = "OFF"
-        self.threshold_exceeded = False
-        self.standby_time_count = 0.0
+        self.system_state: str = "OFF"
+        self.threshold_exceeded: bool = False
+        self.standby_time_count: float = 0.0
 
-        self.system_state_previous = self.system_state
-        self.threshold_exceeded_previous = self.threshold_exceeded
-        self.standby_time_count_previous = self.standby_time_count
+        self.system_state_previous: str = self.system_state
+        self.threshold_exceeded_previous: bool = self.threshold_exceeded
+        self.standby_time_count_previous: float = self.standby_time_count
 
-    def system_operation(self, operation_mode, demand_load):
+    def system_operation(self, operation_mode: str, demand_load: float) -> tuple[float, float]:
         """System operation."""
         if operation_mode == "StandbyLoad":
             if self.min_output <= demand_load <= self.max_output:
@@ -221,7 +224,11 @@ class XTPController(Component):
         if force_convergence:
             return
 
-        demand_load = abs(stsv.get_input_value(self.demand_input) / 1000)  # WATT input to KILOWATT
+        raw = stsv.get_input_value(self.demand_input)
+        assert math.isfinite(raw), (
+            f"Non-finite demand input at timestep {timestep}: {raw}"
+        )
+        demand_load = abs(raw / 1000)  # WATT input to KILOWATT
 
         """ Only for household testing
         if self.system_state == "OFF" and soc < 0.2:

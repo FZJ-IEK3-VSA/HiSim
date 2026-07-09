@@ -1,4 +1,11 @@
-"""Basic household new system setup."""
+"""Household electric heating system setup with building sizing.
+
+This module provides a `setup_function` that configures a HiSim simulation
+for a household with electric space heating and domestic hot water preparation.
+The setup includes occupancy profiles, weather data, PV system, electric heating
+elements, DHW storage, optional battery and EMS, and an electricity meter.
+Configuration is loaded from modular household config files or defaults are used.
+"""
 
 # clean
 
@@ -104,8 +111,7 @@ def setup_function(
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.logging_level = 3
-    else:
-        simu_params_year = my_simulation_parameters.year
+    simu_params_year = my_simulation_parameters.year
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================
@@ -124,6 +130,13 @@ def setup_function(
 
     # Set Weather
     weather_location = arche_type_config_.weather_location
+
+    # testing AU weather data
+    weather_filepath = arche_type_config_.weather_filepath
+    weather_datasource_raw = arche_type_config_.weather_datasource
+    weather_datasource: Optional[weather.WeatherDataSourceEnum] = None
+    if isinstance(weather_datasource_raw, str):
+        weather_datasource = weather.WeatherDataSourceEnum[weather_datasource_raw]
 
     # Set Photovoltaic System
     azimuth = arche_type_config_.pv_azimuth
@@ -215,7 +228,12 @@ def setup_function(
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
+    # my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
+    my_weather_config = weather.WeatherConfig.get_default(
+        location_entry=weather_location,
+        weather_direct_filepath=weather_filepath,
+        weather_direct_data_source=weather_datasource,
+    )
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_weather)
@@ -305,7 +323,7 @@ def setup_function(
         loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
             source_output_name="LoadingPowerInputForBattery_",
             source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-            source_weight=5,
+            source_weight=6,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Battery Control. ",

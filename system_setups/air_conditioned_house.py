@@ -153,14 +153,14 @@ def setup_function(
     my_sim.add_component(my_weather)
 
     """Photovoltaic System"""
-    power = 4e3
-    pv_co2_footprint = power * 1e-3 * 130.7
-    pv_cost = power * 1e-3 * 535.81
+    pv_system_power_in_watt = 4e3
+    pv_co2_footprint = pv_system_power_in_watt * 1e-3 * 130.7
+    pv_cost = pv_system_power_in_watt * 1e-3 * 535.81
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
         building_name="BUI1",
         time=year,
         location=location,
-        power_in_watt=power,
+        power_in_watt=pv_system_power_in_watt,
         load_module_data=False,
         module_name="Hanwha HSL60P6-PA-4-250T [2013]",
         integrate_inverter=True,

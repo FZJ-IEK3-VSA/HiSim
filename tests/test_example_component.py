@@ -12,8 +12,16 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.system_setups
-def test_example_component():
-    """Test for the Example Component."""
+def test_example_component() -> None:
+    """Verify ExampleComponent build() and i_simulate() produce expected outputs.
+
+    Constructs an ExampleComponent from the default config, wires a fake
+    thermal-energy-delivered input (50 W), calls build() with the default
+    electricity/capacity/initial-temperature values, then runs one
+    simulation step at timestep 10 min and asserts the resulting
+    SingleTimeStepValues match the expected t_m_c, electricity_output, and
+    stored_energy outputs.
+    """
 
     mysim: SimulationParameters = SimulationParameters.full_year(
         year=2021, seconds_per_timestep=60
@@ -22,7 +30,6 @@ def test_example_component():
     my_example_component_config = (
         example_component.ExampleComponentConfig.get_default_example_component()
     )
-    print("\n")
     log.information(
         "default example component config " + str(my_example_component_config) + "\n"
     )

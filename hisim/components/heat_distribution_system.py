@@ -36,6 +36,7 @@ class HeatDistributionSystemType(IntEnum):
 
     RADIATOR = 1
     FLOORHEATING = 2
+    LOW_TEMPERATURE_RADIATOR = 3
 
 
 class PositionHotWaterStorageInSystemSetup(IntEnum):
@@ -620,6 +621,8 @@ class HeatDistribution(cp.Component):
             component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING
         elif config.heating_system in [HeatDistributionSystemType.RADIATOR, 1]:
             component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR
+        elif config.heating_system in [HeatDistributionSystemType.LOW_TEMPERATURE_RADIATOR, 3]:
+            component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR
         else:
             capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
             return capex_cost_data_class  # or proceed as needed
@@ -695,7 +698,7 @@ class HeatDistribution(cp.Component):
                     # get energy from power
                     thermal_output_energy_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=thermal_output_power_values_in_watt,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     )
                     thermal_output_energy_hds_entry = KpiEntry(
                         name="Thermal output energy of heat distribution system",
@@ -1362,7 +1365,7 @@ class HeatDistributionControllerInformation:
             factor_of_oversizing_of_heat_distribution_system=1.0,
         )
 
-        self.water_mass_flow_rate_in_kp_per_second = self.calc_heating_distribution_system_water_mass_flow_rate(
+        self.water_mass_flow_rate_in_kg_per_second = self.calc_heating_distribution_system_water_mass_flow_rate(
             max_thermal_building_demand_in_watt=self.hds_controller_config.heating_load_of_building_in_watt
         )
 
@@ -1404,6 +1407,10 @@ class HeatDistributionControllerInformation:
         elif self.heat_distribution_system_type == HeatDistributionSystemType.RADIATOR:
             list_of_maximum_flow_and_return_temperatures_in_celsius = [70, 55]
             exponent_factor_of_heating_distribution_system = 1.3
+
+        elif self.heat_distribution_system_type == HeatDistributionSystemType.LOW_TEMPERATURE_RADIATOR:
+            list_of_maximum_flow_and_return_temperatures_in_celsius = [55, 45]
+            exponent_factor_of_heating_distribution_system = 1.2
         else:
             raise ValueError(
                 "Heating System Type not defined here. Check your heat distribution controller config or your Heating System Type class."

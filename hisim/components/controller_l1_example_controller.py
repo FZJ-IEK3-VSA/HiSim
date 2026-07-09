@@ -4,7 +4,6 @@
 
 # Generic/Built-in
 
-from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -32,15 +31,15 @@ class SimpleControllerConfig(ConfigBase):
     name: str
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Return the full class name of the base class."""
-        return SimpleController.get_full_classname()
+        return str(SimpleController.get_full_classname())
 
     @classmethod
     def get_default_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "SimpleControllerConfig":
         """Returns default config."""
         config = SimpleControllerConfig(name="SimpleController", building_name=building_name)
         return config
@@ -49,8 +48,11 @@ class SimpleControllerConfig(ConfigBase):
 class SimpleController(Component):
     """Simple controller class."""
 
-    StorageFillLevel = "Fill Level Percent"
-    GasHeaterPowerPercent = "Gas Heater Power Level"
+    StorageFillLevel: str = "Fill Level Percent"
+    GasHeaterPowerPercent: str = "Gas Heater Power Level"
+
+    FILL_LEVEL_LOW_THRESHOLD: float = 0.4
+    FILL_LEVEL_HIGH_THRESHOLD: float = 0.99
 
     def __init__(
         self,
@@ -83,8 +85,8 @@ class SimpleController(Component):
             lt.LoadTypes.GAS,
             lt.Units.PERCENT,
         )
-        self.state = 0
-        self.previous_state = self.state
+        self.state: int = 0
+        self.previous_state: int = self.state
 
     def i_save_state(self) -> None:
         """Saves the state."""
@@ -100,8 +102,8 @@ class SimpleController(Component):
         if force_convergence:
             return
         percent = stsv.get_input_value(self.input1_channel)
-        if percent < 0.4:
+        if percent < SimpleController.FILL_LEVEL_LOW_THRESHOLD:
             self.state = 1
-        if percent > 0.99:
+        if percent > SimpleController.FILL_LEVEL_HIGH_THRESHOLD:
             self.state = 0
         stsv.set_output_value(self.output1_channel, self.state)

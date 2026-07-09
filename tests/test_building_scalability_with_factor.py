@@ -19,8 +19,16 @@ from tests import functions_for_testing as fft
 
 @pytest.mark.buildingtest
 @utils.measure_execution_time
-def test_building_scalability():
-    """Test function for the building module."""
+def test_building_scalability() -> None:
+    """Verify building envelope surfaces scale linearly with conditioned floor area.
+
+    Constructs a default German single-family home with occupancy (LPG UTSP connector)
+    and Aachen weather, simulates one timestep at a baseline conditioned floor area of
+    121.2 m², then re-runs the building for scaling factors 1, 5, and 12. Asserts that:
+      - opaque envelope surfaces (facade, roof, floor) scale by the factor, and
+      - window/door surfaces and per-orientation window areas scale consistently
+        with the building's `window_scaling_factor`.
+    """
 
     # Sets inputs
     absolute_conditioned_floor_area_in_m2 = 121.2

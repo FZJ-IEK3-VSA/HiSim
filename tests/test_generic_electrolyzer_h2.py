@@ -1,4 +1,9 @@
-"""Test for generic electrolyzer h2."""
+"""Tests for the generic electrolyzer component for hydrogen production.
+
+This module contains tests for the generic_electrolyzer_h2 component, which simulates
+green hydrogen production via electrolysis. Tests verify hydrogen flow rate calculations
+based on electrical load input and activation state.
+"""
 import pytest
 
 from hisim import component as cp
@@ -10,8 +15,15 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_electrolyzer():
-    """Test electrolyzer."""
+def test_electrolyzer() -> None:
+    """Verify hydrogen flow rate output of the generic electrolyzer under a fixed electrical load.
+
+    Constructs an `Electrolyzer` with a PEM configuration (nominal load 987 kW, max load
+    ~1028 kW, nominal H2 flow rate 18.875 kg/h), feeds a fake electrical load of 850.6 kW
+    and an activation state of 1, then asserts that the produced hydrogen flow rate matches
+    the expected value (~0.6218 kg/h) when the electrolyzer is active, and is zero when the
+    activation state indicates off or standby.
+    """
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
         2021, seconds_per_timestep
@@ -85,8 +97,7 @@ def test_electrolyzer():
 
     else:
         assert (
-            stsv.values[my_electrolyzer.hydrogen_flow_rate.global_index]
-            == 0.621840650119573
+            stsv.values[my_electrolyzer.hydrogen_flow_rate.global_index] == pytest.approx(0.621840650119573)
         )
 
     # python -m pytest ../tests/test_generic_electrolyzer_h2.py

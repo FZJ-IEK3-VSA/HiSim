@@ -28,8 +28,9 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         time_correction_factor: float,
         output_description: str,
         figure_format: FigureFormat,
+        path_checker=None,
     ) -> None:
-        """Initalizes a carpot plot."""
+        """Initializes a carpet plot."""
         super().__init__(
             output=output,
             component_name=component_name,
@@ -39,11 +40,17 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             time_correction_factor=time_correction_factor,
             output_description=output_description,
             figure_format=figure_format,
+            path_checker=path_checker,
         )
 
-    def plot(self, xdims: int, data: Any) -> ReportImageEntry:
-        """Makes a carpet plot."""
+    def plot(self, xdims: int, data: Any) -> "ReportImageEntry | None":
+        """Makes a carpet plot.
+
+        Returns:
+            ReportImageEntry or None -- None when data cannot be reshaped into entire days.
+        """
         log.trace("starting carpet plots")
+        self.ensure_output_dir()
         ydims = int(len(data) / xdims)  # number of calculated timesteps per day
         y_steps_per_hour = int(ydims / 24)
 
@@ -51,6 +58,7 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             database = data.values.reshape(xdims, ydims)
         except ValueError:
             log.error("Carpet plot can only deal with data containing entire days")
+            return None
 
         if np.max(np.abs(data.values)) > 1.5e3:
             database = database * 1e-3
@@ -113,7 +121,8 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         time_correction_factor: float,
         output_description: str,
         figure_format: FigureFormat,
-    ):
+        path_checker=None,
+    ) -> None:
         """Initializes a line chart."""
         if output_description is None:
             raise ValueError("Output description was None for component " + component_name)
@@ -127,6 +136,7 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             time_correction_factor=time_correction_factor,
             output_description=output_description,
             figure_format=figure_format,
+            path_checker=path_checker,
         )
 
     @utils.measure_memory_leak
@@ -134,6 +144,7 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         """Makes a line plot."""
 
         mpl.use("Agg")
+        self.ensure_output_dir()
 
         _fig, axis = plt.subplots(figsize=self.figsize, dpi=self.dpi)
         x_zero = data.index
@@ -185,6 +196,7 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         422.51,
         366.83,
     ]
+    """Reference monthly PV production values (in kWh) used as a baseline for comparison."""
 
     def __init__(
         self,
@@ -195,7 +207,8 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         time_correction_factor: float,
         output_description: str,
         figure_format: FigureFormat,
-    ):
+        path_checker=None,
+    ) -> None:
         """Initializes the classes."""
         super().__init__(
             output=output,
@@ -206,13 +219,14 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             time_correction_factor=time_correction_factor,
             output_description=output_description,
             figure_format=figure_format,
+            path_checker=path_checker,
         )
         self.filename = f"monthly_{self.output}{self.figure_format}"
 
     def plot(self, data: Any) -> ReportImageEntry:
         """Plots the bar chart."""
-        width = 0.35
         # Specify the values of blue bars (height)
+        self.ensure_output_dir()
 
         # Position of bars on x-axis
         ind = np.arange(12)

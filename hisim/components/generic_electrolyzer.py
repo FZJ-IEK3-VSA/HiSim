@@ -5,7 +5,7 @@ linarly. Recovery heat is not considered so far.
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import ClassVar, List, Optional
 
 from dataclasses_json import dataclass_json
 
@@ -64,6 +64,9 @@ class GenericElectrolyzerConfig(cp.ConfigBase):
 class ElectrolyzerState:
     """Saves the state of the electrolyzer."""
 
+    hydrogen: float
+    electricity: float
+
     def __init__(self, hydrogen: float = 0, electricity: float = 0):
         """Initialize an instance."""
         self.hydrogen = hydrogen
@@ -93,22 +96,24 @@ class GenericElectrolyzer(cp.Component):
     """
 
     # Inputs
-    AvailableElectricity = "AvailbaleElectricity"
+    AvailableElectricity: ClassVar[str] = "AvailbaleElectricity"
 
     # Outputs
-    HydrogenOutput = "HydrogenOutput"
-    ElectricityOutput = "ElectricityOutput"
+    HydrogenOutput: ClassVar[str] = "HydrogenOutput"
+    ElectricityOutput: ClassVar[str] = "ElectricityOutput"
 
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericElectrolyzerConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: Optional[cp.DisplayConfig] = None,
     ):
         """Initialize an instance."""
 
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
+        if my_display_config is None:
+            my_display_config = cp.DisplayConfig()
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -213,6 +218,6 @@ class GenericElectrolyzer(cp.Component):
         stsv.set_output_value(self.hydrogen_output_channel, self.state.hydrogen)
         stsv.set_output_value(self.electricity_output_channel, self.state.electricity)
 
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         """Writes the information of the current component to the report."""
         return self.config.get_string_dict()

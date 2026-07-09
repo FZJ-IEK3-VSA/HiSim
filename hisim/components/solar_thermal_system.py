@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 import datetime
-from typing import Any, List, Optional
+from typing import List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -44,7 +44,7 @@ class SolarThermalSystemConfig(ConfigBase):
     """Configuration of the SolarThermalSystem component."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return SolarThermalSystem.get_full_classname()
 
@@ -59,7 +59,6 @@ class SolarThermalSystemConfig(ConfigBase):
     eta_0: float
     a_1_w_m2_k: float  # W/(m2*K)
     a_2_w_m2_k: float  # W/(m2*K2)
-    delta_temperature_n_k = 10  # K
 
     # Whether on old solar pump or a new one is used
     old_solar_pump: bool
@@ -78,6 +77,9 @@ class SolarThermalSystemConfig(ConfigBase):
 
     # Weight of component, defines hierachy in control. The default is 1.
     source_weight: int
+
+    # Temperature difference between collector inlet and mean temperature
+    delta_temperature_n_k: float = 10  # K
 
     @classmethod
     def get_default_solar_thermal_system(
@@ -213,9 +215,9 @@ class SolarThermalSystem(Component):
         self.previous_state = deepcopy(self.state)
         # Initialized variables
         self.factor = 1.0
-        self.precalc_data_for_all_timesteps_data: List = []
-        self.precalc_data_for_all_timesteps_output: List = []
-        self.cache_filepath: str
+        self.precalc_data_for_all_timesteps_data: List[Optional[pd.DataFrame]] = []
+        self.precalc_data_for_all_timesteps_output: List[pd.DataFrame] = []
+        self.cache_filepath: Optional[str] = None
 
         # Add inputs
         self.t_out_channel: ComponentInput = self.add_input(
@@ -352,7 +354,7 @@ class SolarThermalSystem(Component):
 
     def get_cost_opex(
         self,
-        all_outputs: List,
+        all_outputs: List[ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
@@ -393,7 +395,7 @@ class SolarThermalSystem(Component):
 
     def get_component_kpi_entries(
         self,
-        all_outputs: List,
+        all_outputs: List[ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
@@ -518,7 +520,7 @@ class SolarThermalSystem(Component):
 
     def get_default_connections_from_simple_hot_water_storage(
         self,
-    ):
+    ) -> List[ComponentConnection]:
         """Get simple_water_storage default connections."""
 
         connections = []
@@ -532,7 +534,7 @@ class SolarThermalSystem(Component):
         )
         return connections
 
-    def get_default_connections_from_weather(self):
+    def get_default_connections_from_weather(self) -> List[ComponentConnection]:
         """Get default connections from weather."""
 
         connections = []
@@ -570,7 +572,7 @@ class SolarThermalSystem(Component):
 
     def get_default_connections_from_controller(
         self,
-    ):
+    ) -> List[ComponentConnection]:
         """Get Controller default connections."""
         component_class = SolarThermalSystemController
         connections = []
@@ -611,17 +613,14 @@ class SolarThermalSystem(Component):
             ]
 
             if len(self.precalc_data_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:
-                raise Exception(
-                    "Reading the cached solar thermal precalc values seems to have failed. "
-                    + "Expected "
-                    + str(self.my_simulation_parameters.timesteps)
-                    + " values, but got "
-                    + str(len(self.precalc_data_for_all_timesteps_output))
+                raise ValueError(
+                    f"Reading the cached solar thermal precalc values seems to have failed. "
+                    f"Expected {self.my_simulation_parameters.timesteps} values, but got "
+                    f"{len(self.precalc_data_for_all_timesteps_output)}"
                 )
 
-        # create empty result lists as a preparation for caching
-        # in i_simulate
-        self.precalc_data_for_all_timesteps_data = [0] * self.my_simulation_parameters.timesteps
+        # create placeholder list for per-timestep precalc DataFrames, filled in i_simulate
+        self.precalc_data_for_all_timesteps_data = [None] * self.my_simulation_parameters.timesteps
 
     def i_simulate(
         self,
@@ -722,6 +721,7 @@ class SolarThermalSystem(Component):
 
         if timestep + 1 == self.my_simulation_parameters.timesteps:
             for i, df in enumerate(self.precalc_data_for_all_timesteps_data):
+                assert df is not None
                 df["timestep"] = i  # Add timestep column to each
 
             # Combine all into one large DataFrame
@@ -752,7 +752,7 @@ class SolarThermalSystemControllerConfig(ConfigBase):
     """Config class for controller of solar thermal system."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return SolarThermalSystemController.get_full_classname()
 
@@ -766,7 +766,7 @@ class SolarThermalSystemControllerConfig(ConfigBase):
         building_name: str = "BUI1",
         name: str = "SolarThermalSystemController",
         set_temperature_difference_for_on: float = 10,
-    ) -> Any:
+    ) -> "SolarThermalSystemControllerConfig":
         """Gets a default SolarThermalSystemController for DHW."""
         return SolarThermalSystemControllerConfig(
             building_name=building_name,
@@ -861,7 +861,7 @@ class SolarThermalSystemController(Component):
 
     def get_default_connections_from_simple_hot_water_storage(
         self,
-    ):
+    ) -> List[ComponentConnection]:
         """Get simple_water_storage default connections."""
 
         connections = []
@@ -877,7 +877,7 @@ class SolarThermalSystemController(Component):
 
     def get_default_connections_from_solar_thermal_system(
         self,
-    ):
+    ) -> List[ComponentConnection]:
         """Get simple_water_storage default connections."""
 
         connections = []
@@ -968,7 +968,7 @@ class SolarThermalSystemController(Component):
 
     def get_cost_opex(
         self,
-        all_outputs: List,
+        all_outputs: List[ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
@@ -986,7 +986,7 @@ class SolarThermalSystemController(Component):
 
     def get_component_kpi_entries(
         self,
-        all_outputs: List,
+        all_outputs: List[ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""

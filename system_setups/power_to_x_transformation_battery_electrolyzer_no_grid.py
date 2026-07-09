@@ -43,7 +43,19 @@ __status__ = "development"
 
 
 def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
-    """Setup function."""
+    """Set up a renewable energy to hydrogen simulation.
+
+    Wires together CSV wind-power input, transformer, PTX energy-management
+    controller, electrolyzer controller, and electrolyzer to simulate
+    hydrogen production from RES. Configures full-year simulation with
+    60-second timesteps and enables comprehensive post-processing.
+
+    Args:
+        my_sim: Simulator instance to register components with.
+        my_simulation_parameters: Optional SimulationParameters; if None,
+            defaults to a full-year 2021 simulation at 60s per timestep.
+
+    """
     log.information("Starting basic electrolyzer system setup")
     # =================================================================================================================================
     # Set System Parameters
@@ -222,4 +234,4 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     )
 
 
-# python ../hisim/hisim_main.py ptx_transf_bat_ec_no_gird.py setup_function
+# python ../hisim/hisim_main.py ptx_transf_bat_ec_no_grid.py setup_function

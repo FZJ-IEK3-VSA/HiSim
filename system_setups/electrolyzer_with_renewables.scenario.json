@@ -1,0 +1,117 @@
+{
+    "name": "Electrolyzer with renewables",
+    "description": "Simple Electrolyzer system setup.",
+    "multiple_buildings": false,
+    "components": [
+        {
+            "component_full_classname": "hisim.components.transformer_rectifier.Transformer",
+            "configuration": {
+                "building_name": "CSV Loader",
+                "name": "Standard transformer and rectifier unit",
+                "efficiency": 0.95
+            },
+            "config_full_classname": "hisim.components.transformer_rectifier.TransformerConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.csvloader.CSVLoader",
+            "configuration": {
+                "building_name": "CSV Loader",
+                "name": "CSV",
+                "csv_filename": "wind_generated_power_1_min.csv",
+                "column": 1,
+                "loadtype": "Electricity",
+                "unit": "kW",
+                "column_name": "generated_power",
+                "sep": ",",
+                "decimal": ".",
+                "multiplier": 1,
+                "output_description": "Values from CSV"
+            },
+            "config_full_classname": "hisim.components.csvloader.CSVLoaderConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.controller_l1_electrolyzer_h2.ElectrolyzerController",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "L1ElectrolyzerController",
+                "nom_load": 987.0,
+                "min_load": 205.462,
+                "max_load": 1028.225,
+                "standby_load": 41.225,
+                "warm_start_time": 30.0,
+                "cold_start_time": 600.0
+            },
+            "config_full_classname": "hisim.components.controller_l1_electrolyzer_h2.ElectrolyzerControllerConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.generic_electrolyzer_h2.Electrolyzer",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Electrolyzer",
+                "electrolyzer_type": "PEM",
+                "nom_load": 987.0,
+                "max_load": 1028.225,
+                "nom_h2_flow_rate": 18.875,
+                "faraday_eff": 0.999,
+                "i_cell_nom": 2.0,
+                "ramp_up_rate": 0.03,
+                "ramp_down_rate": 0.25
+            },
+            "config_full_classname": "hisim.components.generic_electrolyzer_h2.ElectrolyzerConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        }
+    ],
+    "connections": [
+        {
+            "source": {
+                "component_name": "CSV",
+                "field_name": "CSV Profile"
+            },
+            "target": {
+                "component_name": "Standard transformer and rectifier unit",
+                "field_name": "Input1"
+            }
+        },
+        {
+            "source": {
+                "component_name": "Standard transformer and rectifier unit",
+                "field_name": "MyTransformerOutput"
+            },
+            "target": {
+                "component_name": "L1ElectrolyzerController",
+                "field_name": "ProvidedLoad"
+            }
+        },
+        {
+            "source": {
+                "component_name": "L1ElectrolyzerController",
+                "field_name": "CurrentMode"
+            },
+            "target": {
+                "component_name": "Electrolyzer",
+                "field_name": "InputState"
+            }
+        },
+        {
+            "source": {
+                "component_name": "L1ElectrolyzerController",
+                "field_name": "DistributedLoad"
+            },
+            "target": {
+                "component_name": "Electrolyzer",
+                "field_name": "LoadInput"
+            }
+        }
+    ]
+}

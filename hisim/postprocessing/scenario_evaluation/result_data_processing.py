@@ -1,6 +1,6 @@
 """Result Data Processing and Plotting for Scenario Comparison."""
 
-import os
+from pathlib import Path
 from enum import Enum
 from dataclasses import dataclass
 from typing import Dict, Tuple, Optional, List
@@ -21,8 +21,8 @@ class ScenarioDataProcessing:
     ) -> Tuple[pd.DataFrame, List[str]]:
         """Get csv data and create dataframes with the filtered and procesed scenario data."""
 
-        if not os.path.isfile(filepath_of_aggregated_dataframe):
-            raise FileExistsError(f"The file {filepath_of_aggregated_dataframe} could not be found.")
+        if not Path(filepath_of_aggregated_dataframe).is_file():
+            raise FileNotFoundError(f"The file {filepath_of_aggregated_dataframe} could not be found.")
         log.information(f"Read aggregated dataframe with all HiSim results from {filepath_of_aggregated_dataframe}.")
 
         if data_format_type == DataFormatEnum.CSV.name:
@@ -69,7 +69,7 @@ class ScenarioDataProcessing:
 
         # create a excel writer object
         with pd.ExcelWriter(  # pylint: disable=abstract-class-instantiated
-            path=os.path.join(path_to_save, f"{kind_of_data_set}_stats.xlsx"),
+            path=Path(path_to_save) / f"{kind_of_data_set}_stats.xlsx",
             mode="w",
         ) as writer:
             # statistical data

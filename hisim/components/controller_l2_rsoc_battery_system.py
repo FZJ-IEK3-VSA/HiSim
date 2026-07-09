@@ -1,7 +1,7 @@
 """L2 Controller for PtX Buffer Battery operation."""
 
 # clean
-import os
+from pathlib import Path
 from typing import List, Any
 import json
 from dataclasses import dataclass
@@ -43,38 +43,63 @@ class RsocBatteryControllerConfig(ConfigBase):
     max_power_sofc: float
     # standby_load_sofc: float
 
-    operation_mode: float
+    operation_mode: str
 
     @staticmethod
-    def read_config(rsoc_name):
-        """Opens the according JSON-file, based on the rSOC_name."""
+    def read_config(
+        rsoc_name: str, config_path: Path | None = None
+    ) -> dict[str, Any]:
+        """Open the manufacturer config JSON and return the variant for ``rsoc_name``.
 
-        config_file = os.path.join(utils.HISIMPATH["inputs"], "rSOC_manufacturer_config.json")
+        When ``config_path`` is ``None`` the config shipped with HiSim
+        (``utils.HISIMPATH["inputs"] / "rSOC_manufacturer_config.json"``) is
+        used, preserving the original behaviour. Passing an explicit
+        ``config_path`` keeps the lookup independent of the module-global
+        ``HISIMPATH`` and the default inputs directory, which makes it usable
+        from tests.
+        """
+
+        config_file = (
+            config_path
+            if config_path is not None
+            else Path(utils.HISIMPATH["inputs"]) / "rSOC_manufacturer_config.json"
+        )
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
-            return data.get("rSOC variants", {}).get(rsoc_name, {})
+            variant: dict[str, Any] = data.get("rSOC variants", {}).get(rsoc_name, {})
+            return variant
 
     @classmethod
-    def confic_rsoc(
+    def config_rsoc(
         cls,
         rsoc_name: str,
-        operation_mode: float,
+        operation_mode: str,
         building_name: str = "BUI1",
+        config_data: dict[str, Any] | None = None,
     ) -> Any:
-        """Configure rsoc."""
-        config_json = cls.read_config(rsoc_name)
+        """Configure rsoc.
+
+        When ``config_data`` is ``None`` the manufacturer config is read from
+        disk via :meth:`read_config`, preserving the original behaviour.
+        Passing an in-memory ``config_data`` dict keeps the construction
+        independent of the filesystem and the module-global ``HISIMPATH``, so
+        the config can be built in tests without the inputs directory or JSON
+        file being present.
+        """
+        if config_data is None:
+            config_data = cls.read_config(rsoc_name)
 
         config = RsocBatteryControllerConfig(
             building_name=building_name,
-            name="rSOC and Battery Controller",  # config_json.get("name", "")
-            nom_load_soec=config_json.get("nom_load_soec", 0.0),
-            min_load_soec=config_json.get("min_load_soec", 0.0),
-            max_load_soec=config_json.get("max_load_soec", 0.0),
-            standby_load=config_json.get("standby_load", 0.0),
-            nom_power_sofc=config_json.get("nom_power_sofc", 0.0),
-            min_power_sofc=config_json.get("min_power_sofc", 0.0),
-            max_power_sofc=config_json.get("max_power_sofc", 0.0),
-            # standby_load_sofc=config_json.get("standby_load_sofc", 0.0),
+            name="rSOC and Battery Controller",  # config_data.get("name", "")
+            nom_load_soec=config_data.get("nom_load_soec", 0.0),
+            min_load_soec=config_data.get("min_load_soec", 0.0),
+            max_load_soec=config_data.get("max_load_soec", 0.0),
+            standby_load=config_data.get("standby_load", 0.0),
+            nom_power_sofc=config_data.get("nom_power_sofc", 0.0),
+            min_power_sofc=config_data.get("min_power_sofc", 0.0),
+            max_power_sofc=config_data.get("max_power_sofc", 0.0),
+            # standby_load_sofc=config_data.get("standby_load_sofc", 0.0),
             operation_mode=operation_mode,
         )
         return config
@@ -251,11 +276,6 @@ class RsocBatteryController(Component):
             return
 
         # first a power deman evaluation
-        if timestep < 10:
-            print(self.min_load_soec)
-            print(self.min_power_sofc)
-            print(self.standby_load_soec)
-
         res_load = stsv.get_input_value(self.load_input) / 1000  # to use KILOWATT
         demand = stsv.get_input_value(self.demand_input) / 1000  # to use KILOWATT
         power_delta = demand - res_load

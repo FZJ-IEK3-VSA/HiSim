@@ -501,7 +501,7 @@ class ModularHeatPump(cp.Component):
                     dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=dhw_heat_pump_total_electricity_consumption_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                 elif output.field_name == self.ThermalPowerDelivered:
@@ -509,7 +509,7 @@ class ModularHeatPump(cp.Component):
                     dhw_heat_pump_heating_energy_output_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=dhw_heat_pump_heating_power_output_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
 

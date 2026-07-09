@@ -3,7 +3,7 @@
 from __future__ import annotations
 import os
 import inspect
-from typing import List, Optional
+from typing import List, Optional, Sequence
 import enum
 
 import datetime
@@ -29,6 +29,7 @@ class SimulationParameters(JSONWizard):
     surplus_control: bool
     cache_dir_path: str
     multiple_buildings: bool
+    log_connections: bool
 
     def __init__(
         self,
@@ -37,14 +38,45 @@ class SimulationParameters(JSONWizard):
         seconds_per_timestep: int,
         country: str = 'DE',
         result_directory: str = "",
-        post_processing_options: Optional[List[int]] = None,
+        post_processing_options: Optional[Sequence[int]] = None,
         logging_level: int = log.LogPrio.INFORMATION,
         skip_finished_results: bool = False,
         surplus_control: bool = True,
         cache_dir_path: str = os.path.join(os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))), "inputs", "cache"),  # type: ignore
         multiple_buildings: bool = False,
+        log_connections: bool = False,
     ):
-        """Initializes the class."""
+        """Initialize the SimulationParameters.
+
+        Defines how the simulation will proceed, including time resolution, time span,
+        logging configuration, and various simulation options.
+
+        Args:
+            start_date: The start date and time of the simulation period.
+            end_date: The end date and time of the simulation period.
+            seconds_per_timestep: The duration of each simulation timestep in seconds.
+            country: Country code for location-specific data (e.g., weather, tariffs).
+                Defaults to 'DE' (Germany).
+            result_directory: Directory path where simulation results will be stored.
+                Defaults to empty string (will be set by the simulation runner).
+            post_processing_options: List of post-processing option flags to enable.
+                Each integer corresponds to a specific post-processing task.
+                Defaults to None (empty list).
+            logging_level: Logging verbosity level. Use values from log.LogPrio.
+                Defaults to log.LogPrio.INFORMATION.
+            skip_finished_results: If True, skip computation for timesteps that have
+                already been completed. Useful for resuming interrupted simulations.
+                Defaults to False.
+            surplus_control: If True, enable surplus energy control logic for managing
+                excess generation (e.g., from PV systems). Defaults to True.
+            cache_dir_path: Directory path for caching intermediate data (e.g., weather
+                data, processed inputs). Defaults to the 'inputs/cache' directory
+                within the hisim package.
+            multiple_buildings: If True, configure the simulation for multiple buildings.
+                Defaults to False (single building).
+            log_connections: If True, enable logging of component connections for
+                debugging and verification. Defaults to False.
+        """
         self.start_date: datetime.datetime = start_date
         self.end_date: datetime.datetime = end_date
         self.seconds_per_timestep = seconds_per_timestep
@@ -55,7 +87,7 @@ class SimulationParameters(JSONWizard):
         self.country: str = country
         if post_processing_options is None:
             post_processing_options = []
-        self.post_processing_options: List[int] = post_processing_options
+        self.post_processing_options: List[int] = list(post_processing_options)
         self.logging_level: int = logging_level  # Info # noqa
         self.result_directory: str = result_directory
         self.skip_finished_results: bool = skip_finished_results
@@ -63,6 +95,7 @@ class SimulationParameters(JSONWizard):
         self.cache_dir_path = cache_dir_path
         self.multiple_buildings = multiple_buildings
         self.figure_format = FigureFormat.PNG
+        self.log_connections = log_connections
 
     @classmethod
     def full_year(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:

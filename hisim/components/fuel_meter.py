@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import List, Optional, Any
+from typing import List, Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -52,7 +52,7 @@ class FuelMeterConfig(cp.ConfigBase):
         fuel_loadtype: lt.LoadTypes = lt.LoadTypes.OIL,
         heating_value_of_fuel_in_kwh_per_liter: Optional[float] = 9.82,  # configuration.py
         fuel_density_in_kg_per_m3: Optional[float] = 0.83 * 1e3,  # configuration.py
-    ) -> Any:
+    ) -> "FuelMeterConfig":
         """Gets a default FuelMeter."""
         return FuelMeterConfig(
             building_name=building_name,

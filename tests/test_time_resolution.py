@@ -6,35 +6,38 @@ Here we test the cluster household.
 # clean
 
 import os
+import shutil
+from math import isclose
 from typing import Dict, List, Tuple
+from uuid import uuid4
 import pandas as pd
 import pytest
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
 from hisim import utils
+from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.components import (
     building,
     weather,
     loadprofilegenerator_utsp_connector,
     generic_pv_system,
-    advanced_heat_pump_hplib,
     advanced_battery_bslib,
     controller_l2_energy_management_system,
     simple_water_storage,
     heat_distribution_system,
-    generic_heat_pump_modular,
-    generic_hot_water_storage_modular,
-    controller_l1_heatpump,
     electricity_meter,
+    more_advanced_heat_pump_hplib
 )
-from hisim.units import Quantity, Celsius, Watt
+
 from hisim import loadtypes as lt
+from tests.testing_utils import TestingUtils
 
 
 def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:
     """Function to check if values are similar within a certain tolerance (rel tolerance = 5%, absolute tolerance = 0.1)."""
-    return all(abs(x - lst[0]) / x <= relative_tolerance for x in lst) or all(abs(x - lst[0]) <= 0.1 for x in lst)
+    reference = float(lst[0])
+    return all(isclose(float(value), reference, rel_tol=relative_tolerance, abs_tol=0.1) for value in lst)
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -42,12 +45,13 @@ PATH = "../system_setups/household_test_timeresolutions.py"
 
 
 @utils.measure_execution_time
-@pytest.mark.base
+@pytest.mark.extendedbase
 def test_cluster_house_for_several_time_resolutions():
     """Test cluster house for several time resolutions."""
 
     opex_consumption_dict: Dict = {}
     yearly_results_dict: Dict = {}
+    run_id = uuid4().hex
     # do not use seconds per timestep = 60 because test takes then too long
     for seconds_per_timestep in [60 * 15, 60 * 30, 60 * 60]:
         print("\n")
@@ -57,27 +61,100 @@ def test_cluster_house_for_several_time_resolutions():
             seconds_per_timestep=seconds_per_timestep,
             yearly_result_dict=yearly_results_dict,
             opex_consumptions_dict=opex_consumption_dict,
+            run_id=run_id,
         )
 
     # go through all results and compare if aggregated results are all the same
     print("\n")
     print("Yearly results including KPIs")
+    # The yearly-results CSV (yearly_<days>_days.csv in
+    # result_data_for_scenario_evaluation) keys its "variable" column by the
+    # configured component name (Component.component_name == config.name for this
+    # single-building simulation), not by the Python class name -- see
+    # PostProcessingChartController.get_variable_name_and_unit_from_ppdt_results_column,
+    # which builds the variable name from the component output's pretty name
+    # (object_name == component_name). The load-profile generator is configured
+    # with the name "UTSPConnector"
+    # (see UtspLpgConnectorConfig.get_default_utsp_connector_config), so its class
+    # name "UtspLpgConnector" does not appear in the yearly-result keys -- match
+    # the configured name instead. PVSystem's and Weather's configured names equal
+    # their class names, so their get_classname() matches their yearly-result keys.
+    utsp_connector_name = (
+        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config().name
+    )
+    # Predefined-input components whose aggregated yearly results must be stable
+    # across the three time resolutions (15/30/60 min).
+    invariant_yearly_component_names = [
+        utsp_connector_name,
+        generic_pv_system.PVSystem.get_classname(),
+        weather.Weather.get_classname(),
+    ]
+    # Track which invariant components were actually seen so the similarity
+    # checks below cannot silently go dead (e.g. if a component is renamed and the
+    # substring match no longer hits any yearly-result key).
+    seen_invariant_yearly_components = set()
     for key, values in result_dict.items():
         # for these components the outputs must be identical as they are predefined input data
-        if loadprofilegenerator_utsp_connector.UtspLpgConnector.get_classname() in key:
-            assert values_are_similar(lst=values)
-        if generic_pv_system.PVSystem.get_classname() in key:
-            assert values_are_similar(lst=values)
-        if weather.Weather.get_classname() in key:
-            assert values_are_similar(lst=values)
+        for component_name in invariant_yearly_component_names:
+            if component_name in key:
+                seen_invariant_yearly_components.add(component_name)
+                assert values_are_similar(lst=values), f"{key}: {values} not all similar."
         if not values_are_similar(lst=values):
             print(key, values, "not all similar. ")
+
+    missing_invariant_yearly_components = (
+        set(invariant_yearly_component_names) - seen_invariant_yearly_components
+    )
+    assert not missing_invariant_yearly_components, (
+        f"Expected invariant yearly-result components {sorted(missing_invariant_yearly_components)} not found in "
+        f"yearly results; available keys: {list(result_dict)}."
+    )
     # go through all opex consumptions and compare if results are all the same
     print("\n")
-    print("Opex consumtions in kWh")
+    print("Opex consumptions in kWh")
+    # The opex CSV (operational_costs_co2_footprint.csv) indexes components by their
+    # configured component name (Component.component_name == config.name for this
+    # single-building simulation), not by the Python class name. The load-profile
+    # generator is configured with the name "UTSPConnector"
+    # (see UtspLpgConnectorConfig.get_default_utsp_connector_config), so its class
+    # name "UtspLpgConnector" does not appear in the opex keys -- match the
+    # configured name instead. PVSystem's configured name equals its class name, so
+    # PVSystem.get_classname() matches its opex key. The opex CSV also contains
+    # empty separator rows whose index is read as NaN (a float); skip those before
+    # treating the key as a string so the substring checks below do not raise a
+    # TypeError.
+    # Predefined-input components whose opex "Total energy consumption [kWh]" must be
+    # stable across time resolutions. Weather is deliberately excluded here: it only
+    # provides input data and its get_cost_opex returns the default OpexCostDataClass
+    # (kpi_tag=None), so it is skipped when the opex CSV is written and therefore has
+    # no consumption row. Weather is still asserted in the yearly-results loop above.
+    # utsp_connector_name is defined above, next to the yearly-results loop, because
+    # both the yearly-results and opex CSVs key components by the configured name.
+    invariant_opex_component_names = [
+        utsp_connector_name,
+        generic_pv_system.PVSystem.get_classname(),
+    ]
+    # Track which invariant components were actually seen so the similarity checks
+    # below cannot silently go dead (e.g. if a component is renamed and the substring
+    # match no longer hits any opex key).
+    seen_invariant_components = set()
     for key, values in opex_consumption_dict.items():
+        if not isinstance(key, str):
+            continue
+        for component_name in invariant_opex_component_names:
+            if component_name in key:
+                seen_invariant_components.add(component_name)
+                # for these components the consumption must be similar as they are
+                # predefined input data
+                assert values_are_similar(lst=values), f"{key}: {values} not all similar."
         if not values_are_similar(lst=values):
             print(key, values, "not all similar. ")
+
+    missing_invariant_components = set(invariant_opex_component_names) - seen_invariant_components
+    assert not missing_invariant_components, (
+        f"Expected invariant opex components {sorted(missing_invariant_components)} not found in opex "
+        f"results; available keys: {list(opex_consumption_dict)}."
+    )
 
     print(
         "Please make sure that your data is correctly resampled. "
@@ -86,7 +163,7 @@ def test_cluster_house_for_several_time_resolutions():
 
 
 def run_cluster_house(
-    seconds_per_timestep: int, yearly_result_dict: Dict, opex_consumptions_dict: Dict
+    seconds_per_timestep: int, yearly_result_dict: Dict, opex_consumptions_dict: Dict, run_id: str
 ) -> Tuple[Dict, Dict]:  # noqa: too-many-statements
     """The test should check if a normal simulation works with the electricity grid implementation."""
 
@@ -97,7 +174,13 @@ def run_cluster_house(
     year = 2021
     # Build Simulation Parameters
 
-    my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+    my_simulation_parameters = SimulationParameters.one_day_only(year=year, seconds_per_timestep=seconds_per_timestep)
+    my_simulation_parameters.logging_level = log.LogPrio.ERROR
+    my_simulation_parameters.result_directory = TestingUtils.get_result_directory(
+        test_name=f"test_cluster_house_for_several_time_resolutions_{run_id}_{seconds_per_timestep}s"
+    )
+    if os.path.isdir(my_simulation_parameters.result_directory):
+        shutil.rmtree(my_simulation_parameters.result_directory)
     my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
     my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
     my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
@@ -188,75 +271,79 @@ def run_cluster_house(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    # Set sizing option for Hot water Storage
-    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
-
-    # Build Heat Pump Controller
-    my_heat_pump_controller_config = advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
-        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
+    # Build Heat Pump Controller for space heating
+    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
+        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
+        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
     )
-    my_heat_pump_controller_config.mode = hp_controller_mode
+    my_heatpump_controller_sh_config.mode = hp_controller_mode
 
-    my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
-        config=my_heat_pump_controller_config, my_simulation_parameters=my_simulation_parameters,
+    my_heatpump_controller_sh = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
+        config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
     )
+    my_sim.add_component(my_heatpump_controller_sh, connect_automatically=True)
+
+    my_heatpump_controller_dhw_config = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config()
+    )
+
+    # Build Heat Pump Controller for dhw
+    my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
+        config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
+    )
+    my_sim.add_component(my_heatpump_controller_dhw, connect_automatically=True)
+
+    # Build Heat Pump (for dhw and space heating)
+    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+    )
+    my_heatpump_config.with_domestic_hot_water_preparation = True
+
+    my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
+        config=my_heatpump_config,
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    # Verknüpfung mit Luft als Umgebungswärmeqzuelle
+    if my_heatpump.parameters["Group"].iloc[0] == 1.0 or my_heatpump.parameters["Group"].iloc[0] == 4.0:
+        my_heatpump.connect_input(
+            my_heatpump.TemperatureInputPrimary,
+            my_weather.component_name,
+            my_weather.DailyAverageOutsideTemperatures,
+        )
+    else:
+        raise KeyError(
+            "Wasser oder Sole als primäres Wärmeträgermedium muss über extra Wärmenetz-Modell noch bereitgestellt werden"
+        )
     # Add to simulator
-    my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
+    my_sim.add_component(my_heatpump, connect_automatically=True)
 
-    # Build Heat Pump
-    my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
-        heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
+    # DHW storage configs
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
+        number_of_apartments=my_building_information.number_of_apartments
     )
 
-    my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
-    )
-    # Add to simulator
-    my_sim.add_component(my_heat_pump, connect_automatically=True)
-
-    # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
-    my_dhw_heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments, default_power_in_watt=6000,
-    )
-    my_dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-        name="DHWHeatpumpController"
-    )
-    my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments, default_volume_in_liter=450,
-    )
-    my_dhw_storage_config.compute_default_cycle(
-        temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
-        - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
-    )
-    my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
+    my_dhw_storage = simple_water_storage.SimpleDHWStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
-    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters, config=my_dhw_heatpump_controller_config,
-    )
-    my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
-        config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
-    )
-    # Add to simulator
-    my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
+
+    my_sim.add_component(my_dhw_storage, connect_automatically=True)
 
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-        sizing_option=sizing_option,
+        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
     )
-    my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
-        config=my_simple_heat_water_storage_config, my_simulation_parameters=my_simulation_parameters,
+    my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
+        config=my_simple_heat_water_storage_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
-    my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
+    my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
         absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
         heating_system=my_hds_controller_information.hds_controller_config.heating_system,
     )
@@ -292,7 +379,7 @@ def run_cluster_house(
     loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
         source_output_name="LoadingPowerInputForBattery_",
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-        source_weight=5,
+        source_weight=6,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         output_description="Target electricity for Battery Control. ",
@@ -328,7 +415,9 @@ def run_cluster_house(
     # =========================================================================================================================================================
     # Get yearly results from scenario preparation
     yearly_results_path = os.path.join(
-        my_simulation_parameters.result_directory, "result_data_for_scenario_evaluation", "yearly_365_days.csv"
+        my_simulation_parameters.result_directory,
+        "result_data_for_scenario_evaluation",
+        f"yearly_{my_simulation_parameters.duration.days}_days.csv",
     )
     yearly_results = pd.read_csv(yearly_results_path, usecols=["variable", "value"])
     # Get opex consumptions

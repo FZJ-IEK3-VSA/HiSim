@@ -1,7 +1,7 @@
 """Test for heat demand calculation in the building module."""
 
-# clean
-import os
+import shutil
+from pathlib import Path
 from typing import Optional
 import numpy as np
 import pytest
@@ -12,6 +12,7 @@ from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import idealized_electric_heater
+from tests.testing_utils import TestingUtils
 
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
@@ -22,25 +23,25 @@ __version__ = "1.0"
 __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
-# PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../system_setups/household_for_test_building_theoretical_heat_demand.py"
+# SYSTEM_SETUP_SCRIPT_PATH and FUNC needed to build simulator, SYSTEM_SETUP_SCRIPT_PATH is fake
+SYSTEM_SETUP_SCRIPT_PATH = "../system_setups/household_for_test_building_theoretical_heat_demand.py"
 
 
 @pytest.mark.buildingtest
 def test_house_with_idealized_electric_heater_for_heating_test(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """Test for heating energy demand.
+    """Test that an idealized electric heater holds indoor temperature within setpoints.
 
-    This setup function emulates an household including the basic components. Here the residents have their
-    heating needs covered by a idealized electric heater that returns exactly the heat that the building needs.
+    Builds a one-week household simulation (weather, occupancy, building, and an
+    idealized electric heater that supplies exactly the building's theoretical
+    thermal demand) and asserts that the resulting indoor air temperature stays
+    between the configured heating and cooling set temperatures at every timestep.
 
-    - Simulation Parameters
-    - Components
-        - Occupancy (Residents' Demands)
-        - Weather
-        - Building
-        - Idealized Electric Heater
+    Args:
+        my_simulation_parameters: Optional pre-built simulation parameters. If
+            `None`, a one-week simulation for 2021 with hourly timesteps is
+            constructed and used.
     """
 
     # =========================================================================================================================================================
@@ -48,7 +49,7 @@ def test_house_with_idealized_electric_heater_for_heating_test(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60
+    seconds_per_timestep = 60 * 60
 
     # Set Fake Heater
     set_heating_temperature_for_building_in_celsius = 20
@@ -59,9 +60,11 @@ def test_house_with_idealized_electric_heater_for_heating_test(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
+        my_simulation_parameters = SimulationParameters.one_week_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+    my_simulation_parameters.result_directory = TestingUtils.get_result_directory()
+    shutil.rmtree(my_simulation_parameters.result_directory, ignore_errors=True)
 
     # # in case ou want to check on all TABULA buildings -> run test over all building_codes
     # d_f = pd.read_csv(
@@ -78,13 +81,10 @@ def test_house_with_idealized_electric_heater_for_heating_test(
 
     # this part is copied from hisim_main
     # Build Simulator
-    normalized_path = os.path.normpath(PATH)
-    path_in_list = normalized_path.split(os.sep)
-    if len(path_in_list) >= 1:
-        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
+    system_setup_directory = str(Path(SYSTEM_SETUP_SCRIPT_PATH).resolve().parent)
 
     my_sim: sim.Simulator = sim.Simulator(
-        module_directory=path_to_be_added,
+        module_directory=system_setup_directory,
         my_simulation_parameters=my_simulation_parameters,
         module_filename="household_for_test_building_theoretical_heat_demand",
     )

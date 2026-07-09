@@ -113,6 +113,7 @@ ENV/
 env.bak/
 venv.bak/
 hisimvenv_cluster/
+hisimvenv/
 
 # Spyder project settings
 .spyderproject
@@ -177,7 +178,6 @@ cfg.json
 tests/cfg.json
 tests/json/results
 json/results
-hisim/json_generator.py
 hisim/~$components_information.xlsx
 flake8_calls.txt
 prospector_calls.txt
@@ -200,3 +200,8 @@ system_setups/district_system_setup/results
 
 # history extension
 .history/
+
+component_connections.json
+*.backup
+*.bak
+results/

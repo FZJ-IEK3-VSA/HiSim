@@ -94,10 +94,7 @@ class AirConditionerConfig(ConfigBase):
         )
 
         if air_conditioner is None:
-            raise Exception(
-                "Air conditioner model not registered in the database"
-            )
-
+            raise ValueError(f"Air conditioner model {manufacturer}/{model_name} not found in database")
         # Prepare reference data for interpolation
         self.t_out_cooling_ref = air_conditioner[
             "Outdoor temperature range - cooling"

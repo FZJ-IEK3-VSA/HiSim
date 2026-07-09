@@ -1,4 +1,9 @@
-"""Test for generic rsoc."""
+"""Tests for the generic reversible Solid Oxide Cell (rSOC) component.
+
+This module verifies the behavior of the generic_rsoc component which models
+both SOEC (Solid Oxide Electrolysis Cell) for hydrogen production and SOFC
+(Solid Oxide Fuel Cell) for power generation modes.
+"""
 
 # clean
 import pytest
@@ -7,12 +12,16 @@ from hisim import component as cp
 from hisim.components import generic_rsoc
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim import log
 
 
 @pytest.mark.base
-def test_electrolyzer():
-    """Test for electrolyzer."""
+def test_rsoc():
+    """Test rSOC electrolyzer (SOEC) mode with ramp-up dynamics.
+
+    Simulates the rSOC component with a -10 kW power input to activate
+    SOEC mode. Verifies that hydrogen flow rates remain zero during the
+    initial timestep due to the system's slow ramp-up rate.
+    """
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
         2021, seconds_per_timestep
@@ -85,12 +94,15 @@ def test_electrolyzer():
     # Simulate
     my_rsoc.i_restore_state()
     my_rsoc.i_simulate(timestep, stsv, False)
-    log.information(str(stsv.values))
 
     # Checking differnt values
+    # These values are outputs of i_simulate, not constants assigned directly
+    # to zero. Depending on platform/compiler/ramp-up arithmetic, the computed
+    # result may be a tiny residual (e.g. 1e-16) rather than exactly 0.0, so a
+    # tolerance-based check is used instead of exact equality.
     assert (
-        stsv.values[my_rsoc.soec_hydrogen_flow_rate.global_index] == 0.0
+        abs(stsv.values[my_rsoc.soec_hydrogen_flow_rate.global_index]) < 1e-9
     )  # should be zero because the systems ramp up is slow
-    assert stsv.values[my_rsoc.sofc_hydrogen_flow_rate.global_index] == 0.0
+    assert abs(stsv.values[my_rsoc.sofc_hydrogen_flow_rate.global_index]) < 1e-9
 
     # python -m pytest ../tests/test_generic_rSOC.py

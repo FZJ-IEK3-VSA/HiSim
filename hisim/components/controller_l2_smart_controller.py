@@ -1,10 +1,9 @@
 """L2 Smart Controller Module."""
 
-# clean
 # Generic/Built-in
 
 # Owned
-from typing import List, Any, Dict, Optional
+from typing import List, Union, Dict, Optional, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.component import Component, SingleTimeStepValues, ConfigBase, DisplayConfig
@@ -29,7 +28,7 @@ class SmartControllerConfig(ConfigBase):
     name: str
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Return the full class name of the base class."""
         return SmartController.get_full_classname()
 
@@ -37,11 +36,11 @@ class SmartControllerConfig(ConfigBase):
     def get_default_config_ems(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "SmartControllerConfig":
         """Default Config for Energy Management System."""
         config = SmartControllerConfig(
             building_name=building_name,
-            name=" SmartController",
+            name="SmartController",
         )
         return config
 
@@ -49,14 +48,25 @@ class SmartControllerConfig(ConfigBase):
 class SmartController(Component):
     """Smart Controller class."""
 
+    my_simulation_parameters: SimulationParameters
+    config: SmartControllerConfig
+
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         controllers: Optional[Dict[str, List[str]]],
         config: SmartControllerConfig,
         my_display_config: DisplayConfig = DisplayConfig(),
+        wrapped_controllers: Optional[List[Any]] = None,
     ) -> None:
-        """Construct all necessary attributes."""
+        """Construct all necessary attributes.
+
+        ``wrapped_controllers`` is an optional seam for tests: when it is
+        provided, the internal construction of the wrapped heat-pump and
+        EV-charger controllers in :meth:`build` is skipped and the given
+        (lightweight) controllers are used directly. When it is ``None``
+        (the default) the original behaviour is preserved.
+        """
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()
@@ -66,17 +76,33 @@ class SmartController(Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        if controllers is None:
+        if controllers is None and wrapped_controllers is None:
             controllers = {"HeatPump": ["mode"], "EVCharger": ["mode"]}
         self.wrapped_controllers: List[Any] = []
-        self.build(controllers)
+        self.build(controllers, wrapped_controllers=wrapped_controllers)
 
-    def build(self, controllers: Dict[str, List[str]]) -> None:
-        """Build wrapped controllers."""
+    def build(
+        self,
+        controllers: Optional[Dict[str, List[str]]],
+        wrapped_controllers: Optional[List[Any]] = None,
+    ) -> None:
+        """Build wrapped controllers.
+
+        When ``wrapped_controllers`` is provided, the internal construction of
+        the heat-pump and EV-charger controllers is skipped and the injected
+        controllers are used instead. This keeps the default behaviour
+        unchanged while allowing tests to pass in lightweight fakes.
+        """
+        if wrapped_controllers is not None:
+            self.wrapped_controllers = list(wrapped_controllers)
+            self.add_io()
+            return
+        if controllers is None:
+            controllers = {"HeatPump": ["mode"], "EVCharger": ["mode"]}
         for controller_name in controllers:
             if "HeatPump" in controller_name:
                 ghpcc = GenericHeatPumpControllerConfig(
-                    building_name="BUI1",
+                    building_name=self.config.building_name,
                     name="generic heat pump controller",
                     temperature_air_heating_in_celsius=15,
                     temperature_air_cooling_in_celsius=25,
@@ -100,19 +126,19 @@ class SmartController(Component):
 
         self.add_io()
 
-    def connect_similar_inputs(self, components: List[Any]) -> None:
+    def connect_similar_inputs(self, components: Union[List[Component], Component]) -> None:
         """Connect similar inputs."""
         if len(self.inputs) == 0:
-            raise Exception("The component " + self.component_name + " has no inputs.")
+            raise ValueError("The component " + self.component_name + " has no inputs.")
 
-        if isinstance(components, list) is False:
+        if not isinstance(components, list):
             components = [components]
 
         for component in components:
             if isinstance(component, Component) is False:
-                raise Exception("Input variable is not a component")
+                raise TypeError("Input variable is not a component")
             has_not_been_connected = True
-            index = None
+            index: Optional[int] = None
             for index, _ in enumerate(self.wrapped_controllers):
                 for input_channel in self.wrapped_controllers[index].inputs:
                     for output in component.outputs:
@@ -124,7 +150,7 @@ class SmartController(Component):
                                 output.field_name,
                             )
             if has_not_been_connected and index is not None:
-                raise Exception(
+                raise ValueError(
                     f"No similar inputs from {self.wrapped_controllers[index].component_name} are compatible with the outputs of {component.component_name}!"
                 )
 
@@ -157,14 +183,14 @@ class SmartController(Component):
                 timestep=timestep, stsv=stsv, force_convergence=force_convergence
             )
 
-    def connect_electricity(self, component: Any) -> None:
+    def connect_electricity(self, component: Component) -> None:
         """Connect Electricity input."""
         for index, _ in enumerate(self.wrapped_controllers):
             if hasattr(self.wrapped_controllers[index], "ElectricityInput"):
-                if isinstance(component, Component) is False:
-                    raise Exception("Input has to be a component!")
-                if hasattr(component, "ElectricityOutput") is False:
-                    raise Exception("Input Component does not have Electricity Output!")
+                if not isinstance(component, Component):
+                    raise TypeError("Input has to be a component!")
+                if not hasattr(component, "ElectricityOutput"):
+                    raise AttributeError("Input Component does not have Electricity Output!")
                 self.connect_input(
                     self.wrapped_controllers[index].ELECTRICITY_INPUT,
                     component.component_name,

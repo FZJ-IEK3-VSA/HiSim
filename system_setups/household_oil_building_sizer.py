@@ -1,4 +1,30 @@
-"""Basic household new system setup."""
+"""Household system setup with an oil-based heating system (building-sizer variant).
+
+This module provides :func:`setup_function`, the entry point that assembles a
+complete HiSim household simulation built around an oil-fired heating system.
+It is run through the documented HiSim entry points -- ``hisim_main.py`` (to
+execute a simulation) and ``hisim_convert_to_json.py`` (to export the setup to
+a JSON scenario) -- which import the module and invoke ``setup_function``.
+
+The setup wires together the following components:
+
+- occupancy profiles (residents' electricity and hot-water demands) via the
+  load-profile-generator UTSP connector,
+- weather data,
+- a photovoltaic (PV) system,
+- a building thermal model,
+- an oil heater with its controller,
+- a heat distribution system with its controller,
+- a hot-water storage,
+- a fuel meter,
+- a battery and an energy management system (EMS), and
+- an electricity meter.
+
+Sizing and system parameters are read from a
+:class:`~hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig`
+(archetype and energy-system configuration); when no config is supplied a
+default oil-household configuration is used instead.
+"""
 
 # clean
 
@@ -110,6 +136,7 @@ def setup_function(
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.logging_level = 3
+        simu_params_year = default_year
     else:
         simu_params_year = my_simulation_parameters.year
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -136,6 +163,13 @@ def setup_function(
 
     # Set Weather
     weather_location = arche_type_config_.weather_location
+
+    # testing AU weather data
+    weather_filepath = arche_type_config_.weather_filepath
+    weather_datasource_raw = arche_type_config_.weather_datasource
+    weather_datasource: Optional[weather.WeatherDataSourceEnum] = None
+    if isinstance(weather_datasource_raw, str):
+        weather_datasource = weather.WeatherDataSourceEnum[weather_datasource_raw]
 
     # Set Photovoltaic System
     azimuth = arche_type_config_.pv_azimuth
@@ -227,7 +261,13 @@ def setup_function(
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
+    # my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
+    my_weather_config = weather.WeatherConfig.get_default(
+        location_entry=weather_location,
+        weather_direct_filepath=weather_filepath,
+        weather_direct_data_source=weather_datasource,
+    )
+
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_weather)
@@ -327,7 +367,7 @@ def setup_function(
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
@@ -383,7 +423,7 @@ def setup_function(
         loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
             source_output_name="LoadingPowerInputForBattery_",
             source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-            source_weight=5,
+            source_weight=6,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Battery Control. ",

@@ -12,11 +12,13 @@ The buffer is controlled accoring to four modes:
     (c) full power when building temperature is below lower target,
     (d) off when temperature is higher than upper target.
 """
+from __future__ import annotations
+
 import importlib
 from dataclasses import dataclass
 
 # Owned
-from typing import List, Any
+from typing import List
 
 from dataclasses_json import dataclass_json
 
@@ -62,7 +64,7 @@ class L1BuildingHeatingConfig(cp.ConfigBase):
     def get_default_config_heating(
         name: str,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> L1BuildingHeatingConfig:
         """Default config for the heating controller."""
         config = L1BuildingHeatingConfig(
             building_name=building_name,
@@ -81,11 +83,19 @@ class L1BuildingHeatControllerState:
     """Data class that saves the state of the controller."""
 
     def __init__(self, state: float = 0):
-        """Initializes the class."""
+        """Initialize the controller state.
+
+        Args:
+            state: Initial state value representing heating control percentage (0-1).
+        """
         self.state: float = state
 
     def clone(self) -> "L1BuildingHeatControllerState":
-        """Clones itself."""
+        """Create a copy of the current state.
+
+        Returns:
+            A new L1BuildingHeatControllerState instance with the same state value.
+        """
         return L1BuildingHeatControllerState(state=self.state)
 
 
@@ -183,7 +193,7 @@ class L1BuildingHeatController(cp.Component):
         self.add_default_connections(self.get_default_connections_from_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_ems())
 
-    def get_building_default_connections(self):
+    def get_building_default_connections(self) -> List[cp.ComponentConnection]:
         """Sets the default connections for the building."""
 
         connections = []
@@ -197,7 +207,7 @@ class L1BuildingHeatController(cp.Component):
         )
         return connections
 
-    def get_default_connections_from_ems(self):
+    def get_default_connections_from_ems(self) -> List[cp.ComponentConnection]:
         """Sets the default connections for the energy management system."""
 
         connections = []
@@ -211,7 +221,7 @@ class L1BuildingHeatController(cp.Component):
         )
         return connections
 
-    def get_default_connections_from_hot_water_storage(self):
+    def get_default_connections_from_hot_water_storage(self) -> List[cp.ComponentConnection]:
         """Sets default connections for the buffer."""
         # use importlib for importing the other component in order to avoid circular-import errors
         component_module_name = "hisim.components.generic_hot_water_storage_modular"

@@ -1,4 +1,5 @@
 """Example Transformer."""
+from __future__ import annotations
 
 # clean
 
@@ -17,21 +18,31 @@ from hisim.component import ConfigBase
 @dataclass_json
 @dataclass
 class TransformerConfig(ConfigBase):
-    """Configuration of the Example Transformer."""
+    """Configuration of the Example Transformer.
+
+    Attributes
+    ----------
+    efficiency : float
+        Conversion efficiency of the transformer/rectifier, expressed as a
+        dimensionless fraction in the range [0, 1] (e.g. ``0.95`` for 95 %).
+        It is applied as a direct multiplicative scalar on the input power,
+        so passing a percentage (e.g. ``95``) would silently scale the output
+        by 100x. Use a fraction, not a percentage.
+    """
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
-        return Transformer.get_full_classname()
+        return str(Transformer.get_full_classname())
 
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
     building_name: str
     name: str
-    efficiency: float
+    efficiency: float  # conversion efficiency as a fraction in [0, 1] (not a percentage)
 
     @classmethod
-    def get_default_transformer(cls):
+    def get_default_transformer(cls) -> TransformerConfig:
         """Gets a default Transformer."""
         return TransformerConfig(building_name="BUI1", name="Generic Transformer and rectifier Unit", efficiency=0.95)
 
@@ -56,19 +67,21 @@ class Transformer(Component):
 
     """
 
-    TransformerInput = "Input1"
-    TransformerOutput = "MyTransformerOutput"
+    TransformerInput: str = "Input1"
+    TransformerOutput: str = "MyTransformerOutput"
 
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: TransformerConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: DisplayConfig | None = None,
     ) -> None:
         """Constructs all the neccessary attributes."""
         self.transformerconfig = config
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,

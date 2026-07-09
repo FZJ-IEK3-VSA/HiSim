@@ -2,8 +2,8 @@
 
 # clean
 
-from typing import Optional, Any
-from hisim.simulator import SimulationParameters
+from typing import Optional
+from hisim.simulator import SimulationParameters, Simulator
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
@@ -13,7 +13,10 @@ from hisim.components import electricity_meter
 from hisim import loadtypes
 
 
-def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> Any:
+def setup_function(
+    my_sim: Simulator,
+    my_simulation_parameters: Optional[SimulationParameters] = None,
+) -> None:
     """The setup function emulates an household including the basic components.
 
     Here the residents have their electricity and heating needs covered
@@ -29,11 +32,6 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     """
 
-    # delete all files in cache:
-    # dir = '..//hisim//inputs//cache'
-    # for file in os.listdir( dir ):
-    #   os.remove( os.path.join( dir, file ) )
-
     # ==== System Parameters ====
 
     # Set simulation parameters
@@ -43,7 +41,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # Set heat pump controller
     temperature_air_heating_in_celsius = 16.0
     temperature_air_cooling_in_celsius = 24.0
-    offset = 0.5
+    temperature_offset_in_kelvin = 0.5  # K, hysteresis band around the setpoint
     hp_mode = 2
 
     # ==== Build Components ====
@@ -95,7 +93,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
             name="GenericHeatPumpController",
             temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
             temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-            offset=offset,
+            offset=temperature_offset_in_kelvin,
             mode=hp_mode,
         ),
         my_simulation_parameters=my_simulation_parameters,

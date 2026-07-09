@@ -1,12 +1,13 @@
-"""Test for electricity meter."""
+"""Test for heating meter component."""
 
 # clean
 
 import os
+from pathlib import Path
 import json
 from typing import Optional
 import pytest
-# import numpy as np
+import numpy as np
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -16,7 +17,6 @@ from hisim.components import (
     electricity_meter,
     heating_meter,
     more_advanced_heat_pump_hplib,
-    generic_hot_water_storage_modular,
     simple_water_storage,
     heat_distribution_system,
     generic_pv_system,
@@ -24,7 +24,6 @@ from hisim.components import (
 from hisim import utils
 
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim import log
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -32,11 +31,23 @@ PATH = "../system_setups/household_for_test_gas_meter.py"
 
 
 @utils.measure_execution_time
-@pytest.mark.base
+@pytest.mark.extendedbase
 def test_house(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """The test should check if a normal simulation works with the electricity grid implementation."""
+    """Run a household simulation with a heating meter and verify heat-consumption KPIs.
+
+    Builds a full household system (building, heat pump, heat distribution system,
+    hot-water and DHW storages, PV, electricity meter, and heating meter), runs the
+    simulation, and asserts that the heating meter's total heat consumption matches
+    the heat distribution system output (within 5% relative tolerance) and that
+    OPEX costs and CO2 footprint KPIs are non-negative.
+
+    Args:
+        my_simulation_parameters: Optional simulation parameters. If None, a
+            one-day simulation for 2021 with hourly timesteps is used, with CSV
+            export and KPI computation enabled.
+    """
 
     # =========================================================================================================================================================
     # System Parameters
@@ -61,10 +72,7 @@ def test_house(
 
     # this part is copied from hisim_main
     # Build Simulator
-    normalized_path = os.path.normpath(PATH)
-    path_in_list = normalized_path.split(os.sep)
-    if len(path_in_list) >= 1:
-        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
+    path_to_be_added = str(Path(PATH).resolve().parent)
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
@@ -119,7 +127,7 @@ def test_house(
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
         )
@@ -171,12 +179,12 @@ def test_house(
     )
 
     # Build DHW Storage
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
+        number_of_apartments=my_building_information.number_of_apartments
+    )
 
-    my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
-
-    my_dhw_storage = generic_hot_water_storage_modular.HotWaterStorage(
-        config=my_dhw_storage_config,
-        my_simulation_parameters=my_simulation_parameters,
+    my_dhw_storage = simple_water_storage.SimpleDHWStorage(
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
     # Build Electricity Meter
@@ -232,34 +240,70 @@ def test_house(
 
     jsondata = jsondata["BUI1"]
 
-    heat_consumption_in_kilowatt_hour = jsondata["Heating Meter"]["Total heat consumption from grid"].get("value")
+    heat_consumption_in_kilowatt_hour = jsondata["Heating Meter"]["Total heat consumption from grid"].get("value")  # pylint: disable=unused-variable
 
-    heat_consumption_for_space_heating_in_kilowatt_hour = jsondata["Heat Distribution System"][
+    heat_consumption_for_space_heating_in_kilowatt_hour = jsondata["Heat Distribution System"][  # pylint: disable=unused-variable
         "Thermal output energy of heat distribution system"
     ].get("value")
-    # heat_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Residents"][
-    #     "Residents' total thermal dhw consumption"
-    # ].get("value")
 
-    opex_costs_for_heat_in_euro = jsondata["Heating Meter"]["Opex costs of heat consumption from grid"].get("value")
+    # The residents' domestic-hot-water thermal consumption is published under the
+    # "Residents' total warm water energy consumption" KPI (the thermal energy needed to heat
+    # the tapped warm water, in kWh). It is read here so a regression that drops or breaks this
+    # KPI is caught. Note: in this system setup the domestic-hot-water circuit is served by a
+    # dedicated heat pump and storage and is NOT wired into the HeatingMeter (its
+    # SimpleDHWStorage connection is disabled in heating_meter.py). The HeatingMeter therefore
+    # only measures the space-heating circuit, so its "Total heat consumption from grid" must
+    # match the heat distribution system output and must NOT include the domestic-hot-water
+    # energy below.
+    heat_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Residents"][
+        "Residents' total warm water energy consumption"
+    ].get("value")
 
-    co2_footprint_due_to_heat_use_in_kg = jsondata["Heating Meter"][
+    # The residents' domestic-hot-water thermal consumption is published under the
+    # "Residents' total warm water energy consumption" KPI (the thermal energy needed to heat
+    # the tapped warm water, in kWh). It is read here so a regression that drops or breaks this
+    # KPI is caught. Note: in this system setup the domestic-hot-water circuit is served by a
+    # dedicated heat pump and storage and is NOT wired into the HeatingMeter (its
+    # SimpleDHWStorage connection is disabled in heating_meter.py). The HeatingMeter therefore
+    # only measures the space-heating circuit, so its "Total heat consumption from grid" must
+    # match the heat distribution system output and must NOT include the domestic-hot-water
+    # energy below.
+    heat_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Residents"][
+        "Residents' total warm water energy consumption"
+    ].get("value")
+
+    # The residents' domestic-hot-water thermal consumption is published under the
+    # "Residents' total warm water energy consumption" KPI (the thermal energy needed to heat
+    # the tapped warm water, in kWh). It is read here so a regression that drops or breaks this
+    # KPI is caught. Note: in this system setup the domestic-hot-water circuit is served by a
+    # dedicated heat pump and storage and is NOT wired into the HeatingMeter (its
+    # SimpleDHWStorage connection is disabled in heating_meter.py). The HeatingMeter therefore
+    # only measures the space-heating circuit, so its "Total heat consumption from grid" must
+    # match the heat distribution system output and must NOT include the domestic-hot-water
+    # energy below.
+    heat_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Residents"][
+        "Residents' total warm water energy consumption"
+    ].get("value")
+
+    opex_costs_for_heat_in_euro = jsondata["Heating Meter"]["Opex costs of heat consumption from grid"].get("value")  # pylint: disable=unused-variable
+
+    co2_footprint_due_to_heat_use_in_kg = jsondata["Heating Meter"][  # pylint: disable=unused-variable
         "CO2 footprint of heat consumption from grid"
     ].get("value")
 
-    log.information(
-        "Heat consumption for space heating [kWh] " + str(heat_consumption_for_space_heating_in_kilowatt_hour)
+    # The HeatingMeter measures only the space-heating circuit (see comment above), so its
+    # total heat consumption has to match the thermal energy delivered by the heat distribution
+    # system. The domestic-hot-water energy is tracked separately and is not part of this
+    # balance. Compare with a relative tolerance of 5%.
+    np.testing.assert_allclose(
+        heat_consumption_in_kilowatt_hour,
+        heat_consumption_for_space_heating_in_kilowatt_hour,
+        rtol=0.05,
     )
-    # log.information(
-    #     "Heat consumption for domestic hot water [kWh] " + str(heat_consumption_for_domestic_hot_water_in_kilowatt_hour)
-    # )
-    log.information("Total heat consumption measured by heating meter [kWh] " + str(heat_consumption_in_kilowatt_hour))
-    log.information("Opex costs for total gas consumption [€] " + str(opex_costs_for_heat_in_euro))
-    log.information("CO2 footprint for total heat consumption [kg] " + str(co2_footprint_due_to_heat_use_in_kg))
 
-    # test and compare with relative error of 5%
-    # np.testing.assert_allclose(
-    #     heat_consumption_in_kilowatt_hour,
-    #     heat_consumption_for_space_heating_in_kilowatt_hour + heat_consumption_for_domestic_hot_water_in_kilowatt_hour,
-    #     rtol=0.05,
-    # )
+    # Guard against regressions that silently produce zero/None KPIs.
+    assert heat_consumption_in_kilowatt_hour > 0
+    assert heat_consumption_for_space_heating_in_kilowatt_hour > 0
+    assert heat_consumption_for_domestic_hot_water_in_kilowatt_hour >= 0
+    assert opex_costs_for_heat_in_euro >= 0
+    assert co2_footprint_due_to_heat_use_in_kg >= 0

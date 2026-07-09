@@ -28,6 +28,9 @@ __maintainer__ = "Maximilian Hillen"
 __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = "development"
 
+# Constants
+SPECIFIC_HEAT_CAPACITY_WATER = 4182  # J/(kg·K)
+
 
 @dataclass_json
 @dataclass
@@ -146,7 +149,7 @@ class CHPState:
         elif self.electricity_output > 0.0:
             self.activation = 1
         else:
-            raise Exception("Impossible CHPState.")
+            raise ValueError(f"Impossible CHPState: electricity_output={self.electricity_output}")
 
 
 class CHP(Component):
@@ -322,9 +325,9 @@ class CHP(Component):
         pass
 
     def simulate_chp(self, control_signal: float, stsv: SingleTimeStepValues, timestep: int) -> Any:
-        """Simualtes the component."""
+        """Simulates the component."""
 
-        specific_heat_capacity_water = 4182
+        specific_heat_capacity_water = SPECIFIC_HEAT_CAPACITY_WATER
         # Calculation.Electric Energy deliverd
         # CHP is on
         if self.state.activation != 0:
@@ -552,10 +555,10 @@ class CHP(Component):
                 if control_signal > 1 or control_signal < 0:
                     control_signal = 1
 
-        if control_signal > 1:
-            raise Exception("Expected a control signal between 0 and 1")
-        if control_signal < 0:
-            raise Exception("Expected a control signal between 0 and 1")
+        if control_signal > 1 or control_signal < 0:
+            raise ValueError(
+                f"Expected a control signal between 0 and 1, got {control_signal}"
+            )
 
         el_power, th_power, eff_el_real, eff_th_real = self.simulate_chp(
             control_signal=control_signal, stsv=stsv, timestep=timestep

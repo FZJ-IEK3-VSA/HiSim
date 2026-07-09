@@ -136,11 +136,6 @@ class DynamicComponent(Component):
         self.outputs.append(myoutput)
         setattr(self, label, myoutput)
 
-        # Define Output as DynamicConnectionOutput
-        # if source_component_class is None:
-        #     source_component_class = label
-        # else:
-        #     source_component_class = source_component_class + label
         self.my_component_outputs.append(
             DynamicConnectionOutput(
                 source_component_label=label,
@@ -169,7 +164,7 @@ class DynamicComponent(Component):
         label = f"Input_{source_object_name}_{source_component_output}_{num_inputs}"
         vars(self)[label] = label
 
-        log.trace("Added component input and connect: " + source_object_name + " - " + source_component_output)
+        log.trace(f"Added component input and connection {label}")
         # Define Input as Component Input and add it to inputs
         myinput = ComponentInput(self.component_name, label, source_load_type, source_unit, True)
         self.inputs.append(myinput)
@@ -224,12 +219,7 @@ class DynamicComponent(Component):
                     myinput.src_field_name = str(source_component_output)
                     setattr(self, label, myinput)
                     num_inputs += 1
-                    log.trace(
-                        "Added component inputs and connect: "
-                        + myinput.src_object_name
-                        + " - "
-                        + myinput.src_field_name
-                    )
+                    log.trace(f"Added component inputs and connection {label}")
                     self.connect_input(label, component.component_name, output_var.field_name)
                     self.my_component_inputs.append(
                         DynamicConnectionInput(

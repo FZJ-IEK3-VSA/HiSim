@@ -13,8 +13,17 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_gas_heater():
-    """Test for the gas heater."""
+def test_gas_heater() -> None:
+    """Test GenericBoiler (gas heater) output calculations.
+
+    Verifies that the gas heater component correctly computes:
+    - Water output mass flow (SH circuit)
+    - Water output temperature (SH circuit)
+    - Thermal output power
+
+    Uses fake inputs for control signal, operating mode, temperature delta,
+    and mass flow input temperature to drive the component.
+    """
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(

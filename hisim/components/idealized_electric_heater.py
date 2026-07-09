@@ -1,4 +1,5 @@
 """Idealized Electric Heater Module."""
+from __future__ import annotations
 
 # clean
 # Owned
@@ -71,7 +72,7 @@ class IdealizedElectricHeater(cp.Component):
         config: IdealizedHeaterConfig,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
-        """Construct all the neccessary attributes."""
+        """Construct all the necessary attributes."""
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()
@@ -81,12 +82,6 @@ class IdealizedElectricHeater(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-
-        self.thermal_power_delivered_in_watt: float = 0
-        self.theoretical_thermal_building_in_watt: float = 0
-        self.heating_in_watt: float = 0
-        self.set_heating_temperature_for_building_in_celsius = config.set_heating_temperature_for_building_in_celsius
-        self.set_cooling_temperature_for_building_in_celsius = config.set_cooling_temperature_for_building_in_celsius
 
         # Inputs
 
@@ -150,11 +145,11 @@ class IdealizedElectricHeater(cp.Component):
         """Simulate the Idealized Electric Heater."""
 
         # Get inputs ------------------------------------------------------------------------------------------------------------
-        theoretical_thermal_building_in_watt = stsv.get_input_value(self.theoretical_thermal_building_channel)
+        theoretical_thermal_building_demand_in_watt = stsv.get_input_value(self.theoretical_thermal_building_channel)
 
         # Calculations ----------------------------------------------------------------------------------------------------------
 
-        thermal_power_delivered_in_watt = theoretical_thermal_building_in_watt
+        thermal_power_delivered_in_watt = theoretical_thermal_building_demand_in_watt
 
         if thermal_power_delivered_in_watt >= 0:
             heating_in_watt = thermal_power_delivered_in_watt

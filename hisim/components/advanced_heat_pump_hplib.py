@@ -227,14 +227,14 @@ class HeatPumpHplib(Component):
 
         self.minimum_running_time_in_seconds = (
             config.minimum_running_time_in_seconds.value
-            if config.minimum_running_time_in_seconds
-            else config.minimum_running_time_in_seconds
+            if config.minimum_running_time_in_seconds is not None
+            else None
         )
 
         self.minimum_idle_time_in_seconds = (
             config.minimum_idle_time_in_seconds.value
-            if config.minimum_idle_time_in_seconds
-            else config.minimum_idle_time_in_seconds
+            if config.minimum_idle_time_in_seconds is not None
+            else None
         )
 
         # Component has states
@@ -292,7 +292,7 @@ class HeatPumpHplib(Component):
             field_name=self.ThermalOutputEnergy,
             load_type=LoadTypes.HEATING,
             unit=Units.WATT_HOUR,
-            output_description=("Thermal output enery in Watthours"),
+            output_description=("Thermal output energy in Watthours"),
         )
 
         self.p_el: ComponentOutput = self.add_output(
@@ -715,18 +715,18 @@ class HeatPumpHplib(Component):
                     # get energy from power
                     output_heating_energy_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=heating_output_power_values_in_watt,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     )
 
                     # take only output values for cooling
                     cooling_output_power_values_in_watt = postprocessing_results.iloc[:, index].loc[
                         postprocessing_results.iloc[:, index] < 0.0
                     ]
-                    # for cooling enery use absolute value, not negative value
+                    # for cooling energy use absolute value, not negative value
                     output_cooling_energy_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=cooling_output_power_values_in_watt,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
 
@@ -734,14 +734,14 @@ class HeatPumpHplib(Component):
                     # get electrical energie values for heating
                     electrical_energy_for_heating_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     )
 
                 elif output.field_name == self.ElectricalInputPowerForCooling:
                     # get electrical energie values for cooling
                     electrical_energy_for_cooling_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     )
 
                 elif output.field_name == self.TimeOnHeating:

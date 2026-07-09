@@ -1,5 +1,7 @@
 """District heating test."""
 
+from __future__ import annotations
+
 import pytest
 
 from hisim.components.generic_district_heating import (
@@ -35,13 +37,13 @@ from hisim import simulator as sim
     ],
 )
 def test_controller_determine_operating_mode(
-    with_warm_water,
-    daily_avg_outside_temperature_deg_c,
-    sh_current_water_temperature,
-    sh_target_water_temperature,
-    dhw_input_temperature,
-    expected_mode,
-):
+    with_warm_water: bool,
+    daily_avg_outside_temperature_deg_c: float,
+    sh_current_water_temperature: float,
+    sh_target_water_temperature: float,
+    dhw_input_temperature: float | None,
+    expected_mode: HeatingMode,
+) -> None:
     """Test determination of operating mode."""
 
     testee = given_default_controller_testee(with_warm_water=with_warm_water)
@@ -75,14 +77,14 @@ def test_controller_determine_operating_mode(
     ],
 )
 def test_component_get_dhw_outputs(
-    connected_load_w,
-    water_input_temperature_deg_c,
-    delta_temperature_needed_in_celsius,
-    expected_thermal_power_delivered_w,
-    expected_thermal_energy_delivered_in_watt_hour,
-    expected_water_output_temperature_deg_c,
-    expected_water_mass_flow_rate_in_kg_per_s,
-):
+    connected_load_w: float,
+    water_input_temperature_deg_c: float,
+    delta_temperature_needed_in_celsius: float,
+    expected_thermal_power_delivered_w: float,
+    expected_thermal_energy_delivered_in_watt_hour: float,
+    expected_water_output_temperature_deg_c: float,
+    expected_water_mass_flow_rate_in_kg_per_s: float,
+) -> None:
     """Test calculation of dhw outputs."""
 
     testee = given_default_component_testee()
@@ -122,14 +124,14 @@ def test_component_get_dhw_outputs(
     ],
 )
 def test_component_get_space_heating_outputs(
-    connected_load_w,
-    water_input_temperature_deg_c,
-    delta_temperature_needed_in_celsius,
-    water_mass_flow_rate_in_kg_per_s,
-    expected_thermal_power_delivered_w,
-    expected_thermal_energy_delivered_in_watt_hour,
-    expected_water_output_temperature_deg_c,
-):
+    connected_load_w: float,
+    water_input_temperature_deg_c: float,
+    delta_temperature_needed_in_celsius: float,
+    water_mass_flow_rate_in_kg_per_s: float,
+    expected_thermal_power_delivered_w: float,
+    expected_thermal_energy_delivered_in_watt_hour: float,
+    expected_water_output_temperature_deg_c: float,
+) -> None:
     """Test calculation of space heating outputs."""
 
     testee = given_default_component_testee()

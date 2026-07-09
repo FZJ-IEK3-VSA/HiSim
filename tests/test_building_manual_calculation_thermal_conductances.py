@@ -5,7 +5,7 @@ Therefore some functions must be adjusted which are tested here before.
 """
 # clean
 import numpy as np
-import pytest
+from pytest import mark
 from hisim.components import building
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
@@ -27,10 +27,16 @@ from hisim import utils
 #         my_residence = building.Building(
 #             config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
 #         log.information(building_code)
-@pytest.mark.buildingtest
+@mark.buildingtest
 @utils.measure_execution_time
-def test_building_thermal_conductance_calculation():
-    """Test function for some functions of the building module."""
+def test_building_thermal_conductance_calculation() -> None:
+    """Verify thermal conductance H_tr values match hand-calculated values.
+
+    The H_tr values read from TABULA building data are compared against
+    hand-calculated values using U * A * b_tr for windows/doors and opaque
+    surfaces. This validates the building module's thermal conductance
+    calculations before scaling up building area for scalability testing.
+    """
 
     building_code = "DE.N.SFH.05.Gen.ReEx.001.001"
     building_heat_capacity_class = "medium"
@@ -56,12 +62,12 @@ def test_building_thermal_conductance_calculation():
         "Window_2",
         "Door_1",
     ]
-    list_h_tr_window = []
-    list_h_tr_window_calculated = []
+    list_h_tr_window_in_watt_per_kelvin = []
+    list_h_tr_window_calculated_in_watt_per_kelvin = []
 
     k = 0
     for w_i in w_s:
-        list_h_tr_window.append(
+        list_h_tr_window_in_watt_per_kelvin.append(
             my_residence.my_building_information.buildingdata_ref[
                 "H_Transmission_" + w_i
             ].values[0]
@@ -74,13 +80,13 @@ def test_building_thermal_conductance_calculation():
             * my_residence.my_building_information.buildingdata_ref["A_" + w_i].values[0]
             * 1.0
         )
-        list_h_tr_window_calculated.append(h_tr_i)
+        list_h_tr_window_calculated_in_watt_per_kelvin.append(h_tr_i)
         k = k + 1
 
     # check if calculated H_tr is equal to H_tr which was read from buildingdata directly
-    np.testing.assert_allclose(list_h_tr_window, list_h_tr_window_calculated, atol=0.02)
+    np.testing.assert_allclose(list_h_tr_window_in_watt_per_kelvin, list_h_tr_window_calculated_in_watt_per_kelvin, atol=0.02)
 
-    # builing function: get_thermal_conductance_of_opaque_surfaces_in_watt_per_kelvin
+    # building function: get_thermal_conductance_of_opaque_surfaces_in_watt_per_kelvin
     opaque_walls = [
         "Wall_1",
         "Wall_2",
@@ -114,4 +120,4 @@ def test_building_thermal_conductance_calculation():
         k = k + 1
 
     # check if calculated H_tr is equal to H_tr which was read from buildingdata directly
-    np.testing.assert_allclose(list_h_tr_window, list_h_tr_window_calculated, atol=0.02)
+    np.testing.assert_allclose(list_h_tr_opaque, list_h_tr_opaque_calculated, atol=0.02)

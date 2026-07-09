@@ -21,25 +21,21 @@ from hisim.components import (
     generic_pv_system,
     heat_distribution_system,
     advanced_battery_bslib,
-    advanced_heat_pump_hplib,
     controller_l2_energy_management_system,
-    generic_heat_pump_modular,
-    controller_l1_heatpump,
-    generic_hot_water_storage_modular,
     simple_water_storage,
+    more_advanced_heat_pump_hplib
 )
 from hisim import utils
 import hisim.loadtypes as lt
 
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.units import Quantity, Celsius, Watt
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_ems.py"
 
 
 @utils.measure_execution_time
-@pytest.mark.base
+@pytest.mark.extendedbase
 def test_house(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
@@ -137,38 +133,79 @@ def test_house(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    # Build Heat Pump Controller
-    my_heat_pump_controller_config = (
-        advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
-            building_name=building_name,
-            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
+    # Build Heat Pump Controller for space heating
+    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
+        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
+        set_heating_threshold_outside_temperature_in_celsius=my_hds_controller_information.set_heating_threshold_temperature_in_celsius,
+    )
+
+    my_heatpump_controller_sh = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
+        config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
+    )
+    my_sim.add_component(my_heatpump_controller_sh, connect_automatically=True)
+
+    my_heatpump_controller_dhw_config = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config()
+    )
+
+    # Build Heat Pump Controller for dhw
+    my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
+        config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
+    )
+    my_sim.add_component(my_heatpump_controller_dhw, connect_automatically=True)
+
+    # Build Heat Pump (for dhw and space heating)
+    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+    )
+    my_heatpump_config.with_domestic_hot_water_preparation = True
+
+    my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
+        config=my_heatpump_config,
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    # Verknüpfung mit Luft als Umgebungswärmeqzuelle
+    if my_heatpump.parameters["Group"].iloc[0] == 1.0 or my_heatpump.parameters["Group"].iloc[0] == 4.0:
+        my_heatpump.connect_input(
+            my_heatpump.TemperatureInputPrimary,
+            my_weather.component_name,
+            my_weather.DailyAverageOutsideTemperatures,
         )
+    else:
+        raise KeyError(
+            "Wasser oder Sole als primäres Wärmeträgermedium muss über extra Wärmenetz-Modell noch bereitgestellt werden"
+        )
+    # Add to simulator
+    my_sim.add_component(my_heatpump, connect_automatically=True)
+
+    # DHW storage configs
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
+        number_of_apartments=my_building_information.number_of_apartments
     )
-    my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
-        config=my_heat_pump_controller_config,
+
+    my_dhw_storage = simple_water_storage.SimpleDHWStorage(
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
+    )
+
+    my_sim.add_component(my_dhw_storage, connect_automatically=True)
+
+    # Build Heat Water Storage
+    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+        max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
+        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
+    )
+    my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
+        config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
-    my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
-
-    # Build Heat Pump
-    my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        building_name=building_name,
-        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
-        heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
-    )
-
-    my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    # Add to simulator
-    my_sim.add_component(my_heat_pump, connect_automatically=True)
+    my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
         building_name=building_name,
-        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
         absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
         heating_system=my_hds_controller_information.hds_controller_config.heating_system,
     )
@@ -178,61 +215,6 @@ def test_house(
     )
     # Add to simulator
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
-
-    # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        building_name=building_name,
-        max_thermal_power_in_watt_of_heating_system=my_heat_pump_config.set_thermal_output_power_in_watt.value,
-        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
-    )
-    my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
-        config=my_simple_heat_water_storage_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    # Add to simulator
-    my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
-
-    # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
-    my_dhw_heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
-        building_name=building_name,
-        number_of_apartments=my_building_information.number_of_apartments,
-        default_power_in_watt=6000,
-    )
-
-    my_dhw_heatpump_controller_config = (
-        controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-            name="DHWHeatpumpController"
-        )
-    )
-
-    my_dhw_storage_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-            building_name=building_name,
-            number_of_apartments=my_building_information.number_of_apartments,
-            default_volume_in_liter=450,
-        )
-    )
-    my_dhw_storage_config.compute_default_cycle(
-        temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
-        - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
-    )
-
-    my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
-        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
-    )
-
-    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_dhw_heatpump_controller_config,
-    )
-
-    my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
-        config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
-    )
-    # Add to simulator
-    my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
@@ -263,7 +245,7 @@ def test_house(
     loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
         source_output_name="LoadingPowerInputForBattery_",
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-        source_weight=5,
+        source_weight=6,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         output_description="Target electricity for Battery Control. ",
@@ -438,8 +420,8 @@ def test_house(
 
     print("\n")
     np.testing.assert_allclose(
-        ems_grid_consumption_in_kilowatt_hour,
-        electricity_from_grid_kpi_in_kilowatt_hour,
+        ems_grid_injection_in_kilowatt_hour,
+        electricity_to_grid_kpi_in_kilowatt_hour,
         rtol=0.05,
     )
     np.testing.assert_allclose(

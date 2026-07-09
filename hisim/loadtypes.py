@@ -10,7 +10,10 @@ Guidelines for enum classes:
         is an Unit, then 'Meter' should not be used.
 
 """
+from __future__ import annotations
+
 # clean
+
 import enum
 
 
@@ -177,6 +180,30 @@ class Units(str, enum.Enum):
     BINARY = "binary"
 
 
+#: Units whose cumulative post-processing value is a *mean* over all
+#: timesteps rather than a *sum*.  This mirrors the distinction made in
+#: :func:`hisim.simulator.HiSimSimulator.get_std_results`: rate-like
+#: quantities (power, temperature, pressure, ...) are averaged so they keep
+#: their unit, while extensive quantities (energy, volume, mass, cost, ...)
+#: are summed to a total.  Keeping this set in one place avoids the system
+#: chart and the simulator drifting apart on which units are aggregated how.
+UNITS_USING_MEAN_AGGREGATION: frozenset[Units] = frozenset(
+    {
+        Units.CELSIUS,
+        Units.KELVIN,
+        Units.ANY,
+        Units.METER_PER_SECOND,
+        Units.DEGREES,
+        Units.WATT,
+        Units.KILOWATT,
+        Units.WATT_PER_SQUARE_METER,
+        Units.KG_PER_SEC,
+        Units.PERCENT,
+        Units.PASCAL,
+    }
+)
+
+
 @enum.unique
 class OutputPostprocessingRules(str, enum.Enum):
 
@@ -227,6 +254,7 @@ class ComponentType(str, enum.Enum):
     ENERGY_MANAGEMENT_SYSTEM = "EnergyManagementSystem"
     HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING = "Floorheating"
     HEAT_DISTRIBUTION_SYSTEM_RADIATOR = "Conventional Radiator"
+    HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR = "Low Temperature Radiator"
     NO_HDS = "No HDS"
 
     # different heat_pump types

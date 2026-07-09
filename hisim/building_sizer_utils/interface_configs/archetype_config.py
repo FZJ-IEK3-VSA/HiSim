@@ -1,8 +1,7 @@
 """Archetype config module."""
 
-# -*- coding: utf-8 -*-
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional
 
 from dataclasses_json import dataclass_json
 
@@ -13,11 +12,26 @@ class ArcheTypeConfig:
     """Archetype config class.
 
     Defines the system config for the modular household.
+
+    Photovoltaic orientation is given by two angle fields whose values are
+    always expressed in **degrees**, never radians. This matches the convention
+    used by the downstream PV component
+    (:class:`~hisim.components.generic_pv_system.PVSystemConfig`), which
+    interprets azimuth "from north in °" and tilt "from horizontal":
+
+    - ``pv_azimuth``: panel azimuth angle in degrees, measured clockwise from
+      north. The default ``180`` corresponds to a south-facing panel.
+    - ``pv_tilt``: panel tilt angle in degrees from the horizontal plane. The
+      default ``30`` corresponds to a 30° tilt.
+
+    Callers must pass these values in degrees; do not mix degrees and radians.
     """
 
     building_name: str = "BUI1"
     building_id: str = "default_building"
+    #: PV panel azimuth in degrees, measured clockwise from north (180° = south).
     pv_azimuth: float = 180
+    #: PV panel tilt in degrees from the horizontal plane.
     pv_tilt: float = 30
     pv_rooftop_capacity_in_kilowatt: Optional[float] = None
     pv_rooftop_generation_in_kilowatthour: Optional[float] = None
@@ -27,9 +41,13 @@ class ArcheTypeConfig:
     norm_heating_load_in_kilowatt: Optional[float] = None
     weather_location: str = "AACHEN"
     weather_try_region: int = 6
+
+    weather_filepath: Optional[str] = None
+    weather_datasource: Optional[str] = None
+
     building_postal_code: str = "52062"
     building_location: str = "Aachen"
-    lpg_households: List[str] = field(default_factory=lambda: ["CHR01_Couple_both_at_Work"])
+    lpg_households: list[str] = field(default_factory=lambda: ["CHR01_Couple_both_at_Work"])
     commodity: str = "electric"
     supply_level: str = "central_heating"
     building_density_within_buffer_area_of_100m_radius: float = 0.09
@@ -37,23 +55,3 @@ class ArcheTypeConfig:
     construction_year: int = 1964
     coordinates_latitude: float = 50.77664
     coordinates_longitude: float = 6.0834
-
-    # #: considered mobility options, passed as inputs to the LoadProfileGenerator and considered to model cars
-    # mobility_set: Optional[JsonReference] = None
-    # # field(
-    # #     default_factory=lambda: TransportationDeviceSets.Bus_and_one_30_km_h_Car  # type: ignore
-    # #     )
-    # #: average daily commuting distance in kilometers, passed as input to the LoadProfileGenerator and considered to model consumption of cars
-    # mobility_distance: Optional[JsonReference] = field(
-    #     default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_15km_Commuting_Distance
-    # )  # type: ignore
-
-
-# def create_archetype_config_file() -> None:
-#     """Component Cost file is created."""
-
-#     config_file=ArcheTypeConfig()
-#     config_file_written = config_file.to_json()
-
-#     with open('arche_type_config.json', 'w', encoding="utf-8") as outfile:
-#         outfile.write(config_file_written)

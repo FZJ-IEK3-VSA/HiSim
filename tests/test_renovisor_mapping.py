@@ -79,6 +79,7 @@ def test_mapping_report_covers_every_request_leaf(example_gas: dict) -> None:
 
     paths = {entry["path"] for entry in report["fields"]}
     assert {entry["status"] for entry in report["fields"]} <= {"used", "approximated", "defaulted", "ignored"}
+
     def covered(leaf: str) -> bool:
         return any(leaf == p or (leaf.startswith(p) and leaf[len(p)] in ".[") for p in paths)
 

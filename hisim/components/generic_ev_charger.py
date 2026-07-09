@@ -243,7 +243,7 @@ class VehiclePure(cp.Component):
                     data = json.load(file)
                 return data["Values"]
 
-            filepath = utils.load_export_load_profile_generator(target=self.evconfig.profile_name)
+            filepath = utils.load_export_load_profile_generator(target=self.evconfig.profile)
             if filepath is None:
                 filepath = utils.HISIMPATH
 
@@ -622,7 +622,7 @@ class EVCharger(cp.Component):
 
         self.build(
             manufacturer=config.manufacturer,
-            name=config.name,
+            name=config.charger_name,
             electric_vehicle=config.electric_vehicle,
             sim_params=my_simulation_parameters,
         )

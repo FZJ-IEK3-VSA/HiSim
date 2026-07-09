@@ -106,7 +106,7 @@ class GenericBatteryConfig(cp.ConfigBase):
             building_name=building_name,
             name="Generic Battery",
             manufacturer="sonnen",
-            model="sonnenBatterie 10 - 11,5 kWh",
+            model="sonnenBatterie 10 - 11 kWh",
             soc=10 / 15,
             base=False,
             predictive=False,

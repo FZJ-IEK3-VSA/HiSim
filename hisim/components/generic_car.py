@@ -50,6 +50,9 @@ class CarInformation:
     time_resolution: str = "01:00:00"
     car_location: List[int] = field(default_factory=lambda: [0])
     driven_meters: List[float] = field(default_factory=lambda: [0])
+    #: True when the series above come from real occupancy/LPG data; False for the
+    #: placeholder default, which :meth:`Car.build` expands into a stationary profile.
+    has_occupancy_data: bool = False
 
 
 @dataclass_json
@@ -154,6 +157,7 @@ class GenericCarInformation:
                 time_resolution=time_resolutions[index],
                 car_location=car_locations[index],
                 driven_meters=driven_meters[index],
+                has_occupancy_data=True,
             )
         return data_dict_for_car_component
 
@@ -506,6 +510,16 @@ class Car(cp.Component):
         self.car_location = car_information.car_location
         self.meters_driven = car_information.driven_meters
         self.time_resolution = car_information.time_resolution
+
+        # Without real occupancy/LPG data (e.g. webtool preview or unit tests),
+        # CarInformation carries a single placeholder step. Expand it into a stationary
+        # full-length profile (car parked at location 0, nothing driven) so the component
+        # is constructible and safe to simulate, and skip the LPG-string translation below
+        # which expects minute-resolution location strings.
+        if not car_information.has_occupancy_data:
+            self.car_location = [0] * self.my_simulation_parameters.timesteps
+            self.meters_driven = [0.0] * self.my_simulation_parameters.timesteps
+            return
 
         location_translator = {
             "School": 0,

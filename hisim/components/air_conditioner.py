@@ -118,14 +118,18 @@ class AirConditionerConfig(ConfigBase):
             raise ValueError(
                 f"No installation cost information for type {air_conditioner['Type']}"
             )
-        self.cost = air_conditioner["Price"] + installation_cost
-        self.maintenance_cost_as_percentage_of_investment = 0.05
+        # Price is stored in the database as a string like "3500.00 EUR"; extract the numeric part.
+        price_field = air_conditioner["Price"]
+        price_in_euro = float(str(price_field).split(" ")[0]) if price_field else 0.0
+        self.investment_costs_in_euro = price_in_euro + installation_cost
+        # Maintenance estimated at 5 % of the investment cost per year.
+        self.maintenance_costs_in_euro_per_year = 0.05 * self.investment_costs_in_euro
         # Lifetime estimation:
         # 10 years https://www.deutschlandfunk.de/belastung-fuer-die-atmosphaere-der-vormarsch-der-100.html,
         # 10-15 years https://klivago.de/faq-was-man-ueber-eine-klimaanlage-wissen-sollte
         # 15 years https://volted.ch/blogs/guides-fokus-und-bericht/wie-lange-halten-tragbare-
         # klimaanlagen?srsltid=AfmBOoojFnnbhbCYtAGCZLzdawl4C8zeNvRtc9GFeCICEwaWB6ZdKhSt
-        self.lifetime = 12
+        self.lifetime_in_years = 12
         self.co2_emissions_kg_co2_eq = (
             165.84  # In first step same as for heat pump
         )
@@ -353,9 +357,9 @@ class AirConditioner(cp.Component):
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
 
-        capex_per_period = (config.investment_costs_in_euro / config.lifetime) * duration_ratio
+        capex_per_period = (config.investment_costs_in_euro / config.lifetime_in_years) * duration_ratio
         co2_per_period = (
-            config.co2_emissions_kg_co2_eq / config.lifetime
+            config.co2_emissions_kg_co2_eq / config.lifetime_in_years
         ) * duration_ratio
 
         return CapexCostDataClass(

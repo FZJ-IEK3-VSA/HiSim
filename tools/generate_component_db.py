@@ -283,11 +283,16 @@ def _find_config_class(comp_class: type) -> Optional[type]:
 def _find_default_config(config_class: type) -> Optional[Any]:
     """Return a usable instance of *config_class* using the best available strategy."""
 
-    # Collect get_default_* classmethods
+    # Collect get_default_* factory methods. Accept both classmethods
+    # (inspect.ismethod → bound method) and staticmethods (inspect.isfunction →
+    # plain function); many configs declare get_default_config as a staticmethod.
+    def _is_factory(obj: Any) -> bool:
+        return inspect.ismethod(obj) or inspect.isfunction(obj)
+
     candidates = [
         (name, getattr(config_class, name))
         for name in dir(config_class)
-        if "default" in name.lower() and inspect.ismethod(getattr(config_class, name, None))
+        if "default" in name.lower() and _is_factory(getattr(config_class, name, None))
     ]
 
     for _name, method in candidates:
@@ -464,7 +469,20 @@ def _collect_component_classes() -> List[type]:
                 seen.add(id(obj))
                 classes.append(obj)
 
-    return classes
+    # Drop abstract base components: a collected component that other collected
+    # components subclass *and* that declares no concrete config (its __init__ takes a
+    # bare cp.ConfigBase) is an abstract base, not a standalone editor node — e.g.
+    # SimpleWaterStorage, the shared base of SimpleHotWaterStorage/SimpleDHWStorage.
+    concrete: List[type] = []
+    for cls in classes:
+        is_base_of_another = any(other is not cls and issubclass(other, cls) for other in classes)
+        if is_base_of_another and _find_config_class(cls) is None:
+            print(f"  [SKIP ] {cls.__module__}.{cls.__name__}: abstract base component (no concrete config)",
+                  file=sys.stderr)
+            continue
+        concrete.append(cls)
+
+    return concrete
 
 
 # ---------------------------------------------------------------------------

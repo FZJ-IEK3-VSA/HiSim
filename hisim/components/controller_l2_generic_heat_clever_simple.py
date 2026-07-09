@@ -218,7 +218,7 @@ class L2HeatSmartController(cp.Component):
             cp.ComponentConnection(
                 L2HeatSmartController.ReferenceTemperature,
                 building_classname,
-                Building.TemperatureMean,
+                Building.TemperatureMeanThermalMass,
             )
         )
         return connections

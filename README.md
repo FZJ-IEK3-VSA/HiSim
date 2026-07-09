@@ -143,7 +143,7 @@ These methods are used by `Simulator` to execute the simulation and generate the
 
 List of `Component` Children
 -----------
-Theses classes inherent from `Component` (`component.py`) class and can be used in your setup function to customize different configurations. All `Component` class children are stored in `hisim/hisim/components` directory. Some of these classes are:
+Theses classes inherit from `Component` (`component.py`) class and can be used in your setup function to customize different configurations. All `Component` class children are stored in `hisim/hisim/components` directory. Some of these classes are:
 
 - `RandomNumbers` (`random_numbers.py`)
 - `SimpleWaterStorage` (`simple_water_storage.py`)

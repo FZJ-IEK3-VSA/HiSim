@@ -235,7 +235,7 @@ class PIDController(cp.Component):
             cp.ComponentConnection(
                 PIDController.TemperatureMean,
                 building_classname,
-                Building.TemperatureMean,
+                Building.TemperatureMeanThermalMass,
             )
         )
         connections.append(

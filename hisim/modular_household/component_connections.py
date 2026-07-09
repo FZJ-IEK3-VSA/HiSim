@@ -192,7 +192,7 @@ def configure_cars(
 
     # create all cars
     my_cars: List[generic_car.Car] = []
-    for car_information_dict in my_car_information.data_dict_for_car_component.values():
+    for car_information in my_car_information.data_dict_for_car_component.values():
         # decide if they are diesel driven or electricity driven and initialize config
         if ev_included:
             my_car_config = generic_car.CarConfig.get_default_ev_config()
@@ -204,7 +204,7 @@ def configure_cars(
             generic_car.Car(
                 my_simulation_parameters=my_simulation_parameters,
                 config=my_car_config,
-                data_dict_with_car_information=car_information_dict,
+                car_information=car_information,
             )
         )
         my_sim.add_component(my_cars[-1])

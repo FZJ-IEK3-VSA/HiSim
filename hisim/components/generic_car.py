@@ -6,10 +6,10 @@ Evaluates diesel or electricity consumption based on driven kilometers and proce
 # clean
 
 import datetime as dt
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # -*- coding: utf-8 -*-
-from typing import List, Any, Tuple, Dict
+from typing import List, Any, Tuple, Dict, Optional
 import numpy as np
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -34,6 +34,22 @@ __version__ = ""
 __maintainer__ = "Johanna Ganglbauer"
 __email__ = "johanna.ganglbauer@4wardenergy.at"
 __status__ = "development"
+
+
+@dataclass
+class CarInformation:
+    """Car-usage time series and identifiers originating from the LPG/occupancy profile.
+
+    Passed to :class:`Car` instead of a loosely-typed information dict. Defaults describe a
+    stationary car with a single time step and are used when no occupancy data is provided
+    (e.g. webtool preview or unit tests).
+    """
+
+    car_name: str = "Car"
+    household_name: str = ""
+    time_resolution: str = "01:00:00"
+    car_location: List[int] = field(default_factory=lambda: [0])
+    driven_meters: List[float] = field(default_factory=lambda: [0])
 
 
 @dataclass_json
@@ -128,20 +144,16 @@ class GenericCarInformation:
 
     def prepare_data_dict_for_car_component(
         self, car_names: List, household_names: List, time_resolutions: List, car_locations: List, driven_meters: List
-    ) -> Dict:
+    ) -> Dict[str, CarInformation]:
         """Prepare data for car component."""
-        data_dict_for_car_component: Dict = {}
+        data_dict_for_car_component: Dict[str, CarInformation] = {}
         for index, household_name in enumerate(household_names):
-            data_dict_for_car_component.update(
-                {
-                    household_name: {
-                        "car_name": car_names[index],
-                        "household_name": household_name,
-                        "time_resolution": time_resolutions[index],
-                        "car_location": car_locations[index],
-                        "driven_meters": driven_meters[index],
-                    }
-                }
+            data_dict_for_car_component[household_name] = CarInformation(
+                car_name=car_names[index],
+                household_name=household_name,
+                time_resolution=time_resolutions[index],
+                car_location=car_locations[index],
+                driven_meters=driven_meters[index],
             )
         return data_dict_for_car_component
 
@@ -244,7 +256,7 @@ class Car(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: CarConfig,
-        data_dict_with_car_information: Dict,
+        car_information: Optional[CarInformation] = None,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
     ) -> None:
         """Initializes Car."""
@@ -257,7 +269,7 @@ class Car(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.build(config=config, car_information_dict=data_dict_with_car_information)
+        self.build(config=config, car_information=car_information or CarInformation())
 
         if self.config.fuel == lt.LoadTypes.ELECTRICITY:
             self.electricity_output: cp.ComponentOutput = self.add_output(
@@ -488,12 +500,12 @@ class Car(cp.Component):
         )
         return capex_cost_data_class
 
-    def build(self, config: CarConfig, car_information_dict: Dict) -> None:
+    def build(self, config: CarConfig, car_information: CarInformation) -> None:
         """Loads necesary data and saves config to class."""
-        self.car_information_dict = car_information_dict
-        self.car_location = car_information_dict["car_location"]
-        self.meters_driven = car_information_dict["driven_meters"]
-        self.time_resolution = car_information_dict["time_resolution"]
+        self.car_information = car_information
+        self.car_location = car_information.car_location
+        self.meters_driven = car_information.driven_meters
+        self.time_resolution = car_information.time_resolution
 
         location_translator = {
             "School": 0,

@@ -1436,10 +1436,10 @@ class Building(cp.Component):
         if output.field_name == self.TheoreticalThermalBuildingDemand:
             thermal_demand_values = postprocessing_results.iloc[:, index]
             heating_demand_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                thermal_demand_values[thermal_demand_values > 0], timeresolution=self.seconds_per_timestep
+                thermal_demand_values[thermal_demand_values > 0], time_resolution_in_seconds=self.seconds_per_timestep
             )
             cooling_demand_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                thermal_demand_values[thermal_demand_values < 0], timeresolution=self.seconds_per_timestep
+                thermal_demand_values[thermal_demand_values < 0], time_resolution_in_seconds=self.seconds_per_timestep
             )
 
             heating_demand_entry = KpiEntry(
@@ -1464,7 +1464,7 @@ class Building(cp.Component):
             solar_gains_values_in_watt = postprocessing_results.iloc[:, index]
             # get energy from power
             energy_gains_from_solar_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                power_timeseries_in_watt=solar_gains_values_in_watt, timeresolution=self.seconds_per_timestep
+                power_timeseries_in_watt=solar_gains_values_in_watt, time_resolution_in_seconds=self.seconds_per_timestep
             )
             energy_gains_from_solar_entry = KpiEntry(
                 name="Solar energy gains",
@@ -1479,7 +1479,7 @@ class Building(cp.Component):
             internal_gains_values_in_watt = postprocessing_results.iloc[:, index]
             # get energy from power
             energy_gains_from_internal_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                power_timeseries_in_watt=internal_gains_values_in_watt, timeresolution=self.seconds_per_timestep
+                power_timeseries_in_watt=internal_gains_values_in_watt, time_resolution_in_seconds=self.seconds_per_timestep
             )
             energy_gains_from_internal_entry = KpiEntry(
                 name="Internal energy gains",

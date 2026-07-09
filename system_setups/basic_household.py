@@ -46,12 +46,14 @@ def setup_function(
     seconds_per_timestep = 60
 
     # Default source weight for electricity meter connections
-    DEFAULT_SOURCE_WEIGHT = 999
+    default_source_weight = 999
     # Set Heat Pump Controller
 
     temperature_air_heating_in_celsius = 19.0
     temperature_air_cooling_in_celsius = 24.0
-    offset = 0.5
+    # hysteresis band around the heating/cooling setpoints, in K
+    # (a temperature difference: e.g. heating turns off above setpoint + offset)
+    temperature_offset_in_kelvin = 0.5
     hp_mode = 2
 
     # =================================================================================================================================
@@ -100,7 +102,7 @@ def setup_function(
             name="GenericHeatPumpController",
             temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
             temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-            offset=offset,
+            offset=temperature_offset_in_kelvin,
             mode=hp_mode,
         ),
         my_simulation_parameters=my_simulation_parameters,
@@ -127,7 +129,7 @@ def setup_function(
             loadtypes.ComponentType.PV,
             loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,
         ],
-        source_weight=DEFAULT_SOURCE_WEIGHT,
+        source_weight=default_source_weight,
     )
 
     my_electricity_meter.add_component_input_and_connect(
@@ -136,7 +138,7 @@ def setup_function(
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
         source_unit=loadtypes.Units.WATT,
         source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-        source_weight=DEFAULT_SOURCE_WEIGHT,
+        source_weight=default_source_weight,
     )
 
     my_electricity_meter.add_component_input_and_connect(
@@ -148,7 +150,7 @@ def setup_function(
             loadtypes.ComponentType.HEAT_PUMP,
             loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
         ],
-        source_weight=DEFAULT_SOURCE_WEIGHT,
+        source_weight=default_source_weight,
     )
 
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)

@@ -50,10 +50,20 @@ class Chart:  # noqa: too-few-public-methods
         units,
         directory_path,
         time_correction_factor,
+        *,
         output2=None,
         figure_format=None,
+        path_checker=None,
     ):
-        """Initializes the base class."""
+        """Initializes the base class.
+
+        ``path_checker`` is an optional callable used to validate the length of
+        the generated file paths. It defaults to
+        :func:`hisim.result_path_provider.check_path_length`; tests may inject a
+        no-op to avoid the hidden ``result_path_provider`` singleton. The
+        per-component output directory is *not* created here -- call
+        :meth:`ensure_output_dir` (done by the ``plot`` methods) before writing.
+        """
         self.output = output
         self.component_name = component_name
         self.output_description = output_description
@@ -72,17 +82,17 @@ class Chart:  # noqa: too-few-public-methods
         matches = re.finditer(".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$|#)", self.output)
         matches = [m.group(0) for m in matches]  # type: ignore
 
-        pass_sign = False
+        passed_hash_delimiter = False
         chart_property = ""
         chart_object = ""
         for single_match in matches:
-            if pass_sign:
+            if passed_hash_delimiter:
                 chart_property = f"{chart_property}{single_match}"
             else:
                 chart_object = f"{chart_object}{single_match}"
 
             if single_match.find("#"):  # type: ignore
-                pass_sign = True
+                passed_hash_delimiter = True
 
             if len(self.title) == 0:
                 self.title = str(single_match)
@@ -95,7 +105,6 @@ class Chart:  # noqa: too-few-public-methods
         self.directory_path = directory_path
         self.output_type = self.output.split(" # ", 2)[1]
         self.component_output_folder_path = str(Path(self.directory_path) / self.component_name / self.output_type)
-        Path(self.component_output_folder_path).mkdir(parents=True, exist_ok=True)
         self.object_name = " "
         self.property = chart_property
         if output2 is not None:
@@ -105,8 +114,23 @@ class Chart:  # noqa: too-few-public-methods
             self.filename = f"{self.type.lower()}{self.figure_format.value}"
         self.filepath = str(Path(self.directory_path) / self.filename)
         self.filepath2 = str(Path(self.component_output_folder_path) / self.filename)
-        result_path_provider.check_path_length(path=self.filepath)
-        result_path_provider.check_path_length(path=self.filepath2)
+        # Resolve the path-length checker: tests may inject a no-op to avoid the
+        # hidden ``result_path_provider`` singleton; production keeps the default.
+        if path_checker is None:
+            path_checker = result_path_provider.check_path_length
+        path_checker(path=self.filepath)
+        path_checker(path=self.filepath2)
+
+    def ensure_output_dir(self) -> None:
+        """Create the per-component output directory if it does not exist yet.
+
+        This used to be done unconditionally in ``__init__``, which made every
+        ``Chart`` (and subclass) construction touch the filesystem and depend on
+        the global ``result_path_provider``. It is now invoked lazily by the
+        ``plot`` methods, right before they write into ``self.filepath2``, so
+        that constructing a chart is free of side effects and easy to test.
+        """
+        Path(self.component_output_folder_path).mkdir(parents=True, exist_ok=True)
 
     def rescale_y_axis(self, y_values: Any, units: Any) -> Tuple[Any, Any]:
         """Rescale y_values of plots."""

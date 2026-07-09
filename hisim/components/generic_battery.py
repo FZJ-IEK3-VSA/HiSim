@@ -47,6 +47,8 @@ class GenericBatteryState:
 
     def charge(self, energy):
         """Charge."""
+        assert self.max_stored_energy is not None
+        assert self.max_var_stored_energy is not None
         energy = abs(energy)
         if self.stored_energy + energy < self.max_stored_energy:
             charge = energy
@@ -61,6 +63,8 @@ class GenericBatteryState:
 
     def discharge(self, energy):
         """Discharge."""
+        assert self.min_stored_energy is not None
+        assert self.min_var_stored_energy is not None
         energy = -abs(energy)
         if self.stored_energy + energy > self.min_stored_energy:
             discharge = energy
@@ -134,6 +138,31 @@ class BatteryControllerConfig(cp.ConfigBase):
         )
 
 
+def select_battery_spec(
+    database: list[dict[str, Any]],
+    manufacturer: str,
+    model: str,
+) -> dict[str, Any]:
+    """Select a battery spec entry from *database* by manufacturer and model.
+
+    This is a pure, side-effect-free helper: it takes the loaded battery
+    ``database`` (a list of dicts, as produced by
+    :func:`hisim.utils.load_smart_appliance`) and returns the entry whose
+    ``Manufacturer`` and ``Model`` match the requested values. Tests can pass a
+    small in-memory list of dicts and avoid reading the on-disk input file.
+
+    Raises:
+        ValueError: if no entry in *database* matches *manufacturer*/*model*.
+    """
+    for battery in database:
+        if battery["Manufacturer"] == manufacturer and battery["Model"] == model:
+            return battery
+    raise ValueError(
+        f"Battery model '{manufacturer}' / '{model}' is not registered in the "
+        "provided battery database."
+    )
+
+
 class GenericBattery(cp.Component):
     """Generic Battery class."""
 
@@ -159,8 +188,21 @@ class GenericBattery(cp.Component):
         my_simulation_parameters: SimulationParameters,
         config: GenericBatteryConfig,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        battery_database: list[dict[str, Any]] | None = None,
     ) -> None:
-        """Initialize the class."""
+        """Initialize the class.
+
+        Args:
+            my_simulation_parameters: The global simulation parameters.
+            config: The battery configuration.
+            my_display_config: Controls visibility of the component in the webtool/report.
+            battery_database: optional in-memory battery spec database (a list
+                of dicts, as produced by
+                :func:`hisim.utils.load_smart_appliance`). When ``None`` (the
+                default) the database is loaded from the on-disk smart-appliance
+                input file, preserving the production behaviour. Tests can inject
+                a small list of dicts to avoid touching the file system.
+        """
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()
@@ -171,7 +213,12 @@ class GenericBattery(cp.Component):
             my_display_config=my_display_config,
         )
 
-        self.build(manufacturer=config.manufacturer, model=config.model, base=config.base)
+        self.build(
+            manufacturer=config.manufacturer,
+            model=config.model,
+            base=config.base,
+            battery_database=battery_database,
+        )
 
         self.state = SimpleStorageState(
             max_var_val=self.max_var_stored_energy,
@@ -215,24 +262,32 @@ class GenericBattery(cp.Component):
             output_description=f"here a description for {self.ElectricityOutput} will follow.",
         )
 
-    def build(self, manufacturer, model, base):
-        """Build function."""
+    def build(self, manufacturer, model, base, battery_database=None):
+        """Build function.
+
+        Args:
+            manufacturer: Battery manufacturer name used to look up the spec in the database.
+            model: Battery model name used to look up the spec in the database.
+            base: Base value stored on the component as ``self.base``.
+            battery_database: optional in-memory battery spec database. When
+                ``None`` the database is loaded from the on-disk smart-appliance
+                input file via :func:`hisim.utils.load_smart_appliance`, keeping
+                the production behaviour unchanged.
+        """
         self.base = base
         self.time_correction_factor = 1 / self.my_simulation_parameters.seconds_per_timestep
         self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
 
-        # Gets flexibilities, including heat pump
-        battery_database = utils.load_smart_appliance("Battery")
+        # Load the battery spec database on demand so tests can inject an
+        # in-memory list of dicts and avoid the file read.
+        if battery_database is None:
+            battery_database = utils.load_smart_appliance("Battery")
 
-        battery_found = False
-        battery = None
-        for battery in battery_database:
-            if battery["Manufacturer"] == manufacturer and battery["Model"] == model:
-                battery_found = True
-                break
-
-        if battery is None or not battery_found:
-            raise Exception("Battery model not registered in the database")
+        battery = select_battery_spec(
+            database=battery_database,
+            manufacturer=manufacturer,
+            model=model,
+        )
 
         self.max_stored_energy = battery["Capacity"] * 1e3
         self.min_stored_energy = self.max_stored_energy * 0.0

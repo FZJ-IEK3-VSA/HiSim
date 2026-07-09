@@ -21,7 +21,7 @@ from hisim import utils
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../system_setups/household_for_test_building_u_values.py"
+PATH: str = "../system_setups/household_for_test_building_u_values.py"
 
 
 @pytest.mark.buildingtest
@@ -115,10 +115,10 @@ def test_house_with_idealized_electric_heater_for_testing_u_values(
 
 def house_with_idealized_electric_heater_for_testing_u_values(
     my_simulation_parameters: Optional[SimulationParameters] = None,
-    u_value_facade_in_watt_per_m2_per_kelvin=None,
-    u_value_roof_in_watt_per_m2_per_kelvin=None,
-    u_value_window_in_watt_per_m2_per_kelvin=None,
-    u_value_door_in_watt_per_m2_per_kelvin=None,
+    u_value_facade_in_watt_per_m2_per_kelvin: Optional[float] = None,
+    u_value_roof_in_watt_per_m2_per_kelvin: Optional[float] = None,
+    u_value_window_in_watt_per_m2_per_kelvin: Optional[float] = None,
+    u_value_door_in_watt_per_m2_per_kelvin: Optional[float] = None,
 ) -> Tuple[float, float, float, float, float, float]:  # noqa: too-many-statements
     """Build and run a simulator to extract building U-values and thermal demand.
 

@@ -16,7 +16,6 @@ from hisim.dynamic_component import (
     DynamicComponent,
     DynamicConnectionInput,
     DynamicConnectionOutput,
-    DynamicComponentConnection,
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
@@ -174,9 +173,7 @@ class HeatingMeter(DynamicComponent):
         )
 
         self.add_dynamic_default_connections(self.get_default_connections_from_heat_distribution_system())
-        # self.add_dynamic_default_connections(self.get_default_connections_from_simple_dhw_storage())
         self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
-        self.add_dynamic_default_connections(self.get_default_connections_from_generic_heat_source())
 
     def get_default_connections_from_heat_distribution_system(
         self,
@@ -202,29 +199,6 @@ class HeatingMeter(DynamicComponent):
         )
         return dynamic_connections
 
-    # def get_default_connections_from_simple_dhw_storage(
-    #     self,
-    # ):
-    #     """Get default connections from SimpleDHWStorage."""
-    #
-    #     from hisim.components.simple_dhw_storage import (  # pylint: disable=import-outside-toplevel
-    #         SimpleDHWStorage,
-    #     )
-    #
-    #     dynamic_connections = []
-    #     dhw_storage_class_name = SimpleDHWStorage.get_classname()
-    #     dynamic_connections.append(
-    #         dynamic_component.DynamicComponentConnection(
-    #             source_component_class=SimpleDHWStorage,
-    #             source_class_name=dhw_storage_class_name,
-    #             source_component_field_name=SimpleDHWStorage.ThermalPowerConsumptionDHW,
-    #             source_load_type=lt.LoadTypes.HEATING,
-    #             source_unit=lt.Units.WATT,
-    #             source_tags=[lt.InandOutputType.HEAT_CONSUMPTION],
-    #             source_weight=999,
-    #         )
-    #     )
-    #     return dynamic_connections
 
     def get_default_connections_from_more_advanced_heat_pump(
         self,
@@ -250,29 +224,6 @@ class HeatingMeter(DynamicComponent):
         )
         return dynamic_connections
 
-    def get_default_connections_from_generic_heat_source(
-        self,
-    ):
-        """Get generic heat source default connections."""
-
-        from hisim.components.generic_heat_source import HeatSource  # pylint: disable=import-outside-toplevel
-
-        dynamic_connections = []
-        heat_source_class_name = HeatSource.get_classname()
-        dynamic_connections.append(
-            DynamicComponentConnection(
-                source_component_class=HeatSource,
-                source_class_name=heat_source_class_name,
-                source_component_field_name=HeatSource.ThermalPowerDelivered,
-                source_load_type=lt.LoadTypes.HEATING,
-                source_unit=lt.Units.WATT,
-                source_tags=[
-                    lt.InandOutputType.HEAT_DELIVERED,
-                ],
-                source_weight=DEFAULT_SOURCE_WEIGHT,
-            )
-        )
-        return dynamic_connections
 
     def write_to_report(self):
         """Writes relevant information to report."""
@@ -388,7 +339,7 @@ class HeatingMeter(DynamicComponent):
                     ]
                     total_used_energy_in_kwh = KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=total_used_energy_in_watt,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     )
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
@@ -426,7 +377,7 @@ class HeatingMeter(DynamicComponent):
                     ]
                     total_used_energy_in_kwh = KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=total_used_energy_in_watt,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     )
 
                     break

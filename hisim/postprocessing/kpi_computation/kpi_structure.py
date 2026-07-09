@@ -1,6 +1,6 @@
 # clean
 
-"""Classes to provide the structure for the KPi generation."""
+"""Classes to provide the structure for the KPI generation."""
 from typing import Optional, Union, List, Tuple
 from enum import Enum
 from dataclasses import dataclass
@@ -41,7 +41,7 @@ class KpiTagEnumClass(Enum):
     STORAGE_HOT_WATER_SPACE_HEATING = "Storage For Space Heating Hot Water"
     WINDTURBINE = "Wind Turbine"
     SMART_DEVICE = "Smart Device"
-    EMS = "Energy Management System"
+    # EMS = "Energy Management System"
     ELECTRICITY_GRID = "Electricity Grid"
     THERMAL_GRID = "Thermal Grid"
     COSTS_DISTRICT_GRID = "Costs Of District Grid"
@@ -51,6 +51,8 @@ class KpiTagEnumClass(Enum):
     GROUND_PROBE = "Ground Probe"
     ELECTRIC_HEATING = "Electric Heating"
     ENERGY_MANAGEMENT_SYSTEM = "Energy Management System"
+    DISTRICT_ENERGY_MANAGEMENT_SYSTEM = " District Energy Management System"
+
 
 
 @dataclass
@@ -69,20 +71,24 @@ class KpiHelperClass:
     """Class for providing some helper fucntions for calculating KPIs."""
 
     @staticmethod
-    def compute_total_energy_from_power_timeseries(power_timeseries_in_watt: pd.Series, timeresolution: int) -> float:
+    def compute_total_energy_from_power_timeseries(power_timeseries_in_watt: pd.Series, time_resolution_in_seconds: float) -> float:
         """Computes the energy in kWh from a power timeseries in W."""
         if power_timeseries_in_watt.empty:
             return 0.0
 
-        energy_in_kilowatt_hour = float(power_timeseries_in_watt.sum() * timeresolution / 3.6e6)
+        energy_in_kilowatt_hour = float(power_timeseries_in_watt.sum() * time_resolution_in_seconds / 3.6e6)
         return energy_in_kilowatt_hour
 
     @staticmethod
     def calc_mean_max_min_value(list_or_pandas_series: Union[List, pd.Series]) -> Tuple[float, float, float]:
         """Calc mean, max and min values from List or pd.Series with numpy."""
 
-        mean_value = float(np.mean(list_or_pandas_series))
-        max_value = float(np.max(list_or_pandas_series))
-        min_value = float(np.min(list_or_pandas_series))
+        # Convert the input to an ndarray once and reuse it. Passing a plain
+        # ``list`` to ``np.mean``/``np.max``/``np.min`` would internally call
+        # ``np.asarray`` three times, building the same array each time.
+        arr = np.asarray(list_or_pandas_series)
+        mean_value = float(arr.mean())
+        max_value = float(arr.max())
+        min_value = float(arr.min())
 
         return mean_value, max_value, min_value

@@ -1,0 +1,51 @@
+{
+  "db_path": "/projects2/2026_n-pflugradt_building_simulations/tasks.db",
+  "db_snapshot_path": "/projects2/2026_n-pflugradt_building_simulations/tasks.snapshot.db",
+  "db_snapshot_interval_s": 300,
+  "journal_mode": "WAL",
+  "logs_db_path": "/projects2/2026_n-pflugradt_building_simulations/logs.db",
+  "logs_archive_path": "/projects2/2026_n-pflugradt_building_simulations/logs.archive.db",
+  "bind_host": "0.0.0.0",
+  "bind_port": 8080,
+  "result_root": "/projects2/2026_n-pflugradt_building_simulations/results",
+  "url_publish_path": "/projects2/2026_n-pflugradt_building_simulations/server.url",
+
+  "max_retries": 3,
+  "success_file": "finished.flag",
+  "lease_timeout_s": 14400,
+  "worker_timeout_s": 900,
+  "orphan_strikes": 2,
+  "reaper_period_s": 45,
+  "release_idle_workers": true,
+
+  "per_job_mem_gb": 10.0,
+  "mem_autoraise": true,
+  "mem_autoraise_margin_gb": 1.0,
+  "mem_min_samples": 20,
+  "mem_validation_warn_gb": 1.0,
+
+  "circuit_breaker": {
+    "enabled": true,
+    "window": 100,
+    "min_samples": 20,
+    "failure_rate": 0.5,
+    "consecutive": 25
+  },
+
+  "autoscale": {
+    "enabled": true,
+    "worker_mode": "single_core",
+    "period_s": 60,
+    "standby_floor": 1,
+    "max_workers": 50,
+    "worker_script": "/projects2/2026_n-pflugradt_building_simulations/HiSim/scripts/hpc_harness/slurm/worker_single_core.sbatch",
+    "worker_config": "/projects2/2026_n-pflugradt_building_simulations/HiSim/scripts/hpc_harness/worker.iek2012.json",
+    "slurm_log_dir": "/projects2/2026_n-pflugradt_building_simulations/slurm_logs",
+    "partition": null,
+    "squeue_poll_s": 60,
+    "registration_grace_s": 900,
+    "profiles": [
+      {"name": "hisim_setup", "runner": "hisim_setup"}
+    ]
+  }
+}

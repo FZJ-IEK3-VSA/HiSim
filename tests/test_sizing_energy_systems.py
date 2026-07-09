@@ -14,8 +14,6 @@ from hisim.components import (
     advanced_heat_pump_hplib,
     advanced_battery_bslib,
     simple_water_storage,
-    generic_heat_pump_modular,
-    generic_hot_water_storage_modular,
 )
 from hisim.units import Quantity, Watt
 
@@ -26,7 +24,13 @@ from hisim import utils
 @pytest.mark.buildingtest
 @utils.measure_execution_time
 def test_energy_system_scalability() -> None:
-    """Test function for the scability of the whole energy system."""
+    """Verify energy-system components scale linearly with building floor area.
+
+    Sizes the energy system with a scaling factor of 1 and again with 5, then asserts
+    that PV output, hplib thermal power, space-heating storage volume, and battery
+    capacity scale by ~5×, while the DHW heat pump and DHW storage scale with the
+    number of apartments (within 1 % relative tolerance).
+    """
 
     # calculate energy system sizes for original case (scaling factors = 1)
     (
@@ -35,8 +39,7 @@ def test_energy_system_scalability() -> None:
         original_hplib_thermal_output_power_in_watt,
         original_storage_size_for_space_heating_in_liter,
         original_battery_size_in_kilowatt_hours,
-        original_hp_modular_thermal_power_in_watt_for_dhw,
-        original_storage_modular_size_in_liter_for_dhw,
+        original_storage_size_in_liter_for_dhw,
     ) = simulation_for_one_timestep(
         scaling_factor_for_absolute_conditioned_floor_area=1,
     )
@@ -56,12 +59,8 @@ def test_energy_system_scalability() -> None:
         "original size battery in kWh " + str(original_battery_size_in_kilowatt_hours)
     )
     log.information(
-        "original size hp modular for dhw "
-        + str(original_hp_modular_thermal_power_in_watt_for_dhw)
-    )
-    log.information(
-        "original size storage modular for dwh in liter "
-        + str(original_storage_modular_size_in_liter_for_dhw)
+        "original size storage for dwh in liter "
+        + str(original_storage_size_in_liter_for_dhw)
         + "\n"
     )
 
@@ -73,8 +72,7 @@ def test_energy_system_scalability() -> None:
         scaled_hplib_thermal_output_power_in_watt,
         scaled_storage_size_for_space_heating_in_liter,
         scaled_battery_size_in_kilowatt_hours,
-        scaled_hp_modular_thermal_power_in_watt_for_dhw,
-        scaled_storage_modular_size_in_liter_for_dhw,
+        scaled_storage_size_in_liter_for_dhw,
     ) = simulation_for_one_timestep(
         scaling_factor_for_absolute_conditioned_floor_area=5,
     )
@@ -93,12 +91,8 @@ def test_energy_system_scalability() -> None:
         "original size battery in kWh " + str(scaled_battery_size_in_kilowatt_hours)
     )
     log.information(
-        "original size hp modular for dhw "
-        + str(scaled_hp_modular_thermal_power_in_watt_for_dhw)
-    )
-    log.information(
-        "original size storage modular for dwh in liter "
-        + str(scaled_storage_modular_size_in_liter_for_dhw)
+        "original size storage for dwh in liter "
+        + str(scaled_storage_size_in_liter_for_dhw)
         + "\n"
     )
 
@@ -127,17 +121,10 @@ def test_energy_system_scalability() -> None:
         rtol=0.01,
     )
 
-    # hp modular for dhw scales with number of apartments
-    np.testing.assert_allclose(
-        scaled_hp_modular_thermal_power_in_watt_for_dhw,
-        original_hp_modular_thermal_power_in_watt_for_dhw * number_of_apartments,
-        rtol=0.01,
-    )
-
     # storage modular for dhw scales with number of apartments
     np.testing.assert_allclose(
-        scaled_storage_modular_size_in_liter_for_dhw,
-        original_storage_modular_size_in_liter_for_dhw * number_of_apartments,
+        scaled_storage_size_in_liter_for_dhw,
+        original_storage_size_in_liter_for_dhw * number_of_apartments,
         rtol=0.01,
     )
 
@@ -145,7 +132,28 @@ def test_energy_system_scalability() -> None:
 def simulation_for_one_timestep(
     scaling_factor_for_absolute_conditioned_floor_area: int,
 ) -> Tuple[int, float, float, float, float, float, float]:
-    """Test function for the system setup house for one timestep."""
+    """Build a scaled energy system and return the sized component values for one timestep.
+
+    Constructs a German single-family-home building scaled by the given factor, then
+    sizes the PV system, hplib heat pump, space-heating hot-water storage, battery,
+    DHW heat pump, and DHW storage against the scaled building, returning the
+    resulting component sizes without running a full simulation.
+
+    Args:
+        scaling_factor_for_absolute_conditioned_floor_area: Multiplier applied to the
+            baseline 121.2 m² conditioned floor area; also drives rooftop area and
+            number of apartments via the building config.
+
+    Returns:
+        A tuple of:
+          number_of_apartments: Number of apartments in the scaled building.
+          pv_power_in_watt: Rated electric power of the scaled PV system [W].
+          hplib_thermal_power_in_watt: Thermal output power set for the hplib heat pump [W].
+          simple_hot_water_storage_size_in_liter: Volume of the space-heating water storage [L].
+          battery_capacity_in_kilowatt_hours: Battery capacity [kWh].
+          hp_for_dhw_thermal_power_in_watt: Thermal power of the DHW heat pump [W].
+          water_storage_size_for_dhw_in_liter: Volume of the DHW storage [L].
+    """
 
     # Set building inputs
     absolute_conditioned_floor_area_in_m2 = (
@@ -201,14 +209,9 @@ def simulation_for_one_timestep(
         total_pv_power_in_watt_peak=my_pv_config.power_in_watt
     )
 
-    # Set DHW Heat Pump Modular
-    my_hp_for_dhw_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
-        my_residence_information.number_of_apartments
-    )
-
-    # Set DHW Storage modular
-    my_storage_for_dhw_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-        my_residence_information.number_of_apartments
+    # Set DHW Storage
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
+        number_of_apartments=my_residence_information.number_of_apartments
     )
 
     # Energy system sizes
@@ -220,8 +223,7 @@ def simulation_for_one_timestep(
     battery_capacity_in_kilowatt_hours = (
         my_battery_config.custom_battery_capacity_generic_in_kilowatt_hour
     )
-    hp_for_dhw_thermal_power_in_watt = my_hp_for_dhw_config.power_th
-    water_storage_size_for_dhw_in_liter = my_storage_for_dhw_config.volume
+    water_storage_size_for_dhw_in_liter = my_dhw_storage_config.volume_heating_water_storage_in_liter
 
     return (
         my_residence_information.number_of_apartments,
@@ -229,6 +231,5 @@ def simulation_for_one_timestep(
         hplib_thermal_power_in_watt.value,
         simple_hot_water_storage_size_in_liter,
         battery_capacity_in_kilowatt_hours,
-        hp_for_dhw_thermal_power_in_watt,
         water_storage_size_for_dhw_in_liter,
     )

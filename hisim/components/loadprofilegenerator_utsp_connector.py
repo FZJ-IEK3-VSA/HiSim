@@ -1885,7 +1885,7 @@ class UtspLpgConnector(cp.Component):
                     occupancy_total_electricity_consumption_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                 if output.field_name == self.WaterConsumption and output.unit == lt.Units.LITER:
@@ -1971,7 +1971,7 @@ class UtspLpgConnector(cp.Component):
                 occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
                 consumption_in_kwh = KpiHelperClass.compute_total_energy_from_power_timeseries(
                     power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
-                    timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                 )
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year, self.my_simulation_parameters.country

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 import pytest
 
-# import numpy as np
+import numpy as np
 
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
@@ -27,25 +27,37 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 # PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../system_setups/household_for_test_building_heat_demand.py"
+PATH: str = "../system_setups/household_for_test_building_heat_demand.py"
 
 
+@pytest.mark.xfail(
+    reason="Heating by devices was integrated in the internal heat gains, so the "
+    "calculated heating demand no longer matches the TABULA reference within 10 %. "
+    "See issue #637 - a human must confirm whether to fix the production code or "
+    "widen the tolerance.",
+    strict=False,
+)
 @pytest.mark.buildingtest
 @utils.measure_execution_time
 def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """Test for heating energy demand.
+    """Test annual heating energy demand against TABULA reference values.
 
-    This setup function emulates an household including the basic components. Here the residents have their
-    heating needs covered by the heat pump.
+    Builds a household simulation with occupancy (LPG UTSP connector), weather
+    (Aachen), a German single-family-home building, and an idealized electric
+    heater, then runs a full year and compares the calculated floor-area-
+    normalised heating demand against the TABULA reference value with a 10 %
+    relative tolerance.
 
-    - Simulation Parameters
-    - Components
-        - Occupancy (Residents' Demands)
-        - Weather
-        - Building
-        - Idealized Electric Heater
+    Currently marked ``xfail`` because heating-by-devices was integrated into
+    internal heat gains, causing the calculated demand to diverge from the
+    TABULA reference (see issue #637).
+
+    Args:
+        my_simulation_parameters: Optional pre-built simulation parameters.
+            If ``None``, a full-year simulation for 2021 with hourly
+            (3600 s) timesteps is constructed automatically.
     """
 
     # =========================================================================================================================================================
@@ -217,16 +229,21 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     )
     log.information("Deviation of both values " + f"{deviation_of_both_values_in_percent}" + " %")
 
-    # # test whether tabula energy demand for heating is equal to energy demand for heating generated from idealized electric heater with a tolerance of 10%
-    # np.testing.assert_allclose(
-    #     energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2,
-    #     energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2,
-    #     rtol=0.10,
-    # )
+    # The comparison below currently diverges from the TABULA reference because heating by
+    # devices was integrated in the internal heat gains. See issue #637: a human must confirm
+    # whether the production code should be fixed or the tolerance widened. The test is marked
+    # xfail so it keeps exercising this assertion without breaking CI while this is unresolved.
     log.information(
         "This test fails now because heating by devices was integrated in internal heat gains.\n"
         + "TODO: Find out why heating demands are so different. Compare annual solar and internal gains as well as heat transfer through transmission and ventilation "
         + "with TABULA reference values.\n"
         + "See TABULA calculation method here: "
         + "https://www.iwu.de/fileadmin/publikationen/gebaeudebestand/episcope/2013_IWU_LogaEtDiefenbach_TABULA-Calculation-Method.pdf"
+    )
+
+    # test whether tabula energy demand for heating is equal to energy demand for heating generated from idealized electric heater with a tolerance of 10%
+    np.testing.assert_allclose(
+        energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2,
+        energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2,
+        rtol=0.10,
     )

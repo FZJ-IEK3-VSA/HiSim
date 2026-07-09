@@ -30,6 +30,7 @@ pylint:
       - possibly-used-before-assignment
       - consider-using-min-builtin
       - consider-using-max-builtin
+      - import-outside-toplevel
 #    disable:
 #      - too-many-locals
 #      - arguments-differ
@@ -62,6 +63,9 @@ pydocstyle:
     - W293
     - D211
     - D203
+    - D406  # Section name should end with a newline
+    - D407  # Missing dashed underline after section
+    - D413  # Missing blank line after last section
 
 bandit:
   run: false

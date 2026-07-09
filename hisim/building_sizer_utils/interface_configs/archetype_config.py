@@ -1,6 +1,5 @@
 """Archetype config module."""
 
-# -*- coding: utf-8 -*-
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -13,11 +12,26 @@ class ArcheTypeConfig:
     """Archetype config class.
 
     Defines the system config for the modular household.
+
+    Photovoltaic orientation is given by two angle fields whose values are
+    always expressed in **degrees**, never radians. This matches the convention
+    used by the downstream PV component
+    (:class:`~hisim.components.generic_pv_system.PVSystemConfig`), which
+    interprets azimuth "from north in °" and tilt "from horizontal":
+
+    - ``pv_azimuth``: panel azimuth angle in degrees, measured clockwise from
+      north. The default ``180`` corresponds to a south-facing panel.
+    - ``pv_tilt``: panel tilt angle in degrees from the horizontal plane. The
+      default ``30`` corresponds to a 30° tilt.
+
+    Callers must pass these values in degrees; do not mix degrees and radians.
     """
 
     building_name: str = "BUI1"
     building_id: str = "default_building"
+    #: PV panel azimuth in degrees, measured clockwise from north (180° = south).
     pv_azimuth: float = 180
+    #: PV panel tilt in degrees from the horizontal plane.
     pv_tilt: float = 30
     pv_rooftop_capacity_in_kilowatt: Optional[float] = None
     pv_rooftop_generation_in_kilowatthour: Optional[float] = None

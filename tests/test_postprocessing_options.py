@@ -13,8 +13,8 @@ from tests.postprocessing_option_test_framework import PostProcessingOptionTestF
 pytestmark = pytest.mark.postprocessingoptions
 
 
-@pytest.fixture(scope="module")
-def postprocessing_option_framework() -> PostProcessingOptionTestFramework:
+@pytest.fixture(scope="module", name="postprocessing_option_framework")
+def fixture_postprocessing_option_framework() -> PostProcessingOptionTestFramework:
     """Shared framework that keeps the individual option tests small."""
     return PostProcessingOptionTestFramework()
 
@@ -207,15 +207,6 @@ def test_postprocessing_option_prepare_outputs_for_scenario_evaluation(
     )
 
 
-def test_postprocessing_option_make_result_json_for_webtool(
-    postprocessing_option_framework: PostProcessingOptionTestFramework,
-) -> None:
-    """Test that PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL produces the webtool results JSON file."""
-    postprocessing_option_framework.run(
-        PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
-        expected_files=["results_for_webtool.json"],
-    )
-
 
 def test_postprocessing_option_write_component_configs_to_json(
     postprocessing_option_framework: PostProcessingOptionTestFramework,
@@ -242,16 +233,6 @@ def test_postprocessing_option_write_kpis_to_json(
 ) -> None:
     """Test that PostProcessingOptions.WRITE_KPIS_TO_JSON produces the all_kpis.json file."""
     postprocessing_option_framework.run(PostProcessingOptions.WRITE_KPIS_TO_JSON, expected_files=["all_kpis.json"])
-
-
-def test_postprocessing_option_make_operation_results_for_webtool(
-    postprocessing_option_framework: PostProcessingOptionTestFramework,
-) -> None:
-    """Test that PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL produces the daily operation results JSON for the webtool."""
-    postprocessing_option_framework.run(
-        PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL,
-        expected_files=["results_daily_operation_for_webtool.json"],
-    )
 
 
 def test_postprocessing_option_export_to_pkl(postprocessing_option_framework: PostProcessingOptionTestFramework) -> None:

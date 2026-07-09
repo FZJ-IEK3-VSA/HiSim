@@ -22,7 +22,37 @@ class CapexComputationHelperFunctions:
         config: ConfigBase,  # these are component configs
         kpi_tag: Optional[KpiTagEnumClass] = None,
     ) -> CapexCostDataClass:
-        """Compute capex costs and emissions for a given component type."""
+        """Compute CAPEX costs and CO2 emissions for a component over the simulated period.
+
+        If all capex-related fields on ``config`` are ``None``, values are looked up from
+        ``EmissionFactorsAndCostsForDevicesConfig`` for the simulation year and country and
+        scaled by ``size_of_energy_system`` according to ``unit``. Otherwise the values
+        already present on ``config`` (plain numbers or ``Quantity`` objects) are used directly.
+
+        Args:
+            simulation_parameters: Provides year, country, and simulated duration used
+                for yearly-cost proration and device-factor lookup.
+            component_type: The component type whose device cost/emission factors are
+                retrieved when config values are absent.
+            unit: Unit of ``size_of_energy_system`` (e.g. ``Units.KILOWATT``, ``Units.KWH``,
+                ``Units.LITER``, ``Units.SQUARE_METER``, ``Units.ANY``); selects the
+                per-unit cost/emission factor.
+            size_of_energy_system: Capacity or size of the component in the given unit.
+            config: Component config whose capex fields are either all ``None`` (triggering
+                device-factor lookup) or all set to numeric/``Quantity`` values (used directly).
+            kpi_tag: Optional KPI category tag attached to the returned data class.
+
+        Returns:
+            A ``CapexCostDataClass`` with total and per-simulated-period investment cost,
+            CO2 footprint, maintenance cost, lifetime, and subsidy percentage (rounded to
+            2 decimals).
+
+        Raises:
+            ValueError: If ``unit`` is not one of the supported units.
+            ValueError: If the looked-up per-unit investment cost or CO2 footprint is ``None``.
+            ValueError: If config capex values are present but neither all numeric nor all
+                ``Quantity``.
+        """
         list_of_config_capex_variables = [
             config.investment_costs_in_euro,
             config.device_co2_footprint_in_kg,
@@ -39,7 +69,7 @@ class CapexComputationHelperFunctions:
             emissions_and_cost_factors_for_devices = EmissionFactorsAndCostsForDevicesConfig.get_values_for_year(
                 year=simulation_parameters.year, device=component_type, country=simulation_parameters.country
             )
-            # Dependend on unit of the energy system size, get respective capex and emissions value
+            # Depending on unit of the energy system size, get respective capex and emissions value
             if unit == Units.KILOWATT:
                 # Size of energy system is in kW
                 # Use the values in kW
@@ -80,9 +110,15 @@ class CapexComputationHelperFunctions:
 
             # make safety checks explicit so they fire even under python -O
             if investment_costs_in_euro_per_size_unit is None:
-                raise ValueError("investment_costs_in_euro_per_size_unit must not be None.")
+                raise ValueError(
+                    f"investment_costs_in_euro_per_size_unit for component {component_type} "
+                    f"with unit {unit} must not be None."
+                )
             if co2_footprint_in_kg_per_size_unit is None:
-                raise ValueError("co2_footprint_in_kg_per_size_unit must not be None.")
+                raise ValueError(
+                    f"co2_footprint_in_kg_per_size_unit for component {component_type} "
+                    f"with unit {unit} must not be None."
+                )
 
             # these values are independent of size unit of the energy system
             maintenance_costs_as_percentage_of_investment_per_year = (
@@ -144,8 +180,17 @@ class CapexComputationHelperFunctions:
         return capex_cost_data_class
 
     @staticmethod
-    def overwrite_config_values_with_new_capex_values(config: ConfigBase, capex_cost_data_class: CapexCostDataClass):
-        """Overwrite config values with new capex values and return."""
+    def overwrite_config_values_with_new_capex_values(config: ConfigBase, capex_cost_data_class: CapexCostDataClass) -> ConfigBase:
+        """Overwrite capex-related fields on ``config`` with values from a ``CapexCostDataClass``.
+
+        Args:
+            config: The component config to mutate in place.
+            capex_cost_data_class: Source of the new investment cost, CO2 footprint,
+                lifetime, maintenance cost, and subsidy percentage values.
+
+        Returns:
+            The same ``config`` object, with updated capex fields.
+        """
         log.debug(f"Overwriting {config.get_main_classname()} config values with new capex values.")
         config.investment_costs_in_euro = capex_cost_data_class.capex_investment_cost_in_euro
         config.device_co2_footprint_in_kg = capex_cost_data_class.device_co2_footprint_in_kg

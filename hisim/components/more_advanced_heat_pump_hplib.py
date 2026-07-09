@@ -820,10 +820,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         if self.with_domestic_hot_water_preparation:
             self.add_default_connections(self.get_default_connections_from_heat_pump_controller_dhw())
-            self.add_default_connections(self.get_default_connections_from_dhw_storage())
             self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
-            # self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
-
     def get_default_connections_from_heat_pump_controller_space_heating(
         self,
     ):
@@ -898,25 +895,6 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH,
                 hws_classname,
                 simple_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
-            )
-        )
-        return connections
-
-    def get_default_connections_from_dhw_storage(
-        self,
-    ):
-        """Get simple hot water storage default connections."""
-        # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.generic_hot_water_storage_modular"
-        component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "HotWaterStorage")
-        connections = []
-        dhw_classname = component_class.get_classname()
-        connections.append(
-            ComponentConnection(
-                MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW,
-                dhw_classname,
-                component_class.TemperatureMean,
             )
         )
         return connections
@@ -1586,7 +1564,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     # get energy from power
                     output_heating_energy_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=heating_output_power_values_in_watt,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     )
 
                     # take only output values for cooling
@@ -1597,7 +1575,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     output_cooling_energy_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=cooling_output_power_values_in_watt,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                 elif output.field_name == self.ThermalOutputPowerDHW:
@@ -1605,7 +1583,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     dhw_heat_pump_heating_energy_output_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=dhw_heat_pump_heating_power_output_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
 
@@ -1614,7 +1592,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     electrical_energy_for_heating_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                 elif output.field_name == self.ElectricalInputPowerDHW:
@@ -1622,7 +1600,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=dhw_heat_pump_total_electricity_consumption_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
 
@@ -1631,7 +1609,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     electrical_energy_for_cooling_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
 
@@ -2128,6 +2106,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
         self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
+        self.add_default_connections(self.get_default_connections_from_energy_management_system())
 
     def get_default_connections_from_heat_distribution_controller(
         self,
@@ -2170,6 +2149,25 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
                 MoreAdvancedHeatPumpHPLibControllerSpaceHeating.WaterTemperatureInput,
                 hws_classname,
                 simple_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_energy_management_system(
+        self,
+    ):
+        """Get energy management system default connections."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.controller_l2_energy_management_system"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "L2GenericEnergyManagementSystem")
+        connections = []
+        ems_classname = component_class.get_classname()
+        connections.append(
+            ComponentConnection(
+               MoreAdvancedHeatPumpHPLibControllerSpaceHeating.SimpleHotWaterStorageTemperatureModifier,
+                ems_classname,
+                component_class.SpaceHeatingWaterStorageTemperatureModifier,
             )
         )
         return connections
@@ -2519,7 +2517,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
 
     # Inputs
     WaterTemperatureInputFromDHWStorage = "WaterTemperatureInputFromDHWStorage"
-    DHWStorageTemperatureModifier = "StorageTemperatureModifier"
+    DHWStorageTemperatureModifier = "DHWStorageTemperatureModifier"
 
     # Outputs
     State_dhw = "StateDHW"
@@ -2594,27 +2592,8 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
             output_description=f"here a description for {self.Value_thermalpower_dhw_is_constant} will follow.",
         )
 
-        self.add_default_connections(self.get_default_connections_from_dhw_storage())
         self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
-
-    def get_default_connections_from_dhw_storage(
-        self,
-    ):
-        """Get simple hot water storage default connections."""
-        # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.generic_hot_water_storage_modular"
-        component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "HotWaterStorage")
-        connections = []
-        dhw_classname = component_class.get_classname()
-        connections.append(
-            ComponentConnection(
-                MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage,
-                dhw_classname,
-                component_class.TemperatureMean,
-            )
-        )
-        return connections
+        self.add_default_connections(self.get_default_connections_from_energy_management_system())
 
     def get_default_connections_from_simple_dhw_storage(
         self,
@@ -2631,6 +2610,25 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
                 MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage,
                 dhw_classname,
                 component_class.WaterTemperatureToHeatGenerator,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_energy_management_system(
+        self,
+    ):
+        """Get energy management system default connections."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.controller_l2_energy_management_system"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "L2GenericEnergyManagementSystem")
+        connections = []
+        ems_classname = component_class.get_classname()
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLibControllerDHW.DHWStorageTemperatureModifier,
+                ems_classname,
+                component_class.DomesticHotWaterStorageTemperatureModifier,
             )
         )
         return connections

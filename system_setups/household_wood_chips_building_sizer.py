@@ -135,13 +135,12 @@ def setup_function(
         raise ValueError(f"Heat distrbution system not recognized: {energy_system_config_.heat_distribution_system}")
     # Set Weather
     weather_location = arche_type_config_.weather_location
-    if weather_location is None:
-        weather_location = "AACHEN"  # default weather location
     # testing AU weather data
     weather_filepath = arche_type_config_.weather_filepath
-    weather_datasource = arche_type_config_.weather_datasource
-    if isinstance(weather_datasource, str):
-        weather_datasource = weather.WeatherDataSourceEnum[weather_datasource]
+    weather_datasource_raw = arche_type_config_.weather_datasource
+    weather_datasource: Optional[weather.WeatherDataSourceEnum] = None
+    if isinstance(weather_datasource_raw, str):
+        weather_datasource = weather.WeatherDataSourceEnum[weather_datasource_raw]
 
     # Set Photovoltaic System
     azimuth = arche_type_config_.pv_azimuth
@@ -269,6 +268,16 @@ def setup_function(
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 
     # Build Heat Distribution Controller
+    # Guard against a zero/negative/None scaled conditioned floor area which would
+    # otherwise produce a ZeroDivisionError or a silent inf that propagates into the
+    # heat distribution controller sizing. scaled_conditioned_floor_area_in_m2 is
+    # derived from the archetype/building config (absolute_conditioned_floor_area_in_m2,
+    # number_of_dwellings_per_building) and can collapse to zero for misconfigured or
+    # edge-case archetypes.
+    scaled_area = my_building_information.scaled_conditioned_floor_area_in_m2
+    assert scaled_area is not None and scaled_area > 0, (
+        f"scaled_conditioned_floor_area_in_m2 must be positive, got {scaled_area!r}"
+    )
     my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_config_based_on_building_efficiency(
         set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
@@ -276,7 +285,7 @@ def setup_function(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         heating_system=my_hds_system,
         specific_heating_load_of_building_in_watt_per_m2=my_building_information.max_thermal_building_demand_in_watt
-        / my_building_information.scaled_conditioned_floor_area_in_m2,
+        / scaled_area,
     )
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(

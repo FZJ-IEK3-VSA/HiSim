@@ -31,9 +31,8 @@ class SystemSetupConfigBase(JSONWizard):
     def load_from_json(cls, module_config_path: str) -> Self:
         """Load a configuration instance from a JSON file.
 
-        Reads the JSON file, extracts optional `building_config`, `options`,
-        and `system_setup_config` sections, and builds a configuration from
-        scaled or unscaled defaults combined with any JSON overwrites.
+        Reads the JSON file and delegates the dict-level merge/overwrite
+        logic to :meth:`load_from_dict`.
 
         Args:
             module_config_path: Path to the JSON configuration file. If the
@@ -45,8 +44,6 @@ class SystemSetupConfigBase(JSONWizard):
         Raises:
             FileNotFoundError: If the config file cannot be found even after
                 the line-ending workaround.
-            ValueError: If `options` are present in the JSON but no
-                `building_config` is provided.
         """
 
         config_path = Path(module_config_path)
@@ -63,6 +60,36 @@ class SystemSetupConfigBase(JSONWizard):
             else:
                 raise FileNotFoundError(f"The module config file {module_config_path} could not be found.")
         log.information(f"Read module config from {module_config_path}.")
+
+        return cls.load_from_dict(module_config_dict)
+
+    @classmethod
+    def load_from_dict(cls, module_config_dict: dict[str, Any]) -> Self:
+        """Build a configuration instance from an in-memory config dict.
+
+        Extracts optional `building_config`, `options`, and
+        `system_setup_config` sections from `module_config_dict` and builds a
+        configuration from scaled or unscaled defaults combined with any
+        overwrites present in the dict. The dict is consumed in place: the
+        `building_config`, `options`, and `system_setup_config` keys are
+        popped.
+
+        This is the pure, filesystem-free counterpart of
+        :meth:`load_from_json`, so the merge/overwrite logic can be unit tested
+        without writing a JSON file to disk.
+
+        Args:
+            module_config_dict: Parsed module config dict (the contents of a
+                JSON config file). May contain `building_config`, `options`,
+                and `system_setup_config` keys; everything else is ignored.
+
+        Returns:
+            A configuration instance populated from the dict and defaults.
+
+        Raises:
+            ValueError: If `options` are present in the dict but no
+                `building_config` is provided.
+        """
 
         # Read building config overwrites. It is used to scale the system setup.
         building_config_dict = module_config_dict.pop("building_config", {})

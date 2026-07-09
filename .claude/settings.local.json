@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(mypy *)",
+      "PowerShell(python -m pylint hisim/inputs/photovoltaic/module_selection.py hisim/modular_household/interface_configs/modular_household_config.py hisim/modular_household/interface_configs/archetype_config.py --disable=all --enable=W0621,W0212 2>$null; if \\($?\\) { \"PYLINT OK\" })",
+      "PowerShell(python -m pylint hisim/inputs/photovoltaic/module_selection.py hisim/modular_household/interface_configs/modular_household_config.py hisim/modular_household/interface_configs/archetype_config.py --disable=all --enable=W0621,W0212)",
+      "PowerShell(python -c \"import ast; [ast.parse\\(open\\(f\\).read\\(\\)\\) for f in ['hisim/inputs/photovoltaic/module_selection.py','hisim/modular_household/interface_configs/modular_household_config.py','hisim/modular_household/interface_configs/archetype_config.py','tests/modular_household/test_migrate_legacy_field_names.py']]; print\\('SYNTAX OK'\\)\")",
+      "Bash(python *)",
+      "PowerShell(prospector *)",
+      "PowerShell(python -m prospector tests/test_golden_check.py tests/test_golden_kpis.py tests/test_golden_matrix.py tests/test_golden_update.py tests/test_runner.py)",
+      "PowerShell(python -m flake8 tests/test_golden_check.py tests/test_golden_kpis.py tests/test_golden_matrix.py tests/test_golden_update.py tests/test_runner.py; python -m pytest tests/test_golden_check.py tests/test_golden_kpis.py tests/test_golden_matrix.py tests/test_golden_update.py tests/test_runner.py -q 2>&1 | Select-Object -Last 15)",
+      "PowerShell(python -m pytest tests/test_system_setups_household_1d_more_advanced_hp_dhw_hp_no_hot_water_storage.py -q 2>&1 | Select-Object -Last 20)",
+      "PowerShell(python -c \"import json; c=json.load\\(open\\('scripts/golden_config.json'\\)\\); print\\('setups:', len\\(c['setups']\\)\\); print\\('pairs:', len\\(c['setups']\\)*len\\(c['parameter_sets']\\)\\)\"; python -m pytest tests/test_runner.py tests/test_golden_matrix.py -q 2>&1 | Select-Object -Last 6)",
+      "PowerShell(python -m pytest tests/test_runner.py tests/test_golden_check.py tests/test_golden_kpis.py tests/test_golden_matrix.py tests/test_golden_update.py -q 2>&1 | Select-Object -Last 20)",
+      "Bash(PYTHONPATH=scripts python -m prospector tests/test_hpc_harness_units.py tests/test_hpc_harness_server.py tests/test_hpc_harness_db.py)",
+      "Bash(PYTHONPATH=scripts python -c ' *)",
+      "PowerShell(python -c \"from utspclient.helpers.lpgdata import Households; names=[n for n in dir\\(Households\\) if n.startswith\\('CHR'\\)]; print\\(len\\(names\\)\\); print\\('\\\\n'.join\\(names[:70]\\)\\)\")",
+      "PowerShell(python -m flake8 hisim/renovisor tests/test_renovisor_measures.py tests/test_renovisor_mapping.py tests/test_renovisor_upload.py tests/test_renovisor_end_to_end.py)",
+      "PowerShell(python -m flake8 --max-line-length 170 --extend-ignore E203,E128,E122 hisim/renovisor tests/test_renovisor_mapping.py; if \\($?\\) { \"flake8 OK\" }; python -m mypy hisim/renovisor --ignore-missing-imports 2>$null | Select-Object -Last 1)",
+      "PowerShell(python -m pytest tests/test_renovisor_mapping.py -q 2>$null)",
+      "PowerShell(python -c \"import hpc_harness; print\\(hpc_harness.__file__\\)\")",
+      "PowerShell(cd C:\\\\work\\\\hisim; ls | Select-Object Name | Select-Object -First 40; \\(Get-Command python\\).Source)",
+      "Bash(flake8 --max-line-length=170 hisim/economics hisim/components/tariff_provider.py tests/test_economics_engine.py tests/test_economics_subsidies_tariffs.py tests/test_economics_data_and_integration.py tests/test_economics_bridge.py)"
+    ]
+  }
+}

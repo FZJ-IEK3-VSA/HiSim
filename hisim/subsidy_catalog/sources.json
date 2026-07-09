@@ -1,0 +1,40 @@
+{
+  "sources": [
+    {
+      "id": "src_beg_em_2023",
+      "citation": "Richtlinie fuer die Bundesfoerderung fuer effiziente Gebaeude - Einzelmassnahmen (BEG EM), Fassung vom 2023-12-21 (BAnz AT 29.12.2023 B1)",
+      "url": "https://www.energiewechsel.de/KAENEF/Redaktion/DE/FAQ/faq-richtlinie-beg-em.html",
+      "publication_year": 2023,
+      "retrieved": "2026-07-07",
+      "kind": "STATUTE",
+      "notes": "Base 30 %, speed bonus 20 % (degressive), income bonus 30 % (taxable household income <= 40 kEUR, self-occupied), efficiency bonus 5 %, combined cap 70 %; eligible cost 30 kEUR first unit / 15 kEUR units 2-6 / 8 kEUR further. Values need legal verification (cost_module_issues.md #11)."
+    },
+    {
+      "id": "src_estg_35c",
+      "citation": "Einkommensteuergesetz (EStG) §35c: Steuerermaessigung fuer energetische Massnahmen bei zu eigenen Wohnzwecken genutzten Gebaeuden",
+      "url": "https://www.gesetze-im-internet.de/estg/__35c.html",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "STATUTE",
+      "notes": "20 % of cost over 3 years (7/7/6 %), max 40 kEUR; building older than 10 years; excludes BEG funding for the same measure."
+    },
+    {
+      "id": "src_kfw_358",
+      "citation": "KfW: Ergaenzungskredit Wohngebaeude (358/359), subsidized supplementary loan for BEG EM measures",
+      "url": "https://www.kfw.de/inlandsfoerderung/Privatpersonen/Bestehende-Immobilie/F%C3%B6rderprodukte/Erg%C3%A4nzungskredit-Wohngeb%C3%A4ude-(358-359)/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "STATUTE",
+      "notes": "Interest advantage for taxable household income <= 90 kEUR; terms simplified to a fixed 2 % / 20 a for v1."
+    },
+    {
+      "id": "src_at_raus_aus_oel",
+      "citation": "AT: 'Raus aus Oel und Gas' Foerderung (umweltfoerderung.at), federal lump sums for boiler replacement",
+      "url": "https://www.umweltfoerderung.at/privatpersonen/raus-aus-oel",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "STATUTE",
+      "notes": "Lump-sum grant for replacing fossil heating with a heat pump; regional top-ups not yet encoded."
+    }
+  ]
+}

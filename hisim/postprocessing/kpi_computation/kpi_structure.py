@@ -65,6 +65,10 @@ class KpiEntry(JSONWizard):
     description: Optional[str] = None
     tag: Optional[KpiTagEnumClass] = None
     name_of_source_component: Optional[str] = None
+    # Optional uncertainty band (cost_spec.md §7.3): `value` is the AVERAGE slot. Additive —
+    # legacy KPIs leave these unset during the parallel phase of the lifecycle cost engine.
+    value_min: Optional[float] = None
+    value_max: Optional[float] = None
 
 
 class KpiHelperClass:

@@ -198,6 +198,36 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Writing network charts to report took " + f"{duration:1.2f}s.")
+        # Parallel lifecycle cost engine (cost_spec.md §10): strictly additive, writes only new
+        # files. It runs BEFORE the legacy COMPUTE_OPEX/COMPUTE_CAPEX blocks because the legacy
+        # get_cost_capex mutates component configs as a side effect (overwrite_config_values...)
+        # and would contaminate the facts the new engine reads (§10.0 rule 4). The parity
+        # report, which needs the legacy CSVs, is written in a second block further down.
+        # LIFECYCLE_COST_REPORT implies the computation and adds the human-readable reports.
+        if (
+            PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS in ppdt.post_processing_options
+            or PostProcessingOptions.LIFECYCLE_COST_REPORT in ppdt.post_processing_options
+        ):
+            log.information("Computing lifecycle costs (parallel cost engine).")
+            start = timer()
+            try:
+                compute_lifecycle_costs = _load_attribute("hisim.economics.bridge", "compute_lifecycle_costs")
+                compute_lifecycle_costs(
+                    wrapped_components=ppdt.wrapped_components,
+                    all_outputs=ppdt.all_outputs,
+                    postprocessing_results=ppdt.results,
+                    simulation_parameters=ppdt.simulation_parameters,
+                    generate_report=(
+                        PostProcessingOptions.LIFECYCLE_COST_REPORT in ppdt.post_processing_options
+                    ),
+                )
+            except Exception as err:  # pylint: disable=broad-except
+                # The parallel engine must never break a run during the transition phase.
+                log.error(f"Lifecycle cost engine failed (legacy outputs are unaffected): {err}")
+            end = timer()
+            duration = end - start
+            log.information("Computing lifecycle costs took " + f"{duration:1.2f}s.")
+
         if PostProcessingOptions.COMPUTE_OPEX in ppdt.post_processing_options:
             log.information(
                 "Computing and writing operational costs and C02 emissions produced in operation to report."
@@ -229,6 +259,21 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Computing and writing KPIs to report took " + f"{duration:1.2f}s.")
+
+        # Shadow-mode parity (cost_spec.md §9.7): compares the legacy CSVs written above
+        # (read-only) against the facts the lifecycle engine captured BEFORE the legacy path
+        # ran, so legacy config mutation cannot fake agreement.
+        if (
+            PostProcessingOptions.COMPUTE_LIFECYCLE_COSTS in ppdt.post_processing_options
+            or PostProcessingOptions.LIFECYCLE_COST_REPORT in ppdt.post_processing_options
+        ) and PostProcessingOptions.COMPUTE_CAPEX in ppdt.post_processing_options:
+            try:
+                write_parity_from_stored_inputs = _load_attribute(
+                    "hisim.economics.bridge", "write_parity_from_stored_inputs"
+                )
+                write_parity_from_stored_inputs(simulation_parameters=ppdt.simulation_parameters)
+            except Exception as err:  # pylint: disable=broad-except
+                log.error(f"Lifecycle cost parity report failed (legacy outputs are unaffected): {err}")
 
         if PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE in ppdt.post_processing_options:
             building_module = importlib.import_module("hisim.components.building")

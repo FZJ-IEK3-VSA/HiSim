@@ -1,0 +1,26 @@
+{
+  "comment": "Parameters of the DE_2024 allocation ruleset (cost_spec.md §6.2-§6.4). Legal percentages and caps are data; defaults per §559/§559e BGB and CO2KostAufG as of 2024 - to be verified in a legal review pass before release (cost_module_issues.md #10).",
+  "source_ids": ["src_bgb_559", "src_co2kostaufg", "src_betrkv"],
+  "maintenance_apportionable_share": 0.5,
+  "modernization_levy": {
+    "levy_rate_per_year": 0.08,
+    "heating_levy_rate_per_year": 0.10,
+    "cap_in_euro_per_m2_per_month": 3.0,
+    "cap_low_rent_in_euro_per_m2_per_month": 2.0,
+    "cap_low_rent_threshold_in_euro_per_m2": 7.0,
+    "maintenance_deduction_share": 0.3,
+    "duration_in_years": null
+  },
+  "co2_cost_split_tiers": [
+    {"max_emissions_in_kg_per_m2_a": 12, "tenant_share": 1.0},
+    {"max_emissions_in_kg_per_m2_a": 17, "tenant_share": 0.9},
+    {"max_emissions_in_kg_per_m2_a": 22, "tenant_share": 0.8},
+    {"max_emissions_in_kg_per_m2_a": 27, "tenant_share": 0.7},
+    {"max_emissions_in_kg_per_m2_a": 32, "tenant_share": 0.6},
+    {"max_emissions_in_kg_per_m2_a": 37, "tenant_share": 0.5},
+    {"max_emissions_in_kg_per_m2_a": 42, "tenant_share": 0.4},
+    {"max_emissions_in_kg_per_m2_a": 47, "tenant_share": 0.3},
+    {"max_emissions_in_kg_per_m2_a": 52, "tenant_share": 0.2},
+    {"max_emissions_in_kg_per_m2_a": null, "tenant_share": 0.05}
+  ]
+}

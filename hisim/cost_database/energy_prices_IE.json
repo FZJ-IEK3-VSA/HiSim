@@ -1,0 +1,378 @@
+{
+  "entries": [
+    {
+      "carrier": "ELECTRICITY",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.3,
+        "avg": 0.35,
+        "max": 0.42
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 250,
+        "avg": 300,
+        "max": 380
+      },
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.28,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.15,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data."
+    },
+    {
+      "carrier": "ELECTRICITY_FEED_IN",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.1,
+        "avg": 0.15,
+        "max": 0.2
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data."
+    },
+    {
+      "carrier": "NATURAL_GAS",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.09,
+        "avg": 0.11,
+        "max": 0.14
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 90,
+        "avg": 110,
+        "max": 140
+      },
+      "grid_exit_fee_in_euro": 200,
+      "emission_factor_in_kg_per_kwh": 0.2,
+      "co2_price_exposure": 1.0,
+      "tax_and_levy_share": 0.15,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure)."
+    },
+    {
+      "carrier": "HEATING_OIL",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.8,
+        "avg": 0.95,
+        "max": 1.15
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.9,
+      "co2_price_exposure": 1.0,
+      "tax_and_levy_share": 0.15,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per liter, emission factor kg per liter (native billing quantity). Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure)."
+    },
+    {
+      "carrier": "DIESEL",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 1.5,
+        "avg": 1.7,
+        "max": 1.95
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.65,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.45,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per liter, emission factor kg per liter (native billing quantity)."
+    },
+    {
+      "carrier": "PELLETS",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 300,
+        "avg": 360,
+        "max": 450
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 175.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.1,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per ton, emission factor kg per ton (native billing quantity; unlike the migrated legacy entries, which carry per-kWh factors - see cost_module_issues.md #24)."
+    },
+    {
+      "carrier": "WOOD_CHIPS",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 120,
+        "avg": 160,
+        "max": 210
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 80.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.1,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per ton, emission factor kg per ton (native billing quantity; unlike the migrated legacy entries, which carry per-kWh factors - see cost_module_issues.md #24)."
+    },
+    {
+      "carrier": "DISTRICT_HEATING",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.1,
+        "avg": 0.14,
+        "max": 0.19
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 150,
+        "avg": 250,
+        "max": 380
+      },
+      "grid_exit_fee_in_euro": 400,
+      "emission_factor_in_kg_per_kwh": 0.15,
+      "co2_price_exposure": 0.3,
+      "tax_and_levy_share": 0.1,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure)."
+    },
+    {
+      "carrier": "HYDROGEN",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.25,
+        "avg": 0.32,
+        "max": 0.42
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 90,
+        "avg": 110,
+        "max": 140
+      },
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.135,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data."
+    },
+    {
+      "carrier": "ELECTRICITY",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.27,
+        "avg": 0.33,
+        "max": 0.43
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 280,
+        "avg": 340,
+        "max": 430
+      },
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.1,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.15,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data."
+    },
+    {
+      "carrier": "ELECTRICITY_FEED_IN",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.05,
+        "avg": 0.08,
+        "max": 0.12
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data."
+    },
+    {
+      "carrier": "NATURAL_GAS",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.1,
+        "avg": 0.125,
+        "max": 0.16
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 100,
+        "avg": 125,
+        "max": 160
+      },
+      "grid_exit_fee_in_euro": 250,
+      "emission_factor_in_kg_per_kwh": 0.2,
+      "co2_price_exposure": 1.0,
+      "tax_and_levy_share": 0.15,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure)."
+    },
+    {
+      "carrier": "HEATING_OIL",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.85,
+        "avg": 1.05,
+        "max": 1.35
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.9,
+      "co2_price_exposure": 1.0,
+      "tax_and_levy_share": 0.15,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per liter, emission factor kg per liter (native billing quantity). Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure)."
+    },
+    {
+      "carrier": "DIESEL",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 1.6,
+        "avg": 1.9,
+        "max": 2.3
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.65,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.45,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per liter, emission factor kg per liter (native billing quantity)."
+    },
+    {
+      "carrier": "PELLETS",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 320,
+        "avg": 390,
+        "max": 490
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 175.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.1,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per ton, emission factor kg per ton (native billing quantity; unlike the migrated legacy entries, which carry per-kWh factors - see cost_module_issues.md #24)."
+    },
+    {
+      "carrier": "WOOD_CHIPS",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 130,
+        "avg": 175,
+        "max": 230
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 80.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.1,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per ton, emission factor kg per ton (native billing quantity; unlike the migrated legacy entries, which carry per-kWh factors - see cost_module_issues.md #24)."
+    },
+    {
+      "carrier": "DISTRICT_HEATING",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.1,
+        "avg": 0.14,
+        "max": 0.19
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 170,
+        "avg": 280,
+        "max": 420
+      },
+      "grid_exit_fee_in_euro": 400,
+      "emission_factor_in_kg_per_kwh": 0.09,
+      "co2_price_exposure": 0.3,
+      "tax_and_levy_share": 0.1,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure)."
+    },
+    {
+      "carrier": "HYDROGEN",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.15,
+        "avg": 0.2,
+        "max": 0.28
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 100,
+        "avg": 125,
+        "max": 160
+      },
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.135,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data."
+    }
+  ]
+}

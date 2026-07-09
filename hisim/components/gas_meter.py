@@ -211,7 +211,6 @@ class GasMeter(DynamicComponent):
         )
         return dynamic_connections
 
-
     def write_to_report(self):
         """Writes relevant information to report."""
         return self.grid_energy_balancer_config.get_string_dict()

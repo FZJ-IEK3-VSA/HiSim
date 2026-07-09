@@ -310,7 +310,8 @@ def _build_archetype_config(
 
 def _resolve_weather_location(country: str, report: MappingReport) -> Tuple[str, Optional[Tuple[float, float]]]:
     """Map the country code to a weather ``LocationEnum`` member name plus station coordinates."""
-    from hisim.components.weather import LocationEnum  # heavy import kept out of module load
+    # heavy import kept out of module load
+    from hisim.components.weather import LocationEnum  # pylint: disable=import-outside-toplevel
 
     member_name = country if hasattr(LocationEnum, country) else ("AACHEN" if country == "DE" else None)
     if member_name is None:

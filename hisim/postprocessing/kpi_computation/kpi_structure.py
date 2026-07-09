@@ -54,7 +54,6 @@ class KpiTagEnumClass(Enum):
     DISTRICT_ENERGY_MANAGEMENT_SYSTEM = " District Energy Management System"
 
 
-
 @dataclass
 class KpiEntry(JSONWizard):
     """Class for storing one kpi entry."""

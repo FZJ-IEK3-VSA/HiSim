@@ -18,7 +18,8 @@ EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "hisim" / "renovisor" / "ex
 
 def _load_example(name: str) -> dict:
     """Load one of the example request files shipped with the package."""
-    return json.loads((EXAMPLES_DIR / name).read_text(encoding="utf-8"))
+    data: dict = json.loads((EXAMPLES_DIR / name).read_text(encoding="utf-8"))
+    return data
 
 
 @pytest.fixture(name="example_gas")
@@ -78,7 +79,9 @@ def test_mapping_report_covers_every_request_leaf(example_gas: dict) -> None:
 
     paths = {entry["path"] for entry in report["fields"]}
     assert {entry["status"] for entry in report["fields"]} <= {"used", "approximated", "defaulted", "ignored"}
-    covered = lambda leaf: any(leaf == p or (leaf.startswith(p) and leaf[len(p)] in ".[") for p in paths)  # noqa: E731
+    def covered(leaf: str) -> bool:
+        return any(leaf == p or (leaf.startswith(p) and leaf[len(p)] in ".[") for p in paths)
+
     for leaf in [
         "contractVersion",
         "location.countryCode",

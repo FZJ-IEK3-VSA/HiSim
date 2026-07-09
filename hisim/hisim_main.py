@@ -98,6 +98,9 @@ def initialize_from_python(
         setup_function=function_in_module,
         my_simulation_parameters=my_simulation_parameters,
         my_module_config=my_module_config,
+        # Always log component connections in Python mode (mirrors the JSON path, hisim_main.py:215)
+        # so component_connections.json is written for easy post-processing and debugging.
+        force_log_connections=True,
     )
 
     # Build method

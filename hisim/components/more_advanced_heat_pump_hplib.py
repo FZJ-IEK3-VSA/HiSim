@@ -821,6 +821,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         if self.with_domestic_hot_water_preparation:
             self.add_default_connections(self.get_default_connections_from_heat_pump_controller_dhw())
             self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
+
     def get_default_connections_from_heat_pump_controller_space_heating(
         self,
     ):
@@ -2165,7 +2166,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
         ems_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-               MoreAdvancedHeatPumpHPLibControllerSpaceHeating.SimpleHotWaterStorageTemperatureModifier,
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.SimpleHotWaterStorageTemperatureModifier,
                 ems_classname,
                 component_class.SpaceHeatingWaterStorageTemperatureModifier,
             )

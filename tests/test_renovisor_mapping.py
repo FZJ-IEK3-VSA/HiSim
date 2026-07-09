@@ -18,7 +18,8 @@ EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "hisim" / "renovisor" / "ex
 
 def _load_example(name: str) -> dict:
     """Load one of the example request files shipped with the package."""
-    return json.loads((EXAMPLES_DIR / name).read_text(encoding="utf-8"))
+    data: dict = json.loads((EXAMPLES_DIR / name).read_text(encoding="utf-8"))
+    return data
 
 
 @pytest.fixture(name="example_gas")

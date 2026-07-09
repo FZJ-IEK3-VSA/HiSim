@@ -133,7 +133,8 @@ def _parse_simulation_overrides(raw: Any) -> SimulationOverrides:
 
 def _validate_post_processing_option_names(names: List[str]) -> None:
     """Check that every override name is a valid :class:`PostProcessingOptions` member."""
-    from hisim.postprocessingoptions import PostProcessingOptions  # local import to keep parsing lightweight
+    # local import to keep parsing lightweight
+    from hisim.postprocessingoptions import PostProcessingOptions  # pylint: disable=import-outside-toplevel
 
     for name in names:
         if not hasattr(PostProcessingOptions, name):

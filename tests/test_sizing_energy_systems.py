@@ -131,12 +131,12 @@ def test_energy_system_scalability() -> None:
 
 def simulation_for_one_timestep(
     scaling_factor_for_absolute_conditioned_floor_area: int,
-) -> Tuple[int, float, float, float, float, float, float]:
+) -> Tuple[int, float, float, float, float, float]:
     """Build a scaled energy system and return the sized component values for one timestep.
 
     Constructs a German single-family-home building scaled by the given factor, then
     sizes the PV system, hplib heat pump, space-heating hot-water storage, battery,
-    DHW heat pump, and DHW storage against the scaled building, returning the
+    and DHW storage against the scaled building, returning the
     resulting component sizes without running a full simulation.
 
     Args:
@@ -151,7 +151,6 @@ def simulation_for_one_timestep(
           hplib_thermal_power_in_watt: Thermal output power set for the hplib heat pump [W].
           simple_hot_water_storage_size_in_liter: Volume of the space-heating water storage [L].
           battery_capacity_in_kilowatt_hours: Battery capacity [kWh].
-          hp_for_dhw_thermal_power_in_watt: Thermal power of the DHW heat pump [W].
           water_storage_size_for_dhw_in_liter: Volume of the DHW storage [L].
     """
 

@@ -93,7 +93,7 @@ def test_post_success_sends_multipart_with_auth_and_fields(tmp_path: Path) -> No
     call = poster.calls[0]
     assert call["headers"] == {"Authorization": "Bearer secret"}
     assert call["data"]["jobId"] == "j1"
-    part_name, (filename, content, mimetype) = call["files"][0]
+    part_name, (filename, content, _) = call["files"][0]  # The _ is the mimetype
     assert (part_name, filename, content) == ("files", "all_kpis.json", b"{}")
 
 
@@ -126,7 +126,7 @@ def test_post_success_does_not_retry_4xx(tmp_path: Path) -> None:
     sleeper = SleepRecorder()
     with pytest.raises(UploadError, match="403"):
         post_success("https://server/results", None, {}, files, post_fn=poster, sleep_fn=sleeper)
-    assert sleeper.delays == []
+    assert not sleeper.delays
     assert len(poster.calls) == 1
 
 

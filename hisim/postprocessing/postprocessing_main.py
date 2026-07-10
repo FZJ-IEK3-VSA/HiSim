@@ -298,8 +298,6 @@ class PostProcessor:
             log.information("Opening the explorer.")
             self.open_dir_in_file_explorer(ppdt)
 
-        
-
         if PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON in ppdt.post_processing_options:
             log.information("Writing component configurations to JSON file.")
             self.write_component_configurations_to_json(ppdt, my_sim=my_sim)

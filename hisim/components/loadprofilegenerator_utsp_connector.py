@@ -173,7 +173,10 @@ class UtspLpgConnector(cp.Component):
 
         self.calculation_index_for_local_lpg = config.calculation_index_for_local_lpg
         if not self.calculation_index_for_local_lpg:
-            self.calculation_index_for_local_lpg = 1
+            # Fall back to 1, but allow an override via env var so that several local-LPG
+            # runs in parallel (e.g. batch scenario-JSON regeneration) use distinct
+            # pylpg working directories (C<index>) instead of colliding on C1.
+            self.calculation_index_for_local_lpg = int(os.environ.get("HISIM_LOCAL_LPG_CALC_INDEX", "1"))
 
         self.build()
         # dummy value as long as there is no way to consider multiple households in one house

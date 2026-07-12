@@ -10,9 +10,9 @@
 #   - workflow_dispatch            -> choose horizon (week or year) for a manual,
 #                                     heavier full-year parity run.
 #
-# Gate: ADVISORY. The check runs with --advisory, so it reports divergences (report
-# artifact + a warning annotation) but never blocks the PR. Once JSON/Python parity
-# is proven green, drop '--advisory' to turn this into a hard gate.
+# Gate: BLOCKING. The check fails the job on any KPI divergence or run error, so a
+# PR that breaks JSON/Python parity cannot be merged. (Was advisory until the JSON
+# setups were proven equivalent to their Python twins.)
 
 name: golden-json-check
 
@@ -75,18 +75,11 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
         run: uv pip install --system -e .
-      - name: Golden KPI check (JSON, advisory)
+      - name: Golden KPI check (JSON)
         run: |
           python scripts/golden_check.py \
-            --mode json --advisory \
+            --mode json \
             --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
-      - name: Surface divergence as a warning (non-blocking)
-        if: always()
-        run: |
-          report="results/golden-ref-check/report.json"
-          if [ -f "$report" ] && ! python3 -c "import json,sys; sys.exit(0 if json.load(open('$report'))['passed'] else 1)"; then
-            echo "::warning title=JSON golden parity::${{ matrix.setup }} / ${{ matrix.param }} diverged from the golden reference (advisory)."
-          fi
       - name: Upload deviation report
         if: always()
         uses: actions/upload-artifact@v6
@@ -94,3 +87,12 @@ jobs:
           name: golden-json-report-${{ matrix.setup }}-${{ matrix.param }}
           path: results/golden-ref-check/report.*
           if-no-files-found: warn
+
+  summary:
+    name: golden-json-check summary
+    needs: golden-json
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any JSON pair diverged
+        run: '[ "${{ needs.golden-json.result }}" = "success" ] || exit 1'

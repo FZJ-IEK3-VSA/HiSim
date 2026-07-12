@@ -1,0 +1,82 @@
+# Scenario-JSON freshness gate.
+#
+# The 'system_setups/*.scenario.json' files are generated artifacts derived from
+# their '.py' setup siblings (via hisim/hisim_convert_to_json.py). They are
+# committed so end users get ready-to-run configs, but they can silently go
+# stale when a '.py' setup or a component's config/default-connections change
+# without the JSON being regenerated -- which breaks the JSON-mode runs.
+#
+# This job regenerates every scenario JSON from scratch and fails if the result
+# differs from what is committed, i.e. it is exactly "regenerate on every commit"
+# expressed as a *check* (it never writes back to the repo). On failure the fix
+# is: run 'python scripts/regenerate_scenario_jsons.py' locally and commit.
+#
+# Gate: BLOCKING (fails the build on drift).
+#
+# Note: this is heavier than the KPI checks because it builds every setup
+# (occupancy setups trigger LPG). 'basic_household_with_weather_data_request' is
+# excluded because it needs the optional 'wetterdienst' package, which is
+# disabled in requirements.txt.
+
+name: scenario-json-freshness
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: scenario-json-freshness-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  freshness:
+    name: regenerate scenario JSONs and check for drift
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install HiSim package
+        run: uv pip install --system -e .
+      - name: Regenerate all scenario JSONs
+        run: |
+          # Auto-adapt parallelism to the runner: one worker per vCPU, capped so a
+          # very large runner cannot oversubscribe memory with concurrent LPG builds.
+          cores="$(nproc)"
+          cap=8
+          jobs=$(( cores < cap ? cores : cap ))
+          echo "Detected ${cores} core(s); using -j ${jobs} (cap ${cap})."
+          echo "::notice title=Regeneration parallelism::${cores} core(s) available, running with -j ${jobs} (cap ${cap})."
+          python scripts/regenerate_scenario_jsons.py \
+            -j "${jobs}" \
+            --exclude basic_household_with_weather_data_request
+      - name: Fail if any committed scenario JSON is stale
+        run: |
+          if git diff --quiet -- 'system_setups/*.scenario.json'; then
+            echo "All committed scenario JSONs are up to date."
+          else
+            echo "::error title=Stale scenario JSONs::Committed .scenario.json files differ from freshly generated ones. Run 'python scripts/regenerate_scenario_jsons.py' locally and commit the result."
+            echo "----- drift (committed -> regenerated) -----"
+            git --no-pager diff -- 'system_setups/*.scenario.json'
+            git diff --name-only -- 'system_setups/*.scenario.json' > scenario_json_drift.txt
+            exit 1
+          fi
+      - name: Upload drift diff
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: scenario-json-drift
+          path: scenario_json_drift.txt
+          if-no-files-found: ignore

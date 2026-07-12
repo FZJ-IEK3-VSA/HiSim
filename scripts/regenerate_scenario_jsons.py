@@ -57,12 +57,19 @@ class SetupResult:
     message: str = ""
 
 
-def discover_setups(only: Optional[list[str]], all_py: bool) -> list[Path]:
+def _normalize_stems(names: list[str]) -> set[str]:
+    """Return setup stems from a list of names given with or without ``.py``."""
+    return {name[:-3] if name.endswith(".py") else name for name in names}
+
+
+def discover_setups(only: Optional[list[str]], all_py: bool, exclude: Optional[list[str]] = None) -> list[Path]:
     """Return the setup ``.py`` paths to regenerate.
 
     Default: every ``*.py`` that has a sibling ``*.scenario.json``.
     ``all_py``: every ``*.py`` except ``__init__.py``.
     ``only``: restrict to the given setup stems (with or without ``.py``).
+    ``exclude``: drop these setup stems (e.g. ones needing uninstalled optional
+    deps); applied after ``only``.
     """
     if all_py:
         candidates = sorted(p for p in SYSTEM_SETUPS_DIR.glob("*.py") if p.name != "__init__.py")
@@ -74,11 +81,15 @@ def discover_setups(only: Optional[list[str]], all_py: bool) -> list[Path]:
         )
 
     if only:
-        wanted = {name[:-3] if name.endswith(".py") else name for name in only}
+        wanted = _normalize_stems(only)
         candidates = [p for p in candidates if p.stem in wanted]
         missing = wanted - {p.stem for p in candidates}
         if missing:
             raise SystemExit(f"--only names not found as setups: {sorted(missing)}")
+
+    if exclude:
+        excluded = _normalize_stems(exclude)
+        candidates = [p for p in candidates if p.stem not in excluded]
 
     return candidates
 
@@ -134,6 +145,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-j", "--jobs", type=int, default=1, help="Number of setups to regenerate in parallel (default 1).")
     parser.add_argument("--only", nargs="+", metavar="SETUP", help="Regenerate only these setup stems.")
+    parser.add_argument("--exclude", nargs="+", metavar="SETUP", help="Skip these setup stems (e.g. ones needing uninstalled optional deps).")
     parser.add_argument("--all-py", action="store_true", help="Regenerate every *.py, not just those with an existing .scenario.json.")
     parser.add_argument("--python", default=sys.executable, help="Interpreter to run the converter with (default: this interpreter).")
     parser.add_argument("--log-dir", type=Path, default=REPO_ROOT / "results" / "regenerate_scenario_jsons", help="Where to write per-setup converter logs.")
@@ -144,7 +156,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.jobs < 1:
         parser.error("--jobs must be >= 1")
 
-    setups = discover_setups(args.only, args.all_py)
+    setups = discover_setups(args.only, args.all_py, args.exclude)
     if not setups:
         print("No setups matched.")
         return 1

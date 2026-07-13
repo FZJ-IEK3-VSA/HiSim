@@ -3,20 +3,29 @@
 # The 'system_setups/*.scenario.json' files are generated artifacts derived from
 # their '.py' setup siblings (via hisim/hisim_convert_to_json.py). They are
 # committed so end users get ready-to-run configs, but they can silently go
-# stale when a '.py' setup or a component's config/default-connections change
-# without the JSON being regenerated -- which breaks the JSON-mode runs.
+# stale -- or be missing entirely -- when a '.py' setup or a component's
+# config/default-connections change without the JSON being regenerated, which
+# breaks the JSON-mode runs.
 #
-# This job regenerates every scenario JSON from scratch and fails if the result
-# differs from what is committed, i.e. it is exactly "regenerate on every commit"
-# expressed as a *check* (it never writes back to the repo). On failure the fix
-# is: run 'python scripts/regenerate_scenario_jsons.py' locally and commit.
+# This job regenerates a scenario JSON for *every* '.py' setup from scratch
+# (--all-py) and fails unless every setup builds a JSON identical to the one
+# committed next to it. It catches three problems:
+#   - stale JSONs   -- committed content differs from a fresh regeneration;
+#   - missing JSONs -- a '.py' with no committed '.scenario.json' at all;
+#   - broken setups -- a '.py' that cannot be converted (crash / missing input).
+# It is "regenerate on every commit" expressed as a *check* (it never writes back
+# to the repo). On failure the fix is: run
+# 'python scripts/regenerate_scenario_jsons.py --all-py' locally, resolve any
+# converter errors, and commit the regenerated JSONs.
 #
-# Gate: BLOCKING (fails the build on drift).
+# Gate: BLOCKING (fails the build on drift, a missing JSON, or a setup that
+# cannot be built).
 #
 # Note: this is heavier than the KPI checks because it builds every setup
-# (occupancy setups trigger LPG). 'basic_household_with_weather_data_request' is
-# excluded because it needs the optional 'wetterdienst' package, which is
-# disabled in requirements.txt.
+# (occupancy setups trigger LPG). The two weather setups
+# 'basic_household_with_weather_data_request' and 'simple_weather_data_import'
+# are excluded because they need the optional 'wetterdienst' package, which is
+# disabled in requirements.txt; they are therefore not required to ship a JSON.
 
 name: scenario-json-freshness
 
@@ -59,20 +68,48 @@ jobs:
           jobs=$(( cores < cap ? cores : cap ))
           echo "Detected ${cores} core(s); using -j ${jobs} (cap ${cap})."
           echo "::notice title=Regeneration parallelism::${cores} core(s) available, running with -j ${jobs} (cap ${cap})."
+          # --all-py builds *every* setup, not just the ones that already ship a
+          # JSON, so a '.py' with no committed '.scenario.json' produces an
+          # untracked file that the drift check below flags as missing.
+          #
+          # A setup that fails to convert (crash / missing input) is itself a gate
+          # failure, but we do NOT abort here: we record the script's exit code and
+          # let the check step below run too, so build failures AND drift are both
+          # reported in a single run instead of the first one masking the rest.
+          set +e
           python scripts/regenerate_scenario_jsons.py \
             -j "${jobs}" \
-            --exclude basic_household_with_weather_data_request
-      - name: Fail if any committed scenario JSON is stale
+            --all-py \
+            --exclude basic_household_with_weather_data_request simple_weather_data_import
+          rc=$?
+          set -e
+          echo "REGEN_RC=${rc}" >> "$GITHUB_ENV"
+          if [ "${rc}" -ne 0 ]; then
+            echo "::error title=Setup failed to convert::One or more .py setups could not be built into a scenario JSON (see the summary above and the per-setup logs). Every setup must produce a valid JSON."
+          fi
+      - name: Fail if any scenario JSON is missing, stale, or failed to build
         run: |
-          if git diff --quiet -- 'system_setups/*.scenario.json'; then
-            echo "All committed scenario JSONs are up to date."
-          else
-            echo "::error title=Stale scenario JSONs::Committed .scenario.json files differ from freshly generated ones. Run 'python scripts/regenerate_scenario_jsons.py' locally and commit the result."
+          # Record an intent-to-add for every generated JSON so that scenario
+          # JSONs for '.py' setups with *no* committed sibling (i.e. missing
+          # ones just created by --all-py) show up in the diff below --
+          # 'git diff' ignores untracked files otherwise.
+          git add --intent-to-add -- 'system_setups/*.scenario.json'
+          drift=0
+          if ! git diff --quiet -- 'system_setups/*.scenario.json'; then
+            drift=1
+            echo "::error title=Missing or stale scenario JSONs::Some .py setup has a missing or out-of-date .scenario.json sibling. Run 'python scripts/regenerate_scenario_jsons.py --all-py' locally and commit the result."
+            echo "----- affected scenario JSONs (A = missing/uncommitted, M = stale) -----"
+            git diff --name-status -- 'system_setups/*.scenario.json'
             echo "----- drift (committed -> regenerated) -----"
             git --no-pager diff -- 'system_setups/*.scenario.json'
             git diff --name-only -- 'system_setups/*.scenario.json' > scenario_json_drift.txt
+          fi
+          if [ "${REGEN_RC:-0}" -ne 0 ] || [ "${drift}" -ne 0 ]; then
+            echo "One or more scenario JSONs are missing, stale, or failed to build."
+            echo "Fix: run 'python scripts/regenerate_scenario_jsons.py --all-py' locally, resolve any converter errors, and commit the regenerated JSONs."
             exit 1
           fi
+          echo "Every .py setup builds and ships an up-to-date committed .scenario.json."
       - name: Upload drift diff
         if: failure()
         uses: actions/upload-artifact@v6

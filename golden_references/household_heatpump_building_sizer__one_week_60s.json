@@ -2,10 +2,9 @@
   "BUI1.Battery.Battery charging energy": 32.09262589829692,
   "BUI1.Battery.Battery discharging energy": 24.056663861440548,
   "BUI1.Battery.Battery losses": 8.035962036856375,
-
   "BUI1.Building.Building heating load": 7780.752200000001,
   "BUI1.Building.Conditioned floor area": 121.2,
-  "BUI1.Building.Internal energy gains": 85.68097425432883,
+  "BUI1.Building.Internal energy gains": 85.6809742543288,
   "BUI1.Building.Maximum building indoor air temperature reached": 23.007806716753898,
   "BUI1.Building.Minimum building indoor air temperature reached": 18.6669748642821,
   "BUI1.Building.Rooftop area": 168.9,
@@ -16,7 +15,6 @@
   "BUI1.Building.Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius": 3.3483797537291613,
   "BUI1.Building.Theoretical cooling demand": 0.0,
   "BUI1.Building.Theoretical heating demand": 541.9771736564917,
-
   "BUI1.Costs.Costs of grid electricity for simulated period": 59.82872699999999,
   "BUI1.Costs.Costs of grid gas for simulated period": 0.0,
   "BUI1.Costs.Costs of other heating fuels for simulated period": 0.0,
@@ -34,7 +32,6 @@
   "BUI1.Costs.Total costs for simulated period": 59.82872699999999,
   "BUI1.Costs.Total costs only heatpump for simulated period": 0.0,
   "BUI1.Costs.Total costs without heatpump for simulated period": 59.82872699999999,
-
   "BUI1.Electricity Meter.CO2 footprint of electricity consumption from grid": 81.672,
   "BUI1.Electricity Meter.Max power from grid": 9.113004652973562,
   "BUI1.Electricity Meter.Max power to grid": 0.20210413718126405,
@@ -45,7 +42,6 @@
   "BUI1.Electricity Meter.Opex costs of electricity consumption from grid": 59.82872699999999,
   "BUI1.Electricity Meter.Total energy from grid": 199.1954965983161,
   "BUI1.Electricity Meter.Total energy to grid": 0.4129124804534192,
-
   "BUI1.Emissions.CO2 footprint for equipment only heatpump per simulated period": 0.0,
   "BUI1.Emissions.CO2 footprint for equipment per simulated period": 0.0,
   "BUI1.Emissions.CO2 footprint for equipment without heatpump per simulated period": 0.0,
@@ -55,7 +51,6 @@
   "BUI1.Emissions.Total CO2 emissions for simulated period": 81.672,
   "BUI1.Emissions.Total CO2 emissions only heatpump for simulated period": 0.0,
   "BUI1.Emissions.Total CO2 emissions without heatpump for simulated period": 81.672,
-
   "BUI1.Energy Management System.Domestic hot water heat pump electricity from grid": 47.30640089195862,
   "BUI1.Energy Management System.Priority for Input_Battery_AcBatteryPowerUsed_6": 3.0,
   "BUI1.Energy Management System.Priority for Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_5": 2.0,
@@ -63,7 +58,6 @@
   "BUI1.Energy Management System.Priority for Input_UTSPConnector_ElectricalPowerConsumption_2": 0.0,
   "BUI1.Energy Management System.Residents' electricity consumption from grid": 45.58650467346318,
   "BUI1.Energy Management System.Space heating heat pump electricity from grid": 130.09722513039512,
-
   "BUI1.General.Grid injection of electricity": 0.42369834137529266,
   "BUI1.General.PV production": 83.3,
   "BUI1.General.Purchased energy consumption for simulated period": 199.1954965983161,
@@ -81,7 +75,6 @@
   "BUI1.General.Total electricity production": 83.3,
   "BUI1.General.Total energy self-suffiency rate": 29.31,
   "BUI1.General.Windturbine production": 0.0,
-
   "BUI1.Heat Distribution System.Max flow temperature of heat distribution system": 48.797935300031156,
   "BUI1.Heat Distribution System.Max return temperature of heat distribution system": 45.18128703753902,
   "BUI1.Heat Distribution System.Max temperature difference of heat distribution system": 6.318995521585954,
@@ -92,10 +85,8 @@
   "BUI1.Heat Distribution System.Min return temperature of heat distribution system": 18.701536969156063,
   "BUI1.Heat Distribution System.Min temperature difference of heat distribution system": 0.0,
   "BUI1.Heat Distribution System.Thermal output energy of heat distribution system": 540.2699651039461,
-
   "BUI1.Heat Pump For Domestic Hot Water.DHW heat pump total electricity consumption": 60.69398874109008,
   "BUI1.Heat Pump For Domestic Hot Water.Heating output energy of DHW heat pump": 101.87090795499789,
-
   "BUI1.Heat Pump For Space Heating.Cooling hours of SH heat pump": 0.0,
   "BUI1.Heat Pump For Space Heating.Cooling output energy of SH heat pump": 0.0,
   "BUI1.Heat Pump For Space Heating.Electrical input energy for cooling of SH heat pump": 0.0,
@@ -111,15 +102,13 @@
   "BUI1.Heat Pump For Space Heating.Min flow temperature of SH heat pump": 19.84615387936233,
   "BUI1.Heat Pump For Space Heating.Min return temperature of SH heat pump": 19.802191309695225,
   "BUI1.Heat Pump For Space Heating.Min temperature difference of SH heat pump": 0.0,
-  "BUI1.Heat Pump For Space Heating.Number of SH heat pump cycles": 0,
+  "BUI1.Heat Pump For Space Heating.Number of SH heat pump cycles": 0.0,
   "BUI1.Heat Pump For Space Heating.Seasonal energy efficiency ratio of SH heat pump": null,
   "BUI1.Heat Pump For Space Heating.Seasonal performance factor of SH heat pump": 3.7081824636284844,
   "BUI1.Heat Pump For Space Heating.Total electrical input energy of SH heat pump": 154.52438837816206,
-
   "BUI1.Residents.Residents' total electricity consumption": 58.53369865986398,
   "BUI1.Residents.Residents' total warm water consumption": 1820.0,
   "BUI1.Residents.Residents' total warm water energy consumption": 62.88949333333334,
-
   "BUI1.Storage For Domestic Hot Water.Standby heat loss of DHW storage": 5.3,
   "BUI1.Storage For Space Heating Hot Water.Standby heat loss of Hot water storage": 12.2
 }

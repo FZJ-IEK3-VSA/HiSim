@@ -629,6 +629,7 @@ class HeatPumpHplib(Component):
         No electricity costs for components except for Electricity Meter,
         because part of electricity consumption is feed by PV
         """
+        consumption_in_kwh: float = 0.0
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == self.component_name
@@ -636,7 +637,7 @@ class HeatPumpHplib(Component):
                 and output.field_name == self.ElectricalInputPower
                 and output.unit == Units.WATT
             ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
-                self.config.consumption_in_kwh = round(
+                consumption_in_kwh = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
@@ -647,15 +648,15 @@ class HeatPumpHplib(Component):
         )
         co2_per_unit = emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh
         euro_per_unit = emissions_and_cost_factors.electricity_costs_in_euro_per_kwh
-        co2_per_simulated_period_in_kg = self.config.consumption_in_kwh * co2_per_unit
-        opex_energy_cost_per_simulated_period_in_euro = self.config.consumption_in_kwh * euro_per_unit
+        co2_per_simulated_period_in_kg = consumption_in_kwh * co2_per_unit
+        opex_energy_cost_per_simulated_period_in_euro = consumption_in_kwh * euro_per_unit
 
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            total_consumption_in_kwh=self.config.consumption_in_kwh,
-            consumption_for_space_heating_in_kwh=self.config.consumption_in_kwh,
+            total_consumption_in_kwh=consumption_in_kwh,
+            consumption_for_space_heating_in_kwh=consumption_in_kwh,
             loadtype=LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )

@@ -1,7 +1,7 @@
 {
-  "BUI1.Battery.Battery charging energy": 2589.664650339978,
+  "BUI1.Battery.Battery charging energy": 2589.6646503399775,
   "BUI1.Battery.Battery discharging energy": 1899.0818914287463,
-  "BUI1.Battery.Battery losses": 690.5827589112316,
+  "BUI1.Battery.Battery losses": 690.5827589112312,
   "BUI1.Building.Building heating load": 7780.752200000001,
   "BUI1.Building.Conditioned floor area": 121.2,
   "BUI1.Building.Internal energy gains": 4576.192767603954,
@@ -12,7 +12,7 @@
   "BUI1.Building.Specific heating load": 64.19762541254126,
   "BUI1.Building.Tabula reference energy need for heating": 128.1,
   "BUI1.Building.Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius": 179.89446055307337,
-  "BUI1.Building.Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius": 99.3596251054831,
+  "BUI1.Building.Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius": 99.35962510548313,
   "BUI1.Building.Theoretical cooling demand": -704.7435620436597,
   "BUI1.Building.Theoretical heating demand": 11879.294409940847,
   "BUI1.Costs.Costs of grid electricity for simulated period": -1469.6913330000002,

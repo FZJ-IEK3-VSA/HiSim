@@ -225,7 +225,7 @@ def run_simulation(my_sim: sim.Simulator, path_to_module: Optional[str]) -> None
     # If debugging is needed, this may be used to print components and their inputs/outputs
     for comp in my_sim.wrapped_components:
         log.debug(f"Component {comp.my_component.component_name} has inputs "
-                  f"{[input.full_name for input in comp.component_inputs]} and"
+                  f"{[input.fullname for input in comp.component_inputs]} and"
                   f" outputs {[output.full_name for output in comp.component_outputs]}")
 
     log.information("#################################")

@@ -103,7 +103,8 @@ def test_share_of_maximum_pv_potential_boundary_values(value: float) -> None:
 def test_round_trip_via_dataclass_json() -> None:
     """to_dict / from_dict round-trip preserves the @dataclass_json contract."""
     cfg: EnergySystemConfig = EnergySystemConfig.get_default_config_for_energy_system_gas()
-    restored: EnergySystemConfig = EnergySystemConfig.from_dict(cfg.to_dict())
+    # to_dict/from_dict are injected by the @dataclass_json decorator, which mypy cannot see.
+    restored: EnergySystemConfig = EnergySystemConfig.from_dict(cfg.to_dict())  # type: ignore[attr-defined]
     assert restored == cfg
 
 

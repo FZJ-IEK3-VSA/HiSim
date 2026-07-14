@@ -236,19 +236,6 @@
                    "Source":"https://samsung.polyaire.com.au/wp-content/uploads/2019/10/samsung-ducted-brochure-2016.pdf"
                    },
                    {
-                   "Manufacturer":"Panasonic",
-                   "Model":"CS-E24DKE/CU-E24DKE",
-                   "Type":"Single-Split Type",
-                   "Refrigerant [Type/GWP]":"R410A/1975",
-                   "Outdoor temperature range - cooling":[23,30,35],
-                   "Outdoor temperature range - heating":[-8,7,15],
-                   "Cooling capacity W":[8160,7344,6800],
-                   "EER W/W":[3.7224,3.2148,2.82],
-                   "Heating capacity W":[5504,8600,10578],
-                   "COP W/W":[2.6945,3.17,3.3285],
-                   "Source":"https://www.kaelte-bast.de/dateien/pana/th/sm_cs-e24dke.pdf"
-                   },
-                   {
                    "Manufacturer":"Daikin",
                    "Model":"FTXZ35N/RXZ35N",
                    "Type":"Single-Split Type",

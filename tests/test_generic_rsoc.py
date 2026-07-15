@@ -96,9 +96,13 @@ def test_rsoc():
     my_rsoc.i_simulate(timestep, stsv, False)
 
     # Checking differnt values
+    # These values are outputs of i_simulate, not constants assigned directly
+    # to zero. Depending on platform/compiler/ramp-up arithmetic, the computed
+    # result may be a tiny residual (e.g. 1e-16) rather than exactly 0.0, so a
+    # tolerance-based check is used instead of exact equality.
     assert (
-        stsv.values[my_rsoc.soec_hydrogen_flow_rate.global_index] == 0.0
+        abs(stsv.values[my_rsoc.soec_hydrogen_flow_rate.global_index]) < 1e-9
     )  # should be zero because the systems ramp up is slow
-    assert stsv.values[my_rsoc.sofc_hydrogen_flow_rate.global_index] == 0.0
+    assert abs(stsv.values[my_rsoc.sofc_hydrogen_flow_rate.global_index]) < 1e-9
 
     # python -m pytest ../tests/test_generic_rSOC.py

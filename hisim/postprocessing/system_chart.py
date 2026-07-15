@@ -10,8 +10,31 @@ import pydot
 
 from hisim import log
 from hisim.component import ComponentOutput
+from hisim.loadtypes import UNITS_USING_MEAN_AGGREGATION, Units
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import SystemChartEntry
+
+
+def _cumulative_unit_for_sum(unit: Units) -> str:
+    """Derive the unit label for a cumulative *sum* from the source output's unit.
+
+    A sum over timesteps of a "per timestep" quantity yields a total in the
+    base unit (e.g. ``"kWh per timestep"`` -> ``"kWh"``).  Extensive
+    quantities (energy, volume, mass, cost, time) keep their unit when
+    summed, so their unit string is returned unchanged.
+
+    Args:
+        unit: The :class:`Units` member of the source output whose values
+            were summed.
+
+    Returns:
+        The unit string to display next to the cumulative sum value.
+    """
+    text = unit.value
+    suffix = " per timestep"
+    if text.endswith(suffix):
+        return text[: -len(suffix)]
+    return text
 
 
 class SystemChart:
@@ -117,7 +140,8 @@ class SystemChart:
                 with_results=with_results,
             )
             fullpath = Path(self.ppdt.simulation_parameters.result_directory) / filename
-            graph.write_png(fullpath)  # noqa: no-member
+            # pydot generates the write_<format> methods at runtime, so neither pylint nor mypy sees them.
+            graph.write_png(fullpath)  # type: ignore[attr-defined]  # noqa: no-member
         except Exception as exc:  # noqa
             log.error(
                 "Failed to generate network charts. Probably Graphviz is missing on your system. The python error was: "
@@ -147,7 +171,12 @@ class SystemChart:
         set becomes an edge; its label combines the source field, target field
         and unit, with the ``°C`` unit replaced by its HTML entity
         (``&#8451;``). When ``with_results`` is set, the cumulative result
-        value for the connected output is appended to the label.
+        value for the connected output is appended to the label, annotated
+        with its own derived unit and the aggregation kind (``mean`` or
+        ``sum``) so that the number is not mistaken for the input field's
+        instantaneous value: a mean keeps the source output's unit, while a
+        sum is a cumulative total (e.g. ``"kWh per timestep"`` sums to
+        ``"kWh"``).
 
         Args:
             with_labels: If True, edges carry the constructed label text;
@@ -200,13 +229,31 @@ class SystemChart:
                     + component_input.unit
                 )
                 if with_results:
-                    # result value is either sum or mean value, according to distinction in func "get_std_results()" in simulator.py
+                    # The cumulative result from get_std_results() in simulator.py is either a
+                    # *mean* (for rate-like units such as W, °C) or a *sum* (for extensive units
+                    # such as Wh, L, kg, Euro) of the source output over all timesteps.  A mean
+                    # keeps the field's unit, but a sum is a cumulative total whose unit may
+                    # differ from the input field's unit (e.g. "kWh per timestep" sums to "kWh").
+                    # The "in <unit>" clause above describes the input field, not this aggregated
+                    # value, so the value is annotated with its own derived unit and the
+                    # aggregation kind (mean/sum) to avoid a unit-label mismatch.
                     if isinstance(component_input.source_output, ComponentOutput):
                         assert self.ppdt.results_cumulative is not None
+                        source_output = component_input.source_output
                         output_cumulative_result = self.ppdt.results_cumulative.at[
-                            0, component_input.source_output.get_pretty_name()
+                            0, source_output.get_pretty_name()
                         ]
-                        this_edge_label += f": {round(output_cumulative_result, 3)}"
+                        output_unit = source_output.unit
+                        if output_unit in UNITS_USING_MEAN_AGGREGATION:
+                            cumulative_unit = output_unit.value
+                            aggregation_kind = "mean"
+                        else:
+                            cumulative_unit = _cumulative_unit_for_sum(output_unit)
+                            aggregation_kind = "sum"
+                        this_edge_label += (
+                            f": {round(output_cumulative_result, 3)} {cumulative_unit}"
+                            f" ({aggregation_kind})"
+                        )
 
                 this_edge_label = this_edge_label.replace("°C", "&#8451;")
                 if key not in edge_labels:

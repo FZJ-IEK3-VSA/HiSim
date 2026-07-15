@@ -64,6 +64,25 @@ jobs:
       run: |
         pylint --rcfile pylintrc-critical-only $(git ls-files '*.py')
 
+  config-attrs:
+    name: config attributes
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+    - uses: actions/checkout@v6
+    - name: Mark workspace as safe for git
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+    # Catches reads of config fields that do not exist -- e.g. 'config.lifetime' after
+    # the field was renamed to 'lifetime_in_years'. mypy cannot see these: ConfigBase
+    # inherits dataclass_wizard.JSONWizard, which ships no py.typed, so every config
+    # class ends up with an 'Any' base and accepts any attribute. Pure AST, no deps.
+    - name: Check config attribute accesses
+      run: python scripts/check_config_attrs.py
+
   codequality:
     name: prospector
     runs-on: ubuntu-latest
@@ -93,6 +112,10 @@ jobs:
       run: prospector system_setups/
     - name: Lint tests
       if: always()
+      # scripts/ on PYTHONPATH so the top-level hpc_harness package (imported by the
+      # harness tests, mirrored by tests/conftest.py at runtime) resolves for prospector.
+      env:
+        PYTHONPATH: scripts
       run: prospector tests/
     - name: Lint hisim
       if: always()

@@ -63,8 +63,8 @@ HISIMPATH: Dict[str, Any] = {
         "data_processed",
         "heater_efficiencies.csv",
     ),
-    "fuel_costs": os.path.join(hisim_abs_path, "modular_household", "emission_factors_and_costs_fuels.csv"),
-    "component_costs": os.path.join(hisim_abs_path, "modular_household", "emission_factors_and_costs_devices.csv"),
+    "fuel_costs": os.path.join(hisim_inputs, "costs_and_emissions", "why_project", "emission_factors_and_costs_fuels.csv"),
+    "component_costs": os.path.join(hisim_inputs, "costs_and_emissions", "why_project", "emission_factors_and_costs_devices.csv"),
     "occupancy_scaling_factors_per_country": os.path.join(
         hisim_inputs, "loadprofiles", "WHY_reference_data", "scaling_factors_demand.csv"
     ),
@@ -174,7 +174,6 @@ HISIMPATH: Dict[str, Any] = {
     },
     "LoadProfileGenerator_export_directory": os.path.join(os.path.join("D:", os.sep, "Work")),
     "bat_parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "Siemens_Junelight.npy"),
-    "modular_household": os.path.join(hisim_abs_path, "modular_household"),
     "price_signal": {
         "PricePurchase": os.path.join(hisim_inputs, "price_signal", "PricePurchase.csv"),
         "FeedInTarrif": os.path.join(hisim_inputs, "price_signal", "FeedInTarrif.csv"),

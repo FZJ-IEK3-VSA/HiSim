@@ -20,9 +20,15 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components.fuel_meter import FuelMeter, FuelMeterConfig, FuelMeterState
 
+# Heating-oil density expressed in kg per liter. The stored field
+# ``fuel_density_in_kg_per_m3`` uses kg/m^3, and since 1 L == 1e-3 m^3 the
+# conversion is kg/L * 1e3 == kg/m^3. Documented explicitly here so the
+# magic ``* 1e3`` factor in the assertions below is no longer unexplained.
+OIL_DENSITY_IN_KG_PER_LITER: float = 0.83  # kg/L -- typical density of heating oil
+
 
 # Mark every test in this module as a fast ``base`` test (see pytest.ini).
-pytestmark = pytest.mark.base
+pytestmark: pytest.MarkDecorator = pytest.mark.base
 
 
 def test_get_main_classname_returns_full_class_path() -> None:
@@ -41,7 +47,7 @@ def test_get_fuel_meter_default_config_with_no_arguments() -> None:
     assert config.name == "FuelMeter"
     assert config.fuel_loadtype == lt.LoadTypes.OIL
     assert config.heating_value_of_fuel_in_kwh_per_liter == 9.82
-    assert config.fuel_density_in_kg_per_m3 == 0.83 * 1e3
+    assert config.fuel_density_in_kg_per_m3 == OIL_DENSITY_IN_KG_PER_LITER * 1e3  # kg/L -> kg/m^3
     assert config.building_name == "BUI1"
 
 
@@ -54,7 +60,7 @@ def test_get_fuel_meter_default_config_with_custom_building_name() -> None:
     assert config.name == "FuelMeter"
     assert config.fuel_loadtype == lt.LoadTypes.OIL
     assert config.heating_value_of_fuel_in_kwh_per_liter == 9.82
-    assert config.fuel_density_in_kg_per_m3 == 0.83 * 1e3
+    assert config.fuel_density_in_kg_per_m3 == OIL_DENSITY_IN_KG_PER_LITER * 1e3  # kg/L -> kg/m^3
 
 
 def test_get_fuel_meter_default_config_with_custom_fuel_loadtype() -> None:
@@ -66,7 +72,7 @@ def test_get_fuel_meter_default_config_with_custom_fuel_loadtype() -> None:
     assert config.fuel_loadtype == lt.LoadTypes.PELLETS
     # Numeric defaults unchanged.
     assert config.heating_value_of_fuel_in_kwh_per_liter == 9.82
-    assert config.fuel_density_in_kg_per_m3 == 0.83 * 1e3
+    assert config.fuel_density_in_kg_per_m3 == OIL_DENSITY_IN_KG_PER_LITER * 1e3  # kg/L -> kg/m^3
     # And the other defaults are preserved too.
     assert config.name == "FuelMeter"
     assert config.building_name == "BUI1"
@@ -90,18 +96,18 @@ def test_get_cost_capex_returns_default_capex_and_ignores_none_inputs() -> None:
 
 
 @pytest.mark.parametrize(
-    "consumption",
+    "consumption_in_watt_hour",
     [0.0, 1234.5, -10.0],
     ids=["zero", "positive", "negative"],
 )
 def test_fuel_meter_state_self_copy_preserves_value_and_returns_new_instance(
-    consumption: float,
+    consumption_in_watt_hour: float,
 ) -> None:
     """``self_copy`` returns a distinct ``FuelMeterState`` with the same value."""
-    state = FuelMeterState(cumulative_consumption_in_watt_hour=consumption)
+    state = FuelMeterState(cumulative_consumption_in_watt_hour=consumption_in_watt_hour)
     copy = state.self_copy()
 
     # Distinct object, same value (covers the zero, positive, and negative cases).
     assert copy is not state
     assert isinstance(copy, FuelMeterState)
-    assert copy.cumulative_consumption_in_watt_hour == consumption
+    assert copy.cumulative_consumption_in_watt_hour == consumption_in_watt_hour

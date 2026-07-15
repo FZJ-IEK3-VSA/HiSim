@@ -13,7 +13,7 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_gas_heater():
+def test_gas_heater() -> None:
     """Test GenericBoiler (gas heater) output calculations.
 
     Verifies that the gas heater component correctly computes:

@@ -122,7 +122,7 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         output_description: str,
         figure_format: FigureFormat,
         path_checker=None,
-    ):
+    ) -> None:
         """Initializes a line chart."""
         if output_description is None:
             raise ValueError("Output description was None for component " + component_name)
@@ -208,7 +208,7 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         output_description: str,
         figure_format: FigureFormat,
         path_checker=None,
-    ):
+    ) -> None:
         """Initializes the classes."""
         super().__init__(
             output=output,

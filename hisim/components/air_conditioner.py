@@ -42,6 +42,51 @@ __email__ = "k.dabrock@fz-juelich.de"
 __status__ = "development"
 
 
+# Share of the investment costs spent on maintenance each year.
+MAINTENANCE_COST_AS_PERCENTAGE_OF_INVESTMENT_PER_YEAR = 0.05
+
+
+def get_price_in_euro(air_conditioner: dict) -> float:
+    """Return the purchase price of a smart-devices air conditioner entry in euro.
+
+    Prices in the smart-devices database are given either as a plain number or as a
+    string carrying the currency, e.g. "3499.00 EUR".
+    """
+
+    if "Price" not in air_conditioner:
+        raise ValueError(
+            f"Air conditioner {air_conditioner['Manufacturer']}/{air_conditioner['Model']} "
+            "has no price in the smart devices database, so its investment costs are unknown."
+        )
+    price = air_conditioner["Price"]
+    if isinstance(price, (int, float)):
+        return float(price)
+
+    amount, _, currency = str(price).partition(" ")
+    if currency not in ("", "EUR"):
+        raise ValueError(
+            f"Price of air conditioner {air_conditioner['Manufacturer']}/{air_conditioner['Model']} "
+            f"is given in {currency}, but only EUR is supported."
+        )
+    return float(amount)
+
+
+def get_installation_cost_in_euro(air_conditioner: dict) -> float:
+    """Return the installation costs of a smart-devices air conditioner entry in euro.
+
+    Based on https://www.obi.de/magazin/bauen/haustechnik/klimaanlage/klima-splitgeraet#Kosten
+    """
+
+    ac_type = air_conditioner["Type"].replace("-", " ").lower()
+    if "single split" in ac_type:
+        return 1400
+    if "duo" in ac_type:
+        return 2350
+    if "ducted" in ac_type or "triple" in ac_type:
+        return 3300
+    raise ValueError(f"No installation cost information for type {air_conditioner['Type']}")
+
+
 @dataclass_json
 @dataclass
 class AirConditionerConfig(ConfigBase):
@@ -52,12 +97,12 @@ class AirConditionerConfig(ConfigBase):
     manufacturer: str
     model_name: str
     scale_factor: float
-    t_out_cooling_ref: float
-    t_out_heating_ref: float
-    eer_ref: float
-    cop_ref: float
-    cooling_capacity_ref: float
-    heating_capacity_ref: float
+    t_out_cooling_ref: List[float]
+    t_out_heating_ref: List[float]
+    eer_ref: List[float]
+    cop_ref: List[float]
+    cooling_capacity_ref: List[float]
+    heating_capacity_ref: List[float]
     investment_costs_in_euro: float
     lifetime_in_years: int
     co2_emissions_kg_co2_eq: float
@@ -68,20 +113,17 @@ class AirConditionerConfig(ConfigBase):
         """Return the full class name of the main component class."""
         return AirConditioner.get_full_classname()
 
-    def __init__(
-        self,
-        building_name: str,
-        name: str,
-        manufacturer="Panasonic",
-        model_name="CS-RE18JKE/CU-RE18JKE",
-        scale_factor=1.0,
-    ):
-        """Constructor."""
+    @classmethod
+    def get_air_conditioner_config_from_database(
+        cls,
+        manufacturer: str,
+        model_name: str,
+        scale_factor: float = 1.0,
+        building_name: str = "BUI1",
+        name: str = "AirConditioner",
+    ) -> "AirConditionerConfig":
+        """Build a configuration from the smart-devices database entry of the given model."""
 
-        super().__init__(name, building_name)
-        self.manufacturer = "Panasonic"
-        self.model_name = "CS-RE18JKE/CU-RE18JKE"
-        self.scale_factor = scale_factor
         air_conditioners = utils.load_smart_appliance("Air Conditioner")
         air_conditioner = next(
             (
@@ -95,43 +137,32 @@ class AirConditionerConfig(ConfigBase):
 
         if air_conditioner is None:
             raise ValueError(f"Air conditioner model {manufacturer}/{model_name} not found in database")
-        # Prepare reference data for interpolation
-        self.t_out_cooling_ref = air_conditioner[
-            "Outdoor temperature range - cooling"
-        ]
-        self.t_out_heating_ref = air_conditioner[
-            "Outdoor temperature range - heating"
-        ]
-        self.eer_ref = air_conditioner["EER W/W"]
-        self.cop_ref = air_conditioner["COP W/W"]
-        self.cooling_capacity_ref = air_conditioner["Cooling capacity W"]
-        self.heating_capacity_ref = air_conditioner["Heating capacity W"]
-        # Based on https://www.obi.de/magazin/bauen/haustechnik/klimaanlage/klima-splitgeraet#Kosten
-        ac_type = air_conditioner["Type"].replace("-", " ").lower()
-        if "single split" in ac_type:
-            installation_cost = 1400
-        elif "duo" in ac_type:
-            installation_cost = 2350
-        elif "ducted" in ac_type or "triple" in ac_type:
-            installation_cost = 3300
-        else:
-            raise ValueError(
-                f"No installation cost information for type {air_conditioner['Type']}"
-            )
-        # Price is stored in the database as a string like "3500.00 EUR"; extract the numeric part.
-        price_field = air_conditioner["Price"]
-        price_in_euro = float(str(price_field).split(" ")[0]) if price_field else 0.0
-        self.investment_costs_in_euro = price_in_euro + installation_cost
-        # Maintenance estimated at 5 % of the investment cost per year.
-        self.maintenance_costs_in_euro_per_year = 0.05 * self.investment_costs_in_euro
-        # Lifetime estimation:
-        # 10 years https://www.deutschlandfunk.de/belastung-fuer-die-atmosphaere-der-vormarsch-der-100.html,
-        # 10-15 years https://klivago.de/faq-was-man-ueber-eine-klimaanlage-wissen-sollte
-        # 15 years https://volted.ch/blogs/guides-fokus-und-bericht/wie-lange-halten-tragbare-
-        # klimaanlagen?srsltid=AfmBOoojFnnbhbCYtAGCZLzdawl4C8zeNvRtc9GFeCICEwaWB6ZdKhSt
-        self.lifetime_in_years = 12
-        self.co2_emissions_kg_co2_eq = (
-            165.84  # In first step same as for heat pump
+
+        investment_costs_in_euro = get_price_in_euro(air_conditioner) + get_installation_cost_in_euro(air_conditioner)
+
+        return cls(
+            building_name=building_name,
+            name=name,
+            manufacturer=manufacturer,
+            model_name=model_name,
+            scale_factor=scale_factor,
+            # Reference data for interpolation
+            t_out_cooling_ref=air_conditioner["Outdoor temperature range - cooling"],
+            t_out_heating_ref=air_conditioner["Outdoor temperature range - heating"],
+            eer_ref=air_conditioner["EER W/W"],
+            cop_ref=air_conditioner["COP W/W"],
+            cooling_capacity_ref=air_conditioner["Cooling capacity W"],
+            heating_capacity_ref=air_conditioner["Heating capacity W"],
+            investment_costs_in_euro=investment_costs_in_euro,
+            maintenance_costs_in_euro_per_year=MAINTENANCE_COST_AS_PERCENTAGE_OF_INVESTMENT_PER_YEAR
+            * investment_costs_in_euro,
+            # Lifetime estimation:
+            # 10 years https://www.deutschlandfunk.de/belastung-fuer-die-atmosphaere-der-vormarsch-der-100.html,
+            # 10-15 years https://klivago.de/faq-was-man-ueber-eine-klimaanlage-wissen-sollte
+            # 15 years https://volted.ch/blogs/guides-fokus-und-bericht/wie-lange-halten-tragbare-
+            # klimaanlagen?srsltid=AfmBOoojFnnbhbCYtAGCZLzdawl4C8zeNvRtc9GFeCICEwaWB6ZdKhSt
+            lifetime_in_years=12,
+            co2_emissions_kg_co2_eq=165.84,  # In first step same as for heat pump
         )
 
     @classmethod
@@ -141,11 +172,10 @@ class AirConditionerConfig(ConfigBase):
     ) -> "AirConditionerConfig":
         """Return default air-conditioner configuration."""
 
-        return cls(
+        return cls.get_air_conditioner_config_from_database(
             building_name=building_name,
-            name="AirConditioner",
-            manufacturer="Samsung",  # Other option: "Panasonic" , Further options are avilable in the smart_devices file
-            model_name="AC120HBHFKH/SA - AC120HCAFKH/SA",  # "AC120HBHFKH/SA - AC120HCAFKH/SA"     #Other option: "CS-TZ71WKEW + CU-TZ71WKE"#
+            manufacturer="Samsung",  # Further options are available in the smart_devices file
+            model_name="AC120HBHFKH/SA - AC120HCAFKH/SA",  # Other option: "CS-TZ71WKEW + CU-TZ71WKE"
         )
 
     @classmethod
@@ -197,9 +227,8 @@ class AirConditionerConfig(ConfigBase):
         # with different scaling factors
         scaling_factor = relevant_capacity_for_scaling * 0.6 / heating_load
 
-        return cls(
+        return cls.get_air_conditioner_config_from_database(
             building_name=building_name,
-            name="AirConditioner",
             manufacturer=selected_air_conditioner["Manufacturer"],
             model_name=selected_air_conditioner["Model"],
             scale_factor=scaling_factor,
@@ -361,6 +390,7 @@ class AirConditioner(cp.Component):
         co2_per_period = (
             config.co2_emissions_kg_co2_eq / config.lifetime_in_years
         ) * duration_ratio
+        maintenance_cost_per_period = config.maintenance_costs_in_euro_per_year * duration_ratio
 
         return CapexCostDataClass(
             capex_investment_cost_in_euro=config.investment_costs_in_euro,
@@ -368,6 +398,8 @@ class AirConditioner(cp.Component):
             lifetime_in_years=config.lifetime_in_years,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_period,
             device_co2_footprint_for_simulated_period_in_kg=co2_per_period,
+            maintenance_costs_in_euro=config.maintenance_costs_in_euro_per_year,
+            maintenance_cost_per_simulated_period_in_euro=maintenance_cost_per_period,
             kpi_tag=KpiTagEnumClass.AIR_CONDITIONER,
         )
 

@@ -173,7 +173,10 @@ class UtspLpgConnector(cp.Component):
 
         self.calculation_index_for_local_lpg = config.calculation_index_for_local_lpg
         if not self.calculation_index_for_local_lpg:
-            self.calculation_index_for_local_lpg = 1
+            # Fall back to 1, but allow an override via env var so that several local-LPG
+            # runs in parallel (e.g. batch scenario-JSON regeneration) use distinct
+            # pylpg working directories (C<index>) instead of colliding on C1.
+            self.calculation_index_for_local_lpg = int(os.environ.get("HISIM_LOCAL_LPG_CALC_INDEX", "1"))
 
         self.build()
         # dummy value as long as there is no way to consider multiple households in one house
@@ -1110,8 +1113,17 @@ class UtspLpgConnector(cp.Component):
 
                 householdref = household
                 housetype = HouseTypes.HT23_No_Infrastructure_at_all
-                startdate = f"01-01-{self.my_simulation_parameters.start_date.year}"
-                enddate = f"01-01-{self.my_simulation_parameters.end_date.year}"
+                # The profiles are read from 1 January of the simulation year onwards and must cover the
+                # whole simulated time span (see load_result_files_and_transform_to_lists). Deriving the end
+                # date from its year alone would collapse start and end date for any simulation shorter than
+                # a year, so the LPG would return too few time steps.
+                simulated_days = (
+                    self.my_simulation_parameters.end_date - self.my_simulation_parameters.start_date
+                ).days
+                lpg_start_date = datetime.date(self.my_simulation_parameters.start_date.year, 1, 1)
+                lpg_end_date = lpg_start_date + datetime.timedelta(days=simulated_days)
+                startdate = lpg_start_date.strftime("%d-%m-%Y")
+                enddate = lpg_end_date.strftime("%d-%m-%Y")
                 geographic_location = None
 
                 chargingset = self.utsp_config.charging_station_set
@@ -1885,7 +1897,7 @@ class UtspLpgConnector(cp.Component):
                     occupancy_total_electricity_consumption_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                 if output.field_name == self.WaterConsumption and output.unit == lt.Units.LITER:
@@ -1971,7 +1983,7 @@ class UtspLpgConnector(cp.Component):
                 occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
                 consumption_in_kwh = KpiHelperClass.compute_total_energy_from_power_timeseries(
                     power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
-                    timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                 )
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year, self.my_simulation_parameters.country

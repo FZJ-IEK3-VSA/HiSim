@@ -15,10 +15,20 @@ from hisim.simulationparameters import SimulationParameters
 @dataclass_json
 @dataclass
 class SumBuilderConfig(cp.ConfigBase):
-    """Electricity Grid Config."""
+    """Configuration dataclass for sum-builder components.
+
+    ``loadtype`` and ``unit`` define the physical quantity and its unit for
+    every input and the single output of the sum-builder.  Because the unit is
+    chosen at runtime (default ``lt.Units.ANY``), the local variables inside
+    ``i_simulate`` (``val1``, ``val2``, ``val3``, ``total``) carry values in
+    ``unit`` but do not encode it in their names.  ``config.unit`` is the
+    single source of truth for the unit of all values; the framework enforces
+    consistency between connected ``ComponentInput`` and ``ComponentOutput``
+    units during wiring (see ``ComponentWrapper.connect_inputs``).
+    """
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return SumBuilderForTwoInputs.get_full_classname()
 
@@ -28,7 +38,7 @@ class SumBuilderConfig(cp.ConfigBase):
     unit: lt.Units
 
     @classmethod
-    def get_sumbuilder_default_config(cls):
+    def get_sumbuilder_default_config(cls) -> "SumBuilderConfig":
         """Gets a default Sumbuilder."""
         return SumBuilderConfig(building_name="BUI1", name="Sum", loadtype=lt.LoadTypes.ANY, unit=lt.Units.ANY)
 
@@ -36,8 +46,8 @@ class SumBuilderConfig(cp.ConfigBase):
 class CalculateOperation(cp.Component):
     """Arbitrary mathematical operations."""
 
-    operations_available = ["Sum", "Subtract", "Multiply", "Divide"]
-    Output = "Output"
+    operations_available: List[str] = ["Sum", "Subtract", "Multiply", "Divide"]
+    Output: str = "Output"
 
     def __init__(
         self,
@@ -114,7 +124,13 @@ class CalculateOperation(cp.Component):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulates."""
+        """Simulates.
+
+        ``val1`` (each input value) and ``total`` (the running result) carry
+        values in ``self.config.unit`` — the single source of truth for the
+        physical unit.  The unit is runtime-determined, so it is not encoded
+        in the variable names.
+        """
         total: float = 0
         for index, input_channel in enumerate(self.inputs):
             val1 = stsv.get_input_value(input_channel)
@@ -136,9 +152,9 @@ class CalculateOperation(cp.Component):
 class SumBuilderForTwoInputs(Component):
     """Adds two outputs."""
 
-    SumInput1 = "Input 1"
-    SumInput2 = "Input 2"
-    SumOutput = "Sum"
+    SumInput1: str = "Input 1"
+    SumInput2: str = "Input 2"
+    SumOutput: str = "Sum"
 
     def __init__(
         self,
@@ -195,7 +211,12 @@ class SumBuilderForTwoInputs(Component):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Adds the two values."""
+        """Adds the two values.
+
+        ``val1`` and ``val2`` carry values in ``self.config.unit`` — the single
+        source of truth for the physical unit.  The unit is runtime-determined,
+        so it is not encoded in the variable names.
+        """
         val1 = stsv.get_input_value(self.input1)
         val2 = stsv.get_input_value(self.input2)
         stsv.set_output_value(self.output1, val1 + val2)
@@ -212,10 +233,10 @@ class SumBuilderForTwoInputs(Component):
 class SumBuilderForThreeInputs(Component):
     """Sum builder for three inputs."""
 
-    SumInput1 = "Input 1"
-    SumInput2 = "Input 2"
-    SumInput3 = "Input 3"
-    SumOutput = "Sum"
+    SumInput1: str = "Input 1"
+    SumInput2: str = "Input 2"
+    SumInput3: str = "Input 3"
+    SumOutput: str = "Sum"
 
     def __init__(
         self,
@@ -275,7 +296,12 @@ class SumBuilderForThreeInputs(Component):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Performs the addition of the values."""
+        """Performs the addition of the values.
+
+        ``val1``, ``val2`` and ``val3`` carry values in ``self.config.unit`` —
+        the single source of truth for the physical unit.  The unit is
+        runtime-determined, so it is not encoded in the variable names.
+        """
         val1 = stsv.get_input_value(self.input1)
         val2 = stsv.get_input_value(self.input2)
         val3 = stsv.get_input_value(self.input3)

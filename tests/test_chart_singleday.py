@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -11,7 +13,7 @@ from hisim.postprocessing.chart_singleday import ChartSingleDay
 
 pytestmark: pytest.MarkDecorator = pytest.mark.base
 
-LABEL_MONTHS = [
+LABEL_MONTHS: list[str] = [
     "January",
     "February",
     "March",
@@ -174,7 +176,7 @@ def test_build_day_slice_does_not_mutate_input_series() -> None:
     assert list(data.values) == original_values
 
 
-def test_get_day_data_delegates_to_build_day_slice(tmp_path) -> None:
+def test_get_day_data_delegates_to_build_day_slice(tmp_path: Path) -> None:
     """``get_day_data`` sets ``self.plot_title`` and returns the slice from ``build_day_slice``."""
     from hisim.simulationparameters import FigureFormat
 

@@ -24,7 +24,7 @@ def _row(
     v_oc: float,
     i_sc: float,
     a_c: float,
-) -> dict:
+) -> dict[str, str | float]:
     """Build a single CEC-module-shaped record for the synthetic frame."""
     return {
         "Name": name,

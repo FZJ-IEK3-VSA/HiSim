@@ -14,7 +14,15 @@ from tests import functions_for_testing as fft
 
 @pytest.mark.base
 def test_chp_system() -> None:
-    """Test chp system."""
+    """Test the advanced fuel cell CHP system simulation outputs.
+
+    Configures an advanced fuel cell CHP system with methane fuel, electricity-led
+    operating mode, and specific operational constraints (min operation time 60 s,
+    min idle time 15 s, max electrical power 3 kW). Provides fake control, mass-flow
+    input temperature, and electricity-target signals, then simulates a single
+    timestep and asserts that mass flow, output temperature, gas demand, electrical
+    power, thermal power, and cycle count match expected values.
+    """
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
@@ -29,7 +37,7 @@ def test_chp_system() -> None:
     # p_el_max=3_000
 
     # ===================================================================================================================
-    # Set Gas Heater
+    # Set CHP System
     my_chp_system_config = advanced_fuel_cell.CHPConfig.get_default_config()
     my_chp_system_config.min_operation_time = 60
     my_chp_system_config.min_idle_time = 15
@@ -40,7 +48,7 @@ def test_chp_system() -> None:
     my_chp_system = advanced_fuel_cell.CHP(
         config=my_chp_system_config, my_simulation_parameters=my_simulation_parameters
     )
-    # Set Fake Outputs for Gas Heater
+    # Set Fake Outputs for CHP System
     control_signal = cp.ComponentOutput(
         "FakeControlSignal", "ControlSignal", lt.LoadTypes.ANY, lt.Units.PERCENT
     )
@@ -111,3 +119,72 @@ def test_chp_system() -> None:
         stsv.values[my_chp_system.gas_demand_real_used_channel.global_index]
         == 9.994428193341691e-05
     )
+
+
+@pytest.mark.base
+def test_chp_raises_value_error_for_out_of_range_control_signal() -> None:
+    """A control signal outside [0, 1] in heat-led mode raises ValueError.
+
+    In ``heat`` operating mode the control signal is taken verbatim from the
+    connected input channel (no clamping), so an out-of-range value must be
+    rejected with a specific, catchable exception rather than the bare
+    ``Exception`` base class.
+    """
+
+    seconds_per_timestep = 60
+    my_simulation_parameters = SimulationParameters.one_day_only(
+        2017, seconds_per_timestep
+    )
+
+    my_chp_system_config = advanced_fuel_cell.CHPConfig.get_default_config()
+    my_chp_system_config.operating_mode = "heat"
+
+    my_chp_system = advanced_fuel_cell.CHP(
+        config=my_chp_system_config, my_simulation_parameters=my_simulation_parameters
+    )
+
+    control_signal = cp.ComponentOutput(
+        "FakeControlSignal", "ControlSignal", lt.LoadTypes.ANY, lt.Units.PERCENT
+    )
+    massflow_input_temperature = cp.ComponentOutput(
+        "FakeMassflowInputTemperature",
+        "MassflowInputTemperature",
+        lt.LoadTypes.WATER,
+        lt.Units.CELSIUS,
+    )
+    electricity_from_chp_target = cp.ComponentOutput(
+        "FakeElectricityFromCHPTarget",
+        "ElectricityFromCHPTarget",
+        lt.LoadTypes.ELECTRICITY,
+        lt.Units.WATT,
+    )
+
+    my_chp_system.control_signal_channel.source_output = control_signal
+    my_chp_system.mass_inp_temp_channel.source_output = massflow_input_temperature
+    my_chp_system.electricity_target_channel.source_output = electricity_from_chp_target
+
+    number_of_outputs = fft.get_number_of_outputs(
+        [
+            control_signal,
+            massflow_input_temperature,
+            electricity_from_chp_target,
+            my_chp_system,
+        ]
+    )
+    stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
+
+    fft.add_global_index_of_components(
+        [
+            control_signal,
+            massflow_input_temperature,
+            electricity_from_chp_target,
+            my_chp_system,
+        ]
+    )
+
+    stsv.values[control_signal.global_index] = 1.5  # out of range (> 1)
+    stsv.values[massflow_input_temperature.global_index] = 50
+    stsv.values[electricity_from_chp_target.global_index] = 300
+
+    with pytest.raises(ValueError, match="control signal between 0 and 1"):
+        my_chp_system.i_simulate(100, stsv, False)

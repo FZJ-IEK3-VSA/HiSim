@@ -87,7 +87,26 @@ def initialize_lpg_utsp_connector_and_return_results(
     float | Any,
     loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode,
 ]:
-    """Initialize the lpg utsp connector and simulate for one timestep."""
+    """Initialize the LPG UTSP connector and simulate a single timestep.
+
+    Builds an `UtspLpgConnector` with the given household reference(s), runs one
+    simulation step, and reads back the occupancy-related output channels.
+
+    Args:
+        households: A single household reference or a list of household
+            references to simulate with the LPG UTSP connector.
+
+    Returns:
+        A tuple of:
+        - number_of_residents: Total number of residents across the household(s).
+        - heating_by_residents: Heating energy attributable to residents.
+        - heating_by_devices: Heating energy attributable to devices.
+        - electricity_consumption: Electricity consumption from the connector.
+        - water_consumption: Water consumption from the connector.
+        - data_acquisition_mode_after_initialization: The `LpgDataAcquisitionMode`
+          resolved after initialization (may differ from the requested mode when
+          UTSP is unavailable, e.g. falling back to `USE_PREDEFINED_PROFILE`).
+    """
     # Set Simu Params
     year = 2021
     seconds_per_timestep = 60

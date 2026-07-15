@@ -340,32 +340,33 @@ class Component:
         input_to_set.src_object_name = src_object_name
         input_to_set.src_field_name = src_field_name
 
-        # write input and output connection to json file
-        file_name = os.path.join(self.my_simulation_parameters.result_directory, "component_connections.json")
+        if self.enable_logging:
+            # write input and output connection to json file
+            file_name = os.path.join(self.my_simulation_parameters.result_directory, "component_connections.json")
 
-        dict_with_connection_information = {
-            "From": {"Component": input_to_set.src_object_name, "Field": input_to_set.src_field_name},
-            "To": {"Component": input_to_set.component_name, "Field": input_to_set.field_name},
-        }
+            dict_with_connection_information = {
+                "From": {"Component": input_to_set.src_object_name, "Field": input_to_set.src_field_name},
+                "To": {"Component": input_to_set.component_name, "Field": input_to_set.field_name},
+            }
 
-        try:
-            # Validate that result_directory exists, create if it doesn't
-            if not os.path.exists(self.my_simulation_parameters.result_directory):
-                os.makedirs(self.my_simulation_parameters.result_directory, exist_ok=True)
+            try:
+                # Validate that result_directory exists, create if it doesn't
+                if not os.path.exists(self.my_simulation_parameters.result_directory):
+                    os.makedirs(self.my_simulation_parameters.result_directory, exist_ok=True)
 
-            if os.path.exists(file_name):
-                with open(file_name, mode="r+", encoding="utf-8") as file:
-                    file.seek(os.stat(file_name).st_size - 1)
-                    file.write(f",{json.dumps(dict_with_connection_information)}]")
-            else:
-                with open(file_name, "a", encoding="utf-8") as file:
-                    json.dump([dict_with_connection_information], file)
-        except (OSError, IOError) as e:
-            # Log warning instead of crashing
-            log.warning(
-                f"Failed to write component connections to {file_name}: {e}. "
-                "Component connections will not be logged to file."
-            )
+                if os.path.exists(file_name):
+                    with open(file_name, mode="r+", encoding="utf-8") as file:
+                        file.seek(os.stat(file_name).st_size - 1)
+                        file.write(f",{json.dumps(dict_with_connection_information)}]")
+                else:
+                    with open(file_name, "a", encoding="utf-8") as file:
+                        json.dump([dict_with_connection_information], file)
+            except (OSError, IOError) as e:
+                # Log warning instead of crashing
+                log.warning(
+                    f"Failed to write component connections to {file_name}: {e}. "
+                    "Component connections will not be logged to file."
+                )
 
     def connect_dynamic_input(self, input_fieldname: str, src_object: ComponentOutput) -> None:
         """For connecting an input to a dynamic output."""

@@ -11,7 +11,7 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_hds():
+def test_hds() -> None:
     """Test the heat distribution system across various scenarios.
 
     Verifies that the heat distribution system correctly handles:

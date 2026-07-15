@@ -1,6 +1,7 @@
 """Test quantities and units."""
 
 import itertools
+from collections.abc import Iterator
 
 import pytest
 
@@ -9,7 +10,7 @@ from hisim.utils import InstanceCounterMeta
 
 
 @pytest.fixture(autouse=True)
-def _reset_instance_counter() -> itertools.count:
+def _reset_instance_counter() -> Iterator[None]:
     """Reset the shared ``InstanceCounter`` id counter around every test.
 
     ``Quantity`` shares a global id counter (see ``InstanceCounterMeta``) that

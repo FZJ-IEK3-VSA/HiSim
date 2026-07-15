@@ -970,14 +970,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     dhw_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=dhw_hp_electricity_from_grid_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                     dhw_heatpump_electricity_from_grid_entry = KpiEntry(
                         name="Domestic hot water heat pump electricity from grid",
                         unit="kWh",
                         value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.EMS,
+                        tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
                         description=self.component_name,
                         name_of_source_component=dhw_heat_pump_class_name,
                     )
@@ -991,7 +991,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                         sh_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
                             KpiHelperClass.compute_total_energy_from_power_timeseries(
                                 power_timeseries_in_watt=sh_electricity_from_grid_in_watt_series,
-                                timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                                time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                             )
                         )
                         # make kpi entry
@@ -999,7 +999,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                             name="Space heating heat pump electricity from grid",
                             unit="kWh",
                             value=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
-                            tag=KpiTagEnumClass.EMS,
+                            tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
                             description=self.component_name,
                             name_of_source_component=more_advanced_heat_pump_class_name,
                         )
@@ -1012,14 +1012,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                         dhw_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
                             KpiHelperClass.compute_total_energy_from_power_timeseries(
                                 power_timeseries_in_watt=dhw_hp_electricity_from_grid_in_watt_series,
-                                timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                                time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                             )
                         )
                         dhw_heatpump_electricity_from_grid_entry = KpiEntry(
                             name="Domestic hot water heat pump electricity from grid",
                             unit="kWh",
                             value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
-                            tag=KpiTagEnumClass.EMS,
+                            tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
                             description=self.component_name,
                             name_of_source_component=more_advanced_heat_pump_class_name,
                         )
@@ -1034,7 +1034,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     sh_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=sh_electricity_from_grid_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                     # make kpi entry
@@ -1042,7 +1042,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                         name="Space heating heat pump electricity from grid",
                         unit="kWh",
                         value=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.EMS,
+                        tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
                         description=self.component_name,
                         name_of_source_component=advanced_heat_pump_class_name,
                     )
@@ -1056,14 +1056,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     occupancy_electricity_from_grid_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=occupancy_electricity_from_grid_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                     occupancy_electricity_from_grid_entry = KpiEntry(
                         name="Residents' electricity consumption from grid",
                         unit="kWh",
                         value=occupancy_electricity_from_grid_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.EMS,
+                        tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
                         description=self.component_name,
                         name_of_source_component=occupancy_class_name,
                     )
@@ -1077,7 +1077,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                         sh_heater_electricity_from_grid_in_kilowatt_hour = abs(
                             KpiHelperClass.compute_total_energy_from_power_timeseries(
                                 power_timeseries_in_watt=sh_electricity_from_grid_in_watt_series,
-                                timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                                time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                             )
                         )
                         # make kpi entry
@@ -1085,7 +1085,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                             name="Space heating electric heater electricity from grid",
                             unit="kWh",
                             value=sh_heater_electricity_from_grid_in_kilowatt_hour,
-                            tag=KpiTagEnumClass.EMS,
+                            tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
                             description=self.component_name,
                             name_of_source_component=electric_heater_class_name,
                         )
@@ -1097,14 +1097,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                         dhw_heater_electricity_from_grid_in_kilowatt_hour = abs(
                             KpiHelperClass.compute_total_energy_from_power_timeseries(
                                 power_timeseries_in_watt=dhw_heater_electricity_from_grid_in_watt_series,
-                                timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                                time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                             )
                         )
                         dhw_heater_electricity_from_grid_entry = KpiEntry(
                             name="Domestic hot water electric heater electricity from grid",
                             unit="kWh",
                             value=dhw_heater_electricity_from_grid_in_kilowatt_hour,
-                            tag=KpiTagEnumClass.EMS,
+                            tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
                             description=self.component_name,
                             name_of_source_component=electric_heater_class_name,
                         )
@@ -1119,14 +1119,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     dhw_st_electricity_from_grid_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=dhw_st_electricity_from_grid_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                     dhw_st_electricity_from_grid_entry = KpiEntry(
                         name="Domestic hot water solar thermal system electricity from grid",
                         unit="kWh",
                         value=dhw_st_electricity_from_grid_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.EMS,
+                        tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
                         description=self.component_name,
                         name_of_source_component=solar_thermal_system_class_name,
                     )
@@ -1140,14 +1140,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     electric_car_electricity_from_grid_in_kilowatt_hour = abs(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=electric_car_electricity_from_grid_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
                     electric_car_electricity_from_grid_entry = KpiEntry(
                         name="Electric car electricity consumption from grid",
                         unit="kWh",
                         value=electric_car_electricity_from_grid_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.EMS,
+                        tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
                         description=self.component_name,
                         name_of_source_component=electric_car_charger_class_name,
                     )
@@ -1159,7 +1159,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 name=f"Priority for {input_sorted.field_name}",
                 unit="-",
                 value=index,
-                tag=KpiTagEnumClass.EMS,
+                tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
                 description=self.component_name,
                 name_of_source_component=input_sorted.component_name,
             )

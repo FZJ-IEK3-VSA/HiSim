@@ -1,0 +1,98 @@
+# JSON-vs-golden parity check: runs the same curated setups expressed as
+# '.scenario.json' (the JSON system-setup design) with the *same* parameters as the
+# Python golden run, and compares their KPIs against the committed golden references
+# in golden_references/ (which were produced by the Python setups).
+#
+# The point is to prove the JSON setups are equivalent to their Python twins.
+#
+# Scope:
+#   - push / pull_request to main  -> the short one-week pairs, automatically.
+#   - workflow_dispatch            -> choose horizon (week or year) for a manual,
+#                                     heavier full-year parity run.
+#
+# Gate: BLOCKING. The check fails the job on any KPI divergence or run error, so a
+# PR that breaks JSON/Python parity cannot be merged. (Was advisory until the JSON
+# setups were proven equivalent to their Python twins.)
+
+name: golden-json-check
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      horizon:
+        description: "Parameter horizon to check as JSON"
+        type: choice
+        default: week
+        options: [ week, year ]
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: golden-json-check-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  discover:
+    name: discover json pairs
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: gen
+        # week for automatic triggers; the chosen horizon for a manual dispatch.
+        # golden_matrix.py is stdlib-only, so no dependency install is needed here.
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            horizon="${{ inputs.horizon }}"
+          else
+            horizon="week"
+          fi
+          echo "horizon=$horizon"
+          echo "matrix=$(python3 scripts/golden_matrix.py --horizon "$horizon")" >> "$GITHUB_OUTPUT"
+
+  golden-json:
+    name: golden-json ${{ matrix.setup }} / ${{ matrix.param }}
+    needs: discover
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install HiSim package
+        run: uv pip install --system -e .
+      - name: Golden KPI check (JSON)
+        run: |
+          python scripts/golden_check.py \
+            --mode json \
+            --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
+      - name: Upload deviation report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: golden-json-report-${{ matrix.setup }}-${{ matrix.param }}
+          path: results/golden-ref-check/report.*
+          if-no-files-found: warn
+
+  summary:
+    name: golden-json-check summary
+    needs: golden-json
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any JSON pair diverged
+        run: '[ "${{ needs.golden-json.result }}" = "success" ] || exit 1'

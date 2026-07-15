@@ -129,14 +129,14 @@ class SmartController(Component):
     def connect_similar_inputs(self, components: Union[List[Component], Component]) -> None:
         """Connect similar inputs."""
         if len(self.inputs) == 0:
-            raise Exception("The component " + self.component_name + " has no inputs.")
+            raise ValueError("The component " + self.component_name + " has no inputs.")
 
         if not isinstance(components, list):
             components = [components]
 
         for component in components:
             if isinstance(component, Component) is False:
-                raise Exception("Input variable is not a component")
+                raise TypeError("Input variable is not a component")
             has_not_been_connected = True
             index: Optional[int] = None
             for index, _ in enumerate(self.wrapped_controllers):
@@ -150,7 +150,7 @@ class SmartController(Component):
                                 output.field_name,
                             )
             if has_not_been_connected and index is not None:
-                raise Exception(
+                raise ValueError(
                     f"No similar inputs from {self.wrapped_controllers[index].component_name} are compatible with the outputs of {component.component_name}!"
                 )
 
@@ -187,10 +187,10 @@ class SmartController(Component):
         """Connect Electricity input."""
         for index, _ in enumerate(self.wrapped_controllers):
             if hasattr(self.wrapped_controllers[index], "ElectricityInput"):
-                if isinstance(component, Component) is False:
-                    raise Exception("Input has to be a component!")
-                if hasattr(component, "ElectricityOutput") is False:
-                    raise Exception("Input Component does not have Electricity Output!")
+                if not isinstance(component, Component):
+                    raise TypeError("Input has to be a component!")
+                if not hasattr(component, "ElectricityOutput"):
+                    raise AttributeError("Input Component does not have Electricity Output!")
                 self.connect_input(
                     self.wrapped_controllers[index].ELECTRICITY_INPUT,
                     component.component_name,

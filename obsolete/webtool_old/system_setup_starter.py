@@ -1,0 +1,161 @@
+"""Build and simulate a system setup for a specific system setup that is defined in a JSON file.
+
+Result files are stored in `/results`.
+See `tests/test_system_setup_starter.py` for a system setup.
+
+Run `hisim/system_setup_starter.py <json-file>` to start a simulation.
+Required fields in the JSON file are: `path_to_module`, `function_in_module` and
+`simulation_parameters`. SimulationParameters from the system_setups is not used. Instead, the
+parameters from the JSON are set.
+
+Optional field: `building_config`
+The values from `building_config` replace single values of the system setup's building object. When
+present, it is used to scale the default configuration with `get_scaled_default()`.
+
+Optional field: `system_setup_config`
+The values from `system_setup_config` overwrite specific values of the configuration object.
+Arguments that are not present keep the (scaled) default value.
+"""
+
+from __future__ import annotations
+
+import json
+import datetime
+from pathlib import Path
+from typing import Any, NamedTuple
+from copy import deepcopy
+
+from hisim import log
+from hisim.hisim_main import main
+from hisim.utils import set_attributes_of_dataclass_from_dict
+from hisim.simulator import SimulationParameters
+
+
+class SystemSetupResult(NamedTuple):
+    """Result of :func:`make_system_setup`.
+
+    A named 3-tuple so callers can either unpack positionally
+    (``path_to_module, simulation_parameters, module_config_path = make_system_setup(...)``)
+    or access the fields by name (``result.module_config_path``). It is
+    backward-compatible with code that already unpacks the plain tuple.
+    """
+
+    path_to_module: str
+    simulation_parameters: SimulationParameters
+    module_config_path: str
+
+
+def make_system_setup(
+    parameters_json: dict[str, Any], result_directory: str
+) -> SystemSetupResult:
+    """Build a system setup from a JSON parameter dict and prepare it for simulation.
+
+    Parses `parameters_json`, constructs a `SimulationParameters` instance from its
+    `simulation_parameters` section, and writes `module_config.json` and
+    `simulation_parameters.json` into `result_directory`. The simulation itself is
+    not executed here; the returned values are intended to be passed to
+    `hisim.hisim_main.main`.
+
+    Args:
+        parameters_json: Mapping with the keys `path_to_module`, `simulation_parameters`,
+            and optionally `options`, `building_config`, `system_setup_config`.
+            A list is rejected (only a single setup is supported).
+        result_directory: Path to the directory where the generated JSON config files
+            are written. Created if it does not exist.
+
+    Returns:
+        A :class:`SystemSetupResult` named tuple
+        `(path_to_module, simulation_parameters, module_config_path)` where
+        `path_to_module` is the module path for the setup function,
+        `simulation_parameters` is the constructed `SimulationParameters`, and
+        `module_config_path` is the path to the written `module_config.json`.
+
+    Raises:
+        NotImplementedError: If `parameters_json` is a list.
+        AttributeError: If `parameters_json` contains keys other than the expected ones.
+    """
+    # Defensive runtime guard: the type annotation promises a dict, but this
+    # function is also fed directly from `json.load` (which returns `Any`) in
+    # `__main__`; reject a list up front with a clear error instead of failing
+    # later inside `pop`. Statically unreachable per the annotation, hence the
+    # explicit type ignore.
+    if isinstance(parameters_json, list):  # type: ignore[unreachable]
+        raise NotImplementedError("System Setup Starter can only handle one setup at a time for now.")
+
+    _parameters_json = deepcopy(parameters_json)
+    Path(result_directory).mkdir(parents=True, exist_ok=True)  # pylint: disable=unexpected-keyword-arg
+    path_to_module = _parameters_json.pop("path_to_module")
+
+    simulation_parameters_dict = _parameters_json.pop("simulation_parameters")
+    module_config_path = str(Path(result_directory).joinpath("module_config.json"))
+    simulation_parameters_path = str(Path(result_directory).joinpath("simulation_parameters.json"))
+    options = _parameters_json.pop("options", {})
+    building_config = _parameters_json.pop("building_config", {})
+    system_setup_config = _parameters_json.pop("system_setup_config", {})
+    module_config_dict = {
+        "options": options,
+        "building_config": building_config,
+        "system_setup_config": system_setup_config,
+    }
+
+    if _parameters_json:
+        raise AttributeError(f"There are unused attributes ({_parameters_json.keys()}) in parameters JSON.")
+
+    # Set custom simulation parameters
+    simulation_parameters = SimulationParameters(
+        start_date=datetime.datetime.fromisoformat(simulation_parameters_dict.pop("start_date")),
+        end_date=datetime.datetime.fromisoformat(simulation_parameters_dict.pop("end_date")),
+        seconds_per_timestep=simulation_parameters_dict.pop("seconds_per_timestep"),
+        result_directory=result_directory,
+    )
+    set_attributes_of_dataclass_from_dict(simulation_parameters, simulation_parameters_dict)
+
+    with open(simulation_parameters_path, "w", encoding="utf8") as out_file:
+        out_file.write(simulation_parameters.to_json())  # ignore: type
+
+    with open(module_config_path, "w", encoding="utf8") as out_file:
+        out_file.write(json.dumps(module_config_dict))  # ignore: type
+
+    return SystemSetupResult(
+        path_to_module=path_to_module,
+        simulation_parameters=simulation_parameters,
+        module_config_path=module_config_path,
+    )
+
+
+if __name__ == "__main__":
+    import sys
+
+    PARAMETERS_JSON_FILE: str
+    RESULT_DIRECTORY: str
+    if len(sys.argv) == 1:
+        PARAMETERS_JSON_FILE = "input/request.json"
+        RESULT_DIRECTORY = "results"
+        if not Path(PARAMETERS_JSON_FILE).is_file():
+            log.information("Please specify an input JSON file or place it in `input/request.json`.")
+            sys.exit(1)
+    elif len(sys.argv) == 2:
+        PARAMETERS_JSON_FILE = sys.argv[1]
+        RESULT_DIRECTORY = "results"
+    elif len(sys.argv) == 3:
+        PARAMETERS_JSON_FILE = sys.argv[1]
+        RESULT_DIRECTORY = sys.argv[2]
+    else:
+        log.information("HiSim from JSON received too many arguments.")
+        sys.exit(1)
+
+    log.information(f"Reading parameters from {PARAMETERS_JSON_FILE}.")
+    with open(PARAMETERS_JSON_FILE, "r", encoding="utf8") as file:
+        my_parameters_json: dict[str, Any] = json.load(file)
+
+    (
+        my_path_to_module,
+        my_simulation_parameters,
+        my_module_config,
+    ) = make_system_setup(parameters_json=my_parameters_json, result_directory=RESULT_DIRECTORY)
+
+    main(
+        my_path_to_module,
+        my_simulation_parameters,
+        my_module_config,
+    )

@@ -10,10 +10,9 @@ from pydantic import BaseModel, Field
 import humps
 # 1st party imports
 from hisim import log
-from hisim.components.controller_l2_district_energy_management_system import L2GenericDistrictEnergyManagementSystem
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
-from hisim.components.generic_car import GenericCarInformation
+from hisim.components.generic_car import Car, GenericCarInformation
 from hisim.component import ConfigBase
 import hisim.component as cp
 import hisim.dynamic_component as dcp
@@ -82,22 +81,22 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
     # Car information can be generated using Occupancy (see class GenericCarInformation)
     # However, then each car must be assigned to an occupancy
     elif config.get_main_classname() == "hisim.components.generic_car.Car":
-        config_json_str["household_name"] = component.car_information.household_name
+        config_json_str["household_name"] = cast(Car, component).car_information_dict["household_name"]
 
     outs = []
     ins = []
     for out in component.outputs:
         if isinstance(component, DynamicComponent):
-            matches = [
+            output_matches = [
                 dyn_out
                 for dyn_out in component.my_component_outputs
                 if dyn_out.source_output_field_name == out.field_name
             ]
-            if len(matches) > 1:
+            if len(output_matches) > 1:
                 raise ValueError(
                     f"Multiple dynamic outputs found for field '{out.field_name}' in component '{component.component_name}'"
                 )
-            if len(matches) == 1:
+            if len(output_matches) == 1:
                 match = re.search(r"Output(\d+)$", out.field_name)
                 number = int(match.group(1)) if match else 100
 
@@ -107,12 +106,8 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
                     if number < 16:
                         continue
 
-                if isinstance(component, L2GenericDistrictEnergyManagementSystem):
-                    if number < 16:
-                        continue
-
                 # add_component_output has been used
-                dyn_out = matches[0]
+                dyn_out = output_matches[0]
                 # Extract source_output_name from the field_name
                 match = re.match(r"^(.*?)(Output\d+)$", out.field_name)
                 if not match:
@@ -135,18 +130,18 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
 
     for inp in component.inputs:
         if isinstance(component, DynamicComponent):
-            matches = [
+            input_matches = [
                 dyn_inp
                 for dyn_inp in component.my_component_inputs
                 if dyn_inp.source_component_class == inp.field_name
             ]
-            if len(matches) > 1:
+            if len(input_matches) > 1:
                 raise ValueError(
                     f"Multiple dynamic inputs found for field '{inp.field_name}' in component '{component.component_name}'"
                 )
-            if len(matches) == 1:
+            if len(input_matches) == 1:
                 # add_component_input(s)_and_connect has been used
-                dyn_inp = matches[0]
+                dyn_inp = input_matches[0]
                 source_component_field_name = dyn_inp.source_component_field_name
 
                 # Extract source_object_name
@@ -224,7 +219,7 @@ def add_component_to_scenario(scenario: Scenario, config: ConfigBase, component:
         # Handle special case for Car component, link to LPG connector
         for idx, comp in enumerate(scenario.components):
             if comp.component_full_classname == "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector":
-                car_info = component.car_information
+                car_info = cast(Car, component).car_information_dict
                 my_comp = cast(UtspLpgConnector, my_sim.wrapped_components[idx].my_component)  # For mypy, we know that this is an UtspLpgConnector
                 new_gci = GenericCarInformation(my_occupancy_instance=my_comp).data_dict_for_car_component[car_info.household_name]
 

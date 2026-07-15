@@ -165,7 +165,7 @@ class ComponentWrapper:
                             cinput.source_output = global_output
                             log.debug("Connected input '" + cinput.fullname + "' to '" + global_output.full_name + "'")
                         else:
-                            raise SystemError(
+                            raise ValueError(
                                 f"The input {cinput.field_name} (cp: {cinput.component_name}, unit: {cinput.unit}) and "
                                 f"output {global_output.field_name}(cp: {global_output.component_name}, unit: {global_output.unit}) "
                                 f"do not have the same unit!"
@@ -183,7 +183,7 @@ class ComponentWrapper:
                         "Likely, the heat pump has DHW deactivated. Therefore, this is ignored for now."
                     )
                 else:
-                    raise SystemError(
+                    raise ValueError(
                         f"The ComponentInput {cinput.field_name} (cp: {cinput.component_name}, "
                         f"unit: {cinput.unit}) is not connected to any ComponentOutput. "
                         "You could run debug mode (logging_level=4) to check all inputs, outputs and connections. "

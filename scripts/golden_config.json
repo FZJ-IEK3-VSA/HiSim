@@ -1,0 +1,19 @@
+{
+  "check_subdir": "golden-ref-check",
+  "setups": [
+    {"id": "household_district_heating_building_sizer",     "path": "system_setups/household_district_heating_building_sizer.py"},
+    {"id": "household_electric_heating_building_sizer",     "path": "system_setups/household_electric_heating_building_sizer.py"},
+    {"id": "household_gas_building_sizer",                  "path": "system_setups/household_gas_building_sizer.py"},
+    {"id": "household_heatpump_building_sizer",             "path": "system_setups/household_heatpump_building_sizer.py"},
+    {"id": "household_hydrogen_boiler_building_sizer",      "path": "system_setups/household_hydrogen_boiler_building_sizer.py"},
+    {"id": "household_oil_building_sizer",                  "path": "system_setups/household_oil_building_sizer.py"},
+    {"id": "household_pellets_building_sizer",              "path": "system_setups/household_pellets_building_sizer.py"},
+    {"id": "household_wood_chips_building_sizer",           "path": "system_setups/household_wood_chips_building_sizer.py"}
+  ],
+  "parameter_sets": [
+    {"id": "one_week_60s", "factory": "one_week_only", "year": 2021, "seconds_per_timestep": 60,
+     "post_processing_options": ["COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"]},
+    {"id": "full_year_60s", "factory": "full_year", "year": 2021, "seconds_per_timestep": 60,
+     "post_processing_options": ["COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"]}
+  ]
+}

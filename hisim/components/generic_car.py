@@ -388,7 +388,7 @@ class Car(cp.Component):
                     consumption_in_kwh = round(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         ),
                         1,
                     )
@@ -428,7 +428,7 @@ class Car(cp.Component):
                 total_electricity_demand_in_kilowatt_hour = round(
                     KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     ),
                     1,
                 )

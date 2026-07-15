@@ -17,6 +17,13 @@ from hisim import loadtypes as lt
 from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
 from hisim.simulationparameters import SimulationParameters
 
+# Conversion factors used to derive the seconds-per-timestep of a
+# full-year simulation from the requested number of timesteps:
+# days/year -> hours/day -> seconds/hour -> seconds/timestep.
+SECONDS_PER_HOUR: int = 3600
+HOURS_PER_DAY: int = 24
+DAYS_PER_YEAR: int = 365
+
 
 def _make_config(
     column: int = 0,
@@ -42,7 +49,7 @@ def _make_config(
 def _make_simulation_parameters(timesteps: int) -> SimulationParameters:
     """Build :class:`SimulationParameters` for the requested number of timesteps."""
     return SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=365 * 24 * 3600 // timesteps
+        year=2021, seconds_per_timestep=DAYS_PER_YEAR * HOURS_PER_DAY * SECONDS_PER_HOUR // timesteps
     )
 
 
@@ -60,7 +67,7 @@ def test_csvloader_construction_with_dataframe_seam() -> None:
         dataframe=dataframe,
     )
 
-    np.testing.assert_array_equal(loader.column, np.asarray(values, dtype=float))
+    np.testing.assert_array_equal(loader.column_values, np.asarray(values, dtype=float))
     assert loader.multiplier == 2.0
     assert loader.column_name == "Profile"
     # The csv_filename is not consulted when a dataframe is supplied.
@@ -111,7 +118,7 @@ def test_csvloader_too_few_rows_raises() -> None:
     sim_params = _make_simulation_parameters(timesteps=24)
     config = _make_config(column=0)
 
-    with pytest.raises(Exception, match="Timesteps"):
+    with pytest.raises(ValueError, match="fewer than the .* simulation timesteps"):
         CSVLoader(
             config=config,
             my_simulation_parameters=sim_params,
@@ -141,6 +148,37 @@ def test_csvloader_from_config_file_reads_disk(tmp_path: Path) -> None:
         inputs_dir=tmp_path,
     )
 
-    np.testing.assert_array_equal(loader.column, np.asarray(values, dtype=float))
+    np.testing.assert_array_equal(loader.column_values, np.asarray(values, dtype=float))
     assert loader.multiplier == 1.0
     assert loader.column_name == "Profile"
+
+
+@pytest.mark.base
+def test_csvloader_column_deprecated_alias_returns_column_values() -> None:
+    """The deprecated ``column`` attribute aliases ``column_values``.
+
+    Issue #758 renamed the misleading public attribute ``self.column`` (an
+    np.ndarray of profile values) to ``self.column_values`` to avoid clashing
+    with ``self.csvconfig.column`` (an int index). A repo-wide audit found no
+    remaining in-tree reads of ``.column`` on ``CSVLoader`` instances, but a
+    backward-compatible read-only property is kept so any downstream code that
+    still introspects ``loader.column`` gets a ``DeprecationWarning`` and the
+    same array rather than a silent ``AttributeError``.
+    """
+    values = [float(i) for i in range(8)]
+    dataframe = pd.DataFrame({"Profile": values})
+    sim_params = _make_simulation_parameters(timesteps=len(values))
+    config = _make_config(column=0, multiplier=1.0)
+
+    loader = CSVLoader(
+        config=config,
+        my_simulation_parameters=sim_params,
+        dataframe=dataframe,
+    )
+
+    with pytest.warns(DeprecationWarning, match="column_values"):
+        legacy = loader.column
+
+    # The alias returns the same underlying array object.
+    assert legacy is loader.column_values
+    np.testing.assert_array_equal(legacy, np.asarray(values, dtype=float))

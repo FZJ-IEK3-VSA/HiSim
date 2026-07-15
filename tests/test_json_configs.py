@@ -34,12 +34,29 @@ def discover_system_setups(base_dir: Path = SYSTEM_SETUP_DIR) -> list[tuple[str]
 
 SYSTEM_SETUPS: list[tuple[str]] = discover_system_setups()
 
+# Setups that import an optional dependency which is intentionally not installed
+# (see requirements.txt) cannot be exercised here. A *missing* one of these is the
+# only initialization failure the test tolerates (as a skip); every other error is
+# a real problem and must fail the test.
+OPTIONAL_DEPENDENCIES: set[str] = {"wetterdienst"}
+
 
 @pytest.mark.jsonconfig
 @pytest.mark.parametrize(["system_setup"], SYSTEM_SETUPS)
 @utils.measure_execution_time
 def test_json(system_setup: str) -> None:
-    """Test generation and execution of JSON configs."""
+    """Verify a system setup yields equivalent simulators via Python and JSON.
+
+    Initializes a simulator from the given Python setup module, exports its
+    JSON configuration, re-initializes a second simulator from that JSON, and
+    asserts both wrap the same number of components and register the same
+    number of outputs. Every setup is expected to initialize successfully; the
+    only tolerated (skipped) failure is a missing optional dependency listed in
+    ``OPTIONAL_DEPENDENCIES``. Any other initialization error fails the test.
+
+    Args:
+        system_setup: Path to the system setup ``.py`` module to test.
+    """
 
     system_setup_path = Path(system_setup)
     output_directory = Path(TestingUtils.get_result_directory(test_name="test_json_configs")) / system_setup_path.stem
@@ -53,32 +70,48 @@ def test_json(system_setup: str) -> None:
             path_to_module=system_setup,
             my_simulation_parameters=my_simulation_parameters,
         )
-    except Exception:
-        pytest.skip(f"Python configuration {system_setup} fails. Skipping JSON test for this configuration.")
-    else:
-        scenario_path, simulation_parameters_path = write_json_for_initialized_simulator(
-            path_to_module=system_setup,
-            my_sim=sim_py,
-            output_directory=str(output_directory),
-        )
-        sim_json = initialize_from_json(
-            scenario=str(scenario_path),
-            simulation_parameters=str(simulation_parameters_path),
-            path_to_module=str(scenario_path),
-            delta=None,
-        )
-        sim_json.prepare_calculation()
-        sim_json.connect_all_components()
+    except ModuleNotFoundError as exc:
+        # Skip ONLY when a known optional dependency is genuinely absent; anything
+        # else is a real failure the test must surface.
+        missing = (exc.name or "").split(".")[0]
+        if missing in OPTIONAL_DEPENDENCIES:
+            pytest.skip(f"Optional dependency '{missing}' not installed; skipping {system_setup}.")
+        raise
 
-        num_components_py, num_outputs_py = get_num_of_components_and_outputs(sim_py)
-        num_components_json, num_outputs_json = get_num_of_components_and_outputs(sim_json)
+    scenario_path, simulation_parameters_path = write_json_for_initialized_simulator(
+        path_to_module=system_setup,
+        my_sim=sim_py,
+        output_directory=str(output_directory),
+    )
+    sim_json = initialize_from_json(
+        scenario=str(scenario_path),
+        simulation_parameters=str(simulation_parameters_path),
+        path_to_module=str(scenario_path),
+        delta=None,
+    )
+    sim_json.prepare_calculation()
+    sim_json.connect_all_components()
 
-        assert num_components_py == num_components_json
-        assert num_outputs_py == num_outputs_json
+    num_components_py, num_outputs_py = get_num_of_components_and_outputs(sim_py)
+    num_components_json, num_outputs_json = get_num_of_components_and_outputs(sim_json)
+
+    assert num_components_py == num_components_json
+    assert num_outputs_py == num_outputs_json
 
 
 def get_num_of_components_and_outputs(simulator: sim.Simulator) -> tuple[int, int]:
-    """Helper function to get the number of components and outputs in the current simulator."""
+    """Return the number of wrapped components and registered outputs in a simulator.
+
+    Args:
+        simulator: An initialized ``Simulator`` whose ``wrapped_components``
+            and ``all_outputs`` collections have been populated (e.g. after
+            ``connect_all_components``).
+
+    Returns:
+        A ``(num_components, num_outputs)`` tuple where ``num_components`` is
+        ``len(simulator.wrapped_components)`` and ``num_outputs`` is
+        ``len(simulator.all_outputs)``.
+    """
 
     num_components = len(simulator.wrapped_components)
     num_outputs = len(simulator.all_outputs)

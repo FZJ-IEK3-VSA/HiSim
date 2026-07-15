@@ -4,7 +4,7 @@
 # Owned
 from dataclasses import dataclass
 import logging
-from typing import List, Any, Optional
+from typing import List, Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -79,9 +79,9 @@ class ElectricHeatingConfig(ConfigBase):
     def get_default_electric_heating_config(
         cls,
         building_name: str = "BUI1",
-        with_domestic_hot_water_preparation=False,
+        with_domestic_hot_water_preparation: bool = False,
         maximum_electric_power_w: float = 40000,
-    ) -> Any:
+    ) -> "ElectricHeatingConfig":
         """Get a default Electric heating."""
         config = ElectricHeatingConfig(
             building_name=building_name,
@@ -469,7 +469,6 @@ class ElectricHeating(Component):
         elif heating_mode == HeatingMode.OFF:
             thermal_power_dhw_delivered_w = 0.0
             thermal_energy_dhw_delivered_in_watt_hour = 0.0
-            thermal_power_dhw_delivered_w = 0.0
             water_mass_flow_rate_for_dhw_in_kg_per_s = 0.0
             water_output_temperature_for_dhw_deg_c = stsv.get_input_value(self.water_input_temperature_dhw_channel)
             thermal_power_sh_delivered_in_watt = 0.0
@@ -573,8 +572,14 @@ class ElectricHeating(Component):
                     1,
                 )
 
-        assert sh_consumption_in_kwh is not None
-        assert dhw_consumption_in_kwh is not None
+        if sh_consumption_in_kwh is None:
+            raise ValueError(
+                f"Could not find {self.ElectricOutputShPower} output for component {self.component_name}"
+            )
+        if dhw_consumption_in_kwh is None:
+            raise ValueError(
+                f"Could not find {self.ElectricOutputDhwPower} output for component {self.component_name}"
+            )
 
         total_consumption_in_kwh = sh_consumption_in_kwh + dhw_consumption_in_kwh
 
@@ -754,10 +759,10 @@ class ElectricHeatingControllerConfig(ConfigBase):
     def get_default_electric_heating_controller_config(
         cls,
         building_name: str = "BUI1",
-        with_domestic_hot_water_preparation=False,
+        with_domestic_hot_water_preparation: bool = False,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         parallel_space_heating_and_dhw_option: bool = False,
-    ) -> Any:
+    ) -> "ElectricHeatingControllerConfig":
         """Gets a default electric heating controller."""
         return ElectricHeatingControllerConfig(
             building_name=building_name,
@@ -774,10 +779,10 @@ class ElectricHeatingControllerConfig(ConfigBase):
         cls,
         specific_heating_load_of_building_in_watt_per_m2: float,
         building_name: str = "BUI1",
-        with_domestic_hot_water_preparation=False,
+        with_domestic_hot_water_preparation: bool = False,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         parallel_space_heating_and_dhw_option: bool = False,
-    ) -> Any:
+    ) -> "ElectricHeatingControllerConfig":
         """Gets a default electric heating controller."""
         set_heating_threshold_outside_temperature_in_celsius = HeatDistributionControllerConfig.set_heating_threshold_temperature_based_on_building_efficiency(
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,

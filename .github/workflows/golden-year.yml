@@ -1,0 +1,100 @@
+# Tier 2 of the golden-reference gate: the heavy full-year pairs.
+#
+# Runs on pull requests to main as a NORMAL, visible check (previously it was
+# workflow_run-triggered, which GitHub never surfaces in the PR checks list).
+#
+# To avoid spending the full-year compute when a cheaper check has already
+# failed, the `gate` job first waits for quality + tests + golden-check to finish
+# for this commit (scripts/ci_wait_all.sh) and FAILS FAST the moment any of them
+# concludes non-success — the heavy `golden-year` matrix then never runs, and the
+# failure carries an explanatory message. Only when all prerequisites are green
+# does the full-year matrix run.
+
+name: golden-year
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+  actions: read      # gh run list, to poll the prerequisite workflow runs
+
+concurrency:
+  group: golden-year-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  gate:
+    name: gate (wait for prerequisites)
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      # The prerequisite workflows report against the PR head commit.
+      SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Wait for quality + tests + golden-check (fail fast if any failed)
+        # Only PRs have prerequisites to gate on; a manual workflow_dispatch run
+        # goes straight to the full-year matrix.
+        if: github.event_name == 'pull_request'
+        run: bash scripts/ci_wait_all.sh "$SHA"
+      - name: Build full-year matrix
+        id: gen
+        run: echo "matrix=$(python3 scripts/golden_matrix.py --horizon year)" >> "$GITHUB_OUTPUT"
+
+  golden-year:
+    name: golden-year ${{ matrix.setup }} / ${{ matrix.param }}
+    # Skipped automatically when `gate` fails, so the heavy compute never runs
+    # unless every prerequisite passed.
+    needs: gate
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.gate.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install HiSim package
+        run: uv pip install --system -e .
+      - name: Golden KPI check (full year)
+        run: python scripts/golden_check.py --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
+      - name: Upload deviation report
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: golden-year-report-${{ matrix.setup }}-${{ matrix.param }}
+          path: results/golden-ref-check/report.*
+          if-no-files-found: warn
+
+  summary:
+    name: golden-year summary
+    needs: [gate, golden-year]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conclude
+        run: |
+          gate="${{ needs.gate.result }}"
+          gy="${{ needs.golden-year.result }}"
+          echo "gate=$gate  golden-year=$gy"
+          if [ "$gate" != "success" ]; then
+            echo "::error title=golden-year::Prerequisite CI failed, so the full-year golden check did not run. See the 'gate' job for which prerequisite failed."
+            exit 1
+          fi
+          if [ "$gy" != "success" ]; then
+            echo "::error title=golden-year::Full-year golden KPI check failed."
+            exit 1
+          fi
+          echo "Full-year golden check passed."

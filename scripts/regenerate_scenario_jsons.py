@@ -6,8 +6,10 @@ Each setup is (re)built with the canonical converter
 imports and HiSim singletons cannot bleed between setups. Results are written
 back next to the setup as ``<setup>.scenario.json``.
 
-By default only setups that already have a committed ``.scenario.json`` sibling
-are regenerated (pass ``--all-py`` to cover every ``.py`` instead).
+By default every ``.py`` setup is regenerated -- including brand-new configs
+that do not have a committed ``.scenario.json`` sibling yet, so a freshly added
+setup gets its JSON generated on the first run. Pass ``--only-existing`` to
+restrict the run to setups that already have a committed ``.scenario.json``.
 
 Parallelism
 -----------
@@ -23,8 +25,9 @@ afterwards unless ``--keep-simulation-json`` is given.
 
 Examples
 --------
-    python scripts/regenerate_scenario_jsons.py                 # all, sequential
+    python scripts/regenerate_scenario_jsons.py                 # every *.py, sequential
     python scripts/regenerate_scenario_jsons.py -j 4            # 4 in parallel
+    python scripts/regenerate_scenario_jsons.py --only-existing # skip brand-new configs
     python scripts/regenerate_scenario_jsons.py --only household_gas_building_sizer
     python scripts/regenerate_scenario_jsons.py --dry-run
 """
@@ -57,28 +60,37 @@ class SetupResult:
     message: str = ""
 
 
-def discover_setups(only: Optional[list[str]], all_py: bool) -> list[Path]:
+def _normalize_stems(names: list[str]) -> set[str]:
+    """Return setup stems from a list of names given with or without ``.py``."""
+    return {name[:-3] if name.endswith(".py") else name for name in names}
+
+
+def discover_setups(only: Optional[list[str]], only_existing: bool, exclude: Optional[list[str]] = None) -> list[Path]:
     """Return the setup ``.py`` paths to regenerate.
 
-    Default: every ``*.py`` that has a sibling ``*.scenario.json``.
-    ``all_py``: every ``*.py`` except ``__init__.py``.
+    Default: every ``*.py`` except ``__init__.py`` -- including brand-new setups
+    that do not have a committed ``*.scenario.json`` sibling yet, so a freshly
+    added config gets its JSON generated on the first run.
+    ``only_existing``: restrict to ``*.py`` that already have a committed
+    ``*.scenario.json`` sibling.
     ``only``: restrict to the given setup stems (with or without ``.py``).
+    ``exclude``: drop these setup stems (e.g. ones needing uninstalled optional
+    deps); applied after ``only``.
     """
-    if all_py:
-        candidates = sorted(p for p in SYSTEM_SETUPS_DIR.glob("*.py") if p.name != "__init__.py")
-    else:
-        candidates = sorted(
-            p
-            for p in SYSTEM_SETUPS_DIR.glob("*.py")
-            if p.name != "__init__.py" and p.with_suffix(".scenario.json").exists()
-        )
+    candidates = sorted(p for p in SYSTEM_SETUPS_DIR.glob("*.py") if p.name != "__init__.py")
+    if only_existing:
+        candidates = [p for p in candidates if p.with_suffix(".scenario.json").exists()]
 
     if only:
-        wanted = {name[:-3] if name.endswith(".py") else name for name in only}
+        wanted = _normalize_stems(only)
         candidates = [p for p in candidates if p.stem in wanted]
         missing = wanted - {p.stem for p in candidates}
         if missing:
             raise SystemExit(f"--only names not found as setups: {sorted(missing)}")
+
+    if exclude:
+        excluded = _normalize_stems(exclude)
+        candidates = [p for p in candidates if p.stem not in excluded]
 
     return candidates
 
@@ -134,7 +146,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-j", "--jobs", type=int, default=1, help="Number of setups to regenerate in parallel (default 1).")
     parser.add_argument("--only", nargs="+", metavar="SETUP", help="Regenerate only these setup stems.")
-    parser.add_argument("--all-py", action="store_true", help="Regenerate every *.py, not just those with an existing .scenario.json.")
+    parser.add_argument("--exclude", nargs="+", metavar="SETUP", help="Skip these setup stems (e.g. ones needing uninstalled optional deps).")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--all-py", action="store_true", help="Regenerate every *.py setup (the default now; kept for compatibility).")
+    mode.add_argument("--only-existing", action="store_true", help="Only regenerate *.py with an existing committed .scenario.json (skip new configs).")
     parser.add_argument("--python", default=sys.executable, help="Interpreter to run the converter with (default: this interpreter).")
     parser.add_argument("--log-dir", type=Path, default=REPO_ROOT / "results" / "regenerate_scenario_jsons", help="Where to write per-setup converter logs.")
     parser.add_argument("--keep-simulation-json", action="store_true", help="Keep the per-setup <setup>.simulation.json the converter emits.")
@@ -144,7 +159,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.jobs < 1:
         parser.error("--jobs must be >= 1")
 
-    setups = discover_setups(args.only, args.all_py)
+    setups = discover_setups(args.only, args.only_existing, args.exclude)
     if not setups:
         print("No setups matched.")
         return 1

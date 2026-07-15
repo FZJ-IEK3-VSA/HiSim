@@ -1,6 +1,6 @@
 {
   "config_sha256": "05d95c63ffa8c6070692370729f48365c5e0230842d2f64f002aace6bc8588da",
-  "generated_at": "2026-07-10T15:35:49.553216+00:00",
+  "generated_at": "2026-07-14T12:15:09.932989+00:00",
   "golden_files": [
     "household_district_heating_building_sizer__full_year_60s.json",
     "household_district_heating_building_sizer__one_week_60s.json",
@@ -19,7 +19,7 @@
     "household_wood_chips_building_sizer__full_year_60s.json",
     "household_wood_chips_building_sizer__one_week_60s.json"
   ],
-  "hisim_commit": "8c67d4dfa2eb9ca373ccb7d9d00a2a3563bd0c3b",
+  "hisim_commit": "e77a28e50d67562ddac8cf912d3c4e9d955b5fa0",
   "platform": "Linux-6.17.0-1018-azure-x86_64-with-glibc2.36",
   "python_version": "3.11.15"
 }

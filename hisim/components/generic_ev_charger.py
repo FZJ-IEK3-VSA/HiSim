@@ -284,7 +284,7 @@ class VehiclePure(cp.Component):
                     data = json.load(file)
                 return data["Values"]
 
-            filepath = utils.load_export_load_profile_generator(target=self.evconfig.profile_name)
+            filepath = utils.load_export_load_profile_generator(target=self.evconfig.profile)
             if filepath is None:
                 filepath = utils.HISIMPATH
 

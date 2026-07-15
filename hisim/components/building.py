@@ -2848,9 +2848,15 @@ class BuildingInformation:
             area_door_1 = float(self.buildingdata_ref["A_Door_1"].values[0])
             door_u_value_in_watt_per_m2_per_kelvin = float(self.buildingdata_ref["U_Actual_Door_1"].values[0])
 
-            self.door_u_value_in_watt_per_m2_per_kelvin = (door_u_value_in_watt_per_m2_per_kelvin * area_door_1) / (
-                area_door_1
-            )
+            # With a single door the area-weighted U-value is just the door's own
+            # U-value; guard against a zero door area (no door) to avoid dividing by
+            # zero, while keeping the exact expression for the non-zero case.
+            if area_door_1 != 0:
+                self.door_u_value_in_watt_per_m2_per_kelvin = (
+                    door_u_value_in_watt_per_m2_per_kelvin * area_door_1
+                ) / (area_door_1)
+            else:
+                self.door_u_value_in_watt_per_m2_per_kelvin = door_u_value_in_watt_per_m2_per_kelvin
         else:
             self.door_u_value_in_watt_per_m2_per_kelvin = self.buildingconfig.door_u_value_in_watt_per_m2_per_kelvin
 

@@ -495,7 +495,7 @@ class UtspLpgConnector(cp.Component):
 
     def get_profiles_from_predefined_profile(
         self,
-    ) -> Tuple[str, str, str, str, str]:
+    ) -> Tuple[str, str, str, str, str, str, str, str]:
         """Get the loadprofiles for a specific predefined profile from hisim/inputs/loadprofiles."""
         if self.name_of_predefined_loadprofile is None:
             self.name_of_predefined_loadprofile = "CHR01 Couple both at Work"
@@ -552,16 +552,25 @@ class UtspLpgConnector(cp.Component):
             warm_water_file = os.path.join(predefined_profile_filepaths, "SumProfiles.HH1.Warm Water.csv")
             inner_device_heat_gains_file = os.path.join(predefined_profile_filepaths, "SumProfiles.HH1.Inner Device Heat Gains.csv")
 
-        #
-        # when using predefined profile there are no saved files concerning flexibility or car data
-        # TODO: implement flexibility and car files?
+        # Car occupancy
+        profile_dir = os.path.dirname(inner_device_heat_gains_file)
+        car_states_file = os.path.join(profile_dir, "CarStates.HH1.json")
+        car_locations_file = os.path.join(profile_dir, "CarLocations.HH1.json")
+        driving_distances_file = os.path.join(profile_dir, "DrivingDistances.HH1.json")
+
+        # when using predefined profile there are no saved files concerning flexibility
+        # TODO: implement flexibility files?
         return (
             electricity_file,
             warm_water_file,
             inner_device_heat_gains_file,
             high_activity_file,
             low_activity_file,
+            car_states_file,
+            car_locations_file,
+            driving_distances_file,
         )
+
 
     def save_result_file(self, name: str, content: str) -> str:
         """Saves a result file in the folder specified in the config object.
@@ -954,6 +963,9 @@ class UtspLpgConnector(cp.Component):
                         inner_device_heat_gains_file,
                         high_activity_file,
                         low_activity_file,
+                        car_states_file,
+                        car_locations_file,
+                        driving_distances_file,
                     ) = self.get_profiles_from_predefined_profile()
 
                     (
@@ -972,6 +984,26 @@ class UtspLpgConnector(cp.Component):
                     )
 
                     self.max_hot_water_demand = max(self.water_consumption)
+
+                    # load car data if files exist
+                    list_of_car_files = [car_states_file, car_locations_file, driving_distances_file]
+                    if all(os.path.exists(f) for f in list_of_car_files):
+                        flexibility_file = ""
+                        list_of_flexibility_and_car_files = [
+                            flexibility_file,
+                            car_states_file,
+                            car_locations_file,
+                            driving_distances_file,
+                        ]
+                        list_of_flexibility_and_car_data = self.load_results_and_transform_string_to_data(
+                            list_of_result_files=list_of_flexibility_and_car_files
+                        )
+                        self.flexibility_data_dict["flexibility"].append(list_of_flexibility_and_car_data[0])
+                        self.car_data_dict["car_states"].append(list_of_flexibility_and_car_data[1])
+                        self.car_data_dict["car_locations"].append(list_of_flexibility_and_car_data[2])
+                        self.car_data_dict["driving_distances"].append(list_of_flexibility_and_car_data[3])
+                    else:
+                        log.warning("No car data files found for predefined profile. Car data will be empty.")
 
                     # no caching if predefined profile is used
 

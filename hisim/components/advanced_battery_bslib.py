@@ -1,4 +1,4 @@
-""" Battery implementation built upon the bslib library. It contains a Battery Class together with its Configuration and State. """
+"""Battery implementation built upon the bslib library. It contains a Battery Class together with its Configuration and State."""
 
 # clean
 
@@ -99,7 +99,7 @@ class BatteryConfig(ConfigBase):
             lifetime_in_years=None,
             lifetime_in_cycles=5e3,  # estimated value , source: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
             maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None
+            subsidy_as_percentage_of_investment_costs=None,
         )
         return config
 
@@ -117,9 +117,12 @@ class BatteryConfig(ConfigBase):
             name=name,
             # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
             custom_battery_capacity_generic_in_kilowatt_hour=round(custom_battery_capacity_generic_in_kilowatt_hour, 2),
-            custom_pv_inverter_power_generic_in_watt=round(custom_battery_capacity_generic_in_kilowatt_hour * c_rate * 1e3, 2),
+            custom_pv_inverter_power_generic_in_watt=round(
+                custom_battery_capacity_generic_in_kilowatt_hour * c_rate * 1e3, 2
+            ),
             source_weight=1,
-            system_id="SG1",
+            # system_id="SG1",  # generic battery system, losses scale linearly with capacity
+            system_id="S2",  # needs to be compatible with ACBatMod
             charge_in_kwh=0,
             discharge_in_kwh=0,
             # capex and device emissions are calculated in get_cost_capex function by default
@@ -128,7 +131,7 @@ class BatteryConfig(ConfigBase):
             lifetime_in_years=None,
             lifetime_in_cycles=5e3,  # todo set correct values
             maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None
+            subsidy_as_percentage_of_investment_costs=None,
         )
 
         return config
@@ -274,7 +277,9 @@ class Battery(Component):
 
         # Simulate on timestep
         results = self.ac_coupled_battery_object.simulate(
-            p_load=set_point_for_ac_battery_power_in_watt, soc=state_of_charge, dt=time_increment_in_seconds,
+            p_load=set_point_for_ac_battery_power_in_watt,
+            soc=state_of_charge,
+            dt=time_increment_in_seconds,
         )
         # The bslib simulation returns how much of loading power input was actually used for charging and discharging and the resulting state of charge
         ac_battery_power_used_for_charging_or_discharging_in_watt = results[0]
@@ -334,30 +339,28 @@ class Battery(Component):
         """Returns investment cost, CO2 emissions and lifetime."""
 
         component_type = ComponentType.BATTERY
-        kpi_tag = (
-            KpiTagEnumClass.BATTERY
-        )
+        kpi_tag = KpiTagEnumClass.BATTERY
         unit = Units.KWH
         size_of_energy_system = config.custom_battery_capacity_generic_in_kilowatt_hour * 1e-3
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
-        simulation_parameters=simulation_parameters,
-        component_type=component_type,
-        unit=unit,
-        size_of_energy_system=size_of_energy_system,
-        config=config,
-        kpi_tag=kpi_tag
+            simulation_parameters=simulation_parameters,
+            component_type=component_type,
+            unit=unit,
+            size_of_energy_system=size_of_energy_system,
+            config=config,
+            kpi_tag=kpi_tag,
         )
 
         # Todo: think about livetime in cycles not in years
-        (virtual_number_of_full_charge_cycles, lifetime_in_cycles) = Battery.get_battery_aging_information(
-            config=config
-        )
+        virtual_number_of_full_charge_cycles, lifetime_in_cycles = Battery.get_battery_aging_information(config=config)
         if lifetime_in_cycles > 0:
-            capex_per_simulated_period = (capex_cost_data_class.capex_investment_cost_in_euro / lifetime_in_cycles) * (virtual_number_of_full_charge_cycles)
-            device_co2_footprint_per_simulated_period = (capex_cost_data_class.device_co2_footprint_in_kg / lifetime_in_cycles) * (
+            capex_per_simulated_period = (capex_cost_data_class.capex_investment_cost_in_euro / lifetime_in_cycles) * (
                 virtual_number_of_full_charge_cycles
             )
+            device_co2_footprint_per_simulated_period = (
+                capex_cost_data_class.device_co2_footprint_in_kg / lifetime_in_cycles
+            ) * (virtual_number_of_full_charge_cycles)
 
         else:
             log.warning("Capex calculation not valid. Check lifetime_in_cycles in Configuration of Battery.")
@@ -365,12 +368,20 @@ class Battery(Component):
 
         # overwrite capex and emission based on battery cycles
         capex_cost_data_class.capex_investment_cost_for_simulated_period_in_euro = capex_per_simulated_period
-        capex_cost_data_class.device_co2_footprint_for_simulated_period_in_kg = device_co2_footprint_per_simulated_period
+        capex_cost_data_class.device_co2_footprint_for_simulated_period_in_kg = (
+            device_co2_footprint_per_simulated_period
+        )
 
-        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(
+            config=config, capex_cost_data_class=capex_cost_data_class
+        )
         return capex_cost_data_class
 
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of maintenance costs."""
         battery_losses_in_kwh: float = 0.0
         for index, output in enumerate(all_outputs):
@@ -409,7 +420,11 @@ class Battery(Component):
 
         return opex_cost_data_class
 
-    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         return []
 

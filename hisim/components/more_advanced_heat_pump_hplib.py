@@ -317,11 +317,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
             PositionHotWaterStorageInSystemSetup.NO_STORAGE,
         ]:
             if self.m_dot_ref is None or self.m_dot_ref == 0:
-                raise ValueError(
-                    """If system setup is without parallel hot water storage, nominal massflow and minimum
+                raise ValueError("""If system setup is without parallel hot water storage, nominal massflow and minimum
                     thermal power of the heat pump must be given an integer value due to constant massflow
-                    of water pump."""
-                )
+                    of water pump.""")
 
         self.fluid_primary_side = config.fluid_primary_side
 
@@ -379,7 +377,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
             if self.passive_cooling_with_brine:
                 raise KeyError("HP modell with air as heat source does not support passive cooling with brine!")
             if self.electrical_input_power_brine_pump_in_watt != 0.0:
-                raise KeyError("HP modell with air as heat source does not support electrical input power for brine pump!")
+                raise KeyError(
+                    "HP modell with air as heat source does not support electrical input power for brine pump!"
+                )
 
         if self.parameters["Group"].iloc[0] == 2.0 or self.parameters["Group"].iloc[0] == 5.0:
             if self.fluid_primary_side.lower() != "brine":
@@ -398,7 +398,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             if self.fluid_primary_side.lower() != "water":
                 raise KeyError("HP modell does not fit to heat source in config!")
 
-            if self.electrical_input_power_brine_pump_in_watt == 0.0 :
+            if self.electrical_input_power_brine_pump_in_watt == 0.0:
                 raise KeyError(
                     "HP modell with brine/water as heat source need config parameter electrical_input_power_brine_pump_in_watt!"
                 )
@@ -1277,21 +1277,21 @@ class MoreAdvancedHeatPumpHPLib(Component):
         electrical_energy_hp_sh_in_watt_hour = p_el_sh * self.my_simulation_parameters.seconds_per_timestep / 3600
         electrical_energy_hp_dhw_in_watt_hour = p_el_dhw * self.my_simulation_parameters.seconds_per_timestep / 3600
 
-        cumulative_hp_thermal_energy_tot_in_watt_hour = (
-            self.state.cumulative_thermal_energy_tot_in_watt_hour + abs(thermal_energy_hp_tot_in_watt_hour)
+        cumulative_hp_thermal_energy_tot_in_watt_hour = self.state.cumulative_thermal_energy_tot_in_watt_hour + abs(
+            thermal_energy_hp_tot_in_watt_hour
         )
-        cumulative_hp_thermal_energy_sh_in_watt_hour = (
-            self.state.cumulative_thermal_energy_sh_in_watt_hour + abs(thermal_energy_hp_sh_in_watt_hour)
+        cumulative_hp_thermal_energy_sh_in_watt_hour = self.state.cumulative_thermal_energy_sh_in_watt_hour + abs(
+            thermal_energy_hp_sh_in_watt_hour
         )
-        cumulative_hp_thermal_energy_dhw_in_watt_hour = (
-            self.state.cumulative_thermal_energy_dhw_in_watt_hour + abs(thermal_energy_hp_dhw_in_watt_hour)
+        cumulative_hp_thermal_energy_dhw_in_watt_hour = self.state.cumulative_thermal_energy_dhw_in_watt_hour + abs(
+            thermal_energy_hp_dhw_in_watt_hour
         )
 
         cumulative_hp_electrical_energy_tot_in_watt_hour = (
             self.state.cumulative_electrical_energy_tot_in_watt_hour + abs(electrical_energy_hp_tot_in_watt_hour)
         )
-        cumulative_hp_electrical_energy_sh_in_watt_hour = (
-            self.state.cumulative_electrical_energy_sh_in_watt_hour + abs(electrical_energy_hp_sh_in_watt_hour)
+        cumulative_hp_electrical_energy_sh_in_watt_hour = self.state.cumulative_electrical_energy_sh_in_watt_hour + abs(
+            electrical_energy_hp_sh_in_watt_hour
         )
         cumulative_hp_electrical_energy_dhw_in_watt_hour = (
             self.state.cumulative_electrical_energy_dhw_in_watt_hour + abs(electrical_energy_hp_dhw_in_watt_hour)
@@ -1322,8 +1322,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 raise ValueError("specific heat capacity on primary side has to be a value not none!")
 
             temperature_difference_primary_side = 5.0
-            m_dot_water_primary = thermal_power_from_environment / (specific_heat_capacity_of_primary_fluid *
-                                                                    temperature_difference_primary_side)
+            m_dot_water_primary = thermal_power_from_environment / (
+                specific_heat_capacity_of_primary_fluid * temperature_difference_primary_side
+            )
 
             if on_off == 0:
                 temperature_difference_primary_side = 0.0
@@ -1418,14 +1419,16 @@ class MoreAdvancedHeatPumpHPLib(Component):
         size_of_energy_system = config.set_thermal_output_power_in_watt * 1e-3
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
-        simulation_parameters=simulation_parameters,
-        component_type=component_type,
-        unit=unit,
-        size_of_energy_system=size_of_energy_system,
-        config=config,
-        kpi_tag=kpi_tag
+            simulation_parameters=simulation_parameters,
+            component_type=component_type,
+            unit=unit,
+            size_of_energy_system=size_of_energy_system,
+            config=config,
+            kpi_tag=kpi_tag,
         )
-        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
+        config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(
+            config=config, capex_cost_data_class=capex_cost_data_class
+        )
 
         return capex_cost_data_class
 
@@ -1615,12 +1618,14 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     )
 
                 elif output.field_name == self.TimeOnHeating:
-                    heating_time_in_seconds = sum(postprocessing_results.iloc[:, index])
-                    heating_time_in_hours = heating_time_in_seconds / 3600
+                    # time_on_heating is a cumulative per-cycle counter (resets to 0 when off),
+                    # not a per-timestep increment. Count active timesteps and multiply by dt.
+                    active_steps = (postprocessing_results.iloc[:, index] > 0).sum()
+                    heating_time_in_hours = active_steps * self.my_simulation_parameters.seconds_per_timestep / 3600
 
                 elif output.field_name == self.TimeOnCooling:
-                    cooling_time_in_seconds = sum(postprocessing_results.iloc[:, index])
-                    cooling_time_in_hours = cooling_time_in_seconds / 3600
+                    active_steps = (postprocessing_results.iloc[:, index] > 0).sum()
+                    cooling_time_in_hours = active_steps * self.my_simulation_parameters.seconds_per_timestep / 3600
 
                 elif output.field_name == self.TemperatureOutputSH:
                     flow_temperature_list_in_celsius = postprocessing_results.iloc[:, index]

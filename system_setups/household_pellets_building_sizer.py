@@ -106,12 +106,14 @@ def setup_function(
             PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER
         )
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.logging_level = 3
     else:
         simu_params_year = my_simulation_parameters.year
+
+    my_simulation_parameters.country = "DE"
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================

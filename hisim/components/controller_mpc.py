@@ -485,7 +485,7 @@ class MpcController(cp.Component):
         used instead.
         """
         repo = SingletonSimRepository()
-        return repo.get_entry(key=key) if repo.exist_entry(key=key) else fallback
+        return repo.get_entry(key=key) if repo.entry_exists(key=key) else fallback
 
     def build(self):
         """Build function: The function sets important constants and parameters for the calculations."""

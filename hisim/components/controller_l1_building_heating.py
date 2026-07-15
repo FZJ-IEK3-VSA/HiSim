@@ -224,16 +224,16 @@ class L1BuildingHeatController(cp.Component):
     def get_default_connections_from_hot_water_storage(self) -> List[cp.ComponentConnection]:
         """Sets default connections for the buffer."""
         # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.generic_hot_water_storage_modular"
+        component_module_name = "hisim.components.simple_water_storage"
         component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "HotWaterStorage")
+        component_class = getattr(component_module, "SimpleHotWaterStorage")
         connections = []
         boiler_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 L1BuildingHeatController.BufferTemperature,
                 boiler_classname,
-                component_class.TemperatureMean,
+                component_class.WaterTemperatureToHeatGenerator,
             )
         )
         return connections

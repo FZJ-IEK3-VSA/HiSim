@@ -223,41 +223,33 @@
       "value": 21
     },
     {
-      "name": "MAKE_RESULT_JSON_FOR_WEBTOOL",
+      "name": "WRITE_COMPONENT_CONFIGS_TO_JSON",
       "value": 22
     },
     {
-      "name": "WRITE_COMPONENT_CONFIGS_TO_JSON",
+      "name": "WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER",
       "value": 23
     },
     {
-      "name": "WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER",
+      "name": "WRITE_KPIS_TO_JSON",
       "value": 24
     },
     {
-      "name": "WRITE_KPIS_TO_JSON",
+      "name": "EXPORT_TO_PKL",
       "value": 25
     },
     {
-      "name": "MAKE_OPERATION_RESULTS_FOR_WEBTOOL",
+      "name": "WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON",
       "value": 26
     },
     {
-      "name": "EXPORT_TO_PKL",
+      "name": "EXPORT_MONTHLY_RESULTS",
       "value": 27
     },
     {
-      "name": "WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON",
-      "value": 28
-    },
-    {
-      "name": "EXPORT_MONTHLY_RESULTS",
-      "value": 29
-    },
-    {
       "name": "EXPORT_RESULTS_IN_ONE_FILE",
-      "value": 30
+      "value": 38
     }
   ],
-  "generated_at": "2026-06-26T10:55:34.094684"
+  "generated_at": "2026-07-15T10:10:00.543325"
 }

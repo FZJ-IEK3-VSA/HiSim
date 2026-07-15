@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-26T10:55:34.094684",
+  "generated_at": "2026-07-15T10:10:00.543325",
   "components": [
     {
       "component_full_classname": "hisim.components.building.Building",
@@ -765,6 +765,182 @@
       "default_connections": {}
     },
     {
+      "component_full_classname": "hisim.components.advanced_fuel_cell_controller.ExtendedController",
+      "config_full_classname": "hisim.components.configuration.ExtendedControllerConfig",
+      "display_name": "Extended Controller class.",
+      "category": "CHP",
+      "is_dynamic": false,
+      "default_config": {
+        "building_name": "BUI1",
+        "name": "Example Component",
+        "chp": true,
+        "gas_heater": true,
+        "electrolyzer": true,
+        "chp_mode": "power",
+        "chp_power_states_possible": 10,
+        "maximum_autarky": false
+      },
+      "config_fields": [
+        {
+          "name": "building_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "BUI1"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "Example Component"
+        },
+        {
+          "name": "chp",
+          "type": "bool",
+          "is_optional": false,
+          "enum_class": null,
+          "default": true
+        },
+        {
+          "name": "gas_heater",
+          "type": "bool",
+          "is_optional": false,
+          "enum_class": null,
+          "default": true
+        },
+        {
+          "name": "electrolyzer",
+          "type": "bool",
+          "is_optional": false,
+          "enum_class": null,
+          "default": true
+        },
+        {
+          "name": "chp_mode",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "power"
+        },
+        {
+          "name": "chp_power_states_possible",
+          "type": "int",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 10
+        },
+        {
+          "name": "maximum_autarky",
+          "type": "bool",
+          "is_optional": false,
+          "enum_class": null,
+          "default": false
+        }
+      ],
+      "input_ports": [
+        {
+          "field_name": "Electricity Demand",
+          "load_type": "Electricity",
+          "unit": "W",
+          "mandatory": true
+        },
+        {
+          "field_name": "PV Production",
+          "load_type": "Electricity",
+          "unit": "W",
+          "mandatory": true
+        },
+        {
+          "field_name": "Temperature 0 Percent",
+          "load_type": "WarmWater",
+          "unit": "°C",
+          "mandatory": true
+        },
+        {
+          "field_name": "Temperature 20 Percent",
+          "load_type": "WarmWater",
+          "unit": "°C",
+          "mandatory": true
+        },
+        {
+          "field_name": "Temperature 40 Percent",
+          "load_type": "WarmWater",
+          "unit": "°C",
+          "mandatory": true
+        },
+        {
+          "field_name": "Temperature 60 Percent",
+          "load_type": "WarmWater",
+          "unit": "°C",
+          "mandatory": true
+        },
+        {
+          "field_name": "Temperature 80 Percent",
+          "load_type": "WarmWater",
+          "unit": "°C",
+          "mandatory": true
+        },
+        {
+          "field_name": "Temperature 100 Percent",
+          "load_type": "WarmWater",
+          "unit": "°C",
+          "mandatory": true
+        }
+      ],
+      "output_ports": [
+        {
+          "field_name": "Controller CHP",
+          "load_type": "Any",
+          "unit": "%",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Control signal for the CHP as a fraction of full power. [%]"
+        },
+        {
+          "field_name": "Controller Gas Heater",
+          "load_type": "Any",
+          "unit": "%",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Control signal for the gas heater as a fraction of full power. [%]"
+        },
+        {
+          "field_name": "Power To Electrolyzer",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Electrical power directed to the electrolyzer. [W]"
+        },
+        {
+          "field_name": "Power From Or To Grid",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Electrical power drawn from (positive) or fed into (negative) the grid. [W]"
+        },
+        {
+          "field_name": "RuntimeCounterCHP",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Accumulated runtime counter of the CHP."
+        },
+        {
+          "field_name": "RuntimeCounterGasHeater",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Accumulated runtime counter of the gas heater."
+        }
+      ],
+      "default_connections": {}
+    },
+    {
       "component_full_classname": "hisim.components.generic_rsoc.Rsoc",
       "config_full_classname": "hisim.components.generic_rsoc.RsocConfig",
       "display_name": "Rsoc component class.",
@@ -1401,120 +1577,6 @@
       "default_connections": {}
     },
     {
-      "component_full_classname": "hisim.components.controller_l1_heat_old.ControllerHeat",
-      "config_full_classname": "hisim.components.controller_l1_heat_old.ControllerHeatConfig",
-      "display_name": "Controller heat.",
-      "category": "Control",
-      "is_dynamic": false,
-      "default_config": {
-        "building_name": "BUI1",
-        "name": "ControllerHeatL1",
-        "temperature_storage_target_warm_water": 50,
-        "temperature_storage_target_heating_water": 35,
-        "temperature_storage_target_hysteresis_ww": 45,
-        "temperature_storage_target_hysteresis_hw": 35
-      },
-      "config_fields": [
-        {
-          "name": "building_name",
-          "type": "str",
-          "is_optional": false,
-          "enum_class": null,
-          "default": "BUI1"
-        },
-        {
-          "name": "name",
-          "type": "str",
-          "is_optional": false,
-          "enum_class": null,
-          "default": "ControllerHeatL1"
-        },
-        {
-          "name": "temperature_storage_target_warm_water",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 50
-        },
-        {
-          "name": "temperature_storage_target_heating_water",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 35
-        },
-        {
-          "name": "temperature_storage_target_hysteresis_ww",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 45
-        },
-        {
-          "name": "temperature_storage_target_hysteresis_hw",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 35
-        }
-      ],
-      "input_ports": [
-        {
-          "field_name": "StorageTemperatureWarmWater",
-          "load_type": "Water",
-          "unit": "°C",
-          "mandatory": false
-        },
-        {
-          "field_name": "StorageTemperatureHeatingWater",
-          "load_type": "Water",
-          "unit": "°C",
-          "mandatory": false
-        },
-        {
-          "field_name": "ResidenceTemperature",
-          "load_type": "Temperature",
-          "unit": "°C",
-          "mandatory": false
-        }
-      ],
-      "output_ports": [
-        {
-          "field_name": "ControlSignalGasHeater",
-          "load_type": "Any",
-          "unit": "%",
-          "postprocessing_flag": null,
-          "sankey_flow_direction": false,
-          "output_description": "Control signal for gas heater (0-1)"
-        },
-        {
-          "field_name": "ControlSignalChp",
-          "load_type": "Any",
-          "unit": "%",
-          "postprocessing_flag": null,
-          "sankey_flow_direction": false,
-          "output_description": "Control signal for CHP unit (0-1)"
-        },
-        {
-          "field_name": "ControlSignalHeatPump",
-          "load_type": "Any",
-          "unit": "%",
-          "postprocessing_flag": null,
-          "sankey_flow_direction": false,
-          "output_description": "Control signal for heat pump (0-1)"
-        },
-        {
-          "field_name": "ControlSignalChooseStorage",
-          "load_type": "Any",
-          "unit": "-",
-          "postprocessing_flag": null,
-          "sankey_flow_direction": false,
-          "output_description": "Control signal for storage selection (1: warm water storage, 2: heating water storage)"
-        }
-      ],
-      "default_connections": {}
-    },
-    {
       "component_full_classname": "hisim.components.controller_l1_electrolyzer.L1GenericElectrolyzerController",
       "config_full_classname": "hisim.components.controller_l1_electrolyzer.L1ElectrolyzerControllerConfig",
       "display_name": "Controller of the Electrolyzer.",
@@ -1522,12 +1584,12 @@
       "is_dynamic": false,
       "default_config": {
         "building_name": "BUI1",
-        "name": "default",
-        "source_weight": 0,
-        "min_operation_time_in_seconds": 0,
-        "min_idle_time_in_seconds": 0,
-        "p_min_electrolyzer": 0.0,
-        "h2_soc_threshold": 0.0
+        "name": "L1 Electrolyzer Controller",
+        "source_weight": 1,
+        "min_operation_time_in_seconds": 14400,
+        "min_idle_time_in_seconds": 7200,
+        "p_min_electrolyzer": 1200,
+        "h2_soc_threshold": 96
       },
       "config_fields": [
         {
@@ -1542,42 +1604,42 @@
           "type": "str",
           "is_optional": false,
           "enum_class": null,
-          "default": "default"
+          "default": "L1 Electrolyzer Controller"
         },
         {
           "name": "source_weight",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 1
         },
         {
           "name": "min_operation_time_in_seconds",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 14400
         },
         {
           "name": "min_idle_time_in_seconds",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 7200
         },
         {
           "name": "p_min_electrolyzer",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 1200
         },
         {
           "name": "h2_soc_threshold",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 96
         }
       ],
       "input_ports": [
@@ -1881,10 +1943,10 @@
       "is_dynamic": false,
       "default_config": {
         "building_name": "BUI1",
-        "name": "default",
-        "setback_delta_in_kelvin": 0.0,
-        "night_start_hour": 0,
-        "night_end_hour": 0
+        "name": "NightSetbackController",
+        "setback_delta_in_kelvin": -4.0,
+        "night_start_hour": 22,
+        "night_end_hour": 6
       },
       "config_fields": [
         {
@@ -1899,28 +1961,28 @@
           "type": "str",
           "is_optional": false,
           "enum_class": null,
-          "default": "default"
+          "default": "NightSetbackController"
         },
         {
           "name": "setback_delta_in_kelvin",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": -4.0
         },
         {
           "name": "night_start_hour",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 22
         },
         {
           "name": "night_end_hour",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 6
         }
       ],
       "input_ports": [],
@@ -1951,13 +2013,13 @@
       "is_dynamic": false,
       "default_config": {
         "building_name": "BUI1",
-        "name": "default",
-        "source_weight": 0,
-        "t_min_heating_in_celsius": 0.0,
-        "t_max_heating_in_celsius": 0.0,
-        "t_buffer_activation_threshold_in_celsius": 0.0,
-        "day_of_heating_season_begin": 0,
-        "day_of_heating_season_end": 0
+        "name": "L1BuildingTemperatureControllerdefault",
+        "source_weight": 1,
+        "t_min_heating_in_celsius": 19.5,
+        "t_max_heating_in_celsius": 20.5,
+        "t_buffer_activation_threshold_in_celsius": 40.0,
+        "day_of_heating_season_begin": 270,
+        "day_of_heating_season_end": 150
       },
       "config_fields": [
         {
@@ -1972,49 +2034,49 @@
           "type": "str",
           "is_optional": false,
           "enum_class": null,
-          "default": "default"
+          "default": "L1BuildingTemperatureControllerdefault"
         },
         {
           "name": "source_weight",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 1
         },
         {
           "name": "t_min_heating_in_celsius",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 19.5
         },
         {
           "name": "t_max_heating_in_celsius",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 20.5
         },
         {
           "name": "t_buffer_activation_threshold_in_celsius",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 40.0
         },
         {
           "name": "day_of_heating_season_begin",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 270
         },
         {
           "name": "day_of_heating_season_end",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 150
         }
       ],
       "input_ports": [
@@ -2054,10 +2116,10 @@
             "source_output_name": "TemperatureMeanThermalMass"
           }
         ],
-        "HotWaterStorage": [
+        "SimpleHotWaterStorage": [
           {
             "target_input_name": "BufferTemperature",
-            "source_output_name": "TemperatureMean"
+            "source_output_name": "WaterTemperatureToHeatGenerator"
           }
         ],
         "L2GenericEnergyManagementSystem": [
@@ -2076,15 +2138,15 @@
       "is_dynamic": false,
       "default_config": {
         "building_name": "BUI1",
-        "name": "default",
-        "source_weight": 0,
-        "t_min_heating_in_celsius": 0.0,
-        "t_max_heating_in_celsius": 0.0,
-        "cooling_considered": false,
-        "day_of_heating_season_begin": 0,
-        "day_of_heating_season_end": 0,
-        "min_operation_time_in_seconds": 0,
-        "min_idle_time_in_seconds": 0
+        "name": "Controller",
+        "source_weight": 1,
+        "t_min_heating_in_celsius": 19.5,
+        "t_max_heating_in_celsius": 20.5,
+        "cooling_considered": true,
+        "day_of_heating_season_begin": 270,
+        "day_of_heating_season_end": 150,
+        "min_operation_time_in_seconds": 1800,
+        "min_idle_time_in_seconds": 1800
       },
       "config_fields": [
         {
@@ -2099,63 +2161,63 @@
           "type": "str",
           "is_optional": false,
           "enum_class": null,
-          "default": "default"
+          "default": "Controller"
         },
         {
           "name": "source_weight",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 1
         },
         {
           "name": "t_min_heating_in_celsius",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 19.5
         },
         {
           "name": "t_max_heating_in_celsius",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 20.5
         },
         {
           "name": "cooling_considered",
           "type": "bool",
           "is_optional": false,
           "enum_class": null,
-          "default": false
+          "default": true
         },
         {
           "name": "day_of_heating_season_begin",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 270
         },
         {
           "name": "day_of_heating_season_end",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 150
         },
         {
           "name": "min_operation_time_in_seconds",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 1800
         },
         {
           "name": "min_idle_time_in_seconds",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 1800
         }
       ],
       "input_ports": [
@@ -2183,10 +2245,10 @@
         }
       ],
       "default_connections": {
-        "HotWaterStorage": [
+        "SimpleHotWaterStorage": [
           {
             "target_input_name": "StorageTemperature",
-            "source_output_name": "TemperatureMean"
+            "source_output_name": "WaterTemperatureToHeatGenerator"
           }
         ],
         "L2GenericEnergyManagementSystem": [
@@ -2205,19 +2267,19 @@
       "is_dynamic": false,
       "default_config": {
         "building_name": "BUI1",
-        "name": "default",
-        "source_weight": 0,
-        "use": "",
-        "electricity_threshold": 0.0,
-        "h2_soc_threshold": 0.0,
-        "t_min_heating_in_celsius": 0.0,
-        "t_max_heating_in_celsius": 0.0,
-        "t_min_dhw_in_celsius": 0.0,
-        "t_max_dhw_in_celsius": 0.0,
-        "day_of_heating_season_begin": 0,
-        "day_of_heating_season_end": 0,
-        "min_operation_time_in_seconds": 0,
-        "min_idle_time_in_seconds": 0
+        "name": "CHP Controller",
+        "source_weight": 1,
+        "use": "Gas",
+        "electricity_threshold": 300,
+        "h2_soc_threshold": 0,
+        "t_min_heating_in_celsius": 20.0,
+        "t_max_heating_in_celsius": 20.5,
+        "t_min_dhw_in_celsius": 42,
+        "t_max_dhw_in_celsius": 60,
+        "day_of_heating_season_begin": 270,
+        "day_of_heating_season_end": 150,
+        "min_operation_time_in_seconds": 14400,
+        "min_idle_time_in_seconds": 7200
       },
       "config_fields": [
         {
@@ -2232,91 +2294,91 @@
           "type": "str",
           "is_optional": false,
           "enum_class": null,
-          "default": "default"
+          "default": "CHP Controller"
         },
         {
           "name": "source_weight",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 1
         },
         {
           "name": "use",
           "type": "LoadTypes",
           "is_optional": false,
           "enum_class": "LoadTypes",
-          "default": ""
+          "default": "Gas"
         },
         {
           "name": "electricity_threshold",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 300
         },
         {
           "name": "h2_soc_threshold",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 0
         },
         {
           "name": "t_min_heating_in_celsius",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 20.0
         },
         {
           "name": "t_max_heating_in_celsius",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 20.5
         },
         {
           "name": "t_min_dhw_in_celsius",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 42
         },
         {
           "name": "t_max_dhw_in_celsius",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 60
         },
         {
           "name": "day_of_heating_season_begin",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 270
         },
         {
           "name": "day_of_heating_season_end",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 150
         },
         {
           "name": "min_operation_time_in_seconds",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 14400
         },
         {
           "name": "min_idle_time_in_seconds",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 7200
         }
       ],
       "input_ports": [
@@ -2364,10 +2426,10 @@
         }
       ],
       "default_connections": {
-        "HotWaterStorage": [
+        "SimpleHotWaterStorage": [
           {
             "target_input_name": "HotWaterStorageTemperature",
-            "source_output_name": "TemperatureMean"
+            "source_output_name": "WaterTemperatureToHeatGenerator"
           }
         ],
         "Building": [
@@ -2380,6 +2442,559 @@
           {
             "target_input_name": "HydrogenSOC",
             "source_output_name": "HydrogenSOC"
+          }
+        ]
+      }
+    },
+    {
+      "component_full_classname": "hisim.components.controller_mpc.MpcController",
+      "config_full_classname": "hisim.components.controller_mpc.MpcControllerConfig",
+      "display_name": "MPC Controller class.",
+      "category": "Control",
+      "is_dynamic": false,
+      "default_config": {
+        "building_name": "BUI1",
+        "name": "MpcController",
+        "mpc_scheme": "optimization_once_aday_only",
+        "min_comfort_temp": 21.0,
+        "max_comfort_temp": 23.0,
+        "optimizer_sampling_rate": 15,
+        "initial_temperature": 22.0,
+        "flexibility_element": "basic_buidling_configuration",
+        "initial_state_of_charge": 0.6666666666666666,
+        "temp_forecast": [],
+        "phi_m_forecast": [],
+        "phi_st_forecast": [],
+        "phi_ia_forecast": [],
+        "pv_forecast_yearly": [],
+        "maximum_storage_capacity": 0.0,
+        "minimum_storage_capacity": 0.0,
+        "maximum_charging_power": 0.0,
+        "maximum_discharging_power": 0.0,
+        "battery_efficiency": 0.0,
+        "inverter_efficiency": 0.0,
+        "temperature_forecast_24h_1min": [],
+        "phi_m_forecast_24h_1min": [],
+        "phi_ia_forecast_24h_1min": [],
+        "phi_st_forecast_24h_1min": [],
+        "pv_forecast_24h_1min": [],
+        "price_purchase_forecast_24h_1min": [],
+        "price_injection_forecast_24h_1min": [],
+        "optimal_cost": [],
+        "revenues": [],
+        "air_conditioning_electricity": [],
+        "cost_optimal_temperature_set_point": [],
+        "pv2load": [],
+        "electricity_from_grid": [],
+        "electricity_to_grid": [],
+        "battery_to_load": [],
+        "pv_to_battery_timestep": [],
+        "battery_power_flow_timestep": [],
+        "battery_control_state": [],
+        "batt_soc_actual_timestep": [],
+        "batt_soc_normalized_timestep": [],
+        "h_tr_w": 37.96,
+        "h_tr_ms": 2757.3,
+        "h_tr_em": 127.81,
+        "h_ve_adj": 61.81,
+        "h_tr_is": 1881.63,
+        "c_m": 19998000.0,
+        "cop_coef": [
+          0,
+          0
+        ],
+        "eer_coef": [
+          0,
+          0
+        ],
+        "predictive": true,
+        "prediction_horizon": 0
+      },
+      "config_fields": [
+        {
+          "name": "building_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "BUI1"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "MpcController"
+        },
+        {
+          "name": "mpc_scheme",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "optimization_once_aday_only"
+        },
+        {
+          "name": "min_comfort_temp",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 21.0
+        },
+        {
+          "name": "max_comfort_temp",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 23.0
+        },
+        {
+          "name": "optimizer_sampling_rate",
+          "type": "int",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 15
+        },
+        {
+          "name": "initial_temperature",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 22.0
+        },
+        {
+          "name": "flexibility_element",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "basic_buidling_configuration"
+        },
+        {
+          "name": "initial_state_of_charge",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 0.6666666666666666
+        },
+        {
+          "name": "temp_forecast",
+          "type": "List[float]",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "phi_m_forecast",
+          "type": "List[float]",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "phi_st_forecast",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "phi_ia_forecast",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "pv_forecast_yearly",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "maximum_storage_capacity",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 0.0
+        },
+        {
+          "name": "minimum_storage_capacity",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 0.0
+        },
+        {
+          "name": "maximum_charging_power",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 0.0
+        },
+        {
+          "name": "maximum_discharging_power",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 0.0
+        },
+        {
+          "name": "battery_efficiency",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 0.0
+        },
+        {
+          "name": "inverter_efficiency",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 0.0
+        },
+        {
+          "name": "temperature_forecast_24h_1min",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "phi_m_forecast_24h_1min",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "phi_ia_forecast_24h_1min",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "phi_st_forecast_24h_1min",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "pv_forecast_24h_1min",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "price_purchase_forecast_24h_1min",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "price_injection_forecast_24h_1min",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "optimal_cost",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "revenues",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "air_conditioning_electricity",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "cost_optimal_temperature_set_point",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "pv2load",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "electricity_from_grid",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "electricity_to_grid",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "battery_to_load",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "pv_to_battery_timestep",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "battery_power_flow_timestep",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "battery_control_state",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "batt_soc_actual_timestep",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "batt_soc_normalized_timestep",
+          "type": "list",
+          "is_optional": false,
+          "enum_class": null,
+          "default": []
+        },
+        {
+          "name": "h_tr_w",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 37.96
+        },
+        {
+          "name": "h_tr_ms",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 2757.3
+        },
+        {
+          "name": "h_tr_em",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 127.81
+        },
+        {
+          "name": "h_ve_adj",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 61.81
+        },
+        {
+          "name": "h_tr_is",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 1881.63
+        },
+        {
+          "name": "c_m",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 19998000.0
+        },
+        {
+          "name": "cop_coef",
+          "type": "List",
+          "is_optional": false,
+          "enum_class": null,
+          "default": [
+            0,
+            0
+          ]
+        },
+        {
+          "name": "eer_coef",
+          "type": "List",
+          "is_optional": false,
+          "enum_class": null,
+          "default": [
+            0,
+            0
+          ]
+        },
+        {
+          "name": "predictive",
+          "type": "bool",
+          "is_optional": false,
+          "enum_class": null,
+          "default": true
+        },
+        {
+          "name": "prediction_horizon",
+          "type": "Optional[int]",
+          "is_optional": true,
+          "enum_class": null,
+          "default": 0
+        }
+      ],
+      "input_ports": [
+        {
+          "field_name": "Residence Temperature",
+          "load_type": "Temperature",
+          "unit": "°C",
+          "mandatory": true
+        }
+      ],
+      "output_ports": [
+        {
+          "field_name": "OperatingMode",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for OperatingMode will follow."
+        },
+        {
+          "field_name": "ThermalEnergyDelivered",
+          "load_type": "Heating",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for ThermalEnergyDelivered will follow."
+        },
+        {
+          "field_name": "ElectricityOutput",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for ElectricityOutput will follow."
+        },
+        {
+          "field_name": "PV2load",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for PV2load will follow."
+        },
+        {
+          "field_name": "GridImport",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for GridImport will follow."
+        },
+        {
+          "field_name": "GridExport",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for GridExport will follow."
+        },
+        {
+          "field_name": "Battery2Load",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for Battery2Load will follow."
+        },
+        {
+          "field_name": "PV2Battery",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for PV2Battery will follow."
+        },
+        {
+          "field_name": "BatteryEnergyContent",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for BatteryEnergyContent will follow."
+        },
+        {
+          "field_name": "BatteryControlState",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for BatteryControlState will follow."
+        },
+        {
+          "field_name": "BatteryChargingDischargingPower",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for BatteryChargingDischargingPower will follow."
+        },
+        {
+          "field_name": "BatterySoC",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for BatterySoC will follow."
+        },
+        {
+          "field_name": "ElectricityCost",
+          "load_type": "Price",
+          "unit": "Euros per kWh",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for ElectricityCost will follow."
+        },
+        {
+          "field_name": "GenerationRevenue",
+          "load_type": "Price",
+          "unit": "Euros per kWh",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for GenerationRevenue will follow."
+        }
+      ],
+      "default_connections": {
+        "Weather": [
+          {
+            "target_input_name": "TemperatureOutside",
+            "source_output_name": "TemperatureOutside"
           }
         ]
       }
@@ -2607,19 +3222,14 @@
       "default_connections": {}
     },
     {
-      "component_full_classname": "hisim.components.controller_l2_district_energy_management_system.L2GenericDistrictEnergyManagementSystem",
-      "config_full_classname": "hisim.components.controller_l2_district_energy_management_system.EMSDistrictConfig",
-      "display_name": "Surplus electricity controller - time step based.",
+      "component_full_classname": "hisim.components.controller_l1_example_controller.SimpleController",
+      "config_full_classname": "hisim.components.controller_l1_example_controller.SimpleControllerConfig",
+      "display_name": "Simple controller class.",
       "category": "Control",
-      "is_dynamic": true,
+      "is_dynamic": false,
       "default_config": {
         "building_name": "BUI1",
-        "name": "L2EMSElectricityController",
-        "strategy": 1,
-        "limit_to_shave": 0,
-        "building_indoor_temperature_offset_value": 2,
-        "domestic_hot_water_storage_temperature_offset_value": 10,
-        "space_heating_water_storage_temperature_offset_value": 10
+        "name": "SimpleController"
       },
       "config_fields": [
         {
@@ -2634,53 +3244,164 @@
           "type": "str",
           "is_optional": false,
           "enum_class": null,
-          "default": "L2EMSElectricityController"
+          "default": "SimpleController"
+        }
+      ],
+      "input_ports": [
+        {
+          "field_name": "Fill Level Percent",
+          "load_type": "Electricity",
+          "unit": "kWh",
+          "mandatory": true
+        }
+      ],
+      "output_ports": [
+        {
+          "field_name": "Gas Heater Power Level",
+          "load_type": "Gas",
+          "unit": "%",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Control signal setting the gas heater power level as a fraction of full power. [%]"
+        }
+      ],
+      "default_connections": {}
+    },
+    {
+      "component_full_classname": "hisim.components.controller_l1_generic_ev_charge.L1Controller",
+      "config_full_classname": "hisim.components.controller_l1_generic_ev_charge.ChargingStationConfig",
+      "display_name": "Simulates EV charging and battery losses due to driving. Control according to constant SOC threshold and optional surplus control.",
+      "category": "Control",
+      "is_dynamic": false,
+      "default_config": {
+        "building_name": "BUI1",
+        "name": "L1EVChargeControl",
+        "source_weight": 1,
+        "charging_station_set": {
+          "Name": "Charging At Home with 03.7 kW",
+          "Guid": {
+            "StrVal": "38e3a15d-d6f5-4f51-a16a-da287d14608f"
+          }
+        },
+        "battery_set_soc": 0.8,
+        "lower_threshold_charging_power_in_watt": 370.0,
+        "device_co2_footprint_in_kg": 100,
+        "investment_costs_in_euro": 1000,
+        "lifetime_in_years": 10,
+        "maintenance_costs_in_euro_per_year": 50.0,
+        "subsidy_as_percentage_of_investment_costs": 0
+      },
+      "config_fields": [
+        {
+          "name": "building_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "BUI1"
         },
         {
-          "name": "strategy",
-          "type": "Union[EMSControlStrategy, int]",
+          "name": "name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "L1EVChargeControl"
+        },
+        {
+          "name": "source_weight",
+          "type": "int",
           "is_optional": false,
           "enum_class": null,
           "default": 1
         },
         {
-          "name": "limit_to_shave",
+          "name": "charging_station_set",
+          "type": "JsonReference",
+          "is_optional": false,
+          "enum_class": null,
+          "default": {
+            "Name": "Charging At Home with 03.7 kW",
+            "Guid": {
+              "StrVal": "38e3a15d-d6f5-4f51-a16a-da287d14608f"
+            }
+          }
+        },
+        {
+          "name": "battery_set_soc",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 0.8
+        },
+        {
+          "name": "lower_threshold_charging_power_in_watt",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 370.0
+        },
+        {
+          "name": "device_co2_footprint_in_kg",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 100
+        },
+        {
+          "name": "investment_costs_in_euro",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 1000
+        },
+        {
+          "name": "lifetime_in_years",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 10
+        },
+        {
+          "name": "maintenance_costs_in_euro_per_year",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 50.0
+        },
+        {
+          "name": "subsidy_as_percentage_of_investment_costs",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
           "default": 0
-        },
-        {
-          "name": "building_indoor_temperature_offset_value",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 2
-        },
-        {
-          "name": "domestic_hot_water_storage_temperature_offset_value",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 10
-        },
-        {
-          "name": "space_heating_water_storage_temperature_offset_value",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 10
         }
       ],
       "input_ports": [
         {
-          "field_name": "ElectricityToElectrolyzerUnused",
+          "field_name": "ElectricityNeededByCar",
           "load_type": "Electricity",
           "unit": "W",
-          "mandatory": false
+          "mandatory": true
         },
         {
-          "field_name": "SurplusUnusedFromDistrictEMS",
+          "field_name": "CarLocation",
+          "load_type": "Any",
+          "unit": "-",
+          "mandatory": true
+        },
+        {
+          "field_name": "StateOfCharge",
+          "load_type": "Any",
+          "unit": "-",
+          "mandatory": true
+        },
+        {
+          "field_name": "AcBatteryChargingPower",
+          "load_type": "Electricity",
+          "unit": "W",
+          "mandatory": true
+        },
+        {
+          "field_name": "ElectricityTargetFromEMS",
           "load_type": "Electricity",
           "unit": "W",
           "mandatory": false
@@ -2688,124 +3409,131 @@
       ],
       "output_ports": [
         {
-          "field_name": "TotalElectricityToOrFromGrid",
+          "field_name": "ElectricityTargetToOrFromCarBattery",
           "load_type": "Electricity",
           "unit": "W",
           "postprocessing_flag": null,
-          "sankey_flow_direction": false,
-          "output_description": "here a description for TotalElectricityToOrFromGrid will follow."
+          "sankey_flow_direction": null,
+          "output_description": "Set power for EV charging (and discharging) in Watt."
         },
         {
-          "field_name": "TotalElectricityToGrid",
+          "field_name": "BatteryChargingPowerToEMS",
           "load_type": "Electricity",
           "unit": "W",
-          "postprocessing_flag": null,
-          "sankey_flow_direction": false,
-          "output_description": "here a description for TotalElectricityToGrid will follow."
+          "postprocessing_flag": [
+            "Consumption without any EMS control"
+          ],
+          "sankey_flow_direction": null,
+          "output_description": "Real Power for EV charging in Watt. Signal send to L2EMSElectricityController"
+        }
+      ],
+      "default_connections": {
+        "Car": [
+          {
+            "target_input_name": "ElectricityNeededByCar",
+            "source_output_name": "ElectricityOutput"
+          },
+          {
+            "target_input_name": "CarLocation",
+            "source_output_name": "CarLocation"
+          }
+        ],
+        "CarBattery": [
+          {
+            "target_input_name": "StateOfCharge",
+            "source_output_name": "StateOfCharge"
+          },
+          {
+            "target_input_name": "AcBatteryChargingPower",
+            "source_output_name": "AcBatteryChargingPower"
+          }
+        ]
+      }
+    },
+    {
+      "component_full_classname": "hisim.components.controller_l2_smart_controller.SmartController",
+      "config_full_classname": "hisim.components.controller_l2_smart_controller.SmartControllerConfig",
+      "display_name": "Smart Controller class.",
+      "category": "Control",
+      "is_dynamic": false,
+      "default_config": {
+        "building_name": "BUI1",
+        "name": "SmartController"
+      },
+      "config_fields": [
+        {
+          "name": "building_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "BUI1"
         },
         {
-          "field_name": "TotalElectricityFromGrid",
-          "load_type": "Electricity",
-          "unit": "W",
-          "postprocessing_flag": null,
-          "sankey_flow_direction": false,
-          "output_description": "here a description for TotalElectricityFromGrid will follow."
-        },
+          "name": "name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "SmartController"
+        }
+      ],
+      "input_ports": [
         {
-          "field_name": "TotalElectricityConsumption",
-          "load_type": "Electricity",
-          "unit": "W",
-          "postprocessing_flag": [],
-          "sankey_flow_direction": false,
-          "output_description": "here a description for TotalElectricityConsumption will follow."
-        },
-        {
-          "field_name": "TotalElectricityConsumptionEMSControlled",
-          "load_type": "Electricity",
-          "unit": "W",
-          "postprocessing_flag": null,
-          "sankey_flow_direction": false,
-          "output_description": "here a description for TotalElectricityConsumptionEMSControlled will follow."
-        },
-        {
-          "field_name": "ElectricityProduction",
-          "load_type": "Electricity",
-          "unit": "W",
-          "postprocessing_flag": null,
-          "sankey_flow_direction": false,
-          "output_description": "here a description for ElectricityProduction will follow."
-        },
-        {
-          "field_name": "TotalElectricityConsumptionUnControlled",
-          "load_type": "Electricity",
-          "unit": "W",
-          "postprocessing_flag": null,
-          "sankey_flow_direction": false,
-          "output_description": "here a description for TotalElectricityConsumptionUnControlled will follow."
-        },
-        {
-          "field_name": "BuildingIndoorTemperatureModifier",
+          "field_name": "Residence Temperature",
           "load_type": "Temperature",
           "unit": "°C",
-          "postprocessing_flag": null,
-          "sankey_flow_direction": false,
-          "output_description": "here a description for BuildingIndoorTemperatureModifier will follow."
+          "mandatory": true
         },
         {
-          "field_name": "DomesticHotWaterStorageTemperatureModifier",
-          "load_type": "Temperature",
-          "unit": "°C",
-          "postprocessing_flag": null,
-          "sankey_flow_direction": false,
-          "output_description": "here a description for DomesticHotWaterStorageTemperatureModifier will follow."
+          "field_name": "ElectricityInput",
+          "load_type": "Electricity",
+          "unit": "W",
+          "mandatory": false
         },
         {
-          "field_name": "SpaceHeatingWaterStorageTemperatureModifier",
-          "load_type": "Temperature",
-          "unit": "°C",
-          "postprocessing_flag": null,
-          "sankey_flow_direction": false,
-          "output_description": "here a description for SpaceHeatingWaterStorageTemperatureModifier will follow."
+          "field_name": "ElectricityInput",
+          "load_type": "Electricity",
+          "unit": "W",
+          "mandatory": true
         },
         {
-          "field_name": "CheckPeakShaving",
+          "field_name": "StateOfCharge",
+          "load_type": "Any",
+          "unit": "-",
+          "mandatory": true
+        }
+      ],
+      "output_ports": [
+        {
+          "field_name": "State",
           "load_type": "Any",
           "unit": "-",
           "postprocessing_flag": null,
-          "sankey_flow_direction": false,
-          "output_description": "here a description for CheckPeakShaving will follow."
+          "sankey_flow_direction": null,
+          "output_description": "here a description for State will follow."
         },
         {
-          "field_name": "SurplusUnusedFromDistrictEMSOutput",
-          "load_type": "Electricity",
-          "unit": "W",
+          "field_name": "EVChargerState",
+          "load_type": "Any",
+          "unit": "-",
           "postprocessing_flag": null,
-          "sankey_flow_direction": false,
-          "output_description": "here a description for SurplusUnusedFromDistrictEMSOutput will follow."
+          "sankey_flow_direction": null,
+          "output_description": "Charging state of the EV charger controller."
         },
         {
-          "field_name": "ElectricityToOrFromGridOfUtspLpgConnector_Output13",
-          "load_type": "Electricity",
-          "unit": "W",
+          "field_name": "EVChargerMode",
+          "load_type": "Any",
+          "unit": "-",
           "postprocessing_flag": null,
-          "sankey_flow_direction": true,
-          "output_description": "Target electricity for Occupancy. "
+          "sankey_flow_direction": null,
+          "output_description": "Operating mode of the EV charger controller."
         },
         {
-          "field_name": "ElectricityToOrFromGridOfModularHeatPump_Output14",
-          "load_type": "Electricity",
-          "unit": "W",
+          "field_name": "MinimumStateOfCharge",
+          "load_type": "Any",
+          "unit": "-",
           "postprocessing_flag": null,
-          "sankey_flow_direction": true,
-          "output_description": "Target electricity for dhw heat pump."
-        },
-        {
-          "field_name": "ElectricityToOrFromGridOfHeatPumpHplib_Output15",
-          "load_type": "Electricity",
-          "unit": "W",
-          "postprocessing_flag": null,
-          "sankey_flow_direction": true,
-          "output_description": "Target electricity for Heating Heat Pump. "
+          "sankey_flow_direction": null,
+          "output_description": "Minimum state of charge the vehicle battery must reach."
         }
       ],
       "default_connections": {}
@@ -3620,6 +4348,284 @@
           }
         ]
       }
+    },
+    {
+      "component_full_classname": "hisim.components.generic_ev_charger.Vehicle",
+      "config_full_classname": "hisim.components.generic_ev_charger.VehicleConfig",
+      "display_name": "Electric Vehicle Component.",
+      "category": "EV",
+      "is_dynamic": false,
+      "default_config": {
+        "building_name": "BUI1",
+        "name": "ElectricVehicle",
+        "manufacturer": "Renault",
+        "model": "Zoe v3",
+        "soc": 0.8
+      },
+      "config_fields": [
+        {
+          "name": "building_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "BUI1"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "ElectricVehicle"
+        },
+        {
+          "name": "manufacturer",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "Renault"
+        },
+        {
+          "name": "model",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "Zoe v3"
+        },
+        {
+          "name": "soc",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 0.8
+        }
+      ],
+      "input_ports": [
+        {
+          "field_name": "BeforeCapacity",
+          "load_type": "Electricity",
+          "unit": "W",
+          "mandatory": true
+        }
+      ],
+      "output_ports": [
+        {
+          "field_name": "AfterCapacity",
+          "load_type": "Any",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Battery energy content of the vehicle after the current timestep."
+        },
+        {
+          "field_name": "MaxCapacity",
+          "load_type": "Any",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Maximum battery capacity of the vehicle."
+        },
+        {
+          "field_name": "Discharge",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Electrical power discharged from the vehicle battery while driving. [W]"
+        }
+      ],
+      "default_connections": {}
+    },
+    {
+      "component_full_classname": "hisim.components.generic_ev_charger.EVChargerController",
+      "config_full_classname": "hisim.components.generic_ev_charger.EVChargerControllerConfig",
+      "display_name": "Electricle vehicle controller class.",
+      "category": "EV",
+      "is_dynamic": false,
+      "default_config": {
+        "building_name": "BUI1",
+        "name": "ElectricalChargerController",
+        "mode": 1
+      },
+      "config_fields": [
+        {
+          "name": "building_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "BUI1"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "ElectricalChargerController"
+        },
+        {
+          "name": "mode",
+          "type": "Union[EVChargerMode, int]",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 1
+        }
+      ],
+      "input_ports": [
+        {
+          "field_name": "ElectricityInput",
+          "load_type": "Electricity",
+          "unit": "W",
+          "mandatory": true
+        },
+        {
+          "field_name": "StateOfCharge",
+          "load_type": "Any",
+          "unit": "-",
+          "mandatory": true
+        }
+      ],
+      "output_ports": [
+        {
+          "field_name": "EVChargerState",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Charging state of the EV charger controller."
+        },
+        {
+          "field_name": "EVChargerMode",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Operating mode of the EV charger controller."
+        },
+        {
+          "field_name": "MinimumStateOfCharge",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Minimum state of charge the vehicle battery must reach."
+        }
+      ],
+      "default_connections": {}
+    },
+    {
+      "component_full_classname": "hisim.components.generic_car.Car",
+      "config_full_classname": "hisim.components.generic_car.CarConfig",
+      "display_name": "Simulates car with constant consumption. Car usage (driven kilometers and state) orginate from LPG.",
+      "category": "EV",
+      "is_dynamic": false,
+      "default_config": {
+        "building_name": "BUI1",
+        "name": "Car",
+        "source_weight": 1,
+        "fuel": "Diesel",
+        "consumption_per_km": 0.06,
+        "device_co2_footprint_in_kg": 9139.3,
+        "investment_costs_in_euro": 32035.0,
+        "lifetime_in_years": 18,
+        "maintenance_costs_in_euro_per_year": 640.7,
+        "subsidy_as_percentage_of_investment_costs": 0
+      },
+      "config_fields": [
+        {
+          "name": "building_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "BUI1"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "Car"
+        },
+        {
+          "name": "source_weight",
+          "type": "int",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 1
+        },
+        {
+          "name": "fuel",
+          "type": "LoadTypes",
+          "is_optional": false,
+          "enum_class": "LoadTypes",
+          "default": "Diesel"
+        },
+        {
+          "name": "consumption_per_km",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 0.06
+        },
+        {
+          "name": "device_co2_footprint_in_kg",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 9139.3
+        },
+        {
+          "name": "investment_costs_in_euro",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 32035.0
+        },
+        {
+          "name": "lifetime_in_years",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 18
+        },
+        {
+          "name": "maintenance_costs_in_euro_per_year",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 640.7
+        },
+        {
+          "name": "subsidy_as_percentage_of_investment_costs",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 0
+        }
+      ],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "field_name": "FuelConsumption",
+          "load_type": "Diesel",
+          "unit": "L",
+          "postprocessing_flag": [
+            "FuelConsumption",
+            "Diesel",
+            "Car",
+            "DISPLAY_IN_WEBTOOL"
+          ],
+          "sankey_flow_direction": null,
+          "output_description": "Diesel Consumption of the car while driving [l]."
+        },
+        {
+          "field_name": "DrivenMeters",
+          "load_type": "Any",
+          "unit": "m",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Driven distance in meters."
+        }
+      ],
+      "default_connections": {}
     },
     {
       "component_full_classname": "hisim.components.generic_electrolyzer_and_h2_storage.AdvancedElectrolyzer",
@@ -6272,7 +7278,7 @@
           "mandatory": true
         },
         {
-          "field_name": "StorageTemperatureModifier",
+          "field_name": "DHWStorageTemperatureModifier",
           "load_type": "Temperature",
           "unit": "°C",
           "mandatory": false
@@ -6305,16 +7311,16 @@
         }
       ],
       "default_connections": {
-        "HotWaterStorage": [
-          {
-            "target_input_name": "WaterTemperatureInputFromDHWStorage",
-            "source_output_name": "TemperatureMean"
-          }
-        ],
         "SimpleDHWStorage": [
           {
             "target_input_name": "WaterTemperatureInputFromDHWStorage",
             "source_output_name": "WaterTemperatureToHeatGenerator"
+          }
+        ],
+        "L2GenericEnergyManagementSystem": [
+          {
+            "target_input_name": "DHWStorageTemperatureModifier",
+            "source_output_name": "DomesticHotWaterStorageTemperatureModifier"
           }
         ]
       }
@@ -6446,6 +7452,12 @@
           {
             "target_input_name": "WaterTemperatureInput",
             "source_output_name": "WaterTemperatureToHeatGenerator"
+          }
+        ],
+        "L2GenericEnergyManagementSystem": [
+          {
+            "target_input_name": "SimpleHotWaterStorageTemperatureModifier",
+            "source_output_name": "SpaceHeatingWaterStorageTemperatureModifier"
           }
         ]
       }
@@ -6664,145 +7676,6 @@
           {
             "target_input_name": "ElectricityInput",
             "source_output_name": "ElectricityAvailable"
-          }
-        ]
-      }
-    },
-    {
-      "component_full_classname": "hisim.components.generic_heat_source.HeatSource",
-      "config_full_classname": "hisim.components.generic_heat_source.HeatSourceConfig",
-      "display_name": "Heat Source implementation.",
-      "category": "Heating",
-      "is_dynamic": false,
-      "default_config": {
-        "building_name": "BUI1",
-        "name": "HeatingHeatSource",
-        "source_weight": 1,
-        "fuel": "DistrictHeating",
-        "thermal_power_in_watt": 6200.0,
-        "water_vs_heating": "Heating",
-        "efficiency": 1.0,
-        "device_co2_footprint_in_kg": 0,
-        "investment_costs_in_euro": 0,
-        "lifetime_in_years": 1,
-        "boiler_type": 1
-      },
-      "config_fields": [
-        {
-          "name": "building_name",
-          "type": "str",
-          "is_optional": false,
-          "enum_class": null,
-          "default": "BUI1"
-        },
-        {
-          "name": "name",
-          "type": "str",
-          "is_optional": false,
-          "enum_class": null,
-          "default": "HeatingHeatSource"
-        },
-        {
-          "name": "source_weight",
-          "type": "int",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 1
-        },
-        {
-          "name": "fuel",
-          "type": "LoadTypes",
-          "is_optional": false,
-          "enum_class": "LoadTypes",
-          "default": "DistrictHeating"
-        },
-        {
-          "name": "thermal_power_in_watt",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 6200.0
-        },
-        {
-          "name": "water_vs_heating",
-          "type": "InandOutputType",
-          "is_optional": false,
-          "enum_class": "InandOutputType",
-          "default": "Heating"
-        },
-        {
-          "name": "efficiency",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 1.0
-        },
-        {
-          "name": "device_co2_footprint_in_kg",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 0
-        },
-        {
-          "name": "investment_costs_in_euro",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 0
-        },
-        {
-          "name": "lifetime_in_years",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 1
-        },
-        {
-          "name": "boiler_type",
-          "type": "BoilerType",
-          "is_optional": false,
-          "enum_class": "BoilerType",
-          "default": 1
-        }
-      ],
-      "input_ports": [
-        {
-          "field_name": "L1HeatSourceTargetPercentage",
-          "load_type": "Any",
-          "unit": "%",
-          "mandatory": true
-        }
-      ],
-      "output_ports": [
-        {
-          "field_name": "ThermalPowerDelivered",
-          "load_type": "Heating",
-          "unit": "W",
-          "postprocessing_flag": [
-            "ThermalProduction"
-          ],
-          "sankey_flow_direction": null,
-          "output_description": "Thermal Power Delivered"
-        },
-        {
-          "field_name": "FuelDelivered",
-          "load_type": "DistrictHeating",
-          "unit": "Wh",
-          "postprocessing_flag": [
-            "FuelConsumption",
-            "DistrictHeating",
-            "Heating"
-          ],
-          "sankey_flow_direction": null,
-          "output_description": "Fuel Delivered"
-        }
-      ],
-      "default_connections": {
-        "L1HeatPumpController": [
-          {
-            "target_input_name": "L1HeatSourceTargetPercentage",
-            "source_output_name": "HeatControllerTargetPercentage"
           }
         ]
       }
@@ -7300,6 +8173,181 @@
       }
     },
     {
+      "component_full_classname": "hisim.components.generic_heat_pump_modular.ModularHeatPump",
+      "config_full_classname": "hisim.components.generic_heat_pump_modular.HeatPumpConfig",
+      "display_name": "Heat pump implementation.",
+      "category": "Heating",
+      "is_dynamic": false,
+      "default_config": {
+        "building_name": "BUI1",
+        "name": "HeatingHeatPump",
+        "source_weight": 1,
+        "manufacturer": "Viessmann Werke GmbH & Co KG",
+        "device_name": "Vitocal 300-A AWO-AC 301.B07",
+        "power_th": 6200,
+        "water_vs_heating": "Heating",
+        "device_category": "HeatPump",
+        "device_co2_footprint_in_kg": null,
+        "investment_costs_in_euro": null,
+        "lifetime_in_years": null,
+        "maintenance_costs_in_euro_per_year": null,
+        "subsidy_as_percentage_of_investment_costs": null
+      },
+      "config_fields": [
+        {
+          "name": "building_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "BUI1"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "HeatingHeatPump"
+        },
+        {
+          "name": "source_weight",
+          "type": "int",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 1
+        },
+        {
+          "name": "manufacturer",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "Viessmann Werke GmbH & Co KG"
+        },
+        {
+          "name": "device_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "Vitocal 300-A AWO-AC 301.B07"
+        },
+        {
+          "name": "power_th",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 6200
+        },
+        {
+          "name": "water_vs_heating",
+          "type": "InandOutputType",
+          "is_optional": false,
+          "enum_class": "InandOutputType",
+          "default": "Heating"
+        },
+        {
+          "name": "device_category",
+          "type": "HeatingSystems",
+          "is_optional": false,
+          "enum_class": "HeatingSystems",
+          "default": "HeatPump"
+        },
+        {
+          "name": "device_co2_footprint_in_kg",
+          "type": "Optional[float]",
+          "is_optional": true,
+          "enum_class": null,
+          "default": null
+        },
+        {
+          "name": "investment_costs_in_euro",
+          "type": "Optional[float]",
+          "is_optional": true,
+          "enum_class": null,
+          "default": null
+        },
+        {
+          "name": "lifetime_in_years",
+          "type": "Optional[float]",
+          "is_optional": true,
+          "enum_class": null,
+          "default": null
+        },
+        {
+          "name": "maintenance_costs_in_euro_per_year",
+          "type": "Optional[float]",
+          "is_optional": true,
+          "enum_class": null,
+          "default": null
+        },
+        {
+          "name": "subsidy_as_percentage_of_investment_costs",
+          "type": "Optional[float]",
+          "is_optional": true,
+          "enum_class": null,
+          "default": null
+        }
+      ],
+      "input_ports": [
+        {
+          "field_name": "TemperatureOutside",
+          "load_type": "Any",
+          "unit": "°C",
+          "mandatory": true
+        },
+        {
+          "field_name": "HeatControllerTargetPercentage",
+          "load_type": "Any",
+          "unit": "%",
+          "mandatory": true
+        }
+      ],
+      "output_ports": [
+        {
+          "field_name": "ThermalPowerDelivered",
+          "load_type": "Heating",
+          "unit": "W",
+          "postprocessing_flag": [
+            "Heating"
+          ],
+          "sankey_flow_direction": null,
+          "output_description": "Thermal Power Delivered"
+        },
+        {
+          "field_name": "ElectricityOutput",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": [
+            "Consumption with EMS control",
+            "Heating",
+            "HeatPump"
+          ],
+          "sankey_flow_direction": null,
+          "output_description": "Electricity Output"
+        },
+        {
+          "field_name": "PowerModifier",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": [],
+          "sankey_flow_direction": null,
+          "output_description": "Power Modifier"
+        }
+      ],
+      "default_connections": {
+        "Weather": [
+          {
+            "target_input_name": "TemperatureOutside",
+            "source_output_name": "TemperatureOutside"
+          }
+        ],
+        "L1HeatPumpController": [
+          {
+            "target_input_name": "HeatControllerTargetPercentage",
+            "source_output_name": "HeatControllerTargetPercentage"
+          }
+        ]
+      }
+    },
+    {
       "component_full_classname": "hisim.components.generic_heat_water_storage.HeatStorageController",
       "config_full_classname": "hisim.components.generic_heat_water_storage.HeatStorageControllerConfig",
       "display_name": "HeatStorageController class.",
@@ -7450,199 +8498,6 @@
         }
       ],
       "default_connections": {}
-    },
-    {
-      "component_full_classname": "hisim.components.generic_hot_water_storage_modular.HotWaterStorage",
-      "config_full_classname": "hisim.components.generic_hot_water_storage_modular.StorageConfig",
-      "display_name": "Simple hot water storage implementation.",
-      "category": "Heating",
-      "is_dynamic": false,
-      "default_config": {
-        "building_name": "BUI1",
-        "name": "DHWBoiler",
-        "source_weight": 1,
-        "use": "Boiler",
-        "volume": 250,
-        "surface": 2.306587685805036,
-        "u_value": 0.36,
-        "energy_full_cycle": null,
-        "power": 0,
-        "device_co2_footprint_in_kg": 0,
-        "investment_costs_in_euro": 3627.5,
-        "lifetime_in_years": 20,
-        "maintenance_costs_in_euro_per_year": 72.55,
-        "subsidy_as_percentage_of_investment_costs": 0
-      },
-      "config_fields": [
-        {
-          "name": "building_name",
-          "type": "str",
-          "is_optional": false,
-          "enum_class": null,
-          "default": "BUI1"
-        },
-        {
-          "name": "name",
-          "type": "str",
-          "is_optional": false,
-          "enum_class": null,
-          "default": "DHWBoiler"
-        },
-        {
-          "name": "source_weight",
-          "type": "int",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 1
-        },
-        {
-          "name": "use",
-          "type": "ComponentType",
-          "is_optional": false,
-          "enum_class": "ComponentType",
-          "default": "Boiler"
-        },
-        {
-          "name": "volume",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 250
-        },
-        {
-          "name": "surface",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 2.306587685805036
-        },
-        {
-          "name": "u_value",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 0.36
-        },
-        {
-          "name": "energy_full_cycle",
-          "type": "Optional[float]",
-          "is_optional": true,
-          "enum_class": null,
-          "default": null
-        },
-        {
-          "name": "power",
-          "type": "float",
-          "is_optional": false,
-          "enum_class": null,
-          "default": 0
-        },
-        {
-          "name": "device_co2_footprint_in_kg",
-          "type": "Optional[float]",
-          "is_optional": true,
-          "enum_class": null,
-          "default": 0
-        },
-        {
-          "name": "investment_costs_in_euro",
-          "type": "Optional[float]",
-          "is_optional": true,
-          "enum_class": null,
-          "default": 3627.5
-        },
-        {
-          "name": "lifetime_in_years",
-          "type": "Optional[float]",
-          "is_optional": true,
-          "enum_class": null,
-          "default": 20
-        },
-        {
-          "name": "maintenance_costs_in_euro_per_year",
-          "type": "Optional[float]",
-          "is_optional": true,
-          "enum_class": null,
-          "default": 72.55
-        },
-        {
-          "name": "subsidy_as_percentage_of_investment_costs",
-          "type": "Optional[float]",
-          "is_optional": true,
-          "enum_class": null,
-          "default": 0
-        }
-      ],
-      "input_ports": [
-        {
-          "field_name": "WaterConsumption",
-          "load_type": "WarmWater",
-          "unit": "L",
-          "mandatory": true
-        },
-        {
-          "field_name": "ThermalPowerDelivered",
-          "load_type": "Heating",
-          "unit": "W",
-          "mandatory": false
-        },
-        {
-          "field_name": "ThermalPowerCHP",
-          "load_type": "Heating",
-          "unit": "W",
-          "mandatory": false
-        }
-      ],
-      "output_ports": [
-        {
-          "field_name": "TemperatureMean",
-          "load_type": "Temperature",
-          "unit": "°C",
-          "postprocessing_flag": [
-            "StorageContent"
-          ],
-          "sankey_flow_direction": null,
-          "output_description": "Temperature Mean"
-        },
-        {
-          "field_name": "PowerFromHotWaterStorage",
-          "load_type": "Heating",
-          "unit": "kJ",
-          "postprocessing_flag": [
-            "Discharge",
-            "Boiler",
-            "DISPLAY_IN_WEBTOOL"
-          ],
-          "sankey_flow_direction": null,
-          "output_description": "Power transfered to Building or Hot Water Pipe."
-        }
-      ],
-      "default_connections": {
-        "UtspLpgConnector": [
-          {
-            "target_input_name": "WaterConsumption",
-            "source_output_name": "WaterConsumption"
-          }
-        ],
-        "ModularHeatPump": [
-          {
-            "target_input_name": "ThermalPowerDelivered",
-            "source_output_name": "ThermalPowerDelivered"
-          }
-        ],
-        "HeatSource": [
-          {
-            "target_input_name": "ThermalPowerDelivered",
-            "source_output_name": "ThermalPowerDelivered"
-          }
-        ],
-        "SimpleCHP": [
-          {
-            "target_input_name": "ThermalPowerCHP",
-            "source_output_name": "ThermalPowerOutputBoiler"
-          }
-        ]
-      }
     },
     {
       "component_full_classname": "hisim.components.simple_water_storage.SimpleDHWStorage",
@@ -9092,6 +9947,273 @@
           {
             "target_input_name": "TemperatureInputSecondarySH",
             "source_output_name": "WaterTemperatureToHeatGenerator"
+          }
+        ]
+      }
+    },
+    {
+      "component_full_classname": "hisim.components.air_conditioner.AirConditioner",
+      "config_full_classname": "hisim.components.air_conditioner.AirConditionerConfig",
+      "display_name": "Simulates an air conditioner that provides heating and cooling based on a modulating signal.",
+      "category": "Heating",
+      "is_dynamic": false,
+      "default_config": {
+        "building_name": "BUI1",
+        "name": "AirConditioner",
+        "manufacturer": "Samsung",
+        "model_name": "AC120HBHFKH/SA - AC120HCAFKH/SA",
+        "scale_factor": 1.0,
+        "t_out_cooling_ref": [
+          23,
+          30,
+          35
+        ],
+        "t_out_heating_ref": [
+          -8,
+          7,
+          15
+        ],
+        "eer_ref": [
+          4.52,
+          3.9,
+          3.43
+        ],
+        "cop_ref": [
+          3.57,
+          4.2,
+          4.41
+        ],
+        "cooling_capacity_ref": [
+          14400,
+          12960,
+          12000
+        ],
+        "heating_capacity_ref": [
+          8960,
+          14000,
+          17220
+        ],
+        "investment_costs_in_euro": 6800.0,
+        "lifetime_in_years": 12,
+        "co2_emissions_kg_co2_eq": 165.84,
+        "maintenance_costs_in_euro_per_year": 340.0
+      },
+      "config_fields": [
+        {
+          "name": "building_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "BUI1"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "AirConditioner"
+        },
+        {
+          "name": "manufacturer",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "Samsung"
+        },
+        {
+          "name": "model_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "AC120HBHFKH/SA - AC120HCAFKH/SA"
+        },
+        {
+          "name": "scale_factor",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 1.0
+        },
+        {
+          "name": "t_out_cooling_ref",
+          "type": "List[float]",
+          "is_optional": false,
+          "enum_class": null,
+          "default": [
+            23,
+            30,
+            35
+          ]
+        },
+        {
+          "name": "t_out_heating_ref",
+          "type": "List[float]",
+          "is_optional": false,
+          "enum_class": null,
+          "default": [
+            -8,
+            7,
+            15
+          ]
+        },
+        {
+          "name": "eer_ref",
+          "type": "List[float]",
+          "is_optional": false,
+          "enum_class": null,
+          "default": [
+            4.52,
+            3.9,
+            3.43
+          ]
+        },
+        {
+          "name": "cop_ref",
+          "type": "List[float]",
+          "is_optional": false,
+          "enum_class": null,
+          "default": [
+            3.57,
+            4.2,
+            4.41
+          ]
+        },
+        {
+          "name": "cooling_capacity_ref",
+          "type": "List[float]",
+          "is_optional": false,
+          "enum_class": null,
+          "default": [
+            14400,
+            12960,
+            12000
+          ]
+        },
+        {
+          "name": "heating_capacity_ref",
+          "type": "List[float]",
+          "is_optional": false,
+          "enum_class": null,
+          "default": [
+            8960,
+            14000,
+            17220
+          ]
+        },
+        {
+          "name": "investment_costs_in_euro",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 6800.0
+        },
+        {
+          "name": "lifetime_in_years",
+          "type": "int",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 12
+        },
+        {
+          "name": "co2_emissions_kg_co2_eq",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 165.84
+        },
+        {
+          "name": "maintenance_costs_in_euro_per_year",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 340.0
+        }
+      ],
+      "input_ports": [
+        {
+          "field_name": "TemperatureOutside",
+          "load_type": "Temperature",
+          "unit": "°C",
+          "mandatory": true
+        },
+        {
+          "field_name": "ModulatingPowerSignal",
+          "load_type": "Any",
+          "unit": "%",
+          "mandatory": false
+        },
+        {
+          "field_name": "PV2load",
+          "load_type": "Electricity",
+          "unit": "W",
+          "mandatory": false
+        },
+        {
+          "field_name": "GridImport",
+          "load_type": "Electricity",
+          "unit": "W",
+          "mandatory": false
+        },
+        {
+          "field_name": "Battery2Load",
+          "load_type": "Electricity",
+          "unit": "W",
+          "mandatory": false
+        }
+      ],
+      "output_ports": [
+        {
+          "field_name": "ThermalPowerDelivered",
+          "load_type": "Heating",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Delivered thermal power"
+        },
+        {
+          "field_name": "ThermalEnergyDelivered",
+          "load_type": "Heating",
+          "unit": "Wh",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Delivered thermal energy"
+        },
+        {
+          "field_name": "ElectricalPowerConsumption",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Electrical power consumption"
+        },
+        {
+          "field_name": "ElectricalEnergyConsumption",
+          "load_type": "Electricity",
+          "unit": "Wh",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Electrical energy consumption"
+        },
+        {
+          "field_name": "EnergyEfficiencyRatio",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Energy efficiency ratio for cooling."
+        }
+      ],
+      "default_connections": {
+        "Weather": [
+          {
+            "target_input_name": "TemperatureOutside",
+            "source_output_name": "TemperatureOutside"
+          }
+        ],
+        "AirConditionerController": [
+          {
+            "target_input_name": "ModulatingPowerSignal",
+            "source_output_name": "ModulatingPowerSignal"
           }
         ]
       }
@@ -10805,6 +11927,125 @@
       }
     },
     {
+      "component_full_classname": "hisim.components.generic_smart_device.SmartDevice",
+      "config_full_classname": "hisim.components.generic_smart_device.SmartDeviceConfig",
+      "display_name": "Smart device class.",
+      "category": "SmartDevice",
+      "is_dynamic": false,
+      "default_config": {
+        "building_name": "BUI1",
+        "name": "Smart Device",
+        "identifier": "Identifier",
+        "source_weight": 1,
+        "smart_devices_included": true
+      },
+      "config_fields": [
+        {
+          "name": "building_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "BUI1"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "Smart Device"
+        },
+        {
+          "name": "identifier",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "Identifier"
+        },
+        {
+          "name": "source_weight",
+          "type": "int",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 1
+        },
+        {
+          "name": "smart_devices_included",
+          "type": "bool",
+          "is_optional": false,
+          "enum_class": null,
+          "default": true
+        }
+      ],
+      "input_ports": [
+        {
+          "field_name": "ElectricityTarget",
+          "load_type": "Electricity",
+          "unit": "W",
+          "mandatory": false
+        }
+      ],
+      "output_ports": [
+        {
+          "field_name": "ElectricityOutput",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": [
+            "Consumption with EMS control",
+            "SmartDevice"
+          ],
+          "sankey_flow_direction": null,
+          "output_description": "Electricity output"
+        }
+      ],
+      "default_connections": {}
+    },
+    {
+      "component_full_classname": "hisim.components.generic_battery.BatteryController",
+      "config_full_classname": "hisim.components.generic_battery.BatteryControllerConfig",
+      "display_name": "Battery Controller class.",
+      "category": "Storage",
+      "is_dynamic": false,
+      "default_config": {
+        "building_name": "BUI1",
+        "name": "Battery Controller"
+      },
+      "config_fields": [
+        {
+          "name": "building_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "BUI1"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "Battery Controller"
+        }
+      ],
+      "input_ports": [
+        {
+          "field_name": "ElectricityInput",
+          "load_type": "Electricity",
+          "unit": "W",
+          "mandatory": true
+        }
+      ],
+      "output_ports": [
+        {
+          "field_name": "State",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Charge/discharge control state of the battery controller."
+        }
+      ],
+      "default_connections": {}
+    },
+    {
       "component_full_classname": "hisim.components.advanced_battery_bslib.Battery",
       "config_full_classname": "hisim.components.advanced_battery_bslib.BatteryConfig",
       "display_name": "Battery class.",
@@ -10984,22 +12225,19 @@
       "default_connections": {}
     },
     {
-      "component_full_classname": "hisim.components.generic_hydrogen_storage.GenericHydrogenStorage",
-      "config_full_classname": "hisim.components.generic_hydrogen_storage.GenericHydrogenStorageConfig",
-      "display_name": "Generic hydrogen storage is a simple implementation of a hydrogen storage.",
+      "component_full_classname": "hisim.components.generic_battery.GenericBattery",
+      "config_full_classname": "hisim.components.generic_battery.GenericBatteryConfig",
+      "display_name": "Generic Battery class.",
       "category": "Storage",
       "is_dynamic": false,
       "default_config": {
         "building_name": "BUI1",
-        "name": "default",
-        "source_weight": 0,
-        "min_capacity": 0.0,
-        "max_capacity": 0.0,
-        "max_charging_rate": 0.0,
-        "max_discharging_rate": 0.0,
-        "energy_for_charge": 0.0,
-        "energy_for_discharge": 0.0,
-        "loss_factor_per_day": 0.0
+        "name": "Generic Battery",
+        "manufacturer": "sonnen",
+        "model": "sonnenBatterie 10 - 11 kWh",
+        "soc": 0.6666666666666666,
+        "base": false,
+        "predictive": false
       },
       "config_fields": [
         {
@@ -11014,63 +12252,174 @@
           "type": "str",
           "is_optional": false,
           "enum_class": null,
-          "default": "default"
+          "default": "Generic Battery"
+        },
+        {
+          "name": "manufacturer",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "sonnen"
+        },
+        {
+          "name": "model",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "sonnenBatterie 10 - 11 kWh"
+        },
+        {
+          "name": "soc",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 0.6666666666666666
+        },
+        {
+          "name": "base",
+          "type": "bool",
+          "is_optional": false,
+          "enum_class": null,
+          "default": false
+        },
+        {
+          "name": "predictive",
+          "type": "bool",
+          "is_optional": false,
+          "enum_class": null,
+          "default": false
+        }
+      ],
+      "input_ports": [
+        {
+          "field_name": "ElectricityInput",
+          "load_type": "Electricity",
+          "unit": "W",
+          "mandatory": true
+        },
+        {
+          "field_name": "State",
+          "load_type": "Any",
+          "unit": "-",
+          "mandatory": true
+        }
+      ],
+      "output_ports": [
+        {
+          "field_name": "StateOfCharge",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for StateOfCharge will follow."
+        },
+        {
+          "field_name": "StoredEnergy",
+          "load_type": "Electricity",
+          "unit": "Wh",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for StoredEnergy will follow."
+        },
+        {
+          "field_name": "ElectricityOutput",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for ElectricityOutput will follow."
+        }
+      ],
+      "default_connections": {}
+    },
+    {
+      "component_full_classname": "hisim.components.generic_hydrogen_storage.GenericHydrogenStorage",
+      "config_full_classname": "hisim.components.generic_hydrogen_storage.GenericHydrogenStorageConfig",
+      "display_name": "Generic hydrogen storage is a simple implementation of a hydrogen storage.",
+      "category": "Storage",
+      "is_dynamic": false,
+      "default_config": {
+        "building_name": "BUI1",
+        "name": "HydrogenStorage",
+        "source_weight": 1,
+        "min_capacity": 0,
+        "max_capacity_in_kg": 200,
+        "max_charging_rate": 0.0005555555555555556,
+        "max_discharging_rate": 0.0005555555555555556,
+        "energy_for_charge": 0,
+        "energy_for_discharge": 0,
+        "loss_factor_per_day": 0
+      },
+      "config_fields": [
+        {
+          "name": "building_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "BUI1"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "HydrogenStorage"
         },
         {
           "name": "source_weight",
           "type": "int",
           "is_optional": false,
           "enum_class": null,
-          "default": 0
+          "default": 1
         },
         {
           "name": "min_capacity",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 0
         },
         {
-          "name": "max_capacity",
+          "name": "max_capacity_in_kg",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 200
         },
         {
           "name": "max_charging_rate",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 0.0005555555555555556
         },
         {
           "name": "max_discharging_rate",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 0.0005555555555555556
         },
         {
           "name": "energy_for_charge",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 0
         },
         {
           "name": "energy_for_discharge",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 0
         },
         {
           "name": "loss_factor_per_day",
           "type": "float",
           "is_optional": false,
           "enum_class": null,
-          "default": 0.0
+          "default": 0
         }
       ],
       "input_ports": [
@@ -11183,6 +12532,61 @@
       "default_connections": {}
     },
     {
+      "component_full_classname": "hisim.components.sumbuilder.CalculateOperation",
+      "config_full_classname": "hisim.components.sumbuilder.SumBuilderConfig",
+      "display_name": "Arbitrary mathematical operations.",
+      "category": "Utility",
+      "is_dynamic": false,
+      "default_config": {
+        "building_name": "BUI1",
+        "name": "Sum",
+        "loadtype": "Any",
+        "unit": "-"
+      },
+      "config_fields": [
+        {
+          "name": "building_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "BUI1"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "Sum"
+        },
+        {
+          "name": "loadtype",
+          "type": "LoadTypes",
+          "is_optional": false,
+          "enum_class": "LoadTypes",
+          "default": "Any"
+        },
+        {
+          "name": "unit",
+          "type": "Units",
+          "is_optional": false,
+          "enum_class": "Units",
+          "default": "-"
+        }
+      ],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "field_name": "Output",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Sum of all connected inputs."
+        }
+      ],
+      "default_connections": {}
+    },
+    {
       "component_full_classname": "hisim.components.random_numbers.RandomNumbers",
       "config_full_classname": "hisim.components.random_numbers.RandomNumbersConfig",
       "display_name": "Component that generates random numbers for simulation.",
@@ -11241,6 +12645,117 @@
           "postprocessing_flag": null,
           "sankey_flow_direction": null,
           "output_description": "Random Number Output"
+        }
+      ],
+      "default_connections": {}
+    },
+    {
+      "component_full_classname": "hisim.components.csvloader.CSVLoader",
+      "config_full_classname": "hisim.components.csvloader.CSVLoaderConfig",
+      "display_name": "Csvloader class.",
+      "category": "Utility",
+      "is_dynamic": false,
+      "default_config": {
+        "building_name": "BUI1",
+        "name": "CSVLoader",
+        "csv_filename": "wind_generated_power_1_min.csv",
+        "column": 1,
+        "loadtype": "Electricity",
+        "unit": "W",
+        "column_name": "generated_power",
+        "sep": ",",
+        "decimal": ".",
+        "multiplier": 1.0,
+        "output_description": "Values loaded from CSV profile."
+      },
+      "config_fields": [
+        {
+          "name": "building_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "BUI1"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "CSVLoader"
+        },
+        {
+          "name": "csv_filename",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "wind_generated_power_1_min.csv"
+        },
+        {
+          "name": "column",
+          "type": "int",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 1
+        },
+        {
+          "name": "loadtype",
+          "type": "LoadTypes",
+          "is_optional": false,
+          "enum_class": "LoadTypes",
+          "default": "Electricity"
+        },
+        {
+          "name": "unit",
+          "type": "Units",
+          "is_optional": false,
+          "enum_class": "Units",
+          "default": "W"
+        },
+        {
+          "name": "column_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "generated_power"
+        },
+        {
+          "name": "sep",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": ","
+        },
+        {
+          "name": "decimal",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "."
+        },
+        {
+          "name": "multiplier",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 1.0
+        },
+        {
+          "name": "output_description",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "Values loaded from CSV profile."
+        }
+      ],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "field_name": "CSV Profile",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "CSV loader output 1"
         }
       ],
       "default_connections": {}
@@ -11654,88 +13169,12 @@
   ],
   "failures": [
     {
-      "class": "hisim.components.advanced_fuel_cell_controller.ExtendedController",
-      "error": "TypeError: ExtendedController.__init__() missing 1 required positional argument: 'component_name'"
-    },
-    {
-      "class": "hisim.components.air_conditioner.AirConditioner",
-      "error": "RuntimeError: Could not obtain a default config from AirConditionerConfig"
-    },
-    {
-      "class": "hisim.components.controller_l1_example_controller.SimpleController",
-      "error": "TypeError: SimpleController.__init__() missing 1 required positional argument: 'name'"
-    },
-    {
-      "class": "hisim.components.controller_l1_generic_ev_charge.L1Controller",
-      "error": "AttributeError: 'NoneType' object has no attribute 'Name'"
-    },
-    {
-      "class": "hisim.components.controller_l1_generic_runtime.L1GenericRuntimeController",
-      "error": "ValueError: Missing an output description for default - L1DeviceSignal"
-    },
-    {
-      "class": "hisim.components.controller_l2_generic_heat_clever_simple.L2HeatSmartController",
-      "error": "AttributeError: type object 'Building' has no attribute 'TemperatureMean'"
-    },
-    {
-      "class": "hisim.components.controller_l2_generic_heat_simple.L2GenericHeatController",
-      "error": "ValueError: Missing an output description for default - l2_DeviceSignal"
-    },
-    {
-      "class": "hisim.components.controller_l2_smart_controller.SmartController",
-      "error": "TypeError: SmartController.__init__() missing 1 required positional argument: 'controllers'"
-    },
-    {
-      "class": "hisim.components.controller_mpc.MpcController",
-      "error": "KeyError: <SingletonDictKeyEnum.COEFFICIENT_OF_PERFORMANCE_HEATING: 21>"
-    },
-    {
-      "class": "hisim.components.csvloader.CSVLoader",
-      "error": "PermissionError: [Errno 13] Permission denied: 'C:\\\\Janser\\\\HiSim-516\\\\HiSim\\\\hisim\\\\inputs'"
-    },
-    {
-      "class": "hisim.components.generic_battery.BatteryController",
-      "error": "ValueError: Missing an output description for Battery Controller - State"
-    },
-    {
-      "class": "hisim.components.generic_battery.GenericBattery",
-      "error": "ValueError: Battery model 'sonnen' / 'sonnenBatterie 10 - 11,5 kWh' is not registered in the provided battery database."
-    },
-    {
-      "class": "hisim.components.generic_car.Car",
-      "error": "TypeError: Car.__init__() missing 1 required positional argument: 'data_dict_with_car_information'"
-    },
-    {
       "class": "hisim.components.generic_ev_charger.EVCharger",
-      "error": "Exception: EV Charging Station has not been found in the database."
-    },
-    {
-      "class": "hisim.components.generic_ev_charger.EVChargerController",
-      "error": "ValueError: Missing an output description for ElectricalChargerController - EVChargerState"
-    },
-    {
-      "class": "hisim.components.generic_ev_charger.Vehicle",
-      "error": "ValueError: Missing an output description for ElectricVehicle - AfterCapacity"
+      "error": "AttributeError: 'NoneType' object has no attribute 'capacity'"
     },
     {
       "class": "hisim.components.generic_ev_charger.VehiclePure",
-      "error": "AttributeError: 'VehiclePureConfig' object has no attribute 'profile_name'"
-    },
-    {
-      "class": "hisim.components.generic_heat_pump_modular.ModularHeatPump",
-      "error": "Exception: Heat pump model not registered in the database"
-    },
-    {
-      "class": "hisim.components.generic_smart_device.SmartDevice",
-      "error": "KeyError: 'utsp_reports'"
-    },
-    {
-      "class": "hisim.components.simple_water_storage.SimpleWaterStorage",
-      "error": "RuntimeError: No ConfigBase subclass found in __init__ type hints"
-    },
-    {
-      "class": "hisim.components.sumbuilder.CalculateOperation",
-      "error": "ValueError: Missing an output description for Sum - Output"
+      "error": "ValueError: Target export from Load Profile Generator does not exist"
     }
   ]
 }

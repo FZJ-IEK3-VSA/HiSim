@@ -265,6 +265,9 @@ class Building(cp.Component):
     HeatFluxToThermalMass = "HeatFluxToThermalMass"
     TotalThermalMassHeatFlux = "TotalThermalMassHeatFlux"
     OpenWindow = "OpenWindow"
+    # Diagnostic steady-state heat losses H * (T_heating_setpoint - T_outdoor); not fed back into the simulation.
+    TheoreticalTransmissionHeatLoss = "TheoreticalTransmissionHeatLoss"
+    TheoreticalVentilationHeatLoss = "TheoreticalVentilationHeatLoss"
 
     @utils.measure_execution_time
     def __init__(
@@ -460,6 +463,20 @@ class Building(cp.Component):
             lt.Units.WATT,
             output_description=f"here a description for {self.InternalHeatGainsFromOccupancy} will follow.",
             postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
+        )
+        self.theoretical_transmission_heat_loss_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.TheoreticalTransmissionHeatLoss,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description="Theoretical transmission heat loss, H_tr * (T_heating_setpoint - T_outdoor) (positive = loss).",
+        )
+        self.theoretical_ventilation_heat_loss_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.TheoreticalVentilationHeatLoss,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description="Theoretical ventilation heat loss, H_ve * (T_heating_setpoint - T_outdoor) (positive = loss).",
         )
         self.theoretical_thermal_building_demand_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -829,6 +846,25 @@ class Building(cp.Component):
         stsv.set_output_value(
             self.indoor_air_temperature_channel,
             indoor_air_temperature_in_celsius,
+        )
+
+        # Diagnostic steady-state heat losses at the heating setpoint (positive = loss). Using the
+        # setpoint (not the actual indoor temperature) keeps these consistent with the theoretical
+        # heating demand. Signed on purpose: when the outdoor temperature exceeds the setpoint the
+        # term becomes negative. These outputs are not fed back into the simulation and do not affect
+        # the results.
+        temperature_difference_setpoint_outdoor_in_celsius = (
+            self.set_heating_temperature_in_celsius - temperature_outside_in_celsius
+        )
+        stsv.set_output_value(
+            self.theoretical_transmission_heat_loss_channel,
+            self.my_building_information.total_heat_conductance_transmission
+            * temperature_difference_setpoint_outdoor_in_celsius,
+        )
+        stsv.set_output_value(
+            self.theoretical_ventilation_heat_loss_channel,
+            self.my_building_information.total_heat_conductance_ventilation
+            * temperature_difference_setpoint_outdoor_in_celsius,
         )
 
         stsv.set_output_value(self.total_thermal_power_to_residence_channel, total_thermal_power_to_residence_in_watt)
@@ -1273,6 +1309,14 @@ class Building(cp.Component):
                     list_of_kpi_entries=list_of_kpi_entries,
                 )
 
+        # Energy-balance KPIs need several output time series at once, so they are computed once
+        # after the per-output loop rather than inside it.
+        list_of_kpi_entries = self.get_building_energy_balance_kpis(
+            all_outputs=all_outputs,
+            postprocessing_results=postprocessing_results,
+            list_of_kpi_entries=list_of_kpi_entries,
+        )
+
         return list_of_kpi_entries
 
     def get_building_kpis_from_building_information(self, list_of_kpi_entries: List[KpiEntry]) -> List[KpiEntry]:
@@ -1467,7 +1511,7 @@ class Building(cp.Component):
                 power_timeseries_in_watt=solar_gains_values_in_watt, time_resolution_in_seconds=self.seconds_per_timestep
             )
             energy_gains_from_solar_entry = KpiEntry(
-                name="Solar energy gains",
+                name="Solar energy gains full year",
                 unit="kWh",
                 value=energy_gains_from_solar_in_kilowatt_hour,
                 tag=KpiTagEnumClass.BUILDING,
@@ -1482,13 +1526,88 @@ class Building(cp.Component):
                 power_timeseries_in_watt=internal_gains_values_in_watt, time_resolution_in_seconds=self.seconds_per_timestep
             )
             energy_gains_from_internal_entry = KpiEntry(
-                name="Internal energy gains",
+                name="Internal energy gains full year",
                 unit="kWh",
                 value=energy_gains_from_internal_in_kilowatt_hour,
                 tag=KpiTagEnumClass.BUILDING,
                 description=self.component_name,
             )
             list_of_kpi_entries.append(energy_gains_from_internal_entry)
+
+        return list_of_kpi_entries
+
+    def get_building_energy_balance_kpis(
+        self, all_outputs: List, postprocessing_results: pd.DataFrame, list_of_kpi_entries: List[KpiEntry]
+    ) -> List[KpiEntry]:
+        """Get energy-balance KPIs (transmission/ventilation losses and gains).
+
+        Each balance term is provided both as a full-year sum and restricted to the heating period,
+        i.e. the timesteps with a positive theoretical heating demand. The transmission and
+        ventilation losses are theoretical, i.e. evaluated at the heating setpoint (consistent with
+        the theoretical heating demand), and signed (positive = loss), so the full-year sum can be
+        reduced by periods in which the outdoor temperature exceeds the setpoint. The full-year solar
+        and internal gains are already emitted in get_building_kpis_from_outputs, so only their
+        heating-period variant is added here.
+        """
+        # Map this component's output field names to their result time series (column index aligns
+        # with the position in all_outputs).
+        field_name_to_series = {
+            output.field_name: postprocessing_results.iloc[:, index]
+            for index, output in enumerate(all_outputs)
+            if output.component_name == self.component_name
+        }
+
+        required_field_names = [
+            self.TheoreticalTransmissionHeatLoss,
+            self.TheoreticalVentilationHeatLoss,
+            self.SolarGainThroughWindows,
+            self.InternalHeatGainsFromOccupancy,
+            self.TheoreticalHeatingDemand,
+        ]
+        if any(field_name not in field_name_to_series for field_name in required_field_names):
+            # Required outputs are missing (should not happen for a standard building); skip gracefully.
+            return list_of_kpi_entries
+
+        heating_period_mask = field_name_to_series[self.TheoreticalHeatingDemand] > 0
+
+        # (base KPI name, output field name, whether to also emit the full-year variant here)
+        balance_terms = [
+            ("Theoretical transmission heat losses", self.TheoreticalTransmissionHeatLoss, True),
+            ("Theoretical ventilation heat losses", self.TheoreticalVentilationHeatLoss, True),
+            ("Solar energy gains", self.SolarGainThroughWindows, False),
+            ("Internal energy gains", self.InternalHeatGainsFromOccupancy, False),
+        ]
+        for kpi_base_name, field_name, emit_full_year in balance_terms:
+            power_timeseries_in_watt = field_name_to_series[field_name]
+
+            if emit_full_year:
+                full_year_energy_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=power_timeseries_in_watt,
+                    time_resolution_in_seconds=self.seconds_per_timestep,
+                )
+                list_of_kpi_entries.append(
+                    KpiEntry(
+                        name=f"{kpi_base_name} full year",
+                        unit="kWh",
+                        value=full_year_energy_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.BUILDING,
+                        description=self.component_name,
+                    )
+                )
+
+            heating_period_energy_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                power_timeseries_in_watt=power_timeseries_in_watt[heating_period_mask],
+                time_resolution_in_seconds=self.seconds_per_timestep,
+            )
+            list_of_kpi_entries.append(
+                KpiEntry(
+                    name=f"{kpi_base_name} during heating period",
+                    unit="kWh",
+                    value=heating_period_energy_in_kilowatt_hour,
+                    tag=KpiTagEnumClass.BUILDING,
+                    description=self.component_name,
+                )
+            )
 
         return list_of_kpi_entries
 

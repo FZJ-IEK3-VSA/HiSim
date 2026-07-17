@@ -1210,13 +1210,35 @@ class PostProcessor:
                 maximum_indoor_temperature_in_celsius = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Maximum building indoor air temperature reached"
                 )
+                # The temperature-deviation KPI names embed the configured set temperatures (see
+                # Building.get_building_temperature_deviation_from_set_temperatures), so build the
+                # lookup keys from the actual setpoints of this building instead of hardcoding them.
+                building_module = importlib.import_module("hisim.components.building")
+                set_heating_temperature_in_celsius = None
+                set_cooling_temperature_in_celsius = None
+                for wrapped_component in ppdt.wrapped_components:
+                    component = wrapped_component.my_component
+                    if (
+                        isinstance(component, building_module.Building)
+                        and component.config.building_name == building_object
+                    ):
+                        set_heating_temperature_in_celsius = component.set_heating_temperature_in_celsius
+                        set_cooling_temperature_in_celsius = component.set_cooling_temperature_in_celsius
+                        break
+
                 deviation_from_minimum_indoor_temperature_in_celsius_hour = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict,
-                    target_key="Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius",
+                    target_key=(
+                        "Temperature deviation of building indoor air temperature being below set temperature "
+                        f"{set_heating_temperature_in_celsius} Celsius"
+                    ),
                 )
                 deviation_from_maximum_indoor_temperature_in_celsius_hour = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict,
-                    target_key="Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius",
+                    target_key=(
+                        "Temperature deviation of building indoor air temperature being above set temperature "
+                        f"{set_cooling_temperature_in_celsius} Celsius"
+                    ),
                 )
 
                 # initialize json interface to pass kpi's to building_sizer

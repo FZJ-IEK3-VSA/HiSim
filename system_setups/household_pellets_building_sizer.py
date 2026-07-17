@@ -123,7 +123,7 @@ def setup_function(
         raise ValueError("Heating system needs to be pellet heater for this system setup.")
 
     heating_reference_temperature_in_celsius = -7.0
-    building_set_heating_temperature_in_celsius = 20.0
+    building_set_heating_temperature_in_celsius = 22.0
     building_set_cooling_temperature_in_celsius = 25.0
 
     # Set heat distribution system
@@ -204,16 +204,28 @@ def setup_function(
     # Optional building-envelope override from the archetype config. Each field defaults to None,
     # in which case the Building component derives the value from the TABULA building_code as before.
     # Only when a real U-value/area is provided in the config is it used instead (opt-in).
-    my_building_config.floor_u_value_in_watt_per_m2_per_kelvin = arche_type_config_.floor_u_value_in_watt_per_m2_per_kelvin
+    my_building_config.floor_u_value_in_watt_per_m2_per_kelvin = (
+        arche_type_config_.floor_u_value_in_watt_per_m2_per_kelvin
+    )
     my_building_config.floor_area_in_m2 = arche_type_config_.floor_area_in_m2
-    my_building_config.facade_u_value_in_watt_per_m2_per_kelvin = arche_type_config_.facade_u_value_in_watt_per_m2_per_kelvin
+    my_building_config.facade_u_value_in_watt_per_m2_per_kelvin = (
+        arche_type_config_.facade_u_value_in_watt_per_m2_per_kelvin
+    )
     my_building_config.facade_area_in_m2 = arche_type_config_.facade_area_in_m2
-    my_building_config.roof_u_value_in_watt_per_m2_per_kelvin = arche_type_config_.roof_u_value_in_watt_per_m2_per_kelvin
+    my_building_config.roof_u_value_in_watt_per_m2_per_kelvin = (
+        arche_type_config_.roof_u_value_in_watt_per_m2_per_kelvin
+    )
     my_building_config.roof_area_in_m2 = arche_type_config_.roof_area_in_m2
-    my_building_config.window_u_value_in_watt_per_m2_per_kelvin = arche_type_config_.window_u_value_in_watt_per_m2_per_kelvin
+    my_building_config.window_u_value_in_watt_per_m2_per_kelvin = (
+        arche_type_config_.window_u_value_in_watt_per_m2_per_kelvin
+    )
     my_building_config.window_area_in_m2 = arche_type_config_.window_area_in_m2
-    my_building_config.door_u_value_in_watt_per_m2_per_kelvin = arche_type_config_.door_u_value_in_watt_per_m2_per_kelvin
+    my_building_config.door_u_value_in_watt_per_m2_per_kelvin = (
+        arche_type_config_.door_u_value_in_watt_per_m2_per_kelvin
+    )
     my_building_config.door_area_in_m2 = arche_type_config_.door_area_in_m2
+    my_building_config.thermal_bridging_heat_conductance_in_watt_per_kelvin = arche_type_config_.thermal_bridging_heat_conductance_in_watt_per_kelvin
+    my_building_config.ventilation_heat_conductance_in_watt_per_kelvin = arche_type_config_.ventilation_heat_conductance_in_watt_per_kelvin
     if arche_type_config_.building_heat_capacity_class is not None:
         my_building_config.building_heat_capacity_class = arche_type_config_.building_heat_capacity_class
 

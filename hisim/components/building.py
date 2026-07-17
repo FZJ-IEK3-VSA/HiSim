@@ -101,6 +101,8 @@ class BuildingConfig(cp.ConfigBase):
     window_area_in_m2: Optional[float]
     door_u_value_in_watt_per_m2_per_kelvin: Optional[float]
     door_area_in_m2: Optional[float]
+    thermal_bridging_heat_conductance_in_watt_per_kelvin: Optional[float]
+    ventilation_heat_conductance_in_watt_per_kelvin: Optional[float]
     predictive: bool
     set_heating_temperature_in_celsius: float
     set_cooling_temperature_in_celsius: float
@@ -133,6 +135,8 @@ class BuildingConfig(cp.ConfigBase):
         window_area_in_m2: Optional[float] = None,
         door_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None,
         door_area_in_m2: Optional[float] = None,
+        thermal_bridging_heat_conductance_in_watt_per_kelvin: Optional[float] = None,
+        ventilation_heat_conductance_in_watt_per_kelvin: Optional[float] = None,
         building_name: str = "BUI1",
     ) -> Any:
         """Get a default Building."""
@@ -155,6 +159,8 @@ class BuildingConfig(cp.ConfigBase):
             window_area_in_m2=window_area_in_m2,
             door_u_value_in_watt_per_m2_per_kelvin=door_u_value_in_watt_per_m2_per_kelvin,
             door_area_in_m2=door_area_in_m2,
+            thermal_bridging_heat_conductance_in_watt_per_kelvin=thermal_bridging_heat_conductance_in_watt_per_kelvin,
+            ventilation_heat_conductance_in_watt_per_kelvin=ventilation_heat_conductance_in_watt_per_kelvin,
             total_base_area_in_m2=None,
             number_of_apartments=None,
             predictive=False,
@@ -2989,6 +2995,14 @@ class BuildingInformation:
         self,
     ):
         """Manipulate building data of heat transfer."""
+        # Use the configured thermal-bridging conductance if given, otherwise derive it from the
+        # TABULA delta_U as before (opt-in, backward compatible).
+        if self.buildingconfig.thermal_bridging_heat_conductance_in_watt_per_kelvin is not None:
+            self.heat_conductance_thermal_bridging_in_watt_per_kelvin = (
+                self.buildingconfig.thermal_bridging_heat_conductance_in_watt_per_kelvin
+            )
+            return
+
         if self.buildingdata_ref["delta_U_ThermalBridging"].values[0] == 0:
             self.buildingdata_ref["delta_U_ThermalBridging"] = 0.1
 
@@ -3000,6 +3014,14 @@ class BuildingInformation:
 
     def set_ventilation_heat_transfer_parameter(self):
         """Manipulate building data of heat transfer."""
+        # Use the configured ventilation conductance if given, otherwise derive it from the TABULA
+        # air change rates as before (opt-in, backward compatible).
+        if self.buildingconfig.ventilation_heat_conductance_in_watt_per_kelvin is not None:
+            self.heat_conductance_ventilation_in_watt_per_kelvin = (
+                self.buildingconfig.ventilation_heat_conductance_in_watt_per_kelvin
+            )
+            return
+
         heat_capacity_of_air_per_volume_in_watt_hour_per_m3_per_kelvin = 0.34
 
         self.heat_conductance_ventilation_in_watt_per_kelvin = (

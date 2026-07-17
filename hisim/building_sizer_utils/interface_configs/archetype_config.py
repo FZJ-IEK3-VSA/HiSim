@@ -70,3 +70,5 @@ class ArcheTypeConfig:
     window_area_in_m2: Optional[float] = None
     door_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
     door_area_in_m2: Optional[float] = None
+    thermal_bridging_heat_conductance_in_watt_per_kelvin: Optional[float] = None
+    ventilation_heat_conductance_in_watt_per_kelvin: Optional[float] = None

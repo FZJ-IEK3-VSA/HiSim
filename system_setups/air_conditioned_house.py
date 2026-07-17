@@ -121,6 +121,8 @@ def setup_function(
         window_area_in_m2=None,
         door_u_value_in_watt_per_m2_per_kelvin=None,
         door_area_in_m2=None,
+        thermal_bridging_heat_conductance_in_watt_per_kelvin=None,
+        ventilation_heat_conductance_in_watt_per_kelvin=None,
         predictive=False,
         device_co2_footprint_in_kg=None,
         investment_costs_in_euro=None,

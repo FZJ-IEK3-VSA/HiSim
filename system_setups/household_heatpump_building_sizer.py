@@ -214,6 +214,8 @@ def setup_function(
     my_building_config.window_area_in_m2 = arche_type_config_.window_area_in_m2
     my_building_config.door_u_value_in_watt_per_m2_per_kelvin = arche_type_config_.door_u_value_in_watt_per_m2_per_kelvin
     my_building_config.door_area_in_m2 = arche_type_config_.door_area_in_m2
+    my_building_config.thermal_bridging_heat_conductance_in_watt_per_kelvin = arche_type_config_.thermal_bridging_heat_conductance_in_watt_per_kelvin
+    my_building_config.ventilation_heat_conductance_in_watt_per_kelvin = arche_type_config_.ventilation_heat_conductance_in_watt_per_kelvin
     if arche_type_config_.building_heat_capacity_class is not None:
         my_building_config.building_heat_capacity_class = arche_type_config_.building_heat_capacity_class
 

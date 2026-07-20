@@ -42,6 +42,19 @@ OUTPUT_DIR = os.path.join(REPO_ROOT, "system_setups", "editor", "public", "data"
 COMPONENTS_PKG = "hisim.components"
 COMPONENTS_PATH = os.path.join(REPO_ROOT, "hisim", "components")
 
+# Components whose *construction* requires external Load Profile Generator (LPG)
+# export data that is not shipped with the repo and is absent in CI, so they cannot
+# be introspected there: VehiclePure loads the LPG SQLite export inside __init__, and
+# EVCharger dereferences an already-constructed VehiclePure (its default config carries
+# ``electric_vehicle=None``). Neither is a standalone editor node — both are wired up
+# programmatically from an LPG/occupancy setup — so they are skipped rather than counted
+# as introspection failures. Their config dataclasses remain covered by
+# tests/test_component_config_fields.py.
+_DATA_DEPENDENT_SKIP: set = {
+    "hisim.components.generic_ev_charger.EVCharger",
+    "hisim.components.generic_ev_charger.VehiclePure",
+}
+
 # ---------------------------------------------------------------------------
 # Category mapping  (module segment → UI category label)
 # ---------------------------------------------------------------------------
@@ -621,9 +634,14 @@ def main() -> int:
 
     components: List[Dict] = []
     failures: List[Dict] = []
+    skipped: List[str] = []
 
     for cls in classes:
         label = f"{cls.__module__}.{cls.__name__}"
+        if label in _DATA_DEPENDENT_SKIP:
+            skipped.append(label)
+            print(f"  [SKIP] {label}: requires external LPG data unavailable in CI", file=sys.stderr)
+            continue
         try:
             data = _introspect(cls, sim_params)
             components.append(data)
@@ -640,6 +658,7 @@ def main() -> int:
         "generated_at": now,
         "components": components,
         "failures": failures,
+        "skipped": skipped,
     }
     enum_db = _build_enum_db()
     enum_db["generated_at"] = now
@@ -661,13 +680,18 @@ def main() -> int:
     ok_count = len(components)
     fail_count = len(failures)
     print(f"\nWrote {comp_path}")
-    print(f"      {ok_count} components OK, {fail_count} failed")
+    print(f"      {ok_count} components OK, {fail_count} failed, {len(skipped)} skipped")
     print(f"Wrote {enum_path}")
     print(f"Wrote {catalog_path}")
     print(f"      {len(catalog_db['weather_datasets'])} weather datasets, "
           f"{len(catalog_db['heat_pump_models'])} heat pump models, "
           f"{sum(len(v) for v in catalog_db['pv_modules'].values())} PV modules, "
           f"{sum(len(v) for v in catalog_db['pv_inverters'].values())} PV inverters")
+
+    if skipped:
+        print(f"\n{len(skipped)} component(s) skipped (require external data unavailable in CI):")
+        for label in skipped:
+            print(f"  - {label}")
 
     if failures:
         print(f"\n{fail_count} component(s) failed — fix or investigate:")

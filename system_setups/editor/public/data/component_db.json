@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-15T10:10:00.543325",
+  "generated_at": "2026-07-20T18:40:51.634230",
   "components": [
     {
       "component_full_classname": "hisim.components.building.Building",
@@ -13167,14 +13167,9 @@
       "default_connections": {}
     }
   ],
-  "failures": [
-    {
-      "class": "hisim.components.generic_ev_charger.EVCharger",
-      "error": "AttributeError: 'NoneType' object has no attribute 'capacity'"
-    },
-    {
-      "class": "hisim.components.generic_ev_charger.VehiclePure",
-      "error": "ValueError: Target export from Load Profile Generator does not exist"
-    }
+  "failures": [],
+  "skipped": [
+    "hisim.components.generic_ev_charger.EVCharger",
+    "hisim.components.generic_ev_charger.VehiclePure"
   ]
 }

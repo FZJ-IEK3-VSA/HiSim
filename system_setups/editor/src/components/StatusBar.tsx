@@ -5,9 +5,11 @@ export default function StatusBar() {
   const importMessages = useEditorStore((s) => s.validationMessages)
   const errors = useEditorStore((s) => s.validationErrors)
   const warnings = useEditorStore((s) => s.validationWarnings)
+  const infos = useEditorStore((s) => s.validationInfos)
   const [expanded, setExpanded] = useState(false)
+  const [showInfos, setShowInfos] = useState(true)
 
-  const hasValidation = errors.length > 0 || warnings.length > 0
+  const hasValidation = errors.length > 0 || warnings.length > 0 || infos.length > 0
   const hasImport = importMessages.length > 0
   const hasAnything = hasValidation || hasImport
 
@@ -15,6 +17,7 @@ export default function StatusBar() {
     ? [
         errors.length > 0 ? `${errors.length} error${errors.length !== 1 ? 's' : ''}` : '',
         warnings.length > 0 ? `${warnings.length} warning${warnings.length !== 1 ? 's' : ''}` : '',
+        infos.length > 0 ? `${infos.length} info` : '',
       ]
         .filter(Boolean)
         .join(', ')
@@ -23,6 +26,16 @@ export default function StatusBar() {
       ? `Import: ${importMessages[0]}`
       : `Import: ${importMessages.length} warnings`
     : 'Ready'
+
+  // Highest-severity level present drives the summary icon/color.
+  const level = errors.length > 0 ? 'error' : warnings.length > 0 ? 'warning' : 'info'
+  const summaryIcon = level === 'error' ? '✗' : level === 'warning' ? '⚠' : 'ℹ'
+  const summaryColor =
+    level === 'error'
+      ? 'text-red-500 font-medium'
+      : level === 'warning'
+      ? 'text-amber-500 font-medium'
+      : 'text-sky-500 font-medium'
 
   return (
     <div className="border-t border-gray-200 bg-white shrink-0">
@@ -47,6 +60,25 @@ export default function StatusBar() {
               <span>{msg}</span>
             </div>
           ))}
+          {infos.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowInfos((v) => !v)}
+                className="text-[11px] text-gray-400 hover:text-gray-600 pt-0.5"
+              >
+                {showInfos ? '▾' : '▸'} {infos.length} info{' '}
+                {showInfos ? '(hide)' : '(show)'}
+              </button>
+              {showInfos &&
+                infos.map((msg, i) => (
+                  <div key={`i${i}`} className="flex gap-1.5 text-xs text-sky-600">
+                    <span className="shrink-0">ℹ</span>
+                    <span>{msg}</span>
+                  </div>
+                ))}
+            </>
+          )}
         </div>
       )}
 
@@ -62,14 +94,8 @@ export default function StatusBar() {
           <span className="text-gray-400">Ready</span>
         ) : (
           <>
-            <span
-              className={
-                errors.length > 0
-                  ? 'text-red-500 font-medium'
-                  : 'text-amber-500 font-medium'
-              }
-            >
-              {errors.length > 0 ? '✗' : '⚠'} {summary}
+            <span className={summaryColor}>
+              {summaryIcon} {summary}
             </span>
             <span className="text-gray-300">·</span>
             <span className="text-gray-400">{expanded ? '▲ collapse' : '▼ expand'}</span>

@@ -64,6 +64,8 @@ export default function Toolbar() {
         setSelectedNodeId(null)
         resetHistory()
         setValidationMessages(result.warnings)
+        // Validate immediately so the status bar reflects the opened scenario.
+        runValidation()
       }
       reader.readAsText(file)
     }

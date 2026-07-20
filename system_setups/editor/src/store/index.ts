@@ -23,6 +23,7 @@ interface EditorState {
   validationMessages: string[]
   validationErrors: string[]
   validationWarnings: string[]
+  validationInfos: string[]
   scenarioName: string
   scenarioDescription: string
   showAutoConnections: boolean
@@ -65,6 +66,7 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
   validationMessages: [],
   validationErrors: [],
   validationWarnings: [],
+  validationInfos: [],
   scenarioName: 'Untitled scenario',
   scenarioDescription: '',
   showAutoConnections: true,
@@ -122,8 +124,8 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
 
   runValidation: () => {
     const { nodes, edges } = get()
-    const { errors, warnings } = validateScenario(nodes, edges)
-    set({ validationErrors: errors, validationWarnings: warnings })
+    const { errors, warnings, infos } = validateScenario(nodes, edges)
+    set({ validationErrors: errors, validationWarnings: warnings, validationInfos: infos })
   },
 
   setScenarioMeta: (name, description) => set({ scenarioName: name, scenarioDescription: description }),
@@ -185,6 +187,7 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
       validationMessages: [],
       validationErrors: [],
       validationWarnings: [],
+      validationInfos: [],
       scenarioName: 'Untitled scenario',
       scenarioDescription: '',
       past: [],

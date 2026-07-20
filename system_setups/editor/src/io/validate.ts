@@ -5,15 +5,17 @@ import type { DynamicInputPort } from '../types'
 export interface ValidationResult {
   errors: string[]
   warnings: string[]
+  infos: string[]
 }
 
 export function validateScenario(nodes: HiSimNode[], edges: Edge[]): ValidationResult {
   const errors: string[] = []
   const warnings: string[] = []
+  const infos: string[] = []
 
   if (nodes.length === 0) {
     warnings.push('Canvas is empty.')
-    return { errors, warnings }
+    return { errors, warnings, infos }
   }
 
   const nodeById = new Map(nodes.map((n) => [n.id, n]))
@@ -39,7 +41,7 @@ export function validateScenario(nodes: HiSimNode[], edges: Edge[]): ValidationR
           `${node.data.instanceName}: mandatory port "${port.field_name}" is not connected.`,
         )
       } else if (!port.mandatory && !connected) {
-        warnings.push(
+        infos.push(
           `${node.data.instanceName}: optional port "${port.field_name}" is not connected.`,
         )
       }
@@ -61,7 +63,11 @@ export function validateScenario(nodes: HiSimNode[], edges: Edge[]): ValidationR
     if (outPort.load_type === 'Any' || inPort.load_type === 'Any') continue
 
     if (outPort.load_type !== inPort.load_type) {
-      errors.push(
+      // HiSim connects inputs to outputs purely by field name (see Component.connect_input);
+      // it never enforces load-type equality, and shipped setups legitimately mix related
+      // load types (e.g. Water → Temperature on a water-storage port). So a mismatch is a
+      // warning to surface odd wiring, not a blocking error.
+      warnings.push(
         `${srcNode.data.instanceName}.${outName} → ${tgtNode.data.instanceName}.${inName}: ` +
           `load type mismatch (${outPort.load_type} ≠ ${inPort.load_type}).`,
       )
@@ -112,11 +118,14 @@ export function validateScenario(nodes: HiSimNode[], edges: Edge[]): ValidationR
   }
 
   // ── 5: Required config fields non-null ────────────────────────────────────
+  const isEmpty = (v: unknown) => v === null || v === undefined || v === ''
   for (const node of nodes) {
     for (const field of node.data.entry.config_fields) {
       if (field.name === 'name' || field.is_optional) continue
-      const val = node.data.config[field.name]
-      if (val === null || val === undefined || val === '') {
+      // A field whose own default is empty may legitimately stay empty
+      // (e.g. UtspLpgConnector.guid defaults to ""), so don't flag it.
+      if (isEmpty(field.default)) continue
+      if (isEmpty(node.data.config[field.name])) {
         warnings.push(
           `${node.data.instanceName}: required config field "${field.name}" is empty.`,
         )
@@ -124,5 +133,5 @@ export function validateScenario(nodes: HiSimNode[], edges: Edge[]): ValidationR
     }
   }
 
-  return { errors, warnings }
+  return { errors, warnings, infos }
 }

@@ -42,9 +42,9 @@ _spec.loader.exec_module(_gen)
 def _unique_config_classes():
     """Map each distinct config dataclass to one owning component (for context)."""
     mapping: dict = {}
-    for comp_class in _gen._collect_component_classes():
+    for comp_class in _gen._collect_component_classes():  # pylint: disable=protected-access
         try:
-            cfg_class = _gen._find_config_class(comp_class)
+            cfg_class = _gen._find_config_class(comp_class)  # pylint: disable=protected-access
         except Exception:
             cfg_class = None
         if cfg_class is None or not dataclasses.is_dataclass(cfg_class):
@@ -64,7 +64,7 @@ _CONFIG_CLASSES = _unique_config_classes()
 )
 def test_default_config_populates_all_declared_fields(config_class):
     """Every field declared on a config dataclass must be set on its default instance."""
-    default_config = _gen._find_default_config(config_class)
+    default_config = _gen._find_default_config(config_class)  # pylint: disable=protected-access
     if default_config is None:
         # A different failure mode (no obtainable default config) already surfaced
         # by generate_component_db.py's own failure list — not the invariant here.

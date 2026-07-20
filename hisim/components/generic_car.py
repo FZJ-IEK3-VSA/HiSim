@@ -9,7 +9,7 @@ import datetime as dt
 from dataclasses import dataclass, field
 
 # -*- coding: utf-8 -*-
-from typing import List, Any, Tuple, Dict, Optional
+from typing import List, Any, Tuple, Dict, Optional, cast
 import numpy as np
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -573,7 +573,10 @@ class Car(cp.Component):
                         freq="min",
                     ),
                     "meters_driven": self.meters_driven[:steps_desired_in_minutes],
-                    "car_location": [location_translator[elem] for elem in self.car_location][
+                    # In the LPG/occupancy path the raw values are location-name strings
+                    # (from the profile), not the integer codes CarInformation.car_location is
+                    # typed as; translate them to integers here.
+                    "car_location": [location_translator[cast(Optional[str], elem)] for elem in self.car_location][
                         :steps_desired_in_minutes
                     ],
                 }

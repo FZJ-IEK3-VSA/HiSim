@@ -81,7 +81,7 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
     # Car information can be generated using Occupancy (see class GenericCarInformation)
     # However, then each car must be assigned to an occupancy
     elif config.get_main_classname() == "hisim.components.generic_car.Car":
-        config_json_str["household_name"] = cast(Car, component).car_information_dict["household_name"]
+        config_json_str["household_name"] = cast(Car, component).car_information.household_name
 
     outs = []
     ins = []
@@ -219,7 +219,7 @@ def add_component_to_scenario(scenario: Scenario, config: ConfigBase, component:
         # Handle special case for Car component, link to LPG connector
         for idx, comp in enumerate(scenario.components):
             if comp.component_full_classname == "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector":
-                car_info = cast(Car, component).car_information_dict
+                car_info = cast(Car, component).car_information
                 my_comp = cast(UtspLpgConnector, my_sim.wrapped_components[idx].my_component)  # For mypy, we know that this is an UtspLpgConnector
                 new_gci = GenericCarInformation(my_occupancy_instance=my_comp).data_dict_for_car_component[car_info.household_name]
 

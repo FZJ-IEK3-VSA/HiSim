@@ -114,6 +114,7 @@ env.bak/
 venv.bak/
 hisimvenv_cluster/
 hisimvenv/
+sg_hisimvenv/
 
 # Spyder project settings
 .spyderproject

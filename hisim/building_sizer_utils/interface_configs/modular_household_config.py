@@ -179,8 +179,8 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         return household_config
 
     @classmethod
-    def get_default_config_for_household_coal(cls):
-        """Get default ModularHouseholdConfig for coal heating."""
+    def get_default_config_for_household_coal(cls) -> ModularHouseholdConfig:
+        """Create a default :class:`ModularHouseholdConfig` for a household with a coal heating system."""
         energy_system_config_ = (
             system_config.EnergySystemConfig.get_default_config_for_energy_system_coal_heating()
         )
@@ -191,8 +191,6 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         return household_config
 
     @classmethod
-    def get_default_config_for_household_hydrogen(cls):
-        """Get default ModularHouseholdConfig."""
     def get_default_config_for_household_hydrogen(cls) -> ModularHouseholdConfig:
         """Create a default :class:`ModularHouseholdConfig` for a household with a hydrogen heating system.
 

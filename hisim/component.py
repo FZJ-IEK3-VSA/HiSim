@@ -10,13 +10,14 @@ import os
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 import json
 import pandas as pd
 from dataclass_wizard import JSONWizard
 
 from hisim import loadtypes as lt
 from hisim import log
+from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
@@ -192,6 +193,12 @@ class DisplayConfig:
 
 class Component:
     """Base class for all components."""
+
+    # Cost role declaration for the lifecycle cost engine (cost_spec.md §9.2). PRICED
+    # components must return facts from `get_cost_facts()`, FREE_OF_COST components must
+    # return None, METER components provide `get_energy_flow_facts()`. UNDECLARED components
+    # are flagged by the completeness check (warning during the parallel phase).
+    cost_relevance: ClassVar[CostRelevance] = CostRelevance.UNDECLARED
 
     @classmethod
     def get_classname(cls):
@@ -437,6 +444,23 @@ class Component:
         # pylint: disable=unused-argument
         """Calculates lifetime, total capital expenditure cost and total co2 footprint of production of device."""
         raise NotImplementedError(f"{config.get_main_classname()} has no capex costs implemented.")
+
+    def get_cost_facts(self) -> Optional[ComponentCostFacts]:
+        """Return cost-relevant facts for the lifecycle cost engine, or None (cost_spec.md §3.3).
+
+        Components declare, the engine computes: no prices, no discounting, no dataframe
+        access here. The default (None) means "not part of the cost model" — controllers,
+        weather and occupancy simply don't override this hook.
+        """
+        return None
+
+    def get_energy_flow_facts(
+        self,
+        all_outputs: List,  # pylint: disable=unused-argument
+        postprocessing_results: pd.DataFrame,  # pylint: disable=unused-argument
+    ) -> Optional[EnergyFlowFacts]:
+        """Return the carrier flows a meter measured, or None for non-meters (cost_spec.md §3.4)."""
+        return None
 
     def get_component_kpi_entries(
         self,

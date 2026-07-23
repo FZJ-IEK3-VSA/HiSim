@@ -1,0 +1,36 @@
+{
+  "id": "DE_DYNAMIC_SYNTHETIC_2024",
+  "comment": "Example dynamic contract (cost_spec.md \u00a78.2) on the synthetic reference profile; real EPEX series are not shipped for licensing reasons (spec Q16) - use load_spot_series with a user-supplied CSV.",
+  "carrier": "ELECTRICITY",
+  "jurisdiction": {
+    "country": "DE",
+    "region": null
+  },
+  "valid_from_year": 2024,
+  "supply": {
+    "kind": "DYNAMIC",
+    "spot_series": "synthetic_reference_hourly",
+    "formula": {
+      "spot_factor": 1.0,
+      "markup_in_euro_per_kwh": 0.017
+    },
+    "grid_fee_in_euro_per_kwh": 0.094,
+    "taxes_and_levies_in_euro_per_kwh": 0.051,
+    "vat_rate": 0.19
+  },
+  "standing_charge_in_euro_per_year": 140,
+  "capacity_charge": {
+    "kind": "NONE"
+  },
+  "feed_in": {
+    "kind": "FIXED_TARIFF",
+    "rate_in_euro_per_kwh": 0.081,
+    "duration_in_years": 20
+  },
+  "controllability_discount": {
+    "kind": "NONE"
+  },
+  "source_ids": [
+    "inline:example contract on the synthetic reference profile (spec Q16); component prices modeled on typical 2024 DE dynamic tariffs (EXPERT_ESTIMATE)"
+  ]
+}

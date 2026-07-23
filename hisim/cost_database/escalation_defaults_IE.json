@@ -1,0 +1,18 @@
+{
+  "carriers": {
+    "ELECTRICITY": 0.02,
+    "ELECTRICITY_FEED_IN": 0.0,
+    "NATURAL_GAS": 0.03,
+    "HEATING_OIL": 0.03,
+    "PELLETS": 0.02,
+    "WOOD_CHIPS": 0.02,
+    "DISTRICT_HEATING": 0.025,
+    "HYDROGEN": 0.02,
+    "DIESEL": 0.03
+  },
+  "asset_classes": {},
+  "source_ids": [
+    "src_ai_estimates"
+  ],
+  "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Per-asset-class table deliberately empty (cost_spec.md Q2)."
+}

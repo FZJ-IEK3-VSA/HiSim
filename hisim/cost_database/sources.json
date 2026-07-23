@@ -1,0 +1,589 @@
+{
+  "sources": [
+    {
+      "id": "src_opex_1",
+      "citation": "statista.de: Entwicklung der Strompreise in Deutschland (Verivox Verbraucherpreisindex)",
+      "url": "https://de.statista.com/statistik/daten/studie/914784/umfrage/entwicklung-der-strompreise-in-deutschland-verivox-verbraucherpreisindex/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_2",
+      "citation": "echtsolar.de: Einspeiseverguetung (average of monthly injection revenue)",
+      "url": "https://echtsolar.de/einspeiseverguetung/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_3",
+      "citation": "statista.de: Durchschnittspreis fuer Dieselkraftstoff seit 1950",
+      "url": "https://de.statista.com/statistik/daten/studie/779/umfrage/durchschnittspreis-fuer-dieselkraftstoff-seit-dem-jahr-1950/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_4",
+      "citation": "statista.de: Entwicklung der Gaspreise fuer Haushaltskunden seit 2006",
+      "url": "https://de.statista.com/statistik/daten/studie/168286/umfrage/entwicklung-der-gaspreise-fuer-haushaltskunden-seit-2006/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_5",
+      "citation": "statista.de: CO2-Emissionsfaktor fuer den Strommix in Deutschland seit 1990",
+      "url": "https://de.statista.com/statistik/daten/studie/38897/umfrage/co2-emissionsfaktor-fuer-den-strommix-in-deutschland-seit-1990/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_6",
+      "citation": "destatis.de: Erdgas- und Strom-Durchschnittspreise",
+      "url": "https://www.destatis.de/DE/Themen/Wirtschaft/Preise/Erdgas-Strom-DurchschnittsPreise/_inhalt.html",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_8",
+      "citation": "BAFA: EEW Infoblatt CO2-Faktoren 2022",
+      "url": "https://www.bafa.de/SharedDocs/Downloads/DE/Energie/eew_infoblatt_co2_faktoren_2022.pdf",
+      "publication_year": 2022,
+      "retrieved": "2026-07-07",
+      "kind": "STATUTE",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_9",
+      "citation": "Umweltbundesamt: CO2-Emissionen pro Kilowattstunde Strom 2024",
+      "url": "https://www.umweltbundesamt.de/themen/co2-emissionen-pro-kilowattstunde-strom-2024",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "PROJECT_DATA",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_11",
+      "citation": "BAFA: EEW Infoblatt CO2-Faktoren 2025",
+      "url": "https://www.bafa.de/SharedDocs/Downloads/DE/Energie/eew_infoblatt_co2_faktoren_2025.pdf",
+      "publication_year": 2025,
+      "retrieved": "2026-07-07",
+      "kind": "STATUTE",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_12",
+      "citation": "statista.de: Verbraucherpreis fuer leichtes Heizoel seit 1960",
+      "url": "https://de.statista.com/statistik/daten/studie/2633/umfrage/entwicklung-des-verbraucherpreises-fuer-leichtes-heizoel-seit-1960/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_13",
+      "citation": "statista.de: Preisentwicklung fuer Holzpellets in Deutschland",
+      "url": "https://de.statista.com/statistik/daten/studie/214738/umfrage/preisentwicklung-fuer-holzpellets-in-deutschland/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_14",
+      "citation": "Umweltbundesamt: Factsheet Neubewertung von CO2-Emissionen aus der Holzverbrennung",
+      "url": "https://www.umweltbundesamt.de/sites/default/files/medien/479/publikationen/factsheet_ansatz_zur_neubewertung_von_co2-emissionen_aus_der_holzverbrennung_0.pdf",
+      "publication_year": 2022,
+      "retrieved": "2026-07-07",
+      "kind": "PROJECT_DATA",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_15",
+      "citation": "FNR Mediathek: Energiepreisentwicklung",
+      "url": "https://mediathek.fnr.de/energiepreisentwicklung.html",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_16",
+      "citation": "statista.de: Preis fuer Fernwaerme nach Anschlusswert in Deutschland",
+      "url": "https://de.statista.com/statistik/daten/studie/250114/umfrage/preis-fuer-fernwaerme-nach-anschlusswert-in-deutschland/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_17",
+      "citation": "Knosala et al. 2022, Energy & Buildings (doi:10.1016/j.enbuild.2022.112480)",
+      "url": "https://doi.org/10.1016/j.enbuild.2022.112480",
+      "publication_year": 2022,
+      "retrieved": "2026-07-07",
+      "kind": "LITERATURE",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_22",
+      "citation": "Ariadne: Analyse Heizkosten und Treibhausgasemissionen in Bestandswohngebaeuden",
+      "url": "https://ariadneprojekt.de/publikation/analyse-heizkosten-und-treibhausgasemissionen-in-bestandswohngebauden/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "LITERATURE",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_23",
+      "citation": "e-control.at: Was kostet eine kWh Strom",
+      "url": "https://www.e-control.at/konsumenten/strom/strompreis/was-kostet-eine-kwh",
+      "publication_year": 2025,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_24",
+      "citation": "Umweltbundesamt AT: Report REP0888 (Emissionsfaktoren)",
+      "url": "https://www.umweltbundesamt.at/fileadmin/site/publikationen/rep0888.pdf",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "PROJECT_DATA",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_25",
+      "citation": "OeMAG: Marktpreise 2024",
+      "url": "https://www.oem-ag.at/fileadmin/user_upload/Dokumente/marktpreis/Marktpreise_2024.pdf",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_26",
+      "citation": "e-control.at: Preismonitor",
+      "url": "https://www.e-control.at/preismonitor",
+      "publication_year": 2025,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_27",
+      "citation": "heizoel24.at: Heizoelpreise",
+      "url": "https://www.heizoel24.at/heizoelpreise",
+      "publication_year": 2025,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_28",
+      "citation": "statista.de: Durchschnittlicher Preis fuer einen Liter Diesel in Oesterreich",
+      "url": "https://de.statista.com/statistik/daten/studie/796450/umfrage/durchschnittlicher-preis-fuer-einen-liter-diesel-in-oesterreich/",
+      "publication_year": 2025,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_29",
+      "citation": "propellets.at: Aktuelle Pelletpreise",
+      "url": "https://www.propellets.at/aktuelle-pelletpreise",
+      "publication_year": 2025,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_30",
+      "citation": "biomasseverband.at: Energietraegervergleich",
+      "url": "https://www.biomasseverband.at/energietraegervergleich/",
+      "publication_year": 2025,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_31",
+      "citation": "waermepreise.at: Tarifuebersicht Fernwaerme",
+      "url": "https://waermepreise.at/tarifuebersicht/",
+      "publication_year": 2025,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_32",
+      "citation": "erdgasautos.at: Wasserstoff tanken",
+      "url": "https://www.erdgasautos.at/wasserstoff/tanken/",
+      "publication_year": 2025,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_33",
+      "citation": "squarevest.ag: Strompreisentwicklung Prognose",
+      "url": "https://www.squarevest.ag/blog/strompreisentwicklung-prognose",
+      "publication_year": 2025,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_34",
+      "citation": "BMWK: Wirtschaftlichkeitsberechnung zum Gaspreis, Prognose bis 2042",
+      "url": "https://kostenlos.com/wp-content/uploads/gas/BMWK-Wirtschaftslichkeitsberechnung-zum-Gaspreis-Prognose-bis-2042.png",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "PROJECT_DATA",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_opex_35",
+      "citation": "trading.de: Oelpreis-Prognosen",
+      "url": "https://trading.de/prognosen/oelpreis/",
+      "publication_year": 2025,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_19",
+      "citation": "WHY project: emission_factors_and_costs_devices.csv (cordis 891943)",
+      "url": "https://cordis.europa.eu/project/id/891943/results",
+      "publication_year": 2022,
+      "retrieved": "2026-07-07",
+      "kind": "PROJECT_DATA",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_20",
+      "citation": "gebaeudeforum.de: Waermeerzeugung im Bestand mit EE, January 2024",
+      "url": "https://www.gebaeudeforum.de/service/downloads/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "LITERATURE",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_21",
+      "citation": "doi:10.3390/su13041938 (Sustainability 13, 2021)",
+      "url": "https://doi.org/10.3390/su13041938",
+      "publication_year": 2021,
+      "retrieved": "2026-07-07",
+      "kind": "LITERATURE",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_22",
+      "citation": "DUH: Waermepumpen Faktenpapier Neuauflage (2023)",
+      "url": "https://www.duh.de/fileadmin/user_upload/download/Projektinformation/Energieeffizienz/W%C3%A4rmepumpen/300623_Waermepumpen_Faktenpapier_Neuauflage_Digital.pdf",
+      "publication_year": 2023,
+      "retrieved": "2026-07-07",
+      "kind": "LITERATURE",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_23",
+      "citation": "VDI 2067 Blatt 1: Wirtschaftlichkeit gebaeudetechnischer Anlagen",
+      "url": null,
+      "publication_year": 2012,
+      "retrieved": "2026-07-07",
+      "kind": "STANDARD",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_24",
+      "citation": "doi:10.1016/j.renene.2023.01.117 (Renewable Energy 2023)",
+      "url": "https://doi.org/10.1016/j.renene.2023.01.117",
+      "publication_year": 2023,
+      "retrieved": "2026-07-07",
+      "kind": "LITERATURE",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_25",
+      "citation": "solarenergie.de: Stromspeicher Preise",
+      "url": "https://solarenergie.de/stromspeicher/preise",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_26",
+      "citation": "ostrom.de: How much does a smart meter cost in 2025",
+      "url": "https://www.ostrom.de/en/post/how-much-does-a-smart-meter-cost-in-2025",
+      "publication_year": 2025,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_27",
+      "citation": "mcsmeters.com: Gas meters",
+      "url": "https://mcsmeters.com/collections/gas-meters",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MANUFACTURER",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_28",
+      "citation": "gasag.de: Energiemanagementsystem Privathaushalt",
+      "url": "https://www.gasag.de/magazin/energiesparen/energiemanagementsystem-privathaushalt/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_29",
+      "citation": "adac.de: Energiemanagementsystem zuhause",
+      "url": "https://www.adac.de/rund-ums-haus/energie/spartipps/energiemanagementsystem-zuhause/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_30",
+      "citation": "co2online.de: Solarthermie Preise, Kosten, Amortisation",
+      "url": "https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_31",
+      "citation": "finanztip.de / KfW 270: PV-Anlage finanzieren",
+      "url": "https://www.finanztip.de/photovoltaik/pv-anlage-finanzieren/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_32",
+      "citation": "hisim internal: simple_water_storage.get_scaled_hot_water_storage (1 kW ~ 50 l)",
+      "url": null,
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "EXPERT_ESTIMATE",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_33",
+      "citation": "renewa.de: Fussbodenheizung Foerderung",
+      "url": "https://renewa.de/sanierung/gewerke/heizung/fussbodenheizung/foerderung",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_34",
+      "citation": "vattenfall.de: Fussbodenheizung Kosten fuer Einbau und Betrieb",
+      "url": "https://www.vattenfall.de/infowelt-energie/nachhaltig-heizen/fussbodenheizung-kosten-fuer-einbau-und-betrieb",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_35",
+      "citation": "dein-heizungsbauer.de: Fussbodenheizung oder Heizkoerper",
+      "url": "https://www.dein-heizungsbauer.de/ratgeber/bauen-sanieren/fussbodenheizung-oder-heizkoerper/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_36",
+      "citation": "heizsparer.de: Fussbodenheizung oder Heizkoerper",
+      "url": "https://www.heizsparer.de/heizung/heizkorper/fussbodenheizung/fussbodenheizung-oder-heizkoerper",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_37",
+      "citation": "co2online.de: Oelheizung laufende Kosten",
+      "url": "https://www.co2online.de/modernisieren-und-bauen/heizung/oelheizung-laufende-kosten/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_38",
+      "citation": "vaillant.at: Kosten Waermepumpe",
+      "url": "https://www.vaillant.at/privatanwender/tipps-und-wissen/heiztechnologien/warmepumpen/kosten-warmepumpe/",
+      "publication_year": 2025,
+      "retrieved": "2026-07-07",
+      "kind": "MANUFACTURER",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_39",
+      "citation": "co2online.de: Heizungsarten im Vergleich",
+      "url": "https://www.co2online.de/modernisieren-und-bauen/heizung/heizungsarten-im-vergleich/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_40",
+      "citation": "thermondo.de: Lebensdauer einer Waermepumpe",
+      "url": "https://www.thermondo.de/info/rat/waermepumpe/lebensdauer-einer-waermepumpe/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_41",
+      "citation": "Kanton BL: Oekobilanz Waermeerzeugungssysteme 2012",
+      "url": "https://bl-api.webcloud7.ch/politik-und-behorden/direktionen/bau-und-umweltschutzdirektion/umweltschutz-energie/energie/publikationen/dokumente-publikationen/oekobilanz-waermeerzeugungssysteme-2012.pdf",
+      "publication_year": 2012,
+      "retrieved": "2026-07-07",
+      "kind": "PROJECT_DATA",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_42",
+      "citation": "thermondo.de: Lebensdauer Heizung im Vergleich",
+      "url": "https://www.thermondo.de/info/rat/vergleich/lebensdauer-heizung/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_43",
+      "citation": "energiesparverband.at: Infoblatt Fernwaerme",
+      "url": "https://www.energiesparverband.at/fileadmin/esv/Broschueren/Infoblatt-Fernwaerme.pdf",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "LITERATURE",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_44",
+      "citation": "umweltbundesamt.de: Photovoltaik (erneuerbare Energien)",
+      "url": "https://www.umweltbundesamt.de/themen/klima-energie/erneuerbare-energien/photovoltaik",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "PROJECT_DATA",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_45",
+      "citation": "wko.at: Infopoint Stromspeicher",
+      "url": "https://www.wko.at/netzwerke/infopoint-stromspeicher",
+      "publication_year": 2025,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_46",
+      "citation": "co2online.de: Solarthermie Preise (AT reference)",
+      "url": "https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_capex_47",
+      "citation": "energieinstitut.at: Solaranlagen",
+      "url": "https://www.energieinstitut.at/privatpersonen/photovoltaik-und-solarthermie/solaranlagen",
+      "publication_year": 2025,
+      "retrieved": "2026-07-07",
+      "kind": "MARKET_SURVEY",
+      "notes": "Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_expert_migration",
+      "citation": "HiSim team expert estimate / assumption recorded in configuration.py comments",
+      "url": null,
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "EXPERT_ESTIMATE",
+      "notes": "Covers values marked 'no idea, assumption' or 'own assumption' in the legacy dicts. Migrated 1:1 from hisim/components/configuration.py docstring citations; original retrieval date unknown."
+    },
+    {
+      "id": "src_expert_engine_defaults",
+      "citation": "HiSim cost engine default table (cost_spec.md, engine defaults)",
+      "url": null,
+      "publication_year": 2026,
+      "retrieved": "2026-07-07",
+      "kind": "EXPERT_ESTIMATE",
+      "notes": "Escalation defaults and CO2 price corridor estimates pending team review (cost_module_issues.md Q2)."
+    },
+    {
+      "id": "src_nehs_ets2",
+      "citation": "Brennstoffemissionshandelsgesetz (BEHG/nEHS) fixed price path 2024-2026; EU ETS2 corridor estimate from 2027",
+      "url": "https://www.gesetze-im-internet.de/behg/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "STATUTE",
+      "notes": "2024-2026 statutory; 2027+ EXPERT_ESTIMATE corridor, see cost_module_issues.md Q2."
+    },
+    {
+      "id": "src_bgb_559",
+      "citation": "Buergerliches Gesetzbuch (BGB) \u00a7559, \u00a7559e: Mieterhoehung nach Modernisierung",
+      "url": "https://www.gesetze-im-internet.de/bgb/__559.html",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "STATUTE",
+      "notes": "Levy rates and caps as of 2024; legal review pending (cost_module_issues.md #10)."
+    },
+    {
+      "id": "src_co2kostaufg",
+      "citation": "Kohlendioxidkostenaufteilungsgesetz (CO2KostAufG): tier table Anlage",
+      "url": "https://www.gesetze-im-internet.de/co2kostaufg/",
+      "publication_year": 2023,
+      "retrieved": "2026-07-07",
+      "kind": "STATUTE",
+      "notes": "10-tier tenant/landlord split of the carbon price component."
+    },
+    {
+      "id": "src_betrkv",
+      "citation": "Betriebskostenverordnung (BetrKV) \u00a72: umlagefaehige Betriebskosten",
+      "url": "https://www.gesetze-im-internet.de/betrkv/",
+      "publication_year": 2024,
+      "retrieved": "2026-07-07",
+      "kind": "STATUTE",
+      "notes": "Apportionable operating costs; maintenance_apportionable_share is an EXPERT_ESTIMATE pending legal review."
+    },
+    {
+      "id": "src_ai_estimates",
+      "citation": "AI Estimates (Claude, July 2026): placeholder techno-economic estimates for DE and IE, 2026 and 2035, for testing",
+      "url": null,
+      "publication_year": 2026,
+      "retrieved": "2026-07-07",
+      "kind": "EXPERT_ESTIMATE",
+      "notes": "Placeholder values so every carrier/asset class has DE/IE data for 2026 and 2035. Bands span plausible market ranges; replace with reviewed sources before scientific use."
+    }
+  ]
+}

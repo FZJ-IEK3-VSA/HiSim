@@ -1,0 +1,75 @@
+{
+  "comment": "User-facing eligibility questionnaire catalog (cost_spec.md §5.7). Localized question texts are legally sensitive and need review (spec Q31); languages shipped in v1: de + en.",
+  "questions": [
+    {
+      "field": "applicant.actor",
+      "answer_kind": "CHOICE",
+      "options": [
+        "OWNER_OCCUPIER",
+        "LANDLORD",
+        "WEG",
+        "TENANT"
+      ],
+      "question": {
+        "de": "In welcher Rolle stellen Sie den Foerderantrag?",
+        "en": "In what role are you applying for the subsidy?"
+      },
+      "option_labels": {
+        "de": {
+          "OWNER_OCCUPIER": "Selbstnutzende:r Eigentuemer:in",
+          "LANDLORD": "Vermieter:in",
+          "WEG": "Wohnungseigentuemergemeinschaft",
+          "TENANT": "Mieter:in"
+        },
+        "en": {
+          "OWNER_OCCUPIER": "Owner-occupier",
+          "LANDLORD": "Landlord",
+          "WEG": "Homeowners' association",
+          "TENANT": "Tenant"
+        }
+      },
+      "help": {
+        "de": "Einige Boni (z. B. Einkommens- und Geschwindigkeits-Bonus) gelten nur fuer selbstnutzende Eigentuemer:innen.",
+        "en": "Some bonuses (e.g. income and speed bonus) only apply to owner-occupiers."
+      }
+    },
+    {
+      "field": "building.existing_heating.energy_carrier",
+      "answer_kind": "CHOICE",
+      "options": [
+        "NATURAL_GAS",
+        "HEATING_OIL",
+        "PELLETS",
+        "WOOD_CHIPS",
+        "DISTRICT_HEATING",
+        "ELECTRICITY"
+      ],
+      "question": {
+        "de": "Womit heizt das Gebaeude derzeit?",
+        "en": "What does the building currently heat with?"
+      },
+      "option_labels": {
+        "de": {
+          "NATURAL_GAS": "Erdgas",
+          "HEATING_OIL": "Heizoel",
+          "PELLETS": "Pellets",
+          "WOOD_CHIPS": "Hackschnitzel",
+          "DISTRICT_HEATING": "Fernwaerme",
+          "ELECTRICITY": "Strom"
+        },
+        "en": {
+          "NATURAL_GAS": "Natural gas",
+          "HEATING_OIL": "Heating oil",
+          "PELLETS": "Pellets",
+          "WOOD_CHIPS": "Wood chips",
+          "DISTRICT_HEATING": "District heating",
+          "ELECTRICITY": "Electricity"
+        }
+      },
+      "help": {
+        "de": "Der Austausch fossiler Heizungen wird besonders gefoerdert.",
+        "en": "Replacing fossil heating systems receives extra support."
+      }
+    }
+  ]
+}

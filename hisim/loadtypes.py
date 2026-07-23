@@ -255,6 +255,18 @@ class ComponentType(str, enum.Enum):
     HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR = "Low Temperature Radiator"
     NO_HDS = "No HDS"
 
+    # Building envelope measures (lifecycle cost engine, cost_spec.md Q7). These are cost
+    # subjects sized in m2 of the respective envelope element (EXTERIOR_DOOR and
+    # VENTILATION_SYSTEM per unit); the building physics sees them only as changed U-values.
+    WALL_INSULATION = "WallInsulation"
+    ROOF_INSULATION = "RoofInsulation"
+    TOP_CEILING_INSULATION = "TopCeilingInsulation"
+    FLOOR_INSULATION = "FloorInsulation"
+    WINDOWS = "Windows"
+    EXTERIOR_DOOR = "ExteriorDoor"
+    AIR_SEALING = "AirSealing"
+    VENTILATION_SYSTEM = "VentilationSystem"
+
     # different heat_pump types
     HEAT_PUMP_BUILDING = "HeatPumpBuilding"  # Heatpump for heating the house
     HEAT_PUMP_DHW = "HeatPumpDHW"  # heatpump for heating domnestic hot water

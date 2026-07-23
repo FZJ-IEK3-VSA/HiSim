@@ -47,7 +47,16 @@ setup(
     license="MIT license",
     long_description=readme,
     long_description_content_type="text/markdown",
-    package_data={"hisim": ["inputs/*"]},
+    package_data={
+        "hisim": [
+            "inputs/*",
+            # Data files of the lifecycle cost engine (cost_spec.md §3.5, §5.2):
+            "cost_database/*.json",
+            "cost_database/tariffs/*.json",
+            "cost_database/spot_series/*.csv",
+            "subsidy_catalog/*.json",
+        ]
+    },
     include_package_data=True,
     keywords="hisim",
     name="hisim",

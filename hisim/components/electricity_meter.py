@@ -12,6 +12,8 @@ from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput, OpexCostDataClass, CapexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
+from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
 from hisim.dynamic_component import (
     DynamicComponent,
     DynamicConnectionInput,
@@ -70,6 +72,10 @@ class ElectricityMeter(DynamicComponent):
 
     It calculates the electricity production and consumption dynamically for all components.
     """
+
+    # Lifecycle cost engine declaration (cost_spec.md §9.2): energy is billed at this
+    # carrier boundary; the meter hardware itself is additionally priced via get_cost_facts().
+    cost_relevance = CostRelevance.METER
 
     # Outputs
     ElectricityAvailable = "ElectricityAvailable"
@@ -684,6 +690,40 @@ class ElectricityMeter(DynamicComponent):
         )
 
         return opex_cost_data_class
+
+    def get_cost_facts(self) -> ComponentCostFacts:
+        """Cost facts of the meter hardware for the lifecycle cost engine (cost_spec.md §3.3)."""
+        return ComponentCostFacts(
+            asset_class=lt.ComponentType.ELECTRICITY_METER,
+            size=1.0,
+            size_unit=lt.Units.ANY,
+            kpi_tag=KpiTagEnumClass.ELECTRICITY_METER,
+            investment_cost_override_in_euro=self.config.investment_costs_in_euro,
+            lifetime_override_in_years=self.config.lifetime_in_years,
+            override_source=(
+                "component config" if self.config.investment_costs_in_euro is not None else None
+            ),
+        )
+
+    def get_energy_flow_facts(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> EnergyFlowFacts:
+        """Carrier flows at the grid boundary for the lifecycle cost engine (cost_spec.md §3.4)."""
+        energy_bought_in_kwh = 0.0
+        energy_sold_in_kwh = 0.0
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.component_name and output.unit == lt.Units.WATT_HOUR:
+                if output.field_name == self.ElectricityFromGrid:
+                    energy_bought_in_kwh = float(postprocessing_results.iloc[:, index].sum()) * 1e-3
+                elif output.field_name == self.ElectricityToGrid:
+                    energy_sold_in_kwh = float(postprocessing_results.iloc[:, index].sum()) * 1e-3
+        return EnergyFlowFacts(
+            carrier=EnergyCarrier.ELECTRICITY,
+            energy_bought_in_kwh=energy_bought_in_kwh,
+            energy_sold_in_kwh=energy_sold_in_kwh,
+        )
 
     @staticmethod
     def get_cost_capex(config: ElectricityMeterConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument

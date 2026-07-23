@@ -1,5 +1,5 @@
 {
-    "name": "Household gas building sizer",
+    "name": "Household heatpump car building sizer",
     "description": "Basic household new system setup.",
     "multiple_buildings": false,
     "components": [
@@ -81,7 +81,9 @@
                 "predefined_loadprofile_filepaths": null,
                 "guid": "",
                 "calculation_index_for_local_lpg": null,
-                "cars": null
+                "cars": [
+                    "Car_2_22kW_Charging_Power_avg_Speed_30_kmh_0"
+                ]
             },
             "config_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig",
             "inputs": [],
@@ -154,46 +156,65 @@
             "connect_automatically": true
         },
         {
-            "component_full_classname": "hisim.components.generic_boiler.GenericBoiler",
+            "component_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating",
             "configuration": {
                 "building_name": "BUI1",
-                "name": "CondensingGasBoiler",
-                "energy_carrier": "Gas",
-                "boiler_type": 2,
-                "minimal_thermal_power_in_watt": 0,
-                "maximal_thermal_power_in_watt": 8558.827420000001,
-                "eff_th_min": 0.6,
-                "eff_th_max": 0.9,
-                "temperature_delta_in_celsius": 20,
-                "device_co2_footprint_in_kg": null,
-                "investment_costs_in_euro": null,
-                "lifetime_in_years": null,
-                "maintenance_costs_in_euro_per_year": null,
-                "subsidy_as_percentage_of_investment_costs": null,
-                "consumption_in_kilowatt_hour": 0
+                "name": "MoreAdvancedHeatPumpHPLibControllerSH",
+                "mode": 1,
+                "set_heating_threshold_outside_temperature_in_celsius": 18.0,
+                "set_cooling_threshold_outside_temperature_in_celsius": 20.0,
+                "upper_temperature_offset_for_state_conditions_in_celsius": 5.0,
+                "lower_temperature_offset_for_state_conditions_in_celsius": 5.0,
+                "heat_distribution_system_type": 2
             },
-            "config_full_classname": "hisim.components.generic_boiler.GenericBoilerConfig",
+            "config_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig",
             "inputs": [],
             "outputs": [],
             "connect_automatically": true
         },
         {
-            "component_full_classname": "hisim.components.generic_boiler.GenericBoilerController",
+            "component_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW",
             "configuration": {
                 "building_name": "BUI1",
-                "name": "ModulatingBoilerController",
-                "is_modulating": true,
-                "set_heating_threshold_outside_temperature_in_celsius": 18.0,
-                "minimal_thermal_power_in_watt": 0,
-                "maximal_thermal_power_in_watt": 8558.827420000001,
-                "set_temperature_difference_for_full_power": 5.0,
-                "minimum_runtime_in_seconds": 1800,
-                "minimum_resting_time_in_seconds": 1800,
-                "with_domestic_hot_water_preparation": true,
-                "secondary_mode": false,
-                "hysteresis_water_temperature_offset": 10
+                "name": "HeatPumpControllerDHW",
+                "t_min_dhw_storage_in_celsius": 40.0,
+                "t_max_dhw_storage_in_celsius": 60.0,
+                "thermalpower_dhw_is_constant": false,
+                "p_th_max_dhw_in_watt": 5000.0
             },
-            "config_full_classname": "hisim.components.generic_boiler.GenericBoilerControllerConfig",
+            "config_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "MoreAdvancedHeatPumpHPLib",
+                "model": "Generic",
+                "fluid_primary_side": "air",
+                "group_id": 1,
+                "heating_reference_temperature_in_celsius": -7.0,
+                "flow_temperature_in_celsius": 52,
+                "set_thermal_output_power_in_watt": 7780.752200000001,
+                "cycling_mode": true,
+                "minimum_running_time_in_seconds": 3600,
+                "minimum_idle_time_in_seconds": 3600,
+                "minimum_thermal_output_power_in_watt": 1800,
+                "position_hot_water_storage_in_system": 1,
+                "with_domestic_hot_water_preparation": true,
+                "passive_cooling_with_brine": false,
+                "electrical_input_power_brine_pump_in_watt": null,
+                "massflow_nominal_secondary_side_in_kg_per_s": 0.333,
+                "specific_heat_capacity_of_primary_fluid": 0,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig",
             "inputs": [],
             "outputs": [],
             "connect_automatically": true
@@ -221,7 +242,7 @@
             "configuration": {
                 "building_name": "BUI1",
                 "name": "SimpleHotWaterStorage",
-                "volume_heating_water_storage_in_liter": 155.62,
+                "volume_heating_water_storage_in_liter": 389.04,
                 "heat_transfer_coefficient_in_watt_per_m2_per_kelvin": 2.0,
                 "heat_exchanger_is_present": true,
                 "position_hot_water_storage_in_system": 1,
@@ -257,45 +278,66 @@
             "connect_automatically": true
         },
         {
-            "component_full_classname": "hisim.components.gas_meter.GasMeter",
+            "component_full_classname": "hisim.components.generic_car.Car",
             "configuration": {
                 "building_name": "BUI1",
-                "name": "GasMeter",
-                "total_energy_from_grid_in_kwh": 0.0,
-                "gas_loadtype": "Gas",
-                "device_co2_footprint_in_kg": null,
-                "investment_costs_in_euro": null,
-                "lifetime_in_years": null,
-                "maintenance_costs_in_euro_per_year": null,
-                "subsidy_as_percentage_of_investment_costs": null
+                "name": "Car_2_22kW_Charging_Power_avg_Speed_30_kmh_0",
+                "source_weight": 1,
+                "fuel": "Electricity",
+                "consumption_per_km": 0.15,
+                "device_co2_footprint_in_kg": 8899.4,
+                "investment_costs_in_euro": 44498.0,
+                "lifetime_in_years": 18,
+                "maintenance_costs_in_euro_per_year": 889.96,
+                "subsidy_as_percentage_of_investment_costs": 0,
+                "household_name": "CHR01_Couple_both_at_Work_HH1"
             },
-            "config_full_classname": "hisim.components.gas_meter.GasMeterConfig",
-            "inputs": [
-                {
-                    "dynamic": true,
-                    "source_component_output": "EnergyDemandSh",
-                    "source_object_name": "CondensingGasBoiler",
-                    "source_load_type": "Gas",
-                    "source_unit": "Wh",
-                    "source_tags": [
-                        "Gas consumption without any control"
-                    ],
-                    "source_weight": 999
-                },
-                {
-                    "dynamic": true,
-                    "source_component_output": "EnergyDemandDhw",
-                    "source_object_name": "CondensingGasBoiler",
-                    "source_load_type": "Gas",
-                    "source_unit": "Wh",
-                    "source_tags": [
-                        "Gas consumption without any control"
-                    ],
-                    "source_weight": 999
-                }
-            ],
+            "config_full_classname": "hisim.components.generic_car.CarConfig",
+            "inputs": [],
             "outputs": [],
             "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.advanced_ev_battery_bslib.CarBattery",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "CarBattery_1",
+                "source_weight": 1,
+                "system_id": "SG1",
+                "p_inv_custom": 10000.0,
+                "e_bat_custom": 30,
+                "total_charged_energy_in_kilowatthour": 0,
+                "total_discharged_energy_in_kilowatthour": 0
+            },
+            "config_full_classname": "hisim.components.advanced_ev_battery_bslib.CarBatteryConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.controller_l1_generic_ev_charge.L1Controller",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "L1EVChargeControl_1",
+                "source_weight": 1,
+                "charging_station_set": {
+                    "name": "Charging At Home with 11 kW",
+                    "guid": {
+                        "str_val": "78dae308-24c4-45cc-8bdf-b001d61f45c2"
+                    }
+                },
+                "battery_set_soc": 0.4,
+                "lower_threshold_charging_power_in_watt": 1100.0,
+                "device_co2_footprint_in_kg": 100,
+                "investment_costs_in_euro": 1000,
+                "lifetime_in_years": 10,
+                "maintenance_costs_in_euro_per_year": 50.0,
+                "subsidy_as_percentage_of_investment_costs": 0
+            },
+            "config_full_classname": "hisim.components.controller_l1_generic_ev_charge.ChargingStationConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
         },
         {
             "component_full_classname": "hisim.components.electricity_meter.ElectricityMeter",
@@ -368,6 +410,18 @@
             "inputs": [
                 {
                     "dynamic": true,
+                    "source_component_output": "BatteryChargingPowerToEMS",
+                    "source_object_name": "L1EVChargeControl_1",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "CarBattery",
+                        "Consumption with EMS control"
+                    ],
+                    "source_weight": 5
+                },
+                {
+                    "dynamic": true,
                     "source_component_output": "ElectricalPowerConsumption",
                     "source_object_name": "UTSPConnector",
                     "source_load_type": "Electricity",
@@ -392,6 +446,30 @@
                 },
                 {
                     "dynamic": true,
+                    "source_component_output": "ElectricalInputPowerSH",
+                    "source_object_name": "MoreAdvancedHeatPumpHPLib",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "HeatPumpBuilding",
+                        "Consumption with EMS control"
+                    ],
+                    "source_weight": 2
+                },
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricalInputPowerDHW",
+                    "source_object_name": "MoreAdvancedHeatPumpHPLib",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "HeatPumpDHW",
+                        "Consumption with EMS control"
+                    ],
+                    "source_weight": 3
+                },
+                {
+                    "dynamic": true,
                     "source_component_output": "AcBatteryPowerUsed",
                     "source_object_name": "Battery",
                     "source_load_type": "Electricity",
@@ -406,7 +484,20 @@
             "outputs": [
                 {
                     "dynamic": true,
-                    "source_output_name": "LoadingPowerInputForBattery_",
+                    "source_output_name": "ElectricityToOrFromGridOfL1Controller_",
+                    "source_tags": [
+                        "CarBattery",
+                        "ElectricityTarget"
+                    ],
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_weight": 5,
+                    "output_description": "Target electricity for battery of electric car.",
+                    "source_component_class": "L1Controller"
+                },
+                {
+                    "dynamic": true,
+                    "source_output_name": "ChargingPowerForBattery_",
                     "source_tags": [
                         "Battery",
                         "ElectricityTarget"
@@ -424,22 +515,22 @@
     "connections": [
         {
             "source": {
-                "component_name": "CondensingGasBoiler",
-                "field_name": "EnergyDemandSh"
+                "component_name": "Weather",
+                "field_name": "DailyAverageOutsideTemperatures"
             },
             "target": {
-                "component_name": "GasMeter",
-                "field_name": "Input_CondensingGasBoiler_EnergyDemandSh_0"
+                "component_name": "MoreAdvancedHeatPumpHPLib",
+                "field_name": "TemperatureInputPrimary"
             }
         },
         {
             "source": {
-                "component_name": "CondensingGasBoiler",
-                "field_name": "EnergyDemandDhw"
+                "component_name": "L2EMSElectricityController",
+                "field_name": "ElectricityToOrFromGridOfL1Controller_Output16"
             },
             "target": {
-                "component_name": "GasMeter",
-                "field_name": "Input_CondensingGasBoiler_EnergyDemandDhw_1"
+                "component_name": "L1EVChargeControl_1",
+                "field_name": "ElectricityTargetFromEMS"
             }
         },
         {
@@ -455,11 +546,21 @@
         {
             "source": {
                 "component_name": "L2EMSElectricityController",
-                "field_name": "LoadingPowerInputForBattery_Output16"
+                "field_name": "ChargingPowerForBattery_Output17"
             },
             "target": {
                 "component_name": "Battery",
                 "field_name": "LoadingPowerInput"
+            }
+        },
+        {
+            "source": {
+                "component_name": "L1EVChargeControl_1",
+                "field_name": "BatteryChargingPowerToEMS"
+            },
+            "target": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "Input_L1EVChargeControl_1_BatteryChargingPowerToEMS_2"
             }
         },
         {
@@ -469,7 +570,7 @@
             },
             "target": {
                 "component_name": "L2EMSElectricityController",
-                "field_name": "Input_UTSPConnector_ElectricalPowerConsumption_2"
+                "field_name": "Input_UTSPConnector_ElectricalPowerConsumption_3"
             }
         },
         {
@@ -479,7 +580,27 @@
             },
             "target": {
                 "component_name": "L2EMSElectricityController",
-                "field_name": "Input_PVSystem_ElectricityOutput_3"
+                "field_name": "Input_PVSystem_ElectricityOutput_4"
+            }
+        },
+        {
+            "source": {
+                "component_name": "MoreAdvancedHeatPumpHPLib",
+                "field_name": "ElectricalInputPowerSH"
+            },
+            "target": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerSH_5"
+            }
+        },
+        {
+            "source": {
+                "component_name": "MoreAdvancedHeatPumpHPLib",
+                "field_name": "ElectricalInputPowerDHW"
+            },
+            "target": {
+                "component_name": "L2EMSElectricityController",
+                "field_name": "Input_MoreAdvancedHeatPumpHPLib_ElectricalInputPowerDHW_6"
             }
         },
         {
@@ -489,7 +610,7 @@
             },
             "target": {
                 "component_name": "L2EMSElectricityController",
-                "field_name": "Input_Battery_AcBatteryPowerUsed_4"
+                "field_name": "Input_Battery_AcBatteryPowerUsed_7"
             }
         }
     ]

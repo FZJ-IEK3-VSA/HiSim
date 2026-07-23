@@ -21,6 +21,7 @@ MY_SIMULATION_PARAMETERS: dict[str, Any] = {
     "end_date": "2021-01-02T00:00:00",
     "seconds_per_timestep": 900,
     "post_processing_options": [9, 18, 19, 20, 22],
+    "log_connections": True,
 }
 
 

@@ -34,6 +34,12 @@ def discover_system_setups(base_dir: Path = SYSTEM_SETUP_DIR) -> list[tuple[str]
 
 SYSTEM_SETUPS: list[tuple[str]] = discover_system_setups()
 
+# Setups that import an optional dependency which is intentionally not installed
+# (see requirements.txt) cannot be exercised here. A *missing* one of these is the
+# only initialization failure the test tolerates (as a skip); every other error is
+# a real problem and must fail the test.
+OPTIONAL_DEPENDENCIES: set[str] = {"wetterdienst"}
+
 
 @pytest.mark.jsonconfig
 @pytest.mark.parametrize(["system_setup"], SYSTEM_SETUPS)
@@ -44,9 +50,9 @@ def test_json(system_setup: str) -> None:
     Initializes a simulator from the given Python setup module, exports its
     JSON configuration, re-initializes a second simulator from that JSON, and
     asserts both wrap the same number of components and register the same
-    number of outputs. The test is skipped when the Python initialization
-    raises an exception, so only setups that successfully initialize are
-    exercised.
+    number of outputs. Every setup is expected to initialize successfully; the
+    only tolerated (skipped) failure is a missing optional dependency listed in
+    ``OPTIONAL_DEPENDENCIES``. Any other initialization error fails the test.
 
     Args:
         system_setup: Path to the system setup ``.py`` module to test.
@@ -64,28 +70,33 @@ def test_json(system_setup: str) -> None:
             path_to_module=system_setup,
             my_simulation_parameters=my_simulation_parameters,
         )
-    except Exception:
-        pytest.skip(f"Python configuration {system_setup} fails. Skipping JSON test for this configuration.")
-    else:
-        scenario_path, simulation_parameters_path = write_json_for_initialized_simulator(
-            path_to_module=system_setup,
-            my_sim=sim_py,
-            output_directory=str(output_directory),
-        )
-        sim_json = initialize_from_json(
-            scenario=str(scenario_path),
-            simulation_parameters=str(simulation_parameters_path),
-            path_to_module=str(scenario_path),
-            delta=None,
-        )
-        sim_json.prepare_calculation()
-        sim_json.connect_all_components()
+    except ModuleNotFoundError as exc:
+        # Skip ONLY when a known optional dependency is genuinely absent; anything
+        # else is a real failure the test must surface.
+        missing = (exc.name or "").split(".")[0]
+        if missing in OPTIONAL_DEPENDENCIES:
+            pytest.skip(f"Optional dependency '{missing}' not installed; skipping {system_setup}.")
+        raise
 
-        num_components_py, num_outputs_py = get_num_of_components_and_outputs(sim_py)
-        num_components_json, num_outputs_json = get_num_of_components_and_outputs(sim_json)
+    scenario_path, simulation_parameters_path = write_json_for_initialized_simulator(
+        path_to_module=system_setup,
+        my_sim=sim_py,
+        output_directory=str(output_directory),
+    )
+    sim_json = initialize_from_json(
+        scenario=str(scenario_path),
+        simulation_parameters=str(simulation_parameters_path),
+        path_to_module=str(scenario_path),
+        delta=None,
+    )
+    sim_json.prepare_calculation()
+    sim_json.connect_all_components()
 
-        assert num_components_py == num_components_json
-        assert num_outputs_py == num_outputs_json
+    num_components_py, num_outputs_py = get_num_of_components_and_outputs(sim_py)
+    num_components_json, num_outputs_json = get_num_of_components_and_outputs(sim_json)
+
+    assert num_components_py == num_components_json
+    assert num_outputs_py == num_outputs_json
 
 
 def get_num_of_components_and_outputs(simulator: sim.Simulator) -> tuple[int, int]:

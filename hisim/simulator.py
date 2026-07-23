@@ -42,11 +42,18 @@ class Simulator:
         my_simulation_parameters: Optional[SimulationParameters],
         setup_function: str = "setup_function",
         my_module_config: Optional[str] = None,
+        force_log_connections: bool = False,
     ) -> None:
         """Initializes the simulator class and creates the result directory."""
 
+        # When set, the simulation parameters used for this run always log component
+        # connections, so component_connections.json is written for post-processing/
+        # debugging. Enabled by the Python entry point to mirror the JSON path.
+        self._force_log_connections: bool = force_log_connections
         self._simulation_parameters: SimulationParameters
         if my_simulation_parameters is not None:
+            if self._force_log_connections:
+                my_simulation_parameters.log_connections = True
             self._simulation_parameters = my_simulation_parameters
             log.logger.logging_level = self._simulation_parameters.logging_level
         self.wrapped_components: List[ComponentWrapper] = []
@@ -65,6 +72,8 @@ class Simulator:
         """Sets the simulation parameters and the logging level at the same time."""
         self._simulation_parameters = my_simulation_parameters
         if self._simulation_parameters is not None:
+            if self._force_log_connections:
+                self._simulation_parameters.log_connections = True
             log.logger.logging_level = self._simulation_parameters.logging_level
 
     def get_simulation_parameters(self) -> SimulationParameters:
@@ -80,6 +89,9 @@ class Simulator:
         """Adds component to simulator and wraps it up the output in the register."""
         if self._simulation_parameters is None:
             raise ValueError("Simulation Parameters were not initialized")
+        # ensure result directory exists before any connect_input calls log to it
+        if not self._simulation_parameters.result_directory:
+            self.prepare_simulation_directory()
         # set the repository
         component.set_sim_repo(self.simulation_repository)
 

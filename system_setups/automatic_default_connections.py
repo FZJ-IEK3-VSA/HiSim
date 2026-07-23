@@ -124,7 +124,6 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
         config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
     )
-    
 
     # Build Heat Pump (for dhw and space heating)
     my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
@@ -181,7 +180,6 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         my_simulation_parameters=my_simulation_parameters,
     )
 
- 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,

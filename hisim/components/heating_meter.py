@@ -199,7 +199,6 @@ class HeatingMeter(DynamicComponent):
         )
         return dynamic_connections
 
-
     def get_default_connections_from_more_advanced_heat_pump(
         self,
     ):
@@ -223,7 +222,6 @@ class HeatingMeter(DynamicComponent):
             )
         )
         return dynamic_connections
-
 
     def write_to_report(self):
         """Writes relevant information to report."""

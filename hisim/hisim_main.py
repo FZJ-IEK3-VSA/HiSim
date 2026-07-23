@@ -98,6 +98,9 @@ def initialize_from_python(
         setup_function=function_in_module,
         my_simulation_parameters=my_simulation_parameters,
         my_module_config=my_module_config,
+        # Always log component connections in Python mode (mirrors the JSON path, hisim_main.py:215)
+        # so component_connections.json is written for easy post-processing and debugging.
+        force_log_connections=True,
     )
 
     # Build method
@@ -147,7 +150,6 @@ def initialize_from_json(
     sim_params_data['end_date'] = datetime.fromisoformat(sim_params_data['end_date'])
     sim_params_data['post_processing_options'] = [PostProcessingOptions[option] for option in sim_params_data.get('post_processing_options', [])]
     sim_params = SimulationParameters(**sim_params_data)
-    sim_params.log_connections = True  # For easy post-processing (and debugging)
 
     my_sim = _build_simulator_from_scenario(scenario_data, path_to_module, sim_params)
 
@@ -223,7 +225,7 @@ def run_simulation(my_sim: sim.Simulator, path_to_module: Optional[str]) -> None
     # If debugging is needed, this may be used to print components and their inputs/outputs
     for comp in my_sim.wrapped_components:
         log.debug(f"Component {comp.my_component.component_name} has inputs "
-                  f"{[input.full_name for input in comp.component_inputs]} and"
+                  f"{[input.fullname for input in comp.component_inputs]} and"
                   f" outputs {[output.full_name for output in comp.component_outputs]}")
 
     log.information("#################################")

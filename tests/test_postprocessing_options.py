@@ -207,7 +207,6 @@ def test_postprocessing_option_prepare_outputs_for_scenario_evaluation(
     )
 
 
-
 def test_postprocessing_option_write_component_configs_to_json(
     postprocessing_option_framework: PostProcessingOptionTestFramework,
 ) -> None:

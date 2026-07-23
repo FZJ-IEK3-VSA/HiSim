@@ -1,58 +1,58 @@
-# Tier 2 of the golden-reference gate: the heavy full-year pairs. These run ONLY
-# for pull requests to main, and ONLY once every other CI workflow (quality,
-# tests, golden-check) has already concluded successfully for the same commit —
-# so we never spend the full-year compute when a cheaper check has already failed.
+# Tier 2 of the golden-reference gate: the heavy full-year pairs.
 #
-# Mechanism: triggered by the completion of each prerequisite workflow; each
-# firing re-checks (via scripts/ci_all_green.sh) that ALL prerequisites are green
-# for the head SHA, so only the last-completing one proceeds.
+# Runs on pull requests to main as a NORMAL, visible check (previously it was
+# workflow_run-triggered, which GitHub never surfaces in the PR checks list).
+#
+# To avoid spending the full-year compute when a cheaper check has already
+# failed, the `gate` job first waits for quality + tests + golden-check to finish
+# for this commit (scripts/ci_wait_all.sh) and FAILS FAST the moment any of them
+# concludes non-success — the heavy `golden-year` matrix then never runs, and the
+# failure carries an explanatory message. Only when all prerequisites are green
+# does the full-year matrix run.
 
 name: golden-year
 
 on:
-  workflow_run:
-    workflows: ["quality", "tests", "golden-check"]
-    types: [completed]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 
 permissions:
   contents: read
   packages: read
-  statuses: write     # to surface the result back onto the PR commit
+  actions: read      # gh run list, to poll the prerequisite workflow runs
+
+concurrency:
+  group: golden-year-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   gate:
-    name: gate (all CI green?)
-    # Only for a successful PR-triggered prerequisite run.
-    if: >
-      github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.conclusion == 'success'
+    name: gate (wait for prerequisites)
     runs-on: ubuntu-latest
     outputs:
-      go: ${{ steps.check.outputs.go }}
       matrix: ${{ steps.gen.outputs.matrix }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_REPO: ${{ github.repository }}
-      SHA: ${{ github.event.workflow_run.head_sha }}
+      # The prerequisite workflows report against the PR head commit.
+      SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-      - name: Are quality + tests + golden-check all green for this SHA?
-        id: check
-        run: |
-          go="$(bash scripts/ci_all_green.sh "$SHA")"
-          echo "go=$go" >> "$GITHUB_OUTPUT"
-          echo "all-green=$go for $SHA"
+      - name: Wait for quality + tests + golden-check (fail fast if any failed)
+        # Only PRs have prerequisites to gate on; a manual workflow_dispatch run
+        # goes straight to the full-year matrix.
+        if: github.event_name == 'pull_request'
+        run: bash scripts/ci_wait_all.sh "$SHA"
       - name: Build full-year matrix
         id: gen
-        if: steps.check.outputs.go == 'true'
         run: echo "matrix=$(python3 scripts/golden_matrix.py --horizon year)" >> "$GITHUB_OUTPUT"
 
   golden-year:
     name: golden-year ${{ matrix.setup }} / ${{ matrix.param }}
+    # Skipped automatically when `gate` fails, so the heavy compute never runs
+    # unless every prerequisite passed.
     needs: gate
-    if: needs.gate.outputs.go == 'true'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
@@ -64,8 +64,6 @@ jobs:
       matrix: ${{ fromJSON(needs.gate.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
@@ -80,19 +78,23 @@ jobs:
           path: results/golden-ref-check/report.*
           if-no-files-found: warn
 
-  report-status:
-    name: report status to PR
+  summary:
+    name: golden-year summary
     needs: [gate, golden-year]
-    if: always() && needs.gate.outputs.go == 'true'
+    if: always()
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Set commit status
+      - name: Conclude
         run: |
-          state="success"
-          if [ "${{ needs.golden-year.result }}" != "success" ]; then state="failure"; fi
-          gh api -X POST "repos/${{ github.repository }}/statuses/${{ github.event.workflow_run.head_sha }}" \
-            -f state="$state" \
-            -f context="golden-year" \
-            -f description="Full-year golden KPI check: $state"
+          gate="${{ needs.gate.result }}"
+          gy="${{ needs.golden-year.result }}"
+          echo "gate=$gate  golden-year=$gy"
+          if [ "$gate" != "success" ]; then
+            echo "::error title=golden-year::Prerequisite CI failed, so the full-year golden check did not run. See the 'gate' job for which prerequisite failed."
+            exit 1
+          fi
+          if [ "$gy" != "success" ]; then
+            echo "::error title=golden-year::Full-year golden KPI check failed."
+            exit 1
+          fi
+          echo "Full-year golden check passed."

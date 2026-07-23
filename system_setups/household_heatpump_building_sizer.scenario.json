@@ -94,7 +94,7 @@
                 "building_name": "BUI1",
                 "name": "Weather",
                 "location": "Aachen",
-                "source_path": "<<utils.get_input_directory()>>\\weather\\test-reference-years_1995-2012_1-location\\data_processed\\aachen_center",
+                "source_path": "<<utils.get_input_directory()>>/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center",
                 "data_source": 1,
                 "predictive_control": false
             },
@@ -402,7 +402,7 @@
                         "Battery",
                         "Consumption with EMS control"
                     ],
-                    "source_weight": 5
+                    "source_weight": 6
                 }
             ],
             "outputs": [

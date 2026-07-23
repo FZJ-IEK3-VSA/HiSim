@@ -140,7 +140,8 @@ class SystemChart:
                 with_results=with_results,
             )
             fullpath = Path(self.ppdt.simulation_parameters.result_directory) / filename
-            graph.write_png(fullpath)  # noqa: no-member
+            # pydot generates the write_<format> methods at runtime, so neither pylint nor mypy sees them.
+            graph.write_png(fullpath)  # type: ignore[attr-defined]  # noqa: no-member
         except Exception as exc:  # noqa
             log.error(
                 "Failed to generate network charts. Probably Graphviz is missing on your system. The python error was: "

@@ -72,7 +72,8 @@ def run_simulation(
     result_directory: Path,
 ) -> Path:
     """Write the module config and run the setup in-process; return the actual result directory."""
-    from hisim import hisim_main  # heavy import (pulls the full component library) kept out of module load
+    # heavy import (pulls the full component library) kept out of module load
+    from hisim import hisim_main  # pylint: disable=import-outside-toplevel
 
     result_directory.mkdir(parents=True, exist_ok=True)
     config_path = result_directory / MODULE_CONFIG_FILENAME

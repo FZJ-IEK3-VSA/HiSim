@@ -39,6 +39,27 @@ class CSVLoaderConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return CSVLoader.get_full_classname()
 
+    @classmethod
+    def get_default_config(cls, building_name: str = "BUI1") -> "CSVLoaderConfig":
+        """Return a default configuration pointing at a shipped example CSV profile.
+
+        Uses ``wind_generated_power_1_min.csv`` (found in ``HISIMPATH["inputs"]``) so a
+        freshly added CSV loader node has a working, editable default in the editor.
+        """
+        return CSVLoaderConfig(
+            building_name=building_name,
+            name="CSVLoader",
+            csv_filename="wind_generated_power_1_min.csv",
+            column=1,
+            loadtype=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            column_name="generated_power",
+            sep=",",
+            decimal=".",
+            multiplier=1.0,
+            output_description="Values loaded from CSV profile.",
+        )
+
 
 class CSVLoader(cp.Component):
     r"""Csvloader class.

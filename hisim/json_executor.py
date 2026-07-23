@@ -191,7 +191,7 @@ def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.
                 component = component_class(
                     config=config,
                     my_simulation_parameters=sim_params,
-                    data_dict_with_car_information=car_info,
+                    car_information=car_info,
                 )
             else:
                 component = component_class(

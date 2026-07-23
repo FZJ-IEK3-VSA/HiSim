@@ -5,8 +5,6 @@
 The functions are all called in modular_household.
 """
 
-import json
-from os import path
 from typing import Any, List, Optional, Tuple
 
 import pandas as pd
@@ -112,6 +110,7 @@ def configure_smart_devices(
     my_simulation_parameters: SimulationParameters,
     count: int,
     smart_devices_included: bool,
+    my_occupancy_instance: loadprofilegenerator_utsp_connector.UtspLpgConnector,
 ) -> Tuple[List[generic_smart_device.SmartDevice], int]:
     """Sets smart devices without controllers.
 
@@ -125,18 +124,24 @@ def configure_smart_devices(
         True if smart devices (washing machine, dish washer, etc.) are actually smart or surplus controlled.
     count: int
         Integer tracking component hierachy for EMS.
+    my_occupancy_instance: UtspLpgConnector
+        The occupancy component, whose ``flexibility_data_dict`` provides the device
+        flexibility events (replaces the former FlexibilityEvents.HH1.json file read).
 
     """
-    filepath = path.join(utils.HISIMPATH["utsp_reports"], "FlexibilityEvents.HH1.json")
-    device_collection = []
-    with open(filepath, mode="r", encoding="utf-8") as jsonfile:
-        strfile = json.load(jsonfile)
+    # Flexibility events come from the UTSP connector (one entry per household).
+    # Flatten them into a single list of device flexibility samples.
+    flexibility_samples: List[Any] = []
+    for household_flexibility in my_occupancy_instance.flexibility_data_dict.get("flexibility", []):
+        if isinstance(household_flexibility, dict):
+            household_flexibility = list(household_flexibility.values())
+        flexibility_samples.extend(household_flexibility)
 
-    for elem in strfile:
-        if elem["Device"]["Name"] in device_collection:
-            pass
-        else:
-            device_collection.append(elem["Device"]["Name"])
+    device_collection: List[str] = []
+    for elem in flexibility_samples:
+        device_name = elem["Device"]["Name"]
+        if device_name not in device_collection:
+            device_collection.append(device_name)
 
     # create all smart devices
     my_smart_devices: List[generic_smart_device.SmartDevice] = []
@@ -151,6 +156,7 @@ def configure_smart_devices(
                     smart_devices_included=smart_devices_included,
                 ),
                 my_simulation_parameters=my_simulation_parameters,
+                flexibility_data=flexibility_samples,
             )
         )
         my_sim.add_component(my_smart_devices[-1])
@@ -191,7 +197,7 @@ def configure_cars(
 
     # create all cars
     my_cars: List[generic_car.Car] = []
-    for car_information_dict in my_car_information.data_dict_for_car_component.values():
+    for car_information in my_car_information.data_dict_for_car_component.values():
         # decide if they are diesel driven or electricity driven and initialize config
         if ev_included:
             my_car_config = generic_car.CarConfig.get_default_ev_config()
@@ -203,7 +209,7 @@ def configure_cars(
             generic_car.Car(
                 my_simulation_parameters=my_simulation_parameters,
                 config=my_car_config,
-                data_dict_with_car_information=car_information_dict,
+                car_information=car_information,
             )
         )
         my_sim.add_component(my_cars[-1])

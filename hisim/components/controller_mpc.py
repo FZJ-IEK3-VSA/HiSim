@@ -164,12 +164,15 @@ class MpcControllerConfig(ConfigBase):
             battery_control_state=[],
             batt_soc_actual_timestep=[],
             batt_soc_normalized_timestep=[],
-            h_tr_w=0.0,
-            h_tr_ms=0.0,
-            h_tr_em=0.0,
-            h_ve_adj=0.0,
-            h_tr_is=0.0,
-            c_m=0.0,
+            # Building 5R1C physics. These are overridden at runtime by the actual building
+            # via the singleton repository; the defaults below correspond to the default
+            # German single-family home so the controller is usable / introspectable standalone.
+            h_tr_w=37.96,
+            h_tr_ms=2757.3,
+            h_tr_em=127.81,
+            h_ve_adj=61.81,
+            h_tr_is=1881.63,
+            c_m=19998000.0,
             cop_coef=[0] * 2,
             eer_coef=[0] * 2,
             predictive=True,
@@ -473,26 +476,37 @@ class MpcController(cp.Component):
             self.inverter_efficiency = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.INVERTEREFFICIENCY)
             log.information(f"self.inverter_efficiency {format(self.inverter_efficiency)}")
 
+    def _entry_or_config(self, key: SingletonDictKeyEnum, fallback: Any) -> Any:
+        """Read a value from the singleton repository, falling back to the config value.
+
+        The building and air-conditioner components populate these entries during a
+        simulation run. When the controller is constructed standalone (e.g. editor
+        introspection), the repository is empty, so the corresponding config field is
+        used instead.
+        """
+        repo = SingletonSimRepository()
+        return repo.get_entry(key=key) if repo.entry_exists(key=key) else fallback
+
     def build(self):
         """Build function: The function sets important constants and parameters for the calculations."""
         if self.mpcconfig.predictive:
             """getting building physical properties for state space model"""
-            self.h_tr_w = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING
+            self.h_tr_w = self._entry_or_config(
+                SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING, self.mpcconfig.h_tr_w
             )
-            self.h_tr_ms = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS
+            self.h_tr_ms = self._entry_or_config(
+                SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS, self.mpcconfig.h_tr_ms
             )
-            self.h_tr_em = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM
+            self.h_tr_em = self._entry_or_config(
+                SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM, self.mpcconfig.h_tr_em
             )
-            self.h_ve_adj = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION
+            self.h_ve_adj = self._entry_or_config(
+                SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION, self.mpcconfig.h_ve_adj
             )
-            self.h_tr_is = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR
+            self.h_tr_is = self._entry_or_config(
+                SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR, self.mpcconfig.h_tr_is
             )
-            self.c_m = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE)
+            self.c_m = self._entry_or_config(SingletonDictKeyEnum.THERMALCAPACITYENVELOPE, self.mpcconfig.c_m)
             """"
             self.h_tr_w = my_simulation_repository.get_entry(
                 Building.Thermal_transmission_coefficient_glazing
@@ -515,8 +529,12 @@ class MpcController(cp.Component):
             """
 
             """ getting cop_coef and eer_coef from the air conditioner omponenent to be used in the cost optimization"""
-            self.cop_coef = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.COEFFICIENT_OF_PERFORMANCE_HEATING)
-            self.eer_coef = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.ENERGY_EFFICIENY_RATIO_COOLING)
+            self.cop_coef = self._entry_or_config(
+                SingletonDictKeyEnum.COEFFICIENT_OF_PERFORMANCE_HEATING, self.mpcconfig.cop_coef
+            )
+            self.eer_coef = self._entry_or_config(
+                SingletonDictKeyEnum.ENERGY_EFFICIENY_RATIO_COOLING, self.mpcconfig.eer_coef
+            )
 
     def statespace(self):
         """State Space Model of the 5R1C network, Used as a prediction model to the building behavior in the MPC."""

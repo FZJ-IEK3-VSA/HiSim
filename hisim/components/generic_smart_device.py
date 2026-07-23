@@ -8,10 +8,8 @@ the configuration is automatically adopted from the information provided by the 
 # clean
 
 # Generic/Built-in
-import json
 import math as ma
-from os import path
-from typing import List, Any
+from typing import List, Any, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -147,8 +145,17 @@ class SmartDevice(cp.Component):
         my_simulation_parameters: SimulationParameters,
         config: SmartDeviceConfig,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        flexibility_data: Optional[List[Any]] = None,
     ):
-        """Initialize the class."""
+        """Initialize the class.
+
+        :param flexibility_data: Flexibility events for the household's shiftable devices,
+            provided by the :class:`~hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector`
+            (its ``flexibility_data_dict["flexibility"]``). When ``None`` (e.g. webtool
+            preview, or a predefined LPG profile without flexibility data) the device has no
+            shiftable activations and stays inert.
+        :type flexibility_data: Optional[List[Any]]
+        """
 
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -163,6 +170,7 @@ class SmartDevice(cp.Component):
         self.build(
             identifier=config.identifier,
             source_weight=config.source_weight,
+            flexibility_data=flexibility_data,
             seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
         )
         self.previous_state: SmartDeviceState
@@ -256,27 +264,32 @@ class SmartDevice(cp.Component):
 
         stsv.set_output_value(self.electricity_output_channel, self.state.actual_power)
 
-    def build(self, identifier: str, source_weight: int, seconds_per_timestep: int = 60) -> None:
+    def build(
+        self,
+        identifier: str,
+        source_weight: int,
+        flexibility_data: Optional[List[Any]] = None,
+        seconds_per_timestep: int = 60,
+    ) -> None:
         """Initialization of Smart Device information.
 
         :param identifier: name of smart device in LPG
         :type identifier: str
         :param source_weight: priority of smart device in Energy Management System
         :type source_weight: int
+        :param flexibility_data: flexibility events for the household (see :meth:`__init__`);
+            ``None``/empty means no shiftable activations and the device stays inert
+        :type flexibility_data: Optional[List[Any]]
         :param seconds_per_timestep: time step size, defaults to 60
         :type seconds_per_timestep: int, optional
-        :raises NameError: _description_
-        :raises TypeError: _description_
+        :raises TypeError: if the time resolution is not a multiple of one minute
         """
 
-        # load smart device profile
-        smart_device_profile = []
-        filepath = path.join(utils.HISIMPATH["utsp_reports"], "FlexibilityEvents.HH1.json")
-        with open(filepath, encoding="utf-8") as file:
-            smart_device_profile = json.load(file)
-
-        if not smart_device_profile:
-            raise NameError("LPG data for smart appliances is missing or located missleadingly")
+        # Flexibility events supplied by the UtspLpgConnector (its flexibility_data_dict).
+        # Cached flexibility data is stored index-keyed, so normalise a dict to its values.
+        smart_device_profile: Any = flexibility_data or []
+        if isinstance(smart_device_profile, dict):
+            smart_device_profile = list(smart_device_profile.values())
 
         # initializing relevant data
         earliest_start, latest_start, electricity_profile = [], [], []

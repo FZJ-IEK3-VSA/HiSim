@@ -218,7 +218,7 @@ class L2HeatSmartController(cp.Component):
             cp.ComponentConnection(
                 L2HeatSmartController.ReferenceTemperature,
                 building_classname,
-                Building.TemperatureMean,
+                Building.TemperatureMeanThermalMass,
             )
         )
         return connections
@@ -250,7 +250,7 @@ class L2HeatSmartController(cp.Component):
             cp.ComponentConnection(
                 L2HeatSmartController.L1RunTimeSignal,
                 l1_classname,
-                controller_l1_generic_runtime.L1GenericRuntimeController.l1_RunTimeSignal,
+                controller_l1_generic_runtime.L1GenericRuntimeController.L1RunTimeSignal,
             )
         )
         return connections

@@ -311,6 +311,7 @@ def setup_function(
             my_simulation_parameters=my_simulation_parameters,
             count=count,
             smart_devices_included=smart_devices_included,
+            my_occupancy_instance=my_occupancy,
         )
 
     # """SURPLUS CONTROLLER"""

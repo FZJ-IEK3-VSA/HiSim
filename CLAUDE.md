@@ -97,3 +97,30 @@ All RenoVisor translation code lives in `hisim/renovisor/` — schema validation
 2. Define a `@dataclass MyComponentConfig(ConfigBase)` with `get_main_classname()` and a `get_default_*` classmethod.
 3. Subclass `Component`, declare inputs/outputs in `__init__`, implement the four lifecycle methods.
 4. Add a test in `tests/test_my_component.py`; use `SimulationParameters.full_year(year=2021, seconds_per_timestep=60)` for a minimal test setup.
+
+## Scenario Editor (`system_setups/editor/`)
+
+A web-based visual editor for `*.scenario.json` files. Stack: Vite + React + TypeScript + React Flow + Tailwind CSS + Zustand. Full spec in `system_setups/editor/SPEC.md`.
+
+### Prerequisites
+- Node.js 20 LTS — install via [nvm-windows](https://github.com/coreybutler/nvm-windows/releases): `nvm install 20 && nvm use 20`
+- Python in `hisimvenv` (already required for HiSim)
+
+### One-time JS setup
+```powershell
+cd system_setups/editor
+npm install
+```
+
+### Regenerate component / enum databases (run after adding or changing components)
+```bash
+# repo root, hisimvenv active
+python tools/generate_component_db.py
+```
+Writes `system_setups/editor/public/data/component_db.json` and `enum_db.json`.
+
+### Run dev server
+```powershell
+cd system_setups/editor
+npm run dev     # → http://localhost:5173
+```

@@ -54,8 +54,8 @@ class SmartController(Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        controllers: Optional[Dict[str, List[str]]],
         config: SmartControllerConfig,
+        controllers: Optional[Dict[str, List[str]]] = None,
         my_display_config: DisplayConfig = DisplayConfig(),
         wrapped_controllers: Optional[List[Any]] = None,
     ) -> None:

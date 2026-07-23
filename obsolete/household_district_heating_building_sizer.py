@@ -339,13 +339,13 @@ def setup_function(
     my_car_battery_controllers: List[controller_l1_generic_ev_charge.L1Controller] = []
     # iterate over all cars
     car_number = 1
-    for car_information_dict in my_car_information.data_dict_for_car_component.values():
+    for car_information in my_car_information.data_dict_for_car_component.values():
         # Build Electric Vehicles
         my_car_config.name = f"ElectricCar_{car_number}"
         my_car = generic_car.Car(
             my_simulation_parameters=my_simulation_parameters,
             config=my_car_config,
-            data_dict_with_car_information=car_information_dict,
+            car_information=car_information,
         )
         my_cars.append(my_car)
         # Build Electric Vehicle Batteries

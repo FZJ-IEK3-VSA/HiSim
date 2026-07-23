@@ -367,13 +367,13 @@ def setup_function(
 
     # create all cars
     my_cars: List[generic_car.Car] = []
-    for idx, car_information_dict in enumerate(my_car_information.data_dict_for_car_component.values()):
-        my_car_config.name = car_information_dict["car_name"] + f"_{idx}"
+    for idx, car_information in enumerate(my_car_information.data_dict_for_car_component.values()):
+        my_car_config.name = car_information.car_name + f"_{idx}"
         my_cars.append(
             generic_car.Car(
                 my_simulation_parameters=my_simulation_parameters,
                 config=my_car_config,
-                data_dict_with_car_information=car_information_dict,
+                car_information=car_information,
             )
         )
 

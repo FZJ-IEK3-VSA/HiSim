@@ -65,6 +65,8 @@ opex_techno_economic_parameters = {
             "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8]
             "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
             "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
+            "coal_costs_in_euro_per_t": 300,  # EUR/t approx. hard coal (Steinkohle) retail price in DE
+            "coal_footprint_in_kg_per_kwh": 0.341,  # kgCO2eq/kWh Source: BAFA/UBA hard coal
             "district_heating_costs_in_euro_per_kwh": 0.07672,  # EUR/kWh Source : [16]
             "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
             "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # Source: [17] using value of 2020 and assuming it is almost constant for several years
@@ -84,6 +86,8 @@ opex_techno_economic_parameters = {
             "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8]
             "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
             "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
+            "coal_costs_in_euro_per_t": 300,  # EUR/t approx. hard coal (Steinkohle) retail price in DE
+            "coal_footprint_in_kg_per_kwh": 0.341,  # kgCO2eq/kWh Source: BAFA/UBA hard coal
             "district_heating_costs_in_euro_per_kwh": 0.07904,  # EUR/kWh Source : [16]
             "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
             "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # Source: [17] using value of 2020 and assuming it is almost constant for several years
@@ -103,6 +107,8 @@ opex_techno_economic_parameters = {
             "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8]
             "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
             "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
+            "coal_costs_in_euro_per_t": 300,  # EUR/t approx. hard coal (Steinkohle) retail price in DE
+            "coal_footprint_in_kg_per_kwh": 0.341,  # kgCO2eq/kWh Source: BAFA/UBA hard coal
             "district_heating_costs_in_euro_per_kwh": 0.07656,  # EUR/kWh Source : [16]
             "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
             "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # Source: [17] using value of 2020 and assuming it is almost constant for several years
@@ -122,6 +128,8 @@ opex_techno_economic_parameters = {
             "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8]
             "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
             "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
+            "coal_costs_in_euro_per_t": 300,  # EUR/t approx. hard coal (Steinkohle) retail price in DE
+            "coal_footprint_in_kg_per_kwh": 0.341,  # kgCO2eq/kWh Source: BAFA/UBA hard coal
             "district_heating_costs_in_euro_per_kwh": 0.08277,  # EUR/kWh Source : [16]
             "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
             "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # Source: [17] using value of 2020 and assuming it is almost constant for several years
@@ -141,6 +149,8 @@ opex_techno_economic_parameters = {
             "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8]
             "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
             "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
+            "coal_costs_in_euro_per_t": 300,  # EUR/t approx. hard coal (Steinkohle) retail price in DE
+            "coal_footprint_in_kg_per_kwh": 0.341,  # kgCO2eq/kWh Source: BAFA/UBA hard coal
             "district_heating_costs_in_euro_per_kwh": 0.11945,  # EUR/kWh Source : [16]
             "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
             "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # Source: [17] using value of 2020 and assuming it is almost constant for several years
@@ -160,6 +170,8 @@ opex_techno_economic_parameters = {
             "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [8]
             "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
             "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
+            "coal_costs_in_euro_per_t": 300,  # EUR/t approx. hard coal (Steinkohle) retail price in DE
+            "coal_footprint_in_kg_per_kwh": 0.341,  # kgCO2eq/kWh Source: BAFA/UBA hard coal
             "district_heating_costs_in_euro_per_kwh": 0.15034,  # EUR/kWh Source : [16]
             "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
             "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # Source: [17] using value of 2020 and assuming it is almost constant for several years
@@ -179,6 +191,8 @@ opex_techno_economic_parameters = {
             "pellet_footprint_in_kg_per_kwh": 0.036,  # kgCo2eq/kWh # Source: [22]
             "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: [15]
             "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
+            "coal_costs_in_euro_per_t": 300,  # EUR/t approx. hard coal (Steinkohle) retail price in DE
+            "coal_footprint_in_kg_per_kwh": 0.341,  # kgCO2eq/kWh Source: BAFA/UBA hard coal
             "district_heating_costs_in_euro_per_kwh": 0.121,  # EUR/kWh # Source: [22], normal costs + CO2-price of 2024
             "district_heating_footprint_in_kg_per_kwh": 0.169,  # kgCo2eq/kWh # Source: [22]
             "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # Source: [17] using value of 2020 and assuming it is almost constant for several years
@@ -198,6 +212,8 @@ opex_techno_economic_parameters = {
             "pellet_footprint_in_kg_per_kwh": 0.0,  # kgCo2eq/kWh # assume carbon free
             "wood_chip_costs_in_euro_per_t": 96,  # EUR/t Source: own assumption, same as 2024
             "wood_chip_footprint_in_kg_per_kwh": 0.0,  # kgCo2eq/kWh # assume carbon free
+            "coal_costs_in_euro_per_t": 400,  # EUR/t own assumption, higher due to carbon pricing in 2050
+            "coal_footprint_in_kg_per_kwh": 0.341,  # kgCO2eq/kWh Source: BAFA/UBA hard coal (unchanged physical property)
             "district_heating_costs_in_euro_per_kwh": 0.1410,  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
             "district_heating_footprint_in_kg_per_kwh": 0.0,  # kgCO2eq/kWh  # Source: [22], carbon free in 2050
             "green_hydrogen_gas_costs_in_euro_per_kwh": 0.1790,  # Source: [22], normal costs + CO2-price of 2050 (2050 CO2-price from linear regression)
@@ -219,6 +235,8 @@ opex_techno_economic_parameters = {
             "pellet_footprint_in_kg_per_kwh": 0.026,  # [24]
             "wood_chip_costs_in_euro_per_t": 307.02,  # [30]
             "wood_chip_footprint_in_kg_per_kwh": 0.019,  # [24]
+            "coal_costs_in_euro_per_t": 330,  # EUR/t approx. hard coal retail price in AT (DE + 11%)
+            "coal_footprint_in_kg_per_kwh": 0.341,  # kgCO2eq/kWh Source: BAFA/UBA hard coal
             "district_heating_costs_in_euro_per_kwh": 0.1,  # average estimated based on [31]
             "district_heating_footprint_in_kg_per_kwh": 0.179,  # [24] district heating average
             "green_hydrogen_gas_costs_in_euro_per_kwh": 0.39,  # average value from [32]
@@ -238,6 +256,8 @@ opex_techno_economic_parameters = {
             "pellet_footprint_in_kg_per_kwh": 0.026,  # [24]
             "wood_chip_costs_in_euro_per_t": 307.02,  # assume same value as 2025
             "wood_chip_footprint_in_kg_per_kwh": 0.019,  # [24]
+            "coal_costs_in_euro_per_t": 330,  # EUR/t own assumption, same as 2025
+            "coal_footprint_in_kg_per_kwh": 0.341,  # kgCO2eq/kWh Source: BAFA/UBA hard coal
             "district_heating_costs_in_euro_per_kwh": 0.1,  # assume same value as 2025
             "district_heating_footprint_in_kg_per_kwh": 0.179,  # [24]
             "green_hydrogen_gas_costs_in_euro_per_kwh": 0.39,  # assume same value as 2025
@@ -265,6 +285,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
     pellet_footprint_in_kg_per_kwh: float  # kgCo2eq/kWh
     wood_chip_costs_in_euro_per_t: float  # EUR/t
     wood_chip_footprint_in_kg_per_kwh: float  # kgCo2eq/kWh
+    coal_costs_in_euro_per_t: float  # EUR/t
+    coal_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
     district_heating_costs_in_euro_per_kwh: float  # EUR/kWh
     district_heating_footprint_in_kg_per_kwh: float  # kgCo2eq/kWh
     green_hydrogen_gas_costs_in_euro_per_kwh: float  # EUR/kWh
@@ -361,6 +383,14 @@ capex_techno_economic_parameters = {
                 "technical_lifetime_in_years": 18,  # Source: [20]
                 "co2_footprint_in_kg_per_kw": 49.47,  # assume similar to gas heater based on [19]
                 "subsidy_as_percentage_of_investment_costs": 0.3,
+            },
+            ComponentType.COAL_HEATER: {
+                # coal boiler (Festbrennstoffkessel), assume similar to wood chip boiler but without subsidy
+                "investment_costs_in_euro_per_kw": 0.80 * 1600 * (1 + 0.10),  # ~80% of HP cost + 10% for fuel storage
+                "maintenance_costs_as_percentage_of_investment_per_year": 0.05,  # higher due to ash removal
+                "technical_lifetime_in_years": 20,
+                "co2_footprint_in_kg_per_kw": 49.47,  # assume similar to gas heater based on [19]
+                "subsidy_as_percentage_of_investment_costs": 0,  # no subsidy for coal
             },
             ComponentType.DISTRICT_HEATING: {
                 "investment_costs_in_euro_per_kw": 0.636 * 1600,  # 63.6% of heat pump costs, Source: [20]
@@ -494,6 +524,13 @@ capex_techno_economic_parameters = {
                 "maintenance_costs_as_percentage_of_investment_per_year": 400 / (2000 * 10),  # assuming a 10 kW device, Source: [37]
                 "technical_lifetime_in_years": 25,
                 "co2_footprint_in_kg_per_kw": 120,  # Source: [41]
+                "subsidy_as_percentage_of_investment_costs": 0,
+            },
+            ComponentType.COAL_HEATER: {
+                "investment_costs_in_euro_per_kw": 1500,  # own assumption, similar to wood chip heater
+                "maintenance_costs_as_percentage_of_investment_per_year": 300 / (1500 * 10),  # assuming a 10 kW device
+                "technical_lifetime_in_years": 20,
+                "co2_footprint_in_kg_per_kw": 50,  # own assumption, similar to gas heater [41]
                 "subsidy_as_percentage_of_investment_costs": 0,
             },
             ComponentType.DISTRICT_HEATING: {
@@ -933,6 +970,17 @@ class PhysicsConfig:
                 lower_heating_value_in_joule_per_m3=15.6 * 1e9,
                 higher_heating_value_in_joule_per_m3=15.6 * 1e9,
                 specific_heat_capacity_in_joule_per_kg_per_kelvin=2000,  # estimated based on values for different woods
+            )
+        if energy_carrier == LoadTypes.COAL:
+            # hard coal (Steinkohle / anthracite) bulk properties
+            # density (bulk): ~800 kg/m3; lower HV: ~29.3 MJ/kg; higher HV: ~31.0 MJ/kg
+            # sources: VDI-Wärmeatlas, https://www.chemie.de/lexikon/Steinkohle.html
+            # higher heating value of coal unknown -> set to lower heating value
+            return PhysicsConfig(
+                density_in_kg_per_m3=800,
+                lower_heating_value_in_joule_per_m3=29.3e6 * 800,
+                higher_heating_value_in_joule_per_m3=29.3e6 * 800,
+                specific_heat_capacity_in_joule_per_kg_per_kelvin=1300,
             )
         if energy_carrier == LoadTypes.WATER:
             return PhysicsConfig(

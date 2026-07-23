@@ -310,6 +310,40 @@ class GenericBoilerConfig(ConfigBase):
         return config
 
     @classmethod
+    def get_scaled_conventional_coal_boiler_config(
+        cls,
+        heating_load_of_building_in_watt: float,
+        number_of_apartments_in_building: Optional[int] = None,
+        building_name: str = "BUI1",
+    ) -> Any:
+        """Get a conventional coal boiler scaled to heating load.
+
+        Coal boilers are conventional (no condensing mode available).
+        They operate as on-off burners with significant minimum run/idle times.
+        """
+        maximal_thermal_power_in_watt = cls.scale_thermal_power(
+            heating_load_of_building_in_watt, number_of_apartments_in_building
+        )
+        config = GenericBoilerConfig(
+            building_name=building_name,
+            name="ConventionalCoalBoiler",
+            boiler_type=BoilerType.CONVENTIONAL,
+            energy_carrier=lt.LoadTypes.COAL,
+            temperature_delta_in_celsius=20,
+            minimal_thermal_power_in_watt=1 / 12 * maximal_thermal_power_in_watt,
+            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            eff_th_min=0.55,
+            eff_th_max=0.80,
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
+            consumption_in_kilowatt_hour=0,
+        )
+        return config
+
+    @classmethod
     def get_scaled_condensing_hydrogen_boiler_config(
         cls,
         heating_load_of_building_in_watt: float,
@@ -818,6 +852,9 @@ class GenericBoiler(Component):
         elif config.energy_carrier == lt.LoadTypes.WOOD_CHIPS:
             kpi_tag = KpiTagEnumClass.WOOD_CHIP_BOILER
             component_type = lt.ComponentType.WOOD_CHIP_HEATER
+        elif config.energy_carrier == lt.LoadTypes.COAL:
+            kpi_tag = KpiTagEnumClass.COAL_BOILER
+            component_type = lt.ComponentType.COAL_HEATER
         else:
             raise ValueError(f"Energy carrier {config.energy_carrier} for generic_boiler not implemented yet.")
 
@@ -904,6 +941,13 @@ class GenericBoiler(Component):
             kpi_tag = KpiTagEnumClass.WOOD_CHIP_BOILER
             co2_per_unit = emissions_and_cost_factors.wood_chip_footprint_in_kg_per_kwh
             euro_per_unit = emissions_and_cost_factors.wood_chip_costs_in_euro_per_t
+            co2_per_simulated_period_in_kg = self.config.consumption_in_kilowatt_hour * co2_per_unit
+            opex_energy_cost_per_simulated_period_in_euro = self.fuel_consumption_in_kg / 1000 * euro_per_unit
+
+        elif self.energy_carrier == lt.LoadTypes.COAL:
+            kpi_tag = KpiTagEnumClass.COAL_BOILER
+            co2_per_unit = emissions_and_cost_factors.coal_footprint_in_kg_per_kwh
+            euro_per_unit = emissions_and_cost_factors.coal_costs_in_euro_per_t
             co2_per_simulated_period_in_kg = self.config.consumption_in_kilowatt_hour * co2_per_unit
             opex_energy_cost_per_simulated_period_in_euro = self.fuel_consumption_in_kg / 1000 * euro_per_unit
 
@@ -1190,6 +1234,35 @@ class GenericBoilerControllerConfig(ConfigBase):
             set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
             minimum_resting_time_in_seconds=15 * 60,
             minimum_runtime_in_seconds=30 * 60,
+            secondary_mode=False,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
+            with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
+            hysteresis_water_temperature_offset=10,
+        )
+
+    @classmethod
+    def get_default_coal_controller_config(
+        cls,
+        maximal_thermal_power_in_watt: float,
+        minimal_thermal_power_in_watt: float,
+        with_domestic_hot_water_preparation: bool = False,
+        set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
+        building_name: str = "BUI1",
+    ) -> Any:
+        """Gets a default controller for coal boiler.
+
+        Coal boilers are on-off (not modulating). They require significant
+        minimum run and resting times due to slow thermal response of the fuel bed.
+        """
+        return GenericBoilerControllerConfig(
+            building_name=building_name,
+            name="CoalBoilerController",
+            is_modulating=False,
+            minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
+            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            set_temperature_difference_for_full_power=5.0,
+            minimum_resting_time_in_seconds=20 * 60,
+            minimum_runtime_in_seconds=45 * 60,
             secondary_mode=False,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,

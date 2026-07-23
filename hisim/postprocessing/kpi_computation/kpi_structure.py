@@ -27,6 +27,7 @@ class KpiTagEnumClass(Enum):
     OIL_BOILER = "Oil Boiler"
     PELLET_BOILER = "Pellet Boiler"
     WOOD_CHIP_BOILER = "Wood Chip Boiler"
+    COAL_BOILER = "Coal Boiler"
     HYDROGEN_BOILER = "Hydrogen Boiler"
     DISTRICT_HEATING = "District Heating"
     GAS_METER = "Gas Meter"

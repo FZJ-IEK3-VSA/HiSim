@@ -3,7 +3,7 @@
 from __future__ import annotations
 import os
 import inspect
-from typing import List, Optional, Sequence
+from typing import Any, List, Optional, Sequence
 import enum
 
 import datetime
@@ -96,6 +96,23 @@ class SimulationParameters(JSONWizard):
         self.multiple_buildings = multiple_buildings
         self.figure_format = FigureFormat.PNG
         self.log_connections = log_connections
+        # Parameters of the parallel lifecycle cost engine (cost_spec.md §3.2). Deliberately a
+        # plain attribute (not a dataclass field) so *.simulation.json round-trips stay
+        # byte-identical during the parallel phase; set via set_economic_parameters() or the
+        # RenoVisor request (see cost_module_issues.md #5).
+        self.economic_parameters: Optional[Any] = None
+        # Optional hisim.economics.bridge.EconomicContext: existing assets, subsidy context,
+        # envelope measures, tenancy data and scenario sets a system setup declares for the
+        # lifecycle cost engine (see system_setups/economic_example/).
+        self.economic_context: Optional[Any] = None
+
+    def set_economic_parameters(self, economic_parameters: Any) -> None:
+        """Attaches EconomicParameters for the lifecycle cost engine (cost_spec.md §3.2)."""
+        self.economic_parameters = economic_parameters
+
+    def set_economic_context(self, economic_context: Any) -> None:
+        """Attaches an EconomicContext for the lifecycle cost engine (cost_spec.md §4-§6)."""
+        self.economic_context = economic_context
 
     @classmethod
     def full_year(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:

@@ -7,7 +7,7 @@ import hashlib
 
 # clean
 import importlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, List, Optional, Dict
 
 import pandas as pd
@@ -29,6 +29,7 @@ from hisim.component import (
 )
 from hisim.components import weather, simple_water_storage, heat_distribution_system
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
+from hisim.economics.facts import ComponentCostFacts, CostRelevance
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules, ComponentType
 from hisim.units import (
     Quantity,
@@ -71,7 +72,8 @@ class HeatPumpHplibConfig(ConfigBase):
     group_id: int
     heating_reference_temperature_in_celsius: Quantity[float, Celsius]  # before t_in
     flow_temperature_in_celsius: Quantity[float, Celsius]  # before t_out_val
-    set_thermal_output_power_in_watt: Quantity[float, Watt]  # before p_th_set
+    # marked as the capacity field for the cost-facts contract test (cost_spec.md §9.4)
+    set_thermal_output_power_in_watt: Quantity[float, Watt] = field(metadata={"capacity": True})  # before p_th_set
     cycling_mode: bool
     minimum_running_time_in_seconds: Optional[Quantity[int, Seconds]]
     minimum_idle_time_in_seconds: Optional[Quantity[int, Seconds]]
@@ -157,6 +159,10 @@ class HeatPumpHplib(Component):
     Relevant simulation parameters are loaded within the init for a
     specific or generic heat pump type.
     """
+
+    # Lifecycle cost engine declaration (cost_spec.md §9.2); the legacy get_cost_capex/opex
+    # methods below stay untouched until the Phase-7 cutover.
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     OnOffSwitch = "OnOffSwitch"  # 1 = on, 0 = 0ff
@@ -622,6 +628,30 @@ class HeatPumpHplib(Component):
         config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
 
         return capex_cost_data_class
+
+    def get_cost_facts(self) -> ComponentCostFacts:
+        """Cost facts for the lifecycle cost engine (cost_spec.md §3.3, §9.1)."""
+        config = self.config
+        return ComponentCostFacts(
+            asset_class=ComponentType.HEAT_PUMP,
+            size=config.set_thermal_output_power_in_watt.value * 1e-3,
+            size_unit=Units.KILOWATT,
+            kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            investment_cost_override_in_euro=(
+                config.investment_costs_in_euro.value if config.investment_costs_in_euro is not None else None
+            ),
+            lifetime_override_in_years=(
+                config.lifetime_in_years.value if config.lifetime_in_years is not None else None
+            ),
+            embodied_co2_override_in_kg=(
+                config.device_co2_footprint_in_kg.value if config.device_co2_footprint_in_kg is not None else None
+            ),
+            override_source=(
+                "component config (e.g. building_sizer / RenoVisor request)"
+                if config.investment_costs_in_euro is not None
+                else None
+            ),
+        )
 
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of maintenance costs.

@@ -1,0 +1,24 @@
+{
+  "catalog_snapshot_date": "2026-07-07",
+  "overall_cap_share": null,
+  "schemes": [
+    {
+      "id": "AT_RAUS_AUS_OEL_HP_2024",
+      "jurisdiction": {"country": "AT", "region": null},
+      "valid_from": "2024-01-01",
+      "valid_to": null,
+      "legal_basis": "Umweltfoerderungsgesetz (UFG), 'Raus aus Oel und Gas' 2024",
+      "url": "https://www.umweltfoerderung.at/privatpersonen/raus-aus-oel",
+      "source_ids": ["src_at_raus_aus_oel"],
+      "applies_to": {"asset_classes": ["HEAT_PUMP"], "measure_kinds": ["REPLACE"]},
+      "eligibility": {"all": [
+        {"field": "applicant.actor", "op": "in", "value": ["OWNER_OCCUPIER", "LANDLORD", "WEG"]},
+        {"field": "building.existing_heating.energy_carrier", "op": "in", "value": ["NATURAL_GAS", "HEATING_OIL"]}
+      ]},
+      "benefit": {"kind": "LUMP_SUM", "amount": 7500},
+      "eligible_cost": {"categories": ["INVESTMENT", "PLANNING", "REMOVAL"], "cap_per_dwelling_unit_in_euro": [], "basis": "GROSS", "proration": "NONE"},
+      "cumulation": {"group": "AT_FEDERAL", "combined_rate_cap": null, "excludes": []},
+      "payout": {"kind": "UPFRONT_GRANT"}
+    }
+  ]
+}

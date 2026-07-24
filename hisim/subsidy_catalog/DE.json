@@ -1,0 +1,837 @@
+{
+  "catalog_snapshot_date": "2026-07-07",
+  "overall_cap_share": null,
+  "schemes": [
+    {
+      "id": "DE_BEG_EM_HP_BASE_2024",
+      "jurisdiction": {
+        "country": "DE",
+        "region": null
+      },
+      "valid_from": "2024-01-01",
+      "valid_to": null,
+      "legal_basis": "BEG EM Richtlinie 2023-12-21, Nr. 8.4.1",
+      "url": "https://www.energiewechsel.de/KAENEF/Redaktion/DE/FAQ/faq-richtlinie-beg-em.html",
+      "source_ids": [
+        "src_beg_em_2023"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "HEAT_PUMP"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "WEG"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2019
+          },
+          {
+            "field": "building.residential_share",
+            "op": ">=",
+            "value": 0.5
+          },
+          {
+            "any": [
+              {
+                "field": "measure.technical_attributes.scop",
+                "op": ">=",
+                "value": 3.0
+              },
+              {
+                "all": [
+                  {
+                    "field": "building.heritage_status",
+                    "op": "!=",
+                    "value": "NONE"
+                  },
+                  {
+                    "field": "measure.technical_attributes.scop",
+                    "op": ">=",
+                    "value": 2.7
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "SHARE_OF_ELIGIBLE_COST",
+        "rate": 0.3
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [
+          30000,
+          15000,
+          15000,
+          15000,
+          15000,
+          15000,
+          8000
+        ],
+        "basis": "GROSS",
+        "proration": "RESIDENTIAL_SHARE"
+      },
+      "cumulation": {
+        "group": "DE_BEG_EM_RATES",
+        "combined_rate_cap": 0.7,
+        "excludes": [
+          "DE_TAX_35C_2024"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "DE_BEG_EM_HP_SPEED_2024",
+      "jurisdiction": {
+        "country": "DE",
+        "region": null
+      },
+      "valid_from": "2024-01-01",
+      "valid_to": null,
+      "legal_basis": "BEG EM Richtlinie 2023-12-21, Nr. 8.4.2 (Klimageschwindigkeits-Bonus)",
+      "url": "https://www.energiewechsel.de/KAENEF/Redaktion/DE/FAQ/faq-richtlinie-beg-em.html",
+      "source_ids": [
+        "src_beg_em_2023"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "HEAT_PUMP"
+        ],
+        "measure_kinds": [
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "==",
+            "value": "OWNER_OCCUPIER"
+          },
+          {
+            "field": "applicant.main_residence",
+            "op": "==",
+            "value": true
+          },
+          {
+            "field": "building.existing_heating.is_functional",
+            "op": "==",
+            "value": true
+          },
+          {
+            "field": "building.existing_heating.energy_carrier",
+            "op": "in",
+            "value": [
+              "NATURAL_GAS",
+              "HEATING_OIL",
+              "PELLETS",
+              "WOOD_CHIPS"
+            ]
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "BONUS_SHARE",
+        "rate": 0.2
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [
+          30000,
+          15000,
+          15000,
+          15000,
+          15000,
+          15000,
+          8000
+        ],
+        "basis": "GROSS",
+        "proration": "RESIDENTIAL_SHARE"
+      },
+      "cumulation": {
+        "group": "DE_BEG_EM_RATES",
+        "combined_rate_cap": 0.7,
+        "excludes": [
+          "DE_TAX_35C_2024"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "DE_BEG_EM_HP_INCOME_2024",
+      "jurisdiction": {
+        "country": "DE",
+        "region": null
+      },
+      "valid_from": "2024-01-01",
+      "valid_to": null,
+      "legal_basis": "BEG EM Richtlinie 2023-12-21, Nr. 8.4.3 (Einkommens-Bonus)",
+      "url": "https://www.energiewechsel.de/KAENEF/Redaktion/DE/FAQ/faq-richtlinie-beg-em.html",
+      "source_ids": [
+        "src_beg_em_2023"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "HEAT_PUMP"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "==",
+            "value": "OWNER_OCCUPIER"
+          },
+          {
+            "field": "applicant.main_residence",
+            "op": "==",
+            "value": true
+          },
+          {
+            "field": "applicant.taxable_household_income_in_euro",
+            "op": "<=",
+            "value": 40000
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "BONUS_SHARE",
+        "rate": 0.3
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [
+          30000,
+          15000,
+          15000,
+          15000,
+          15000,
+          15000,
+          8000
+        ],
+        "basis": "GROSS",
+        "proration": "RESIDENTIAL_SHARE"
+      },
+      "cumulation": {
+        "group": "DE_BEG_EM_RATES",
+        "combined_rate_cap": 0.7,
+        "excludes": [
+          "DE_TAX_35C_2024"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "DE_BEG_EM_HP_EFFICIENCY_2024",
+      "jurisdiction": {
+        "country": "DE",
+        "region": null
+      },
+      "valid_from": "2024-01-01",
+      "valid_to": null,
+      "legal_basis": "BEG EM Richtlinie 2023-12-21, Nr. 8.4.4 (Effizienz-Bonus)",
+      "url": "https://www.energiewechsel.de/KAENEF/Redaktion/DE/FAQ/faq-richtlinie-beg-em.html",
+      "source_ids": [
+        "src_beg_em_2023"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "HEAT_PUMP"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "any": [
+          {
+            "field": "measure.technical_attributes.refrigerant",
+            "op": "==",
+            "value": "R290"
+          },
+          {
+            "field": "measure.technical_attributes.heat_source",
+            "op": "in",
+            "value": [
+              "ground",
+              "water",
+              "waste_water"
+            ]
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "BONUS_SHARE",
+        "rate": 0.05
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [
+          30000,
+          15000,
+          15000,
+          15000,
+          15000,
+          15000,
+          8000
+        ],
+        "basis": "GROSS",
+        "proration": "RESIDENTIAL_SHARE"
+      },
+      "cumulation": {
+        "group": "DE_BEG_EM_RATES",
+        "combined_rate_cap": 0.7,
+        "excludes": [
+          "DE_TAX_35C_2024"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "DE_BEG_EM_SOLAR_2024",
+      "jurisdiction": {
+        "country": "DE",
+        "region": null
+      },
+      "valid_from": "2024-01-01",
+      "valid_to": null,
+      "legal_basis": "BEG EM Richtlinie 2023-12-21, Nr. 8.4.1 (Solarkollektoranlagen)",
+      "url": "https://www.energiewechsel.de/KAENEF/Redaktion/DE/FAQ/faq-richtlinie-beg-em.html",
+      "source_ids": [
+        "src_beg_em_2023"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "SOLAR_THERMAL_SYSTEM"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "WEG"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2019
+          },
+          {
+            "field": "building.residential_share",
+            "op": ">=",
+            "value": 0.5
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "SHARE_OF_ELIGIBLE_COST",
+        "rate": 0.3
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [
+          30000,
+          15000,
+          15000,
+          15000,
+          15000,
+          15000,
+          8000
+        ],
+        "basis": "GROSS",
+        "proration": "RESIDENTIAL_SHARE"
+      },
+      "cumulation": {
+        "group": "DE_BEG_EM_RATES_ST",
+        "combined_rate_cap": 0.7,
+        "excludes": [
+          "DE_TAX_35C_2024"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "DE_TAX_35C_2024",
+      "jurisdiction": {
+        "country": "DE",
+        "region": null
+      },
+      "valid_from": "2020-01-01",
+      "valid_to": null,
+      "legal_basis": "EStG \u00a735c",
+      "url": "https://www.gesetze-im-internet.de/estg/__35c.html",
+      "source_ids": [
+        "src_estg_35c"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "HEAT_PUMP",
+          "SOLAR_THERMAL_SYSTEM",
+          "HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING",
+          "WALL_INSULATION",
+          "ROOF_INSULATION",
+          "TOP_CEILING_INSULATION",
+          "FLOOR_INSULATION",
+          "WINDOWS",
+          "EXTERIOR_DOOR",
+          "AIR_SEALING",
+          "VENTILATION_SYSTEM"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "==",
+            "value": "OWNER_OCCUPIER"
+          },
+          {
+            "field": "applicant.main_residence",
+            "op": "==",
+            "value": true
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2014
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "TAX_CREDIT",
+        "rate": 0.2,
+        "years": 3,
+        "annual_shares": [
+          0.35,
+          0.35,
+          0.3
+        ]
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [
+          200000
+        ],
+        "basis": "GROSS",
+        "proration": "RESIDENTIAL_SHARE"
+      },
+      "cumulation": {
+        "group": "DE_TAX",
+        "combined_rate_cap": null,
+        "excludes": [
+          "DE_BEG_EM_HP_BASE_2024",
+          "DE_BEG_EM_HP_SPEED_2024",
+          "DE_BEG_EM_HP_INCOME_2024",
+          "DE_BEG_EM_HP_EFFICIENCY_2024",
+          "DE_BEG_EM_SOLAR_2024",
+          "DE_KFW_358_LOAN_2024",
+          "DE_BEG_EM_ENVELOPE_2024",
+          "DE_BEG_EM_ENVELOPE_ISFP_2024"
+        ]
+      },
+      "payout": {
+        "kind": "TAX_CREDIT_SCHEDULE"
+      }
+    },
+    {
+      "id": "DE_KFW_358_LOAN_2024",
+      "jurisdiction": {
+        "country": "DE",
+        "region": null
+      },
+      "valid_from": "2024-01-01",
+      "valid_to": null,
+      "legal_basis": "KfW Ergaenzungskredit 358/359",
+      "url": "https://www.kfw.de/inlandsfoerderung/Privatpersonen/Bestehende-Immobilie/F%C3%B6rderprodukte/Erg%C3%A4nzungskredit-Wohngeb%C3%A4ude-(358-359)/",
+      "source_ids": [
+        "src_kfw_358"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "HEAT_PUMP",
+          "SOLAR_THERMAL_SYSTEM"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "WEG"
+            ]
+          },
+          {
+            "field": "applicant.taxable_household_income_in_euro",
+            "op": "<=",
+            "value": 90000
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "SOFT_LOAN",
+        "interest_rate": 0.02,
+        "term": 20,
+        "repayment_grant_rate": 0.0
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [
+          120000
+        ],
+        "basis": "GROSS",
+        "proration": "NONE"
+      },
+      "cumulation": {
+        "group": "DE_LOANS",
+        "combined_rate_cap": null,
+        "excludes": [
+          "DE_TAX_35C_2024"
+        ]
+      },
+      "payout": {
+        "kind": "LOAN_TERMS"
+      }
+    },
+    {
+      "id": "DE_BEG_EM_ENVELOPE_2024",
+      "jurisdiction": {
+        "country": "DE",
+        "region": null
+      },
+      "valid_from": "2024-01-01",
+      "valid_to": null,
+      "legal_basis": "BEG EM Richtlinie 2023-12-21, Nr. 8.3.1 (Gebaeudehuelle) + Anlage TMA",
+      "url": "https://www.energiewechsel.de/KAENEF/Redaktion/DE/FAQ/faq-richtlinie-beg-em.html",
+      "source_ids": [
+        "src_beg_em_2023"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_INSULATION",
+          "ROOF_INSULATION",
+          "TOP_CEILING_INSULATION",
+          "FLOOR_INSULATION",
+          "WINDOWS",
+          "EXTERIOR_DOOR",
+          "AIR_SEALING",
+          "VENTILATION_SYSTEM"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "WEG"
+            ]
+          },
+          {
+            "field": "building.construction_year",
+            "op": "<=",
+            "value": 2019
+          },
+          {
+            "field": "building.residential_share",
+            "op": ">=",
+            "value": 0.5
+          },
+          {
+            "any": [
+              {
+                "all": [
+                  {
+                    "field": "measure.asset_class",
+                    "op": "==",
+                    "value": "WallInsulation"
+                  },
+                  {
+                    "field": "measure.technical_attributes.u_value",
+                    "op": "<=",
+                    "value": 0.2
+                  }
+                ]
+              },
+              {
+                "all": [
+                  {
+                    "field": "measure.asset_class",
+                    "op": "==",
+                    "value": "RoofInsulation"
+                  },
+                  {
+                    "field": "measure.technical_attributes.u_value",
+                    "op": "<=",
+                    "value": 0.14
+                  }
+                ]
+              },
+              {
+                "all": [
+                  {
+                    "field": "measure.asset_class",
+                    "op": "==",
+                    "value": "TopCeilingInsulation"
+                  },
+                  {
+                    "field": "measure.technical_attributes.u_value",
+                    "op": "<=",
+                    "value": 0.14
+                  }
+                ]
+              },
+              {
+                "all": [
+                  {
+                    "field": "measure.asset_class",
+                    "op": "==",
+                    "value": "FloorInsulation"
+                  },
+                  {
+                    "field": "measure.technical_attributes.u_value",
+                    "op": "<=",
+                    "value": 0.25
+                  }
+                ]
+              },
+              {
+                "all": [
+                  {
+                    "field": "measure.asset_class",
+                    "op": "==",
+                    "value": "Windows"
+                  },
+                  {
+                    "field": "measure.technical_attributes.u_value",
+                    "op": "<=",
+                    "value": 0.95
+                  }
+                ]
+              },
+              {
+                "all": [
+                  {
+                    "field": "measure.asset_class",
+                    "op": "==",
+                    "value": "ExteriorDoor"
+                  },
+                  {
+                    "field": "measure.technical_attributes.u_value",
+                    "op": "<=",
+                    "value": 1.3
+                  }
+                ]
+              },
+              {
+                "field": "measure.asset_class",
+                "op": "in",
+                "value": [
+                  "AirSealing",
+                  "VentilationSystem"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "SHARE_OF_ELIGIBLE_COST",
+        "rate": 0.15
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [
+          30000,
+          30000,
+          30000,
+          30000,
+          30000,
+          30000,
+          30000
+        ],
+        "basis": "GROSS",
+        "proration": "RESIDENTIAL_SHARE"
+      },
+      "cumulation": {
+        "group": "DE_BEG_EM_ENVELOPE_RATES",
+        "combined_rate_cap": 0.2,
+        "excludes": [
+          "DE_TAX_35C_2024"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    },
+    {
+      "id": "DE_BEG_EM_ENVELOPE_ISFP_2024",
+      "jurisdiction": {
+        "country": "DE",
+        "region": null
+      },
+      "valid_from": "2024-01-01",
+      "valid_to": null,
+      "legal_basis": "BEG EM Richtlinie 2023-12-21, Nr. 8.3.2 (iSFP-Bonus)",
+      "url": "https://www.energiewechsel.de/KAENEF/Redaktion/DE/FAQ/faq-richtlinie-beg-em.html",
+      "source_ids": [
+        "src_beg_em_2023"
+      ],
+      "applies_to": {
+        "asset_classes": [
+          "WALL_INSULATION",
+          "ROOF_INSULATION",
+          "TOP_CEILING_INSULATION",
+          "FLOOR_INSULATION",
+          "WINDOWS",
+          "EXTERIOR_DOOR",
+          "AIR_SEALING",
+          "VENTILATION_SYSTEM"
+        ],
+        "measure_kinds": [
+          "INSTALL",
+          "REPLACE"
+        ]
+      },
+      "eligibility": {
+        "all": [
+          {
+            "field": "applicant.actor",
+            "op": "in",
+            "value": [
+              "OWNER_OCCUPIER",
+              "LANDLORD",
+              "WEG"
+            ]
+          },
+          {
+            "field": "building.has_isfp",
+            "op": "==",
+            "value": true
+          }
+        ]
+      },
+      "benefit": {
+        "kind": "BONUS_SHARE",
+        "rate": 0.05
+      },
+      "eligible_cost": {
+        "categories": [
+          "INVESTMENT",
+          "PLANNING",
+          "REMOVAL"
+        ],
+        "cap_per_dwelling_unit_in_euro": [
+          30000,
+          30000,
+          30000,
+          30000,
+          30000,
+          30000,
+          30000
+        ],
+        "basis": "GROSS",
+        "proration": "RESIDENTIAL_SHARE"
+      },
+      "cumulation": {
+        "group": "DE_BEG_EM_ENVELOPE_RATES",
+        "combined_rate_cap": 0.2,
+        "excludes": [
+          "DE_TAX_35C_2024"
+        ]
+      },
+      "payout": {
+        "kind": "UPFRONT_GRANT"
+      }
+    }
+  ]
+}

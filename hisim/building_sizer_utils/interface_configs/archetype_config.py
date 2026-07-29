@@ -55,3 +55,18 @@ class ArcheTypeConfig:
     construction_year: int = 1964
     coordinates_latitude: float = 50.77664
     coordinates_longitude: float = 6.0834
+
+    # Optional building-envelope override. If any of these are set, the value is passed through to
+    # the Building component and used instead of the TABULA archetype default. If left None (default),
+    # the envelope is derived from the TABULA building_code exactly as before (opt-in, backward compatible).
+    building_heat_capacity_class: Optional[str] = None
+    floor_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
+    floor_area_in_m2: Optional[float] = None
+    facade_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
+    facade_area_in_m2: Optional[float] = None
+    roof_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
+    roof_area_in_m2: Optional[float] = None
+    window_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
+    window_area_in_m2: Optional[float] = None
+    door_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
+    door_area_in_m2: Optional[float] = None

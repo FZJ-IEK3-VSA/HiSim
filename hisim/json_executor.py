@@ -159,9 +159,13 @@ def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.
                         log.warning(f"Unexpected value for result_dir_path in UtspLpgConnector config: {config_dict['result_dir_path']}.")
                     # UtspLpgConnectorConfig has values of type JsonReference, which need to be converted to pascal-case
                     config_dict["household"] = humps.pascalize(config_dict["household"])
-                    config_dict["travel_route_set"] = humps.pascalize(config_dict["travel_route_set"])
-                    config_dict["transportation_device_set"] = humps.pascalize(config_dict["transportation_device_set"])
-                    config_dict["charging_station_set"] = humps.pascalize(config_dict["charging_station_set"])
+                    # The three mobility fields are Optional: null means "no transportation", which
+                    # the connector requires for all three at once (see execute_local_lpg_single_household).
+                    # humps.pascalize(None) returns "" rather than None, and an empty string cannot be
+                    # decoded into a JsonReference -- so leave None values alone.
+                    for mobility_field in ("travel_route_set", "transportation_device_set", "charging_station_set"):
+                        if config_dict.get(mobility_field) is not None:
+                            config_dict[mobility_field] = humps.pascalize(config_dict[mobility_field])
                 elif comp_def["component_full_classname"] == "hisim.components.controller_l1_generic_ev_charge.L1Controller":
                     config_dict["charging_station_set"] = humps.pascalize(config_dict["charging_station_set"])
                 elif comp_def["component_full_classname"] == "hisim.components.weather.Weather":

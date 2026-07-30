@@ -1,5 +1,5 @@
 import type { Edge } from '@xyflow/react'
-import type { DynamicInputPort } from '../types'
+import type { DynamicInputPort, DynamicOutputPort } from '../types'
 import type { HiSimNode } from '../store'
 
 export interface ScenarioJson {
@@ -21,6 +21,7 @@ export function exportScenario(
 
   const components = nodes.map((node) => {
     const dynInputs = (node.data.dynamicInputs as DynamicInputPort[] | undefined) ?? []
+    const dynOutputs = (node.data.dynamicOutputs as DynamicOutputPort[] | undefined) ?? []
     return {
       component_full_classname: node.data.entry.component_full_classname,
       configuration: node.data.config,
@@ -34,7 +35,18 @@ export function exportScenario(
         source_tags: inp.source_tags,
         source_weight: inp.source_weight,
       })),
-      outputs: [],
+      // Only the prefix is persisted — HiSim appends the Output{n} suffix itself when the
+      // scenario is executed, exactly as io/import.ts reconstructs it on the way back in.
+      outputs: dynOutputs.map((out) => ({
+        dynamic: true,
+        source_output_name: out.source_output_name,
+        source_tags: out.source_tags,
+        source_load_type: out.load_type,
+        source_unit: out.unit,
+        source_weight: out.source_weight,
+        output_description: out.output_description,
+        source_component_class: out.source_component_class,
+      })),
       connect_automatically: node.data.connectAutomatically,
     }
   })

@@ -10,8 +10,9 @@
 #   2. editor-tests -- on a Node runner, run Tier 1 (Vitest data round-trip over every
 #                      scenario) and Tier 2 (Playwright UI round-trip driving the real app).
 #
-# Gate: BLOCKING. See system_setups/editor/tests/README.md for what is asserted and why
-# dynamic-port scenarios are held to the universal invariants only.
+# Gate: BLOCKING. See system_setups/editor/tests/README.md for what is asserted. All
+# scenarios — including those using dynamic component ports — are held to the full set of
+# invariants; validation warnings are compared against a committed snapshot.
 
 name: editor-tests
 

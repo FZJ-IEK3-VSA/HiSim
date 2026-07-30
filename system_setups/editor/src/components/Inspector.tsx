@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useEditorStore } from '../store'
+import { isPortActive } from '../io/ports'
 import type { CatalogDb, ConfigField, EnumDb } from '../types'
 
 // ── Enum value lookup ──────────────────────────────────────────────────────────
@@ -410,10 +411,16 @@ export default function Inspector() {
               <p className="text-[11px] font-medium text-gray-500 mb-1">Ports</p>
               {node.data.entry.input_ports.map((p) => {
                 const unresolved = node.data.unresolvedPorts?.includes(p.field_name)
+                const inactive = !isPortActive(p, node.data.config)
                 return (
                   <div
                     key={p.field_name}
-                    className="flex gap-1 text-[11px] leading-5"
+                    className={`flex gap-1 text-[11px] leading-5 ${inactive ? 'opacity-50' : ''}`}
+                    title={
+                      inactive
+                        ? `Only exists when ${p.conditional_on} is set — this component's configuration does not declare it.`
+                        : undefined
+                    }
                   >
                     <span className={unresolved ? 'text-amber-500' : 'text-gray-400'}>
                       {unresolved ? '⚠' : '→'}
@@ -425,13 +432,26 @@ export default function Inspector() {
                   </div>
                 )
               })}
-              {node.data.entry.output_ports.map((p) => (
-                <div key={p.field_name} className="flex gap-1 text-[11px] text-gray-500 leading-5">
-                  <span className="text-gray-400">←</span>
-                  <span className="truncate">{p.field_name}</span>
-                  <span className="ml-auto text-gray-400 shrink-0">{p.load_type}</span>
-                </div>
-              ))}
+              {node.data.entry.output_ports.map((p) => {
+                const inactive = !isPortActive(p, node.data.config)
+                return (
+                  <div
+                    key={p.field_name}
+                    className={`flex gap-1 text-[11px] text-gray-500 leading-5 ${
+                      inactive ? 'opacity-50' : ''
+                    }`}
+                    title={
+                      inactive
+                        ? `Only exists when ${p.conditional_on} is set — this component's configuration does not declare it.`
+                        : undefined
+                    }
+                  >
+                    <span className="text-gray-400">←</span>
+                    <span className="truncate">{p.field_name}</span>
+                    <span className="ml-auto text-gray-400 shrink-0">{p.load_type}</span>
+                  </div>
+                )
+              })}
               {(node.data.unresolvedPorts?.length ?? 0) > 0 && (
                 <p className="mt-1 text-[11px] text-amber-600 italic">
                   ⚠ {node.data.unresolvedPorts!.length} input(s) could not be auto-connected

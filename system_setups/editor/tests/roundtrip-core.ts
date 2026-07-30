@@ -28,30 +28,16 @@ export function validationErrorsFor(text: string, db: ComponentDb): string[] {
 }
 
 /**
- * Whether a scenario exercises HiSim's *dynamic* component ports (dynamic inputs/outputs).
+ * Validation *warnings* for an imported scenario, sorted for a stable snapshot.
  *
- * The editor does not yet fully round-trip these: dynamic `outputs` are not persisted, and
- * dynamic-input connection indices are re-synthesised on import (see tests/README.md). For
- * such scenarios only the universal invariants (no dropped components, idempotency) are
- * asserted; full semantic equality is asserted for the dynamic-free scenarios. When the
- * editor learns to preserve dynamic ports, this gate can be removed.
+ * Warnings are non-blocking by design — HiSim wires inputs to outputs purely by field name
+ * and never enforces load-type equality, so shipped setups legitimately mix related load
+ * types (see io/validate.ts). They are still snapshotted rather than ignored: the existing
+ * ones stay visible and reviewable, while any *new* warning fails the build.
  */
-export function usesDynamicPorts(text: string): boolean {
-  let j: { components?: unknown[]; connections?: unknown[] }
-  try {
-    j = JSON.parse(text)
-  } catch {
-    return false
-  }
-  const comps = (j.components ?? []) as Array<Record<string, unknown>>
-  const hasDynDecl = comps.some(
-    (c) =>
-      (Array.isArray(c.inputs) && c.inputs.length > 0) ||
-      (Array.isArray(c.outputs) && c.outputs.length > 0),
-  )
-  const conns = (j.connections ?? []) as Array<Record<string, { field_name?: string }>>
-  const hasDynConn = conns.some((c) => /^Input_.+_\d+$/.test(c?.target?.field_name ?? ''))
-  return hasDynDecl || hasDynConn
+export function validationWarningsFor(text: string, db: ComponentDb): string[] {
+  const r = importScenario(text, db)
+  return [...validateScenario(r.nodes, r.edges).warnings].sort()
 }
 
 // ── Canonicalisation ─────────────────────────────────────────────────────────

@@ -1,7 +1,13 @@
 import { create } from 'zustand'
 import { applyNodeChanges, applyEdgeChanges, addEdge as rfAddEdge } from '@xyflow/react'
 import type { Node, Edge, NodeChange, EdgeChange, Connection } from '@xyflow/react'
-import type { CatalogDb, ComponentDb, EnumDb, ComponentNodeData } from '../types'
+import type {
+  CatalogDb,
+  ComponentDb,
+  DynamicOutputPort,
+  EnumDb,
+  ComponentNodeData,
+} from '../types'
 import { getLoadTypeColor } from '../data/loadTypeColors'
 import { autoConnectNode as autoConnectNodeFn } from '../io/autoConnect'
 import { validateScenario } from '../io/validate'
@@ -99,7 +105,11 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
     const { nodes, edges } = get()
     const sourceNode = nodes.find((n) => n.id === connection.source)
     const portName = connection.sourceHandle?.replace('output-', '') ?? ''
-    const outPort = sourceNode?.data.entry.output_ports.find((p) => p.field_name === portName)
+    const outPort =
+      sourceNode?.data.entry.output_ports.find((p) => p.field_name === portName) ??
+      (sourceNode?.data.dynamicOutputs as DynamicOutputPort[] | undefined)?.find(
+        (p) => p.field_name === portName,
+      )
     const loadType = outPort?.load_type ?? 'Any'
 
     const newEdge: Edge = {

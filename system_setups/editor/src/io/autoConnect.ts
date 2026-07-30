@@ -71,7 +71,21 @@ export function autoConnectNode(
         const outPort = src.data.entry.output_ports.find(
           (p) => p.field_name === conn.source_output_name,
         )
-        const loadType = outPort?.load_type ?? 'Any'
+        const inPort = targetNode.data.entry.input_ports.find(
+          (p) => p.field_name === conn.target_input_name,
+        )
+
+        // A default_connections entry naming a port that the component database does not
+        // know is a registry defect (see _check_default_connections in
+        // tools/generate_component_db.py). Emitting the edge anyway would attach it to a
+        // non-existent handle, which validation then reports as an orphaned edge against a
+        // scenario the user never touched. Report it as unresolved instead.
+        if (!outPort || !inPort) {
+          unresolvedPorts.push(conn.target_input_name)
+          continue
+        }
+
+        const loadType = outPort.load_type
 
         newEdges.push({
           id: `ac-${++_edgeSeq}`,
@@ -84,7 +98,7 @@ export function autoConnectNode(
             strokeWidth: 2,
             strokeDasharray: '5,4',
           },
-          data: { loadType, unit: outPort?.unit ?? '', autoConnected: true },
+          data: { loadType, unit: outPort.unit, autoConnected: true },
         })
       } else {
         unresolvedPorts.push(conn.target_input_name)

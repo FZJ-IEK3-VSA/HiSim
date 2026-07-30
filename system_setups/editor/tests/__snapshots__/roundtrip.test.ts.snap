@@ -1,0 +1,229 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`scenario round-trip (Open JSON → Save JSON) > air_conditioned_house.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > automatic_default_connections.scenario.json > produces only the reviewed validation warnings 1`] = `
+[
+  "DHWStorage.WaterTemperatureToHeatGenerator → HeatPumpControllerDHW.WaterTemperatureInputFromDHWStorage: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: load type mismatch (Water ≠ Temperature).",
+  "HeatDistributionSystem.WaterMassFlowHDS → SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem: load type mismatch (Volume ≠ WarmWater).",
+  "HeatDistributionSystem.WaterTemperatureOutput → SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: load type mismatch (Water ≠ Temperature).",
+  "MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW → DHWStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Volume ≠ WarmWater).",
+  "MoreAdvancedHeatPumpHPLib.MassFlowOutputSH → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Volume ≠ WarmWater).",
+  "MoreAdvancedHeatPumpHPLib.TemperatureOutputDHW → DHWStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Heating ≠ Temperature).",
+  "MoreAdvancedHeatPumpHPLib.TemperatureOutputSH → SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Heating ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH: load type mismatch (Water ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → MoreAdvancedHeatPumpHPLibControllerSH.WaterTemperatureInput: load type mismatch (Water ≠ Temperature).",
+]
+`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > basic_household.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > basic_household_only_heating.scenario.json > produces only the reviewed validation warnings 1`] = `
+[
+  "CondensingGasBoiler.WaterOutputMassFlowSh → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
+  "CondensingGasBoiler.WaterOutputTemperatureSh → SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Water ≠ Temperature).",
+  "HeatDistributionSystem.WaterMassFlowHDS → SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem: load type mismatch (Volume ≠ WarmWater).",
+  "HeatDistributionSystem.WaterTemperatureOutput → SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: load type mismatch (Water ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → ModulatingBoilerController.WaterTemperatureInputFromWaterStorage: load type mismatch (Water ≠ Temperature).",
+]
+`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > basic_household_with_weather_data_request.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > default_connections.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > dynamic_components.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > electrolyzer_with_renewables.scenario.json > produces only the reviewed validation warnings 1`] = `
+[
+  "CSV.CSV Profile → Standard transformer and rectifier unit.Input1: unit mismatch (W ≠ kW).",
+]
+`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > household_district_heating_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+[
+  "DHWStorage.WaterMassFlowRateOfDHW → DistrictHeating.WaterInputMassFlowRateFromWarmWaterStorage: load type mismatch (WarmWater ≠ Water).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → DistrictHeatingController.WaterTemperatureInputFromWarmWaterStorage: load type mismatch (Water ≠ Temperature).",
+  "DistrictHeating.ThermalOutputDhwEnergy → FuelMeter.Input_DistrictHeating_ThermalOutputDhwEnergy_1: load type mismatch (WarmWater ≠ Heating).",
+  "DistrictHeating.WaterOutputDhwMassFlowRate → DHWStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
+  "DistrictHeating.WaterOutputDhwTemperature → DHWStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Water ≠ Temperature).",
+  "HeatDistributionSystem.WaterMassFlowHDS → DistrictHeating.WaterInputMassFlowRateFromHeatDistributionSystem: load type mismatch (Volume ≠ Water).",
+  "HeatDistributionSystem.WaterTemperatureOutput → DistrictHeatingController.WaterTemperatureInputFromHeatDistributionSystem: load type mismatch (Water ≠ Temperature).",
+]
+`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > household_electric_heating_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+[
+  "DHWStorage.WaterMassFlowRateOfDHW → ElectricHeating.WaterInputMassFlowRateFromWarmWaterStorage: load type mismatch (WarmWater ≠ Water).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → ElectricHeatingController.WaterTemperatureInputFromWarmWaterStorage: load type mismatch (Water ≠ Temperature).",
+  "ElectricHeating.WaterOutputDhwMassFlowRate → DHWStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
+  "ElectricHeating.WaterOutputDhwTemperature → DHWStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Water ≠ Temperature).",
+]
+`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > household_gas_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+[
+  "CondensingGasBoiler.EnergyDemandDhw → GasMeter.Input_CondensingGasBoiler_EnergyDemandDhw_1: load type mismatch (WarmWater ≠ Gas).",
+  "CondensingGasBoiler.EnergyDemandSh → GasMeter.Input_CondensingGasBoiler_EnergyDemandSh_0: load type mismatch (Heating ≠ Gas).",
+  "CondensingGasBoiler.WaterOutputMassFlowSh → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
+  "CondensingGasBoiler.WaterOutputTemperatureDhw → DHWStorage.WaterTemperatureFromHeatGenerator: load type mismatch (WarmWater ≠ Temperature).",
+  "CondensingGasBoiler.WaterOutputTemperatureSh → SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → CondensingGasBoiler.WaterInputTemperatureDhw: load type mismatch (Water ≠ WarmWater).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → ModulatingBoilerController.WaterTemperatureInputFromDHWStorage: load type mismatch (Water ≠ Temperature).",
+  "HeatDistributionSystem.WaterMassFlowHDS → SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem: load type mismatch (Volume ≠ WarmWater).",
+  "HeatDistributionSystem.WaterTemperatureOutput → SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: load type mismatch (Water ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → ModulatingBoilerController.WaterTemperatureInputFromWaterStorage: load type mismatch (Water ≠ Temperature).",
+]
+`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > household_gas_solar_thermal.scenario.json > produces only the reviewed validation warnings 1`] = `
+[
+  "CondensingGasBoiler.EnergyDemandDhw → GasMeter.Input_CondensingGasBoiler_EnergyDemandDhw_1: load type mismatch (WarmWater ≠ Gas).",
+  "CondensingGasBoiler.EnergyDemandSh → GasMeter.Input_CondensingGasBoiler_EnergyDemandSh_0: load type mismatch (Heating ≠ Gas).",
+  "CondensingGasBoiler.WaterOutputMassFlowSh → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
+  "CondensingGasBoiler.WaterOutputTemperatureDhw → DHWStorage.WaterTemperatureFromSecondaryHeatGenerator: load type mismatch (WarmWater ≠ Temperature).",
+  "CondensingGasBoiler.WaterOutputTemperatureSh → SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterMeanTemperatureInStorage → SolarThermalSystemController.MeanWaterTemperatureInStorage: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → CondensingGasBoiler.WaterInputTemperatureDhw: load type mismatch (Water ≠ WarmWater).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → ModulatingBoilerController.WaterTemperatureInputFromDHWStorage: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → SolarThermalSystem.TemperatureCollectorInletDegC: load type mismatch (Water ≠ Temperature).",
+  "HeatDistributionSystem.WaterMassFlowHDS → SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem: load type mismatch (Volume ≠ WarmWater).",
+  "HeatDistributionSystem.WaterTemperatureOutput → SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: load type mismatch (Water ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → ModulatingBoilerController.WaterTemperatureInputFromWaterStorage: load type mismatch (Water ≠ Temperature).",
+  "SolarThermalSystem.WaterMassFlowOutput → DHWStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
+  "SolarThermalSystem.WaterTemperatureOutput → DHWStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Water ≠ Temperature).",
+  "SolarThermalSystem.WaterTemperatureOutput → SolarThermalSystemController.CollectorTemperature: load type mismatch (Water ≠ Temperature).",
+]
+`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > household_gas_solar_thermal_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+[
+  "CondensingGasBoiler.EnergyDemandDhw → GasMeter.Input_CondensingGasBoiler_EnergyDemandDhw_1: load type mismatch (WarmWater ≠ Gas).",
+  "CondensingGasBoiler.EnergyDemandSh → GasMeter.Input_CondensingGasBoiler_EnergyDemandSh_0: load type mismatch (Heating ≠ Gas).",
+  "CondensingGasBoiler.WaterOutputMassFlowSh → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
+  "CondensingGasBoiler.WaterOutputTemperatureDhw → DHWStorage.WaterTemperatureFromSecondaryHeatGenerator: load type mismatch (WarmWater ≠ Temperature).",
+  "CondensingGasBoiler.WaterOutputTemperatureSh → SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterMeanTemperatureInStorage → SolarThermalSystemController.MeanWaterTemperatureInStorage: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → CondensingGasBoiler.WaterInputTemperatureDhw: load type mismatch (Water ≠ WarmWater).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → ModulatingBoilerController.WaterTemperatureInputFromDHWStorage: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → SolarThermalSystem.TemperatureCollectorInletDegC: load type mismatch (Water ≠ Temperature).",
+  "HeatDistributionSystem.WaterMassFlowHDS → SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem: load type mismatch (Volume ≠ WarmWater).",
+  "HeatDistributionSystem.WaterTemperatureOutput → SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: load type mismatch (Water ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → ModulatingBoilerController.WaterTemperatureInputFromWaterStorage: load type mismatch (Water ≠ Temperature).",
+  "SolarThermalSystem.WaterMassFlowOutput → DHWStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
+  "SolarThermalSystem.WaterTemperatureOutput → DHWStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Water ≠ Temperature).",
+  "SolarThermalSystem.WaterTemperatureOutput → SolarThermalSystemController.CollectorTemperature: load type mismatch (Water ≠ Temperature).",
+]
+`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > household_heatpump_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+[
+  "DHWStorage.WaterTemperatureToHeatGenerator → HeatPumpControllerDHW.WaterTemperatureInputFromDHWStorage: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: load type mismatch (Water ≠ Temperature).",
+  "HeatDistributionSystem.WaterMassFlowHDS → SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem: load type mismatch (Volume ≠ WarmWater).",
+  "HeatDistributionSystem.WaterTemperatureOutput → SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: load type mismatch (Water ≠ Temperature).",
+  "MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW → DHWStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Volume ≠ WarmWater).",
+  "MoreAdvancedHeatPumpHPLib.MassFlowOutputSH → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Volume ≠ WarmWater).",
+  "MoreAdvancedHeatPumpHPLib.TemperatureOutputDHW → DHWStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Heating ≠ Temperature).",
+  "MoreAdvancedHeatPumpHPLib.TemperatureOutputSH → SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Heating ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH: load type mismatch (Water ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → MoreAdvancedHeatPumpHPLibControllerSH.WaterTemperatureInput: load type mismatch (Water ≠ Temperature).",
+]
+`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > household_heatpump_car_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+[
+  "DHWStorage.WaterTemperatureToHeatGenerator → HeatPumpControllerDHW.WaterTemperatureInputFromDHWStorage: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: load type mismatch (Water ≠ Temperature).",
+  "HeatDistributionSystem.WaterMassFlowHDS → SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem: load type mismatch (Volume ≠ WarmWater).",
+  "HeatDistributionSystem.WaterTemperatureOutput → SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: load type mismatch (Water ≠ Temperature).",
+  "MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW → DHWStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Volume ≠ WarmWater).",
+  "MoreAdvancedHeatPumpHPLib.MassFlowOutputSH → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Volume ≠ WarmWater).",
+  "MoreAdvancedHeatPumpHPLib.TemperatureOutputDHW → DHWStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Heating ≠ Temperature).",
+  "MoreAdvancedHeatPumpHPLib.TemperatureOutputSH → SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Heating ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH: load type mismatch (Water ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → MoreAdvancedHeatPumpHPLibControllerSH.WaterTemperatureInput: load type mismatch (Water ≠ Temperature).",
+]
+`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > household_heatpump_solar_thermal_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+[
+  "DHWStorage.WaterMeanTemperatureInStorage → SolarThermalSystemController.MeanWaterTemperatureInStorage: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → HeatPumpControllerDHW.WaterTemperatureInputFromDHWStorage: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → SolarThermalSystem.TemperatureCollectorInletDegC: load type mismatch (Water ≠ Temperature).",
+  "HeatDistributionSystem.WaterMassFlowHDS → SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem: load type mismatch (Volume ≠ WarmWater).",
+  "HeatDistributionSystem.WaterTemperatureOutput → SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: load type mismatch (Water ≠ Temperature).",
+  "MoreAdvancedHeatPumpHPLib.MassFlowOutputDHW → DHWStorage.WaterMassFlowRateFromSecondaryHeatGenerator: load type mismatch (Volume ≠ WarmWater).",
+  "MoreAdvancedHeatPumpHPLib.MassFlowOutputSH → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Volume ≠ WarmWater).",
+  "MoreAdvancedHeatPumpHPLib.TemperatureOutputDHW → DHWStorage.WaterTemperatureFromSecondaryHeatGenerator: load type mismatch (Heating ≠ Temperature).",
+  "MoreAdvancedHeatPumpHPLib.TemperatureOutputSH → SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Heating ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → MoreAdvancedHeatPumpHPLib.TemperatureInputSecondarySH: load type mismatch (Water ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → MoreAdvancedHeatPumpHPLibControllerSH.WaterTemperatureInput: load type mismatch (Water ≠ Temperature).",
+  "SolarThermalSystem.WaterMassFlowOutput → DHWStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
+  "SolarThermalSystem.WaterTemperatureOutput → DHWStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Water ≠ Temperature).",
+  "SolarThermalSystem.WaterTemperatureOutput → SolarThermalSystemController.CollectorTemperature: load type mismatch (Water ≠ Temperature).",
+]
+`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > household_hydrogen_boiler_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+[
+  "CondensingHydrogenBoiler.EnergyDemandDhw → GasMeter.Input_CondensingHydrogenBoiler_EnergyDemandDhw_1: load type mismatch (WarmWater ≠ Green Hydrogen).",
+  "CondensingHydrogenBoiler.EnergyDemandSh → GasMeter.Input_CondensingHydrogenBoiler_EnergyDemandSh_0: load type mismatch (Heating ≠ Green Hydrogen).",
+  "CondensingHydrogenBoiler.WaterOutputMassFlowSh → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
+  "CondensingHydrogenBoiler.WaterOutputTemperatureDhw → DHWStorage.WaterTemperatureFromHeatGenerator: load type mismatch (WarmWater ≠ Temperature).",
+  "CondensingHydrogenBoiler.WaterOutputTemperatureSh → SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → CondensingHydrogenBoiler.WaterInputTemperatureDhw: load type mismatch (Water ≠ WarmWater).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → ModulatingBoilerController.WaterTemperatureInputFromDHWStorage: load type mismatch (Water ≠ Temperature).",
+  "HeatDistributionSystem.WaterMassFlowHDS → SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem: load type mismatch (Volume ≠ WarmWater).",
+  "HeatDistributionSystem.WaterTemperatureOutput → SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: load type mismatch (Water ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → ModulatingBoilerController.WaterTemperatureInputFromWaterStorage: load type mismatch (Water ≠ Temperature).",
+]
+`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > household_oil_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+[
+  "ConventionalOilBoiler.EnergyDemandDhw → FuelMeter.Input_ConventionalOilBoiler_EnergyDemandDhw_1: load type mismatch (WarmWater ≠ Heating).",
+  "ConventionalOilBoiler.WaterOutputMassFlowSh → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
+  "ConventionalOilBoiler.WaterOutputTemperatureDhw → DHWStorage.WaterTemperatureFromHeatGenerator: load type mismatch (WarmWater ≠ Temperature).",
+  "ConventionalOilBoiler.WaterOutputTemperatureSh → SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → ConventionalOilBoiler.WaterInputTemperatureDhw: load type mismatch (Water ≠ WarmWater).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → ModulatingBoilerController.WaterTemperatureInputFromDHWStorage: load type mismatch (Water ≠ Temperature).",
+  "HeatDistributionSystem.WaterMassFlowHDS → SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem: load type mismatch (Volume ≠ WarmWater).",
+  "HeatDistributionSystem.WaterTemperatureOutput → SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: load type mismatch (Water ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → ModulatingBoilerController.WaterTemperatureInputFromWaterStorage: load type mismatch (Water ≠ Temperature).",
+]
+`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > household_pellets_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+[
+  "ConventionalPelletBoiler.EnergyDemandDhw → FuelMeter.Input_ConventionalPelletBoiler_EnergyDemandDhw_1: load type mismatch (WarmWater ≠ Heating).",
+  "ConventionalPelletBoiler.WaterOutputMassFlowSh → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
+  "ConventionalPelletBoiler.WaterOutputTemperatureDhw → DHWStorage.WaterTemperatureFromHeatGenerator: load type mismatch (WarmWater ≠ Temperature).",
+  "ConventionalPelletBoiler.WaterOutputTemperatureSh → SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → ConventionalPelletBoiler.WaterInputTemperatureDhw: load type mismatch (Water ≠ WarmWater).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → PelletBoilerController.WaterTemperatureInputFromDHWStorage: load type mismatch (Water ≠ Temperature).",
+  "HeatDistributionSystem.WaterMassFlowHDS → SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem: load type mismatch (Volume ≠ WarmWater).",
+  "HeatDistributionSystem.WaterTemperatureOutput → SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: load type mismatch (Water ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → PelletBoilerController.WaterTemperatureInputFromWaterStorage: load type mismatch (Water ≠ Temperature).",
+]
+`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > household_wood_chips_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+[
+  "ConventionalWoodChipBoiler.EnergyDemandDhw → FuelMeter.Input_ConventionalWoodChipBoiler_EnergyDemandDhw_1: load type mismatch (WarmWater ≠ Heating).",
+  "ConventionalWoodChipBoiler.WaterOutputMassFlowSh → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
+  "ConventionalWoodChipBoiler.WaterOutputTemperatureDhw → DHWStorage.WaterTemperatureFromHeatGenerator: load type mismatch (WarmWater ≠ Temperature).",
+  "ConventionalWoodChipBoiler.WaterOutputTemperatureSh → SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Water ≠ Temperature).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → ConventionalWoodChipBoiler.WaterInputTemperatureDhw: load type mismatch (Water ≠ WarmWater).",
+  "DHWStorage.WaterTemperatureToHeatGenerator → WoodChipBoilerController.WaterTemperatureInputFromDHWStorage: load type mismatch (Water ≠ Temperature).",
+  "HeatDistributionSystem.WaterMassFlowHDS → SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem: load type mismatch (Volume ≠ WarmWater).",
+  "HeatDistributionSystem.WaterTemperatureOutput → SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: load type mismatch (Water ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → WoodChipBoilerController.WaterTemperatureInputFromWaterStorage: load type mismatch (Water ≠ Temperature).",
+]
+`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > simple_system_setup_one.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > simple_system_setup_two.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;

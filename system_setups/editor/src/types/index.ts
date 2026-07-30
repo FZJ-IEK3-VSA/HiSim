@@ -4,6 +4,12 @@ export interface InputPort {
   unit: string
   mandatory: boolean
   tags: string[]
+  /**
+   * Set when the port only exists for a non-default config setting (e.g.
+   * MoreAdvancedHeatPumpHPLib's DHW ports under `with_domestic_hot_water_preparation`).
+   * Names the config field — `"flag"` for a boolean, `"field=MEMBER"` for an enum.
+   */
+  conditional_on?: string
 }
 
 export interface OutputPort {
@@ -13,6 +19,8 @@ export interface OutputPort {
   postprocessing_flag: boolean
   sankey_flow_direction: string | null
   output_description: string
+  /** See InputPort.conditional_on. */
+  conditional_on?: string
 }
 
 /** One entry within a default_connections value list (source_class_name is the dict key). */
@@ -41,12 +49,25 @@ export interface ComponentEntry {
   output_ports: OutputPort[]
   // { "SourceClassName": [{target_input_name, source_output_name}, ...] }
   default_connections: Record<string, DefaultConnectionEntry[]>
+  /** Config switches that had to be flipped to reveal `conditional_on` ports. */
+  conditional_flags: string[]
+}
+
+/** A default_connections declaration naming a port that does not exist. */
+export interface DefaultConnectionIssue {
+  component: string
+  source_class: string
+  target_input_name: string
+  source_output_name: string
+  problem: string
+  known: boolean
 }
 
 export interface ComponentDb {
   generated_at: string
   components: ComponentEntry[]
   failures: Array<{ classname: string; error: string }>
+  default_connection_issues?: DefaultConnectionIssue[]
 }
 
 export interface EnumDb {
@@ -73,6 +94,25 @@ export interface DynamicInputPort {
   source_component_output: string
   source_tags: string[]
   source_weight: number
+}
+
+/**
+ * A dynamic output port synthesised from a component's `outputs[]` array in the scenario JSON.
+ *
+ * HiSim's DynamicComponent.add_component_output appends `Output{n}` to the declared prefix,
+ * where n counts every output the component already has — so the scenario JSON stores only
+ * the prefix (`source_output_name`) while connections reference the full name. The editor
+ * reconstructs `field_name` the same way; see synthesiseDynamicOutputName in io/import.ts.
+ */
+export interface DynamicOutputPort {
+  field_name: string             // e.g. "LoadingPowerInputForBattery_Output16"
+  source_output_name: string     // the stored prefix, e.g. "LoadingPowerInputForBattery_"
+  load_type: string
+  unit: string
+  source_tags: string[]
+  source_weight: number
+  output_description: string
+  source_component_class: string | null
 }
 
 // ── Domain catalogs ──────────────────────────────────────────────────────────
@@ -109,6 +149,8 @@ export interface ComponentNodeData extends Record<string, unknown> {
   connectAutomatically: boolean
   /** Parsed from the scenario JSON's inputs[] — only present on dynamic components. */
   dynamicInputs?: DynamicInputPort[]
+  /** Parsed from the scenario JSON's outputs[] — only present on dynamic components. */
+  dynamicOutputs?: DynamicOutputPort[]
   /** Input port names that could not be auto-connected (zero or multiple candidates). */
   unresolvedPorts?: string[]
 }

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-20T18:40:51.634230",
+  "generated_at": "2026-07-31T00:09:51.007135",
   "components": [
     {
       "component_full_classname": "hisim.components.building.Building",
@@ -522,7 +522,8 @@
             "source_output_name": "BuildingIndoorTemperatureModifier"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.advanced_fuel_cell.CHP",
@@ -762,7 +763,8 @@
           "output_description": "here a description for GasDemandReal will follow."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.advanced_fuel_cell_controller.ExtendedController",
@@ -938,7 +940,8 @@
           "output_description": "Accumulated runtime counter of the gas heater."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_rsoc.Rsoc",
@@ -1201,7 +1204,8 @@
           "output_description": "Total energy produced for demand"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_chp.SimpleCHP",
@@ -1314,6 +1318,18 @@
           ],
           "sankey_flow_direction": null,
           "output_description": "Electrical Power output of CHP in Watt."
+        },
+        {
+          "field_name": "FuelDelivered",
+          "load_type": "Gas",
+          "unit": "Wh",
+          "postprocessing_flag": [
+            "FuelConsumption",
+            "Gas"
+          ],
+          "sankey_flow_direction": null,
+          "output_description": "Gas consumption of CHP in Wh.",
+          "conditional_on": "use=Gas"
         }
       ],
       "default_connections": {
@@ -1327,7 +1343,10 @@
             "source_output_name": "CHPControllerHeatingModeSignal"
           }
         ]
-      }
+      },
+      "conditional_flags": [
+        "use=Gas"
+      ]
     },
     {
       "component_full_classname": "hisim.components.generic_fuel_cell.FuelCell",
@@ -1574,7 +1593,8 @@
           "output_description": "Total time the electorlyzer is operating (on)"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_l1_electrolyzer.L1GenericElectrolyzerController",
@@ -1673,7 +1693,8 @@
             "source_output_name": "HydrogenSOC"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_l1_electrolyzer_h2.ElectrolyzerController",
@@ -1799,7 +1820,8 @@
           "output_description": "Total count of switching off"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_l1_fuel_cell.FuelCellController",
@@ -1933,7 +1955,8 @@
           "output_description": "Total count of switching off"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.night_setback_controller.NightSetbackController",
@@ -2003,7 +2026,8 @@
             "source_output_name": "BuildingTemperatureModifier"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_l1_building_heating.L1BuildingHeatController",
@@ -2128,7 +2152,8 @@
             "source_output_name": "BuildingIndoorTemperatureModifier"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_l1_heatpump.L1HeatPumpController",
@@ -2257,7 +2282,8 @@
             "source_output_name": "DomesticHotWaterStorageTemperatureModifier"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_l1_chp.L1CHPController",
@@ -2444,7 +2470,8 @@
             "source_output_name": "HydrogenSOC"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_mpc.MpcController",
@@ -2997,7 +3024,8 @@
             "source_output_name": "TemperatureOutside"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_pid.PIDController",
@@ -3111,7 +3139,8 @@
           "output_description": "here a description for PV FeedForwardSignal will follow."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_l2_ptx_energy_management_system.PTXController",
@@ -3219,7 +3248,8 @@
           "output_description": "distributes RES load to the system"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_l1_example_controller.SimpleController",
@@ -3265,7 +3295,8 @@
           "output_description": "Control signal setting the gas heater power level as a fraction of full power. [%]"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_l1_generic_ev_charge.L1Controller",
@@ -3448,7 +3479,8 @@
             "source_output_name": "AcBatteryChargingPower"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_l2_smart_controller.SmartController",
@@ -3536,7 +3568,8 @@
           "output_description": "Minimum state of charge the vehicle battery must reach."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
@@ -3780,7 +3813,8 @@
           "output_description": "Target electricity for solar thermal domestic hot water."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_l2_xtp_fuel_cell_ems.XTPController",
@@ -3880,7 +3914,8 @@
           "output_description": "distributes demand to the system"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_l1_rsoc.RsocController",
@@ -4076,7 +4111,8 @@
           "output_description": "Total count of standby cycles"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.controller_l2_rsoc_battery_system.RsocBatteryController",
@@ -4214,7 +4250,8 @@
           "output_description": "power delta between drovided and demand."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.advanced_ev_battery_bslib.CarBattery",
@@ -4347,7 +4384,8 @@
             "source_output_name": "ElectricityTargetToOrFromCarBattery"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_ev_charger.Vehicle",
@@ -4433,7 +4471,8 @@
           "output_description": "Electrical power discharged from the vehicle battery while driving. [W]"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_ev_charger.EVChargerController",
@@ -4509,7 +4548,8 @@
           "output_description": "Minimum state of charge the vehicle battery must reach."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_car.Car",
@@ -4623,9 +4663,33 @@
           "postprocessing_flag": null,
           "sankey_flow_direction": null,
           "output_description": "Driven distance in meters."
+        },
+        {
+          "field_name": "ElectricityOutput",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": [
+            "Car",
+            "DISPLAY_IN_WEBTOOL"
+          ],
+          "sankey_flow_direction": null,
+          "output_description": "Electricity Consumption of the car while driving. [W]",
+          "conditional_on": "fuel=Electricity"
+        },
+        {
+          "field_name": "CarLocation",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Location of the car as integer.",
+          "conditional_on": "fuel=Electricity"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": [
+        "fuel=Electricity"
+      ]
     },
     {
       "component_full_classname": "hisim.components.generic_electrolyzer_and_h2_storage.AdvancedElectrolyzer",
@@ -4797,7 +4861,8 @@
           "output_description": "Power Level"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_electrolyzer.GenericElectrolyzer",
@@ -4901,7 +4966,8 @@
             "source_output_name": "AvailableElectricity"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_electrolyzer_and_h2_storage.HydrogenStorage",
@@ -5073,7 +5139,8 @@
           "output_description": "Discharging Hydrogen Amount Real"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_electrolyzer_h2.Electrolyzer",
@@ -5285,7 +5352,8 @@
           "output_description": "Total time the electorlyzer is operating (on)"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.example_storage.SimpleStorage",
@@ -5377,7 +5445,8 @@
           "output_description": "Current Fill Level in Percent"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.example_component.ExampleComponent",
@@ -5479,7 +5548,8 @@
           "output_description": "Stored Energy"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.example_template.ComponentName",
@@ -5549,7 +5619,8 @@
           "output_description": "Output without State"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.example_transformer.ExampleTransformer",
@@ -5625,7 +5696,8 @@
           "output_description": "Output 2"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.air_conditioner.AirConditionerController",
@@ -5726,7 +5798,8 @@
             "source_output_name": "TemperatureIndoorAir"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_district_heating.DistrictHeatingController",
@@ -5804,6 +5877,13 @@
           "load_type": "Temperature",
           "unit": "°C",
           "mandatory": true
+        },
+        {
+          "field_name": "WaterTemperatureInputFromWarmWaterStorage",
+          "load_type": "Temperature",
+          "unit": "°C",
+          "mandatory": true,
+          "conditional_on": "with_domestic_hot_water_preparation"
         }
       ],
       "output_ports": [
@@ -5850,8 +5930,17 @@
             "target_input_name": "HeatingFlowTemperatureFromHeatDistributionSystem",
             "source_output_name": "HeatingFlowTemperature"
           }
+        ],
+        "SimpleDHWStorage": [
+          {
+            "target_input_name": "WaterTemperatureInputFromWarmWaterStorage",
+            "source_output_name": "WaterTemperatureToHeatGenerator"
+          }
         ]
-      }
+      },
+      "conditional_flags": [
+        "with_domestic_hot_water_preparation"
+      ]
     },
     {
       "component_full_classname": "hisim.components.generic_district_heating.DistrictHeating",
@@ -5965,6 +6054,20 @@
           "load_type": "Water",
           "unit": "kg/s",
           "mandatory": true
+        },
+        {
+          "field_name": "WaterInputTemperatureDhw",
+          "load_type": "Water",
+          "unit": "°C",
+          "mandatory": true,
+          "conditional_on": "with_domestic_hot_water_preparation"
+        },
+        {
+          "field_name": "WaterInputMassFlowRateFromWarmWaterStorage",
+          "load_type": "Water",
+          "unit": "kg/s",
+          "mandatory": true,
+          "conditional_on": "with_domestic_hot_water_preparation"
         }
       ],
       "output_ports": [
@@ -6057,8 +6160,21 @@
             "target_input_name": "WaterInputMassFlowRateFromHeatDistributionSystem",
             "source_output_name": "WaterMassFlowHDS"
           }
+        ],
+        "SimpleDHWStorage": [
+          {
+            "target_input_name": "WaterInputTemperatureDhw",
+            "source_output_name": "WaterTemperatureToHeatGenerator"
+          },
+          {
+            "target_input_name": "WaterInputMassFlowRateFromWarmWaterStorage",
+            "source_output_name": "WaterMassFlowRateOfDHW"
+          }
         ]
-      }
+      },
+      "conditional_flags": [
+        "with_domestic_hot_water_preparation"
+      ]
     },
     {
       "component_full_classname": "hisim.components.generic_electric_heating.ElectricHeatingController",
@@ -6132,6 +6248,13 @@
           "load_type": "Temperature",
           "unit": "°C",
           "mandatory": true
+        },
+        {
+          "field_name": "WaterTemperatureInputFromWarmWaterStorage",
+          "load_type": "Temperature",
+          "unit": "°C",
+          "mandatory": true,
+          "conditional_on": "with_domestic_hot_water_preparation"
         }
       ],
       "output_ports": [
@@ -6158,8 +6281,17 @@
             "target_input_name": "DailyAverageOutsideTemperature",
             "source_output_name": "DailyAverageOutsideTemperatures"
           }
+        ],
+        "SimpleDHWStorage": [
+          {
+            "target_input_name": "WaterTemperatureInputFromWarmWaterStorage",
+            "source_output_name": "WaterTemperatureToHeatGenerator"
+          }
         ]
-      }
+      },
+      "conditional_flags": [
+        "with_domestic_hot_water_preparation"
+      ]
     },
     {
       "component_full_classname": "hisim.components.generic_electric_heating.ElectricHeating",
@@ -6275,6 +6407,20 @@
           "load_type": "Heating",
           "unit": "Wh",
           "mandatory": true
+        },
+        {
+          "field_name": "WaterInputTemperatureDhw",
+          "load_type": "Water",
+          "unit": "°C",
+          "mandatory": true,
+          "conditional_on": "with_domestic_hot_water_preparation"
+        },
+        {
+          "field_name": "WaterInputMassFlowRateFromWarmWaterStorage",
+          "load_type": "Water",
+          "unit": "kg/s",
+          "mandatory": true,
+          "conditional_on": "with_domestic_hot_water_preparation"
         }
       ],
       "output_ports": [
@@ -6383,8 +6529,21 @@
             "target_input_name": "TheoreticalHeatingEnergyDemand",
             "source_output_name": "TheoreticalHeatingEnergyDemand"
           }
+        ],
+        "SimpleDHWStorage": [
+          {
+            "target_input_name": "WaterInputTemperatureDhw",
+            "source_output_name": "WaterTemperatureToHeatGenerator"
+          },
+          {
+            "target_input_name": "WaterInputMassFlowRateFromWarmWaterStorage",
+            "source_output_name": "WaterMassFlowRateOfDHW"
+          }
         ]
-      }
+      },
+      "conditional_flags": [
+        "with_domestic_hot_water_preparation"
+      ]
     },
     {
       "component_full_classname": "hisim.components.generic_boiler.GenericBoilerController",
@@ -6510,6 +6669,13 @@
           "load_type": "Temperature",
           "unit": "°C",
           "mandatory": true
+        },
+        {
+          "field_name": "WaterTemperatureInputFromDHWStorage",
+          "load_type": "Temperature",
+          "unit": "°C",
+          "mandatory": true,
+          "conditional_on": "with_domestic_hot_water_preparation"
         }
       ],
       "output_ports": [
@@ -6563,7 +6729,10 @@
             "source_output_name": "HeatingFlowTemperature"
           }
         ]
-      }
+      },
+      "conditional_flags": [
+        "with_domestic_hot_water_preparation"
+      ]
     },
     {
       "component_full_classname": "hisim.components.generic_boiler.GenericBoiler",
@@ -6856,7 +7025,8 @@
             "source_output_name": "WaterTemperatureToHeatGenerator"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.heat_distribution_system.HeatDistributionController",
@@ -7013,7 +7183,8 @@
             "source_output_name": "BuildingIndoorTemperatureModifier"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.heat_distribution_system.HeatDistribution",
@@ -7210,7 +7381,8 @@
             "source_output_name": "WaterTemperatureToHeatDistribution"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW",
@@ -7323,7 +7495,8 @@
             "source_output_name": "DomesticHotWaterStorageTemperatureModifier"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating",
@@ -7460,7 +7633,8 @@
             "source_output_name": "SpaceHeatingWaterStorageTemperatureModifier"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.advanced_heat_pump_hplib.HeatPumpHplibController",
@@ -7581,7 +7755,8 @@
             "source_output_name": "SpaceHeatingWaterStorageTemperatureModifier"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_heat_pump.GenericHeatPumpController",
@@ -7678,7 +7853,8 @@
             "source_output_name": "ElectricityAvailable"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.simple_heat_source.SimpleHeatSource",
@@ -7847,7 +8023,8 @@
             "source_output_name": "DailyAverageOutsideTemperatures"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_heat_water_storage.HeatStorage",
@@ -8021,7 +8198,8 @@
           "output_description": "here a description for RealHeatForBuilding will follow."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_heat_pump.GenericHeatPump",
@@ -8170,7 +8348,8 @@
             "source_output_name": "State"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_heat_pump_modular.ModularHeatPump",
@@ -8345,7 +8524,8 @@
             "source_output_name": "HeatControllerTargetPercentage"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_heat_water_storage.HeatStorageController",
@@ -8427,7 +8607,8 @@
           "output_description": "here a description for RealThermalDemandHeatingWater will follow."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.idealized_electric_heater.IdealizedElectricHeater",
@@ -8497,7 +8678,8 @@
           "output_description": "here a description for HeatingPowerDelivered will follow."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.simple_water_storage.SimpleDHWStorage",
@@ -8806,7 +8988,8 @@
             "source_output_name": "WaterOutputDhwMassFlowRate"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.simple_water_storage.SimpleHotWaterStorage",
@@ -9103,7 +9286,8 @@
             "source_output_name": "WaterOutputMassFlowSh"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.simple_water_storage.SimpleHotWaterStorageController",
@@ -9149,7 +9333,8 @@
           "output_description": "here a description for State will follow."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.advanced_heat_pump_hplib.HeatPumpHplib",
@@ -9497,7 +9682,8 @@
             "source_output_name": "WaterTemperatureToHeatGenerator"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib",
@@ -9717,6 +9903,34 @@
           "load_type": "Temperature",
           "unit": "°C",
           "mandatory": true
+        },
+        {
+          "field_name": "OnOffSwitchDHW",
+          "load_type": "Any",
+          "unit": "-",
+          "mandatory": true,
+          "conditional_on": "with_domestic_hot_water_preparation"
+        },
+        {
+          "field_name": "ThermalPowerIsConstantForDHW",
+          "load_type": "Any",
+          "unit": "-",
+          "mandatory": true,
+          "conditional_on": "with_domestic_hot_water_preparation"
+        },
+        {
+          "field_name": "MaxThermalPowerValueForDHW",
+          "load_type": "Any",
+          "unit": "-",
+          "mandatory": true,
+          "conditional_on": "with_domestic_hot_water_preparation"
+        },
+        {
+          "field_name": "TemperatureInputSecondaryDHW",
+          "load_type": "Temperature",
+          "unit": "°C",
+          "mandatory": true,
+          "conditional_on": "with_domestic_hot_water_preparation"
         }
       ],
       "output_ports": [
@@ -9928,6 +10142,107 @@
           "postprocessing_flag": null,
           "sankey_flow_direction": null,
           "output_description": "DeltaTHeatpumpSecondarySide."
+        },
+        {
+          "field_name": "ThermalOutputPowerDHW",
+          "load_type": "Heating",
+          "unit": "W",
+          "postprocessing_flag": [
+            "DISPLAY_IN_WEBTOOL"
+          ],
+          "sankey_flow_direction": null,
+          "output_description": "Thermal output power dhw Storage in Watt",
+          "conditional_on": "with_domestic_hot_water_preparation"
+        },
+        {
+          "field_name": "ElectricalInputPowerDHW",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Electricity input power for DHW in Watt",
+          "conditional_on": "with_domestic_hot_water_preparation"
+        },
+        {
+          "field_name": "TemperatureInputDHW",
+          "load_type": "Heating",
+          "unit": "°C",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Temperature Input DHW in °C",
+          "conditional_on": "with_domestic_hot_water_preparation"
+        },
+        {
+          "field_name": "TemperatureOutputDHW",
+          "load_type": "Heating",
+          "unit": "°C",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Temperature Output DHW Water in °C",
+          "conditional_on": "with_domestic_hot_water_preparation"
+        },
+        {
+          "field_name": "MassFlowOutputDHW",
+          "load_type": "Volume",
+          "unit": "kg/s",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Mass flow output",
+          "conditional_on": "with_domestic_hot_water_preparation"
+        },
+        {
+          "field_name": "ThermalEnergyDHW",
+          "load_type": "Heating",
+          "unit": "Wh",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for ThermalEnergyDHW will follow.",
+          "conditional_on": "with_domestic_hot_water_preparation"
+        },
+        {
+          "field_name": "ElectricalEnergyDHW",
+          "load_type": "Electricity",
+          "unit": "Wh",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for ElectricalEnergyDHW will follow.",
+          "conditional_on": "with_domestic_hot_water_preparation"
+        },
+        {
+          "field_name": "CumulativeThermalEnergyDHW",
+          "load_type": "Heating",
+          "unit": "Wh",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for CumulativeThermalEnergyDHW will follow.",
+          "conditional_on": "with_domestic_hot_water_preparation"
+        },
+        {
+          "field_name": "CumulativeElectricalEnergyDHW",
+          "load_type": "Electricity",
+          "unit": "Wh",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "here a description for CumulativeElectricalEnergyDHW will follow.",
+          "conditional_on": "with_domestic_hot_water_preparation"
+        },
+        {
+          "field_name": "CounterSwitchToSH",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "CounterSwitchToSH is a counter of switching the mode to SH, NOT counting starting of on_off.",
+          "conditional_on": "with_domestic_hot_water_preparation"
+        },
+        {
+          "field_name": "CounterSwitchToDHW",
+          "load_type": "Any",
+          "unit": "-",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "CounterSwitchToDHW is a counter of switching the mode to DHW, NOT counting starting of on_off.",
+          "conditional_on": "with_domestic_hot_water_preparation"
         }
       ],
       "default_connections": {
@@ -9948,8 +10263,31 @@
             "target_input_name": "TemperatureInputSecondarySH",
             "source_output_name": "WaterTemperatureToHeatGenerator"
           }
+        ],
+        "MoreAdvancedHeatPumpHPLibControllerDHW": [
+          {
+            "target_input_name": "OnOffSwitchDHW",
+            "source_output_name": "StateDHW"
+          },
+          {
+            "target_input_name": "ThermalPowerIsConstantForDHW",
+            "source_output_name": "ThermalPowerDHWConst"
+          },
+          {
+            "target_input_name": "MaxThermalPowerValueForDHW",
+            "source_output_name": "ThermalPowerHPForDHWConst"
+          }
+        ],
+        "SimpleDHWStorage": [
+          {
+            "target_input_name": "TemperatureInputSecondaryDHW",
+            "source_output_name": "WaterTemperatureToHeatGenerator"
+          }
         ]
-      }
+      },
+      "conditional_flags": [
+        "with_domestic_hot_water_preparation"
+      ]
     },
     {
       "component_full_classname": "hisim.components.air_conditioner.AirConditioner",
@@ -10216,7 +10554,8 @@
             "source_output_name": "ModulatingPowerSignal"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.solar_thermal_system.SolarThermalSystemController",
@@ -10299,7 +10638,8 @@
             "source_output_name": "RequiredWaterMassFlowOutput"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.solar_thermal_system.SolarThermalSystem",
@@ -10588,7 +10928,8 @@
             "source_output_name": "ControlSignalToSolarThermalSystem"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.electricity_meter.ElectricityMeter",
@@ -10759,7 +11100,8 @@
           "output_description": "here a description for CumulativeProduction will follow."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.fuel_meter.FuelMeter",
@@ -10830,7 +11172,8 @@
           "output_description": "here a description for CumulativeConsumption will follow."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.gas_meter.GasMeter",
@@ -10967,7 +11310,8 @@
           "output_description": "here a description for CumulativeProduction will follow."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.heating_meter.HeatingMeter",
@@ -11062,7 +11406,8 @@
           "output_description": "here a description for CumulativeProduction will follow."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
@@ -11094,9 +11439,9 @@
           }
         },
         "charging_station_set": {
-          "Name": "Charging At Home with 11 kW",
+          "Name": "Charging At Home with 03.7 kW, output results to Car Electricity",
           "Guid": {
-            "StrVal": "78dae308-24c4-45cc-8bdf-b001d61f45c2"
+            "StrVal": "223f0577-9249-4293-a849-ea12e2033377"
           }
         },
         "profile_with_washing_machine_and_dishwasher": true,
@@ -11181,9 +11526,9 @@
           "is_optional": true,
           "enum_class": null,
           "default": {
-            "Name": "Charging At Home with 11 kW",
+            "Name": "Charging At Home with 03.7 kW, output results to Car Electricity",
             "Guid": {
-              "StrVal": "78dae308-24c4-45cc-8bdf-b001d61f45c2"
+              "StrVal": "223f0577-9249-4293-a849-ea12e2033377"
             }
           }
         },
@@ -11326,7 +11671,8 @@
           "output_description": "here a description for LPG UTSP WaterConsumption will follow."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_pv_system.PVSystem",
@@ -11630,7 +11976,8 @@
             "source_output_name": "WindSpeed"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_windturbine.Windturbine",
@@ -11924,7 +12271,8 @@
             "source_output_name": "Pressure"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_smart_device.SmartDevice",
@@ -11997,7 +12345,8 @@
           "output_description": "Electricity output"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_battery.BatteryController",
@@ -12043,7 +12392,8 @@
           "output_description": "Charge/discharge control state of the battery controller."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.advanced_battery_bslib.Battery",
@@ -12222,7 +12572,8 @@
           "output_description": "here a description for DischargingPower will follow."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_battery.GenericBattery",
@@ -12330,7 +12681,8 @@
           "output_description": "here a description for ElectricityOutput will follow."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_hydrogen_storage.GenericHydrogenStorage",
@@ -12461,7 +12813,8 @@
             "source_output_name": "FuelDelivered"
           }
         ]
-      }
+      },
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.sumbuilder.SumBuilderForTwoInputs",
@@ -12529,7 +12882,8 @@
           "output_description": "Sum of values"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.sumbuilder.CalculateOperation",
@@ -12584,7 +12938,8 @@
           "output_description": "Sum of all connected inputs."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.random_numbers.RandomNumbers",
@@ -12647,7 +13002,8 @@
           "output_description": "Random Number Output"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.csvloader.CSVLoader",
@@ -12758,7 +13114,8 @@
           "output_description": "CSV loader output 1"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.generic_price_signal.PriceSignal",
@@ -12883,7 +13240,8 @@
           "output_description": "here a description for PriceInjection will follow."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.sumbuilder.SumBuilderForThreeInputs",
@@ -12957,7 +13315,8 @@
           "output_description": "Sum of values"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.transformer_rectifier.Transformer",
@@ -13013,7 +13372,8 @@
           "output_description": "Output 1"
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     },
     {
       "component_full_classname": "hisim.components.weather.Weather",
@@ -13164,12 +13524,39 @@
           "output_description": "here a description for DailyAverageOutsideTemperatures will follow."
         }
       ],
-      "default_connections": {}
+      "default_connections": {},
+      "conditional_flags": []
     }
   ],
   "failures": [],
   "skipped": [
     "hisim.components.generic_ev_charger.EVCharger",
     "hisim.components.generic_ev_charger.VehiclePure"
+  ],
+  "default_connection_issues": [
+    {
+      "component": "hisim.components.night_setback_controller.NightSetbackController",
+      "source_class": "Building",
+      "target_input_name": "BuildingTemperatureModifier",
+      "source_output_name": "BuildingTemperatureModifier",
+      "problem": "target_input_name \"BuildingTemperatureModifier\" is not an input port",
+      "known": true
+    },
+    {
+      "component": "hisim.components.night_setback_controller.NightSetbackController",
+      "source_class": "Building",
+      "target_input_name": "BuildingTemperatureModifier",
+      "source_output_name": "BuildingTemperatureModifier",
+      "problem": "source_output_name \"BuildingTemperatureModifier\" is not an output port of Building",
+      "known": true
+    },
+    {
+      "component": "hisim.components.controller_mpc.MpcController",
+      "source_class": "Weather",
+      "target_input_name": "TemperatureOutside",
+      "source_output_name": "TemperatureOutside",
+      "problem": "target_input_name \"TemperatureOutside\" is not an input port",
+      "known": true
+    }
   ]
 }

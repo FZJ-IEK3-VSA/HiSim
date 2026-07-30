@@ -10,7 +10,7 @@ import {
   type Node,
 } from '@xyflow/react'
 import { useEditorStore, type HiSimNode } from '../store'
-import type { DynamicInputPort } from '../types'
+import type { DynamicInputPort, DynamicOutputPort } from '../types'
 import { nodeTypes } from '../nodes'
 import { HiSimEdge } from '../edges/HiSimEdge'
 import ContextMenu from './ContextMenu'
@@ -94,7 +94,12 @@ function CanvasInner() {
       const outName = connection.sourceHandle?.replace('output-', '') ?? ''
       const inName = connection.targetHandle?.replace('input-', '') ?? ''
 
-      const outPort = src.data.entry.output_ports.find((p) => p.field_name === outName)
+      // Check static output port first, then dynamic output port
+      const outPort =
+        src.data.entry.output_ports.find((p) => p.field_name === outName) ??
+        (src.data.dynamicOutputs as DynamicOutputPort[] | undefined)?.find(
+          (p) => p.field_name === outName,
+        )
       if (!outPort) return false
 
       // Check static input port first, then dynamic input port

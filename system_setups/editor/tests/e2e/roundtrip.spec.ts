@@ -7,13 +7,12 @@
 // the Tier 1 unit tests cannot see.
 //
 // The semantic comparison reuses tests/roundtrip-core.ts, so both tiers judge fidelity by
-// the same rules. Dynamic-port scenarios are held to the universal invariants only
-// (see tests/README.md).
+// the same rules — including scenarios that use dynamic component ports.
 
 import { test, expect } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { listScenarioFiles, readScenario, scenarioPath } from '../scenarios'
-import { diffScenario, usesDynamicPorts } from '../roundtrip-core'
+import { diffScenario } from '../roundtrip-core'
 
 const files = listScenarioFiles()
 
@@ -21,7 +20,6 @@ test.describe('editor UI round-trip (Open JSON → Save JSON)', () => {
   for (const file of files) {
     test(file, async ({ page }) => {
       const original = readScenario(file)
-      const dynamic = usesDynamicPorts(original)
 
       await page.goto('/')
       // Palette shows "Loading…" until the component database has been fetched and applied;
@@ -45,17 +43,16 @@ test.describe('editor UI round-trip (Open JSON → Save JSON)', () => {
       ])
       const saved = readFileSync(await download.path(), 'utf-8')
 
-      // Universal: the saved file is valid JSON and preserves the component set.
+      // The saved file is valid JSON and preserves the component set.
       const inComps = (JSON.parse(original).components ?? []).length
       const outComps = (JSON.parse(saved).components ?? []).length
       expect(outComps).toBe(inComps)
 
-      if (!dynamic) {
-        // Full semantic fidelity for dynamic-free scenarios.
-        expect(diffScenario(original, saved)).toEqual([])
-        // Auto-validate-on-open must not report errors in the status bar.
-        await expect(page.locator('footer')).not.toContainText('error')
-      }
+      // Full semantic fidelity.
+      expect(diffScenario(original, saved)).toEqual([])
+
+      // Auto-validate-on-open must not report errors in the status bar.
+      await expect(page.locator('footer')).not.toContainText('error')
     })
   }
 })

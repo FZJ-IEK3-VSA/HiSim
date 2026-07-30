@@ -73,7 +73,11 @@ export function autoLayout(nodes: HiSimNode[], edges: Edge[]): HiSimNode[] {
     let y = ORIGIN_Y
     for (const n of col) {
       positioned.set(n.id, { x, y })
-      const dynCount = (n.data.dynamicInputs as unknown[] | undefined)?.length ?? 0
+      // Dynamic inputs and outputs share rows on the card, so the taller side sets the height.
+      const dynCount = Math.max(
+        (n.data.dynamicInputs as unknown[] | undefined)?.length ?? 0,
+        (n.data.dynamicOutputs as unknown[] | undefined)?.length ?? 0,
+      )
       y += cardHeight(n.data.entry, dynCount) + CARD_GAP
     }
   }

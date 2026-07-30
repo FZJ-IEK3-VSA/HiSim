@@ -2,9 +2,13 @@
 //
 // Exercises the editor's real import/export logic (the same functions the UI calls)
 // without a browser. For each scenario it asserts:
-//   - universal:   import drops nothing; a second open→save is byte-identical (idempotent)
-//   - semantic:    open→save preserves all content, and the import validates without errors
-//                  (asserted only for scenarios that do not use dynamic ports — see README)
+//   - import drops nothing (no components skipped, no connections discarded)
+//   - a second open→save is byte-identical (idempotent)
+//   - open→save preserves all content
+//   - the import validates without errors
+//   - the import's validation warnings match the reviewed snapshot
+//
+// All assertions run for every scenario, including those using dynamic component ports.
 //
 // See tests/e2e/roundtrip.spec.ts for the browser-driven counterpart (Tier 2).
 
@@ -13,9 +17,9 @@ import { listScenarioFiles, readScenario, loadComponentDb } from './scenarios'
 import {
   roundTrip,
   diffScenario,
-  usesDynamicPorts,
   importWarnings,
   validationErrorsFor,
+  validationWarningsFor,
 } from './roundtrip-core'
 
 const db = loadComponentDb()
@@ -28,10 +32,8 @@ describe('scenario round-trip (Open JSON → Save JSON)', () => {
 
   describe.each(files)('%s', (file) => {
     const original = readScenario(file)
-    const dynamic = usesDynamicPorts(original)
 
-    // ── Universal invariants — must hold for every scenario ──────────────────
-    it('imports without dropping components or dangling connections', () => {
+    it('imports without dropping components or connections', () => {
       expect(importWarnings(original, db)).toEqual([])
     })
 
@@ -41,15 +43,19 @@ describe('scenario round-trip (Open JSON → Save JSON)', () => {
       expect(twice).toBe(once)
     })
 
-    // ── Semantic fidelity — dynamic-free scenarios only (see tests/README.md) ─
-    const semantic = dynamic ? it.skip : it
-
-    semantic('preserves all content across open → save', () => {
+    it('preserves all content across open → save', () => {
       expect(diffScenario(original, roundTrip(original, db))).toEqual([])
     })
 
-    semantic('imports with no validation errors', () => {
+    it('imports with no validation errors', () => {
       expect(validationErrorsFor(original, db)).toEqual([])
+    })
+
+    // Snapshotted, not asserted empty: load-type mismatches are legitimate in HiSim (see
+    // validationWarningsFor). Run `npm run test -- -u` after an intentional change, and
+    // review the resulting diff — a new warning means new odd wiring, not a flaky test.
+    it('produces only the reviewed validation warnings', () => {
+      expect(validationWarningsFor(original, db)).toMatchSnapshot()
     })
   })
 })

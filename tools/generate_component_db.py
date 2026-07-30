@@ -14,6 +14,7 @@ Exits non-zero if any component fails to introspect, so CI can catch regressions
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import datetime
 import enum
@@ -391,6 +392,142 @@ def _get_config_fields(config_class: type, default_config: Any) -> List[Dict]:
 # Main introspection
 # ---------------------------------------------------------------------------
 
+def _extract_ports(comp: Component) -> Dict[str, Any]:
+    """Pull input ports, output ports and default connections off a constructed component."""
+    return {
+        "input_ports": [
+            {
+                "field_name": inp.field_name,
+                "load_type": inp.loadtype.value if isinstance(inp.loadtype, enum.Enum) else str(inp.loadtype),
+                "unit": inp.unit.value if isinstance(inp.unit, enum.Enum) else str(inp.unit),
+                "mandatory": inp.is_mandatory,
+            }
+            for inp in comp.inputs
+        ],
+        "output_ports": [
+            {
+                "field_name": out.field_name,
+                "load_type": out.load_type.value if isinstance(out.load_type, enum.Enum) else str(out.load_type),
+                "unit": out.unit.value if isinstance(out.unit, enum.Enum) else str(out.unit),
+                "postprocessing_flag": _serialize_value(out.postprocessing_flag),
+                "sankey_flow_direction": out.sankey_flow_direction,
+                "output_description": out.output_description,
+            }
+            for out in comp.outputs
+        ],
+        "default_connections": {
+            src_cls: [
+                {
+                    "target_input_name": c.target_input_name,
+                    "source_output_name": c.source_output_name,
+                }
+                for c in conns
+            ]
+            for src_cls, conns in comp.default_connections.items()
+        },
+    }
+
+
+# A config field whose enum has more than this many members is a data selector
+# (Units, BuildingCodes, PV module databases …), not a feature switch — sweeping it
+# would cost many instantiations and reveal no new ports.
+_MAX_ENUM_VARIANTS = 30
+
+
+def _config_variants(config_class: type, default_config: Any) -> List[tuple]:
+    """Candidate ``(label, {field: value})`` overrides that may reveal extra ports.
+
+    Many components declare ports inside a conditional on a config field — a boolean
+    (``if self.with_domestic_hot_water_preparation:`` on MoreAdvancedHeatPumpHPLib) or an
+    enum (``if self.config.fuel == lt.LoadTypes.ELECTRICITY:`` on Car). Introspecting only
+    the default config misses those ports entirely, even though scenarios legitimately flip
+    the switch — and ``default_connections`` of *other* components reference them by name.
+    """
+    if not dataclasses.is_dataclass(config_class):
+        return []
+    hints = _resolve_hints(config_class)
+    variants: List[tuple] = []
+
+    for f in dataclasses.fields(config_class):
+        hint = _unwrap_optional(hints.get(f.name))
+        current = getattr(default_config, f.name, None)
+
+        if hint is bool or (isinstance(hint, type) and issubclass(hint, bool)):
+            if current is False:
+                variants.append((f.name, {f.name: True}))
+            continue
+
+        if isinstance(hint, type) and issubclass(hint, enum.Enum):
+            members = list(hint)
+            if len(members) > _MAX_ENUM_VARIANTS:
+                continue
+            for member in members:
+                if member is not current:
+                    # Label with the enum *value* (not .name) so the editor can compare it
+                    # directly against the scenario JSON, which stores serialised values.
+                    variants.append((f"{f.name}={member.value}", {f.name: member}))
+
+    return variants
+
+
+def _merge_conditional_ports(
+    base: Dict[str, Any],
+    comp_class: type,
+    default_config: Any,
+    config_class: type,
+    sim_params: SimulationParameters,
+) -> List[str]:
+    """Union in ports/connections that only appear for a non-default config switch.
+
+    Re-instantiates *comp_class* once per candidate override (see :func:`_config_variants`)
+    and appends any port the default build did not produce, tagged with ``conditional_on`` so
+    the editor can tell the user which setting enables it. Returns the switches that
+    contributed something.
+
+    Failures to construct a variant are ignored — a switch may require companion settings the
+    default config does not provide; that variant simply contributes nothing.
+    """
+    known_inputs = {p["field_name"] for p in base["input_ports"]}
+    known_outputs = {p["field_name"] for p in base["output_ports"]}
+    contributing: List[str] = []
+
+    for flag, overrides in _config_variants(config_class, default_config):
+        try:
+            variant_config = dataclasses.replace(copy.deepcopy(default_config), **overrides)
+            variant = comp_class(my_simulation_parameters=sim_params, config=variant_config)
+            extracted = _extract_ports(variant)
+        except Exception:
+            continue
+
+        added = False
+        for port in extracted["input_ports"]:
+            if port["field_name"] not in known_inputs:
+                known_inputs.add(port["field_name"])
+                base["input_ports"].append({**port, "conditional_on": flag})
+                added = True
+        for port in extracted["output_ports"]:
+            if port["field_name"] not in known_outputs:
+                known_outputs.add(port["field_name"])
+                base["output_ports"].append({**port, "conditional_on": flag})
+                added = True
+
+        # default_connections can be flag-gated too — union per source class.
+        for src_cls, conns in extracted["default_connections"].items():
+            existing = base["default_connections"].setdefault(src_cls, [])
+            seen = {(c["target_input_name"], c["source_output_name"]) for c in existing}
+            for conn in conns:
+                key = (conn["target_input_name"], conn["source_output_name"])
+                if key not in seen:
+                    seen.add(key)
+                    existing.append(conn)
+                    added = True
+
+        if added:
+            contributing.append(flag)
+
+    return contributing
+
+
 def _introspect(comp_class: type, sim_params: SimulationParameters) -> Dict:
     """Instantiate *comp_class* with a minimal config and extract all editor metadata."""
     config_class = _find_config_class(comp_class)
@@ -403,38 +540,13 @@ def _introspect(comp_class: type, sim_params: SimulationParameters) -> Dict:
 
     comp = comp_class(my_simulation_parameters=sim_params, config=default_config)
 
-    input_ports = [
-        {
-            "field_name": inp.field_name,
-            "load_type": inp.loadtype.value if isinstance(inp.loadtype, enum.Enum) else str(inp.loadtype),
-            "unit": inp.unit.value if isinstance(inp.unit, enum.Enum) else str(inp.unit),
-            "mandatory": inp.is_mandatory,
-        }
-        for inp in comp.inputs
-    ]
-
-    output_ports = [
-        {
-            "field_name": out.field_name,
-            "load_type": out.load_type.value if isinstance(out.load_type, enum.Enum) else str(out.load_type),
-            "unit": out.unit.value if isinstance(out.unit, enum.Enum) else str(out.unit),
-            "postprocessing_flag": _serialize_value(out.postprocessing_flag),
-            "sankey_flow_direction": out.sankey_flow_direction,
-            "output_description": out.output_description,
-        }
-        for out in comp.outputs
-    ]
-
-    default_connections = {
-        src_cls: [
-            {
-                "target_input_name": c.target_input_name,
-                "source_output_name": c.source_output_name,
-            }
-            for c in conns
-        ]
-        for src_cls, conns in comp.default_connections.items()
-    }
+    extracted = _extract_ports(comp)
+    conditional_flags = _merge_conditional_ports(
+        extracted, comp_class, default_config, config_class, sim_params
+    )
+    input_ports = extracted["input_ports"]
+    output_ports = extracted["output_ports"]
+    default_connections = extracted["default_connections"]
 
     # First line of the class docstring as human-readable display name
     doc = inspect.getdoc(comp_class) or ""
@@ -451,6 +563,9 @@ def _introspect(comp_class: type, sim_params: SimulationParameters) -> Dict:
         "input_ports": input_ports,
         "output_ports": output_ports,
         "default_connections": default_connections,
+        # Boolean config flags that had to be switched on to reveal extra ports/connections;
+        # the ports they contributed carry a matching "conditional_on" key.
+        "conditional_flags": conditional_flags,
     }
 
 
@@ -496,6 +611,104 @@ def _collect_component_classes() -> List[type]:
         concrete.append(cls)
 
     return concrete
+
+
+# ---------------------------------------------------------------------------
+# Consistency self-check
+# ---------------------------------------------------------------------------
+
+# Pre-existing broken default_connections in HiSim itself, tolerated so the generator stays
+# green while *new* breakage fails the build. Keyed by
+# (component_full_classname, source_class, target_input_name, source_output_name).
+#
+#   NightSetbackController — the ComponentConnection has its roles inverted: target_input_name
+#     is the controller's own *output* and source_output_name is Building's *input*. The
+#     declaration belongs on Building, not on the controller.
+#   MpcController — TemperatureOutside is declared as a class constant but never passed to
+#     add_input(); the component reads weather from the forecast/SimRepository instead, so the
+#     default connection is dead.
+#
+# Remove an entry once the underlying component is fixed — a stale entry is reported.
+_KNOWN_DEFAULT_CONNECTION_ISSUES: set = {
+    (
+        "hisim.components.night_setback_controller.NightSetbackController",
+        "Building",
+        "BuildingTemperatureModifier",
+        "BuildingTemperatureModifier",
+    ),
+    (
+        "hisim.components.controller_mpc.MpcController",
+        "Weather",
+        "TemperatureOutside",
+        "TemperatureOutside",
+    ),
+}
+
+
+def _check_default_connections(components: List[Dict]) -> List[Dict]:
+    """Verify every default_connections entry names ports that actually exist.
+
+    The editor's auto-connect resolves ``default_connections`` against this database, so a
+    ``source_output_name`` that no source component declares silently produces an edge to a
+    non-existent handle — which then surfaces as an "orphaned edge" validation error when the
+    user opens a perfectly valid scenario. Catching it here keeps the failure at generation
+    time, where it is actionable.
+
+    Source classes are matched the same way the editor matches them (short class name against
+    the tail of the full classname, or against the display name).
+    """
+    by_short: Dict[str, List[Dict]] = {}
+    for comp in components:
+        by_short.setdefault(comp["component_full_classname"].rsplit(".", 1)[-1], []).append(comp)
+        by_short.setdefault(comp["display_name"], []).append(comp)
+
+    issues: List[Dict] = []
+    for comp in components:
+        target_inputs = {p["field_name"] for p in comp["input_ports"]}
+        for src_cls, conns in comp["default_connections"].items():
+            candidates = by_short.get(src_cls, [])
+            for conn in conns:
+                problems: List[str] = []
+                if conn["target_input_name"] not in target_inputs:
+                    problems.append(
+                        f'target_input_name "{conn["target_input_name"]}" is not an input port'
+                    )
+                if not candidates:
+                    problems.append("source class is not in the component database")
+                elif not any(
+                    any(p["field_name"] == conn["source_output_name"] for p in cand["output_ports"])
+                    for cand in candidates
+                ):
+                    problems.append(
+                        f'source_output_name "{conn["source_output_name"]}" is not an '
+                        f"output port of {src_cls}"
+                    )
+
+                key = (
+                    comp["component_full_classname"],
+                    src_cls,
+                    conn["target_input_name"],
+                    conn["source_output_name"],
+                )
+                for problem in problems:
+                    issues.append({
+                        "component": comp["component_full_classname"],
+                        "source_class": src_cls,
+                        "target_input_name": conn["target_input_name"],
+                        "source_output_name": conn["source_output_name"],
+                        "problem": problem,
+                        "known": key in _KNOWN_DEFAULT_CONNECTION_ISSUES,
+                    })
+    return issues
+
+
+def _issue_key(issue: Dict) -> tuple:
+    return (
+        issue["component"],
+        issue["source_class"],
+        issue["target_input_name"],
+        issue["source_output_name"],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -653,12 +866,15 @@ def main() -> int:
 
     components.sort(key=lambda c: (c["category"], c["display_name"]))
 
+    connection_issues = _check_default_connections(components)
+
     now = datetime.datetime.now().isoformat()
     component_db: Dict = {
         "generated_at": now,
         "components": components,
         "failures": failures,
         "skipped": skipped,
+        "default_connection_issues": connection_issues,
     }
     enum_db = _build_enum_db()
     enum_db["generated_at"] = now
@@ -693,12 +909,33 @@ def main() -> int:
         for label in skipped:
             print(f"  - {label}")
 
+    new_issues = [i for i in connection_issues if not i["known"]]
+    known_issues = [i for i in connection_issues if i["known"]]
+    stale_allowlist = _KNOWN_DEFAULT_CONNECTION_ISSUES - {_issue_key(i) for i in known_issues}
+
+    if known_issues:
+        print(f"\n{len(known_issues)} known-broken default_connection(s) (allowlisted):")
+        for issue in known_issues:
+            print(f"  - {issue['component']} <- {issue['source_class']}: {issue['problem']}")
+
+    if stale_allowlist:
+        print(f"\n{len(stale_allowlist)} stale entry/entries in _KNOWN_DEFAULT_CONNECTION_ISSUES "
+              f"— the underlying issue is fixed, drop them:")
+        for key in sorted(stale_allowlist):
+            print(f"  - {key}")
+
+    if new_issues:
+        print(f"\n{len(new_issues)} broken default_connection(s) — auto-connect would produce "
+              f"edges to non-existent ports:")
+        for issue in new_issues:
+            print(f"  - {issue['component']} <- {issue['source_class']}: {issue['problem']}")
+
     if failures:
         print(f"\n{fail_count} component(s) failed — fix or investigate:")
         for f in failures:
             print(f"  - {f['class']}: {f['error']}")
-        return 1
-    return 0
+
+    return 1 if (failures or new_issues or stale_allowlist) else 0
 
 
 if __name__ == "__main__":

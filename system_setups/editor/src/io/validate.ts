@@ -1,6 +1,7 @@
 import type { Edge } from '@xyflow/react'
 import type { HiSimNode } from '../store'
-import type { DynamicInputPort } from '../types'
+import type { DynamicInputPort, DynamicOutputPort } from '../types'
+import { activeInputPorts } from './ports'
 
 export interface ValidationResult {
   errors: string[]
@@ -33,7 +34,9 @@ export function validateScenario(nodes: HiSimNode[], edges: Edge[]): ValidationR
     const incoming = edgesByTarget.get(node.id) ?? []
     const connectedHandles = new Set(incoming.map((e) => e.targetHandle))
 
-    for (const port of node.data.entry.input_ports) {
+    // Only ports that this component's configuration actually declares — a conditional port
+    // (see io/ports.ts) is not missing when its config switch is off.
+    for (const port of activeInputPorts(node.data.entry.input_ports, node.data.config)) {
       const handle = `input-${port.field_name}`
       const connected = connectedHandles.has(handle)
       if (port.mandatory && !connected) {
@@ -56,8 +59,19 @@ export function validateScenario(nodes: HiSimNode[], edges: Edge[]): ValidationR
 
     const outName = edge.sourceHandle?.replace(/^output-/, '') ?? ''
     const inName = edge.targetHandle?.replace(/^input-/, '') ?? ''
-    const outPort = srcNode.data.entry.output_ports.find((p) => p.field_name === outName)
-    const inPort = tgtNode.data.entry.input_ports.find((p) => p.field_name === inName)
+
+    // Dynamic ports carry load_type/unit just like static ones, so they take part in the
+    // compatibility check too.
+    const outPort =
+      srcNode.data.entry.output_ports.find((p) => p.field_name === outName) ??
+      (srcNode.data.dynamicOutputs as DynamicOutputPort[] | undefined)?.find(
+        (p) => p.field_name === outName,
+      )
+    const inPort =
+      tgtNode.data.entry.input_ports.find((p) => p.field_name === inName) ??
+      (tgtNode.data.dynamicInputs as DynamicInputPort[] | undefined)?.find(
+        (p) => p.field_name === inName,
+      )
 
     if (!outPort || !inPort) continue
     if (outPort.load_type === 'Any' || inPort.load_type === 'Any') continue
@@ -100,7 +114,11 @@ export function validateScenario(nodes: HiSimNode[], edges: Edge[]): ValidationR
       continue
     }
     const outName = edge.sourceHandle?.replace(/^output-/, '') ?? ''
-    if (!srcNode.data.entry.output_ports.some((p) => p.field_name === outName)) {
+    const hasStaticOut = srcNode.data.entry.output_ports.some((p) => p.field_name === outName)
+    const hasDynOut = (srcNode.data.dynamicOutputs as DynamicOutputPort[] | undefined)?.some(
+      (p) => p.field_name === outName,
+    )
+    if (!hasStaticOut && !hasDynOut) {
       errors.push(
         `Orphaned edge: "${srcNode.data.instanceName}.${outName}" is not a known output port.`,
       )

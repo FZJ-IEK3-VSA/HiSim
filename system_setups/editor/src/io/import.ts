@@ -1,9 +1,15 @@
 import type { Edge } from '@xyflow/react'
-import type { ComponentDb, ComponentEntry, DynamicInputPort } from '../types'
+import type {
+  ComponentDb,
+  ComponentEntry,
+  DynamicInputPort,
+  DynamicOutputPort,
+} from '../types'
 import type { HiSimNode } from '../store'
 import { getLoadTypeColor } from '../data/loadTypeColors'
 import { autoConnectNode as autoConnectNodeFn } from './autoConnect'
 import { autoLayout } from './layout'
+import { activeInputPorts, activeOutputPorts } from './ports'
 
 export interface ImportResult {
   nodes: HiSimNode[]
@@ -13,13 +19,45 @@ export interface ImportResult {
   warnings: string[]
 }
 
+/**
+ * Rebuild the field name HiSim gives a dynamic input.
+ *
+ * `DynamicComponent.add_component_input_and_connect` labels the port
+ * `Input_{source}_{output}_{len(self.inputs)}` — and `self.inputs` already holds the
+ * component's *static* inputs, so the index starts at the static input count, not at 0.
+ * (That off-by-N is why connections into e.g. the EMS's `Input_..._2` … `Input_..._6` ports
+ * used to be dropped on import.)
+ */
+function synthesiseDynamicInputName(
+  inp: Record<string, unknown>,
+  index: number,
+): string {
+  return `Input_${inp.source_object_name}_${inp.source_component_output}_${index}`
+}
+
+/**
+ * Rebuild the field name HiSim gives a dynamic output.
+ *
+ * `DynamicComponent.add_component_output` appends `Output{len(self.outputs) + 1}` to the
+ * declared prefix, counting the component's existing outputs — so the first scenario-declared
+ * output lands one past the registry's output count.
+ */
+function synthesiseDynamicOutputName(prefix: string, index: number): string {
+  return `${prefix}Output${index}`
+}
+
 /** Parse a component's raw `inputs[]` array into typed DynamicInputPort objects. */
-function parseDynamicInputs(comp: Record<string, unknown>): DynamicInputPort[] {
+function parseDynamicInputs(
+  comp: Record<string, unknown>,
+  entry: ComponentEntry,
+  config: Record<string, unknown>,
+): DynamicInputPort[] {
   const rawInputs = (comp.inputs as Array<Record<string, unknown>>) ?? []
+  const base = activeInputPorts(entry.input_ports, config).length
   return rawInputs
     .filter((inp) => inp.dynamic === true)
     .map((inp, i) => ({
-      field_name: `Input_${inp.source_object_name}_${inp.source_component_output}_${i}`,
+      field_name: synthesiseDynamicInputName(inp, base + i),
       load_type: String(inp.source_load_type ?? 'Any'),
       unit: String(inp.source_unit ?? '-'),
       source_object_name: String(inp.source_object_name ?? ''),
@@ -27,6 +65,34 @@ function parseDynamicInputs(comp: Record<string, unknown>): DynamicInputPort[] {
       source_tags: (inp.source_tags as string[]) ?? [],
       source_weight: Number(inp.source_weight ?? 0),
     }))
+}
+
+/** Parse a component's raw `outputs[]` array into typed DynamicOutputPort objects. */
+function parseDynamicOutputs(
+  comp: Record<string, unknown>,
+  entry: ComponentEntry,
+  config: Record<string, unknown>,
+): DynamicOutputPort[] {
+  const rawOutputs = (comp.outputs as Array<Record<string, unknown>>) ?? []
+  const base = activeOutputPorts(entry.output_ports, config).length
+  return rawOutputs
+    .filter((out) => out.dynamic === true)
+    .map((out, i) => {
+      const prefix = String(out.source_output_name ?? '')
+      return {
+        field_name: synthesiseDynamicOutputName(prefix, base + i + 1),
+        source_output_name: prefix,
+        load_type: String(out.source_load_type ?? 'Any'),
+        unit: String(out.source_unit ?? '-'),
+        source_tags: (out.source_tags as string[]) ?? [],
+        source_weight: Number(out.source_weight ?? 0),
+        output_description: String(out.output_description ?? ''),
+        source_component_class:
+          out.source_component_class === undefined || out.source_component_class === null
+            ? null
+            : String(out.source_component_class),
+      }
+    })
 }
 
 export function importScenario(text: string, componentDb: ComponentDb): ImportResult {
@@ -53,11 +119,13 @@ export function importScenario(text: string, componentDb: ComponentDb): ImportRe
   const rawComponents = (json.components as Record<string, unknown>[]) ?? []
   let nodeSeq = Date.now()
 
-  // ── Pass 1: collect valid (comp, entry, dynamicInputs) triples ────────────
+  // ── Pass 1: collect valid (comp, entry, dynamic port) tuples ──────────────
   const valid: Array<{
     comp: Record<string, unknown>
     entry: ComponentEntry
+    config: Record<string, unknown>
     dynamicInputs: DynamicInputPort[]
+    dynamicOutputs: DynamicOutputPort[]
   }> = []
 
   for (const comp of rawComponents) {
@@ -67,12 +135,18 @@ export function importScenario(text: string, componentDb: ComponentDb): ImportRe
       warnings.push(`Not in registry (skipped): ${classname}`)
       continue
     }
-    valid.push({ comp, entry, dynamicInputs: parseDynamicInputs(comp) })
+    const config = (comp.configuration ?? {}) as Record<string, unknown>
+    valid.push({
+      comp,
+      entry,
+      config,
+      dynamicInputs: parseDynamicInputs(comp, entry, config),
+      dynamicOutputs: parseDynamicOutputs(comp, entry, config),
+    })
   }
 
   // ── Pass 2: create nodes (positions resolved after edges are built) ──────
-  const nodes: HiSimNode[] = valid.map(({ comp, entry, dynamicInputs }) => {
-    const config = (comp.configuration ?? {}) as Record<string, unknown>
+  const nodes: HiSimNode[] = valid.map(({ comp, entry, config, dynamicInputs, dynamicOutputs }) => {
     const instanceName = String(config.name ?? entry.display_name)
     return {
       id: `n-${nodeSeq++}`,
@@ -85,6 +159,7 @@ export function importScenario(text: string, componentDb: ComponentDb): ImportRe
         collapsed: true,
         connectAutomatically: Boolean(comp.connect_automatically ?? false),
         dynamicInputs: dynamicInputs.length > 0 ? dynamicInputs : undefined,
+        dynamicOutputs: dynamicOutputs.length > 0 ? dynamicOutputs : undefined,
       },
     }
   })
@@ -111,10 +186,22 @@ export function importScenario(text: string, componentDb: ComponentDb): ImportRe
       continue
     }
 
-    // Source must always be a static output port
-    const outPort = srcNode.data.entry.output_ports.find((p) => p.field_name === src.field_name)
+    // Source may be a static output port OR a dynamic output port declared by the scenario
+    const staticOutPort = srcNode.data.entry.output_ports.find(
+      (p) => p.field_name === src.field_name,
+    )
+    const dynOutput = !staticOutPort
+      ? srcNode.data.dynamicOutputs?.find((p) => p.field_name === src.field_name)
+      : undefined
+    const outPort = staticOutPort ?? dynOutput
+
     if (!outPort) {
-      // Dynamic-component outputs are not in the registry — skip silently
+      // Dropping a connection loses scenario content, so it must be reported — a silent
+      // skip here makes the edge vanish and then resurfaces as a misleading downstream
+      // error ("mandatory port not connected") on a scenario that is perfectly valid.
+      warnings.push(
+        `Connection dropped: "${src.component_name}.${src.field_name}" is not a known output port.`,
+      )
       continue
     }
 
@@ -125,7 +212,9 @@ export function importScenario(text: string, componentDb: ComponentDb): ImportRe
       : undefined
 
     if (!staticInPort && !dynInput) {
-      // Unknown target port — skip silently
+      warnings.push(
+        `Connection dropped: "${tgt.component_name}.${tgt.field_name}" is not a known input port.`,
+      )
       continue
     }
 

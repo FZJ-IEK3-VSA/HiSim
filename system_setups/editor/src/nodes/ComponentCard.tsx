@@ -1,7 +1,8 @@
 import { memo, useCallback } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import type { ComponentNodeData, DynamicInputPort } from '../types'
+import type { ComponentNodeData, DynamicInputPort, DynamicOutputPort } from '../types'
 import { getLoadTypeColor } from '../data/loadTypeColors'
+import { activeInputPorts } from '../io/ports'
 import { useEditorStore } from '../store'
 
 // Card layout constants — handle top positions must match these exactly
@@ -28,6 +29,8 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
   const updateNodeData = useEditorStore((s) => s.updateNodeData)
   const { entry, instanceName, config, collapsed, unresolvedPorts = [] } = data
   const dynamicInputs: DynamicInputPort[] = (data.dynamicInputs as DynamicInputPort[] | undefined) ?? []
+  const dynamicOutputs: DynamicOutputPort[] =
+    (data.dynamicOutputs as DynamicOutputPort[] | undefined) ?? []
 
   // ── Real-time validation ──────────────────────────────────────────────────
   // Return unconnected mandatory port names as a \0-separated string for stable
@@ -36,7 +39,7 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
     const connected = new Set(
       s.edges.filter((e) => e.target === id).map((e) => e.targetHandle),
     )
-    return entry.input_ports
+    return activeInputPorts(entry.input_ports, config)
       .filter((p) => p.mandatory && !connected.has(`input-${p.field_name}`))
       .map((p) => p.field_name)
       .join('\0')
@@ -61,6 +64,7 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
   )
 
   const staticPortRows = Math.max(entry.input_ports.length, entry.output_ports.length)
+  const dynamicRows = Math.max(dynamicInputs.length, dynamicOutputs.length)
 
   return (
     <div style={{ width: 260 }} className="relative">
@@ -99,7 +103,7 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
       {/* ── Dynamic input handles (below static rows) ─────────── */}
       {dynamicInputs.map((inp, j) => (
         <Handle
-          key={`dyn-${inp.field_name}`}
+          key={`dyn-in-${inp.field_name}`}
           type="target"
           position={Position.Left}
           id={`input-${inp.field_name}`}
@@ -107,6 +111,21 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
             ...HANDLE_STYLE,
             top: HEADER_H + staticPortRows * PORT_H + j * PORT_H + PORT_H / 2,
             background: getLoadTypeColor(inp.load_type),
+          }}
+        />
+      ))}
+
+      {/* ── Dynamic output handles (share the dynamic rows) ───── */}
+      {dynamicOutputs.map((out, j) => (
+        <Handle
+          key={`dyn-out-${out.field_name}`}
+          type="source"
+          position={Position.Right}
+          id={`output-${out.field_name}`}
+          style={{
+            ...HANDLE_STYLE,
+            top: HEADER_H + staticPortRows * PORT_H + j * PORT_H + PORT_H / 2,
+            background: getLoadTypeColor(out.load_type),
           }}
         />
       ))}
@@ -140,7 +159,7 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
 
         {/* Static port rows */}
         {staticPortRows > 0 && (
-          <div className={dynamicInputs.length > 0 ? '' : 'border-b border-gray-100'}>
+          <div className={dynamicRows > 0 ? '' : 'border-b border-gray-100'}>
             {Array.from({ length: staticPortRows }).map((_, i) => {
               const inp = entry.input_ports[i]
               const out = entry.output_ports[i]
@@ -204,29 +223,48 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
           </div>
         )}
 
-        {/* Dynamic input rows */}
-        {dynamicInputs.length > 0 && (
+        {/* Dynamic port rows — inputs left, outputs right, mirroring the static section */}
+        {dynamicRows > 0 && (
           <div className="border-b border-gray-100">
             {staticPortRows > 0 && (
               <div className="border-t border-dashed border-gray-200" />
             )}
-            {dynamicInputs.map((inp) => (
-              <div
-                key={inp.field_name}
-                className="flex items-center"
-                style={{ height: PORT_H }}
-              >
-                <div className="flex-1 flex items-center pl-4 pr-2 min-w-0">
-                  <span
-                    className="text-[11px] truncate italic"
-                    style={{ color: getLoadTypeColor(inp.load_type) + 'cc' }}
-                    title={`${inp.field_name} — ${inp.load_type} [${inp.unit}]`}
-                  >
-                    {inp.source_object_name}: {inp.source_component_output}
-                  </span>
+            {Array.from({ length: dynamicRows }).map((_, j) => {
+              const inp = dynamicInputs[j]
+              const out = dynamicOutputs[j]
+              return (
+                <div key={j} className="flex items-center" style={{ height: PORT_H }}>
+                  {/* Dynamic input label */}
+                  <div className="flex-1 flex items-center pl-4 pr-1 min-w-0">
+                    {inp && (
+                      <span
+                        className="text-[11px] truncate italic"
+                        style={{ color: getLoadTypeColor(inp.load_type) + 'cc' }}
+                        title={`${inp.field_name} — ${inp.load_type} [${inp.unit}]`}
+                      >
+                        {inp.source_object_name}: {inp.source_component_output}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Centre divider */}
+                  <div className="w-px h-3 bg-gray-100 shrink-0" />
+
+                  {/* Dynamic output label */}
+                  <div className="flex-1 flex items-center justify-end pl-1 pr-4 min-w-0">
+                    {out && (
+                      <span
+                        className="text-[11px] truncate italic"
+                        style={{ color: getLoadTypeColor(out.load_type) + 'cc' }}
+                        title={`${out.field_name} — ${out.load_type} [${out.unit}]`}
+                      >
+                        {out.source_output_name}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 

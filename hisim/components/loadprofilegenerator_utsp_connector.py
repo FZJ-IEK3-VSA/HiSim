@@ -52,6 +52,37 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 DEFAULT_WW_TEMPERATURE_INPUT = 40.45  # °C - default warm water temperature fallback
 DEFAULT_WW_MASS_INPUT = 9.3  # kg/s - default warm water mass input fallback
 
+#: Date format for the strings handed to the LPG binary.
+#:
+#: The LPG deserializes its calculation spec with Newtonsoft using InvariantCulture, which reads a
+#: bare "dd-MM-yyyy" string as "MM-dd-yyyy". Formatting dates as ``%d-%m-%Y`` therefore either
+#: crashed the LPG ("14-01-2021" -> "Could not convert string to DateTime") or, worse, silently
+#: shifted the end date ("12-01-2021" was read as 1 December, so an 11-day request returned 335
+#: days of profile). ISO 8601 is unambiguous under InvariantCulture and is what the UTSP path has
+#: always used, so use it everywhere.
+LPG_DATE_FORMAT = "%Y-%m-%d"
+
+
+def compute_lpg_start_and_end_date(my_simulation_parameters: SimulationParameters) -> Tuple[str, str]:
+    """Return the start and end date for a local LPG run, formatted for the LPG binary.
+
+    The profiles are read from 1 January of the simulation year onwards and must cover the whole
+    simulated time span (see :meth:`UtspLpgConnector.load_result_files_and_transform_to_lists`), so
+    the range always starts on 1 January and spans as many days as the HiSim simulation. Deriving
+    the end date from the year alone would collapse start and end date for any simulation shorter
+    than a year, so the LPG would return too few time steps.
+
+    The LPG includes the end day itself, so the request covers one day more than HiSim needs. That
+    surplus is deliberate: the UTC conversion in :meth:`Car.build` shifts the series, and the
+    callers slice the profiles down to the number of time steps they want.
+
+    Both strings use :data:`LPG_DATE_FORMAT` -- see there for why the format matters.
+    """
+    simulated_days = (my_simulation_parameters.end_date - my_simulation_parameters.start_date).days
+    lpg_start_date = datetime.date(my_simulation_parameters.start_date.year, 1, 1)
+    lpg_end_date = lpg_start_date + datetime.timedelta(days=simulated_days)
+    return lpg_start_date.strftime(LPG_DATE_FORMAT), lpg_end_date.strftime(LPG_DATE_FORMAT)
+
 
 class LpgDataAcquisitionMode(enum.Enum):
     """Set LPG Data Acquisition Mode."""
@@ -1113,17 +1144,7 @@ class UtspLpgConnector(cp.Component):
 
                 householdref = household
                 housetype = HouseTypes.HT23_No_Infrastructure_at_all
-                # The profiles are read from 1 January of the simulation year onwards and must cover the
-                # whole simulated time span (see load_result_files_and_transform_to_lists). Deriving the end
-                # date from its year alone would collapse start and end date for any simulation shorter than
-                # a year, so the LPG would return too few time steps.
-                simulated_days = (
-                    self.my_simulation_parameters.end_date - self.my_simulation_parameters.start_date
-                ).days
-                lpg_start_date = datetime.date(self.my_simulation_parameters.start_date.year, 1, 1)
-                lpg_end_date = lpg_start_date + datetime.timedelta(days=simulated_days)
-                startdate = lpg_start_date.strftime("%d-%m-%Y")
-                enddate = lpg_end_date.strftime("%d-%m-%Y")
+                startdate, enddate = compute_lpg_start_and_end_date(self.my_simulation_parameters)
                 geographic_location = None
 
                 chargingset = self.utsp_config.charging_station_set

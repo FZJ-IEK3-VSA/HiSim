@@ -84,6 +84,28 @@ def compute_lpg_start_and_end_date(my_simulation_parameters: SimulationParameter
     return lpg_start_date.strftime(LPG_DATE_FORMAT), lpg_end_date.strftime(LPG_DATE_FORMAT)
 
 
+#: LPG charging station sets that book the car's charging into the household ``Electricity`` load
+#: type -- the very profile this component reads and publishes as ``ElectricalPowerConsumption``.
+#:
+#: Choosing one of these silently moves the car's energy into the residents' electricity. If the
+#: setup also builds a :class:`~hisim.components.generic_car.Car`, the same kilometres are paid for
+#: twice; if it builds no car, the household carries one anyway that nobody declared. Prefer
+#: ``Charging_At_Home_with_03_7_kW_output_results_to_Car_Electricity``, which keeps the driving
+#: distances and car locations but books the energy to a load type HiSim never reads.
+#:
+#: The list mirrors ``tblChargingStationSetEntries.GridChargingLoadtypeID == 1`` ("Electricity") in
+#: the LPG's ``profilegenerator.db3``; ``tests/test_charging_station_set_booking.py`` both keeps it
+#: in sync with that database and enforces that no shipped configuration uses one.
+CHARGING_STATION_SETS_BOOKED_TO_HOUSEHOLD_ELECTRICITY = frozenset(
+    {
+        "Charging At Home with 00.5 kW",
+        "Charging At Home with 03.7 kW",
+        "Charging At Home with 11 kW",
+        "Charging At Home with 22 kW",
+    }
+)
+
+
 class LpgDataAcquisitionMode(enum.Enum):
     """Set LPG Data Acquisition Mode."""
 
@@ -139,7 +161,10 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             energy_intensity=EnergyIntensityType.EnergySaving,
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
-            charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
+            # Books the charging to the separate "Electricity for Car Charging" load type instead of
+            # the household electricity this component reads -- see
+            # CHARGING_STATION_SETS_BOOKED_TO_HOUSEHOLD_ELECTRICITY.
+            charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW_output_results_to_Car_Electricity,
             profile_with_washing_machine_and_dishwasher=True,
             predictive_control=False,
             predictive=False,

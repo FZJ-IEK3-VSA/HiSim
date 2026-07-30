@@ -115,7 +115,9 @@ def initialize_lpg_utsp_connector_and_return_results(
     result_path = "lpg_utsp_scaling_test"
     travel_route_set = TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
     transportation_device_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car
-    charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
+    # Must not book the charging into the household electricity profile this connector reads --
+    # see CHARGING_STATION_SETS_BOOKED_TO_HOUSEHOLD_ELECTRICITY.
+    charging_station_set = ChargingStationSets.Charging_At_Home_with_03_7_kW_output_results_to_Car_Electricity
     energy_intensity = EnergyIntensityType.EnergySaving
     guid = "guid should not be varied automatically"
     data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP

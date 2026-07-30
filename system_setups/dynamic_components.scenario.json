@@ -278,9 +278,9 @@
                     }
                 },
                 "charging_station_set": {
-                    "name": "Charging At Home with 11 kW",
+                    "name": "Charging At Home with 03.7 kW, output results to Car Electricity",
                     "guid": {
-                        "str_val": "78dae308-24c4-45cc-8bdf-b001d61f45c2"
+                        "str_val": "223f0577-9249-4293-a849-ea12e2033377"
                     }
                 },
                 "profile_with_washing_machine_and_dishwasher": true,

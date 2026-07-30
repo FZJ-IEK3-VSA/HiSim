@@ -32,6 +32,42 @@ export function isPortActive(
   return String(config[field]) === expected
 }
 
+/**
+ * The port's effective load type for a given configuration.
+ *
+ * Some components type their ports from config rather than fixing them in code — CSVLoader
+ * passes `config.loadtype` / `config.unit` straight to `add_output`, and SumBuilder,
+ * CalculateOperation, SimpleStorage and GasMeter do the same. The component database records
+ * whichever value the *default* config produced, so reading `port.load_type` directly would
+ * compare a scenario's kW against a registry snapshot's W and report a mismatch that does not
+ * exist. `tools/generate_component_db.py` marks these ports with `load_type_from_config` /
+ * `unit_from_config`, and only when the mapping is the identity, so resolving against the
+ * node's config is safe.
+ */
+export function portLoadType(
+  port: InputPort | OutputPort,
+  config: Record<string, unknown>,
+): string {
+  return resolveFromConfig(port.load_type_from_config, config) ?? port.load_type
+}
+
+/** The port's effective unit for a given configuration. See portLoadType. */
+export function portUnit(
+  port: InputPort | OutputPort,
+  config: Record<string, unknown>,
+): string {
+  return resolveFromConfig(port.unit_from_config, config) ?? port.unit
+}
+
+function resolveFromConfig(
+  field: string | undefined,
+  config: Record<string, unknown>,
+): string | undefined {
+  if (!field) return undefined
+  const value = config[field]
+  return value === undefined || value === null ? undefined : String(value)
+}
+
 /** Input ports that exist for this configuration. */
 export function activeInputPorts(
   ports: InputPort[],

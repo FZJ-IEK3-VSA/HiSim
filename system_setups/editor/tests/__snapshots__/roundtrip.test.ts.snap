@@ -35,11 +35,7 @@ exports[`scenario round-trip (Open JSON → Save JSON) > default_connections.sce
 
 exports[`scenario round-trip (Open JSON → Save JSON) > dynamic_components.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > electrolyzer_with_renewables.scenario.json > produces only the reviewed validation warnings 1`] = `
-[
-  "CSV.CSV Profile → Standard transformer and rectifier unit.Input1: unit mismatch (W ≠ kW).",
-]
-`;
+exports[`scenario round-trip (Open JSON → Save JSON) > electrolyzer_with_renewables.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
 
 exports[`scenario round-trip (Open JSON → Save JSON) > household_district_heating_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
 [

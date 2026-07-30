@@ -9,7 +9,7 @@ import type { HiSimNode } from '../store'
 import { getLoadTypeColor } from '../data/loadTypeColors'
 import { autoConnectNode as autoConnectNodeFn } from './autoConnect'
 import { autoLayout } from './layout'
-import { activeInputPorts, activeOutputPorts } from './ports'
+import { activeInputPorts, activeOutputPorts, portLoadType, portUnit } from './ports'
 
 export interface ImportResult {
   nodes: HiSimNode[]
@@ -218,14 +218,19 @@ export function importScenario(text: string, componentDb: ComponentDb): ImportRe
       continue
     }
 
+    const loadType = staticOutPort
+      ? portLoadType(staticOutPort, srcNode.data.config)
+      : outPort.load_type
+    const unit = staticOutPort ? portUnit(staticOutPort, srcNode.data.config) : outPort.unit
+
     edges.push({
       id: `e-${nodeSeq++}`,
       source: srcNode.id,
       target: tgtNode.id,
       sourceHandle: `output-${src.field_name}`,
       targetHandle: `input-${tgt.field_name}`,
-      style: { stroke: getLoadTypeColor(outPort.load_type), strokeWidth: 2 },
-      data: { loadType: outPort.load_type, unit: outPort.unit },
+      style: { stroke: getLoadTypeColor(loadType), strokeWidth: 2 },
+      data: { loadType, unit },
     })
   }
 

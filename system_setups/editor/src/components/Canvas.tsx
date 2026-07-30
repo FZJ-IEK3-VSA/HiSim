@@ -10,6 +10,7 @@ import {
   type Node,
 } from '@xyflow/react'
 import { useEditorStore, type HiSimNode } from '../store'
+import { portLoadType, portUnit } from '../io/ports'
 import type { DynamicInputPort, DynamicOutputPort } from '../types'
 import { nodeTypes } from '../nodes'
 import { HiSimEdge } from '../edges/HiSimEdge'
@@ -94,13 +95,17 @@ function CanvasInner() {
       const outName = connection.sourceHandle?.replace('output-', '') ?? ''
       const inName = connection.targetHandle?.replace('input-', '') ?? ''
 
-      // Check static output port first, then dynamic output port
-      const outPort =
-        src.data.entry.output_ports.find((p) => p.field_name === outName) ??
-        (src.data.dynamicOutputs as DynamicOutputPort[] | undefined)?.find(
-          (p) => p.field_name === outName,
-        )
-      if (!outPort) return false
+      // Check static output port first, then dynamic output port. Static ports may take their
+      // type from config (see io/ports.ts), so resolve against the node's own config —
+      // otherwise a CSV loader set to kW could not be wired to a kW input. Dynamic ports
+      // already carry the scenario's own types.
+      const staticOutPort = src.data.entry.output_ports.find((p) => p.field_name === outName)
+      const dynOutput = !staticOutPort
+        ? (src.data.dynamicOutputs as DynamicOutputPort[] | undefined)?.find(
+            (p) => p.field_name === outName,
+          )
+        : undefined
+      if (!staticOutPort && !dynOutput) return false
 
       // Check static input port first, then dynamic input port
       const staticInPort = tgt.data.entry.input_ports.find((p) => p.field_name === inName)
@@ -109,14 +114,19 @@ function CanvasInner() {
             (p) => p.field_name === inName,
           )
         : undefined
-
       if (!staticInPort && !dynInput) return false
 
-      const inLoadType = staticInPort?.load_type ?? dynInput?.load_type ?? 'Any'
-      const inUnit = staticInPort?.unit ?? dynInput?.unit ?? ''
+      const outLoadType = staticOutPort
+        ? portLoadType(staticOutPort, src.data.config)
+        : dynOutput!.load_type
+      const outUnit = staticOutPort ? portUnit(staticOutPort, src.data.config) : dynOutput!.unit
+      const inLoadType = staticInPort
+        ? portLoadType(staticInPort, tgt.data.config)
+        : dynInput!.load_type
+      const inUnit = staticInPort ? portUnit(staticInPort, tgt.data.config) : dynInput!.unit
 
-      if (inLoadType === 'Any' || outPort.load_type === 'Any') return true
-      return outPort.load_type === inLoadType && outPort.unit === inUnit
+      if (inLoadType === 'Any' || outLoadType === 'Any') return true
+      return outLoadType === inLoadType && outUnit === inUnit
     },
     [],
   )

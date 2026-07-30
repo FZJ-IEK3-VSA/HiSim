@@ -10,6 +10,7 @@ import type {
 } from '../types'
 import { getLoadTypeColor } from '../data/loadTypeColors'
 import { autoConnectNode as autoConnectNodeFn } from '../io/autoConnect'
+import { portLoadType, portUnit } from '../io/ports'
 import { validateScenario } from '../io/validate'
 
 export type HiSimNode = Node<ComponentNodeData>
@@ -105,18 +106,27 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
     const { nodes, edges } = get()
     const sourceNode = nodes.find((n) => n.id === connection.source)
     const portName = connection.sourceHandle?.replace('output-', '') ?? ''
-    const outPort =
-      sourceNode?.data.entry.output_ports.find((p) => p.field_name === portName) ??
-      (sourceNode?.data.dynamicOutputs as DynamicOutputPort[] | undefined)?.find(
-        (p) => p.field_name === portName,
-      )
-    const loadType = outPort?.load_type ?? 'Any'
+    const staticOutPort = sourceNode?.data.entry.output_ports.find(
+      (p) => p.field_name === portName,
+    )
+    const dynOutput = !staticOutPort
+      ? (sourceNode?.data.dynamicOutputs as DynamicOutputPort[] | undefined)?.find(
+          (p) => p.field_name === portName,
+        )
+      : undefined
+
+    // Static port types may come from config (see io/ports.ts); dynamic ports carry their own.
+    const config = sourceNode?.data.config ?? {}
+    const loadType = staticOutPort
+      ? portLoadType(staticOutPort, config)
+      : dynOutput?.load_type ?? 'Any'
+    const unit = staticOutPort ? portUnit(staticOutPort, config) : dynOutput?.unit ?? ''
 
     const newEdge: Edge = {
       ...connection,
       id: `e-${Date.now()}`,
       style: { stroke: getLoadTypeColor(loadType), strokeWidth: 2 },
-      data: { loadType, unit: outPort?.unit ?? '' },
+      data: { loadType, unit },
     }
     set({ edges: rfAddEdge(newEdge, edges) })
   },

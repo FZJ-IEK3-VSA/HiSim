@@ -2,7 +2,7 @@ import { memo, useCallback } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import type { ComponentNodeData, DynamicInputPort, DynamicOutputPort } from '../types'
 import { getLoadTypeColor } from '../data/loadTypeColors'
-import { activeInputPorts } from '../io/ports'
+import { activeInputPorts, portLoadType, portUnit } from '../io/ports'
 import { useEditorStore } from '../store'
 
 // Card layout constants — handle top positions must match these exactly
@@ -175,11 +175,14 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
                           style={{
                             color: missingMandatory
                               ? '#ef4444'
-                              : getLoadTypeColor(inp.load_type) + 'cc',
+                              : getLoadTypeColor(portLoadType(inp, config)) + 'cc',
                           }}
-                          title={`${inp.field_name} — ${inp.load_type} [${inp.unit}]${
-                            inp.mandatory ? ' *required' : ''
-                          }${missingMandatory ? ' — NOT CONNECTED' : ''}`}
+                          title={`${inp.field_name} — ${portLoadType(inp, config)} [${portUnit(
+                            inp,
+                            config,
+                          )}]${inp.mandatory ? ' *required' : ''}${
+                            missingMandatory ? ' — NOT CONNECTED' : ''
+                          }`}
                         >
                           {inp.field_name}
                           {inp.mandatory && (
@@ -210,8 +213,11 @@ export const ComponentCard = memo(function ComponentCard({ id, data: rawData, se
                     {out && (
                       <span
                         className="text-[11px] truncate"
-                        style={{ color: getLoadTypeColor(out.load_type) + 'cc' }}
-                        title={`${out.field_name} — ${out.load_type} [${out.unit}]`}
+                        style={{ color: getLoadTypeColor(portLoadType(out, config)) + 'cc' }}
+                        title={`${out.field_name} — ${portLoadType(out, config)} [${portUnit(
+                          out,
+                          config,
+                        )}]`}
                       >
                         {out.field_name}
                       </span>

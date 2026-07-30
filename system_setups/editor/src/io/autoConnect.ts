@@ -1,6 +1,7 @@
 import type { Edge } from '@xyflow/react'
 import type { HiSimNode } from '../store'
 import { getLoadTypeColor } from '../data/loadTypeColors'
+import { portLoadType, portUnit } from './ports'
 
 // Module-level counter — never resets, so IDs are unique across all calls in a session
 let _edgeSeq = 0
@@ -85,7 +86,7 @@ export function autoConnectNode(
           continue
         }
 
-        const loadType = outPort.load_type
+        const loadType = portLoadType(outPort, src.data.config)
 
         newEdges.push({
           id: `ac-${++_edgeSeq}`,
@@ -98,7 +99,7 @@ export function autoConnectNode(
             strokeWidth: 2,
             strokeDasharray: '5,4',
           },
-          data: { loadType, unit: outPort.unit, autoConnected: true },
+          data: { loadType, unit: portUnit(outPort, src.data.config), autoConnected: true },
         })
       } else {
         unresolvedPorts.push(conn.target_input_name)

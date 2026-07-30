@@ -18,7 +18,6 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import CapexCostDataClass, OpexCostDataClass
-from hisim.components.building import Building
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
 from hisim.simulationparameters import SimulationParameters
 
@@ -111,17 +110,11 @@ class NightSetbackController(cp.Component):
             output_description="Temperature modifier for the building during the night setback window.",
         )
 
-        self.add_default_connections(self.get_default_connections_to_building())
-
-    def get_default_connections_to_building(self) -> List[cp.ComponentConnection]:
-        """Connect the output to the building temperature modifier input."""
-        return [
-            cp.ComponentConnection(
-                NightSetbackController.BuildingTemperatureModifier,
-                Building.get_classname(),
-                Building.BuildingTemperatureModifier,
-            )
-        ]
+        # No default connections are declared here. `default_connections` describes the
+        # *inputs* a component pulls from a source ("my input X <- their output Y"), and this
+        # controller only produces an output. The connection into
+        # Building.BuildingTemperatureModifier is therefore declared on Building, in
+        # Building.get_default_connections_from_night_setback_controller().
 
     def i_save_state(self) -> None:
         """Save the current state."""

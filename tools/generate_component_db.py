@@ -458,16 +458,49 @@ def _config_variants(config_class: type, default_config: Any) -> List[tuple]:
             continue
 
         if isinstance(hint, type) and issubclass(hint, enum.Enum):
-            members = list(hint)
+            members = [m for m in hint if m is not current]
             if len(members) > _MAX_ENUM_VARIANTS:
-                continue
+                # A large enum is a data selector (Units, weather datasets …), not a feature
+                # switch. Probe a single member anyway: that is enough for
+                # _detect_config_derived_types to notice a port whose type follows the field.
+                members = members[:1]
             for member in members:
-                if member is not current:
-                    # Label with the enum *value* (not .name) so the editor can compare it
-                    # directly against the scenario JSON, which stores serialised values.
-                    variants.append((f"{f.name}={member.value}", {f.name: member}))
+                # Label with the enum *value* (not .name) so the editor can compare it
+                # directly against the scenario JSON, which stores serialised values.
+                variants.append((f"{f.name}={member.value}", {f.name: member}))
 
     return variants
+
+
+def _detect_config_derived_types(
+    base_ports: List[Dict],
+    variant_ports: List[Dict],
+    field: str,
+    base_value: Any,
+    variant_value: Any,
+) -> None:
+    """Mark ports whose load_type/unit is copied straight from a config field.
+
+    Some components type their ports from configuration rather than declaring them fixed —
+    CSVLoader passes ``self.csvconfig.loadtype`` / ``self.csvconfig.unit`` to ``add_output``.
+    Introspecting one config then bakes *that* config's units into the registry, and a scenario
+    that sets a different unit gets flagged with a bogus mismatch warning.
+
+    A field is only recorded when the mapping is the identity in **both** builds (the port
+    reports exactly the configured value), so a component that derives its port type through
+    some other mapping is left alone rather than mis-resolved by the editor.
+    """
+    variant_by_name = {p["field_name"]: p for p in variant_ports}
+    for port in base_ports:
+        other = variant_by_name.get(port["field_name"])
+        if other is None:
+            continue
+        for key in ("load_type", "unit"):
+            marker = f"{key}_from_config"
+            if marker in port or port[key] == other[key]:
+                continue
+            if port[key] == _serialize_value(base_value) and other[key] == _serialize_value(variant_value):
+                port[marker] = field
 
 
 def _merge_conditional_ports(
@@ -498,6 +531,16 @@ def _merge_conditional_ports(
             extracted = _extract_ports(variant)
         except Exception:
             continue
+
+        # Ports present in both builds whose type moved with the override are config-derived.
+        for field, value in overrides.items():
+            base_value = getattr(default_config, field, None)
+            _detect_config_derived_types(
+                base["input_ports"], extracted["input_ports"], field, base_value, value
+            )
+            _detect_config_derived_types(
+                base["output_ports"], extracted["output_ports"], field, base_value, value
+            )
 
         added = False
         for port in extracted["input_ports"]:
@@ -617,32 +660,13 @@ def _collect_component_classes() -> List[type]:
 # Consistency self-check
 # ---------------------------------------------------------------------------
 
-# Pre-existing broken default_connections in HiSim itself, tolerated so the generator stays
-# green while *new* breakage fails the build. Keyed by
+# Escape hatch for broken default_connections in HiSim itself, so a known defect can be
+# recorded rather than blocking database generation. Keyed by
 # (component_full_classname, source_class, target_input_name, source_output_name).
 #
-#   NightSetbackController — the ComponentConnection has its roles inverted: target_input_name
-#     is the controller's own *output* and source_output_name is Building's *input*. The
-#     declaration belongs on Building, not on the controller.
-#   MpcController — TemperatureOutside is declared as a class constant but never passed to
-#     add_input(); the component reads weather from the forecast/SimRepository instead, so the
-#     default connection is dead.
-#
-# Remove an entry once the underlying component is fixed — a stale entry is reported.
-_KNOWN_DEFAULT_CONNECTION_ISSUES: set = {
-    (
-        "hisim.components.night_setback_controller.NightSetbackController",
-        "Building",
-        "BuildingTemperatureModifier",
-        "BuildingTemperatureModifier",
-    ),
-    (
-        "hisim.components.controller_mpc.MpcController",
-        "Weather",
-        "TemperatureOutside",
-        "TemperatureOutside",
-    ),
-}
+# Currently empty — keep it that way. A stale entry (one that no longer matches any detected
+# issue) is reported and fails generation, so this cannot silently rot.
+_KNOWN_DEFAULT_CONNECTION_ISSUES: set = set()
 
 
 def _check_default_connections(components: List[Dict]) -> List[Dict]:

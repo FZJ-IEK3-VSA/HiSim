@@ -10,6 +10,13 @@ export interface InputPort {
    * Names the config field — `"flag"` for a boolean, `"field=MEMBER"` for an enum.
    */
   conditional_on?: string
+  /**
+   * Set when the port's load type / unit is taken straight from a config field rather than
+   * fixed in code (e.g. CSVLoader passes `config.loadtype` / `config.unit` to `add_output`).
+   * Names the field; the effective type is the node's current config value.
+   */
+  load_type_from_config?: string
+  unit_from_config?: string
 }
 
 export interface OutputPort {
@@ -21,6 +28,9 @@ export interface OutputPort {
   output_description: string
   /** See InputPort.conditional_on. */
   conditional_on?: string
+  /** See InputPort.load_type_from_config / unit_from_config. */
+  load_type_from_config?: string
+  unit_from_config?: string
 }
 
 /** One entry within a default_connections value list (source_class_name is the dict key). */

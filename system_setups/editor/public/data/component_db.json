@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-31T00:09:51.007135",
+  "generated_at": "2026-07-31T00:37:03.391378",
   "components": [
     {
       "component_full_classname": "hisim.components.building.Building",
@@ -520,6 +520,12 @@
           {
             "target_input_name": "BuildingTemperatureModifier",
             "source_output_name": "BuildingIndoorTemperatureModifier"
+          }
+        ],
+        "NightSetbackController": [
+          {
+            "target_input_name": "BuildingTemperatureModifier",
+            "source_output_name": "BuildingTemperatureModifier"
           }
         ]
       },
@@ -2019,14 +2025,7 @@
           "output_description": "Temperature modifier for the building during the night setback window."
         }
       ],
-      "default_connections": {
-        "Building": [
-          {
-            "target_input_name": "BuildingTemperatureModifier",
-            "source_output_name": "BuildingTemperatureModifier"
-          }
-        ]
-      },
+      "default_connections": {},
       "conditional_flags": []
     },
     {
@@ -3017,14 +3016,7 @@
           "output_description": "here a description for GenerationRevenue will follow."
         }
       ],
-      "default_connections": {
-        "Weather": [
-          {
-            "target_input_name": "TemperatureOutside",
-            "source_output_name": "TemperatureOutside"
-          }
-        ]
-      },
+      "default_connections": {},
       "conditional_flags": []
     },
     {
@@ -5410,13 +5402,17 @@
           "field_name": "Charging Amount",
           "load_type": "WarmWater",
           "unit": "kWh",
-          "mandatory": true
+          "mandatory": true,
+          "load_type_from_config": "loadtype",
+          "unit_from_config": "unit"
         },
         {
           "field_name": "Discharging Amount",
           "load_type": "WarmWater",
           "unit": "kWh",
-          "mandatory": true
+          "mandatory": true,
+          "load_type_from_config": "loadtype",
+          "unit_from_config": "unit"
         }
       ],
       "output_ports": [
@@ -5426,7 +5422,9 @@
           "unit": "kWh",
           "postprocessing_flag": null,
           "sankey_flow_direction": null,
-          "output_description": "Actual Storage Delta"
+          "output_description": "Actual Storage Delta",
+          "load_type_from_config": "loadtype",
+          "unit_from_config": "unit"
         },
         {
           "field_name": "Current Fill Level Absolute",
@@ -5434,7 +5432,9 @@
           "unit": "kWh",
           "postprocessing_flag": null,
           "sankey_flow_direction": null,
-          "output_description": "Current Fill Level"
+          "output_description": "Current Fill Level",
+          "load_type_from_config": "loadtype",
+          "unit_from_config": "unit"
         },
         {
           "field_name": "Current Fill Level Percent",
@@ -5442,7 +5442,8 @@
           "unit": "%",
           "postprocessing_flag": null,
           "sankey_flow_direction": null,
-          "output_description": "Current Fill Level in Percent"
+          "output_description": "Current Fill Level in Percent",
+          "load_type_from_config": "loadtype"
         }
       ],
       "default_connections": {},
@@ -11265,7 +11266,8 @@
           "unit": "W",
           "postprocessing_flag": null,
           "sankey_flow_direction": false,
-          "output_description": "here a description for GasAvailable will follow."
+          "output_description": "here a description for GasAvailable will follow.",
+          "load_type_from_config": "gas_loadtype"
         },
         {
           "field_name": "GasFromGrid",
@@ -11275,7 +11277,8 @@
             "DISPLAY_IN_WEBTOOL"
           ],
           "sankey_flow_direction": false,
-          "output_description": "here a description for GasFromGrid will follow."
+          "output_description": "here a description for GasFromGrid will follow.",
+          "load_type_from_config": "gas_loadtype"
         },
         {
           "field_name": "GasConsumption",
@@ -11283,7 +11286,8 @@
           "unit": "Wh",
           "postprocessing_flag": null,
           "sankey_flow_direction": false,
-          "output_description": "here a description for GasConsumption will follow."
+          "output_description": "here a description for GasConsumption will follow.",
+          "load_type_from_config": "gas_loadtype"
         },
         {
           "field_name": "GasProduction",
@@ -11291,7 +11295,8 @@
           "unit": "Wh",
           "postprocessing_flag": null,
           "sankey_flow_direction": false,
-          "output_description": "here a description for GasProduction will follow."
+          "output_description": "here a description for GasProduction will follow.",
+          "load_type_from_config": "gas_loadtype"
         },
         {
           "field_name": "CumulativeConsumption",
@@ -11299,7 +11304,8 @@
           "unit": "Wh",
           "postprocessing_flag": null,
           "sankey_flow_direction": false,
-          "output_description": "here a description for CumulativeConsumption will follow."
+          "output_description": "here a description for CumulativeConsumption will follow.",
+          "load_type_from_config": "gas_loadtype"
         },
         {
           "field_name": "CumulativeProduction",
@@ -11307,7 +11313,8 @@
           "unit": "Wh",
           "postprocessing_flag": null,
           "sankey_flow_direction": false,
-          "output_description": "here a description for CumulativeProduction will follow."
+          "output_description": "here a description for CumulativeProduction will follow.",
+          "load_type_from_config": "gas_loadtype"
         }
       ],
       "default_connections": {},
@@ -12863,13 +12870,17 @@
           "field_name": "Input 1",
           "load_type": "Any",
           "unit": "-",
-          "mandatory": true
+          "mandatory": true,
+          "load_type_from_config": "loadtype",
+          "unit_from_config": "unit"
         },
         {
           "field_name": "Input 2",
           "load_type": "Any",
           "unit": "-",
-          "mandatory": false
+          "mandatory": false,
+          "load_type_from_config": "loadtype",
+          "unit_from_config": "unit"
         }
       ],
       "output_ports": [
@@ -12879,7 +12890,9 @@
           "unit": "-",
           "postprocessing_flag": null,
           "sankey_flow_direction": null,
-          "output_description": "Sum of values"
+          "output_description": "Sum of values",
+          "load_type_from_config": "loadtype",
+          "unit_from_config": "unit"
         }
       ],
       "default_connections": {},
@@ -12935,7 +12948,9 @@
           "unit": "-",
           "postprocessing_flag": null,
           "sankey_flow_direction": null,
-          "output_description": "Sum of all connected inputs."
+          "output_description": "Sum of all connected inputs.",
+          "load_type_from_config": "loadtype",
+          "unit_from_config": "unit"
         }
       ],
       "default_connections": {},
@@ -13111,7 +13126,9 @@
           "unit": "W",
           "postprocessing_flag": null,
           "sankey_flow_direction": null,
-          "output_description": "CSV loader output 1"
+          "output_description": "CSV loader output 1",
+          "load_type_from_config": "loadtype",
+          "unit_from_config": "unit"
         }
       ],
       "default_connections": {},
@@ -13290,19 +13307,25 @@
           "field_name": "Input 1",
           "load_type": "Any",
           "unit": "-",
-          "mandatory": true
+          "mandatory": true,
+          "load_type_from_config": "loadtype",
+          "unit_from_config": "unit"
         },
         {
           "field_name": "Input 2",
           "load_type": "Any",
           "unit": "-",
-          "mandatory": false
+          "mandatory": false,
+          "load_type_from_config": "loadtype",
+          "unit_from_config": "unit"
         },
         {
           "field_name": "Input 3",
           "load_type": "Any",
           "unit": "-",
-          "mandatory": false
+          "mandatory": false,
+          "load_type_from_config": "loadtype",
+          "unit_from_config": "unit"
         }
       ],
       "output_ports": [
@@ -13312,7 +13335,9 @@
           "unit": "-",
           "postprocessing_flag": null,
           "sankey_flow_direction": null,
-          "output_description": "Sum of values"
+          "output_description": "Sum of values",
+          "load_type_from_config": "loadtype",
+          "unit_from_config": "unit"
         }
       ],
       "default_connections": {},
@@ -13533,30 +13558,5 @@
     "hisim.components.generic_ev_charger.EVCharger",
     "hisim.components.generic_ev_charger.VehiclePure"
   ],
-  "default_connection_issues": [
-    {
-      "component": "hisim.components.night_setback_controller.NightSetbackController",
-      "source_class": "Building",
-      "target_input_name": "BuildingTemperatureModifier",
-      "source_output_name": "BuildingTemperatureModifier",
-      "problem": "target_input_name \"BuildingTemperatureModifier\" is not an input port",
-      "known": true
-    },
-    {
-      "component": "hisim.components.night_setback_controller.NightSetbackController",
-      "source_class": "Building",
-      "target_input_name": "BuildingTemperatureModifier",
-      "source_output_name": "BuildingTemperatureModifier",
-      "problem": "source_output_name \"BuildingTemperatureModifier\" is not an output port of Building",
-      "known": true
-    },
-    {
-      "component": "hisim.components.controller_mpc.MpcController",
-      "source_class": "Weather",
-      "target_input_name": "TemperatureOutside",
-      "source_output_name": "TemperatureOutside",
-      "problem": "target_input_name \"TemperatureOutside\" is not an input port",
-      "known": true
-    }
-  ]
+  "default_connection_issues": []
 }

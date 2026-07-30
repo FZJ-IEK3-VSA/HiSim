@@ -541,6 +541,7 @@ class Building(cp.Component):
         self.add_default_connections(self.get_default_connections_from_hds())
         self.add_default_connections(self.get_default_connections_from_electric_heater())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
+        self.add_default_connections(self.get_default_connections_from_night_setback_controller())
 
     def get_default_connections_from_weather(
         self,
@@ -686,6 +687,32 @@ class Building(cp.Component):
                 Building.BuildingTemperatureModifier,
                 ems_classname,
                 component_class.BuildingIndoorTemperatureModifier,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_night_setback_controller(
+        self,
+    ):
+        """Get night setback controller default connections.
+
+        The controller only produces an output, so the connection is declared here on the
+        consuming side. Note this targets the same input as
+        get_default_connections_from_energy_management_system: a setup that auto-connects both
+        an EMS and a night setback controller would wire two sources onto
+        BuildingTemperatureModifier, so pick one.
+        """
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.night_setback_controller"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "NightSetbackController")
+        connections = []
+        controller_classname = component_class.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                Building.BuildingTemperatureModifier,
+                controller_classname,
+                component_class.BuildingTemperatureModifier,
             )
         )
         return connections

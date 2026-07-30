@@ -1,7 +1,7 @@
 import type { Edge } from '@xyflow/react'
 import type { HiSimNode } from '../store'
 import type { DynamicInputPort, DynamicOutputPort } from '../types'
-import { activeInputPorts } from './ports'
+import { activeInputPorts, portLoadType, portUnit } from './ports'
 
 export interface ValidationResult {
   errors: string[]
@@ -74,22 +74,30 @@ export function validateScenario(nodes: HiSimNode[], edges: Edge[]): ValidationR
       )
 
     if (!outPort || !inPort) continue
-    if (outPort.load_type === 'Any' || inPort.load_type === 'Any') continue
 
-    if (outPort.load_type !== inPort.load_type) {
+    // Resolve config-derived types against each node's own config, not the registry default.
+    const outLoadType = portLoadType(outPort, srcNode.data.config)
+    const inLoadType = portLoadType(inPort, tgtNode.data.config)
+    if (outLoadType === 'Any' || inLoadType === 'Any') continue
+
+    if (outLoadType !== inLoadType) {
       // HiSim connects inputs to outputs purely by field name (see Component.connect_input);
       // it never enforces load-type equality, and shipped setups legitimately mix related
       // load types (e.g. Water → Temperature on a water-storage port). So a mismatch is a
       // warning to surface odd wiring, not a blocking error.
       warnings.push(
         `${srcNode.data.instanceName}.${outName} → ${tgtNode.data.instanceName}.${inName}: ` +
-          `load type mismatch (${outPort.load_type} ≠ ${inPort.load_type}).`,
+          `load type mismatch (${outLoadType} ≠ ${inLoadType}).`,
       )
-    } else if (outPort.unit !== inPort.unit) {
-      warnings.push(
-        `${srcNode.data.instanceName}.${outName} → ${tgtNode.data.instanceName}.${inName}: ` +
-          `unit mismatch (${outPort.unit} ≠ ${inPort.unit}).`,
-      )
+    } else {
+      const outUnit = portUnit(outPort, srcNode.data.config)
+      const inUnit = portUnit(inPort, tgtNode.data.config)
+      if (outUnit !== inUnit) {
+        warnings.push(
+          `${srcNode.data.instanceName}.${outName} → ${tgtNode.data.instanceName}.${inName}: ` +
+            `unit mismatch (${outUnit} ≠ ${inUnit}).`,
+        )
+      }
     }
   }
 

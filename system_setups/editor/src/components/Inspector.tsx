@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useEditorStore } from '../store'
-import { isPortActive } from '../io/ports'
+import { isPortActive, portLoadType } from '../io/ports'
 import type { CatalogDb, ConfigField, EnumDb } from '../types'
 
 // ── Enum value lookup ──────────────────────────────────────────────────────────
@@ -428,7 +428,9 @@ export default function Inspector() {
                     <span className={`truncate ${unresolved ? 'text-amber-600' : 'text-gray-500'}`}>
                       {p.field_name}
                     </span>
-                    <span className="ml-auto text-gray-400 shrink-0">{p.load_type}</span>
+                    <span className="ml-auto text-gray-400 shrink-0">
+                      {portLoadType(p, node.data.config)}
+                    </span>
                   </div>
                 )
               })}
@@ -448,7 +450,9 @@ export default function Inspector() {
                   >
                     <span className="text-gray-400">←</span>
                     <span className="truncate">{p.field_name}</span>
-                    <span className="ml-auto text-gray-400 shrink-0">{p.load_type}</span>
+                    <span className="ml-auto text-gray-400 shrink-0">
+                      {portLoadType(p, node.data.config)}
+                    </span>
                   </div>
                 )
               })}

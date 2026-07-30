@@ -23,7 +23,6 @@ from hisim import component as cp
 from hisim.component import ConfigBase
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.weather import Weather
 
 # from hisim.components.generic_battery import GenericBattery
 # from hisim.components.loadprofilegenerator_connector import Occupancy
@@ -198,8 +197,6 @@ class MpcController(cp.Component):
     """MPC Controller class."""
 
     # Inputs
-    # weather
-    TemperatureOutside = "TemperatureOutside"
     # building
     TemperatureMean = "Residence Temperature"
 
@@ -373,7 +370,12 @@ class MpcController(cp.Component):
             output_description=f"here a description for {self.GenerationRevenue} will follow.",
         )
 
-        self.add_default_connections(self.get_weather_default_connections())
+        # No weather default connection is declared: this controller does not take the outside
+        # temperature through a port. It reads the whole yearly forecast from
+        # SingletonSimRepository (WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST) in
+        # i_prepare_simulation, because the MPC optimisation needs the horizon ahead of the
+        # current timestep, which a per-timestep input cannot supply. The previous declaration
+        # named a "TemperatureOutside" input that was never added, so connecting it raised.
 
         if self.mpcconfig.prediction_horizon is not None:
             self.prediction_horizon = int(
@@ -424,20 +426,6 @@ class MpcController(cp.Component):
         self.battery_control_state = self.mpcconfig.battery_control_state
         self.batt_soc_actual_timestep = self.mpcconfig.batt_soc_actual_timestep
         self.batt_soc_normalized_timestep = self.mpcconfig.batt_soc_normalized_timestep
-
-    def get_weather_default_connections(self):
-        """Get default connections from the weather component."""
-
-        connections = []
-        weather_classname = Weather.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                MpcController.TemperatureOutside,
-                weather_classname,
-                Weather.TemperatureOutside,
-            )
-        )
-        return connections
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""

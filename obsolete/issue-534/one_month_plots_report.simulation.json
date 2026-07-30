@@ -1,0 +1,23 @@
+{
+    "start_date": "2021-01-01T00:00:00",
+    "end_date": "2021-02-02T00:00:00",
+    "seconds_per_timestep": 900,
+    "post_processing_options": [
+        "PLOT_LINE",
+        "PLOT_CARPET",
+        "PLOT_MONTHLY_BAR_CHARTS",
+        "EXPORT_TO_CSV",
+        "GENERATE_PDF_REPORT",
+        "WRITE_COMPONENTS_TO_REPORT",
+        "WRITE_ALL_OUTPUTS_TO_REPORT",
+        "INCLUDE_CONFIGS_IN_PDF_REPORT",
+        "INCLUDE_IMAGES_IN_PDF_REPORT",
+        "COMPUTE_OPEX",
+        "COMPUTE_CAPEX",
+        "COMPUTE_KPIS",
+        "WRITE_KPIS_TO_JSON"
+    ],
+    "logging_level": 3,
+    "skip_finished_results": false,
+    "log_connections": false
+}

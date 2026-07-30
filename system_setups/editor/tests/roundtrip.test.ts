@@ -5,8 +5,8 @@
 //   - import drops nothing (no components skipped, no connections discarded)
 //   - a second open→save is byte-identical (idempotent)
 //   - open→save preserves all content
-//   - the import validates without errors
-//   - the import's validation warnings match the reviewed snapshot
+//   - the import validates without errors or warnings
+//   - its load-type mismatches match the reviewed snapshot
 //
 // All assertions run for every scenario, including those using dynamic component ports.
 //
@@ -18,6 +18,7 @@ import {
   roundTrip,
   diffScenario,
   importWarnings,
+  loadTypeMismatchesFor,
   validationErrorsFor,
   validationWarningsFor,
 } from './roundtrip-core'
@@ -51,11 +52,17 @@ describe('scenario round-trip (Open JSON → Save JSON)', () => {
       expect(validationErrorsFor(original, db)).toEqual([])
     })
 
-    // Snapshotted, not asserted empty: load-type mismatches are legitimate in HiSim (see
-    // validationWarningsFor). Run `npm run test -- -u` after an intentional change, and
-    // review the resulting diff — a new warning means new odd wiring, not a flaky test.
-    it('produces only the reviewed validation warnings', () => {
-      expect(validationWarningsFor(original, db)).toMatchSnapshot()
+    // A warning now means a dimensional problem (unit mismatch) or an empty required config
+    // field — both are real defects, so this is asserted empty rather than snapshotted.
+    it('imports with no validation warnings', () => {
+      expect(validationWarningsFor(original, db)).toEqual([])
+    })
+
+    // Load-type mismatches are labelling inconsistencies in HiSim's components, not faults in
+    // the scenario or the editor, so they are recorded instead. Run `npm run test -- -u` after
+    // an intentional change and review the diff — a new entry means new odd wiring.
+    it('produces only the reviewed load-type mismatches', () => {
+      expect(loadTypeMismatchesFor(original, db)).toMatchSnapshot()
     })
   })
 })

@@ -1,8 +1,8 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`scenario round-trip (Open JSON → Save JSON) > air_conditioned_house.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
+exports[`scenario round-trip (Open JSON → Save JSON) > air_conditioned_house.scenario.json > produces only the reviewed load-type mismatches 1`] = `[]`;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > automatic_default_connections.scenario.json > produces only the reviewed validation warnings 1`] = `
+exports[`scenario round-trip (Open JSON → Save JSON) > automatic_default_connections.scenario.json > produces only the reviewed load-type mismatches 1`] = `
 [
   "DHWStorage.WaterTemperatureToHeatGenerator → HeatPumpControllerDHW.WaterTemperatureInputFromDHWStorage: load type mismatch (Water ≠ Temperature).",
   "DHWStorage.WaterTemperatureToHeatGenerator → MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: load type mismatch (Water ≠ Temperature).",
@@ -17,9 +17,9 @@ exports[`scenario round-trip (Open JSON → Save JSON) > automatic_default_conne
 ]
 `;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > basic_household.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
+exports[`scenario round-trip (Open JSON → Save JSON) > basic_household.scenario.json > produces only the reviewed load-type mismatches 1`] = `[]`;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > basic_household_only_heating.scenario.json > produces only the reviewed validation warnings 1`] = `
+exports[`scenario round-trip (Open JSON → Save JSON) > basic_household_only_heating.scenario.json > produces only the reviewed load-type mismatches 1`] = `
 [
   "CondensingGasBoiler.WaterOutputMassFlowSh → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
   "CondensingGasBoiler.WaterOutputTemperatureSh → SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Water ≠ Temperature).",
@@ -29,15 +29,15 @@ exports[`scenario round-trip (Open JSON → Save JSON) > basic_household_only_he
 ]
 `;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > basic_household_with_weather_data_request.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
+exports[`scenario round-trip (Open JSON → Save JSON) > basic_household_with_weather_data_request.scenario.json > produces only the reviewed load-type mismatches 1`] = `[]`;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > default_connections.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
+exports[`scenario round-trip (Open JSON → Save JSON) > default_connections.scenario.json > produces only the reviewed load-type mismatches 1`] = `[]`;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > dynamic_components.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
+exports[`scenario round-trip (Open JSON → Save JSON) > dynamic_components.scenario.json > produces only the reviewed load-type mismatches 1`] = `[]`;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > electrolyzer_with_renewables.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
+exports[`scenario round-trip (Open JSON → Save JSON) > electrolyzer_with_renewables.scenario.json > produces only the reviewed load-type mismatches 1`] = `[]`;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > household_district_heating_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+exports[`scenario round-trip (Open JSON → Save JSON) > household_district_heating_building_sizer.scenario.json > produces only the reviewed load-type mismatches 1`] = `
 [
   "DHWStorage.WaterMassFlowRateOfDHW → DistrictHeating.WaterInputMassFlowRateFromWarmWaterStorage: load type mismatch (WarmWater ≠ Water).",
   "DHWStorage.WaterTemperatureToHeatGenerator → DistrictHeatingController.WaterTemperatureInputFromWarmWaterStorage: load type mismatch (Water ≠ Temperature).",
@@ -49,7 +49,7 @@ exports[`scenario round-trip (Open JSON → Save JSON) > household_district_heat
 ]
 `;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > household_electric_heating_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+exports[`scenario round-trip (Open JSON → Save JSON) > household_electric_heating_building_sizer.scenario.json > produces only the reviewed load-type mismatches 1`] = `
 [
   "DHWStorage.WaterMassFlowRateOfDHW → ElectricHeating.WaterInputMassFlowRateFromWarmWaterStorage: load type mismatch (WarmWater ≠ Water).",
   "DHWStorage.WaterTemperatureToHeatGenerator → ElectricHeatingController.WaterTemperatureInputFromWarmWaterStorage: load type mismatch (Water ≠ Temperature).",
@@ -58,7 +58,7 @@ exports[`scenario round-trip (Open JSON → Save JSON) > household_electric_heat
 ]
 `;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > household_gas_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+exports[`scenario round-trip (Open JSON → Save JSON) > household_gas_building_sizer.scenario.json > produces only the reviewed load-type mismatches 1`] = `
 [
   "CondensingGasBoiler.EnergyDemandDhw → GasMeter.Input_CondensingGasBoiler_EnergyDemandDhw_1: load type mismatch (WarmWater ≠ Gas).",
   "CondensingGasBoiler.EnergyDemandSh → GasMeter.Input_CondensingGasBoiler_EnergyDemandSh_0: load type mismatch (Heating ≠ Gas).",
@@ -73,7 +73,7 @@ exports[`scenario round-trip (Open JSON → Save JSON) > household_gas_building_
 ]
 `;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > household_gas_solar_thermal.scenario.json > produces only the reviewed validation warnings 1`] = `
+exports[`scenario round-trip (Open JSON → Save JSON) > household_gas_solar_thermal.scenario.json > produces only the reviewed load-type mismatches 1`] = `
 [
   "CondensingGasBoiler.EnergyDemandDhw → GasMeter.Input_CondensingGasBoiler_EnergyDemandDhw_1: load type mismatch (WarmWater ≠ Gas).",
   "CondensingGasBoiler.EnergyDemandSh → GasMeter.Input_CondensingGasBoiler_EnergyDemandSh_0: load type mismatch (Heating ≠ Gas).",
@@ -93,7 +93,7 @@ exports[`scenario round-trip (Open JSON → Save JSON) > household_gas_solar_the
 ]
 `;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > household_gas_solar_thermal_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+exports[`scenario round-trip (Open JSON → Save JSON) > household_gas_solar_thermal_building_sizer.scenario.json > produces only the reviewed load-type mismatches 1`] = `
 [
   "CondensingGasBoiler.EnergyDemandDhw → GasMeter.Input_CondensingGasBoiler_EnergyDemandDhw_1: load type mismatch (WarmWater ≠ Gas).",
   "CondensingGasBoiler.EnergyDemandSh → GasMeter.Input_CondensingGasBoiler_EnergyDemandSh_0: load type mismatch (Heating ≠ Gas).",
@@ -113,7 +113,7 @@ exports[`scenario round-trip (Open JSON → Save JSON) > household_gas_solar_the
 ]
 `;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > household_heatpump_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+exports[`scenario round-trip (Open JSON → Save JSON) > household_heatpump_building_sizer.scenario.json > produces only the reviewed load-type mismatches 1`] = `
 [
   "DHWStorage.WaterTemperatureToHeatGenerator → HeatPumpControllerDHW.WaterTemperatureInputFromDHWStorage: load type mismatch (Water ≠ Temperature).",
   "DHWStorage.WaterTemperatureToHeatGenerator → MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: load type mismatch (Water ≠ Temperature).",
@@ -128,7 +128,7 @@ exports[`scenario round-trip (Open JSON → Save JSON) > household_heatpump_buil
 ]
 `;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > household_heatpump_car_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+exports[`scenario round-trip (Open JSON → Save JSON) > household_heatpump_car_building_sizer.scenario.json > produces only the reviewed load-type mismatches 1`] = `
 [
   "DHWStorage.WaterTemperatureToHeatGenerator → HeatPumpControllerDHW.WaterTemperatureInputFromDHWStorage: load type mismatch (Water ≠ Temperature).",
   "DHWStorage.WaterTemperatureToHeatGenerator → MoreAdvancedHeatPumpHPLib.TemperatureInputSecondaryDHW: load type mismatch (Water ≠ Temperature).",
@@ -143,7 +143,7 @@ exports[`scenario round-trip (Open JSON → Save JSON) > household_heatpump_car_
 ]
 `;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > household_heatpump_solar_thermal_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+exports[`scenario round-trip (Open JSON → Save JSON) > household_heatpump_solar_thermal_building_sizer.scenario.json > produces only the reviewed load-type mismatches 1`] = `
 [
   "DHWStorage.WaterMeanTemperatureInStorage → SolarThermalSystemController.MeanWaterTemperatureInStorage: load type mismatch (Water ≠ Temperature).",
   "DHWStorage.WaterTemperatureToHeatGenerator → HeatPumpControllerDHW.WaterTemperatureInputFromDHWStorage: load type mismatch (Water ≠ Temperature).",
@@ -163,7 +163,7 @@ exports[`scenario round-trip (Open JSON → Save JSON) > household_heatpump_sola
 ]
 `;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > household_hydrogen_boiler_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+exports[`scenario round-trip (Open JSON → Save JSON) > household_hydrogen_boiler_building_sizer.scenario.json > produces only the reviewed load-type mismatches 1`] = `
 [
   "CondensingHydrogenBoiler.EnergyDemandDhw → GasMeter.Input_CondensingHydrogenBoiler_EnergyDemandDhw_1: load type mismatch (WarmWater ≠ Green Hydrogen).",
   "CondensingHydrogenBoiler.EnergyDemandSh → GasMeter.Input_CondensingHydrogenBoiler_EnergyDemandSh_0: load type mismatch (Heating ≠ Green Hydrogen).",
@@ -178,7 +178,7 @@ exports[`scenario round-trip (Open JSON → Save JSON) > household_hydrogen_boil
 ]
 `;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > household_oil_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+exports[`scenario round-trip (Open JSON → Save JSON) > household_oil_building_sizer.scenario.json > produces only the reviewed load-type mismatches 1`] = `
 [
   "ConventionalOilBoiler.EnergyDemandDhw → FuelMeter.Input_ConventionalOilBoiler_EnergyDemandDhw_1: load type mismatch (WarmWater ≠ Heating).",
   "ConventionalOilBoiler.WaterOutputMassFlowSh → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
@@ -192,7 +192,7 @@ exports[`scenario round-trip (Open JSON → Save JSON) > household_oil_building_
 ]
 `;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > household_pellets_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+exports[`scenario round-trip (Open JSON → Save JSON) > household_pellets_building_sizer.scenario.json > produces only the reviewed load-type mismatches 1`] = `
 [
   "ConventionalPelletBoiler.EnergyDemandDhw → FuelMeter.Input_ConventionalPelletBoiler_EnergyDemandDhw_1: load type mismatch (WarmWater ≠ Heating).",
   "ConventionalPelletBoiler.WaterOutputMassFlowSh → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
@@ -206,7 +206,7 @@ exports[`scenario round-trip (Open JSON → Save JSON) > household_pellets_build
 ]
 `;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > household_wood_chips_building_sizer.scenario.json > produces only the reviewed validation warnings 1`] = `
+exports[`scenario round-trip (Open JSON → Save JSON) > household_wood_chips_building_sizer.scenario.json > produces only the reviewed load-type mismatches 1`] = `
 [
   "ConventionalWoodChipBoiler.EnergyDemandDhw → FuelMeter.Input_ConventionalWoodChipBoiler_EnergyDemandDhw_1: load type mismatch (WarmWater ≠ Heating).",
   "ConventionalWoodChipBoiler.WaterOutputMassFlowSh → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
@@ -220,6 +220,6 @@ exports[`scenario round-trip (Open JSON → Save JSON) > household_wood_chips_bu
 ]
 `;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > simple_system_setup_one.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
+exports[`scenario round-trip (Open JSON → Save JSON) > simple_system_setup_one.scenario.json > produces only the reviewed load-type mismatches 1`] = `[]`;
 
-exports[`scenario round-trip (Open JSON → Save JSON) > simple_system_setup_two.scenario.json > produces only the reviewed validation warnings 1`] = `[]`;
+exports[`scenario round-trip (Open JSON → Save JSON) > simple_system_setup_two.scenario.json > produces only the reviewed load-type mismatches 1`] = `[]`;

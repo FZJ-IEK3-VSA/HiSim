@@ -38,29 +38,37 @@ All of these run for **every** scenario, including those using dynamic component
 - **Idempotency** — a second open→save is byte-identical to the first. A failure means the
   round-trip is non-deterministic.
 - **Semantic preservation** — open→save loses nothing (see above).
-- **No validation errors** — the imported scenario has zero validation errors.
-- **Only the reviewed validation warnings** — warnings are snapshotted, not required to be
+- **No validation errors or warnings** — a warning means a dimensional problem or an empty
+  required config field; the shipped scenarios have neither.
+- **Only the reviewed load-type mismatches** — recorded in a snapshot, not required to be
   empty (see below).
 
-## Why warnings are snapshotted rather than asserted empty
+## Unit mismatch = warning, load-type mismatch = info
 
-Validation reports load-type and unit mismatches on connections as **warnings**. Many are
-legitimate: HiSim's `Component.connect_input` matches inputs to outputs purely by field name
-and never enforces load-type equality, and shipped setups genuinely mix related load types
-(`Water` → `Temperature` on a water-storage port, `Volume` → `WarmWater` on a mass-flow port).
-Requiring zero warnings would mean either rewriting HiSim's load-type labels — which feed KPI
-and post-processing grouping — or deleting a check that does catch real mis-wiring.
+The connection compatibility check reports these at two different severities, deliberately.
 
-So the warning list per scenario is captured in a snapshot. The existing warnings stay visible
-and reviewable in `__snapshots__/roundtrip.test.ts.snap`, while any **new** warning fails the
-build.
+A **unit** mismatch is a real defect. HiSim passes the raw float straight down the channel, so
+a `W` output feeding a `kW` input is a silent factor-1000 error. That is a warning, and the
+tests assert there are none.
+
+A **load type** mismatch is a labelling inconsistency, not a wiring fault — so it is an info,
+and snapshotted. Nothing in HiSim reads a port's load type: `Component.connect_input` matches
+on field name alone, dynamic components match on tags and `source_weight`, and the only
+consumers of `ComponentOutput.load_type` are a display string and JSON serialisation. Component
+authors therefore label the same channel differently in good faith — a storage calls its outlet
+`Water`, the consumer calls its inlet a `Temperature` — and the shipped setups are full of it
+(~136 occurrences across 10 recurring type pairs, with the *units* agreeing every time).
+
+Reporting those as warnings drowned out the unit check, which is what actually matters. Keeping
+them as a snapshot means the existing ones stay visible and reviewable in
+`__snapshots__/roundtrip.test.ts.snap`, while any **new** one shows up as a diff:
 
 ```bash
 npm run test -- -u     # after an intentional change: refresh, then review the snapshot diff
 ```
 
 Vitest refuses to create missing snapshots when `CI` is set, so the snapshot file must be
-committed — CI cannot silently self-approve a new warning.
+committed — CI cannot silently self-approve a new mismatch.
 
 ## Dynamic component ports
 

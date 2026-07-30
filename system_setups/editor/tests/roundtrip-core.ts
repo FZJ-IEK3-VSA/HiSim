@@ -28,16 +28,31 @@ export function validationErrorsFor(text: string, db: ComponentDb): string[] {
 }
 
 /**
- * Validation *warnings* for an imported scenario, sorted for a stable snapshot.
+ * Validation *warnings* for an imported scenario, sorted for stable comparison.
  *
- * Warnings are non-blocking by design — HiSim wires inputs to outputs purely by field name
- * and never enforces load-type equality, so shipped setups legitimately mix related load
- * types (see io/validate.ts). They are still snapshotted rather than ignored: the existing
- * ones stay visible and reviewable, while any *new* warning fails the build.
+ * Since load-type differences were demoted to infos (see io/validate.ts), a warning means a
+ * genuine dimensional problem — a unit mismatch such as W feeding a kW input — or an empty
+ * required config field. The shipped scenarios have none, so the test asserts this is empty
+ * rather than snapshotting it.
  */
 export function validationWarningsFor(text: string, db: ComponentDb): string[] {
   const r = importScenario(text, db)
   return [...validateScenario(r.nodes, r.edges).warnings].sort()
+}
+
+/**
+ * The load-type-mismatch infos for an imported scenario, sorted for a stable snapshot.
+ *
+ * These are labelling inconsistencies in HiSim's own components rather than editor or scenario
+ * faults (io/validate.ts explains why), so they are recorded rather than required to be empty:
+ * the existing ones stay visible and reviewable, while any *new* one shows up as a snapshot
+ * diff. Selected by message text because ValidationResult groups by severity, not by check.
+ */
+export function loadTypeMismatchesFor(text: string, db: ComponentDb): string[] {
+  const r = importScenario(text, db)
+  return validateScenario(r.nodes, r.edges)
+    .infos.filter((m) => m.includes('load type mismatch'))
+    .sort()
 }
 
 // ── Canonicalisation ─────────────────────────────────────────────────────────

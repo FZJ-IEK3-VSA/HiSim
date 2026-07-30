@@ -10,7 +10,7 @@ import {
   type Node,
 } from '@xyflow/react'
 import { useEditorStore, type HiSimNode } from '../store'
-import { portLoadType, portUnit } from '../io/ports'
+import { portUnit } from '../io/ports'
 import type { DynamicInputPort, DynamicOutputPort } from '../types'
 import { nodeTypes } from '../nodes'
 import { HiSimEdge } from '../edges/HiSimEdge'
@@ -116,17 +116,16 @@ function CanvasInner() {
         : undefined
       if (!staticInPort && !dynInput) return false
 
-      const outLoadType = staticOutPort
-        ? portLoadType(staticOutPort, src.data.config)
-        : dynOutput!.load_type
       const outUnit = staticOutPort ? portUnit(staticOutPort, src.data.config) : dynOutput!.unit
-      const inLoadType = staticInPort
-        ? portLoadType(staticInPort, tgt.data.config)
-        : dynInput!.load_type
       const inUnit = staticInPort ? portUnit(staticInPort, tgt.data.config) : dynInput!.unit
 
-      if (inLoadType === 'Any' || outLoadType === 'Any') return true
-      return outLoadType === inLoadType && outUnit === inUnit
+      // Block only on a unit mismatch — that is the dimensional error (W into a kW input).
+      // A load-type difference is a labelling inconsistency that HiSim ignores and the shipped
+      // setups are full of (see io/validate.ts), so refusing those edges would stop the user
+      // drawing connections that exist in the setups they just opened. Validation reports them
+      // as infos instead. "-" is Units.ANY, i.e. unitless, so it matches anything.
+      if (outUnit === '-' || inUnit === '-') return true
+      return outUnit === inUnit
     },
     [],
   )

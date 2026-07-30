@@ -44,19 +44,25 @@ export function isPortActive(
  * `unit_from_config`, and only when the mapping is the identity, so resolving against the
  * node's config is safe.
  */
-export function portLoadType(
-  port: InputPort | OutputPort,
-  config: Record<string, unknown>,
-): string {
+export function portLoadType(port: TypedPort, config: Record<string, unknown>): string {
   return resolveFromConfig(port.load_type_from_config, config) ?? port.load_type
 }
 
 /** The port's effective unit for a given configuration. See portLoadType. */
-export function portUnit(
-  port: InputPort | OutputPort,
-  config: Record<string, unknown>,
-): string {
+export function portUnit(port: TypedPort, config: Record<string, unknown>): string {
   return resolveFromConfig(port.unit_from_config, config) ?? port.unit
+}
+
+/**
+ * Anything carrying a load type and a unit — a static InputPort/OutputPort, or a
+ * DynamicInputPort/DynamicOutputPort. Dynamic ports never carry the `*_from_config` markers
+ * (their types come from the scenario itself), so they resolve to their own values.
+ */
+interface TypedPort {
+  load_type: string
+  unit: string
+  load_type_from_config?: string
+  unit_from_config?: string
 }
 
 function resolveFromConfig(

@@ -78,26 +78,29 @@ export function validateScenario(nodes: HiSimNode[], edges: Edge[]): ValidationR
     // Resolve config-derived types against each node's own config, not the registry default.
     const outLoadType = portLoadType(outPort, srcNode.data.config)
     const inLoadType = portLoadType(inPort, tgtNode.data.config)
-    if (outLoadType === 'Any' || inLoadType === 'Any') continue
+    const outUnit = portUnit(outPort, srcNode.data.config)
+    const inUnit = portUnit(inPort, tgtNode.data.config)
+    const edgeLabel =
+      `${srcNode.data.instanceName}.${outName} → ${tgtNode.data.instanceName}.${inName}`
 
-    if (outLoadType !== inLoadType) {
-      // HiSim connects inputs to outputs purely by field name (see Component.connect_input);
-      // it never enforces load-type equality, and shipped setups legitimately mix related
-      // load types (e.g. Water → Temperature on a water-storage port). So a mismatch is a
-      // warning to surface odd wiring, not a blocking error.
-      warnings.push(
-        `${srcNode.data.instanceName}.${outName} → ${tgtNode.data.instanceName}.${inName}: ` +
-          `load type mismatch (${outLoadType} ≠ ${inLoadType}).`,
-      )
-    } else {
-      const outUnit = portUnit(outPort, srcNode.data.config)
-      const inUnit = portUnit(inPort, tgtNode.data.config)
-      if (outUnit !== inUnit) {
-        warnings.push(
-          `${srcNode.data.instanceName}.${outName} → ${tgtNode.data.instanceName}.${inName}: ` +
-            `unit mismatch (${outUnit} ≠ ${inUnit}).`,
-        )
-      }
+    // The two checks are deliberately independent, and at different severities.
+    //
+    // A **unit** mismatch is the one that can actually break a simulation: HiSim passes the
+    // raw float straight down the channel, so a W output feeding a kW input is a silent
+    // factor-1000 error. That is a warning. Units.ANY ("-") means "unitless", so it opts out.
+    if (outUnit !== inUnit && outUnit !== '-' && inUnit !== '-') {
+      warnings.push(`${edgeLabel}: unit mismatch (${outUnit} ≠ ${inUnit}).`)
+    }
+
+    // A **load type** difference is a labelling inconsistency, not a wiring fault. Nothing in
+    // HiSim reads a port's load type — Component.connect_input matches on field name alone,
+    // dynamic components match on tags and source_weight, and the only consumers of
+    // ComponentOutput.load_type are a display string and JSON serialisation. Component authors
+    // therefore label the same channel differently in good faith (a storage calls its outlet
+    // Water; the consumer calls its inlet a Temperature), and the shipped setups are full of
+    // it. Reporting these as warnings drowned out the unit check above, so they are infos.
+    if (outLoadType !== inLoadType && outLoadType !== 'Any' && inLoadType !== 'Any') {
+      infos.push(`${edgeLabel}: load type mismatch (${outLoadType} ≠ ${inLoadType}).`)
     }
   }
 

@@ -274,6 +274,10 @@ class Building(cp.Component):
     # Diagnostic steady-state heat losses H * (T_heating_setpoint - T_outdoor); not fed back into the simulation.
     TheoreticalTransmissionHeatLoss = "TheoreticalTransmissionHeatLoss"
     TheoreticalVentilationHeatLoss = "TheoreticalVentilationHeatLoss"
+    # Diagnostic dynamic heat flows at the actual 5R1C node temperatures; not fed back into the simulation.
+    DynamicTransmissionHeatLoss = "DynamicTransmissionHeatLoss"
+    DynamicVentilationHeatLoss = "DynamicVentilationHeatLoss"
+    ThermalMassStorageRate = "ThermalMassStorageRate"
 
     @utils.measure_execution_time
     def __init__(
@@ -483,6 +487,30 @@ class Building(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description="Theoretical ventilation heat loss, H_ve * (T_heating_setpoint - T_outdoor) (positive = loss).",
+        )
+        self.dynamic_transmission_heat_loss_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.DynamicTransmissionHeatLoss,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description="Dynamic transmission heat loss at actual node temperatures, "
+            "H_tr_w*(T_air - T_out) + H_tr_em*(T_mass - T_out) (positive = loss).",
+        )
+        self.dynamic_ventilation_heat_loss_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.DynamicVentilationHeatLoss,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description="Dynamic ventilation heat loss at actual air temperature, "
+            "H_ve*(T_air - T_out) (positive = loss).",
+        )
+        self.thermal_mass_storage_rate_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.ThermalMassStorageRate,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description="Net heat flow stored in the thermal mass, "
+            "C_m*(T_mass_next - T_mass_prev)/dt (positive = charging).",
         )
         self.theoretical_thermal_building_demand_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -872,6 +900,30 @@ class Building(cp.Component):
             self.my_building_information.total_heat_conductance_ventilation
             * temperature_difference_setpoint_outdoor_in_celsius,
         )
+
+        # Dynamic (actual-node-temperature) 5R1C heat flows. Forward computation from the simulated
+        # node temperatures and the building conductances (positive = loss; storage positive =
+        # charging). These are not fed back into the simulation. Together they satisfy energy
+        # conservation with the delivered heat and gains (up to numerical discretisation), which the
+        # ThermalMassStorageRate output makes verifiable - nothing is fitted to close the balance.
+        dynamic_transmission_heat_loss_in_watt = (
+            self.transmission_heat_transfer_coeff_windows_and_door_in_watt_per_kelvin
+            * (indoor_air_temperature_in_celsius - temperature_outside_in_celsius)
+            + self.external_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin
+            * (thermal_mass_average_bulk_temperature_in_celsius - temperature_outside_in_celsius)
+        )
+        dynamic_ventilation_heat_loss_in_watt = (
+            self.thermal_conductance_by_ventilation_in_watt_per_kelvin
+            * (indoor_air_temperature_in_celsius - temperature_outside_in_celsius)
+        )
+        thermal_mass_storage_rate_in_watt = (
+            self.my_building_information.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin
+            * (next_thermal_mass_temperature_in_celsius - previous_thermal_mass_temperature_in_celsius)
+            / self.seconds_per_timestep
+        )
+        stsv.set_output_value(self.dynamic_transmission_heat_loss_channel, dynamic_transmission_heat_loss_in_watt)
+        stsv.set_output_value(self.dynamic_ventilation_heat_loss_channel, dynamic_ventilation_heat_loss_in_watt)
+        stsv.set_output_value(self.thermal_mass_storage_rate_channel, thermal_mass_storage_rate_in_watt)
 
         stsv.set_output_value(self.total_thermal_power_to_residence_channel, total_thermal_power_to_residence_in_watt)
 
@@ -1545,15 +1597,20 @@ class Building(cp.Component):
     def get_building_energy_balance_kpis(
         self, all_outputs: List, postprocessing_results: pd.DataFrame, list_of_kpi_entries: List[KpiEntry]
     ) -> List[KpiEntry]:
-        """Get energy-balance KPIs (transmission/ventilation losses and gains).
+        """Get energy-balance KPIs (transmission/ventilation losses, gains, thermal-mass storage).
 
-        Each balance term is provided both as a full-year sum and restricted to the heating period,
-        i.e. the timesteps with a positive theoretical heating demand. The transmission and
-        ventilation losses are theoretical, i.e. evaluated at the heating setpoint (consistent with
-        the theoretical heating demand), and signed (positive = loss), so the full-year sum can be
-        reduced by periods in which the outdoor temperature exceeds the setpoint. The full-year solar
-        and internal gains are already emitted in get_building_kpis_from_outputs, so only their
-        heating-period variant is added here.
+        Each term carries two flags: whether to emit the full-year sum and whether to emit the
+        heating-period sum (timesteps with a positive theoretical heating demand).
+
+        - Theoretical transmission/ventilation losses: steady-state at the heating setpoint,
+          consistent with the theoretical heating demand -> both full year and heating period.
+        - Solar/internal gains: only the heating-period variant here (their full-year value is
+          already emitted in get_building_kpis_from_outputs).
+        - Dynamic transmission/ventilation losses and thermal-mass storage: actual 5R1C node
+          temperatures -> full year only (the heating-period slice would not close, because the
+          storage term does not cancel over a sub-annual window).
+
+        All losses are signed (positive = loss); storage is positive when the mass is charging.
         """
         # Map this component's output field names to their result time series (column index aligns
         # with the position in all_outputs).
@@ -1566,6 +1623,9 @@ class Building(cp.Component):
         required_field_names = [
             self.TheoreticalTransmissionHeatLoss,
             self.TheoreticalVentilationHeatLoss,
+            self.DynamicTransmissionHeatLoss,
+            self.DynamicVentilationHeatLoss,
+            self.ThermalMassStorageRate,
             self.SolarGainThroughWindows,
             self.InternalHeatGainsFromOccupancy,
             self.TheoreticalHeatingDemand,
@@ -1576,14 +1636,17 @@ class Building(cp.Component):
 
         heating_period_mask = field_name_to_series[self.TheoreticalHeatingDemand] > 0
 
-        # (base KPI name, output field name, whether to also emit the full-year variant here)
+        # (base KPI name, output field name, emit full-year variant, emit heating-period variant)
         balance_terms = [
-            ("Theoretical transmission heat losses", self.TheoreticalTransmissionHeatLoss, True),
-            ("Theoretical ventilation heat losses", self.TheoreticalVentilationHeatLoss, True),
-            ("Solar energy gains", self.SolarGainThroughWindows, False),
-            ("Internal energy gains", self.InternalHeatGainsFromOccupancy, False),
+            ("Theoretical transmission heat losses", self.TheoreticalTransmissionHeatLoss, True, True),
+            ("Theoretical ventilation heat losses", self.TheoreticalVentilationHeatLoss, True, True),
+            ("Solar energy gains", self.SolarGainThroughWindows, False, True),
+            ("Internal energy gains", self.InternalHeatGainsFromOccupancy, False, True),
+            ("Dynamic transmission heat losses", self.DynamicTransmissionHeatLoss, True, False),
+            ("Dynamic ventilation heat losses", self.DynamicVentilationHeatLoss, True, False),
+            ("Thermal mass storage (net)", self.ThermalMassStorageRate, True, False),
         ]
-        for kpi_base_name, field_name, emit_full_year in balance_terms:
+        for kpi_base_name, field_name, emit_full_year, emit_heating_period in balance_terms:
             power_timeseries_in_watt = field_name_to_series[field_name]
 
             if emit_full_year:
@@ -1601,19 +1664,20 @@ class Building(cp.Component):
                     )
                 )
 
-            heating_period_energy_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                power_timeseries_in_watt=power_timeseries_in_watt[heating_period_mask],
-                time_resolution_in_seconds=self.seconds_per_timestep,
-            )
-            list_of_kpi_entries.append(
-                KpiEntry(
-                    name=f"{kpi_base_name} during heating period",
-                    unit="kWh",
-                    value=heating_period_energy_in_kilowatt_hour,
-                    tag=KpiTagEnumClass.BUILDING,
-                    description=self.component_name,
+            if emit_heating_period:
+                heating_period_energy_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=power_timeseries_in_watt[heating_period_mask],
+                    time_resolution_in_seconds=self.seconds_per_timestep,
                 )
-            )
+                list_of_kpi_entries.append(
+                    KpiEntry(
+                        name=f"{kpi_base_name} during heating period",
+                        unit="kWh",
+                        value=heating_period_energy_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.BUILDING,
+                        description=self.component_name,
+                    )
+                )
 
         return list_of_kpi_entries
 

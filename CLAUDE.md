@@ -117,7 +117,10 @@ npm install
 # repo root, hisimvenv active
 python tools/generate_component_db.py
 ```
-Writes `system_setups/editor/public/data/component_db.json` and `enum_db.json`.
+Writes `component_db.json`, `enum_db.json`, `catalog_db.json` and `usage_db.json` to
+`system_setups/editor/public/data/`. The last one counts which components appear together
+across `system_setups/*.scenario.json` and drives the editor's "Suggest components" feature,
+so re-run it after adding or changing a scenario too.
 
 ### Run dev server
 ```powershell

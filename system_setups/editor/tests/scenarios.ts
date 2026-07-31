@@ -3,7 +3,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
-import type { ComponentDb } from '../src/types'
+import type { ComponentDb, UsageDb } from '../src/types'
 
 const HERE = dirname(fileURLToPath(import.meta.url)) // system_setups/editor/tests
 export const EDITOR_DIR = resolve(HERE, '..') //          system_setups/editor
@@ -28,4 +28,10 @@ export function readScenario(file: string): string {
 export function loadComponentDb(): ComponentDb {
   const p = join(EDITOR_DIR, 'public', 'data', 'component_db.json')
   return JSON.parse(readFileSync(p, 'utf-8')) as ComponentDb
+}
+
+/** Load the generated component co-occurrence statistics (public/data/usage_db.json). */
+export function loadUsageDb(): UsageDb {
+  const p = join(EDITOR_DIR, 'public', 'data', 'usage_db.json')
+  return JSON.parse(readFileSync(p, 'utf-8')) as UsageDb
 }

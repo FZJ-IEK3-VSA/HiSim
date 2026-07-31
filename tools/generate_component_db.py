@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate component_db.json, enum_db.json, and catalog_db.json for the HiSim scenario editor.
+"""Generate the static JSON databases the HiSim scenario editor reads.
 
 Run from the repository root:
     python tools/generate_component_db.py
@@ -8,6 +8,7 @@ Outputs:
     system_setups/editor/public/data/component_db.json
     system_setups/editor/public/data/enum_db.json
     system_setups/editor/public/data/catalog_db.json
+    system_setups/editor/public/data/usage_db.json
 
 Exits non-zero if any component fails to introspect, so CI can catch regressions.
 """
@@ -425,6 +426,46 @@ def _extract_ports(comp: Component) -> Dict[str, Any]:
             ]
             for src_cls, conns in comp.default_connections.items()
         },
+        "dynamic_default_connections": _extract_dynamic_default_connections(comp),
+    }
+
+
+def _extract_dynamic_default_connections(comp: Component) -> Dict[str, List[Dict]]:
+    """The dynamic input ports a DynamicComponent creates for itself, per source class.
+
+    A dynamic component declares no input ports up front — it grows one per source component
+    at run time. ``Simulator.prepare_calculation`` calls ``connect_everything_automatically``
+    for every component registered with ``connect_automatically=True``, which looks each
+    source component's class up in this dict and calls ``add_component_input_and_connect``
+    for every entry found (see hisim/dynamic_component.py).
+
+    Without this, the editor has nothing to show: drop an EMS and a Battery on the canvas and
+    the EMS card has no port to wire the battery to, even though HiSim would create one. The
+    recorded metadata is everything ``add_component_input_and_connect`` needs, so the editor
+    can reproduce the port — name included — exactly as the simulator would.
+    """
+    if not isinstance(comp, DynamicComponent):
+        return {}
+    return {
+        src_cls: [
+            {
+                "source_component_field_name": c.source_component_field_name,
+                "source_load_type": (
+                    c.source_load_type.value
+                    if isinstance(c.source_load_type, enum.Enum)
+                    else str(c.source_load_type)
+                ),
+                "source_unit": (
+                    c.source_unit.value if isinstance(c.source_unit, enum.Enum) else str(c.source_unit)
+                ),
+                "source_tags": [
+                    t.value if isinstance(t, enum.Enum) else str(t) for t in c.source_tags
+                ],
+                "source_weight": c.source_weight,
+            }
+            for c in conns
+        ]
+        for src_cls, conns in comp.dynamic_default_connections.items()
     }
 
 
@@ -565,6 +606,19 @@ def _merge_conditional_ports(
                     existing.append(conn)
                     added = True
 
+        # ... and so can dynamic ones, which are keyed by source class in the same way.
+        for src_cls, dyn_conns in extracted["dynamic_default_connections"].items():
+            existing_dyn = base["dynamic_default_connections"].setdefault(src_cls, [])
+            seen_dyn = {
+                (c["source_component_field_name"], c["source_weight"]) for c in existing_dyn
+            }
+            for conn in dyn_conns:
+                key_dyn = (conn["source_component_field_name"], conn["source_weight"])
+                if key_dyn not in seen_dyn:
+                    seen_dyn.add(key_dyn)
+                    existing_dyn.append(conn)
+                    added = True
+
         if added:
             contributing.append(flag)
 
@@ -590,6 +644,7 @@ def _introspect(comp_class: type, sim_params: SimulationParameters) -> Dict:
     input_ports = extracted["input_ports"]
     output_ports = extracted["output_ports"]
     default_connections = extracted["default_connections"]
+    dynamic_default_connections = extracted["dynamic_default_connections"]
 
     # First line of the class docstring as human-readable display name
     doc = inspect.getdoc(comp_class) or ""
@@ -606,6 +661,9 @@ def _introspect(comp_class: type, sim_params: SimulationParameters) -> Dict:
         "input_ports": input_ports,
         "output_ports": output_ports,
         "default_connections": default_connections,
+        # Per source class, the input ports this component grows at run time. Empty for
+        # everything that is not a DynamicComponent.
+        "dynamic_default_connections": dynamic_default_connections,
         # Boolean config flags that had to be switched on to reveal extra ports/connections;
         # the ports they contributed carry a matching "conditional_on" key.
         "conditional_flags": conditional_flags,
@@ -858,6 +916,158 @@ def _build_catalog_db(now: str) -> Dict:
 
 
 # ---------------------------------------------------------------------------
+# Usage statistics (which components appear together in the shipped scenarios)
+# ---------------------------------------------------------------------------
+
+def _build_usage_db(now: str, components: List[Dict]) -> Dict:
+    """Mine component co-occurrence from the shipped ``system_setups/*.scenario.json``.
+
+    Answers the one question the component registry cannot: *which components belong
+    together?* The registry only records what a component declares about itself, so a
+    missing consumer-side component (a meter, a battery) leaves no trace in the graph —
+    nothing is "unconnected", there is simply less system. The shipped scenarios are the
+    only place that knowledge exists, so it is counted here and handed to the editor's
+    "Suggest components" feature (``src/io/suggest.ts``).
+
+    Emits, per component class: the number of scenarios using it, and how many of those
+    also use each other class. The editor turns that into a confidence
+    (``companions[b] / scenarios[a]``) so it can say "17 of the 17 scenarios with a
+    PVSystem also have an ElectricityMeter".
+    """
+    import glob as _glob
+
+    known = {c["component_full_classname"] for c in components}
+    scenario_dir = os.path.join(REPO_ROOT, "system_setups")
+
+    scenario_count = 0
+    usage: Dict[str, Dict] = {}
+    dynamic_outputs: Dict[str, List[Dict]] = {}
+
+    for path in sorted(_glob.glob(os.path.join(scenario_dir, "*.scenario.json"))):
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                scenario = json.load(fh)
+        except Exception as exc:
+            print(f"  [WARN] Could not read {os.path.basename(path)}: {exc}", file=sys.stderr)
+            continue
+
+        # A class used twice in one scenario still counts once — this measures which
+        # components accompany each other, not how many instances there are.
+        classes = {
+            comp.get("component_full_classname")
+            for comp in scenario.get("components", [])
+        } & known
+        if not classes:
+            continue
+
+        scenario_count += 1
+        for cls in classes:
+            entry = usage.setdefault(cls, {"scenarios": 0, "companions": {}})
+            entry["scenarios"] += 1
+            for other in classes:
+                if other != cls:
+                    entry["companions"][other] = entry["companions"].get(other, 0) + 1
+
+        _collect_dynamic_outputs(scenario, known, dynamic_outputs)
+
+    # Sort companions by count so the editor can read them in relevance order.
+    for entry in usage.values():
+        entry["companions"] = dict(
+            sorted(entry["companions"].items(), key=lambda kv: (-kv[1], kv[0]))
+        )
+
+    for declarations in dynamic_outputs.values():
+        for decl in declarations:
+            decl["feeds"] = [
+                {"component_class": cls, "target_input_name": field}
+                for cls, field in sorted(decl["feeds"])
+            ]
+        declarations.sort(key=lambda d: (-d["scenarios"], d["source_output_name"]))
+
+    return {
+        "generated_at": now,
+        "scenario_count": scenario_count,
+        "components": dict(sorted(usage.items())),
+        "dynamic_outputs": dict(sorted(dynamic_outputs.items())),
+    }
+
+
+def _collect_dynamic_outputs(
+    scenario: Dict, known: set, collected: Dict[str, List[Dict]]
+) -> None:
+    """Record the dynamic *output* ports a scenario declares, and what each one feeds.
+
+    These are the one thing no amount of introspection can supply. A dynamic component grows
+    its inputs from ``dynamic_default_connections``, but an output is only created where some
+    setup explicitly calls ``add_component_output`` — the EMS's
+    ``LoadingPowerInputForBattery_`` channel is written by hand in every system setup that
+    controls a battery, and nothing in HiSim declares that it should exist.
+
+    So the shipped scenarios are the source: for each declared output, this records the
+    declaration verbatim plus the classes of the components its connections lead to, letting
+    the editor offer "your EMS needs this output to drive that battery" instead of asking the
+    user to invent a port name, tag list and source weight from nothing.
+    """
+    by_name = {
+        comp.get("configuration", {}).get("name"): comp
+        for comp in scenario.get("components", [])
+    }
+
+    for comp in scenario.get("components", []):
+        cls = comp.get("component_full_classname")
+        if cls not in known:
+            continue
+        owner = comp.get("configuration", {}).get("name")
+
+        for out in comp.get("outputs", []):
+            if not out.get("dynamic"):
+                continue
+            prefix = out.get("source_output_name", "")
+
+            # Which port on which component does this output actually drive? Connections name
+            # the *runtime* field (prefix + "Output{n}"), so match on the prefix. Recording the
+            # target port as well as its class is what lets the editor draw the connection
+            # rather than just create a dangling output.
+            feeds = set()
+            for conn in scenario.get("connections", []):
+                source = conn.get("source", {})
+                if source.get("component_name") != owner:
+                    continue
+                if not str(source.get("field_name", "")).startswith(prefix):
+                    continue
+                target = by_name.get(conn.get("target", {}).get("component_name"))
+                target_cls = target.get("component_full_classname") if target else None
+                if target_cls in known:
+                    feeds.add((target_cls, conn.get("target", {}).get("field_name")))
+
+            declarations = collected.setdefault(cls, [])
+            existing = next(
+                (
+                    d
+                    for d in declarations
+                    if d["source_output_name"] == prefix
+                    and d["source_weight"] == out.get("source_weight")
+                ),
+                None,
+            )
+            if existing is None:
+                declarations.append({
+                    "source_output_name": prefix,
+                    "source_tags": out.get("source_tags", []),
+                    "source_load_type": out.get("source_load_type"),
+                    "source_unit": out.get("source_unit"),
+                    "source_weight": out.get("source_weight"),
+                    "output_description": out.get("output_description", ""),
+                    "source_component_class": out.get("source_component_class"),
+                    "feeds": feeds,
+                    "scenarios": 1,
+                })
+            else:
+                existing["feeds"] |= feeds
+                existing["scenarios"] += 1
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -903,10 +1113,12 @@ def main() -> int:
     enum_db = _build_enum_db()
     enum_db["generated_at"] = now
     catalog_db = _build_catalog_db(now)
+    usage_db = _build_usage_db(now, components)
 
     comp_path = os.path.join(OUTPUT_DIR, "component_db.json")
     enum_path = os.path.join(OUTPUT_DIR, "enum_db.json")
     catalog_path = os.path.join(OUTPUT_DIR, "catalog_db.json")
+    usage_path = os.path.join(OUTPUT_DIR, "usage_db.json")
 
     with open(comp_path, "w", encoding="utf-8") as fh:
         json.dump(component_db, fh, indent=2, ensure_ascii=False)
@@ -916,6 +1128,9 @@ def main() -> int:
 
     with open(catalog_path, "w", encoding="utf-8") as fh:
         json.dump(catalog_db, fh, indent=2, ensure_ascii=False)
+
+    with open(usage_path, "w", encoding="utf-8") as fh:
+        json.dump(usage_db, fh, indent=2, ensure_ascii=False)
 
     ok_count = len(components)
     fail_count = len(failures)
@@ -927,6 +1142,9 @@ def main() -> int:
           f"{len(catalog_db['heat_pump_models'])} heat pump models, "
           f"{sum(len(v) for v in catalog_db['pv_modules'].values())} PV modules, "
           f"{sum(len(v) for v in catalog_db['pv_inverters'].values())} PV inverters")
+    print(f"Wrote {usage_path}")
+    print(f"      {len(usage_db['components'])} components seen across "
+          f"{usage_db['scenario_count']} shipped scenarios")
 
     if skipped:
         print(f"\n{len(skipped)} component(s) skipped (require external data unavailable in CI):")

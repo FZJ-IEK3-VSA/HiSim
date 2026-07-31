@@ -8,6 +8,7 @@ import type {
 import type { HiSimNode } from '../store'
 import { getLoadTypeColor } from '../data/loadTypeColors'
 import { autoConnectNode as autoConnectNodeFn } from './autoConnect'
+import { syncDynamicPorts } from './dynamicPorts'
 import { autoLayout } from './layout'
 import { activeInputPorts, activeOutputPorts, portLoadType, portUnit } from './ports'
 
@@ -242,10 +243,19 @@ export function importScenario(text: string, componentDb: ComponentDb): ImportRe
     accEdges = [...accEdges, ...newEdges]
   }
 
+  // ── Pass 4b: dynamic ports the simulator creates at run time ──────────────
+  // A dynamic component carrying connect_automatically grows one input per matching source
+  // component when HiSim starts (io/dynamicPorts.ts). The file does not list them — that is
+  // the point of the flag — so without this the canvas would show an EMS with no ports at all
+  // and no way to see, or wire to, what the simulation will actually have.
+  const synced = syncDynamicPorts(nodes, accEdges)
+  const nodesWithDynamicPorts = synced.nodes
+  accEdges = synced.edges
+
   // ── Pass 5: assign positions ──────────────────────────────────────────────
   // Use DAG auto-layout as the base; override with any saved positions from
   // a prior editor session (_editor_positions field written by export.ts).
-  const laidOut = autoLayout(nodes, accEdges)
+  const laidOut = autoLayout(nodesWithDynamicPorts, accEdges)
   const finalNodes = laidOut.map((n) => {
     const saved = savedPositions[n.data.instanceName]
     return saved ? { ...n, position: saved } : n

@@ -39,6 +39,23 @@ export interface DefaultConnectionEntry {
   source_output_name: string
 }
 
+/**
+ * One input port a DynamicComponent grows for a given source class.
+ *
+ * A dynamic component declares no such port up front; `Simulator.prepare_calculation` creates
+ * it — with this exact metadata — for every component registered with
+ * `connect_automatically=True` whose class appears in the target's
+ * `dynamic_default_connections`. There is no `target_input_name` because the port does not
+ * exist yet: its name is *derived* when it is created (see io/dynamicPorts.ts).
+ */
+export interface DynamicDefaultConnection {
+  source_component_field_name: string
+  source_load_type: string
+  source_unit: string
+  source_tags: string[]
+  source_weight: number
+}
+
 export interface ConfigField {
   name: string
   type: string
@@ -59,6 +76,8 @@ export interface ComponentEntry {
   output_ports: OutputPort[]
   // { "SourceClassName": [{target_input_name, source_output_name}, ...] }
   default_connections: Record<string, DefaultConnectionEntry[]>
+  /** { "SourceClassName": [...] } — empty unless `is_dynamic`. */
+  dynamic_default_connections: Record<string, DynamicDefaultConnection[]>
   /** Config switches that had to be flipped to reveal `conditional_on` ports. */
   conditional_flags: string[]
 }
@@ -104,6 +123,12 @@ export interface DynamicInputPort {
   source_component_output: string
   source_tags: string[]
   source_weight: number
+  /**
+   * True when the port was derived from `dynamic_default_connections` rather than declared in
+   * the scenario file. HiSim recreates these itself at `prepare_calculation`, so they are
+   * *not* written to `inputs[]` on export — writing them would create the port twice.
+   */
+  auto?: boolean
 }
 
 /**
@@ -123,6 +148,56 @@ export interface DynamicOutputPort {
   source_weight: number
   output_description: string
   source_component_class: string | null
+}
+
+// ── Usage statistics ─────────────────────────────────────────────────────────
+
+/** How often one component class appears in the shipped scenarios, and alongside what. */
+export interface UsageEntry {
+  /** Number of shipped scenarios containing this component class. */
+  scenarios: number
+  /** Other component class → number of those scenarios that also contain it. */
+  companions: Record<string, number>
+}
+
+/**
+ * Mined from `system_setups/*.scenario.json` by tools/generate_component_db.py.
+ *
+ * The component registry can only say what a component declares about *itself*, which is
+ * blind to a whole class of omission: leaving out a consumer (a meter, a battery) breaks
+ * nothing structurally — no port is left unconnected, the system is just smaller. This
+ * table is the only evidence of which components belong together, and it drives the
+ * "commonly used together" half of io/suggest.ts.
+ */
+/**
+ * A dynamic *output* port that the shipped scenarios declare on a component, and what it feeds.
+ *
+ * The counterpart to `DynamicDefaultConnection`, and the one thing introspection cannot
+ * provide: an output only exists where a setup explicitly calls `add_component_output`. The
+ * EMS's `LoadingPowerInputForBattery_` channel is written by hand in every system setup that
+ * puts a battery under EMS control, and nothing in HiSim declares that it ought to exist — so
+ * the scenarios are mined for it instead.
+ */
+export interface DynamicOutputDeclaration {
+  source_output_name: string     // the prefix; HiSim appends Output{n}
+  source_tags: string[]
+  source_load_type: string
+  source_unit: string
+  source_weight: number
+  output_description: string
+  source_component_class: string | null
+  /** Where this output was connected, in the scenarios that declare it. */
+  feeds: Array<{ component_class: string; target_input_name: string }>
+  /** Number of shipped scenarios declaring it. */
+  scenarios: number
+}
+
+export interface UsageDb {
+  generated_at: string
+  scenario_count: number
+  components: Record<string, UsageEntry>
+  /** component classname → dynamic output ports the shipped scenarios declare on it. */
+  dynamic_outputs: Record<string, DynamicOutputDeclaration[]>
 }
 
 // ── Domain catalogs ──────────────────────────────────────────────────────────

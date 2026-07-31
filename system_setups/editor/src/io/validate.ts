@@ -146,6 +146,42 @@ export function validateScenario(nodes: HiSimNode[], edges: Edge[]): ValidationR
     }
   }
 
+  // ── 7: connect_automatically that HiSim would refuse ──────────────────────
+  //
+  // `Simulator.connect_everything_automatically` raises KeyError for a component registered
+  // with the flag that either declares no default connections at all, or declares some but
+  // finds no matching source in the setup. Both kill the run at prepare_calculation, before
+  // the first time step, and neither is visible anywhere else on the canvas — a Weather
+  // dropped from the palette looks perfectly wired.
+  for (const node of nodes) {
+    if (!node.data.connectAutomatically) continue
+    const entry = node.data.entry
+    const sources = Object.keys(entry.default_connections ?? {})
+    const dynamicSources = Object.keys(entry.dynamic_default_connections ?? {})
+    const declared = [...sources, ...dynamicSources]
+
+    if (declared.length === 0) {
+      errors.push(
+        `${node.data.instanceName}: "connect automatically" is on but the component declares ` +
+        'no default connections — HiSim raises KeyError. Switch it off.',
+      )
+      continue
+    }
+    const matches = (className: string) =>
+      nodes.some(
+        (n) =>
+          n.id !== node.id &&
+          (n.data.entry.component_full_classname.endsWith(`.${className}`) ||
+            n.data.entry.display_name === className),
+      )
+    if (!declared.some(matches)) {
+      errors.push(
+        `${node.data.instanceName}: "connect automatically" is on but none of its default ` +
+        `connection sources (${declared.join(', ')}) is on the canvas — HiSim raises KeyError.`,
+      )
+    }
+  }
+
   // ── 5: Required config fields non-null ────────────────────────────────────
   const isEmpty = (v: unknown) => v === null || v === undefined || v === ''
   for (const node of nodes) {

@@ -8,6 +8,10 @@ preserves the scenario — i.e. **save == open when nothing is changed**.
 | 1 — data round-trip | Vitest (Node) | all `system_setups/*.scenario.json` | `npm run test` |
 | 2 — UI round-trip | Playwright (headless Chromium) | all `system_setups/*.scenario.json` | `npm run test:e2e` |
 
+[`suggest.test.ts`](./suggest.test.ts) and [`dynamicPorts.test.ts`](./dynamicPorts.test.ts)
+run alongside tier 1 and cover different questions — see [Component
+suggestions](#component-suggestions) and [Dynamic ports](#dynamic-ports) at the end.
+
 Both tiers judge fidelity with the same logic in [`roundtrip-core.ts`](./roundtrip-core.ts):
 Tier 1 calls the editor's `importScenario`/`exportScenario` directly (fast, deterministic,
 pinpoints logic bugs); Tier 2 drives the real app — clicking **Open JSON**, picking the file
@@ -83,6 +87,49 @@ The editor reconstructs the runtime field names the way `DynamicComponent` does:
 
 Both are implemented in [`../src/io/import.ts`](../src/io/import.ts) and mirrored on save by
 [`../src/io/export.ts`](../src/io/export.ts).
+
+## Component suggestions
+
+[`suggest.test.ts`](./suggest.test.ts) tests the *Suggest components* engine
+([`../src/io/suggest.ts`](../src/io/suggest.ts)) against the same shipped scenarios, used
+the other way round: **delete one component from a working scenario and the editor should
+be able to name what went missing.** That is the situation the feature exists for, and it
+is measurable, so the recovery rate is asserted rather than eyeballed.
+
+The two signals are measured separately because they cover disjoint cases:
+
+| Signal | Case it covers | Measured | Asserted |
+|---|---|---|---|
+| port analysis (`default_connections`, then unit + name matching) | the deletion left an unconnected mandatory input (161 of the 227 removals) | rank 1: **91%**, top 3: **98%** | ≥75% / ≥85% |
+| co-occurrence across the shipped scenarios (`usage_db.json`) | the deletion left nothing unconnected — a component nothing declares a need for, such as a battery or a PV system feeding a dynamic port, which port analysis recovers only 12% of the time (the other 66) | rank 1: **67%**, top 3: **70%** | top 3 ≥50% |
+
+Thresholds sit well below the measured rates on purpose: ordinary registry churn shifts
+these by a point or two, while a real regression halves them.
+
+The rest of the file asserts the properties that must hold regardless of ranking — a
+complete scenario yields nothing to fix, no proposal is a component the canvas already has,
+every proposed port pairing names ports that actually exist, and dropping `usage_db.json`
+degrades the second signal to silence rather than to guesswork.
+
+## Dynamic ports
+
+[`dynamicPorts.test.ts`](./dynamicPorts.test.ts) covers the ports a `DynamicComponent` grows
+at run time. The risk there is **naming**: a dynamic input is labelled
+`Input_{source}_{output}_{len(self.inputs)}`, so the order the simulator walks the components
+in decides the port names, and a connection naming the wrong index is silently dropped.
+
+Rather than assert that against a hand-written expectation, the tests use a shipped scenario
+as ground truth in both directions. `household_gas_building_sizer.scenario.json` spells its
+EMS ports out explicitly — names produced by HiSim itself. The test switches the EMS to
+`connect_automatically`, deletes those ports, and requires the editor to derive exactly the
+ones that were there, with the same load types, units, tags and source weights. The same
+scenario pins the output side: `LoadingPowerInputForBattery_Output16` must come back out of
+the mined declaration with that exact name.
+
+Also asserted: derived ports are never written back to the file (HiSim recreates them, so
+writing them would create each port twice), nothing is derived when the toggle is off, and
+the two `connect_automatically` mistakes that make HiSim raise `KeyError` at start-up are
+reported as validation errors.
 
 ## Prerequisites
 

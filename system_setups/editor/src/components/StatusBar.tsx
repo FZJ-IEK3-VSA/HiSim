@@ -1,17 +1,31 @@
 import { useState } from 'react'
-import { useEditorStore } from '../store'
+import { useEditorStore, validationFreshness } from '../store'
 
 export default function StatusBar() {
   const importMessages = useEditorStore((s) => s.validationMessages)
   const errors = useEditorStore((s) => s.validationErrors)
   const warnings = useEditorStore((s) => s.validationWarnings)
   const infos = useEditorStore((s) => s.validationInfos)
+  const nodeCount = useEditorStore((s) => s.nodes.length)
+  const freshness = useEditorStore(validationFreshness)
+  const runValidation = useEditorStore((s) => s.runValidation)
+  const setShowSuggestions = useEditorStore((s) => s.setShowSuggestions)
   const [expanded, setExpanded] = useState(false)
   const [showInfos, setShowInfos] = useState(true)
 
   const hasValidation = errors.length > 0 || warnings.length > 0 || infos.length > 0
   const hasImport = importMessages.length > 0
   const hasAnything = hasValidation || hasImport
+
+  // An empty canvas has nothing to validate, so saying so would only be noise. With
+  // components on it, a result that predates the last edit is worth flagging — it is the
+  // same claim the pre-export dialog makes, made continuously.
+  const staleness =
+    nodeCount === 0 || freshness === 'current'
+      ? null
+      : freshness === 'never'
+      ? 'not validated'
+      : 'validation out of date'
 
   const summary = hasValidation
     ? [
@@ -36,6 +50,8 @@ export default function StatusBar() {
       : level === 'warning'
       ? 'text-amber-500 font-medium'
       : 'text-sky-500 font-medium'
+
+  const canSuggest = errors.length + warnings.length > 0 || staleness !== null
 
   return (
     <div className="border-t border-gray-200 bg-white shrink-0">
@@ -100,6 +116,31 @@ export default function StatusBar() {
             <span className="text-gray-300">·</span>
             <span className="text-gray-400">{expanded ? '▲ collapse' : '▼ expand'}</span>
           </>
+        )}
+
+        {staleness && (
+          <>
+            <span className="text-gray-300">·</span>
+            <button
+              type="button"
+              className="text-amber-600 hover:text-amber-700 hover:underline"
+              onClick={(e) => { e.stopPropagation(); runValidation() }}
+              title="Run validation against the current scenario"
+            >
+              ⧗ {staleness} — validate
+            </button>
+          </>
+        )}
+
+        {canSuggest && (
+          <button
+            type="button"
+            className="ml-auto shrink-0 px-2 py-0.5 rounded bg-blue-50 text-blue-700 hover:bg-blue-100"
+            onClick={(e) => { e.stopPropagation(); setShowSuggestions(true) }}
+            title="Work out which components this scenario is still missing"
+          >
+            Suggest components
+          </button>
         )}
       </footer>
     </div>

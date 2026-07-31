@@ -9,7 +9,8 @@ import {
   type IsValidConnection,
   type Node,
 } from '@xyflow/react'
-import { useEditorStore, type HiSimNode } from '../store'
+import { useEditorStore } from '../store'
+import { createComponentNode } from '../io/createNode'
 import { portUnit } from '../io/ports'
 import type { DynamicInputPort, DynamicOutputPort } from '../types'
 import { nodeTypes } from '../nodes'
@@ -17,9 +18,6 @@ import { HiSimEdge } from '../edges/HiSimEdge'
 import ContextMenu from './ContextMenu'
 
 const edgeTypes = { default: HiSimEdge }
-
-// Counter for generating unique sequential instance names
-let nodeCounter = 0
 
 function CanvasInner() {
   const { screenToFlowPosition } = useReactFlow()
@@ -61,23 +59,10 @@ function CanvasInner() {
       )
       if (!entry) return
 
-      nodeCounter += 1
       const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
-
-      const configOverrides = catalogDb?.config_overrides?.[entry.config_full_classname] ?? {}
-      const newNode: HiSimNode = {
-        id: `node-${nodeCounter}-${Date.now()}`,
-        type: 'componentCard',
-        position,
-        data: {
-          entry,
-          instanceName: `${entry.display_name}_${nodeCounter}`,
-          config: { ...entry.default_config, ...configOverrides },
-          collapsed: true,
-          connectAutomatically: true,
-        },
-      }
-      addNode(newNode)
+      addNode(
+        createComponentNode(entry, position, catalogDb, useEditorStore.getState().nodes),
+      )
     },
     [componentDb, catalogDb, screenToFlowPosition, addNode],
   )

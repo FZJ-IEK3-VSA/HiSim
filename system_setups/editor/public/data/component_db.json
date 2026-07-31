@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-31T00:37:03.391378",
+  "generated_at": "2026-07-31T16:31:37.488665",
   "components": [
     {
       "component_full_classname": "hisim.components.building.Building",
@@ -529,6 +529,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -770,6 +771,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -947,6 +949,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -1211,6 +1214,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -1350,6 +1354,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": [
         "use=Gas"
       ]
@@ -1600,6 +1605,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -1700,6 +1706,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -1827,6 +1834,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -1962,6 +1970,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -2026,6 +2035,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -2152,6 +2162,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -2282,6 +2293,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -2470,6 +2482,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -3017,6 +3030,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -3132,6 +3146,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -3241,6 +3256,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -3288,6 +3304,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -3472,6 +3489,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -3561,6 +3579,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -3806,6 +3825,124 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {
+        "UtspLpgConnector": [
+          {
+            "source_component_field_name": "ElectricalPowerConsumption",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "Residents",
+              "Consumption with EMS control"
+            ],
+            "source_weight": 1
+          }
+        ],
+        "PVSystem": [
+          {
+            "source_component_field_name": "ElectricityOutput",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "PV",
+              "ElectricityProduction"
+            ],
+            "source_weight": 999
+          }
+        ],
+        "MoreAdvancedHeatPumpHPLib": [
+          {
+            "source_component_field_name": "ElectricalInputPowerSH",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "HeatPumpBuilding",
+              "Consumption with EMS control"
+            ],
+            "source_weight": 2
+          },
+          {
+            "source_component_field_name": "ElectricalInputPowerDHW",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "HeatPumpDHW",
+              "Consumption with EMS control"
+            ],
+            "source_weight": 3
+          }
+        ],
+        "ModularHeatPump": [
+          {
+            "source_component_field_name": "ElectricityOutput",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "HeatPumpDHW",
+              "Consumption with EMS control"
+            ],
+            "source_weight": 3
+          }
+        ],
+        "HeatPumpHplib": [
+          {
+            "source_component_field_name": "ElectricalInputPower",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "HeatPumpBuilding",
+              "Consumption with EMS control"
+            ],
+            "source_weight": 2
+          }
+        ],
+        "Battery": [
+          {
+            "source_component_field_name": "AcBatteryPowerUsed",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "Battery",
+              "Consumption with EMS control"
+            ],
+            "source_weight": 6
+          }
+        ],
+        "ElectricHeating": [
+          {
+            "source_component_field_name": "ElectricOutputShPower",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "ElectricBoilerSH",
+              "Consumption with EMS control"
+            ],
+            "source_weight": 2
+          },
+          {
+            "source_component_field_name": "ElectricOutputDhwPower",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "ElectricBoilerDHW",
+              "Consumption with EMS control"
+            ],
+            "source_weight": 3
+          }
+        ],
+        "SolarThermalSystem": [
+          {
+            "source_component_field_name": "ElectricityConsumptionOutput",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "SolarThermalSystem",
+              "Consumption with EMS control"
+            ],
+            "source_weight": 4
+          }
+        ]
+      },
       "conditional_flags": []
     },
     {
@@ -3907,6 +4044,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -4104,6 +4242,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -4243,6 +4382,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -4377,6 +4517,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -4464,6 +4605,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -4541,6 +4683,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -4679,6 +4822,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": [
         "fuel=Electricity"
       ]
@@ -4854,6 +4998,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -4959,6 +5104,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -5132,6 +5278,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -5345,6 +5492,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -5447,6 +5595,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -5550,6 +5699,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -5621,6 +5771,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -5698,6 +5849,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -5800,6 +5952,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -5939,6 +6092,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": [
         "with_domestic_hot_water_preparation"
       ]
@@ -6173,6 +6327,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": [
         "with_domestic_hot_water_preparation"
       ]
@@ -6290,6 +6445,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": [
         "with_domestic_hot_water_preparation"
       ]
@@ -6542,6 +6698,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": [
         "with_domestic_hot_water_preparation"
       ]
@@ -6731,6 +6888,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": [
         "with_domestic_hot_water_preparation"
       ]
@@ -7027,6 +7185,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -7185,6 +7344,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -7383,6 +7543,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -7497,6 +7658,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -7635,6 +7797,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -7757,6 +7920,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -7855,6 +8019,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -8025,6 +8190,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -8200,6 +8366,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -8350,6 +8517,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -8526,6 +8694,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -8609,6 +8778,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -8680,6 +8850,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -8990,6 +9161,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -9288,6 +9460,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -9335,6 +9508,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -9684,6 +9858,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -10286,6 +10461,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": [
         "with_domestic_hot_water_preparation"
       ]
@@ -10556,6 +10732,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -10640,6 +10817,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -10930,6 +11108,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -11102,6 +11281,123 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {
+        "UtspLpgConnector": [
+          {
+            "source_component_field_name": "ElectricalPowerConsumption",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "Consumption without any EMS control"
+            ],
+            "source_weight": 999
+          }
+        ],
+        "PVSystem": [
+          {
+            "source_component_field_name": "ElectricityOutput",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "PV",
+              "ElectricityProduction"
+            ],
+            "source_weight": 999
+          }
+        ],
+        "ModularHeatPump": [
+          {
+            "source_component_field_name": "ElectricityOutput",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "HeatPumpDHW",
+              "Consumption without any EMS control"
+            ],
+            "source_weight": 999
+          }
+        ],
+        "HeatPumpHplib": [
+          {
+            "source_component_field_name": "ElectricalInputPower",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "HeatPumpBuilding",
+              "Consumption without any EMS control"
+            ],
+            "source_weight": 999
+          }
+        ],
+        "MoreAdvancedHeatPumpHPLib": [
+          {
+            "source_component_field_name": "ElectricalInputPowerSH",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "HeatPumpBuilding",
+              "Consumption without any EMS control"
+            ],
+            "source_weight": 999
+          },
+          {
+            "source_component_field_name": "ElectricalInputPowerDHW",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "HeatPumpDHW",
+              "Consumption without any EMS control"
+            ],
+            "source_weight": 999
+          }
+        ],
+        "ElectricHeating": [
+          {
+            "source_component_field_name": "ElectricOutputShPower",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "ElectricBoilerSH",
+              "Consumption without any EMS control"
+            ],
+            "source_weight": 999
+          },
+          {
+            "source_component_field_name": "ElectricOutputDhwPower",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "ElectricBoilerDHW",
+              "Consumption without any EMS control"
+            ],
+            "source_weight": 999
+          }
+        ],
+        "SolarThermalSystem": [
+          {
+            "source_component_field_name": "ElectricityConsumptionOutput",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "SolarThermalSystem",
+              "Consumption without any EMS control"
+            ],
+            "source_weight": 999
+          }
+        ],
+        "L1Controller": [
+          {
+            "source_component_field_name": "BatteryChargingPowerToEMS",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "CarBattery",
+              "Consumption without any EMS control"
+            ],
+            "source_weight": 999
+          }
+        ]
+      },
       "conditional_flags": []
     },
     {
@@ -11174,6 +11470,48 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {
+        "DistrictHeating": [
+          {
+            "source_component_field_name": "ThermalOutputShEnergy",
+            "source_load_type": "Heating",
+            "source_unit": "Wh",
+            "source_tags": [
+              "HEAT_CONSUMPTION"
+            ],
+            "source_weight": 999
+          },
+          {
+            "source_component_field_name": "ThermalOutputDhwEnergy",
+            "source_load_type": "Heating",
+            "source_unit": "Wh",
+            "source_tags": [
+              "HEAT_CONSUMPTION"
+            ],
+            "source_weight": 999
+          }
+        ],
+        "GenericBoiler": [
+          {
+            "source_component_field_name": "EnergyDemandSh",
+            "source_load_type": "Heating",
+            "source_unit": "Wh",
+            "source_tags": [
+              "HEAT_CONSUMPTION"
+            ],
+            "source_weight": 999
+          },
+          {
+            "source_component_field_name": "EnergyDemandDhw",
+            "source_load_type": "Heating",
+            "source_unit": "Wh",
+            "source_tags": [
+              "HEAT_CONSUMPTION"
+            ],
+            "source_weight": 999
+          }
+        ]
+      },
       "conditional_flags": []
     },
     {
@@ -11318,6 +11656,28 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {
+        "GenericBoiler": [
+          {
+            "source_component_field_name": "EnergyDemandSh",
+            "source_load_type": "Gas",
+            "source_unit": "Wh",
+            "source_tags": [
+              "Gas consumption without any control"
+            ],
+            "source_weight": 999
+          },
+          {
+            "source_component_field_name": "EnergyDemandDhw",
+            "source_load_type": "Gas",
+            "source_unit": "Wh",
+            "source_tags": [
+              "Gas consumption without any control"
+            ],
+            "source_weight": 999
+          }
+        ]
+      },
       "conditional_flags": []
     },
     {
@@ -11414,6 +11774,30 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {
+        "HeatDistribution": [
+          {
+            "source_component_field_name": "ThermalPowerDelivered",
+            "source_load_type": "Heating",
+            "source_unit": "W",
+            "source_tags": [
+              "HEAT_CONSUMPTION"
+            ],
+            "source_weight": 999
+          }
+        ],
+        "MoreAdvancedHeatPumpHPLib": [
+          {
+            "source_component_field_name": "ThermalOutputPowerTotalHeatpump",
+            "source_load_type": "Heating",
+            "source_unit": "W",
+            "source_tags": [
+              "HEAT_DELIVERED"
+            ],
+            "source_weight": 999
+          }
+        ]
+      },
       "conditional_flags": []
     },
     {
@@ -11679,6 +12063,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -11984,6 +12369,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -12279,6 +12665,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -12353,6 +12740,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -12400,6 +12788,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -12580,6 +12969,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -12689,6 +13079,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -12821,6 +13212,7 @@
           }
         ]
       },
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -12896,6 +13288,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -12954,6 +13347,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -13018,6 +13412,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -13132,6 +13527,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -13258,6 +13654,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -13341,6 +13738,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -13398,6 +13796,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     },
     {
@@ -13550,6 +13949,7 @@
         }
       ],
       "default_connections": {},
+      "dynamic_default_connections": {},
       "conditional_flags": []
     }
   ],

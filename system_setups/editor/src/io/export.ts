@@ -20,7 +20,13 @@ export function exportScenario(
   const nodeById = new Map(nodes.map((n) => [n.id, n]))
 
   const components = nodes.map((node) => {
-    const dynInputs = (node.data.dynamicInputs as DynamicInputPort[] | undefined) ?? []
+    // Dynamic inputs derived from `dynamic_default_connections` are deliberately dropped:
+    // HiSim recreates them itself at prepare_calculation for any component carrying
+    // connect_automatically, so writing them here would create each port twice — once from
+    // this list, once from the defaults. Only what the user declared is written.
+    const dynInputs = ((node.data.dynamicInputs as DynamicInputPort[] | undefined) ?? []).filter(
+      (p) => !p.auto,
+    )
     const dynOutputs = (node.data.dynamicOutputs as DynamicOutputPort[] | undefined) ?? []
     return {
       component_full_classname: node.data.entry.component_full_classname,

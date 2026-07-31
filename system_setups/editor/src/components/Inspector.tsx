@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useEditorStore } from '../store'
 import { isPortActive, portLoadType } from '../io/ports'
+import { supportsAutoConnect } from '../io/createNode'
+import DynamicPortsPanel from './DynamicPortsPanel'
 import type { CatalogDb, ConfigField, EnumDb } from '../types'
 
 // ── Enum value lookup ──────────────────────────────────────────────────────────
@@ -379,30 +381,42 @@ export default function Inspector() {
             })}
 
           {/* Connect automatically toggle */}
-          <div className="flex items-center justify-between pt-1 border-t border-gray-100">
-            <span className="text-[11px] text-gray-600">Connect automatically</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={node.data.connectAutomatically}
-              className={`relative inline-flex h-4 w-8 shrink-0 rounded-full border transition-colors ${
-                node.data.connectAutomatically
-                  ? 'bg-blue-500 border-blue-500'
-                  : 'bg-gray-200 border-gray-300'
-              }`}
-              onClick={() =>
-                updateNodeData(node.id, {
-                  connectAutomatically: !node.data.connectAutomatically,
-                })
-              }
-            >
-              <span
-                className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
-                  node.data.connectAutomatically ? 'translate-x-4' : 'translate-x-0.5'
+          <div className="pt-1 border-t border-gray-100">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-gray-600">Connect automatically</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={node.data.connectAutomatically}
+                className={`relative inline-flex h-4 w-8 shrink-0 rounded-full border transition-colors ${
+                  node.data.connectAutomatically
+                    ? 'bg-blue-500 border-blue-500'
+                    : 'bg-gray-200 border-gray-300'
                 }`}
-              />
-            </button>
+                onClick={() =>
+                  updateNodeData(node.id, {
+                    connectAutomatically: !node.data.connectAutomatically,
+                  })
+                }
+              >
+                <span
+                  className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${
+                    node.data.connectAutomatically ? 'translate-x-4' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+            {/* Turning this on for a component that declares nothing to connect is not a
+                harmless choice — the simulator raises KeyError before the first time step. */}
+            {node.data.connectAutomatically && !supportsAutoConnect(node.data.entry) && (
+              <p className="mt-1 text-[11px] text-red-600 leading-snug">
+                This component declares no default connections. HiSim raises KeyError for
+                “connect automatically” without them — switch it off.
+              </p>
+            )}
           </div>
+
+          <DynamicPortsPanel node={node} />
 
           {/* Port summary (read-only) + unresolved-port explanations */}
           {(node.data.entry.input_ports.length > 0 ||

@@ -5,11 +5,12 @@ import Canvas from './components/Canvas'
 import Inspector from './components/Inspector'
 import StatusBar from './components/StatusBar'
 import { useEditorStore } from './store'
-import type { CatalogDb, ComponentDb, EnumDb } from './types'
+import type { CatalogDb, ComponentDb, EnumDb, UsageDb } from './types'
 
 export default function App() {
   const loadDatabases = useEditorStore((s) => s.loadDatabases)
   const loadCatalogDb = useEditorStore((s) => s.loadCatalogDb)
+  const loadUsageDb = useEditorStore((s) => s.loadUsageDb)
   const [error, setError] = useState<string | null>(null)
 
   // Global keyboard shortcuts for undo/redo.
@@ -53,7 +54,14 @@ export default function App() {
       .then((r) => r.json() as Promise<CatalogDb>)
       .then((db) => loadCatalogDb(db))
       .catch(() => { /* catalog not yet generated — editor still works without it */ })
-  }, [loadDatabases, loadCatalogDb])
+
+    // Usage statistics power the "commonly used together" half of the suggestions; without
+    // them the port-based half still works, so a missing file is not an error.
+    fetch('./data/usage_db.json')
+      .then((r) => r.json() as Promise<UsageDb>)
+      .then((db) => loadUsageDb(db))
+      .catch(() => { /* usage stats not yet generated */ })
+  }, [loadDatabases, loadCatalogDb, loadUsageDb])
 
   if (error) {
     return (

@@ -35,6 +35,13 @@ with its default config, and records:
 Each port entry records: `field_name`, `load_type`, `unit`, `mandatory`, `tags`,
 `weight`, `postprocessing_flag`, `sankey_flow_direction`, `description`.
 
+For a `DynamicComponent` the port list is only half the story, because such a component
+declares no inputs up front — it grows one per source component at run time. What it *can*
+grow is recorded separately as `dynamic_default_connections`, read off
+`DynamicComponent.dynamic_default_connections`: per source class, the source field, load type,
+unit, tags and weight that `add_component_input_and_connect` will be called with. See
+*Dynamic ports* below.
+
 The script emits `component_db.json`. It can be run as a pre-build step or CI job, and
 re-run whenever components change.
 
@@ -68,7 +75,22 @@ data changes:
 | PV modules | `PVSystemConfig.module_name` | pvlib local database or cached JSON |
 | PV inverters | `PVSystemConfig.inverter_name` | pvlib local database or cached JSON |
 
-### 5. Post-Processing Options Registry *(auto-generated)*
+### 5. Usage Statistics *(auto-generated)*
+
+Mined from the shipped `system_setups/*.scenario.json` by the same script and exported as
+`usage_db.json`: per component class, how many scenarios use it and how many of those also
+use each other class, plus the dynamic **output** channels the scenarios declare on it and
+the ports those feed (see *Dynamic ports*).
+
+This is the only database not derived from the Python source, because the question it
+answers is not answerable from there. A component declares what it consumes, so the
+registry can tell that a Building needs a temperature — but nothing declares that a
+scenario with a PV system usually also has an electricity meter. Leaving that meter out
+breaks no port and produces no validation finding; the system is simply incomplete. The
+shipped scenarios are the only record of which components belong together, so they are
+counted and handed to the suggestion engine.
+
+### 6. Post-Processing Options Registry *(auto-generated)*
 
 Enumerated from `hisim/postprocessingoptions.py`. Each entry: string value +
 human-readable description. Drives the checkboxes in the simulation settings panel.
@@ -159,8 +181,9 @@ human-readable description. Drives the checkboxes in the simulation settings pan
 |---|---|
 | **New** | Clear canvas, start empty scenario |
 | **Open JSON** | Import an existing `*.scenario.json`; reconstruct graph |
-| **Save JSON** | Export current graph as `*.scenario.json` |
+| **Save JSON** | Export current graph as `*.scenario.json`; confirms first if validation is stale, absent, or reporting problems |
 | **Validate** | Run full validation, show detailed report |
+| **Suggest components** | Propose the components the scenario is still missing (see *Suggestions*) |
 | **Auto-connect all** | Apply `add_default_connections()` logic to all components |
 | **Simulation settings** | Open dialog to configure / pick the `*.simulation.json` side |
 
@@ -206,6 +229,71 @@ Triggered by the Validate button or before export:
    metadata)
 6. Warnings (not errors) for components with `connect_automatically: false` that have
    unconnected non-mandatory inputs
+7. `connect_automatically: true` on a component HiSim would refuse it for — no default
+   connections declared, or none whose source is on the canvas (see *Dynamic ports*)
+
+### Freshness
+
+A validation result describes the graph as it was when the button was pressed. The store
+therefore counts content changes (`graphRevision`) and records which revision the current
+result belongs to; card movement and collapse do not count. The status bar shows `not
+validated` / `validation out of date` accordingly, and export refuses to proceed silently
+in either state (see *Import / Export*).
+
+---
+
+## Suggestions
+
+*Suggest components* answers "what is this scenario still missing?" — the question a
+component palette cannot answer, and the main obstacle to writing a scenario from scratch.
+Two independent signals, kept separate in the report because they cover disjoint failures:
+
+1. **Port analysis.** Each unconnected input port is a question about what produces it. A
+   `default_connections` entry answers it exactly (source class *and* output port); failing
+   that, a registry component with a unit-compatible, similarly named output is offered as
+   a labelled guess. Proposals are ranked by how many ports they fill, mandatory ports
+   counting double. Where the source is already on the canvas the proposal is a
+   *connection*, not a component.
+2. **Usage statistics.** Ranks absent components by how consistently they accompany what is
+   on the canvas (`usage_db.json`, ≥60% of the scenarios containing the anchor, ≥2
+   scenarios). On an empty canvas it degrades to the most widely used components — a
+   starting point rather than a blank page.
+
+The second exists because the first cannot see a missing **sink**: remove an electricity
+meter and every remaining port is still connected. Measured by leave-one-out over the
+shipped scenarios, port analysis recovers 91% of removals at rank 1 (98% within the top
+three) *when the removal leaves a mandatory input open*, and 12% otherwise; co-occurrence
+recovers 67% at rank 1 of exactly those remaining cases. `tests/suggest.test.ts` asserts
+both rates so the heuristics cannot silently decay.
+
+Accepting a proposal adds the component with its default configuration, then auto-connects
+it — and re-resolves the default connections of everything else on the canvas, since the
+new component is what they were missing.
+
+---
+
+## Dynamic ports
+
+A `DynamicComponent` (the meters and the EMS) has no fixed input ports; it grows one per
+component it measures or controls. The editor materialises them the way the simulator does,
+so the canvas shows the ports the run will actually have:
+
+| Route | Gate in HiSim | Editor |
+|---|---|---|
+| `dynamic_default_connections` | `Simulator.prepare_calculation` → `connect_everything_automatically`, for every component registered with `connect_automatically=True`. It walks *all* components and adds an input for each whose class the target declares. | Derived automatically, drawn as a dashed edge, flagged `auto`. Omitted from the exported `inputs[]` — HiSim recreates it, so writing it would create the port twice. |
+| `inputs[]` in the scenario | `json_executor` at build time, irrespective of the flag. | Offered in the Inspector when `connect_automatically` is off; written to the file. |
+| `add_component_output` in a Python setup | Never automatic. | Offered from `usage_db.json`'s mined declarations when the component it feeds is on the canvas; adds the port and the connection. |
+
+Port **names** are derived, not stored: an input is
+`Input_{source}_{output}_{len(self.inputs)}` and an output is `{prefix}Output{len(outputs)+1}`,
+so the order the simulator walks the components in decides them. The editor reproduces that
+order (registration order = order in the file = canvas order); `tests/dynamicPorts.test.ts`
+holds it to the names the shipped scenarios contain.
+
+`connect_everything_automatically` also raises `KeyError` for a component registered with the
+flag that declares no default connections at all, or none whose source is in the setup. Both
+are validation errors: they kill the run before the first time step and are invisible on the
+canvas otherwise. New components are created with the flag set accordingly.
 
 ---
 
@@ -242,7 +330,10 @@ in the toolbar applies to every component on the canvas.
 
 ### Export (`*.scenario.json`)
 
-1. Validate; block export on errors (show warnings, allow override).
+1. Confirm before writing whenever the validation result cannot be trusted to describe what
+   is being written — never run, run before the last edit, or reporting errors or warnings.
+   The dialog offers *Validate first* (exporting straight away if the re-run comes back
+   clean) and *Export anyway*; nothing is ever hard-blocked.
 2. Serialize to the exact schema described in `system_setups/README.md`.
 3. Strip the `_editor_positions` extension field before writing.
 4. Offer to also export / select a simulation JSON alongside the scenario JSON.
@@ -260,8 +351,10 @@ in the toolbar applies to every component on the canvas.
       `add_input()` / `add_output()` / `add_default_connections()` calls.
    c. Records all metadata.
 3. Walks `hisim/loadtypes.py` and `hisim/postprocessingoptions.py` for enum registries.
-4. Writes `component_db.json` and `enum_db.json` to `editor/public/data/`.
-5. Exits non-zero if any component fails to introspect, so CI catches regressions.
+4. Counts component co-occurrence across `system_setups/*.scenario.json`.
+5. Writes `component_db.json`, `enum_db.json`, `catalog_db.json` and `usage_db.json` to
+   `editor/public/data/`.
+6. Exits non-zero if any component fails to introspect, so CI catches regressions.
 
 Run via:
 

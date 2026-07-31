@@ -1,0 +1,942 @@
+{
+  "generated_at": "2026-07-31T17:34:24.882965",
+  "scenario_count": 23,
+  "components": {
+    "hisim.components.advanced_battery_bslib.Battery": {
+      "scenarios": 13,
+      "companions": {
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 13,
+        "hisim.components.generic_pv_system.PVSystem": 13,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 13,
+        "hisim.components.weather.Weather": 13,
+        "hisim.components.building.Building": 12,
+        "hisim.components.electricity_meter.ElectricityMeter": 12,
+        "hisim.components.heat_distribution_system.HeatDistribution": 11,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 11,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 11,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 10,
+        "hisim.components.generic_boiler.GenericBoiler": 7,
+        "hisim.components.generic_boiler.GenericBoilerController": 7,
+        "hisim.components.fuel_meter.FuelMeter": 4,
+        "hisim.components.gas_meter.GasMeter": 3,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 3,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 3,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 2,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 2,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.advanced_fuel_cell.CHP": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.generic_car.Car": 1,
+        "hisim.components.generic_district_heating.DistrictHeating": 1,
+        "hisim.components.generic_district_heating.DistrictHeatingController": 1,
+        "hisim.components.generic_electric_heating.ElectricHeating": 1,
+        "hisim.components.generic_electric_heating.ElectricHeatingController": 1
+      }
+    },
+    "hisim.components.advanced_ev_battery_bslib.CarBattery": {
+      "scenarios": 1,
+      "companions": {
+        "hisim.components.advanced_battery_bslib.Battery": 1,
+        "hisim.components.building.Building": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 1,
+        "hisim.components.electricity_meter.ElectricityMeter": 1,
+        "hisim.components.generic_car.Car": 1,
+        "hisim.components.generic_pv_system.PVSystem": 1,
+        "hisim.components.heat_distribution_system.HeatDistribution": 1,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 1,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 1,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 1,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 1,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 1,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 1,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 1,
+        "hisim.components.weather.Weather": 1
+      }
+    },
+    "hisim.components.advanced_fuel_cell.CHP": {
+      "scenarios": 1,
+      "companions": {
+        "hisim.components.advanced_battery_bslib.Battery": 1,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 1,
+        "hisim.components.generic_pv_system.PVSystem": 1,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 1,
+        "hisim.components.weather.Weather": 1
+      }
+    },
+    "hisim.components.air_conditioner.AirConditioner": {
+      "scenarios": 1,
+      "companions": {
+        "hisim.components.air_conditioner.AirConditionerController": 1,
+        "hisim.components.building.Building": 1,
+        "hisim.components.generic_pv_system.PVSystem": 1,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 1,
+        "hisim.components.weather.Weather": 1
+      }
+    },
+    "hisim.components.air_conditioner.AirConditionerController": {
+      "scenarios": 1,
+      "companions": {
+        "hisim.components.air_conditioner.AirConditioner": 1,
+        "hisim.components.building.Building": 1,
+        "hisim.components.generic_pv_system.PVSystem": 1,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 1,
+        "hisim.components.weather.Weather": 1
+      }
+    },
+    "hisim.components.building.Building": {
+      "scenarios": 19,
+      "companions": {
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 19,
+        "hisim.components.weather.Weather": 19,
+        "hisim.components.electricity_meter.ElectricityMeter": 17,
+        "hisim.components.generic_pv_system.PVSystem": 17,
+        "hisim.components.heat_distribution_system.HeatDistribution": 14,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 14,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 13,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 13,
+        "hisim.components.advanced_battery_bslib.Battery": 12,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 12,
+        "hisim.components.generic_boiler.GenericBoiler": 9,
+        "hisim.components.generic_boiler.GenericBoilerController": 9,
+        "hisim.components.fuel_meter.FuelMeter": 4,
+        "hisim.components.gas_meter.GasMeter": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 4,
+        "hisim.components.generic_heat_pump.GenericHeatPump": 3,
+        "hisim.components.generic_heat_pump.GenericHeatPumpController": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 3,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.air_conditioner.AirConditioner": 1,
+        "hisim.components.air_conditioner.AirConditionerController": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.generic_car.Car": 1,
+        "hisim.components.generic_district_heating.DistrictHeating": 1,
+        "hisim.components.generic_district_heating.DistrictHeatingController": 1,
+        "hisim.components.generic_electric_heating.ElectricHeating": 1,
+        "hisim.components.generic_electric_heating.ElectricHeatingController": 1
+      }
+    },
+    "hisim.components.controller_l1_electrolyzer_h2.ElectrolyzerController": {
+      "scenarios": 1,
+      "companions": {
+        "hisim.components.csvloader.CSVLoader": 1,
+        "hisim.components.generic_electrolyzer_h2.Electrolyzer": 1,
+        "hisim.components.transformer_rectifier.Transformer": 1
+      }
+    },
+    "hisim.components.controller_l1_generic_ev_charge.L1Controller": {
+      "scenarios": 1,
+      "companions": {
+        "hisim.components.advanced_battery_bslib.Battery": 1,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.building.Building": 1,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 1,
+        "hisim.components.electricity_meter.ElectricityMeter": 1,
+        "hisim.components.generic_car.Car": 1,
+        "hisim.components.generic_pv_system.PVSystem": 1,
+        "hisim.components.heat_distribution_system.HeatDistribution": 1,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 1,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 1,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 1,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 1,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 1,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 1,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 1,
+        "hisim.components.weather.Weather": 1
+      }
+    },
+    "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": {
+      "scenarios": 13,
+      "companions": {
+        "hisim.components.advanced_battery_bslib.Battery": 13,
+        "hisim.components.generic_pv_system.PVSystem": 13,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 13,
+        "hisim.components.weather.Weather": 13,
+        "hisim.components.building.Building": 12,
+        "hisim.components.electricity_meter.ElectricityMeter": 12,
+        "hisim.components.heat_distribution_system.HeatDistribution": 11,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 11,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 11,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 10,
+        "hisim.components.generic_boiler.GenericBoiler": 7,
+        "hisim.components.generic_boiler.GenericBoilerController": 7,
+        "hisim.components.fuel_meter.FuelMeter": 4,
+        "hisim.components.gas_meter.GasMeter": 3,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 3,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 3,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 2,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 2,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.advanced_fuel_cell.CHP": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.generic_car.Car": 1,
+        "hisim.components.generic_district_heating.DistrictHeating": 1,
+        "hisim.components.generic_district_heating.DistrictHeatingController": 1,
+        "hisim.components.generic_electric_heating.ElectricHeating": 1,
+        "hisim.components.generic_electric_heating.ElectricHeatingController": 1
+      }
+    },
+    "hisim.components.csvloader.CSVLoader": {
+      "scenarios": 1,
+      "companions": {
+        "hisim.components.controller_l1_electrolyzer_h2.ElectrolyzerController": 1,
+        "hisim.components.generic_electrolyzer_h2.Electrolyzer": 1,
+        "hisim.components.transformer_rectifier.Transformer": 1
+      }
+    },
+    "hisim.components.electricity_meter.ElectricityMeter": {
+      "scenarios": 17,
+      "companions": {
+        "hisim.components.building.Building": 17,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 17,
+        "hisim.components.weather.Weather": 17,
+        "hisim.components.generic_pv_system.PVSystem": 16,
+        "hisim.components.heat_distribution_system.HeatDistribution": 13,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 13,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 13,
+        "hisim.components.advanced_battery_bslib.Battery": 12,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 12,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 12,
+        "hisim.components.generic_boiler.GenericBoiler": 8,
+        "hisim.components.generic_boiler.GenericBoilerController": 8,
+        "hisim.components.fuel_meter.FuelMeter": 4,
+        "hisim.components.gas_meter.GasMeter": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 4,
+        "hisim.components.generic_heat_pump.GenericHeatPump": 3,
+        "hisim.components.generic_heat_pump.GenericHeatPumpController": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 3,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.generic_car.Car": 1,
+        "hisim.components.generic_district_heating.DistrictHeating": 1,
+        "hisim.components.generic_district_heating.DistrictHeatingController": 1,
+        "hisim.components.generic_electric_heating.ElectricHeating": 1,
+        "hisim.components.generic_electric_heating.ElectricHeatingController": 1
+      }
+    },
+    "hisim.components.example_transformer.ExampleTransformer": {
+      "scenarios": 1,
+      "companions": {
+        "hisim.components.random_numbers.RandomNumbers": 1,
+        "hisim.components.sumbuilder.SumBuilderForTwoInputs": 1
+      }
+    },
+    "hisim.components.fuel_meter.FuelMeter": {
+      "scenarios": 4,
+      "companions": {
+        "hisim.components.advanced_battery_bslib.Battery": 4,
+        "hisim.components.building.Building": 4,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 4,
+        "hisim.components.electricity_meter.ElectricityMeter": 4,
+        "hisim.components.generic_pv_system.PVSystem": 4,
+        "hisim.components.heat_distribution_system.HeatDistribution": 4,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 4,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 4,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 4,
+        "hisim.components.weather.Weather": 4,
+        "hisim.components.generic_boiler.GenericBoiler": 3,
+        "hisim.components.generic_boiler.GenericBoilerController": 3,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 3,
+        "hisim.components.generic_district_heating.DistrictHeating": 1,
+        "hisim.components.generic_district_heating.DistrictHeatingController": 1
+      }
+    },
+    "hisim.components.gas_meter.GasMeter": {
+      "scenarios": 4,
+      "companions": {
+        "hisim.components.building.Building": 4,
+        "hisim.components.electricity_meter.ElectricityMeter": 4,
+        "hisim.components.generic_boiler.GenericBoiler": 4,
+        "hisim.components.generic_boiler.GenericBoilerController": 4,
+        "hisim.components.heat_distribution_system.HeatDistribution": 4,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 4,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 4,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 4,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 4,
+        "hisim.components.weather.Weather": 4,
+        "hisim.components.advanced_battery_bslib.Battery": 3,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 3,
+        "hisim.components.generic_pv_system.PVSystem": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 2,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 2
+      }
+    },
+    "hisim.components.generic_boiler.GenericBoiler": {
+      "scenarios": 9,
+      "companions": {
+        "hisim.components.building.Building": 9,
+        "hisim.components.generic_boiler.GenericBoilerController": 9,
+        "hisim.components.heat_distribution_system.HeatDistribution": 9,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 9,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 9,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 9,
+        "hisim.components.weather.Weather": 9,
+        "hisim.components.electricity_meter.ElectricityMeter": 8,
+        "hisim.components.advanced_battery_bslib.Battery": 7,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 7,
+        "hisim.components.generic_pv_system.PVSystem": 7,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 7,
+        "hisim.components.gas_meter.GasMeter": 4,
+        "hisim.components.fuel_meter.FuelMeter": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 2,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 2
+      }
+    },
+    "hisim.components.generic_boiler.GenericBoilerController": {
+      "scenarios": 9,
+      "companions": {
+        "hisim.components.building.Building": 9,
+        "hisim.components.generic_boiler.GenericBoiler": 9,
+        "hisim.components.heat_distribution_system.HeatDistribution": 9,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 9,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 9,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 9,
+        "hisim.components.weather.Weather": 9,
+        "hisim.components.electricity_meter.ElectricityMeter": 8,
+        "hisim.components.advanced_battery_bslib.Battery": 7,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 7,
+        "hisim.components.generic_pv_system.PVSystem": 7,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 7,
+        "hisim.components.gas_meter.GasMeter": 4,
+        "hisim.components.fuel_meter.FuelMeter": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 2,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 2
+      }
+    },
+    "hisim.components.generic_car.Car": {
+      "scenarios": 1,
+      "companions": {
+        "hisim.components.advanced_battery_bslib.Battery": 1,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.building.Building": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 1,
+        "hisim.components.electricity_meter.ElectricityMeter": 1,
+        "hisim.components.generic_pv_system.PVSystem": 1,
+        "hisim.components.heat_distribution_system.HeatDistribution": 1,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 1,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 1,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 1,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 1,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 1,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 1,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 1,
+        "hisim.components.weather.Weather": 1
+      }
+    },
+    "hisim.components.generic_district_heating.DistrictHeating": {
+      "scenarios": 1,
+      "companions": {
+        "hisim.components.advanced_battery_bslib.Battery": 1,
+        "hisim.components.building.Building": 1,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 1,
+        "hisim.components.electricity_meter.ElectricityMeter": 1,
+        "hisim.components.fuel_meter.FuelMeter": 1,
+        "hisim.components.generic_district_heating.DistrictHeatingController": 1,
+        "hisim.components.generic_pv_system.PVSystem": 1,
+        "hisim.components.heat_distribution_system.HeatDistribution": 1,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 1,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 1,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 1,
+        "hisim.components.weather.Weather": 1
+      }
+    },
+    "hisim.components.generic_district_heating.DistrictHeatingController": {
+      "scenarios": 1,
+      "companions": {
+        "hisim.components.advanced_battery_bslib.Battery": 1,
+        "hisim.components.building.Building": 1,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 1,
+        "hisim.components.electricity_meter.ElectricityMeter": 1,
+        "hisim.components.fuel_meter.FuelMeter": 1,
+        "hisim.components.generic_district_heating.DistrictHeating": 1,
+        "hisim.components.generic_pv_system.PVSystem": 1,
+        "hisim.components.heat_distribution_system.HeatDistribution": 1,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 1,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 1,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 1,
+        "hisim.components.weather.Weather": 1
+      }
+    },
+    "hisim.components.generic_electric_heating.ElectricHeating": {
+      "scenarios": 1,
+      "companions": {
+        "hisim.components.advanced_battery_bslib.Battery": 1,
+        "hisim.components.building.Building": 1,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 1,
+        "hisim.components.electricity_meter.ElectricityMeter": 1,
+        "hisim.components.generic_electric_heating.ElectricHeatingController": 1,
+        "hisim.components.generic_pv_system.PVSystem": 1,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 1,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 1,
+        "hisim.components.weather.Weather": 1
+      }
+    },
+    "hisim.components.generic_electric_heating.ElectricHeatingController": {
+      "scenarios": 1,
+      "companions": {
+        "hisim.components.advanced_battery_bslib.Battery": 1,
+        "hisim.components.building.Building": 1,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 1,
+        "hisim.components.electricity_meter.ElectricityMeter": 1,
+        "hisim.components.generic_electric_heating.ElectricHeating": 1,
+        "hisim.components.generic_pv_system.PVSystem": 1,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 1,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 1,
+        "hisim.components.weather.Weather": 1
+      }
+    },
+    "hisim.components.generic_electrolyzer_h2.Electrolyzer": {
+      "scenarios": 1,
+      "companions": {
+        "hisim.components.controller_l1_electrolyzer_h2.ElectrolyzerController": 1,
+        "hisim.components.csvloader.CSVLoader": 1,
+        "hisim.components.transformer_rectifier.Transformer": 1
+      }
+    },
+    "hisim.components.generic_heat_pump.GenericHeatPump": {
+      "scenarios": 3,
+      "companions": {
+        "hisim.components.building.Building": 3,
+        "hisim.components.electricity_meter.ElectricityMeter": 3,
+        "hisim.components.generic_heat_pump.GenericHeatPumpController": 3,
+        "hisim.components.generic_pv_system.PVSystem": 3,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 3,
+        "hisim.components.weather.Weather": 3
+      }
+    },
+    "hisim.components.generic_heat_pump.GenericHeatPumpController": {
+      "scenarios": 3,
+      "companions": {
+        "hisim.components.building.Building": 3,
+        "hisim.components.electricity_meter.ElectricityMeter": 3,
+        "hisim.components.generic_heat_pump.GenericHeatPump": 3,
+        "hisim.components.generic_pv_system.PVSystem": 3,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 3,
+        "hisim.components.weather.Weather": 3
+      }
+    },
+    "hisim.components.generic_pv_system.PVSystem": {
+      "scenarios": 18,
+      "companions": {
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 18,
+        "hisim.components.weather.Weather": 18,
+        "hisim.components.building.Building": 17,
+        "hisim.components.electricity_meter.ElectricityMeter": 16,
+        "hisim.components.advanced_battery_bslib.Battery": 13,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 13,
+        "hisim.components.heat_distribution_system.HeatDistribution": 12,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 12,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 12,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 11,
+        "hisim.components.generic_boiler.GenericBoiler": 7,
+        "hisim.components.generic_boiler.GenericBoilerController": 7,
+        "hisim.components.fuel_meter.FuelMeter": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 4,
+        "hisim.components.gas_meter.GasMeter": 3,
+        "hisim.components.generic_heat_pump.GenericHeatPump": 3,
+        "hisim.components.generic_heat_pump.GenericHeatPumpController": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 2,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 2,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.advanced_fuel_cell.CHP": 1,
+        "hisim.components.air_conditioner.AirConditioner": 1,
+        "hisim.components.air_conditioner.AirConditionerController": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.generic_car.Car": 1,
+        "hisim.components.generic_district_heating.DistrictHeating": 1,
+        "hisim.components.generic_district_heating.DistrictHeatingController": 1,
+        "hisim.components.generic_electric_heating.ElectricHeating": 1,
+        "hisim.components.generic_electric_heating.ElectricHeatingController": 1
+      }
+    },
+    "hisim.components.heat_distribution_system.HeatDistribution": {
+      "scenarios": 14,
+      "companions": {
+        "hisim.components.building.Building": 14,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 14,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 14,
+        "hisim.components.weather.Weather": 14,
+        "hisim.components.electricity_meter.ElectricityMeter": 13,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 13,
+        "hisim.components.generic_pv_system.PVSystem": 12,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 12,
+        "hisim.components.advanced_battery_bslib.Battery": 11,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 11,
+        "hisim.components.generic_boiler.GenericBoiler": 9,
+        "hisim.components.generic_boiler.GenericBoilerController": 9,
+        "hisim.components.fuel_meter.FuelMeter": 4,
+        "hisim.components.gas_meter.GasMeter": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 4,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 3,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.generic_car.Car": 1,
+        "hisim.components.generic_district_heating.DistrictHeating": 1,
+        "hisim.components.generic_district_heating.DistrictHeatingController": 1
+      }
+    },
+    "hisim.components.heat_distribution_system.HeatDistributionController": {
+      "scenarios": 14,
+      "companions": {
+        "hisim.components.building.Building": 14,
+        "hisim.components.heat_distribution_system.HeatDistribution": 14,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 14,
+        "hisim.components.weather.Weather": 14,
+        "hisim.components.electricity_meter.ElectricityMeter": 13,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 13,
+        "hisim.components.generic_pv_system.PVSystem": 12,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 12,
+        "hisim.components.advanced_battery_bslib.Battery": 11,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 11,
+        "hisim.components.generic_boiler.GenericBoiler": 9,
+        "hisim.components.generic_boiler.GenericBoilerController": 9,
+        "hisim.components.fuel_meter.FuelMeter": 4,
+        "hisim.components.gas_meter.GasMeter": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 4,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 3,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.generic_car.Car": 1,
+        "hisim.components.generic_district_heating.DistrictHeating": 1,
+        "hisim.components.generic_district_heating.DistrictHeatingController": 1
+      }
+    },
+    "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": {
+      "scenarios": 20,
+      "companions": {
+        "hisim.components.weather.Weather": 20,
+        "hisim.components.building.Building": 19,
+        "hisim.components.generic_pv_system.PVSystem": 18,
+        "hisim.components.electricity_meter.ElectricityMeter": 17,
+        "hisim.components.heat_distribution_system.HeatDistribution": 14,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 14,
+        "hisim.components.advanced_battery_bslib.Battery": 13,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 13,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 13,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 13,
+        "hisim.components.generic_boiler.GenericBoiler": 9,
+        "hisim.components.generic_boiler.GenericBoilerController": 9,
+        "hisim.components.fuel_meter.FuelMeter": 4,
+        "hisim.components.gas_meter.GasMeter": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 4,
+        "hisim.components.generic_heat_pump.GenericHeatPump": 3,
+        "hisim.components.generic_heat_pump.GenericHeatPumpController": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 3,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.advanced_fuel_cell.CHP": 1,
+        "hisim.components.air_conditioner.AirConditioner": 1,
+        "hisim.components.air_conditioner.AirConditionerController": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.generic_car.Car": 1,
+        "hisim.components.generic_district_heating.DistrictHeating": 1,
+        "hisim.components.generic_district_heating.DistrictHeatingController": 1,
+        "hisim.components.generic_electric_heating.ElectricHeating": 1,
+        "hisim.components.generic_electric_heating.ElectricHeatingController": 1
+      }
+    },
+    "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": {
+      "scenarios": 4,
+      "companions": {
+        "hisim.components.building.Building": 4,
+        "hisim.components.electricity_meter.ElectricityMeter": 4,
+        "hisim.components.generic_pv_system.PVSystem": 4,
+        "hisim.components.heat_distribution_system.HeatDistribution": 4,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 4,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 4,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 4,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 4,
+        "hisim.components.weather.Weather": 4,
+        "hisim.components.advanced_battery_bslib.Battery": 3,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 3,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.generic_car.Car": 1,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 1,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 1
+      }
+    },
+    "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": {
+      "scenarios": 4,
+      "companions": {
+        "hisim.components.building.Building": 4,
+        "hisim.components.electricity_meter.ElectricityMeter": 4,
+        "hisim.components.generic_pv_system.PVSystem": 4,
+        "hisim.components.heat_distribution_system.HeatDistribution": 4,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 4,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 4,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 4,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 4,
+        "hisim.components.weather.Weather": 4,
+        "hisim.components.advanced_battery_bslib.Battery": 3,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 3,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.generic_car.Car": 1,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 1,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 1
+      }
+    },
+    "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": {
+      "scenarios": 4,
+      "companions": {
+        "hisim.components.building.Building": 4,
+        "hisim.components.electricity_meter.ElectricityMeter": 4,
+        "hisim.components.generic_pv_system.PVSystem": 4,
+        "hisim.components.heat_distribution_system.HeatDistribution": 4,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 4,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 4,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 4,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 4,
+        "hisim.components.weather.Weather": 4,
+        "hisim.components.advanced_battery_bslib.Battery": 3,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 3,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.generic_car.Car": 1,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 1,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 1
+      }
+    },
+    "hisim.components.random_numbers.RandomNumbers": {
+      "scenarios": 2,
+      "companions": {
+        "hisim.components.sumbuilder.SumBuilderForTwoInputs": 2,
+        "hisim.components.example_transformer.ExampleTransformer": 1
+      }
+    },
+    "hisim.components.simple_water_storage.SimpleDHWStorage": {
+      "scenarios": 13,
+      "companions": {
+        "hisim.components.building.Building": 13,
+        "hisim.components.electricity_meter.ElectricityMeter": 13,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 13,
+        "hisim.components.weather.Weather": 13,
+        "hisim.components.generic_pv_system.PVSystem": 12,
+        "hisim.components.heat_distribution_system.HeatDistribution": 12,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 12,
+        "hisim.components.advanced_battery_bslib.Battery": 11,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 11,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 11,
+        "hisim.components.generic_boiler.GenericBoiler": 7,
+        "hisim.components.generic_boiler.GenericBoilerController": 7,
+        "hisim.components.fuel_meter.FuelMeter": 4,
+        "hisim.components.gas_meter.GasMeter": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 4,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 3,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.generic_car.Car": 1,
+        "hisim.components.generic_district_heating.DistrictHeating": 1,
+        "hisim.components.generic_district_heating.DistrictHeatingController": 1,
+        "hisim.components.generic_electric_heating.ElectricHeating": 1,
+        "hisim.components.generic_electric_heating.ElectricHeatingController": 1
+      }
+    },
+    "hisim.components.simple_water_storage.SimpleHotWaterStorage": {
+      "scenarios": 13,
+      "companions": {
+        "hisim.components.building.Building": 13,
+        "hisim.components.heat_distribution_system.HeatDistribution": 13,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 13,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 13,
+        "hisim.components.weather.Weather": 13,
+        "hisim.components.electricity_meter.ElectricityMeter": 12,
+        "hisim.components.generic_pv_system.PVSystem": 11,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 11,
+        "hisim.components.advanced_battery_bslib.Battery": 10,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 10,
+        "hisim.components.generic_boiler.GenericBoiler": 9,
+        "hisim.components.generic_boiler.GenericBoilerController": 9,
+        "hisim.components.gas_meter.GasMeter": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 4,
+        "hisim.components.fuel_meter.FuelMeter": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 3,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.generic_car.Car": 1
+      }
+    },
+    "hisim.components.solar_thermal_system.SolarThermalSystem": {
+      "scenarios": 3,
+      "companions": {
+        "hisim.components.building.Building": 3,
+        "hisim.components.electricity_meter.ElectricityMeter": 3,
+        "hisim.components.heat_distribution_system.HeatDistribution": 3,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 3,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 3,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 3,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 3,
+        "hisim.components.weather.Weather": 3,
+        "hisim.components.advanced_battery_bslib.Battery": 2,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 2,
+        "hisim.components.gas_meter.GasMeter": 2,
+        "hisim.components.generic_boiler.GenericBoiler": 2,
+        "hisim.components.generic_boiler.GenericBoilerController": 2,
+        "hisim.components.generic_pv_system.PVSystem": 2,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 1,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 1,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 1
+      }
+    },
+    "hisim.components.solar_thermal_system.SolarThermalSystemController": {
+      "scenarios": 3,
+      "companions": {
+        "hisim.components.building.Building": 3,
+        "hisim.components.electricity_meter.ElectricityMeter": 3,
+        "hisim.components.heat_distribution_system.HeatDistribution": 3,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 3,
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 3,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 3,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 3,
+        "hisim.components.weather.Weather": 3,
+        "hisim.components.advanced_battery_bslib.Battery": 2,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 2,
+        "hisim.components.gas_meter.GasMeter": 2,
+        "hisim.components.generic_boiler.GenericBoiler": 2,
+        "hisim.components.generic_boiler.GenericBoilerController": 2,
+        "hisim.components.generic_pv_system.PVSystem": 2,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 1,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 1,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 1
+      }
+    },
+    "hisim.components.sumbuilder.SumBuilderForTwoInputs": {
+      "scenarios": 2,
+      "companions": {
+        "hisim.components.random_numbers.RandomNumbers": 2,
+        "hisim.components.example_transformer.ExampleTransformer": 1
+      }
+    },
+    "hisim.components.transformer_rectifier.Transformer": {
+      "scenarios": 1,
+      "companions": {
+        "hisim.components.controller_l1_electrolyzer_h2.ElectrolyzerController": 1,
+        "hisim.components.csvloader.CSVLoader": 1,
+        "hisim.components.generic_electrolyzer_h2.Electrolyzer": 1
+      }
+    },
+    "hisim.components.weather.Weather": {
+      "scenarios": 20,
+      "companions": {
+        "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector": 20,
+        "hisim.components.building.Building": 19,
+        "hisim.components.generic_pv_system.PVSystem": 18,
+        "hisim.components.electricity_meter.ElectricityMeter": 17,
+        "hisim.components.heat_distribution_system.HeatDistribution": 14,
+        "hisim.components.heat_distribution_system.HeatDistributionController": 14,
+        "hisim.components.advanced_battery_bslib.Battery": 13,
+        "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": 13,
+        "hisim.components.simple_water_storage.SimpleDHWStorage": 13,
+        "hisim.components.simple_water_storage.SimpleHotWaterStorage": 13,
+        "hisim.components.generic_boiler.GenericBoiler": 9,
+        "hisim.components.generic_boiler.GenericBoilerController": 9,
+        "hisim.components.fuel_meter.FuelMeter": 4,
+        "hisim.components.gas_meter.GasMeter": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW": 4,
+        "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating": 4,
+        "hisim.components.generic_heat_pump.GenericHeatPump": 3,
+        "hisim.components.generic_heat_pump.GenericHeatPumpController": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystem": 3,
+        "hisim.components.solar_thermal_system.SolarThermalSystemController": 3,
+        "hisim.components.advanced_ev_battery_bslib.CarBattery": 1,
+        "hisim.components.advanced_fuel_cell.CHP": 1,
+        "hisim.components.air_conditioner.AirConditioner": 1,
+        "hisim.components.air_conditioner.AirConditionerController": 1,
+        "hisim.components.controller_l1_generic_ev_charge.L1Controller": 1,
+        "hisim.components.generic_car.Car": 1,
+        "hisim.components.generic_district_heating.DistrictHeating": 1,
+        "hisim.components.generic_district_heating.DistrictHeatingController": 1,
+        "hisim.components.generic_electric_heating.ElectricHeating": 1,
+        "hisim.components.generic_electric_heating.ElectricHeatingController": 1
+      }
+    }
+  },
+  "dynamic_outputs": {
+    "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": [
+      {
+        "source_output_name": "LoadingPowerInputForBattery_",
+        "source_tags": [
+          "Battery",
+          "ElectricityTarget"
+        ],
+        "source_load_type": "Electricity",
+        "source_unit": "W",
+        "source_weight": 6,
+        "output_description": "Target electricity for Battery Control. ",
+        "source_component_class": null,
+        "feeds": [
+          {
+            "component_class": "hisim.components.advanced_battery_bslib.Battery",
+            "target_input_name": "LoadingPowerInput"
+          }
+        ],
+        "scenarios": 11
+      },
+      {
+        "source_output_name": "ChargingPowerForBattery_",
+        "source_tags": [
+          "Battery",
+          "ElectricityTarget"
+        ],
+        "source_load_type": "Electricity",
+        "source_unit": "W",
+        "source_weight": 6,
+        "output_description": "Target electricity for Battery Control. ",
+        "source_component_class": null,
+        "feeds": [
+          {
+            "component_class": "hisim.components.advanced_battery_bslib.Battery",
+            "target_input_name": "LoadingPowerInput"
+          }
+        ],
+        "scenarios": 1
+      },
+      {
+        "source_output_name": "ElectricityTarget",
+        "source_tags": [
+          "Battery",
+          "ElectricityTarget"
+        ],
+        "source_load_type": "Electricity",
+        "source_unit": "W",
+        "source_weight": 1,
+        "output_description": "Target electricity for battery controller (I). ",
+        "source_component_class": null,
+        "feeds": [
+          {
+            "component_class": "hisim.components.advanced_battery_bslib.Battery",
+            "target_input_name": "LoadingPowerInput"
+          },
+          {
+            "component_class": "hisim.components.advanced_fuel_cell.CHP",
+            "target_input_name": "ElectricityFromCHPTarget"
+          }
+        ],
+        "scenarios": 1
+      },
+      {
+        "source_output_name": "ElectricityTarget",
+        "source_tags": [
+          "Battery",
+          "ElectricityTarget"
+        ],
+        "source_load_type": "Electricity",
+        "source_unit": "W",
+        "source_weight": 2,
+        "output_description": "Target electricity for battery controller (II). ",
+        "source_component_class": null,
+        "feeds": [
+          {
+            "component_class": "hisim.components.advanced_battery_bslib.Battery",
+            "target_input_name": "LoadingPowerInput"
+          },
+          {
+            "component_class": "hisim.components.advanced_fuel_cell.CHP",
+            "target_input_name": "ElectricityFromCHPTarget"
+          }
+        ],
+        "scenarios": 1
+      },
+      {
+        "source_output_name": "ElectricityTarget",
+        "source_tags": [
+          "FuelCell",
+          "ElectricityTarget"
+        ],
+        "source_load_type": "Electricity",
+        "source_unit": "W",
+        "source_weight": 3,
+        "output_description": "Target electricity for fuel cell (I). ",
+        "source_component_class": null,
+        "feeds": [
+          {
+            "component_class": "hisim.components.advanced_battery_bslib.Battery",
+            "target_input_name": "LoadingPowerInput"
+          },
+          {
+            "component_class": "hisim.components.advanced_fuel_cell.CHP",
+            "target_input_name": "ElectricityFromCHPTarget"
+          }
+        ],
+        "scenarios": 1
+      },
+      {
+        "source_output_name": "ElectricityTarget",
+        "source_tags": [
+          "FuelCell",
+          "ElectricityTarget"
+        ],
+        "source_load_type": "Electricity",
+        "source_unit": "W",
+        "source_weight": 4,
+        "output_description": "Target electricity for fuel cell (II). ",
+        "source_component_class": null,
+        "feeds": [
+          {
+            "component_class": "hisim.components.advanced_battery_bslib.Battery",
+            "target_input_name": "LoadingPowerInput"
+          },
+          {
+            "component_class": "hisim.components.advanced_fuel_cell.CHP",
+            "target_input_name": "ElectricityFromCHPTarget"
+          }
+        ],
+        "scenarios": 1
+      },
+      {
+        "source_output_name": "ElectricityToOrFromGridOfL1Controller_",
+        "source_tags": [
+          "CarBattery",
+          "ElectricityTarget"
+        ],
+        "source_load_type": "Electricity",
+        "source_unit": "W",
+        "source_weight": 5,
+        "output_description": "Target electricity for battery of electric car.",
+        "source_component_class": "L1Controller",
+        "feeds": [
+          {
+            "component_class": "hisim.components.controller_l1_generic_ev_charge.L1Controller",
+            "target_input_name": "ElectricityTargetFromEMS"
+          }
+        ],
+        "scenarios": 1
+      }
+    ]
+  }
+}

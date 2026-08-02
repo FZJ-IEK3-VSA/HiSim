@@ -16,6 +16,7 @@ import { exportScenario } from '../src/io/export'
 import { validateScenario } from '../src/io/validate'
 import {
   buildDynamicOutput,
+  buildExplicitDynamicInput,
   dynamicInputOptions,
   dynamicOutputOptions,
 } from '../src/io/dynamicPorts'
@@ -180,6 +181,82 @@ describe('dynamic output channels', () => {
     expect(
       options.some((o) => o.declaration.source_output_name === 'LoadingPowerInputForBattery_'),
     ).toBe(false)
+  })
+})
+
+describe('dynamic inputs mined from the shipped scenarios', () => {
+  const original = readScenario(SCENARIO)
+  const METER = 'ElectricityMeter'
+
+  /** Drop the dynamic inputs a component spells out, leaving it with nothing declared. */
+  function stripDynamicInputs(text: string, componentName: string): string {
+    const scenario = JSON.parse(text)
+    for (const comp of scenario.components ?? []) {
+      if (comp?.configuration?.name === componentName) comp.inputs = []
+    }
+    return JSON.stringify(scenario)
+  }
+
+  function meterOptions(usageDb: typeof usage | null) {
+    const imported = importScenario(stripDynamicInputs(original, METER), db)
+    const meter = imported.nodes.find((n) => n.data.instanceName === METER)!
+    return dynamicInputOptions(meter, imported.nodes, usageDb)
+  }
+
+  it('offers the EMS total, which the meter declares no default connection for', () => {
+    // The meter reads TotalElectricityToOrFromGrid in every *_building_sizer setup, but that
+    // wiring is a hand-written add_component_input_and_connect call. Nothing in HiSim declares
+    // it, so without the mined table there is nothing for the editor to offer.
+    const option = meterOptions(usage).find((o) => o.sourceOutput === 'TotalElectricityToOrFromGrid')
+
+    expect(option).toBeDefined()
+    expect(option?.sourceNodeName).toBe(EMS)
+    expect(option?.connection.weight).toBe(999)
+    expect(option?.connection.tags).toEqual(['ElectricityProduction'])
+    expect(option?.scenarios).toBeGreaterThan(0)
+  })
+
+  it('offers it only from the mined table, never from the registry', () => {
+    // The guard on the double-counting hazard: were this ever promoted to a
+    // dynamic_default_connections entry, resolveAutoDynamicInputs would derive it alongside
+    // the per-consumer ports and the household load would be counted twice.
+    expect(meterOptions(null).some((o) => o.sourceOutput === 'TotalElectricityToOrFromGrid')).toBe(
+      false,
+    )
+  })
+
+  it('marks mined options as such and leaves declared ones unmarked', () => {
+    for (const option of meterOptions(usage)) {
+      const mined = option.sourceOutput === 'TotalElectricityToOrFromGrid'
+      expect(option.scenarios !== undefined).toBe(mined)
+    }
+  })
+
+  it('does not offer an input the scenario already declares', () => {
+    const imported = importScenario(original, db)
+    const meter = imported.nodes.find((n) => n.data.instanceName === METER)!
+    const options = dynamicInputOptions(meter, imported.nodes, usage)
+    expect(options.some((o) => o.sourceOutput === 'TotalElectricityToOrFromGrid')).toBe(false)
+  })
+
+  it('builds a port whose name and metadata match the shipped scenario', () => {
+    // The port the scenario declares is the ground truth: adding the mined option by hand has
+    // to reproduce it exactly, or the connection would name an index HiSim never creates.
+    const declared = dynamicInputsOf(original, METER)[0]
+    const option = meterOptions(usage).find((o) => o.sourceOutput === 'TotalElectricityToOrFromGrid')!
+
+    const imported = importScenario(stripDynamicInputs(original, METER), db)
+    const meter = imported.nodes.find((n) => n.data.instanceName === METER)!
+    const built = buildExplicitDynamicInput(meter, option)
+
+    expect(built.field_name).toBe(declared.field_name)
+    expect(built.source_object_name).toBe(declared.source_object_name)
+    expect(built.source_component_output).toBe(declared.source_component_output)
+    expect(built.load_type).toBe(declared.load_type)
+    expect(built.unit).toBe(declared.unit)
+    expect(built.source_weight).toBe(declared.source_weight)
+    expect(built.source_tags).toEqual(declared.source_tags)
+    expect(built.auto).toBeUndefined()
   })
 })
 

@@ -80,7 +80,7 @@ Two ways to wire components together:
 Each `.py` file contains a `setup_function(sim, sim_params)` that instantiates components and connects them. Each `.scenario.json` file is the JSON-based equivalent (uses `json_executor.py` to build components from fully-qualified class names). Simulation parameters (time range, resolution, post-processing options) live in separate `.simulation.json` files like `2021_minutely_plots.simulation.json`.
 
 ### Post-processing (`hisim/postprocessing/`)
-`PostProcessor` is invoked after simulation. Behavior is controlled by `PostProcessingOptions` flags set on `SimulationParameters`. Key options: `COMPUTE_KPIS`, `PLOT_LINE`, `EXPORT_TO_CSV`, `GENERATE_PDF_REPORT`, `MAKE_RESULT_JSON_FOR_WEBTOOL`. KPI computation lives in `postprocessing/kpi_computation/`. Results land in a `results/` subdirectory next to the scenario file.
+`PostProcessor` is invoked after simulation. Behavior is controlled by `PostProcessingOptions` flags set on `SimulationParameters`. Key options: `COMPUTE_KPIS`, `PLOT_LINE`, `EXPORT_TO_CSV`, `GENERATE_PDF_REPORT`, `WRITE_KPIS_TO_JSON`. KPI computation lives in `postprocessing/kpi_computation/`. Results land in a `results/` subdirectory next to the scenario file.
 
 ### loadtypes.py
 Central registry of enums: `LoadTypes`, `Units`, `ComponentType`, `InandOutputType`, `Locations`, `BuildingCodes`, etc. All component I/O declarations reference these enums — never use raw strings for load types or units.

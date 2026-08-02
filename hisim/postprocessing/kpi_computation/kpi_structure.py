@@ -50,6 +50,7 @@ class KpiTagEnumClass(Enum):
     GENERIC_HEAT_SOURCE = "Generic Heat Source"  # used in simple_heat_source.py
     GROUND_PROBE = "Ground Probe"
     ELECTRIC_HEATING = "Electric Heating"
+    TANKLESS_WATER_HEATER = "Tankless Water Heater"  # used in generic_tankless_water_heater.py
     ENERGY_MANAGEMENT_SYSTEM = "Energy Management System"
     DISTRICT_ENERGY_MANAGEMENT_SYSTEM = " District Energy Management System"
 

@@ -251,5 +251,521 @@
       "value": 38
     }
   ],
-  "generated_at": "2026-07-31T16:31:37.488665"
+  "config_enums": {
+    "BoilerType": [
+      {
+        "name": "CONVENTIONAL",
+        "value": 1
+      },
+      {
+        "name": "CONDENSING",
+        "value": 2
+      }
+    ],
+    "EnergyIntensityType": [
+      {
+        "name": "EnergySaving",
+        "value": "EnergySaving"
+      },
+      {
+        "name": "Random",
+        "value": "Random"
+      },
+      {
+        "name": "EnergyIntensive",
+        "value": "EnergyIntensive"
+      },
+      {
+        "name": "AsOriginal",
+        "value": "AsOriginal"
+      },
+      {
+        "name": "EnergySavingPreferMeasured",
+        "value": "EnergySavingPreferMeasured"
+      },
+      {
+        "name": "EnergyIntensivePreferMeasured",
+        "value": "EnergyIntensivePreferMeasured"
+      }
+    ],
+    "FluidMediaType": [
+      {
+        "name": "WATER",
+        "value": "Water"
+      },
+      {
+        "name": "ETHYLENE_GLYCOL",
+        "value": "EthyleneGlycol"
+      },
+      {
+        "name": "PROPYLEN_GLYCOL",
+        "value": "PropyleneGlycol"
+      },
+      {
+        "name": "ETHANOL",
+        "value": "EthylAlcohol"
+      },
+      {
+        "name": "METHANOL",
+        "value": "MethylAlcohol"
+      }
+    ],
+    "HeatingSystems": [
+      {
+        "name": "HEAT_PUMP",
+        "value": "HeatPump"
+      },
+      {
+        "name": "ELECTRIC_HEATING",
+        "value": "ElectricHeating"
+      },
+      {
+        "name": "OIL_HEATING",
+        "value": "OilHeating"
+      },
+      {
+        "name": "GAS_HEATING",
+        "value": "GasHeating"
+      },
+      {
+        "name": "PELLET_HEATING",
+        "value": "PelletHeating"
+      },
+      {
+        "name": "WOOD_CHIP_HEATING",
+        "value": "WoodChipHeating"
+      },
+      {
+        "name": "DISTRICT_HEATING",
+        "value": "DistrictHeating"
+      },
+      {
+        "name": "HYDROGEN_HEATING",
+        "value": "HydrogenHeating"
+      },
+      {
+        "name": "GAS_SOLAR_THERMAL",
+        "value": "GasSolarThermal"
+      },
+      {
+        "name": "HEAT_PUMP_SOLAR_THERMAL",
+        "value": "HeatPumpSolarThermal"
+      }
+    ],
+    "InandOutputType": [
+      {
+        "name": "MASS_FLOW",
+        "value": "Massflow"
+      },
+      {
+        "name": "CONTROL_SIGNAL",
+        "value": "ControlSignal"
+      },
+      {
+        "name": "ELECTRICITY_TARGET",
+        "value": "ElectricityTarget"
+      },
+      {
+        "name": "LAST_ACTIVATION",
+        "value": "LastActivation"
+      },
+      {
+        "name": "LATEST_ACTIVATION",
+        "value": "LatestActivation"
+      },
+      {
+        "name": "EARLIEST_ACTIVATION",
+        "value": "EarliestActivation"
+      },
+      {
+        "name": "RECOMMENDED_ACTIVATION",
+        "value": "RecommendedActivation"
+      },
+      {
+        "name": "ELECTRICITY_PRODUCTION",
+        "value": "ElectricityProduction"
+      },
+      {
+        "name": "ELECTRICITY_INJECTION",
+        "value": "ElectricityInjection"
+      },
+      {
+        "name": "ELECTRICITY_CONSUMPTION",
+        "value": "ElectricityConsumption"
+      },
+      {
+        "name": "ELECTRICITY_CONSUMPTION_EMS_CONTROLLED",
+        "value": "Consumption with EMS control"
+      },
+      {
+        "name": "ELECTRICITY_CONSUMPTION_UNCONTROLLED",
+        "value": "Consumption without any EMS control"
+      },
+      {
+        "name": "STORAGE_CONTENT",
+        "value": "StorageContent"
+      },
+      {
+        "name": "CHARGE_DISCHARGE",
+        "value": "ChargeDischarge"
+      },
+      {
+        "name": "CHARGE",
+        "value": "Charge"
+      },
+      {
+        "name": "DISCHARGE",
+        "value": "Discharge"
+      },
+      {
+        "name": "GAS_PRODUCTION",
+        "value": "GasProduction"
+      },
+      {
+        "name": "GAS_CONSUMPTION_UNCONTROLLED",
+        "value": "Gas consumption without any control"
+      },
+      {
+        "name": "HEAT_DELIVERED",
+        "value": "HEAT_DELIVERED"
+      },
+      {
+        "name": "HEAT_CONSUMPTION",
+        "value": "HEAT_CONSUMPTION"
+      },
+      {
+        "name": "HEAT_TO_BUILDING",
+        "value": "HeatToBuilding"
+      },
+      {
+        "name": "HEAT_TO_BUFFER",
+        "value": "HeatToBuffer"
+      },
+      {
+        "name": "THERMAL_PRODUCTION",
+        "value": "ThermalProduction"
+      },
+      {
+        "name": "FUEL_CONSUMPTION",
+        "value": "FuelConsumption"
+      },
+      {
+        "name": "WATER_HEATING",
+        "value": "WaterHeating"
+      },
+      {
+        "name": "HEATING",
+        "value": "Heating"
+      }
+    ],
+    "LoadTypes": [
+      {
+        "name": "ANY",
+        "value": "Any"
+      },
+      {
+        "name": "ELECTRICITY",
+        "value": "Electricity"
+      },
+      {
+        "name": "IRRADIANCE",
+        "value": "Irradiance"
+      },
+      {
+        "name": "SPEED",
+        "value": "Speed"
+      },
+      {
+        "name": "HEATING",
+        "value": "Heating"
+      },
+      {
+        "name": "COOLING",
+        "value": "Cooling"
+      },
+      {
+        "name": "VOLUME",
+        "value": "Volume"
+      },
+      {
+        "name": "TEMPERATURE",
+        "value": "Temperature"
+      },
+      {
+        "name": "PRESSURE",
+        "value": "Pressure"
+      },
+      {
+        "name": "TIME",
+        "value": "Time"
+      },
+      {
+        "name": "PRICE",
+        "value": "Price"
+      },
+      {
+        "name": "GAS",
+        "value": "Gas"
+      },
+      {
+        "name": "AIR",
+        "value": "Air"
+      },
+      {
+        "name": "GREEN_HYDROGEN",
+        "value": "Green Hydrogen"
+      },
+      {
+        "name": "OXYGEN",
+        "value": "Oxygen"
+      },
+      {
+        "name": "WATER",
+        "value": "Water"
+      },
+      {
+        "name": "WARM_WATER",
+        "value": "WarmWater"
+      },
+      {
+        "name": "DIESEL",
+        "value": "Diesel"
+      },
+      {
+        "name": "OIL",
+        "value": "Oil"
+      },
+      {
+        "name": "PELLETS",
+        "value": "Pellets"
+      },
+      {
+        "name": "WOOD_CHIPS",
+        "value": "WoodChips"
+      },
+      {
+        "name": "DISTRICTHEATING",
+        "value": "DistrictHeating"
+      },
+      {
+        "name": "ON_OFF",
+        "value": "OnOff"
+      },
+      {
+        "name": "ACTIVATION",
+        "value": "Activation"
+      }
+    ],
+    "LpgDataAcquisitionMode": [
+      {
+        "name": "USE_PREDEFINED_PROFILE",
+        "value": "use_predefined_profile"
+      },
+      {
+        "name": "USE_UTSP",
+        "value": "use_utsp"
+      },
+      {
+        "name": "USE_LOCAL_LPG",
+        "value": "use_local_lpg"
+      }
+    ],
+    "PVLibModuleAndInverterEnum": [
+      {
+        "name": "SANDIA_MODULE_DATABASE",
+        "value": 1
+      },
+      {
+        "name": "SANDIA_INVERTER_DATABASE",
+        "value": 2
+      },
+      {
+        "name": "CEC_MODULE_DATABASE",
+        "value": 3
+      },
+      {
+        "name": "CEC_INVERTER_DATABASE",
+        "value": 4
+      },
+      {
+        "name": "ANTON_DRIESSE_INVERTER_DATABASE",
+        "value": 5
+      }
+    ],
+    "SimpleHeatSourceType": [
+      {
+        "name": "CONSTANT_THERMAL_POWER",
+        "value": "CONSTANT_THERMAL_POWER"
+      },
+      {
+        "name": "CONSTANT_TEMPERATURE",
+        "value": "CONSTANT_TEMPERATURE"
+      },
+      {
+        "name": "NEAR_SURFACE_BRINE_TEMPERATURE",
+        "value": "NEAR_SURFACE_BRINE_TEMPERATURE"
+      }
+    ],
+    "Units": [
+      {
+        "name": "ANY",
+        "value": "-"
+      },
+      {
+        "name": "PERCENT",
+        "value": "%"
+      },
+      {
+        "name": "WATT",
+        "value": "W"
+      },
+      {
+        "name": "KILOWATT",
+        "value": "kW"
+      },
+      {
+        "name": "KWH_PER_TIMESTEP",
+        "value": "kWh per timestep"
+      },
+      {
+        "name": "WATT_PER_METER",
+        "value": "W per meter"
+      },
+      {
+        "name": "WATT_PER_SQUARE_METER",
+        "value": "W per square meter"
+      },
+      {
+        "name": "WATT_HOUR_PER_SQUARE_METER",
+        "value": "Wh per square meter"
+      },
+      {
+        "name": "METER_PER_SECOND",
+        "value": "m/s"
+      },
+      {
+        "name": "METER",
+        "value": "m"
+      },
+      {
+        "name": "SQUARE_METER",
+        "value": "m2"
+      },
+      {
+        "name": "WATT_HOUR",
+        "value": "Wh"
+      },
+      {
+        "name": "KWH",
+        "value": "kWh"
+      },
+      {
+        "name": "JOULE",
+        "value": "J"
+      },
+      {
+        "name": "KILOJOULE",
+        "value": "kJ"
+      },
+      {
+        "name": "LITER",
+        "value": "L"
+      },
+      {
+        "name": "CUBICMETERS",
+        "value": "m3"
+      },
+      {
+        "name": "LITER_PER_TIMESTEP",
+        "value": "Liter per timestep"
+      },
+      {
+        "name": "CUBICMETERS_PER_SECOND",
+        "value": "Cubic meters per second"
+      },
+      {
+        "name": "KG",
+        "value": "kg"
+      },
+      {
+        "name": "KG_PER_SEC",
+        "value": "kg/s"
+      },
+      {
+        "name": "CELSIUS",
+        "value": "°C"
+      },
+      {
+        "name": "KELVIN",
+        "value": "K"
+      },
+      {
+        "name": "DEGREES",
+        "value": "Degrees"
+      },
+      {
+        "name": "BAR",
+        "value": "bar"
+      },
+      {
+        "name": "PASCAL",
+        "value": "Pa"
+      },
+      {
+        "name": "SECONDS",
+        "value": "s"
+      },
+      {
+        "name": "HOURS",
+        "value": "h"
+      },
+      {
+        "name": "TIMESTEPS",
+        "value": "timesteps"
+      },
+      {
+        "name": "YEARS",
+        "value": "years"
+      },
+      {
+        "name": "EUR_PER_KWH",
+        "value": "Euros per kWh"
+      },
+      {
+        "name": "EURO",
+        "value": "Euro"
+      },
+      {
+        "name": "BINARY",
+        "value": "binary"
+      }
+    ],
+    "WeatherDataSourceEnum": [
+      {
+        "name": "DWD_TRY",
+        "value": 1
+      },
+      {
+        "name": "NSRDB",
+        "value": 2
+      },
+      {
+        "name": "NSRDB_15MIN",
+        "value": 3
+      },
+      {
+        "name": "DWD_10MIN",
+        "value": 4
+      },
+      {
+        "name": "ERA5",
+        "value": 5
+      },
+      {
+        "name": "DWD_15MIN",
+        "value": 6
+      }
+    ]
+  },
+  "generated_at": "2026-08-01T08:06:42.504544"
 }

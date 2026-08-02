@@ -2,23 +2,9 @@ import { useState, useMemo } from 'react'
 import { useEditorStore } from '../store'
 import { isPortActive, portLoadType } from '../io/ports'
 import { supportsAutoConnect } from '../io/createNode'
+import { enumOptionsFor, optionKey, typedEnumValue } from '../io/configEnums'
 import DynamicPortsPanel from './DynamicPortsPanel'
 import type { CatalogDb, ConfigField, EnumDb } from '../types'
-
-// ── Enum value lookup ──────────────────────────────────────────────────────────
-function getEnumValues(enumClass: string | null, enumDb: EnumDb): string[] | null {
-  if (!enumClass) return null
-  const map: Record<string, string[]> = {
-    Locations: enumDb.locations,
-    BuildingCodes: enumDb.building_codes,
-    LoadTypes: enumDb.load_types,
-    Units: enumDb.units,
-    ComponentType: enumDb.component_types,
-    InandOutputType: enumDb.in_and_output_types,
-    PostProcessingOptions: enumDb.post_processing_options.map((o) => o.value),
-  }
-  return map[enumClass] ?? null
-}
 
 // ── Catalog option lookup ──────────────────────────────────────────────────────
 type CatalogOption = { label: string; value: string }
@@ -144,7 +130,7 @@ function FieldInput({
   onChange: (name: string, val: unknown) => void
 }) {
   const strVal = value === null || value === undefined ? '' : String(value)
-  const enumValues = getEnumValues(field.enum_class, enumDb)
+  const enumOptions = enumOptionsFor(field.enum_class, enumDb)
   const isBool = field.type.includes('bool')
   const isNum = field.type.includes('int') || field.type.includes('float')
 
@@ -163,17 +149,23 @@ function FieldInput({
     )
   }
 
-  if (enumValues) {
+  if (enumOptions) {
+    // A stored value that is not a member gets an option of its own, so the field shows what
+    // the scenario actually holds instead of silently displaying the first member.
+    const isKnown = strVal === '' || enumOptions.some((o) => optionKey(o.value) === strVal)
     return (
       <select
         className={base}
         value={strVal}
-        onChange={(e) => onChange(field.name, e.target.value)}
+        // Never `e.target.value` — that is a string, and an enum whose members are numbers
+        // must stay numeric (see io/configEnums.ts).
+        onChange={(e) => onChange(field.name, typedEnumValue(e.target.value, enumOptions))}
       >
         {field.is_optional && <option value="">— none —</option>}
-        {enumValues.map((v) => (
-          <option key={v} value={v}>
-            {v}
+        {!isKnown && <option value={strVal}>{strVal} (not a valid value)</option>}
+        {enumOptions.map((o) => (
+          <option key={optionKey(o.value)} value={optionKey(o.value)}>
+            {o.label}
           </option>
         ))}
       </select>

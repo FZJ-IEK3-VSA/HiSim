@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-31T16:31:37.488665",
+  "generated_at": "2026-08-01T00:44:21.633887",
   "components": [
     {
       "component_full_classname": "hisim.components.building.Building",
@@ -3928,6 +3928,18 @@
               "Consumption with EMS control"
             ],
             "source_weight": 3
+          }
+        ],
+        "TanklessWaterHeater": [
+          {
+            "source_component_field_name": "ElectricOutputDhwPower",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "ElectricBoilerDHW",
+              "Consumption without any EMS control"
+            ],
+            "source_weight": 999
           }
         ],
         "SolarThermalSystem": [
@@ -11112,6 +11124,193 @@
       "conditional_flags": []
     },
     {
+      "component_full_classname": "hisim.components.generic_tankless_water_heater.TanklessWaterHeater",
+      "config_full_classname": "hisim.components.generic_tankless_water_heater.TanklessWaterHeaterConfig",
+      "display_name": "Tankless electric water heater (Durchlauferhitzer).",
+      "category": "Heating",
+      "is_dynamic": false,
+      "default_config": {
+        "building_name": "BUI1",
+        "name": "TanklessWaterHeater",
+        "maximum_electric_power_in_watt": 21000.0,
+        "efficiency": 0.99,
+        "set_water_temperature_in_celsius": 40.0,
+        "cold_water_temperature_in_celsius": 10.0,
+        "device_co2_footprint_in_kg": null,
+        "investment_costs_in_euro": null,
+        "lifetime_in_years": null,
+        "maintenance_costs_in_euro_per_year": null,
+        "subsidy_as_percentage_of_investment_costs": null
+      },
+      "config_fields": [
+        {
+          "name": "building_name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "BUI1"
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "is_optional": false,
+          "enum_class": null,
+          "default": "TanklessWaterHeater"
+        },
+        {
+          "name": "maximum_electric_power_in_watt",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 21000.0
+        },
+        {
+          "name": "efficiency",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 0.99
+        },
+        {
+          "name": "set_water_temperature_in_celsius",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 40.0
+        },
+        {
+          "name": "cold_water_temperature_in_celsius",
+          "type": "float",
+          "is_optional": false,
+          "enum_class": null,
+          "default": 10.0
+        },
+        {
+          "name": "device_co2_footprint_in_kg",
+          "type": "Optional[float]",
+          "is_optional": true,
+          "enum_class": null,
+          "default": null
+        },
+        {
+          "name": "investment_costs_in_euro",
+          "type": "Optional[float]",
+          "is_optional": true,
+          "enum_class": null,
+          "default": null
+        },
+        {
+          "name": "lifetime_in_years",
+          "type": "Optional[float]",
+          "is_optional": true,
+          "enum_class": null,
+          "default": null
+        },
+        {
+          "name": "maintenance_costs_in_euro_per_year",
+          "type": "Optional[float]",
+          "is_optional": true,
+          "enum_class": null,
+          "default": null
+        },
+        {
+          "name": "subsidy_as_percentage_of_investment_costs",
+          "type": "Optional[float]",
+          "is_optional": true,
+          "enum_class": null,
+          "default": null
+        }
+      ],
+      "input_ports": [
+        {
+          "field_name": "WaterConsumption",
+          "load_type": "WarmWater",
+          "unit": "L",
+          "mandatory": true
+        },
+        {
+          "field_name": "ColdWaterTemperature",
+          "load_type": "Temperature",
+          "unit": "°C",
+          "mandatory": false
+        }
+      ],
+      "output_ports": [
+        {
+          "field_name": "ThermalOutputDhwPower",
+          "load_type": "WarmWater",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Thermal power delivered to the domestic hot water draw."
+        },
+        {
+          "field_name": "ThermalOutputDhwEnergy",
+          "load_type": "WarmWater",
+          "unit": "Wh",
+          "postprocessing_flag": [
+            "DISPLAY_IN_WEBTOOL"
+          ],
+          "sankey_flow_direction": null,
+          "output_description": "Thermal energy delivered to the domestic hot water draw."
+        },
+        {
+          "field_name": "ElectricOutputDhwPower",
+          "load_type": "Electricity",
+          "unit": "W",
+          "postprocessing_flag": [
+            "Consumption without any EMS control"
+          ],
+          "sankey_flow_direction": null,
+          "output_description": "Electric power drawn for domestic hot water preparation."
+        },
+        {
+          "field_name": "ElectricOutputDhwEnergy",
+          "load_type": "Electricity",
+          "unit": "Wh",
+          "postprocessing_flag": [
+            "DISPLAY_IN_WEBTOOL"
+          ],
+          "sankey_flow_direction": null,
+          "output_description": "Electric energy drawn for domestic hot water preparation."
+        },
+        {
+          "field_name": "WaterOutputDhwTemperature",
+          "load_type": "Water",
+          "unit": "°C",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Temperature of the delivered domestic hot water. Equals the set temperature unless the rated power is insufficient."
+        },
+        {
+          "field_name": "WaterOutputDhwMassFlowRate",
+          "load_type": "WarmWater",
+          "unit": "kg/s",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Mass flow rate of the domestic hot water draw."
+        },
+        {
+          "field_name": "UnmetThermalDemandPower",
+          "load_type": "WarmWater",
+          "unit": "W",
+          "postprocessing_flag": null,
+          "sankey_flow_direction": null,
+          "output_description": "Thermal power the draw would have needed beyond the rated electric power. Non-zero means the device is undersized for that timestep."
+        }
+      ],
+      "default_connections": {
+        "UtspLpgConnector": [
+          {
+            "target_input_name": "WaterConsumption",
+            "source_output_name": "WaterConsumption"
+          }
+        ]
+      },
+      "dynamic_default_connections": {},
+      "conditional_flags": []
+    },
+    {
       "component_full_classname": "hisim.components.electricity_meter.ElectricityMeter",
       "config_full_classname": "hisim.components.electricity_meter.ElectricityMeterConfig",
       "display_name": "Electricity meter class.",
@@ -11362,6 +11561,18 @@
             ],
             "source_weight": 999
           },
+          {
+            "source_component_field_name": "ElectricOutputDhwPower",
+            "source_load_type": "Electricity",
+            "source_unit": "W",
+            "source_tags": [
+              "ElectricBoilerDHW",
+              "Consumption without any EMS control"
+            ],
+            "source_weight": 999
+          }
+        ],
+        "TanklessWaterHeater": [
           {
             "source_component_field_name": "ElectricOutputDhwPower",
             "source_load_type": "Electricity",

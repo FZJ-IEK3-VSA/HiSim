@@ -28,7 +28,7 @@ export default function DynamicPortsPanel({ node }: { node: HiSimNode }) {
 
   const inputs = (node.data.dynamicInputs as DynamicInputPort[] | undefined) ?? []
   const outputs = (node.data.dynamicOutputs as DynamicOutputPort[] | undefined) ?? []
-  const inputOptions = dynamicInputOptions(node, nodes)
+  const inputOptions = dynamicInputOptions(node, nodes, usageDb)
   const outputOptions = dynamicOutputOptions(node, nodes, usageDb)
   const auto = node.data.connectAutomatically
 
@@ -85,6 +85,19 @@ export default function DynamicPortsPanel({ node }: { node: HiSimNode }) {
               <span className="truncate text-gray-500" title={option.sourceOutput}>
                 {option.sourceNodeName}: {option.sourceOutput}
               </span>
+              {option.scenarios !== undefined && (
+                <span
+                  className="shrink-0 text-[9px] px-1 rounded bg-amber-50 text-amber-700"
+                  title={
+                    'Not declared by this component — mined from the shipped scenarios, where ' +
+                    `${option.scenarios} of them wire it by hand. Adding it is a deliberate ` +
+                    'choice: an aggregate like the EMS total replaces the individual consumers ' +
+                    'rather than adding to them.'
+                  }
+                >
+                  {option.scenarios}×
+                </span>
+              )}
               <button
                 className="ml-auto shrink-0 px-1.5 rounded bg-blue-50 text-blue-700 hover:bg-blue-100"
                 title={`Weight ${option.connection.weight} · ${option.connection.tags.join(', ')}`}

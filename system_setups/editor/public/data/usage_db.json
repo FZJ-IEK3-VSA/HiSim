@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-31T17:34:24.882965",
+  "generated_at": "2026-08-01T00:44:21.633887",
   "scenario_count": 23,
   "components": {
     "hisim.components.advanced_battery_bslib.Battery": {
@@ -936,6 +936,59 @@
           }
         ],
         "scenarios": 1
+      }
+    ]
+  },
+  "dynamic_inputs": {
+    "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem": [
+      {
+        "source_component_class": "hisim.components.advanced_fuel_cell.CHP",
+        "source_component_field_name": "ElectricityOutput",
+        "source_load_type": "Electricity",
+        "source_unit": "W",
+        "source_tags": [
+          "FuelCell",
+          "Consumption with EMS control"
+        ],
+        "source_weight": 3,
+        "scenarios": 2
+      },
+      {
+        "source_component_class": "hisim.components.controller_l1_generic_ev_charge.L1Controller",
+        "source_component_field_name": "BatteryChargingPowerToEMS",
+        "source_load_type": "Electricity",
+        "source_unit": "W",
+        "source_tags": [
+          "CarBattery",
+          "Consumption with EMS control"
+        ],
+        "source_weight": 5,
+        "scenarios": 1
+      }
+    ],
+    "hisim.components.electricity_meter.ElectricityMeter": [
+      {
+        "source_component_class": "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
+        "source_component_field_name": "TotalElectricityToOrFromGrid",
+        "source_load_type": "Electricity",
+        "source_unit": "W",
+        "source_tags": [
+          "ElectricityProduction"
+        ],
+        "source_weight": 999,
+        "scenarios": 11
+      },
+      {
+        "source_component_class": "hisim.components.generic_heat_pump.GenericHeatPump",
+        "source_component_field_name": "ElectricityOutput",
+        "source_load_type": "Electricity",
+        "source_unit": "W",
+        "source_tags": [
+          "HeatPump",
+          "Consumption without any EMS control"
+        ],
+        "source_weight": 999,
+        "scenarios": 3
       }
     ]
   }

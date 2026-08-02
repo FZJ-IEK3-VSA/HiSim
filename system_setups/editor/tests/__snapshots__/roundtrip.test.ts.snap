@@ -223,3 +223,13 @@ exports[`scenario round-trip (Open JSON → Save JSON) > household_wood_chips_bu
 exports[`scenario round-trip (Open JSON → Save JSON) > simple_system_setup_one.scenario.json > produces only the reviewed load-type mismatches 1`] = `[]`;
 
 exports[`scenario round-trip (Open JSON → Save JSON) > simple_system_setup_two.scenario.json > produces only the reviewed load-type mismatches 1`] = `[]`;
+
+exports[`scenario round-trip (Open JSON → Save JSON) > valentin_sfh.scenario.json > produces only the reviewed load-type mismatches 1`] = `
+[
+  "HeatDistributionSystem.WaterMassFlowHDS → SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem: load type mismatch (Volume ≠ WarmWater).",
+  "HeatDistributionSystem.WaterTemperatureOutput → SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution: load type mismatch (Water ≠ Temperature).",
+  "OldOilBoiler.WaterOutputMassFlowSh → SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator: load type mismatch (Water ≠ WarmWater).",
+  "OldOilBoiler.WaterOutputTemperatureSh → SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator: load type mismatch (Water ≠ Temperature).",
+  "SimpleHotWaterStorage.WaterTemperatureToHeatGenerator → ModulatingBoilerController.WaterTemperatureInputFromWaterStorage: load type mismatch (Water ≠ Temperature).",
+]
+`;

@@ -55,6 +55,12 @@ Generated from `hisim/loadtypes.py` by the same script. Exported as `enum_db.jso
 - `ComponentType` tags and `InandOutputType` tags — for dynamic input matching display
 - `BuildingCodes` — dropdown values for the Building component
 - `Locations` — dropdown values for Weather and PV
+- `config_enums` — every enum class a component *config field* is typed with, collected
+  during introspection rather than named in code, so component-local enums
+  (`BoilerType`, `WeatherDataSourceEnum`, …) get a dropdown instead of a free-text box.
+  Member **values** are emitted with their JSON types intact: an enum whose members are
+  numbers must reach HiSim as a number, since `BoilerType("2")` raises where
+  `BoilerType(2)` loads.
 
 ### 3. Simulation Presets *(auto-discovered)*
 
@@ -197,7 +203,9 @@ Context-sensitive; shows the selected component's config fields as a form:
 - **Number fields**: number input with unit hint
 - **Boolean fields**: toggle switch
 - **Enum fields**: dropdown populated from the appropriate registry (e.g. `BuildingCodes`,
-  `Locations`, household profiles)
+  `Locations`, household profiles). What is written into the config is the enum member's
+  own value, taken from `config_enums` — *not* the string the `<select>` element hands
+  back, which would turn a number-valued member into text that HiSim cannot load
 - **`connect_automatically` toggle**: controls whether the simulator auto-wires defaults
   at runtime
 - **Inputs / Outputs tabs**: for dynamic components, shows the port list with add/remove
@@ -231,6 +239,9 @@ Triggered by the Validate button or before export:
    unconnected non-mandatory inputs
 7. `connect_automatically: true` on a component HiSim would refuse it for — no default
    connections declared, or none whose source is on the canvas (see *Dynamic ports*)
+8. Enum-typed config values that are not exactly one of the enum's members, *type
+   included* — a scenario carrying `"2"` where `BoilerType` expects `2` looks correct
+   everywhere except at load time
 
 ### Freshness
 

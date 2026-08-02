@@ -62,7 +62,7 @@ python tools/generate_component_db.py
 
 Output files (committed to the repo so the editor works without running the script):
 - `system_setups/editor/public/data/component_db.json` — one entry per discovered component (82 at the last regeneration) with inputs, outputs, config fields, and default connections
-- `system_setups/editor/public/data/enum_db.json` — all LoadTypes, Units, ComponentType, etc. enums
+- `system_setups/editor/public/data/enum_db.json` — all LoadTypes, Units, ComponentType, etc. enums, plus `config_enums`: the members (names *and* typed values) of every enum a component config field is declared with
 - `system_setups/editor/public/data/catalog_db.json` — dropdown data (weather datasets, PV modules and inverters, heat pump models)
 - `system_setups/editor/public/data/usage_db.json` — how often each component appears in the shipped `system_setups/*.scenario.json`, alongside which others, and which dynamic output channels they declare; drives *Suggest components* and the dynamic-port offers
 
@@ -119,7 +119,7 @@ The Inspector shows **scenario metadata** (name, description) when nothing is se
 1. **`New`** — clears the canvas and resets the scenario name.
 2. **Set the scenario name and description** in the Inspector (nothing selected). The name becomes the downloaded filename, so `Basic Household` → `basic_household.scenario.json`.
 3. **Drag components** from the palette onto the canvas. The search box filters by display name and category; the `dyn` badge marks a `DynamicComponent` (variable number of ports, resolved at runtime).
-4. **Configure each component**: click its card, then fill in the Inspector. Fields marked `*` are required. The **Instance name** is what connections refer to in the JSON — it must be unique, and it stays in sync with the config's `name` field.
+4. **Configure each component**: click its card, then fill in the Inspector. Fields marked `*` are required. The **Instance name** is what connections refer to in the JSON — it must be unique, and it stays in sync with the config's `name` field. Enum-typed fields are dropdowns listing the actual members of the Python enum; the value written to the JSON is the member's own, so a number-valued enum such as `BoilerType` stays a number (as `"2"` it would be rejected when HiSim loads the file).
 5. **Wire the ports**: drag from an output handle (right edge of a card) to an input handle (left edge). A drop is refused if the units don't match — a `W` output cannot be dropped on a `°C` input. HiSim passes the raw number straight down the channel and never checks it, so nothing would catch such a wire at runtime; the editor blocks it here instead. Unitless ports (`-`, i.e. `Units.ANY`) accept anything.
 6. **`Auto-connect all`** wires up everything the components declare as default connections, wherever exactly one matching source sits on the canvas. These edges are drawn **dashed**. Ports it could not resolve (no candidate, or several) are flagged `⚠` on the card and listed in the Inspector — wire those by hand. To do just one component, right-click its card → **Auto-connect this**.
 7. **`Suggest components`** — when you are not sure what the system still needs, this works it out from what is already on the canvas. See [below](#suggest-components).
@@ -145,7 +145,7 @@ The Inspector shows **scenario metadata** (name, description) when nothing is se
 | | Meaning | Examples |
 |---|---|---|
 | ✗ **error** | The scenario will not run correctly | mandatory input not connected · duplicate component name · edge attached to a port that does not exist |
-| ⚠ **warning** | Probably wrong, will run anyway | unit mismatch across an edge (a `W` output feeding a `°C` input) · required config field left empty |
+| ⚠ **warning** | Probably wrong, will run anyway | unit mismatch across an edge (a `W` output feeding a `°C` input) · required config field left empty · an enum config value of the wrong JSON type (`"2"` where `BoilerType` expects `2`) |
 | ℹ **info** | Noise-level, usually fine | optional input not connected · load-type mismatch across an edge (a labelling inconsistency HiSim ignores — the shipped setups are full of them) |
 
 Infos are collapsible so the two severities that matter stay readable.
@@ -266,6 +266,7 @@ system_setups/editor/
 │   │   ├── dynamicPorts.ts     # ports a DynamicComponent grows at run time
 │   │   ├── suggest.ts          # works out which components are missing
 │   │   ├── createNode.ts       # new-node factory (palette drop and suggestions)
+│   │   ├── configEnums.ts      # enum config fields — options and their JSON types
 │   │   ├── validate.ts         # error / warning / info checks
 │   │   ├── layout.ts           # left-to-right DAG auto-layout
 │   │   └── ports.ts            # port type + conditional-port resolution

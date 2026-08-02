@@ -283,8 +283,8 @@ export const useEditorStore = create<EditorState & EditorActions>()((set, get) =
   setValidationMessages: (messages) => set({ validationMessages: messages }),
 
   runValidation: () => {
-    const { nodes, edges, graphRevision } = get()
-    const { errors, warnings, infos } = validateScenario(nodes, edges)
+    const { nodes, edges, graphRevision, enumDb } = get()
+    const { errors, warnings, infos } = validateScenario(nodes, edges, enumDb)
     set({
       validationErrors: errors,
       validationWarnings: warnings,

@@ -1,6 +1,7 @@
 import type { Edge } from '@xyflow/react'
 import type { HiSimNode } from '../store'
-import type { DynamicInputPort, DynamicOutputPort } from '../types'
+import type { DynamicInputPort, DynamicOutputPort, EnumDb } from '../types'
+import { enumOptionsFor, isExactEnumValue } from './configEnums'
 import { activeInputPorts, portLoadType, portUnit } from './ports'
 
 export interface ValidationResult {
@@ -9,7 +10,16 @@ export interface ValidationResult {
   infos: string[]
 }
 
-export function validateScenario(nodes: HiSimNode[], edges: Edge[]): ValidationResult {
+/**
+ * @param enumDb Optional. Supplied by the app so enum-typed config values can be checked
+ *   against the members they must be — the one defect that is invisible on the canvas and
+ *   only shows up when HiSim refuses to load the file.
+ */
+export function validateScenario(
+  nodes: HiSimNode[],
+  edges: Edge[],
+  enumDb?: EnumDb | null,
+): ValidationResult {
   const errors: string[] = []
   const warnings: string[] = []
   const infos: string[] = []
@@ -193,6 +203,35 @@ export function validateScenario(nodes: HiSimNode[], edges: Edge[]): ValidationR
       if (isEmpty(node.data.config[field.name])) {
         warnings.push(
           `${node.data.instanceName}: required config field "${field.name}" is empty.`,
+        )
+      }
+    }
+  }
+
+  // ── 8: Enum-typed config values ───────────────────────────────────────────
+  //
+  // HiSim deserialises a config straight into its dataclass, so an enum field has to carry a
+  // member value in the member's own JSON type. `BoilerType.CONDENSING` is the number 2 and
+  // `BoilerType("2")` raises — a scenario written with the string reaches the simulation
+  // looking fine and dies on load. Only checked when the enum registry is available.
+  if (enumDb) {
+    for (const node of nodes) {
+      for (const field of node.data.entry.config_fields) {
+        const options = enumOptionsFor(field.enum_class, enumDb)
+        if (!options) continue
+        const value = node.data.config[field.name]
+        if (value === null || value === undefined || value === '') continue
+        if (isExactEnumValue(value, options)) continue
+
+        // Same text, wrong type — the failure this check exists for.
+        const sameText = options.find((o) => String(o.value) === String(value))
+        warnings.push(
+          sameText
+            ? `${node.data.instanceName}: config field "${field.name}" is ` +
+              `${JSON.stringify(value)} but ${field.enum_class} expects ` +
+              `${JSON.stringify(sameText.value)} — HiSim will not load it.`
+            : `${node.data.instanceName}: config field "${field.name}" is ` +
+              `${JSON.stringify(value)}, which is not a ${field.enum_class} value.`,
         )
       }
     }

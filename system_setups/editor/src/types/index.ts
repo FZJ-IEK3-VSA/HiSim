@@ -99,6 +99,12 @@ export interface ComponentDb {
   default_connection_issues?: DefaultConnectionIssue[]
 }
 
+/** One member of an enum a config field is typed with. `value` keeps its JSON type. */
+export interface ConfigEnumMember {
+  name: string
+  value: string | number | boolean
+}
+
 export interface EnumDb {
   load_types: string[]
   units: string[]
@@ -107,6 +113,14 @@ export interface EnumDb {
   building_codes: string[]
   locations: string[]
   post_processing_options: Array<{ name: string; value: string }>
+  /**
+   * Every enum class named by a component config field's type hint → its members.
+   *
+   * The values are what matters: an enum whose members are numbers (`BoilerType.CONDENSING
+   * = 2`) has to reach HiSim as `2`, not `"2"` — `BoilerType("2")` raises. Anything the
+   * editor writes into a config comes from here, types intact.
+   */
+  config_enums: Record<string, ConfigEnumMember[]>
   generated_at: string
 }
 
@@ -192,12 +206,38 @@ export interface DynamicOutputDeclaration {
   scenarios: number
 }
 
+/**
+ * A dynamic *input* port the shipped scenarios declare on a component, which nothing in
+ * HiSim declares for it.
+ *
+ * The mirror of `DynamicOutputDeclaration`, and blind in the same way: a dynamic component
+ * grows an input automatically for every class in its `dynamic_default_connections`, but
+ * some wiring only ever exists as a hand-written `add_component_input_and_connect` call in a
+ * Python setup. The canonical case is the ElectricityMeter reading the EMS's
+ * `TotalElectricityToOrFromGrid`: with an EMS present the meter must read that aggregate
+ * *instead of* the individual consumers, or the household load is counted twice — an
+ * either/or `dynamic_default_connections` cannot express, which is why it is not declared
+ * there. Only pairs the registry does not already cover appear here.
+ */
+export interface DynamicInputDeclaration {
+  source_component_class: string
+  source_component_field_name: string
+  source_load_type: string
+  source_unit: string
+  source_tags: string[]
+  source_weight: number
+  /** Number of shipped scenarios declaring it. */
+  scenarios: number
+}
+
 export interface UsageDb {
   generated_at: string
   scenario_count: number
   components: Record<string, UsageEntry>
   /** component classname → dynamic output ports the shipped scenarios declare on it. */
   dynamic_outputs: Record<string, DynamicOutputDeclaration[]>
+  /** component classname → dynamic input ports the shipped scenarios declare on it. */
+  dynamic_inputs: Record<string, DynamicInputDeclaration[]>
 }
 
 // ── Domain catalogs ──────────────────────────────────────────────────────────

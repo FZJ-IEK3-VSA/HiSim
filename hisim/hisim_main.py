@@ -148,7 +148,14 @@ def initialize_from_json(
     sim_params_data['multiple_buildings'] = scenario_data.get('multiple_buildings', False)
     sim_params_data['start_date'] = datetime.fromisoformat(sim_params_data['start_date'])
     sim_params_data['end_date'] = datetime.fromisoformat(sim_params_data['end_date'])
-    sim_params_data['post_processing_options'] = [PostProcessingOptions[option] for option in sim_params_data.get('post_processing_options', [])]
+    requested_options = sim_params_data.get('post_processing_options', [])
+    unknown_options = [option for option in requested_options if option not in PostProcessingOptions.__members__]
+    if unknown_options:
+        raise ValueError(
+            f"Unknown post processing option(s) {unknown_options} in {simulation_parameters}. "
+            f"Valid options are: {sorted(PostProcessingOptions.__members__)}"
+        )
+    sim_params_data['post_processing_options'] = [PostProcessingOptions[option] for option in requested_options]
     sim_params = SimulationParameters(**sim_params_data)
 
     my_sim = _build_simulator_from_scenario(scenario_data, path_to_module, sim_params)

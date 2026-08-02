@@ -308,6 +308,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
         self.add_dynamic_default_connections(self.get_default_connections_from_electric_heater())
+        self.add_dynamic_default_connections(self.get_default_connections_from_tankless_water_heater())
         self.add_dynamic_default_connections(self.get_default_connections_from_solar_thermal_system())
         # self.add_dynamic_default_connections(self.get_default_connections_from_car_battery())
 
@@ -574,6 +575,44 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             source_unit=lt.Units.WATT,
             output_description="Target electricity for electric heater domestic hot water.",
         )
+        return dynamic_connections
+
+    def get_default_connections_from_tankless_water_heater(
+        self,
+    ):
+        """Get tankless water heater default connections.
+
+        Unlike the other heat generators the tankless water heater is registered as an
+        *uncontrolled* consumer and gets no ELECTRICITY_TARGET output back: a
+        Durchlauferhitzer fires the instant a tap is opened and has no storage to shift
+        its demand into, so there is nothing for the EMS to dispatch. Its consumption is
+        therefore subtracted from the production up front when the surplus is computed.
+
+        The source weight has to stay 999 for that: any other weight would put the input
+        into the target-matching loop of sort_source_weights_and_components, which raises
+        when a dynamic input has no matching ELECTRICITY_TARGET output.
+        """
+
+        from hisim.components.generic_tankless_water_heater import (  # pylint: disable=import-outside-toplevel
+            TanklessWaterHeater,
+        )
+
+        dynamic_connections = []
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=TanklessWaterHeater,
+                source_class_name=TanklessWaterHeater.get_classname(),
+                source_component_field_name=TanklessWaterHeater.ElectricOutputDhwPower,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.ELECTRIC_HEATING_DHW,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                ],
+                source_weight=999,
+            )
+        )
+
         return dynamic_connections
 
     def get_default_connections_from_advanced_battery(

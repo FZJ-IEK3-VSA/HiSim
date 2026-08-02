@@ -79,6 +79,7 @@ _CATEGORY_MAP: Dict[str, str] = {
     "generic_heat_water_storage": "Heating",
     "simple_water_storage": "Heating",
     "generic_electric_heating": "Heating",
+    "generic_tankless_water_heater": "Heating",
     "idealized_electric_heater": "Heating",
     "generic_district_heating": "Heating",
     "solar_thermal_system": "Heating",
@@ -205,11 +206,23 @@ def _unwrap_optional(hint: Any) -> Any:
     return hint
 
 
+# Enum classes named by a config field's type hint, keyed by bare class name — the only name
+# the editor gets, since that is what ``enum_class`` records. Two different enums sharing a
+# name are therefore indistinguishable to it, so those names are collected here and dropped
+# from the database rather than resolved wrongly.
+_CONFIG_ENUMS: Dict[str, type] = {}
+_AMBIGUOUS_CONFIG_ENUMS: set = set()
+
+
 def _enum_class_name(hint: Any) -> Optional[str]:
     inner = _unwrap_optional(hint)
     try:
         if isinstance(inner, type) and issubclass(inner, enum.Enum):
-            return inner.__name__
+            name = inner.__name__
+            known = _CONFIG_ENUMS.setdefault(name, inner)
+            if known is not inner:
+                _AMBIGUOUS_CONFIG_ENUMS.add(name)
+            return name
     except TypeError:
         pass
     return None
@@ -813,7 +826,37 @@ def _build_enum_db() -> Dict:
         "post_processing_options": [
             {"name": m.name, "value": m.value} for m in PostProcessingOptions
         ],
+        "config_enums": _build_config_enums(),
     }
+
+
+def _build_config_enums() -> Dict[str, List[Dict]]:
+    """Members of every enum a component config field is typed with.
+
+    Without this the editor can only offer a dropdown for the handful of enums it names in
+    code, and every component-local enum (``BoilerType``, ``WeatherDataSourceEnum``, ...)
+    degrades to a free-text box. That is not just inconvenient: a text box yields a *string*,
+    and an enum whose members are numbers (``BoilerType.CONDENSING = 2``) then reaches HiSim
+    as ``"2"``, where ``BoilerType("2")`` raises. So the member **values** are emitted with
+    their JSON types intact and the editor writes them back unchanged.
+    """
+    enums: Dict[str, List[Dict]] = {}
+    for name, cls in sorted(_CONFIG_ENUMS.items()):
+        if name in _AMBIGUOUS_CONFIG_ENUMS:
+            print(f"  [WARN] Enum name '{name}' is used by two different classes — "
+                  f"omitted from config_enums", file=sys.stderr)
+            continue
+        members = []
+        for member in cls:
+            value = _serialize_value(member.value)
+            # A dropdown can only round-trip a scalar. Anything else (ComponentType's list
+            # members, for instance) is left out so the field stays a plain input.
+            if not isinstance(value, (str, int, float, bool)):
+                continue
+            members.append({"name": member.name, "value": value})
+        if members:
+            enums[name] = members
+    return enums
 
 
 # ---------------------------------------------------------------------------
@@ -942,6 +985,8 @@ def _build_usage_db(now: str, components: List[Dict]) -> Dict:
     scenario_count = 0
     usage: Dict[str, Dict] = {}
     dynamic_outputs: Dict[str, List[Dict]] = {}
+    dynamic_inputs: Dict[str, List[Dict]] = {}
+    declared_inputs = _declared_dynamic_inputs(components)
 
     for path in sorted(_glob.glob(os.path.join(scenario_dir, "*.scenario.json"))):
         try:
@@ -969,6 +1014,7 @@ def _build_usage_db(now: str, components: List[Dict]) -> Dict:
                     entry["companions"][other] = entry["companions"].get(other, 0) + 1
 
         _collect_dynamic_outputs(scenario, known, dynamic_outputs)
+        _collect_dynamic_inputs(scenario, known, declared_inputs, dynamic_inputs)
 
     # Sort companions by count so the editor can read them in relevance order.
     for entry in usage.values():
@@ -984,12 +1030,117 @@ def _build_usage_db(now: str, components: List[Dict]) -> Dict:
             ]
         declarations.sort(key=lambda d: (-d["scenarios"], d["source_output_name"]))
 
+    for declarations in dynamic_inputs.values():
+        declarations.sort(
+            key=lambda d: (
+                -d["scenarios"],
+                d["source_component_class"],
+                d["source_component_field_name"],
+            )
+        )
+
     return {
         "generated_at": now,
         "scenario_count": scenario_count,
         "components": dict(sorted(usage.items())),
         "dynamic_outputs": dict(sorted(dynamic_outputs.items())),
+        "dynamic_inputs": dict(sorted(dynamic_inputs.items())),
     }
+
+
+def _declared_dynamic_inputs(components: List[Dict]) -> Dict[str, set]:
+    """Map each component class to the (source class key, field) pairs it already declares.
+
+    Used to keep the mined table down to what introspection genuinely cannot supply: a
+    dynamic input covered by ``dynamic_default_connections`` is already offered by the
+    editor from the registry, so re-listing it here would only produce duplicates.
+    """
+    return {
+        comp["component_full_classname"]: {
+            (source_class_key, conn.get("source_component_field_name"))
+            for source_class_key, conns in (comp.get("dynamic_default_connections") or {}).items()
+            for conn in conns
+        }
+        for comp in components
+    }
+
+
+def _is_declared_dynamic_input(declared_for_target: set, source_class: str, field_name: str) -> bool:
+    """True when ``dynamic_default_connections`` already covers this source/field pair.
+
+    The declarations are keyed by bare class name while a scenario names the full path, so
+    the match is on the suffix — the same rule the editor uses in ``dynamic_ports.isClass``.
+    """
+    return any(
+        field == field_name and source_class.endswith(f".{source_class_key}")
+        for source_class_key, field in declared_for_target
+    )
+
+
+def _collect_dynamic_inputs(
+    scenario: Dict, known: set, declared: Dict[str, set], collected: Dict[str, List[Dict]]
+) -> None:
+    """Record the dynamic *input* ports a scenario declares that nothing in HiSim declares.
+
+    The mirror image of :func:`_collect_dynamic_outputs`, and it exists for the same reason.
+    A dynamic component grows an input automatically for every source class listed in its
+    ``dynamic_default_connections`` — but some wiring is only ever written by hand in a
+    system setup, so no amount of introspection reveals it. The canonical case is the
+    ElectricityMeter reading ``TotalElectricityToOrFromGrid`` from the EMS: every
+    ``*_building_sizer`` setup calls ``add_component_input_and_connect`` for it and then adds
+    the meter *without* ``connect_automatically``, because with an EMS present the meter must
+    read the aggregate instead of the individual consumers — wiring both would count the
+    household load twice. That either/or cannot be expressed in
+    ``dynamic_default_connections``, which is why it was never declared there.
+
+    Recording the declaration verbatim lets the editor offer it as a manual addition, with
+    the tags and source weight the shipped scenarios use, rather than asking the user to
+    invent them. Pairs already covered by the registry are skipped.
+    """
+    by_name = {
+        comp.get("configuration", {}).get("name"): comp
+        for comp in scenario.get("components", [])
+    }
+
+    for comp in scenario.get("components", []):
+        cls = comp.get("component_full_classname")
+        if cls not in known:
+            continue
+
+        for inp in comp.get("inputs", []):
+            if not inp.get("dynamic"):
+                continue
+
+            source = by_name.get(inp.get("source_object_name"))
+            source_cls = source.get("component_full_classname") if source else None
+            if source_cls not in known:
+                continue
+            field = inp.get("source_component_output")
+            if _is_declared_dynamic_input(declared.get(cls, set()), source_cls, field):
+                continue
+
+            declarations = collected.setdefault(cls, [])
+            existing = next(
+                (
+                    d
+                    for d in declarations
+                    if d["source_component_class"] == source_cls
+                    and d["source_component_field_name"] == field
+                ),
+                None,
+            )
+            if existing is None:
+                declarations.append({
+                    "source_component_class": source_cls,
+                    "source_component_field_name": field,
+                    "source_load_type": inp.get("source_load_type"),
+                    "source_unit": inp.get("source_unit"),
+                    "source_tags": inp.get("source_tags", []),
+                    "source_weight": inp.get("source_weight"),
+                    "scenarios": 1,
+                })
+            else:
+                existing["scenarios"] += 1
 
 
 def _collect_dynamic_outputs(

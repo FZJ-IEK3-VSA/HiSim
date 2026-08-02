@@ -270,6 +270,7 @@ class ElectricityMeter(DynamicComponent):
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_electric_heater())
+        self.add_dynamic_default_connections(self.get_default_connections_from_tankless_water_heater())
         self.add_dynamic_default_connections(self.get_default_connections_from_solar_thermal_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_electric_car())
 
@@ -439,6 +440,32 @@ class ElectricityMeter(DynamicComponent):
                 source_component_class=ElectricHeating,
                 source_class_name=electric_boiler_class_name,
                 source_component_field_name=ElectricHeating.ElectricOutputDhwPower,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.ELECTRIC_HEATING_DHW,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                ],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_tankless_water_heater(
+        self,
+    ) -> List[DynamicComponentConnection]:
+        """Get tankless water heater default connections."""
+
+        from hisim.components.generic_tankless_water_heater import (  # pylint: disable=import-outside-toplevel
+            TanklessWaterHeater,
+        )
+
+        dynamic_connections: List[DynamicComponentConnection] = []
+        dynamic_connections.append(
+            DynamicComponentConnection(
+                source_component_class=TanklessWaterHeater,
+                source_class_name=TanklessWaterHeater.get_classname(),
+                source_component_field_name=TanklessWaterHeater.ElectricOutputDhwPower,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[

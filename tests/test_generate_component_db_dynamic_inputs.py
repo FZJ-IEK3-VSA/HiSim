@@ -12,6 +12,9 @@ edge cases are stated rather than hoped for); the last two check the harvest tha
 shipped in ``usage_db.json``.
 """
 
+# These tests deliberately exercise the generator's private harvesting functions.
+# pylint: disable=protected-access
+
 from __future__ import annotations
 
 import importlib.util
@@ -69,9 +72,7 @@ def _collect(scenarios: list, declared: dict | None = None) -> dict:
     """Run the collector over several scenarios and return what it accumulated."""
     collected: dict = {}
     for scenario in scenarios:
-        _gen._collect_dynamic_inputs(  # pylint: disable=protected-access
-            scenario, {_METER, _EMS, _PV}, declared or {}, collected
-        )
+        _gen._collect_dynamic_inputs(scenario, {_METER, _EMS, _PV}, declared or {}, collected)
     return collected
 
 
@@ -157,7 +158,7 @@ def test_wiring_the_registry_already_declares_is_skipped() -> None:
         declared={_METER: {("PVSystem", "ElectricityOutput")}},
     )
 
-    assert collected == {}
+    assert not collected
 
 
 def test_repeated_wiring_is_counted_not_duplicated() -> None:
@@ -186,7 +187,7 @@ def test_static_inputs_are_ignored() -> None:
         )
     ])
 
-    assert collected == {}
+    assert not collected
 
 
 def test_a_source_outside_the_registry_is_ignored() -> None:
@@ -198,7 +199,7 @@ def test_a_source_outside_the_registry_is_ignored() -> None:
         )
     ])
 
-    assert collected == {}
+    assert not collected
 
 
 def test_a_dangling_source_name_is_ignored() -> None:
@@ -209,7 +210,7 @@ def test_a_dangling_source_name_is_ignored() -> None:
         )
     ])
 
-    assert collected == {}
+    assert not collected
 
 
 # ---------------------------------------------------------------------------

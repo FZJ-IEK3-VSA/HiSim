@@ -3,7 +3,7 @@
 # clean
 import importlib
 from enum import IntEnum
-from typing import List, Any, Optional, Union
+from typing import ClassVar, Dict, List, Any, Optional, Set, Tuple, Union
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -16,7 +16,9 @@ from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
+from hisim import log
 from hisim import utils
+from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
@@ -37,6 +39,32 @@ class HeatDistributionSystemType(IntEnum):
     RADIATOR = 1
     FLOORHEATING = 2
     LOW_TEMPERATURE_RADIATOR = 3
+
+
+#: Design flow and return temperature in °C, and the heat emission exponent, per system type.
+#: Taken from hplib's HeatingSystem class; the flow/return pair also fixes the design spread
+#: the circuit's water mass flow rate is sized on.
+DESIGN_TEMPERATURES_OF_HEAT_DISTRIBUTION_SYSTEM: Dict[
+    HeatDistributionSystemType, Tuple[float, float, float]
+] = {
+    HeatDistributionSystemType.FLOORHEATING: (35.0, 28.0, 1.1),
+    HeatDistributionSystemType.RADIATOR: (70.0, 55.0, 1.3),
+    HeatDistributionSystemType.LOW_TEMPERATURE_RADIATOR: (55.0, 45.0, 1.2),
+}
+
+
+def get_design_temperatures_of_heat_distribution_system(
+    heat_distribution_system_type: Union["HeatDistributionSystemType", int],
+) -> Tuple[float, float, float]:
+    """Look up (max flow, max return, exponent) for a system type given as enum or plain int."""
+    try:
+        key = HeatDistributionSystemType(int(heat_distribution_system_type))
+        return DESIGN_TEMPERATURES_OF_HEAT_DISTRIBUTION_SYSTEM[key]
+    except (TypeError, ValueError, KeyError):
+        raise ValueError(
+            "Heating System Type not defined here. Check your heat distribution controller "
+            f"config or your Heating System Type class. Got: {heat_distribution_system_type!r}"
+        ) from None
 
 
 class PositionHotWaterStorageInSystemSetup(IntEnum):
@@ -68,6 +96,9 @@ class HeatDistributionConfig(cp.ConfigBase):
     def get_main_classname(cls):
         """Return the full class name of the base class."""
         return HeatDistribution.get_full_classname()
+
+    #: Sized in HeatDistribution.i_prepare_simulation from the building's design heating load.
+    auto_derived_fields: ClassVar[Set[str]] = {"water_mass_flow_rate_in_kg_per_second"}
 
     building_name: str
     name: str
@@ -382,7 +413,98 @@ class HeatDistribution(cp.Component):
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
-        pass
+        self.check_conditioned_floor_area()
+        self.size_water_mass_flow_rate_if_unset()
+
+    def check_conditioned_floor_area(self) -> None:
+        """Reject a floor area of zero here rather than dividing by it mid-run.
+
+        The pipe length, and with it the entire free-convection heat exchange, scales with the
+        conditioned floor area. At zero the pipe surface it divides by is zero too, so the run
+        dies at the first timestep with no water flowing, several call levels down and with
+        nothing but ``ZeroDivisionError: float division by zero`` to go on. Unlike the mass
+        flow rate this figure is not derived here: it is a property of the building the system
+        heats, which the person writing the scenario knows.
+        """
+        if self.absolute_conditioned_floor_area_in_m2 > 0:
+            return
+        raise ValueError(
+            f"{self.component_name}: absolute_conditioned_floor_area_in_m2 is "
+            f"{self.absolute_conditioned_floor_area_in_m2}, but the heat distribution system is sized "
+            "on it (8.8 m of pipe per m^2 of floor), so it has to be greater than zero. Set it to the "
+            "conditioned floor area this system heats — the same figure as the Building component's "
+            "absolute_conditioned_floor_area_in_m2."
+        )
+
+    def size_water_mass_flow_rate_if_unset(self) -> None:
+        """Size the circuit from the building's heating load when the config leaves it at zero.
+
+        ``water_mass_flow_rate_in_kg_per_second`` has no sensible default and nobody can be
+        expected to know it: the Python system setups pass
+        ``my_hds_controller_information.water_mass_flow_rate_in_kg_per_second``, computed from
+        the building's design heating load. A JSON scenario has no such sizing step, so the
+        field arrives as the zero it was written with — and a zero here is caught nowhere.
+        With the storage in PARALLEL position the circuit then carries no water and the
+        building is never heated, while the free-convection branch it diverts into divides by
+        the pipe surface, which is zero as well when the floor area was left unset.
+
+        So it is derived here instead, from the same figure and the same formula the setups
+        use, and loudly, because a silently invented number is worse than a missing one. Runs
+        in ``i_prepare_simulation`` rather than ``__init__`` so it cannot depend on the order
+        components were added in: every component is constructed before any is prepared.
+        """
+        if self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second:
+            return
+
+        if not SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND):
+            log.warning(
+                f"{self.component_name}: water_mass_flow_rate_in_kg_per_second is 0 and there is no "
+                "building to size it from, so the heat distribution system will not carry any water. "
+                "Set the field in the config, or add a Building component to the setup."
+            )
+            return
+
+        max_thermal_building_demand_in_watt = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
+        )
+        # Typed Optional deliberately: the dataclass declares this non-optional, but a scenario
+        # JSON can and does carry `null` here, which dataclasses_json passes through with a
+        # warning. The user's file is the only place this value comes from.
+        heating_system: Optional[Union[HeatDistributionSystemType, int]] = (
+            self.heat_distribution_system_config.heating_system
+        )
+        if heating_system is None:
+            heating_system = HeatDistributionSystemType.FLOORHEATING
+            log.warning(
+                f"{self.component_name}: heating_system is not set, assuming "
+                f"{HeatDistributionSystemType.FLOORHEATING.name} for the design temperature spread."
+            )
+        (
+            max_flow_temperature_in_celsius,
+            max_return_temperature_in_celsius,
+            _,
+        ) = get_design_temperatures_of_heat_distribution_system(heating_system)
+        temperature_difference_in_celsius = max_flow_temperature_in_celsius - max_return_temperature_in_celsius
+        specific_heat_capacity = self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+
+        water_mass_flow_rate_in_kg_per_second = round(
+            max_thermal_building_demand_in_watt / (specific_heat_capacity * temperature_difference_in_celsius), 2
+        )
+        self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = (
+            water_mass_flow_rate_in_kg_per_second
+        )
+        # Keep the config in step so report and KPIs show the figure actually simulated.
+        self.heat_distribution_system_config.water_mass_flow_rate_in_kg_per_second = (
+            water_mass_flow_rate_in_kg_per_second
+        )
+        log.warning(
+            f"{self.component_name}: water_mass_flow_rate_in_kg_per_second was 0 and has been sized to "
+            f"{water_mass_flow_rate_in_kg_per_second} kg/s = {round(max_thermal_building_demand_in_watt, 2)} W "
+            f"/ ({round(specific_heat_capacity, 1)} J/(kg*K) * {temperature_difference_in_celsius} K), from the "
+            f"building's design heating load and the {HeatDistributionSystemType(int(heating_system)).name} "
+            f"design flow/return spread ({max_flow_temperature_in_celsius}/"
+            f"{max_return_temperature_in_celsius} degC). Set the field explicitly to override."
+        )
 
     def i_save_state(self) -> None:
         """Save the current state."""
@@ -831,6 +953,9 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return HeatDistributionController.get_full_classname()
 
+    #: Taken from the building in HeatDistributionController.i_prepare_simulation.
+    auto_derived_fields: ClassVar[Set[str]] = {"heating_load_of_building_in_watt"}
+
     building_name: str
     name: str
     heating_system: Union[HeatDistributionSystemType, int]
@@ -1114,7 +1239,37 @@ class HeatDistributionController(cp.Component):
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
-        pass
+        self.take_heating_load_from_building_if_unset()
+
+    def take_heating_load_from_building_if_unset(self) -> None:
+        """Adopt the building's design heating load when the config leaves it at zero.
+
+        Like the distribution system's mass flow rate this is a figure the Python setups
+        compute (``my_building_information.max_thermal_building_demand_in_watt``) and hand
+        over, and that a JSON scenario cannot state — it follows from the building, not from
+        anything the user chooses. The controller itself only reads it through
+        HeatDistributionControllerInformation, so a zero does not break the run; it does make
+        every sizing figure derived from this config, and the reported KPIs, wrong.
+        """
+        if self.hsd_controller_config.heating_load_of_building_in_watt:
+            return
+        if not SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND):
+            log.warning(
+                f"{self.component_name}: heating_load_of_building_in_watt is 0 and there is no building "
+                "to take it from. Set the field in the config, or add a Building component to the setup."
+            )
+            return
+
+        max_thermal_building_demand_in_watt = round(
+            SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND), 2
+        )
+        self.hsd_controller_config.heating_load_of_building_in_watt = max_thermal_building_demand_in_watt
+        log.warning(
+            f"{self.component_name}: heating_load_of_building_in_watt was 0 and has been set to "
+            f"{max_thermal_building_demand_in_watt} W, the design heating load the building computes from "
+            "its TABULA building code, floor area and heating reference temperature. Set the field "
+            "explicitly to override."
+        )
 
     def i_save_state(self) -> None:
         """Save the current state."""
@@ -1400,21 +1555,15 @@ class HeatDistributionControllerInformation:
         """
 
         self.set_room_temperature_for_building_in_celsius = set_room_temperature_for_building_in_celsius
-        if self.heat_distribution_system_type == HeatDistributionSystemType.FLOORHEATING:
-            list_of_maximum_flow_and_return_temperatures_in_celsius = [35, 28]
-            exponent_factor_of_heating_distribution_system = 1.1
-
-        elif self.heat_distribution_system_type == HeatDistributionSystemType.RADIATOR:
-            list_of_maximum_flow_and_return_temperatures_in_celsius = [70, 55]
-            exponent_factor_of_heating_distribution_system = 1.3
-
-        elif self.heat_distribution_system_type == HeatDistributionSystemType.LOW_TEMPERATURE_RADIATOR:
-            list_of_maximum_flow_and_return_temperatures_in_celsius = [55, 45]
-            exponent_factor_of_heating_distribution_system = 1.2
-        else:
-            raise ValueError(
-                "Heating System Type not defined here. Check your heat distribution controller config or your Heating System Type class."
-            )
+        (
+            max_flow_temperature_in_celsius,
+            max_return_temperature_in_celsius,
+            exponent_factor_of_heating_distribution_system,
+        ) = get_design_temperatures_of_heat_distribution_system(self.heat_distribution_system_type)
+        list_of_maximum_flow_and_return_temperatures_in_celsius = [
+            max_flow_temperature_in_celsius,
+            max_return_temperature_in_celsius,
+        ]
 
         self.max_flow_temperature_in_celsius = list_of_maximum_flow_and_return_temperatures_in_celsius[0]
         self.min_flow_temperature_in_celsius = set_room_temperature_for_building_in_celsius

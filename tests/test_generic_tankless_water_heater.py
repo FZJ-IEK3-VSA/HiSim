@@ -509,7 +509,7 @@ def test_ems_sorts_the_heater_into_uncontrolled_consumption() -> None:
     (*_, consumption_uncontrolled, consumption_ems_controlled) = ems.sort_source_weights_and_components()[3:]
 
     assert len(consumption_uncontrolled) == 1
-    assert consumption_ems_controlled == []
+    assert not consumption_ems_controlled
 
 
 def test_ems_sorting_survives_the_heater_alongside_a_dispatchable_consumer() -> None:

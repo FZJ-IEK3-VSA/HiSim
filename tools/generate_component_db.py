@@ -383,10 +383,55 @@ def _find_default_config(config_class: type) -> Optional[Any]:
 # Config field metadata
 # ---------------------------------------------------------------------------
 
+def _factory_required_fields(config_class: type) -> set:
+    """Config fields that no ``get_default_*`` factory can supply a value for.
+
+    When every factory demands a value for a field, there is no default to record: the one in
+    the database is whatever ``_find_default_config`` synthesised to get the class constructed
+    (``0.0``, ``None``), and it is a placeholder, not a sensible starting value. The Python
+    system setups fill these in by hand — usually from another component — so a scenario that
+    keeps the placeholder runs on a zero that no check catches. Marking them lets the editor
+    ask for a value instead of presenting the placeholder as a default.
+    """
+    def _is_factory(obj: Any) -> bool:
+        return inspect.ismethod(obj) or inspect.isfunction(obj)
+
+    required: set = set()
+    for name in dir(config_class):
+        if "default" not in name.lower():
+            continue
+        method = getattr(config_class, name, None)
+        if not _is_factory(method):
+            continue
+        try:
+            params = inspect.signature(method).parameters.values()
+        except (TypeError, ValueError):
+            continue
+        missing = {
+            p.name for p in params
+            if p.name not in ("cls", "self") and p.default is inspect.Parameter.empty
+        }
+        # A factory that needs nothing supplies a real default for every field.
+        if not missing:
+            return set()
+        required |= missing
+    return required
+
+
 def _get_config_fields(config_class: type, default_config: Any) -> List[Dict]:
     if not dataclasses.is_dataclass(config_class):
         return []
     hints = _resolve_hints(config_class)
+    field_names = {f.name for f in dataclasses.fields(config_class)}
+    # Only fields — a factory parameter that is not one (e.g. `location_entry`) shapes the
+    # config rather than being stored in it, and there is nothing for the editor to ask for.
+    # `name` and `building_name` are excluded too: the editor always writes those itself.
+    placeholder_fields = _factory_required_fields(config_class) & field_names - {"name", "building_name"}
+    auto_derived = set(getattr(config_class, "auto_derived_fields", set()))
+    # A field whose class says zero is a real setting has a usable value already, so it is not
+    # waiting for anything (see ConfigBase.zero_is_valid_fields).
+    placeholder_fields -= set(getattr(config_class, "zero_is_valid_fields", set()))
+
     fields = []
     for f in dataclasses.fields(config_class):
         hint = hints.get(f.name)
@@ -398,6 +443,10 @@ def _get_config_fields(config_class: type, default_config: Any) -> List[Dict]:
             "is_optional": _is_optional(hint) if hint is not None else False,
             "enum_class": _enum_class_name(hint) if hint is not None else None,
             "default": _serialize_value(getattr(default_config, f.name, None)),
+            # The recorded default is a placeholder the user has to replace...
+            "must_be_set": f.name in placeholder_fields and f.name not in auto_derived,
+            # ...unless the component derives it itself, in which case leaving it alone is fine.
+            "auto_derived": f.name in auto_derived,
         })
     return fields
 

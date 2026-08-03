@@ -14,7 +14,7 @@ and as non-modulating on_off controller (which is used especially for pellet and
 # Owned
 import importlib
 from dataclasses import dataclass
-from typing import List, Any, Optional, Tuple
+from typing import ClassVar, List, Any, Optional, Set, Tuple
 from enum import Enum
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -1103,6 +1103,10 @@ class GenericBoilerControllerConfig(ConfigBase):
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
         return GenericBoilerController.get_full_classname()
+
+    #: A fully modulating boiler has no lower power limit — the modulating factory methods set
+    #: exactly zero here, so it must not be read as a value nobody filled in.
+    zero_is_valid_fields: ClassVar[Set[str]] = {"minimal_thermal_power_in_watt"}
 
     building_name: str
     name: str

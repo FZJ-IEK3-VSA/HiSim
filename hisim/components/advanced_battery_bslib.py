@@ -338,7 +338,8 @@ class Battery(Component):
             KpiTagEnumClass.BATTERY
         )
         unit = Units.KWH
-        size_of_energy_system = config.custom_battery_capacity_generic_in_kilowatt_hour * 1e-3
+        # The capacity is already in kWh, which is the unit the database factors use.
+        size_of_energy_system = config.custom_battery_capacity_generic_in_kilowatt_hour
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
         simulation_parameters=simulation_parameters,

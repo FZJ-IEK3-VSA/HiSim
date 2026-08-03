@@ -5,7 +5,7 @@ from __future__ import annotations
 # clean
 
 # Generic/Built-in
-from typing import Any, List
+from typing import Any, ClassVar, List, Set
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -13,7 +13,9 @@ from dataclasses_json import dataclass_json
 from hisim.component import Component, ComponentInput, ComponentOutput, ConfigBase
 from hisim import component as cp
 from hisim import loadtypes as lt
+from hisim import log
 from hisim.simulationparameters import SimulationParameters
+from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
 
 
 __authors__ = "Maximilian Hillen"
@@ -73,6 +75,9 @@ class HeatStorageControllerConfig(ConfigBase):
     def get_main_classname(cls):
         """Return the full class name of the base class."""
         return HeatStorageController.get_full_classname()
+
+    #: Taken from the building in HeatStorageController.i_prepare_simulation.
+    auto_derived_fields: ClassVar[Set[str]] = {"heating_load_of_building_in_watt"}
 
     building_name: str
     name: str
@@ -520,7 +525,37 @@ class HeatStorageController(cp.Component):
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
-        pass
+        self.take_heating_load_from_building_if_unset()
+
+    def take_heating_load_from_building_if_unset(self) -> None:
+        """Adopt the building's design heating load when the config leaves it at zero.
+
+        The Python system setups pass ``my_building_information.max_thermal_building_demand_in_watt``
+        here; a JSON scenario has no sizing step and cannot state a figure that follows from the
+        building rather than from any choice the user makes. At zero this controller asks the
+        storage for no heat at all, silently.
+        """
+        if self.ref_max_thermal_build_demand_in_watt:
+            return
+        if not SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND):
+            log.warning(
+                f"{self.component_name}: heating_load_of_building_in_watt is 0 and there is no building "
+                "to take it from, so no heat will be requested. Set the field in the config, or add a "
+                "Building component to the setup."
+            )
+            return
+
+        max_thermal_building_demand_in_watt = round(
+            SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND), 2
+        )
+        self.ref_max_thermal_build_demand_in_watt = max_thermal_building_demand_in_watt
+        self.heat_storage_controller_config.heating_load_of_building_in_watt = max_thermal_building_demand_in_watt
+        log.warning(
+            f"{self.component_name}: heating_load_of_building_in_watt was 0 and has been set to "
+            f"{max_thermal_building_demand_in_watt} W, the design heating load the building computes from "
+            "its TABULA building code, floor area and heating reference temperature. Set the field "
+            "explicitly to override."
+        )
 
     def build(self):
         """Build function."""

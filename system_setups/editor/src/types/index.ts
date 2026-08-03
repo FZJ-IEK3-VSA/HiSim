@@ -62,6 +62,21 @@ export interface ConfigField {
   is_optional: boolean
   enum_class: string | null
   default: unknown
+  /**
+   * The recorded `default` is a placeholder, not a value: every `get_default_*` factory of the
+   * config demands this field, so `tools/generate_component_db.py` had to invent a `0.0` /
+   * `null` just to construct the class. The Python setups fill these in — usually from another
+   * component — and a scenario that keeps the placeholder runs on a zero nothing checks
+   * (HeatDistribution's floor area divides by zero mid-simulation). The user has to supply it.
+   */
+  must_be_set?: boolean
+  /**
+   * Declared by the config class's `auto_derived_fields`: the component sizes this itself in
+   * `i_prepare_simulation` and logs how, so leaving it unset is correct rather than incomplete.
+   * These are the figures that follow from another component — a building's design heating
+   * load — which nobody could state from their own knowledge.
+   */
+  auto_derived?: boolean
 }
 
 export interface ComponentEntry {

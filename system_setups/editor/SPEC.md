@@ -242,6 +242,31 @@ Triggered by the Validate button or before export:
 8. Enum-typed config values that are not exactly one of the enum's members, *type
    included* — a scenario carrying `"2"` where `BoilerType` expects `2` looks correct
    everywhere except at load time
+9. Config fields the registry has no default for, left at their placeholder (see
+   *Fields without defaults*)
+
+### Fields without defaults
+
+Some config fields have no default at all: every `get_default_*` factory of the config
+demands a value for them, because the Python system setups compute it from another
+component — `HeatDistribution`'s conditioned floor area and design mass flow rate come off
+the building. The database generator still has to construct the config to read the
+component's ports, so it invents a `0.0` or a `null`, and that placeholder is
+indistinguishable from a default once it reaches the editor. A scenario that keeps it runs
+on a zero nothing checks: the heat distribution system divided by its own zero pipe surface
+several hundred timesteps in, reporting only `ZeroDivisionError`.
+
+The fields are therefore marked, and split by who can supply the value:
+
+| Marked | Meaning | Editor |
+|---|---|---|
+| `must_be_set` | No default, and nothing derives it. It describes the building or the installed equipment, so its owner knows it: floor area, heating system type, a boiler's rated power. | Flagged in the Inspector, and an **error** while it holds the placeholder |
+| `auto_derived` | The component sizes it itself in `i_prepare_simulation` and logs how — the config class lists these in `auto_derived_fields`. Nobody could state a circuit's design mass flow rate or a building's design heating load from their own knowledge. | Left alone, with a note saying HiSim will fill it in |
+
+A field whose config class declares it in `zero_is_valid_fields` carries neither mark: a
+fully modulating boiler really has no lower power limit, so its zero is a setting and not an
+omission. All three lists live in the Python config classes, so the editor holds no
+component knowledge of its own.
 
 ### Freshness
 

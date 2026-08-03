@@ -16,6 +16,7 @@ import pandas as pd
 from hisim import log
 from hisim import utils
 from hisim.component import ComponentOutput
+from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexDefaultsRegistry
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
@@ -59,6 +60,9 @@ class PostProcessor:
         """Runs the main post processing."""
         # Define the directory name
         log.information("Main post processing function")
+        # Capex fallbacks are collected while costs are computed and reported at the very end,
+        # so a second run in the same process must not inherit the previous one's entries.
+        CapexDefaultsRegistry.reset()
         report_image_entries: List[ReportImageEntry] = []
         # Check whether HiSim is running in a docker container
         docker_flag = os.getenv("HISIM_IN_DOCKER_CONTAINER", "false")
@@ -313,6 +317,9 @@ class PostProcessor:
         if PostProcessingOptions.WRITE_KPIS_TO_JSON in ppdt.post_processing_options:
             log.information("Write all KPIs to json file.")
             self.write_kpis_to_json_file(ppdt)
+
+        # Last, so the list of defaulted capex values is not buried in the rest of the log output.
+        CapexDefaultsRegistry.log_summary()
 
         log.information("Finished main post processing function.")
 

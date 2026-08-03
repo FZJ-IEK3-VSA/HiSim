@@ -173,8 +173,12 @@ class Simulator:
                 in self._simulation_parameters.post_processing_options
             ):
                 myerr = stsv.get_differences_for_error_msg(previous_values, self.all_outputs)
-                with open(self.iteration_logging_path, "a", encoding="utf-8") as filestream:
-                    filestream.write(myerr + "\n")
+                # Only touch the log file when there is something to report. Once the values have
+                # converged this message is empty, and reopening/appending the (monotonically
+                # growing) file once per timestep just to write a newline dominates the runtime.
+                if myerr:
+                    with open(self.iteration_logging_path, "a", encoding="utf-8") as filestream:
+                        filestream.write(myerr + "\n")
             if iterative_tries > 10:
                 force_convergence = True
             if iterative_tries > 100:

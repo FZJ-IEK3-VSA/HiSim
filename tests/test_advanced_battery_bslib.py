@@ -3,6 +3,7 @@
 import pytest
 from hisim import component as cp
 from hisim.components import advanced_battery_bslib
+from hisim.components.configuration import EmissionFactorsAndCostsForDevicesConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -181,4 +182,36 @@ def test_advanced_battery_bslib_get_cost_capex_zero_lifetime_in_cycles() -> None
     ), (
         f"Expected co2_footprint_per_simulated_period to be {expected_co2_per_simulated_period}, "
         f"got {result.device_co2_footprint_for_simulated_period_in_kg}"
+    )
+
+
+@pytest.mark.base
+def test_advanced_battery_bslib_get_cost_capex_scales_defaults_with_capacity_in_kwh() -> None:
+    """Regression test: the database factors are per kWh, so the capacity must be passed as kWh.
+
+    ``get_cost_capex`` briefly converted the capacity with ``* 1e-3`` before handing it to
+    ``compute_capex_costs_and_emissions``, a factor copied from components whose size is in
+    watt. Every config that leaves its capex fields unset — which is all shipped scenarios
+    with a battery — got an investment cost and CO2 footprint a thousand times too small.
+    """
+    capacity_in_kilowatt_hour = 10.0
+    config = advanced_battery_bslib.BatteryConfig.get_default_config()
+    config.custom_battery_capacity_generic_in_kilowatt_hour = capacity_in_kilowatt_hour
+    # Nothing may be preset, otherwise the database is never consulted.
+    assert config.investment_costs_in_euro is None
+    assert config.device_co2_footprint_in_kg is None
+
+    result = advanced_battery_bslib.Battery.get_cost_capex(
+        config=config,
+        simulation_parameters=SimulationParameters.one_day_only(2021, 60),
+    )
+
+    factors = EmissionFactorsAndCostsForDevicesConfig.get_values_for_year(
+        year=2021, device=lt.ComponentType.BATTERY, country="DE"
+    )
+    assert result.capex_investment_cost_in_euro == pytest.approx(
+        factors.investment_costs_in_euro_per_kwh * capacity_in_kilowatt_hour, abs=0.01
+    )
+    assert result.device_co2_footprint_in_kg == pytest.approx(
+        factors.co2_footprint_in_kg_per_kwh * capacity_in_kilowatt_hour, abs=0.01
     )

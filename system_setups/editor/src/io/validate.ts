@@ -192,6 +192,29 @@ export function validateScenario(
     }
   }
 
+  // ── 5b: Config fields the registry has no default for ─────────────────────
+  //
+  // These fields have no default at all: every `get_default_*` factory of the config demands
+  // one, so what the database records is a placeholder the generator invented to construct the
+  // class. The Python setups compute them — HeatDistribution's floor area comes off the
+  // building — and a scenario that ships the placeholder runs on a zero that nothing else
+  // catches: the heat distribution system divided by its own (zero) pipe surface halfway
+  // through a simulation. An error, not a warning, because the run cannot be trusted.
+  //
+  // Fields the component sizes itself (`auto_derived`) are exempt: leaving those alone is the
+  // documented way to use them.
+  const isUnset = (v: unknown) => v === null || v === undefined || v === '' || v === 0
+  for (const node of nodes) {
+    for (const field of node.data.entry.config_fields) {
+      if (!field.must_be_set) continue
+      if (!isUnset(node.data.config[field.name])) continue
+      errors.push(
+        `${node.data.instanceName}: config field "${field.name}" has no default and is unset — ` +
+        'HiSim has no way to guess it.',
+      )
+    }
+  }
+
   // ── 5: Required config fields non-null ────────────────────────────────────
   const isEmpty = (v: unknown) => v === null || v === undefined || v === ''
   for (const node of nodes) {

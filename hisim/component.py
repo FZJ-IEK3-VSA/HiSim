@@ -10,7 +10,7 @@ import os
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional, Set
 import json
 import pandas as pd
 from dataclass_wizard import JSONWizard
@@ -30,6 +30,21 @@ class ConfigBase(JSONWizard):
 
     building_name: str
     name: str
+
+    #: Fields the component sizes itself when the config leaves them unset, and which a user
+    #: therefore does not have to supply. These are the figures a Python system setup derives
+    #: from other components (a building's design heating load, say) and passes in, which a
+    #: JSON scenario has no way to compute. Naming them here keeps the knowledge in the
+    #: component that owns it: the scenario editor reads this list out of the class rather
+    #: than carrying its own list of exceptions, and so stops demanding a value for them.
+    #: The component must fill such a field in ``i_prepare_simulation`` and say so in the log.
+    auto_derived_fields: ClassVar[Set[str]] = set()
+
+    #: Fields for which zero is a real setting rather than an omission. Only relevant for
+    #: fields no ``get_default_*`` factory supplies a value for, where a zero would otherwise
+    #: read as "never filled in" — a fully modulating boiler genuinely has no lower power
+    #: limit, while a heat distribution system with no floor area is simply unset.
+    zero_is_valid_fields: ClassVar[Set[str]] = set()
 
     def __init__(self, name: str, building_name: str = "BUI1"):
         """Initializes."""

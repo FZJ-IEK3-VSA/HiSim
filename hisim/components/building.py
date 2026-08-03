@@ -309,6 +309,15 @@ class Building(cp.Component):
             config=self.buildingconfig,
         )
 
+        # Publish the design heating load. Components that must be sized on it — the heat
+        # distribution system and its controller — are handed it by the Python system setups,
+        # which read it off BuildingInformation. A JSON scenario has no such sizing step, so
+        # they read it from here instead when their own config leaves the figure at zero.
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND,
+            entry=self.my_building_information.max_thermal_building_demand_in_watt,
+        )
+
         self.build()
 
         self.state: BuildingState = BuildingState(
@@ -2611,7 +2620,7 @@ class BuildingInformation:
             self.buildingconfig.absolute_conditioned_floor_area_in_m2 is not None
             and self.buildingconfig.total_base_area_in_m2 is not None
         ):
-            raise ValueError("Only one variable can be used, the other one must be None.")
+            raise ValueError("Between the building absolute_conditioned_floor_area_in_m2 and total_base_area_in_m2, only one variable can be used, the other one must be None.")
 
             # scaling conditioned floor area
         if self.buildingconfig.absolute_conditioned_floor_area_in_m2 is not None:

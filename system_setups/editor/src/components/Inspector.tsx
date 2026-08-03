@@ -116,18 +116,32 @@ function CatalogSelect({
 }
 
 // ── Individual field renderer ──────────────────────────────────────────────────
+/**
+ * Whether a config value counts as "not supplied" for a field that has no real default.
+ *
+ * Zero belongs in this list: the placeholder the database records for such a field is `0.0`,
+ * and for every field that carries the flag zero is also physically meaningless (a heat
+ * distribution system with no floor area, a boiler with no thermal power).
+ */
+export function isUnsetValue(value: unknown): boolean {
+  return value === null || value === undefined || value === '' || value === 0
+}
+
 function FieldInput({
   field,
   value,
   enumDb,
   catalogOptions,
   onChange,
+  highlight,
 }: {
   field: ConfigField
   value: unknown
   enumDb: EnumDb
   catalogOptions: CatalogOption[] | null
   onChange: (name: string, val: unknown) => void
+  /** Draw attention to the control — the field is waiting for a value it has no default for. */
+  highlight?: boolean
 }) {
   const strVal = value === null || value === undefined ? '' : String(value)
   const enumOptions = enumOptionsFor(field.enum_class, enumDb)
@@ -135,7 +149,10 @@ function FieldInput({
   const isNum = field.type.includes('int') || field.type.includes('float')
 
   const base =
-    'w-full px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white'
+    'w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 bg-white ' +
+    (highlight
+      ? 'border-red-300 ring-1 ring-red-200 focus:ring-red-400'
+      : 'border-gray-200 focus:ring-blue-400')
 
   if (catalogOptions) {
     return (
@@ -354,6 +371,10 @@ export default function Inspector() {
                     catalogDb,
                   )
                 : null
+              // A field the registry has no default for is unset, not zero — see
+              // ConfigField.must_be_set. Flagged here as well as in validation, because this
+              // is where it gets fixed.
+              const unset = field.must_be_set === true && isUnsetValue(node.data.config[field.name])
               return (
                 <div key={field.name}>
                   <label className="flex items-center gap-1 text-[11px] font-medium text-gray-600 mb-0.5">
@@ -367,7 +388,18 @@ export default function Inspector() {
                     enumDb={enumDb}
                     catalogOptions={catOpts}
                     onChange={handleChange}
+                    highlight={unset}
                   />
+                  {unset && (
+                    <p className="mt-0.5 text-[11px] text-red-600">
+                      No default exists for this — HiSim needs a real value.
+                    </p>
+                  )}
+                  {field.auto_derived && (
+                    <p className="mt-0.5 text-[11px] text-gray-400">
+                      Leave at 0 and HiSim sizes it from the building, reporting how in the log.
+                    </p>
+                  )}
                 </div>
               )
             })}

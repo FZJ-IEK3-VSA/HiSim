@@ -1,5 +1,10 @@
 """Tariff provider component (cost_spec.md §8.3).
 
+This component implements the broader dynamic-pricing feature set for future work. For v1,
+the supported lifecycle-analysis scope is intentionally simpler and uses flat price assumptions
+rather than dynamic or synthetic tariff signals. Time-of-use and dynamic tariffs remain in
+this module for future use, but they are not required for the first user-facing lifecycle model.
+
 Evolves `generic_price_signal.py` (which stays untouched during the parallel phase) into a
 provider driven by a :class:`hisim.economics.tariffs.TariffContract` — the same contract the
 postprocessing billing engine reads, so control and billing can never diverge.

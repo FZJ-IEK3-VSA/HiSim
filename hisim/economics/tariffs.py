@@ -1,5 +1,11 @@
 """Tariff contracts and the pure billing engine (cost_spec.md §8).
 
+This module contains the broader tariff and dynamic-pricing model used by future work.
+For v1, the supported product scope is a simpler flat-price lifecycle evaluation: the
+v1 engine does not require time-of-use, dynamic tariffs, capacity-charge logic or
+synthetic spot-price profiles. These structures remain available here for later use,
+but they are not part of the default first-release lifecycle workflow.
+
 One :class:`TariffContract` per carrier is the single source of truth: the in-simulation
 price provider (``hisim/components/tariff_provider.py``) and the postprocessing billing
 engine both read it; neither carries its own price data.

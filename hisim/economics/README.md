@@ -6,8 +6,12 @@ approach) from three kinds of inputs: *facts* declared by components (what am I,
 flows* measured by the meters (what crossed the system boundary), and *versioned data files* (prices,
 lifetimes, subsidy schemes). For v1, the focus is intentionally small and user-facing: discounted
 NPV/EAC, replacements, maintenance, residual value, subsidies, and low/base/high uncertainty bands.
-The broader actor, financing and policy-engine complexity described in the full specification remains
-future work and is not required for the first release.
+The broader actor, financing, dynamic-tariff and policy-engine complexity described in the full
+specification remains future work and is not required for the first release.
+
+The v1 product is intentionally limited to a transparent flat-price lifecycle model. Dynamic pricing,
+capacity charges, time-of-use tariffs, synthetic reference profiles, and peak-based tariff optimization
+are all deferred to later work and are not part of the default user-facing v1 workflow.
 
 The full specification lives in **`cost_spec.md`** at the repo root; every provisional decision
 and every legacy bug found during implementation is tracked in **`cost_module_issues.md`**.

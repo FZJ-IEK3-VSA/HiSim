@@ -4,6 +4,20 @@ This runbook is the step-by-step guide for the reduced-scope v1 lifecycle-cost e
 
 For product scope, read the package overview in [README.md](README.md). For the full long-term design and non-v1 concepts, see [../../cost_spec.md](../../cost_spec.md).
 
+## Scope decision for v1
+
+The v1 lifecycle model is intentionally limited to flat-price discounted cash-flow analysis. This is the default and supported workflow for the first release.
+
+Not included in v1:
+
+- dynamic tariffs
+- time-of-use tariff logic
+- capacity charges / peak-based billing logic
+- synthetic or market-based spot-price profiles
+- tariff optimization or MPC-oriented price forecasting
+
+These features remain valid future-work extensions and are not part of the default v1 user workflow.
+
 ---
 
 ## 1. What this v1 engine is for
@@ -23,6 +37,7 @@ The v1 scope intentionally does not model:
 - sophisticated multi-actor subsidy stacking
 - macroeconomic versus financial perspective splits
 - full source-provenance reporting for every intermediate value
+- dynamic tariffs and tariff-based optimization logic
 
 ---
 

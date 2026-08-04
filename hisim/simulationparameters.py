@@ -96,10 +96,12 @@ class SimulationParameters(JSONWizard):
         self.multiple_buildings = multiple_buildings
         self.figure_format = FigureFormat.PNG
         self.log_connections = log_connections
-        # Parameters of the parallel lifecycle cost engine (cost_spec.md §3.2). Deliberately a
+        # Parameters of the v1 lifecycle cost engine (cost_spec.md §3.2). Deliberately a
         # plain attribute (not a dataclass field) so *.simulation.json round-trips stay
         # byte-identical during the parallel phase; set via set_economic_parameters() or the
-        # RenoVisor request (see cost_module_issues.md #5).
+        # RenoVisor request. The v1 scope is reduced to discounted cash-flow economics,
+        # replacement/maintenance/residual handling, subsidies and low/base/high uncertainty
+        # bands — not the broader v2 actor and policy architecture.
         self.economic_parameters: Optional[Any] = None
         # Optional hisim.economics.bridge.EconomicContext: existing assets, subsidy context,
         # envelope measures, tenancy data and scenario sets a system setup declares for the

@@ -20,8 +20,10 @@ class EconomicParameters(JSONWizard):
     """
 
     observation_period_in_years: int = 20
-    # Nominal calculation interest rate (discount rate).
+    # Nominal calculation interest rate (discount rate) used for v1 discounted cash flows.
     interest_rate: float = 0.03
+    # Inflation rate for converting nominal values and deriving the real interest rate.
+    inflation_rate: float = 0.02
     # General price change for maintenance/operation-related costs.
     general_price_escalation_rate: float = 0.02
     # Per-carrier nominal energy price escalation rates. Unset carriers fall back to the country's
@@ -59,6 +61,19 @@ class EconomicParameters(JSONWizard):
             raise ValueError("observation_period_in_years must be >= 1.")
         if self.interest_rate <= -1.0:
             raise ValueError("interest_rate must be > -100 %.")
+        if self.inflation_rate < 0.0:
+            raise ValueError("inflation_rate must be >= 0.")
+
+    def real_interest_rate(self) -> float:
+        """Real discount rate derived from the nominal rate and inflation.
+
+        For v1 this keeps the model simple and explicit: users can choose a nominal discount
+        rate together with an inflation assumption, and the real rate is derived as
+        (1 + nominal) / (1 + inflation) - 1.
+        """
+        if self.inflation_rate == -1.0:
+            raise ValueError("inflation_rate must not be -1.0.")
+        return (1.0 + self.interest_rate) / (1.0 + self.inflation_rate) - 1.0
 
     def discount_factor(self, year: int) -> float:
         """1 / (1 + i)^year."""

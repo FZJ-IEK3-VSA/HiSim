@@ -1,4 +1,4 @@
-# Specification: Lifecycle Cost Calculation for HiSim (v2)
+# Specification: Lifecycle Cost Calculation for HiSim (v1 reduced-scope)
 
 Status: DRAFT — proposal for review
 Author: generated 2026-07-05, based on a review of the current CAPEX/OPEX implementation; extended with
@@ -167,7 +167,41 @@ Contents:
     mandatory, structured source metadata, and the engine can answer on demand which datapoints —
     and therefore which sources — went into any given result value (§3.10).
 
-### Non-goals (v1 of the new engine)
+### v1 reduced-scope product definition
+
+For the first user-facing release, the lifecycle-cost engine is intentionally limited to the minimum set
+of features required for an economically meaningful decision support tool. This v1 scope prioritizes
+clarity, transparency and fast adoption over full policy and actor complexity.
+
+The v1 engine must support:
+
+- Discounted cash flows over a configurable horizon (default 20 years)
+- NPV and Equivalent Annual Cost (EAC) as headline KPIs
+- Discount rate and inflation / real-vs-nominal handling
+- Annualized operating, maintenance and replacement expenditures
+- Residual value / salvage value at end of horizon
+- Positive and negative cash flows across the full observation period
+- Energy, fuel and feed-in revenues/costs
+- Subsidy reductions, at minimum as upfront and/or annual reductions
+- Low/base/high uncertainty bands for the key KPI outputs
+- Comparison of alternative system configurations using the same cash-flow model
+
+The v1 engine does not need to model:
+
+- Landlord / tenant / owner-occupier allocation logic
+- Separate greenfield / brownfield / operating-only viewpoints as first-class product modes
+- Loan financing, subsidized debt and full amortization logic
+- Full multi-actor subsidy stacking and legal-eligibility questionnaires
+- Macro-economic versus financial perspective splits
+- Full provenance / source-trace reporting for every value
+- CO2-price trajectories and broader policy accounting beyond the basic cash-flow model
+- Scenario sweeps or sampling distributions beyond simple low/base/high bands
+
+This reduced scope is the product target for the initial release. The richer architecture described in
+this specification remains valuable, but it belongs to a later stage of the economics engine and should
+not be required for a first user-facing lifecycle comparison tool.
+
+### Non-goals (beyond v1)
 
 - Income-tax modeling beyond what subsidy tax credits require (no depreciation-for-tax, no
   landlord income tax on rent).
@@ -179,9 +213,8 @@ Contents:
   computed per the legal cap).
 - Portfolio optimization across subsidy schemes over multiple years (the cumulation solver optimizes
   one investment event).
-- Built-in Monte-Carlo UI (but the engine is a pure function, so parameter sweeps are cheap; §4.5
-  provides the scenario hook). Deterministic min/average/max bands per §3.9 *are* in scope; sampled
-  distributions are not.
+- Built-in Monte-Carlo UI. Deterministic low/base/high bands per §3.9 are in scope for v1; sampled
+  distributions are intentionally deferred to later work.
 
 ---
 

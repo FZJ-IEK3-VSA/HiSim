@@ -75,6 +75,14 @@ def zero_rate_parameters(horizon: int = 10) -> EconomicParameters:
     )
 
 
+def test_v1_parameters_include_inflation_and_real_interest_rate():
+    """v1 lifecycle economics must expose inflation and the derived real discount rate."""
+    params = EconomicParameters(interest_rate=0.05, inflation_rate=0.02)
+
+    assert params.inflation_rate == pytest.approx(0.02)
+    assert params.real_interest_rate() == pytest.approx((1.05 / 1.02) - 1.0)
+
+
 GREENFIELD_GROSS = Perspective(
     id="test_greenfield_gross",
     installation_context=InstallationContext.GREENFIELD,

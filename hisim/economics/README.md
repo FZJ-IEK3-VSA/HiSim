@@ -1,15 +1,19 @@
 # `hisim.economics` — the lifecycle cost engine
 
 This package is the parallel successor of HiSim's per-component capex/opex cost calculation.
-It computes **lifecycle costs over a configurable horizon** (default 20 years, annuity method
-per VDI 2067-1 / DIN EN 15459-1) from three kinds of inputs: *facts* declared by components
-(what am I, how big), *energy flows* measured by the meters (what crossed the system boundary),
-and *versioned data files* (prices, lifetimes, subsidy schemes). Everything else — discounting,
-replacements, subsidies, actor splits, uncertainty bands — happens in one central engine.
+It computes **lifecycle costs over a configurable horizon** (default 20 years, discounted cash-flow
+approach) from three kinds of inputs: *facts* declared by components (what am I, how big), *energy
+flows* measured by the meters (what crossed the system boundary), and *versioned data files* (prices,
+lifetimes, subsidy schemes). For v1, the focus is intentionally small and user-facing: discounted
+NPV/EAC, replacements, maintenance, residual value, subsidies, and low/base/high uncertainty bands.
+The broader actor, financing and policy-engine complexity described in the full specification remains
+future work and is not required for the first release.
 
 The full specification lives in **`cost_spec.md`** at the repo root; every provisional decision
 and every legacy bug found during implementation is tracked in **`cost_module_issues.md`**.
 Section references like "§3.9" below point into the spec.
+
+For a step-by-step v1 user guide, see **`RUNBOOK.md`** in this directory.
 
 ---
 

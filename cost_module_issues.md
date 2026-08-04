@@ -1,7 +1,39 @@
 # Cost module implementation — open issues and decisions to clarify
 
+The implementation direction for the cost module has been narrowed to a v1 product scope that keeps the
+first release useful without overloading users with advanced policy and accounting complexity. The v1
+scope is intentionally limited to a discounted 20-year lifecycle comparison with low/base/high bands,
+subsidies, replacements, maintenance, residual value and all relevant cash flows.
+
+This note records the open issues and design decisions for the full cost-engine roadmap, but the
+implementation priorities are now aligned with the reduced v1 requirements described in `cost_spec.md`.
+
 Running log of ambiguities found while implementing `cost_spec.md`. Items marked **DECIDED (provisional)**
 were resolved with a documented default to keep the implementation moving; they should be reviewed.
+
+## v1 scope decision
+
+**In scope for v1**
+- NPV, discount rate and inflation / real-vs-nominal handling
+- Equivalent Annual Cost (EAC)
+- 20-year observation horizon
+- Maintenance, replacements and residual value
+- Positive and negative cash flows across the horizon
+- Subsidy reductions
+- Low/base/high uncertainty bands for key outputs
+- Side-by-side comparison of system variants
+
+**Out of scope for v1**
+- Landlord / tenant / owner allocation logic
+- Financing, loans and amortization models
+- Full policy-engine eligibility logic
+- Multi-perspective actor accounting
+- Full macroeconomic vs financial separation
+- In-depth source-provenance tracking for every value
+- Full scenario sampling or large Monte-Carlo analysis
+
+The more advanced architecture and actor-based modeling remain valid future work and should be treated
+as v2.
 
 ## Spec open questions (§11) — provisional defaults taken in code
 

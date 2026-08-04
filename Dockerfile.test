@@ -28,4 +28,12 @@ RUN python -m pip install --upgrade pip \
     && python -m pip install uv coverage \
     && uv pip install --system -r requirements.txt
 
+# Bake the LoadProfileGenerator binaries into the image. pylpg otherwise fetches them from
+# loadprofilegenerator.de the first time a run needs them, with a requests.get that has no
+# timeout, no status check and no retry -- so every golden job depended on that site being
+# healthy, and a half-downloaded archive would surface much later as a missing result file.
+# Doing it here fails the (rare) image build instead of a (frequent) simulation run.
+RUN python -c "import pathlib, pylpg; from pylpg.lpg_execution import LPGExecutor; LPGExecutor.retrieve_lpg_binaries(pathlib.Path(pylpg.__file__).parent)" \
+    && python -c "import os, pathlib, pylpg; p = pathlib.Path(pylpg.__file__).parent / 'LPG_linux' / 'simengine2'; assert p.is_file(), f'{p} missing'; assert os.access(p, os.X_OK), f'{p} not executable'"
+
 ENV HISIM_TEST_IMAGE=true

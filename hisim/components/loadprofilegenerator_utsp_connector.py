@@ -8,6 +8,7 @@ import io
 import json
 import os
 import shutil
+import subprocess
 import contextlib
 from ast import literal_eval
 from dataclasses import dataclass
@@ -165,6 +166,150 @@ def resolve_local_lpg_calculation_index(configured_index: Optional[int]) -> int:
     if env_override:
         return int(env_override)
     return default_local_lpg_calculation_index()
+
+
+# --------------------------------------------------------------------------------------- #
+# Local-LPG execution: fail on a broken run instead of on the missing file it leaves behind
+# --------------------------------------------------------------------------------------- #
+#: Written by the LPG into its output directory once a calculation has completed. Its absence
+#: is the only reliable "this run did not finish" signal: ``pylpg.LPGExecutor`` calls
+#: ``subprocess.run`` without ``check=True`` and discards the ``CompletedProcess``, so an LPG
+#: that dies half-way through post-processing looks exactly like a successful one until a
+#: result file turns up missing several stack frames later.
+LOCAL_LPG_FINISHED_FLAG = "finished.flag"
+
+#: The LPG's own log, next to the flag. It names the reason the calculation stopped, which is
+#: otherwise unrecoverable: the working directory is deleted during cleanup.
+LOCAL_LPG_LOG_FILE = "Log.CommandlineCalculation.txt"
+
+#: How many lines of the LPG log and of its console output to quote in a failure message.
+LOCAL_LPG_LOG_TAIL_LINES = 40
+
+#: How many entries of the results directory to list in a failure message.
+LOCAL_LPG_LISTING_LIMIT = 60
+
+#: A finished one-week household needs well under a minute; a full year a few minutes. Without
+#: a limit a wedged LPG process holds the whole run (in CI, until the job timeout hours later).
+LOCAL_LPG_TIMEOUT_ENV_VAR = "HISIM_LOCAL_LPG_TIMEOUT_SECONDS"
+DEFAULT_LOCAL_LPG_TIMEOUT_SECONDS = 3600
+
+#: Attempts per household before giving up. The previous retry loop only ever *downgraded* the
+#: acquisition mode, so a transient LPG failure was never retried in the mode that was asked
+#: for -- under strict mode it was not retried at all. Each attempt rebuilds the working
+#: directory from scratch (``clear_previous_calc=True``), so a retry cannot inherit the wreckage.
+LOCAL_LPG_ATTEMPTS_ENV_VAR = "HISIM_LOCAL_LPG_ATTEMPTS"
+DEFAULT_LOCAL_LPG_ATTEMPTS = 2
+
+
+class LocalLpgExecutionError(RuntimeError):
+    """A local LPG calculation did not produce the result files it was asked for."""
+
+
+def local_lpg_timeout_seconds() -> Optional[float]:
+    """Wall-clock limit for a single LPG invocation; ``None`` disables it."""
+    configured = os.environ.get(LOCAL_LPG_TIMEOUT_ENV_VAR, "").strip()
+    if not configured:
+        return float(DEFAULT_LOCAL_LPG_TIMEOUT_SECONDS)
+    timeout = float(configured)
+    return timeout if timeout > 0 else None
+
+
+def local_lpg_attempts() -> int:
+    """Number of attempts per household, at least one."""
+    configured = os.environ.get(LOCAL_LPG_ATTEMPTS_ENV_VAR, "").strip()
+    if not configured:
+        return DEFAULT_LOCAL_LPG_ATTEMPTS
+    return max(1, int(configured))
+
+
+def run_local_lpg_binary(lpe: lpg_execution.LPGExecutor) -> subprocess.CompletedProcess:
+    """Run the LPG simulation engine and return the completed process.
+
+    ``pylpg.LPGExecutor.execute_lpg_binaries`` runs the same command but throws the exit code
+    and both output streams away, which is why an LPG crash used to surface as a
+    ``FileNotFoundError`` on a result file. Running it here keeps that evidence for
+    :func:`describe_local_lpg_failure`.
+    """
+    return subprocess.run(
+        [lpe.lpg_simengine_filepath(), "processhousejob", "-j", "calcspec.json"],
+        cwd=str(lpe.calculation_directory),
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=local_lpg_timeout_seconds(),
+        check=False,
+    )
+
+
+def missing_local_lpg_result_files(result_folder: str, required_files: List[str]) -> List[str]:
+    """Return the required result files (relative paths) the LPG did not write."""
+    return [name for name in required_files if not os.path.isfile(os.path.join(result_folder, name))]
+
+
+def _tail(text: str, lines: int = LOCAL_LPG_LOG_TAIL_LINES) -> str:
+    """Return the last ``lines`` non-empty lines of ``text``, or a placeholder."""
+    kept = [line for line in text.splitlines() if line.strip()][-lines:]
+    return "\n".join(kept) if kept else "(empty)"
+
+
+def _read_log_tail(result_folder: str) -> str:
+    """Return the tail of the LPG's own log file, or why it could not be read."""
+    log_path = os.path.join(result_folder, LOCAL_LPG_LOG_FILE)
+    try:
+        with open(log_path, encoding="utf-8", errors="replace") as log_file:
+            return _tail(log_file.read())
+    except OSError as error:
+        return f"(no LPG log at {log_path}: {error})"
+
+
+def _list_directory(path: str) -> str:
+    """Return a short listing of ``path``, or why it could not be listed."""
+    try:
+        entries = sorted(os.listdir(path))
+    except OSError as error:
+        return f"(cannot list {path}: {error})"
+    if not entries:
+        return f"(empty: {path})"
+    shown = entries[:LOCAL_LPG_LISTING_LIMIT]
+    suffix = f" ... and {len(entries) - len(shown)} more" if len(entries) > len(shown) else ""
+    return ", ".join(shown) + suffix
+
+
+def describe_local_lpg_failure(
+    calculation_directory: str,
+    result_folder: str,
+    missing_files: List[str],
+    completed: Optional[subprocess.CompletedProcess],
+    console_output: str = "",
+) -> str:
+    """Build the diagnostic message for a local LPG run that produced no usable results.
+
+    Everything a post-mortem needs has to go in here: the working directory is deleted during
+    cleanup, and CI keeps nothing but the traceback.
+    """
+    results_subdirectory = os.path.join(result_folder, "Results")
+    finished = os.path.isfile(os.path.join(result_folder, LOCAL_LPG_FINISHED_FLAG))
+    try:
+        free_gigabytes: Any = round(shutil.disk_usage(calculation_directory).free / 1e9, 2)
+    except OSError as error:
+        free_gigabytes = f"unknown ({error})"
+
+    parts = [
+        f"The local LPG in {calculation_directory} did not produce usable results.",
+        f"Exit code: {completed.returncode if completed is not None else 'unknown'}.",
+        f"{LOCAL_LPG_FINISHED_FLAG} written: {finished}.",
+        f"Missing required result files: {missing_files if missing_files else 'none'}.",
+        f"Free disk space at the working directory: {free_gigabytes} GB.",
+        f"Contents of {result_folder}: {_list_directory(result_folder)}",
+        f"Contents of {results_subdirectory}: {_list_directory(results_subdirectory)}",
+        f"Tail of {LOCAL_LPG_LOG_FILE}:\n{_read_log_tail(result_folder)}",
+    ]
+    if completed is not None:
+        parts.append(f"LPG stdout (tail):\n{_tail(completed.stdout or '')}")
+        parts.append(f"LPG stderr (tail):\n{_tail(completed.stderr or '')}")
+    if console_output.strip():
+        parts.append(f"pylpg messages:\n{_tail(console_output)}")
+    return "\n".join(parts)
 
 
 @dataclass_json
@@ -1019,7 +1164,8 @@ class UtspLpgConnector(cp.Component):
                                     f"{self.utsp_config.data_acquisition_mode} and strict mode is on "
                                     f"({STRICT_LPG_ENV_VAR}), so the downgrade was refused. Continuing "
                                     f"would have completed the run on a *different household load "
-                                    f"profile*, producing plausible but silently wrong results."
+                                    f"profile*, producing plausible but silently wrong results. "
+                                    f"Underlying error: {type(e).__name__}: {e}"
                                 ) from e
                             if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
                                 self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_LOCAL_LPG
@@ -1193,7 +1339,33 @@ class UtspLpgConnector(cp.Component):
                                            household: JsonReference,
                                            random_seed: Optional[int] = None
                                            ) -> str:
-        """Using local (offline) LPG to calculate the profiles for one household."""
+        """Using local (offline) LPG to calculate the profiles for one household.
+
+        Retries the calculation on a freshly rebuilt working directory before giving up, and
+        raises :class:`LocalLpgExecutionError` -- naming the exit code, the LPG's own log and
+        the missing files -- rather than letting the caller trip over a missing result file.
+        """
+        attempts = local_lpg_attempts()
+        for attempt in range(1, attempts + 1):
+            try:
+                return self.execute_one_local_lpg_attempt(
+                    calculation_index=calculation_index, household=household, random_seed=random_seed
+                )
+            except (LocalLpgExecutionError, subprocess.TimeoutExpired) as error:
+                if attempt == attempts:
+                    raise
+                log.warning(
+                    f"Local LPG attempt {attempt} of {attempts} failed and will be retried on a "
+                    f"rebuilt working directory. {error}"
+                )
+        raise AssertionError("unreachable: the loop either returns or raises")  # pragma: no cover
+
+    def execute_one_local_lpg_attempt(self,
+                                      calculation_index,
+                                      household: JsonReference,
+                                      random_seed: Optional[int] = None
+                                      ) -> str:
+        """Run the local (offline) LPG once for one household and verify what it wrote."""
 
         mobility_set: Set[Optional[str]] = set()
         for elem in [
@@ -1222,8 +1394,12 @@ class UtspLpgConnector(cp.Component):
             log.warning("Mobility configuration incomplete. Simulation of mobility  will be deactivated.")
             simulate_transportation = False
 
-        with contextlib.redirect_stdout(None):
-            with contextlib.redirect_stderr(None):
+        # pylpg narrates itself on stdout ("Downloading LPG binaries from ...", "copying from
+        # ... to ..."). Those lines used to be dropped on the floor; capture them so a failure
+        # can report whether the binaries had to be fetched over the network first.
+        console_output = io.StringIO()
+        with contextlib.redirect_stdout(console_output):
+            with contextlib.redirect_stderr(console_output):
 
                 householdref = household
                 housetype = HouseTypes.HT23_No_Infrastructure_at_all
@@ -1288,9 +1464,49 @@ class UtspLpgConnector(cp.Component):
                 with open(calcspecfilename, "w", encoding="utf-8") as calcspecfile:
                     jsonrequest = request.to_json(indent=4)
                     calcspecfile.write(jsonrequest)
-                lpe.execute_lpg_binaries()
+                completed = run_local_lpg_binary(lpe)
 
                 path_to_result_folder = os.path.join(lpe.calculation_directory, request.CalcSpec.OutputDirectory)
+
+        # An LPG that stops half-way still leaves a plausible-looking output directory behind:
+        # the run that prompted this check had written its bodily-activity JSONs but none of the
+        # sum profiles. Check the files this component is about to read, here, where the working
+        # directory and the LPG log still exist.
+        (
+            _,
+            electricity,
+            warm_water,
+            inner_device_heat_gains,
+            high_activity,
+            low_activity,
+            *_optional_files,
+        ) = self.define_required_result_files()
+        missing_files = missing_local_lpg_result_files(
+            str(path_to_result_folder),
+            [electricity, warm_water, inner_device_heat_gains, high_activity, low_activity],
+        )
+        if missing_files:
+            raise LocalLpgExecutionError(
+                describe_local_lpg_failure(
+                    calculation_directory=str(lpe.calculation_directory),
+                    result_folder=str(path_to_result_folder),
+                    missing_files=missing_files,
+                    completed=completed,
+                    console_output=console_output.getvalue(),
+                )
+            )
+
+        # The files are all there, so the run is usable and must not be failed over this. A
+        # non-zero exit or a missing completion flag alongside complete output still means the
+        # LPG was unhappy, and saying so here is what makes the next partial run explicable.
+        finished_flag_written = os.path.isfile(os.path.join(str(path_to_result_folder), LOCAL_LPG_FINISHED_FLAG))
+        if completed.returncode != 0 or not finished_flag_written:
+            log.warning(
+                f"The local LPG in {lpe.calculation_directory} wrote every required result file but "
+                f"exited with code {completed.returncode} and "
+                f"{'wrote' if finished_flag_written else 'did not write'} {LOCAL_LPG_FINISHED_FLAG}. "
+                f"Proceeding with its results. LPG stderr (tail):\n{_tail(completed.stderr or '')}"
+            )
 
         return str(path_to_result_folder)
 

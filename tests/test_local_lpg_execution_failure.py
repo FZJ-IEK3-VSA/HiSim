@@ -153,8 +153,8 @@ def test_attempt_is_retried_on_a_rebuilt_working_directory(monkeypatch: pytest.M
     """
     calls = []
 
-    def fake_attempt(self, calculation_index, household, random_seed=None):  # noqa: ANN001
-        calls.append(calculation_index)
+    def fake_attempt(_self, calculation_index, household, **_kwargs):  # noqa: ANN001
+        calls.append((calculation_index, household))
         if len(calls) == 1:
             raise LocalLpgExecutionError("first attempt died")
         return "/tmp/C1/results"
@@ -162,17 +162,20 @@ def test_attempt_is_retried_on_a_rebuilt_working_directory(monkeypatch: pytest.M
     monkeypatch.setattr(UtspLpgConnector, "execute_one_local_lpg_attempt", fake_attempt)
 
     result = UtspLpgConnector.execute_local_lpg_single_household(
-        UtspLpgConnector.__new__(UtspLpgConnector), calculation_index=500, household=None
+        UtspLpgConnector.__new__(UtspLpgConnector), calculation_index=500, household="CHR01"
     )
 
     assert result == "/tmp/C1/results"
-    assert calls == [500, 500], "the retry must reuse the index, whose directory is rebuilt from scratch"
+    assert calls == [
+        (500, "CHR01"),
+        (500, "CHR01"),
+    ], "the retry must repeat the same request on the same index, whose directory is rebuilt from scratch"
 
 
 def test_failure_is_raised_after_the_last_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
     """Once the attempts are used up the error propagates -- no silent substitution."""
 
-    def always_fail(self, calculation_index, household, random_seed=None):  # noqa: ANN001
+    def always_fail(_self, *_args, **_kwargs):  # noqa: ANN001
         raise LocalLpgExecutionError("LPG died")
 
     monkeypatch.setattr(UtspLpgConnector, "execute_one_local_lpg_attempt", always_fail)
@@ -188,8 +191,8 @@ def test_a_hung_lpg_is_retried_too(monkeypatch: pytest.MonkeyPatch) -> None:
     """A timeout is a transient failure like any other and must not skip the retry."""
     calls = []
 
-    def fake_attempt(self, calculation_index, household, random_seed=None):  # noqa: ANN001
-        calls.append(calculation_index)
+    def fake_attempt(_self, calculation_index, household, **_kwargs):  # noqa: ANN001
+        calls.append((calculation_index, household))
         if len(calls) == 1:
             raise subprocess.TimeoutExpired(cmd="simengine2", timeout=1.0)
         return "/tmp/C1/results"
@@ -198,7 +201,7 @@ def test_a_hung_lpg_is_retried_too(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert (
         UtspLpgConnector.execute_local_lpg_single_household(
-            UtspLpgConnector.__new__(UtspLpgConnector), calculation_index=500, household=None
+            UtspLpgConnector.__new__(UtspLpgConnector), calculation_index=500, household="CHR01"
         )
         == "/tmp/C1/results"
     )

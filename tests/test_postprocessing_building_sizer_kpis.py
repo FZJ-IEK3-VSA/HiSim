@@ -127,7 +127,8 @@ def _write_and_load_kpi_config(
     written_file = Path(result_directory) / "BUI1_kpi_config_for_building_sizer.json"
     assert written_file.is_file(), "the building sizer KPI config was not written"
     with written_file.open("r", encoding="utf-8") as config_file:
-        return json.load(config_file)
+        loaded_config: Dict = json.load(config_file)
+    return loaded_config
 
 
 @pytest.mark.base

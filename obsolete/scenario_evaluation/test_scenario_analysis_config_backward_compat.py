@@ -18,7 +18,7 @@ import warnings
 
 import pytest
 
-from hisim.postprocessing.scenario_evaluation.scenario_analysis_complete_with_config import (
+from projects.HiSim.obsolete.scenario_evaluation.scenario_analysis_complete_with_config import (
     ScenarioAnalysisConfig,
     _migrate_legacy_field_names,
 )

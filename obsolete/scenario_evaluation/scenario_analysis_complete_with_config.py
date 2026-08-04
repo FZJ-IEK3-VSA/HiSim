@@ -9,13 +9,12 @@ from typing import Any, Dict, List, Optional, Type, TypeVar, cast
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from dataclasses_json.core import _decode_dataclass
-from hisim.postprocessing.scenario_evaluation import (
-    result_data_collection,
+from projects.HiSim.obsolete.scenario_evaluation import (
     result_data_processing,
-    result_data_plotting,
 )
 from hisim.component import ConfigBase
 from hisim import log
+from projects.HiSim.obsolete.scenario_evaluation import result_data_collection, result_data_plotting
 
 
 #: Mapping of legacy JSON field names to their current names.

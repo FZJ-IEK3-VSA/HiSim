@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from ordered_set import OrderedSet
 import seaborn as sns
 
-from hisim.postprocessing.scenario_evaluation.result_data_processing import (
+from projects.HiSim.obsolete.scenario_evaluation.result_data_processing import (
     ResultDataTypeEnum,
     ResultDataProcessingModeEnum,
     ScenarioDataProcessing,

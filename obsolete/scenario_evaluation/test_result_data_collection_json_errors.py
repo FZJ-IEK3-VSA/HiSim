@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 
-from hisim.postprocessing.scenario_evaluation.result_data_collection import (
+from projects.HiSim.obsolete.scenario_evaluation.result_data_collection import (
     ResultDataCollection,
 )
 

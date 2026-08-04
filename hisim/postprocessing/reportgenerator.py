@@ -56,6 +56,11 @@ class ReportGenerator:
             raise ValueError("Result path for the report was none.")
         self.story: Any
         self.toc = TableOfContents()
+        # When True, close() only collects content and does not render. Rendering a report that
+        # embeds a few hundred figures costs minutes, and every chapter used to trigger a full
+        # re-render of the whole document. Set by the post processor, which calls finalize()
+        # once after the last chapter has been written.
+        self.defer_rendering: bool = False
 
         self.filepath = str(Path(dirpath) / "report.pdf")
         self.open()
@@ -314,7 +319,21 @@ class ReportGenerator:
         canvas.restoreState()
 
     def close(self):
-        """Close the report."""
+        """Finish a chapter, rendering the report unless rendering is deferred."""
+        if self.defer_rendering:
+            return
+        self.render()
+
+    def finalize(self):
+        """Render the report once, ignoring the defer_rendering flag."""
+        self.render()
+
+    def render(self):
+        """Write the accumulated story out to the pdf file.
+
+        multiBuild consumes the story and re-renders the whole document, so this is expensive
+        and deliberately called only once per report.
+        """
         story = copy.deepcopy(self.story)
         self.doc.template.onPage = self.add_page_number
         self.doc.template.onPageEnd = self.add_page_number

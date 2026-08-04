@@ -20,15 +20,20 @@ from scripts.runner import (
     ParameterSetConfig,
     RunResult,
     SetupConfig,
+    NUMERIC_ENV_VARS,
+    NUMERIC_PACKAGES,
     build_simulation_parameters,
     config_hash,
     environment_metadata,
     filter_config,
     load_config,
+    numpy_simd_features,
+    package_versions,
     resolve_scenario_path,
     resolve_setup_path,
     run_all,
     run_all_json,
+    runtime_environment,
     run_one,
     select_pairs,
 )
@@ -249,9 +254,45 @@ def test_environment_metadata_fields(tmp_path: Path) -> None:
     """``environment_metadata`` returns the expected keys with a matching config hash."""
     cfg_path = _write_config(tmp_path, _minimal_config_dict())
     meta = environment_metadata(cfg_path)
-    assert set(meta) == {"hisim_commit", "python_version", "platform", "config_sha256", "generated_at"}
+    assert set(meta) == {
+        "hisim_commit",
+        "config_sha256",
+        "generated_at",
+        "python_version",
+        "platform",
+        "cpu_model",
+        "cpu_count",
+        "usable_cpu_count",
+        "numpy_simd",
+        "numeric_env",
+        "package_versions",
+    }
     assert meta["config_sha256"] == config_hash(cfg_path)
     assert meta["generated_at"]
+
+
+def test_runtime_environment_records_diagnosable_facts() -> None:
+    """The runtime snapshot carries the facts needed to diff a flaky run against a good one."""
+    env = runtime_environment()
+    assert env["cpu_model"]  # never empty; falls back to "unknown"
+    assert env["cpu_count"] is None or env["cpu_count"] >= 1
+    # Every watched env var is present, as its value or the explicit "<unset>", so
+    # two reports line up key-for-key when diffed.
+    assert set(env["numeric_env"]) == set(NUMERIC_ENV_VARS)
+    assert all(value != "" for value in env["numeric_env"].values())
+    assert set(env["package_versions"]) == set(NUMERIC_PACKAGES)
+
+
+def test_package_versions_marks_absent_distributions() -> None:
+    """A distribution that is not installed is recorded, not omitted or raised on."""
+    versions = package_versions(("numpy", "definitely-not-a-real-distribution"))
+    assert versions["definitely-not-a-real-distribution"] == "not installed"
+    assert versions["numpy"] != "not installed"
+
+
+def test_numpy_simd_features_is_a_string() -> None:
+    """SIMD capture never raises — it degrades to ``"unknown"`` rather than break a run."""
+    assert isinstance(numpy_simd_features(), str)
 
 
 # --------------------------------------------------------------------------- #

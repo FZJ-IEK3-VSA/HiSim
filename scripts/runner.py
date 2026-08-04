@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import importlib.metadata
 import json
+import os
 import platform
 import subprocess
 from dataclasses import dataclass
@@ -370,16 +372,120 @@ def _git_commit() -> str:
         return "unknown"
 
 
-def environment_metadata(config_path: Path) -> dict[str, str]:
+# Packages whose version could plausibly move a KPI. Distribution names (what
+# importlib.metadata expects), not import names.
+NUMERIC_PACKAGES = (
+    "numpy",
+    "pandas",
+    "scipy",
+    "pvlib",
+    "hplib",
+    "bslib",
+    "oemof.thermal",
+    "windpowerlib",
+    "pygfunction",
+    "control",
+    "casadi",
+)
+
+# Env vars that change BLAS/OpenMP reduction order, and numpy's SIMD dispatch.
+# Recorded as-is (including "<unset>") so two runs can be compared directly.
+NUMERIC_ENV_VARS = (
+    "OMP_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+    "NPY_DISABLE_CPU_FEATURES",
+    "PYTHONHASHSEED",
+)
+
+
+def cpu_model() -> str:
+    """Best-effort human-readable CPU model.
+
+    Reads ``/proc/cpuinfo`` on Linux (where ``platform.processor()`` usually returns
+    the bare architecture) and falls back to ``platform.processor()`` elsewhere.
+    """
+    try:
+        with open("/proc/cpuinfo", encoding="utf-8") as stream:
+            for line in stream:
+                if line.startswith("model name"):
+                    return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return platform.processor() or "unknown"
+
+
+def cpu_counts() -> dict[str, Any]:
+    """Return the logical CPU count and, where available, the usable (affinity) count.
+
+    The usable count is what OpenBLAS/OpenMP actually size their thread pools from
+    inside a container, which is not always the host's logical count.
+    """
+    usable: Optional[int]
+    try:
+        usable = len(os.sched_getaffinity(0))  # type: ignore[attr-defined]
+    except AttributeError:  # not available on Windows/macOS
+        usable = None
+    return {"cpu_count": os.cpu_count(), "usable_cpu_count": usable}
+
+
+def numpy_simd_features() -> str:
+    """Return numpy's *active* runtime-dispatched SIMD features, space-separated.
+
+    numpy compiles a low baseline (typically SSE/SSE2/SSE3 on x86-64) and selects
+    everything above it from the host CPU at import time, so this is the concrete
+    record of which kernels a given run actually used.
+    """
+    try:
+        import numpy.core._multiarray_umath as umath  # pylint: disable=import-outside-toplevel
+
+        features = umath.__cpu_features__
+        return " ".join(name for name in umath.__cpu_dispatch__ if features.get(name))
+    except Exception:  # noqa: BLE001 - purely informational, never break a run
+        return "unknown"
+
+
+def package_versions(packages: tuple[str, ...] = NUMERIC_PACKAGES) -> dict[str, str]:
+    """Return ``{distribution: version}``, with ``"not installed"`` for absentees."""
+    versions: dict[str, str] = {}
+    for name in packages:
+        try:
+            versions[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            versions[name] = "not installed"
+    return versions
+
+
+def runtime_environment() -> dict[str, Any]:
+    """Return the machine/runtime facts a golden run's numbers could depend on.
+
+    Recorded on every check so that a flaky pair can be diagnosed by diffing the
+    failing run's report against a passing one, instead of guessing. Purely
+    informational — nothing reads it back to make a pass/fail decision.
+    """
+    return {
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "cpu_model": cpu_model(),
+        **cpu_counts(),
+        "numpy_simd": numpy_simd_features(),
+        "numeric_env": {name: os.environ.get(name, "<unset>") for name in NUMERIC_ENV_VARS},
+        "package_versions": package_versions(),
+    }
+
+
+def environment_metadata(config_path: Path) -> dict[str, Any]:
     """Return environment metadata recorded alongside a blessed snapshot.
 
-    Purely informational — the checker never reads it. Includes the HiSim git
-    commit, Python version, platform, config SHA-256, and an ISO-8601 timestamp.
+    Purely informational — the checker never reads it. The HiSim git commit, the
+    config SHA-256 and an ISO-8601 timestamp, plus the full
+    :func:`runtime_environment` (Python, platform, CPU, numpy SIMD dispatch,
+    thread env vars, numeric package versions).
     """
     return {
         "hisim_commit": _git_commit(),
-        "python_version": platform.python_version(),
-        "platform": platform.platform(),
         "config_sha256": config_hash(config_path),
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        **runtime_environment(),
     }

@@ -32,6 +32,7 @@ try:  # run as a script from scripts/ ...
         load_config,
         run_all,
         run_all_json,
+        runtime_environment,
         select_pairs,
     )
 except ModuleNotFoundError:  # ... or imported as scripts.golden_check (tests)
@@ -43,6 +44,7 @@ except ModuleNotFoundError:  # ... or imported as scripts.golden_check (tests)
         load_config,
         run_all,
         run_all_json,
+        runtime_environment,
         select_pairs,
     )
 
@@ -76,6 +78,11 @@ class ComparisonReport:
 
     passed: bool
     pairs: list[PairReport] = field(default_factory=list)
+    # Machine/runtime facts for the run that produced this report (CPU, numpy SIMD
+    # dispatch, thread env vars, numeric package versions). Recorded on pass and
+    # fail alike: diagnosing a flaky pair means diffing a failing run's environment
+    # against a passing one, which only works if both are recorded.
+    environment: dict[str, Any] = field(default_factory=dict)
 
     def summary_line(self) -> str:
         total = len(self.pairs)
@@ -129,6 +136,20 @@ def _print_failure_details(report: ComparisonReport, out_dir: Path, advisory: bo
         print("(advisory mode: divergences reported but not blocking)")
 
 
+def _environment_lines(environment: dict[str, Any]) -> list[str]:
+    """Render the recorded runtime environment as flat, diffable ``key: value`` lines."""
+    if not environment:
+        return []
+    lines = ["", "Environment:"]
+    for key, value in environment.items():
+        if isinstance(value, dict):
+            for sub_key, sub_value in value.items():
+                lines.append(f"    {key}.{sub_key}: {sub_value}")
+        else:
+            lines.append(f"    {key}: {value}")
+    return lines
+
+
 def _write_reports(report: ComparisonReport, out_dir: Path) -> None:
     """Write ``report.json`` and ``report.txt`` into ``out_dir``."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -141,6 +162,7 @@ def _write_reports(report: ComparisonReport, out_dir: Path) -> None:
         lines.append(f"[{tag}] {pair.setup_id} / {pair.parameter_set_id}{note}")
         for dev in pair.deviations:
             lines.append(f"    - {dev}")
+    lines.extend(_environment_lines(report.environment))
     (out_dir / "report.txt").write_text("\n".join(lines) + "\n")
 
 
@@ -172,6 +194,7 @@ def main(
     config = load_config(config_path)
     config = filter_config(config, setup_id=setup_id, param_id=param_id)
     out_dir = results_root / config.check_subdir
+    environment = runtime_environment()
 
     pairs = select_pairs(config)
     missing = [
@@ -195,9 +218,11 @@ def main(
                 )
                 for setup, param in missing
             ],
+            environment=environment,
         )
         _write_reports(report, out_dir)
         print(report.summary_line())
+        print("\n".join(_environment_lines(environment)))
         _print_failure_details(report, out_dir, advisory)
         return 0 if advisory else 1
 
@@ -231,9 +256,12 @@ def main(
             passed = False
         pair_reports.append(PairReport(result.setup_id, result.parameter_set_id, status, nondet, deviations))
 
-    report = ComparisonReport(passed=passed, pairs=pair_reports)
+    report = ComparisonReport(passed=passed, pairs=pair_reports, environment=environment)
     _write_reports(report, out_dir)
     print(report.summary_line())
+    # Printed on success too: a failing run's environment is only informative when
+    # there is a passing run's environment to diff it against.
+    print("\n".join(_environment_lines(environment)))
     if not passed:
         _print_failure_details(report, out_dir, advisory)
     return 0 if (passed or advisory) else 1

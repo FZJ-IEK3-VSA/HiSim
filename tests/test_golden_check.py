@@ -88,6 +88,45 @@ def test_fail_when_kpi_diverges(tmp_path: Path) -> None:
     assert report["pairs"][0]["deviations"]
 
 
+def test_environment_is_recorded_on_pass_and_on_fail(tmp_path: Path) -> None:
+    """Both outcomes record the runtime environment, in report.json and report.txt.
+
+    Diagnosing a flaky pair means diffing a failing run's environment against a
+    passing one, so recording it only on failure would leave nothing to compare to.
+    """
+    golden_dir = tmp_path / "golden_references"
+    _write_golden(golden_dir, {"a": 1.0})
+
+    for kpis, expected_rc, label in (({"a": 1.0}, 0, "pass"), ({"a": 2.0}, 1, "fail")):
+        results_root = tmp_path / label
+        rc = main(
+            config_path=_write_config(tmp_path), golden_dir=golden_dir,
+            results_root=results_root, repo_root=tmp_path, run_fn=_run_fn(kpis),
+        )
+        assert rc == expected_rc
+
+        environment = json.loads(
+            (results_root / "golden-ref-check" / "report.json").read_text()
+        )["environment"]
+        assert environment["cpu_model"]
+        assert "numpy" in environment["package_versions"]
+        assert "OMP_NUM_THREADS" in environment["numeric_env"]
+
+        text = (results_root / "golden-ref-check" / "report.txt").read_text()
+        assert "Environment:" in text
+        assert "package_versions.numpy:" in text
+
+
+def test_environment_is_recorded_when_golden_is_missing(tmp_path: Path) -> None:
+    """The early missing-golden bail still records the environment it bailed in."""
+    rc = main(
+        config_path=_write_config(tmp_path), golden_dir=tmp_path / "golden_references",
+        results_root=tmp_path, repo_root=tmp_path, run_fn=_run_fn({}),
+    )
+    assert rc == 1
+    assert _read_report(tmp_path)["environment"]["cpu_model"]
+
+
 def test_missing_golden_bails_before_running(tmp_path: Path) -> None:
     """A missing golden file fails fast without invoking the run function."""
     config_path = _write_config(tmp_path)

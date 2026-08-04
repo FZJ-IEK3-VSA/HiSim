@@ -155,6 +155,9 @@ class PostProcessor:
                 "ReportGenerator",
             )
             report = report_generator_class(dirpath=ppdt.simulation_parameters.result_directory)
+            # Collect all chapters first and render the pdf once via finalize() below, instead of
+            # re-rendering the entire document at the end of every chapter.
+            report.defer_rendering = True
             self.write_simulation_parameters_to_report(ppdt, report)
             end = timer()
             duration = end - start
@@ -233,6 +236,16 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Computing and writing KPIs to report took " + f"{duration:1.2f}s.")
+
+        # All chapters have been collected by now, so render the pdf. This happens before the
+        # explorer is opened further down, so the finished report is on disk by then.
+        if report is not None:
+            log.information("Rendering the PDF report.")
+            start = timer()
+            report.finalize()
+            end = timer()
+            duration = end - start
+            log.information("Rendering the PDF report took " + f"{duration:1.2f}s.")
 
         if PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE in ppdt.post_processing_options:
             building_module = importlib.import_module("hisim.components.building")

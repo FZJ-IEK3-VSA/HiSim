@@ -1112,15 +1112,23 @@ class PostProcessor:
     ) -> None:
         """Write KPIs to json file for building sizer."""
 
-        def get_kpi_entries_for_building_sizer(data, target_key):
-            """Get kpi entries for building sizer."""
+        def get_kpi_entries_for_building_sizer(data, target_key, match_prefix: bool = False):
+            """Get kpi entries for building sizer.
+
+            With match_prefix the target key only needs to be a prefix of the kpi name. This is needed
+            for kpis whose name contains a config value, e.g. the building set temperatures.
+            """
+
+            def is_match(key: str) -> bool:
+                return key.startswith(target_key) if match_prefix else key == target_key
+
             result = None
             for key1, value1 in data.items():
-                if key1 == target_key:
+                if is_match(key1):
                     result = value1["value"]
                 if isinstance(value1, dict):
                     for key2, value2 in value1.items():
-                        if key2 == target_key:
+                        if is_match(key2):
                             result = value2["value"]
             if result is None:
                 raise KeyError(f"No key is matching the target key {target_key}.")
@@ -1217,13 +1225,16 @@ class PostProcessor:
                 maximum_indoor_temperature_in_celsius = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict, target_key="Maximum building indoor air temperature reached"
                 )
+                # the set temperatures are part of the kpi name, so match on the prefix only
                 deviation_from_minimum_indoor_temperature_in_celsius_hour = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict,
-                    target_key="Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius",
+                    target_key="Temperature deviation of building indoor air temperature being below set temperature",
+                    match_prefix=True,
                 )
                 deviation_from_maximum_indoor_temperature_in_celsius_hour = get_kpi_entries_for_building_sizer(
                     data=kpi_collection_dict,
-                    target_key="Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius",
+                    target_key="Temperature deviation of building indoor air temperature being above set temperature",
+                    match_prefix=True,
                 )
 
                 # initialize json interface to pass kpi's to building_sizer

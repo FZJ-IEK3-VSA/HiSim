@@ -288,6 +288,12 @@ def run_one(
 
     try:
         params = build_simulation_parameters(parameter_set, result_directory)
+        # A golden run must never silently substitute its inputs. Without this, a failed
+        # LPG request downgrades to USE_PREDEFINED_PROFILE and the run *succeeds* on a
+        # different household load profile — which then shows up as a KPI divergence that
+        # looks like a code regression and disappears on re-run. Strict mode turns that
+        # into a run error naming the real cause.
+        os.environ.setdefault("HISIM_STRICT_LPG", "1")
         # Imported lazily so the pure helpers stay importable without the full
         # HiSim execution stack.
         from hisim import hisim_main

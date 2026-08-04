@@ -114,6 +114,59 @@ class LpgDataAcquisitionMode(enum.Enum):
     USE_LOCAL_LPG = "use_local_lpg"
 
 
+# pylpg's LPGExecutor derives its working directory purely from the calculation index:
+# ``<site-packages>/pylpg/C<index>``. That path is shared by every process on the machine,
+# so two concurrent runs that pick the same index share one working directory and one
+# SQLite results database. The collision surfaces as "database is locked", and because the
+# failure is caught and downgraded to USE_PREDEFINED_PROFILE the run then completes on a
+# *different household load profile* without failing — silently wrong numbers.
+#
+# Each run therefore takes a process-private block of indices. The block is wide enough
+# that the multi-household path, which walks index..index+n, stays inside it.
+LOCAL_LPG_INDICES_PER_PROCESS = 100
+
+
+def default_local_lpg_calculation_index() -> int:
+    """Return a process-private base index for the local-LPG working directory.
+
+    Derived from the PID so concurrent runs on one machine never share a directory.
+    PIDs are recycled by the OS, but ``LPGExecutor`` is invoked with
+    ``clear_previous_calc=True``, so a later process inheriting the same PID wipes any
+    directory left behind rather than reusing its contents.
+    """
+    return os.getpid() * LOCAL_LPG_INDICES_PER_PROCESS
+
+
+# When a UTSP or local-LPG request fails, the connector downgrades to
+# USE_PREDEFINED_PROFILE and carries on. That is reasonable for interactive use, but it is
+# the wrong default for anything comparing numbers against a reference: the run completes
+# successfully on a *different household load profile*, so the results look plausible and
+# are silently wrong. Setting this variable makes such a failure fatal instead.
+STRICT_LPG_ENV_VAR = "HISIM_STRICT_LPG"
+_FALSEY_ENV_VALUES = frozenset({"", "0", "false", "no", "off"})
+
+
+def strict_lpg_enabled() -> bool:
+    """True when LPG acquisition failures must be fatal rather than silently downgraded."""
+    return os.environ.get(STRICT_LPG_ENV_VAR, "").strip().lower() not in _FALSEY_ENV_VALUES
+
+
+def resolve_local_lpg_calculation_index(configured_index: Optional[int]) -> int:
+    """Resolve the base calculation index for the local LPG working directory.
+
+    Precedence: an explicit config value, then ``HISIM_LOCAL_LPG_CALC_INDEX`` (set per
+    worker by batch tooling such as ``scripts/regenerate_scenario_jsons.py``), then a
+    process-private default. Never returns the old hard-coded ``1``, which put every
+    concurrent run into the same shared pylpg directory.
+    """
+    if configured_index:
+        return configured_index
+    env_override = os.environ.get("HISIM_LOCAL_LPG_CALC_INDEX")
+    if env_override:
+        return int(env_override)
+    return default_local_lpg_calculation_index()
+
+
 @dataclass_json
 @dataclass
 class UtspLpgConnectorConfig(cp.ConfigBase):
@@ -227,12 +280,9 @@ class UtspLpgConnector(cp.Component):
         self.name_of_predefined_loadprofile = config.name_of_predefined_loadprofile
         self.predefined_loadprofile_filepaths = config.predefined_loadprofile_filepaths
 
-        self.calculation_index_for_local_lpg = config.calculation_index_for_local_lpg
-        if not self.calculation_index_for_local_lpg:
-            # Fall back to 1, but allow an override via env var so that several local-LPG
-            # runs in parallel (e.g. batch scenario-JSON regeneration) use distinct
-            # pylpg working directories (C<index>) instead of colliding on C1.
-            self.calculation_index_for_local_lpg = int(os.environ.get("HISIM_LOCAL_LPG_CALC_INDEX", "1"))
+        self.calculation_index_for_local_lpg = resolve_local_lpg_calculation_index(
+            config.calculation_index_for_local_lpg
+        )
 
         self.build()
         # dummy value as long as there is no way to consider multiple households in one house
@@ -963,6 +1013,14 @@ class UtspLpgConnector(cp.Component):
 
                         except Exception as e:
                             log.warning(f"Error while {self.utsp_config.data_acquisition_mode} request: {e}")
+                            if strict_lpg_enabled():
+                                raise RuntimeError(
+                                    f"LPG data acquisition failed in mode "
+                                    f"{self.utsp_config.data_acquisition_mode} and strict mode is on "
+                                    f"({STRICT_LPG_ENV_VAR}), so the downgrade was refused. Continuing "
+                                    f"would have completed the run on a *different household load "
+                                    f"profile*, producing plausible but silently wrong results."
+                                ) from e
                             if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
                                 self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_LOCAL_LPG
                             elif self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG:
@@ -1323,7 +1381,17 @@ class UtspLpgConnector(cp.Component):
 
         log.information("Requesting LPG profiles from local lpg for multiple household.")
         result_folder_list = []
-        calculation_index = 1
+        # Walk upward from this process's private base index. Previously hard-coded to 1,
+        # which silently ignored the configured/env index and put every concurrent run's
+        # households back onto the same shared C1, C2, ... directories.
+        calculation_index = self.calculation_index_for_local_lpg
+        if len(households) > LOCAL_LPG_INDICES_PER_PROCESS:
+            log.warning(
+                f"{len(households)} households exceed the per-process block of "
+                f"{LOCAL_LPG_INDICES_PER_PROCESS} local-LPG calculation indices, so indices may "
+                f"overlap another concurrent run's working directories. Raise "
+                f"LOCAL_LPG_INDICES_PER_PROCESS or set HISIM_LOCAL_LPG_CALC_INDEX explicitly."
+            )
         for household in households:
             result_folder = self.execute_local_lpg_single_household(calculation_index=calculation_index,
                                                                     household=household,

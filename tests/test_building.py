@@ -20,7 +20,15 @@ from tests import functions_for_testing as fft
 @pytest.mark.base
 @utils.measure_execution_time
 def test_building() -> None:
-    """Test function for the building module."""
+    """Verify the building thermal model cools at a bounded rate without heating.
+
+    Sets up a default German single-family-home `Building` wired to a `Weather`
+    instance (Aachen), a UTSP LPG occupancy connector, and a fake thermal
+    delivery output. Runs a single time step at t=0 for several resolutions
+    (60 s, 15 min, 1 h) and asserts that the simulated thermal-mass
+    temperature does not fall more than ~0.1 °C per minute below the
+    building config's initial internal temperature.
+    """
 
     starttime = datetime.datetime.now()
     formatted_start_time = starttime.strftime("%d-%b-%Y %H:%M:%S")

@@ -1,0 +1,53 @@
+{
+  "job": {
+    "jobId": "example-3-electric-bungalow",
+    "submission": {
+      "url": "https://renovisor.example/api/results",
+      "files": ["all_kpis.json", "*_kpi_config_for_building_sizer.json"]
+    },
+    "simulationOverrides": {
+      "secondsPerTimestep": 3600
+    }
+  },
+  "request": {
+    "contractVersion": "1.0.0",
+    "location": {
+      "countryCode": "IE",
+      "region": "Galway"
+    },
+    "homeInputs": {
+      "dwellingType": "bungalow",
+      "constructionYear": 1955,
+      "floorAreaM2": 110,
+      "storeys": 1,
+      "occupants": 1,
+      "targetTempC": 22,
+      "homeOfficeDaysPerWeek": 5,
+      "smartThermostats": true,
+      "envelopeState": "usual_refurb",
+      "roof": { "construction": "pitched", "insulation": "200mm_added_ceiling" },
+      "walls": { "construction": "solid_wall", "insulation": "partial" },
+      "floor": { "construction": "solid_ground", "insulation": "none" },
+      "windows": { "type": "pvc_double_argon" },
+      "doors": { "type": "composite_insulated" },
+      "heating": {
+        "primary": "direct_electric",
+        "secondary": "wood_stove",
+        "irishCookingRange": false,
+        "emitter": null
+      },
+      "solarThermal": { "mode": "none" },
+      "pv": { "kWp": 0.8, "sizePreset": "balcony_lt1kw", "orientation": "east_west" },
+      "battery": { "kWh": 0, "sizePreset": "none" },
+      "vehicles": [
+        { "type": "electric", "kmPerYear": 12000, "kWhPerKm": 0.18 }
+      ]
+    },
+    "measures": [
+      { "type": "heat_pump", "params": { "kW": 6 } },
+      { "type": "floor_insulation", "params": { "mm": 100 } },
+      { "type": "pv", "params": { "kWp": 5 } },
+      { "type": "battery", "params": { "kWh": 10 } }
+    ]
+  }
+}

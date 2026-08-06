@@ -16,6 +16,7 @@ See GitLab issue #166.
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -33,7 +34,7 @@ def _make_instance() -> ResultDataCollection:
     return ResultDataCollection.__new__(ResultDataCollection)
 
 
-def _empty_lists() -> list:
+def _empty_lists() -> list[list[Any]]:
     return [[] for _ in range(8)]
 
 

@@ -4,7 +4,7 @@
 
 # Generic/Built-in
 import random
-from typing import List, ClassVar
+from typing import List, ClassVar, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -65,8 +65,23 @@ class RandomNumbers(Component):
         config: RandomNumbersConfig,
         my_simulation_parameters: SimulationParameters,
         my_display_config: DisplayConfig = DisplayConfig(),
+        rng: Optional[random.Random] = None,
     ) -> None:
-        """Initialize the class."""
+        """Initialize the class.
+
+        Args:
+            config: Configuration holding the number of timesteps and the
+                ``[minimum, maximum]`` range to draw from.
+            my_simulation_parameters: Simulation parameters of the run.
+            my_display_config: Display configuration for the component.
+            rng: Optional :class:`random.Random` instance used to draw the
+                values. When ``None`` (the default) a fresh
+                ``random.Random()`` is used so the global ``random`` module
+                state is never mutated and production output stays
+                non-deterministic. Passing a seeded instance (e.g.
+                ``random.Random(0)``) makes ``self.values`` reproducible,
+                which is what tests want.
+        """
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()
@@ -76,13 +91,16 @@ class RandomNumbers(Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.values: List[float] = []
         self.minimum = config.minimum
         self.maximum = config.maximum
-        number_range = config.maximum - config.minimum
-        for _ in range(config.timesteps):
-            number = config.minimum + random.random() * number_range
-            self.values.append(number)
+        if rng is None:
+            rng = random.Random()
+        self.values: List[float] = self._generate_values(
+            minimum=config.minimum,
+            maximum=config.maximum,
+            timesteps=config.timesteps,
+            rng=rng,
+        )
         self.output1 = self.add_output(
             self.component_name,
             RandomNumbers.RandomOutput,
@@ -90,6 +108,45 @@ class RandomNumbers(Component):
             lt.Units.ANY,
             output_description="Random Number Output",
         )
+
+    @staticmethod
+    def _generate_values(
+        minimum: float,
+        maximum: float,
+        timesteps: int,
+        rng: random.Random,
+    ) -> List[float]:
+        """Generate ``timesteps`` random values drawn from ``[minimum, maximum]``.
+
+        This is a pure helper: the only state it touches is ``rng``. Passing a
+        seeded :class:`random.Random` makes the returned list fully
+        reproducible without mutating the module-global ``random`` state, so
+        the generation logic (exactly ``timesteps`` values, all within bounds)
+        can be asserted on directly and in isolation from the ``Component``
+        framework.
+
+        Args:
+            minimum: Lower bound (inclusive) of the value range.
+            maximum: Upper bound (inclusive in practice, ``random`` draws on
+                ``[0, 1)`` so ``maximum`` is approached but never exceeded).
+            timesteps: Number of values to generate. Must be non-negative.
+            rng: The :class:`random.Random` instance to draw from.
+
+        Returns:
+            A list of ``timesteps`` floats, each in ``[minimum, maximum)``.
+
+        Raises:
+            ValueError: If ``timesteps`` is negative.
+        """
+        if timesteps < 0:
+            raise ValueError(
+                f"timesteps must be non-negative, got {timesteps}."
+            )
+        number_range = maximum - minimum
+        values: List[float] = []
+        for _ in range(timesteps):
+            values.append(minimum + rng.random() * number_range)
+        return values
 
     def i_restore_state(self) -> None:
         """Restores the state."""

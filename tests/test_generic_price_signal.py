@@ -74,4 +74,4 @@ def test_config_is_pure_and_does_not_mutate() -> None:
     assert second.building_name == "BUI2"
     # The list defaults are fresh instances, not shared mutable state.
     first.fixed_price.append(1.0)
-    assert second.fixed_price == []
+    assert not second.fixed_price

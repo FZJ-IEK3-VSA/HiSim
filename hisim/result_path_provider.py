@@ -16,7 +16,7 @@ import re
 import datetime
 import enum
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 from hisim.sim_repository_singleton import SingletonMeta
 
@@ -48,14 +48,14 @@ class SortingOptionEnum(enum.Enum):
 
 # Default directory layout chosen per run mode. The run mode picks the layout; callers may still
 # override it explicitly when configuring the provider.
-DEFAULT_SORTING_OPTION_FOR_MODE = {
+DEFAULT_SORTING_OPTION_FOR_MODE: dict[RunMode, SortingOptionEnum] = {
     RunMode.SINGLE: SortingOptionEnum.FLAT,
     RunMode.MASS: SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION,
     RunMode.TEST: SortingOptionEnum.FLAT,
 }
 
 # Descriptor arguments of configure() that MUST be provided for each run mode.
-REQUIRED_CONFIGURE_ARGS_FOR_MODE = {
+REQUIRED_CONFIGURE_ARGS_FOR_MODE: dict[RunMode, tuple[str, ...]] = {
     RunMode.SINGLE: ("model_name", "variant_name"),
     RunMode.MASS: ("model_name",),
     RunMode.TEST: ("test_name",),
@@ -64,7 +64,7 @@ REQUIRED_CONFIGURE_ARGS_FOR_MODE = {
 # Descriptor arguments of configure() that MAY additionally be provided for each run mode.
 # Anything provided that is neither required nor optional for the mode is rejected.
 # (``base_path`` is intentionally not listed here: it is a root-location override allowed in any mode.)
-OPTIONAL_CONFIGURE_ARGS_FOR_MODE = {
+OPTIONAL_CONFIGURE_ARGS_FOR_MODE: dict[RunMode, tuple[str, ...]] = {
     RunMode.SINGLE: (),
     RunMode.MASS: (
         "variant_name",
@@ -109,7 +109,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         self.variant_name: Optional[str] = None
         self.scenario_hash_string: Optional[str] = None
         self.further_result_folder_description: Optional[str] = None
-        self.sorting_option: Any = SortingOptionEnum.FLAT
+        self.sorting_option: SortingOptionEnum = SortingOptionEnum.FLAT
         self.time_resolution_in_seconds: Optional[int] = None
         self.simulation_duration_in_days: Optional[int] = None
         self.datetime_string: str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -204,7 +204,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         model_name: str,
         variant_name: Optional[str],
         scenario_hash_string: Optional[str],
-        sorting_option: Any,
+        sorting_option: SortingOptionEnum,
         further_result_folder_description: Optional[str] = None,
     ) -> None:
         """Set important result path information.
@@ -243,7 +243,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         """Set further result folder description."""
         self.further_result_folder_description = further_result_folder_description
 
-    def set_sorting_option(self, sorting_option: Any) -> None:
+    def set_sorting_option(self, sorting_option: SortingOptionEnum) -> None:
         """Set sorting option."""
         self.sorting_option = sorting_option
 
@@ -255,7 +255,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         """Set simulation duration."""
         self.simulation_duration_in_days = simulation_duration_in_days
 
-    def get_run_directory(self) -> Any:
+    def get_run_directory(self) -> Optional[str]:
         """Get the run's root directory (alias for :meth:`get_result_directory_name`)."""
         return self.get_result_directory_name()
 

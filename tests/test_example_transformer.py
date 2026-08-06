@@ -11,7 +11,7 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_example_transformer():
+def test_example_transformer() -> None:
     """Test ExampleTransformer component with two inputs.
 
     Verifies that i_simulate correctly computes output1 as input1 * 5

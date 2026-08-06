@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Any, cast
 import json
+import math
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
@@ -223,7 +224,11 @@ class XTPController(Component):
         if force_convergence:
             return
 
-        demand_load = abs(stsv.get_input_value(self.demand_input) / 1000)  # WATT input to KILOWATT
+        raw = stsv.get_input_value(self.demand_input)
+        assert math.isfinite(raw), (
+            f"Non-finite demand input at timestep {timestep}: {raw}"
+        )
+        demand_load = abs(raw / 1000)  # WATT input to KILOWATT
 
         """ Only for household testing
         if self.system_state == "OFF" and soc < 0.2:

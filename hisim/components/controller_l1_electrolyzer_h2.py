@@ -215,7 +215,7 @@ class ElectrolyzerController(Component):
         standby_load: float | None,
     ) -> tuple[float, str, float]:
         """Load check."""
-        if None in (current_load, min_load, max_load, standby_load):
+        if current_load is None or min_load is None or max_load is None or standby_load is None:
             raise ValueError(f"None type not accepted. {current_load}, {min_load}, {max_load}, {standby_load}")
         if current_load > max_load:
             current_load_to_system = max_load

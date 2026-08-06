@@ -1,4 +1,10 @@
-"""Test for heating meter."""
+"""Integration tests for the FuelMeter component.
+
+Builds a household simulation with an oil boiler heating system. The test
+asserts that the fuel meter's recorded total energy consumption matches the
+oil boiler's consumption within tolerance, and logs the OPEX cost and CO2
+footprint KPI values for inspection.
+"""
 
 # clean
 
@@ -39,10 +45,10 @@ def test_house(
     """Integration test for FuelMeter with an oil boiler heating system.
 
     Builds a complete household simulation including weather, PV, building,
-    heat distribution, oil boiler, and fuel meter. Verifies that the fuel
-    meter's total energy consumption matches the boiler's consumption within
-    a 5% relative tolerance, and checks KPI outputs for OPEX costs and CO2
-    footprint.
+    heat distribution, oil boiler, and fuel meter. Asserts that the fuel
+    meter's total energy consumption matches the oil boiler's consumption
+    within a 5% relative tolerance, and logs the OPEX cost and CO2 footprint
+    KPI values for inspection.
 
     Args:
         my_simulation_parameters: Optional simulation parameters. If None,

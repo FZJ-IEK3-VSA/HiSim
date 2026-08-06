@@ -145,11 +145,11 @@ class IdealizedElectricHeater(cp.Component):
         """Simulate the Idealized Electric Heater."""
 
         # Get inputs ------------------------------------------------------------------------------------------------------------
-        theoretical_thermal_building_in_watt = stsv.get_input_value(self.theoretical_thermal_building_channel)
+        theoretical_thermal_building_demand_in_watt = stsv.get_input_value(self.theoretical_thermal_building_channel)
 
         # Calculations ----------------------------------------------------------------------------------------------------------
 
-        thermal_power_delivered_in_watt = theoretical_thermal_building_in_watt
+        thermal_power_delivered_in_watt = theoretical_thermal_building_demand_in_watt
 
         if thermal_power_delivered_in_watt >= 0:
             heating_in_watt = thermal_power_delivered_in_watt

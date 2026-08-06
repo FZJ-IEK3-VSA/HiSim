@@ -137,12 +137,11 @@ def setup_function(
         raise ValueError(f"Heat distribution system not recognized: {energy_system_config_.heat_distribution_system}")
     # Set Weather
     weather_location = arche_type_config_.weather_location
-    if weather_location is None:
-        weather_location = "AACHEN"  # default weather location
 
     # testing AU weather data
     weather_filepath = arche_type_config_.weather_filepath
-    weather_datasource = arche_type_config_.weather_datasource
+    weather_datasource_raw = arche_type_config_.weather_datasource
+    weather_datasource: Optional[weather.WeatherDataSourceEnum] = None
 
     # Set Photovoltaic System
     azimuth = arche_type_config_.pv_azimuth
@@ -203,6 +202,23 @@ def setup_function(
     my_building_config.absolute_conditioned_floor_area_in_m2 = absolute_conditioned_floor_area_in_m2
     my_building_config.number_of_apartments = number_of_apartments
     my_building_config.enable_opening_windows = True
+
+    # Optional building-envelope override from the archetype config. Each field defaults to None,
+    # in which case the Building component derives the value from the TABULA building_code as before.
+    # Only when a real U-value/area is provided in the config is it used instead (opt-in).
+    my_building_config.floor_u_value_in_watt_per_m2_per_kelvin = arche_type_config_.floor_u_value_in_watt_per_m2_per_kelvin
+    my_building_config.floor_area_in_m2 = arche_type_config_.floor_area_in_m2
+    my_building_config.facade_u_value_in_watt_per_m2_per_kelvin = arche_type_config_.facade_u_value_in_watt_per_m2_per_kelvin
+    my_building_config.facade_area_in_m2 = arche_type_config_.facade_area_in_m2
+    my_building_config.roof_u_value_in_watt_per_m2_per_kelvin = arche_type_config_.roof_u_value_in_watt_per_m2_per_kelvin
+    my_building_config.roof_area_in_m2 = arche_type_config_.roof_area_in_m2
+    my_building_config.window_u_value_in_watt_per_m2_per_kelvin = arche_type_config_.window_u_value_in_watt_per_m2_per_kelvin
+    my_building_config.window_area_in_m2 = arche_type_config_.window_area_in_m2
+    my_building_config.door_u_value_in_watt_per_m2_per_kelvin = arche_type_config_.door_u_value_in_watt_per_m2_per_kelvin
+    my_building_config.door_area_in_m2 = arche_type_config_.door_area_in_m2
+    if arche_type_config_.building_heat_capacity_class is not None:
+        my_building_config.building_heat_capacity_class = arche_type_config_.building_heat_capacity_class
+
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
@@ -234,8 +250,8 @@ def setup_function(
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    if isinstance(weather_datasource, str):
-        weather_datasource = weather.WeatherDataSourceEnum[weather_datasource]
+    if isinstance(weather_datasource_raw, str):
+        weather_datasource = weather.WeatherDataSourceEnum[weather_datasource_raw]
     # my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
     my_weather_config = weather.WeatherConfig.get_default(
         location_entry=weather_location,

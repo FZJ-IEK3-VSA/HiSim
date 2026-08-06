@@ -16,7 +16,14 @@ from tests import functions_for_testing as fft
 
 @pytest.mark.base
 def test_electrolyzer() -> None:
-    """Test electrolyzer."""
+    """Verify hydrogen flow rate output of the generic electrolyzer under a fixed electrical load.
+
+    Constructs an `Electrolyzer` with a PEM configuration (nominal load 987 kW, max load
+    ~1028 kW, nominal H2 flow rate 18.875 kg/h), feeds a fake electrical load of 850.6 kW
+    and an activation state of 1, then asserts that the produced hydrogen flow rate matches
+    the expected value (~0.6218 kg/h) when the electrolyzer is active, and is zero when the
+    activation state indicates off or standby.
+    """
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
         2021, seconds_per_timestep

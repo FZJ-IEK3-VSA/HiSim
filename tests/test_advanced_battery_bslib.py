@@ -95,7 +95,7 @@ def test_advanced_battery_bslib() -> None:
 
 
 @pytest.mark.base
-def test_advanced_battery_bslib_get_cost_capex_zero_lifetime_in_cycles():
+def test_advanced_battery_bslib_get_cost_capex_zero_lifetime_in_cycles() -> None:
     """Regression test: get_cost_capex must not raise NameError when lifetime_in_cycles <= 0.
 
     When ``lifetime_in_cycles`` is zero (or negative), the original code logged a warning but

@@ -7,6 +7,7 @@ import importlib
 import importlib.util
 from dataclasses import dataclass, field
 import inspect
+import logging
 import os
 import sys
 from openpyxl import Workbook  # type: ignore
@@ -321,7 +322,17 @@ class OverviewGenerator:
             module: Optional[ModuleType] = importlib.util.module_from_spec(spec)  # type: ignore
             spec.loader.exec_module(module)  # type: ignore
             sys.modules[myfi.module_name] = module  # type: ignore
-        except Exception:  # noqa: broad-except # pylint: disable=broad-except
+        except (Exception, SystemExit) as e:  # noqa: broad-except # pylint: disable=broad-except
+            # SystemExit is raised by files like setup.py that call setup() at
+            # import time; treat them as "could not be loaded as a module".
+            # Surface the failure so a real bug (SyntaxError, ImportError, ...)
+            # is diagnosable instead of silently dropping the module.
+            logging.getLogger(__name__).warning(
+                "Could not load %s as a module: %s: %s",
+                myfi.file_name,
+                type(e).__name__,
+                e,
+            )
             module = None
         return module
 

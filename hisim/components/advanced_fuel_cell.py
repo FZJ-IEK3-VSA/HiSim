@@ -149,7 +149,7 @@ class CHPState:
         elif self.electricity_output > 0.0:
             self.activation = 1
         else:
-            raise Exception("Impossible CHPState.")
+            raise ValueError(f"Impossible CHPState: electricity_output={self.electricity_output}")
 
 
 class CHP(Component):
@@ -555,10 +555,10 @@ class CHP(Component):
                 if control_signal > 1 or control_signal < 0:
                     control_signal = 1
 
-        if control_signal > 1:
-            raise Exception("Expected a control signal between 0 and 1")
-        if control_signal < 0:
-            raise Exception("Expected a control signal between 0 and 1")
+        if control_signal > 1 or control_signal < 0:
+            raise ValueError(
+                f"Expected a control signal between 0 and 1, got {control_signal}"
+            )
 
         el_power, th_power, eff_el_real, eff_th_real = self.simulate_chp(
             control_signal=control_signal, stsv=stsv, timestep=timestep

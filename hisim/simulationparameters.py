@@ -3,7 +3,7 @@
 from __future__ import annotations
 import os
 import inspect
-from typing import List, Optional
+from typing import List, Optional, Sequence
 import enum
 
 import datetime
@@ -38,7 +38,7 @@ class SimulationParameters(JSONWizard):
         seconds_per_timestep: int,
         country: str = 'DE',
         result_directory: str = "",
-        post_processing_options: Optional[List[int]] = None,
+        post_processing_options: Optional[Sequence[int]] = None,
         logging_level: int = log.LogPrio.INFORMATION,
         skip_finished_results: bool = False,
         surplus_control: bool = True,
@@ -87,7 +87,7 @@ class SimulationParameters(JSONWizard):
         self.country: str = country
         if post_processing_options is None:
             post_processing_options = []
-        self.post_processing_options: List[int] = post_processing_options
+        self.post_processing_options: List[int] = list(post_processing_options)
         self.logging_level: int = logging_level  # Info # noqa
         self.result_directory: str = result_directory
         self.skip_finished_results: bool = skip_finished_results

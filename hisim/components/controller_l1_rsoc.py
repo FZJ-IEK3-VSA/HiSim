@@ -53,23 +53,45 @@ class RsocControllerConfig(ConfigBase):
     switching_time_from_sofc_to_soec: float
 
     @staticmethod
-    def read_config(rsoc_name):
-        """Opens the according JSON-file, based on the rSOC_name."""
+    def read_config(rsoc_name: str, path: Path | None = None) -> dict[str, Any]:
+        """Open the manufacturer config JSON and return the variant for ``rsoc_name``.
 
-        config_file = Path(utils.HISIMPATH["inputs"]) / "rSOC_manufacturer_config.json"
+        When ``path`` is ``None`` the config shipped with HiSim
+        (``utils.HISIMPATH["inputs"] / "rSOC_manufacturer_config.json"``) is
+        used, preserving the original behaviour. Passing an explicit ``path``
+        keeps the lookup independent of the module-global ``HISIMPATH`` and the
+        default inputs directory, which makes it usable from tests.
+        """
+
+        config_file = (
+            path
+            if path is not None
+            else Path(utils.HISIMPATH["inputs"]) / "rSOC_manufacturer_config.json"
+        )
         with config_file.open(encoding="utf-8") as json_file:
             data = json.load(json_file)
-            return data.get("rSOC variants", {}).get(rsoc_name, {})
+            variant: dict[str, Any] = data.get("rSOC variants", {}).get(rsoc_name, {})
+            return variant
 
     @classmethod
     def config_rsoc(
         cls,
         rsoc_name: str,
         building_name: str = "BUI1",
+        config_json: dict[str, Any] | None = None,
     ) -> Any:
-        """Initializes the config variables based on the JSON-file."""
+        """Initialize the config variables based on the manufacturer JSON.
 
-        config_json = cls.read_config(rsoc_name)
+        When ``config_json`` is ``None`` the manufacturer config is read from
+        disk via :meth:`read_config`, preserving the original behaviour.
+        Passing an in-memory ``config_json`` dict keeps the construction
+        independent of the filesystem and the module-global ``HISIMPATH``, so
+        the config can be built in tests without the inputs directory or JSON
+        file being present.
+        """
+
+        if config_json is None:
+            config_json = cls.read_config(rsoc_name)
         config = RsocControllerConfig(
             building_name=building_name,
             name="rSCO l1 Controller",

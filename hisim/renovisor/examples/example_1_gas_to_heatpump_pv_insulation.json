@@ -1,0 +1,53 @@
+{
+  "job": {
+    "jobId": "example-1-gas-to-heatpump",
+    "submission": {
+      "url": "https://renovisor.example/api/results",
+      "files": ["all_kpis.json", "*_kpi_config_for_building_sizer.json"],
+      "authToken": "example-token-1"
+    }
+  },
+  "request": {
+    "contractVersion": "1.0.0",
+    "location": {
+      "countryCode": "IE",
+      "region": "Dublin",
+      "eircodeOrPostcode": "D14 AB12"
+    },
+    "homeInputs": {
+      "dwellingType": "detached_sfh",
+      "constructionYear": 1968,
+      "floorAreaM2": 157,
+      "storeys": 2,
+      "occupants": 2,
+      "targetTempC": 21,
+      "homeOfficeDaysPerWeek": 2,
+      "smartThermostats": false,
+      "envelopeState": "unrenovated",
+      "roof": { "construction": "pitched", "insulation": "100mm_ceiling" },
+      "walls": { "construction": "300mm_cavity", "insulation": "none" },
+      "floor": { "construction": "solid_ground", "insulation": "none" },
+      "windows": { "type": "pvc_double_air" },
+      "doors": { "type": "solid_wood" },
+      "heating": {
+        "primary": "gas",
+        "secondary": null,
+        "irishCookingRange": false,
+        "emitter": "steel_panel_radiators",
+        "seasonalEfficiencyPct": 88,
+        "flowTempC": 70
+      },
+      "solarThermal": { "mode": "none" },
+      "pv": { "kWp": 0, "sizePreset": "none" },
+      "battery": { "kWh": 0, "sizePreset": "none" },
+      "vehicles": [
+        { "type": "gasoline", "kmPerYear": 15000, "litersPer100km": 7 }
+      ]
+    },
+    "measures": [
+      { "type": "heat_pump", "params": { "kW": 8 } },
+      { "type": "pv", "params": { "kWp": 8 } },
+      { "type": "roof_insulation", "params": { "material": "wood_fibre", "mm": 200 } }
+    ]
+  }
+}

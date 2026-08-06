@@ -12,7 +12,7 @@ from hisim.postprocessing.report_image_entries import (
 
 @pytest.mark.base
 def test_system_chart_entry_fields() -> None:
-    """SystemChartEntry stores path and caption by field order."""
+    """Ensure SystemChartEntry stores path and caption by field order."""
     entry = SystemChartEntry(path="/tmp/chart.png", caption="My Chart")
     assert entry.path == "/tmp/chart.png"
     assert entry.caption == "My Chart"
@@ -20,7 +20,7 @@ def test_system_chart_entry_fields() -> None:
 
 @pytest.mark.base
 def test_report_image_entry_happy_path() -> None:
-    """ReportImageEntry stores every argument on the corresponding attribute."""
+    """Ensure ReportImageEntry stores every argument on the corresponding attribute."""
     entry = ReportImageEntry(
         component_name="HeatPump",
         output_type="power",
@@ -41,7 +41,7 @@ def test_report_image_entry_happy_path() -> None:
 
 @pytest.mark.base
 def test_report_image_entry_optional_fields_none() -> None:
-    """category and unit may be None without raising."""
+    """Category and unit may be None without raising."""
     entry = ReportImageEntry(
         component_name="HeatPump",
         output_type="power",
@@ -60,7 +60,7 @@ def test_report_image_entry_component_name_none_raises() -> None:
     """A None component_name raises ValueError mentioning the cause."""
     with pytest.raises(ValueError, match="Component name was None"):
         ReportImageEntry(
-            component_name=None,
+            component_name=None,  # type: ignore[arg-type]
             output_type="power",
             file_path="/tmp/x.png",
             component_output_folder_path="/tmp/",

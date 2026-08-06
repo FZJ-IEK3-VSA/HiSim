@@ -22,17 +22,15 @@ test_requirements = [
 setup(
     author="Noah Pflugradt",
     author_email="n.pflugradt@fz-juelich.de",
-    python_requires=">=3.5",
+    python_requires=">=3.10",
     classifiers=[
         "Development Status :: 2 - Pre-Alpha",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
         "Natural Language :: English",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.5",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
     ],
     description="ETHOS.HiSim is a house infrastructure simulator",
     entry_points={
@@ -42,9 +40,9 @@ setup(
     },
     install_requires=requirements,
     extras_require={
-        # Optional: required only for the MPI HPC harness (hisim.hpc_harness).
-        # mpi4py must be built against the cluster's MPI implementation.
-        "hpc": ["mpi4py"],
+        # Kept for backward compatibility ('pip install -e .[hpc]'); the REST HPC
+        # harness dependencies now ship in requirements.txt / install_requires.
+        "hpc": [],
     },
     license="MIT license",
     long_description=readme,

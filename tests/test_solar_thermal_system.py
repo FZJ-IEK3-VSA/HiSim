@@ -12,7 +12,12 @@ from tests import functions_for_testing as fft
 
 @pytest.mark.base
 def test_solar_thermal_system():
-    """Test solar thermal system."""
+    """Verify a SolarThermalSystem produces the expected thermal power on a summer noon step.
+
+    Builds a Weather and SolarThermalSystem with a 4 m² collector, drives them with a
+    fake binary control signal at a 3rd-of-July noon timestep, and asserts the
+    thermal power output matches the reference value (~3260.38 W).
+    """
     # Inputs
     seconds_per_timestep = 60
 
@@ -81,7 +86,12 @@ def test_solar_thermal_system():
 
 @pytest.mark.base
 def test_precalc():
-    """Test solar thermal system precalc function from oemof."""
+    """Verify oemof's flat_plate_precalc yields zero heat under zero irradiance.
+
+    Calls flat_plate_precalc with Aachen coordinates, a 30° tilt, and zero
+    global/diffuse irradiance at ambient temperature 0 °C, then asserts the
+    resulting collector heat output is 0.
+    """
     azimuth = (180.0,)
     tilt: float = 30.0
     eta_0: float = 0.78
@@ -119,4 +129,4 @@ def test_precalc():
         temp_amb=pd.Series(ambient_air_temperature_deg_c, index=[time_ind]),
     )
 
-    assert precalc_data["collectors_heat"].iloc[0] == 0
+    assert precalc_data["collectors_heat"].iloc[0] == pytest.approx(0, abs=1e-9)

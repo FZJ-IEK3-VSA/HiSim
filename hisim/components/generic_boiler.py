@@ -656,7 +656,7 @@ class GenericBoiler(Component):
         temperature_delta = stsv.get_input_value(self.temperature_delta_channel)
 
         if not 0 <= control_signal <= 1:
-            raise Exception(f"Expected a control signal between 0 and 1, not {control_signal}")
+            raise ValueError(f"Expected a control signal between 0 and 1, not {control_signal}")
 
         # Calculate combustion efficiency
         delta_efficiency = self.max_combustion_efficiency - self.min_combustion_efficiency

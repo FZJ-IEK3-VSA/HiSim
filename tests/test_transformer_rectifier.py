@@ -11,6 +11,8 @@ simulation, no I/O.
 import pytest
 
 from hisim.components.transformer_rectifier import Transformer, TransformerConfig
+from hisim.component import DisplayConfig
+from hisim.simulationparameters import SimulationParameters
 
 
 @pytest.mark.base
@@ -53,3 +55,37 @@ def test_get_main_classname_ends_with_transformer() -> None:
     assert classname.endswith(".Transformer")
     # The exact full string is also known, so pin it exactly.
     assert classname == "hisim.components.transformer_rectifier.Transformer"
+
+
+@pytest.mark.base
+def test_transformer_default_display_config_not_shared() -> None:
+    """Each ``Transformer`` built without an explicit display config gets its own ``DisplayConfig``.
+
+    A mutable default ``DisplayConfig()`` evaluated once at definition time
+    would otherwise be shared across instances, so mutations on one instance's
+    display config would contaminate every other instance (and subsequent runs
+    in a parametric study).
+    """
+    mysim = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
+    config = TransformerConfig.get_default_transformer()
+
+    first = Transformer(my_simulation_parameters=mysim, config=config)
+    second = Transformer(my_simulation_parameters=mysim, config=config)
+
+    assert first.my_display_config is not second.my_display_config
+
+
+@pytest.mark.base
+def test_transformer_explicit_display_config_respected() -> None:
+    """An explicitly passed ``DisplayConfig`` is used verbatim (not replaced)."""
+    mysim = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
+    config = TransformerConfig.get_default_transformer()
+    explicit = DisplayConfig()
+
+    transformer = Transformer(
+        my_simulation_parameters=mysim,
+        config=config,
+        my_display_config=explicit,
+    )
+
+    assert transformer.my_display_config is explicit

@@ -8,8 +8,17 @@ from hisim.simulationparameters import SimulationParameters
 
 
 @pytest.mark.base
-def test_storage():
-    """Test hot water storage."""
+def test_storage() -> None:
+    """Simulate one timestep of a HeatStorage and check its outputs.
+
+    Configures a default heat storage with custom volumes and temperatures,
+    feeds fake thermal-demand, control-signal, and input-power outputs into
+    the storage, runs a single 300 s simulation step, and asserts that the
+    warm-water storage is selected for heat-up, that the heating-water output
+    temperature drops while the warm-water output temperature rises, that the
+    reported energy loss matches the expected value, and that the
+    heater-facing output temperature mirrors the selected warm-water output.
+    """
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(

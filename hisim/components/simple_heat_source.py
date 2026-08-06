@@ -183,7 +183,7 @@ class SimpleHeatSource(cp.Component):
         """Initialize the class."""
 
         self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
+        self.config: SimpleHeatSourceConfig = config
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -202,11 +202,11 @@ class SimpleHeatSource(cp.Component):
             )
 
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER:  # type: ignore
-            self.power_th_in_watt = self.config.power_th_in_watt
+            self.power_th_in_watt: Optional[float] = self.config.power_th_in_watt
             if self.power_th_in_watt is None or str(self.power_th_in_watt) == "nan":
                 raise ValueError("Undefined value for constant power")
         elif self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE:  # type: ignore
-            self.temperature_out_in_celsius = self.config.temperature_out_in_celsius
+            self.temperature_out_in_celsius: Optional[float] = self.config.temperature_out_in_celsius
             if self.temperature_out_in_celsius is None or str(self.temperature_out_in_celsius) == "nan":
                 raise ValueError("Undefined value for constant temperature")
         elif self.config.const_source == SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE:  # type: ignore
@@ -214,13 +214,14 @@ class SimpleHeatSource(cp.Component):
         else:
             raise ValueError("Invalid const_source value.")
 
-        self.fluid_type = config.fluid_type
-        self.mass_fraction_of_fluid_mixed_in_water = config.mass_fraction_of_fluid_mixed_in_water
+        self.fluid_type: FluidMediaType = config.fluid_type
+        self.mass_fraction_of_fluid_mixed_in_water: float = config.mass_fraction_of_fluid_mixed_in_water
 
+        self.cp_f: float = 0.0
         self.fluid_props()
 
-        self.state = SimpleHeatSourceState()
-        self.previous_state = SimpleHeatSourceState()
+        self.state: SimpleHeatSourceState = SimpleHeatSourceState()
+        self.previous_state: SimpleHeatSourceState = SimpleHeatSourceState()
 
         # Inputs
         self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
@@ -299,6 +300,7 @@ class SimpleHeatSource(cp.Component):
         lines.append(f"Name: {self.config.name}")
         lines.append(f"Source: {self.config.const_source}")
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER:
+            assert self.config.power_th_in_watt is not None
             lines.append(f"Power: {self.config.power_th_in_watt * 1e-3:4.0f} kW")
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE:
             lines.append(f"Temperature : {self.config.temperature_out_in_celsius} °C")
@@ -338,6 +340,7 @@ class SimpleHeatSource(cp.Component):
         )
 
         if self.config.use_external_massflow_as_signal_input_for_nominal_massflow and massflow_in_kg_per_sec != 0:
+            assert self.config.massflow_nominal_in_kg_per_s is not None
             massflow_in_kg_per_sec = self.config.massflow_nominal_in_kg_per_s
 
         temperature_input_in_celsius = stsv.get_input_value(
@@ -345,11 +348,13 @@ class SimpleHeatSource(cp.Component):
         )
 
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER:
+            assert self.power_th_in_watt is not None
             thermal_power_in_watt = self.power_th_in_watt
 
             temperature_output = (thermal_power_in_watt / (massflow_in_kg_per_sec * self.cp_f)) + temperature_input_in_celsius
 
         elif self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE:
+            assert self.temperature_out_in_celsius is not None
             temperature_output = self.temperature_out_in_celsius
 
             thermal_power_in_watt = (massflow_in_kg_per_sec * self.cp_f *

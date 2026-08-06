@@ -1,0 +1,216 @@
+{
+    "name": "Air conditioned house",
+    "description": "Air-conditioned household.",
+    "multiple_buildings": false,
+    "components": [
+        {
+            "component_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "UTSPConnector",
+                "data_acquisition_mode": "use_predefined_profile",
+                "household": {
+                    "name": "CHR01 Couple both at Work",
+                    "guid": {
+                        "str_val": "516a33ab-79e1-4221-853b-967fc11cc85a"
+                    }
+                },
+                "energy_intensity": "EnergySaving",
+                "travel_route_set": {
+                    "name": "Travel Route Set for 10km Commuting Distance",
+                    "guid": {
+                        "str_val": "ca46be86-9cc7-47b5-9769-abff78ceca7a"
+                    }
+                },
+                "transportation_device_set": {
+                    "name": "Bus and one 30 km/h Car",
+                    "guid": {
+                        "str_val": "6ac74bd0-bacd-4b39-b84a-dc7ae16702c9"
+                    }
+                },
+                "charging_station_set": {
+                    "name": "Charging At Home with 11 kW",
+                    "guid": {
+                        "str_val": "78dae308-24c4-45cc-8bdf-b001d61f45c2"
+                    }
+                },
+                "profile_with_washing_machine_and_dishwasher": true,
+                "predictive_control": false,
+                "predictive": false,
+                "result_dir_path": "<<utils.HISIMPATH['utsp_results']>>",
+                "cache_dir_path": null,
+                "name_of_predefined_loadprofile": "CHR01 Couple both at Work",
+                "predefined_loadprofile_filepaths": null,
+                "guid": "",
+                "calculation_index_for_local_lpg": null,
+                "cars": null
+            },
+            "config_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.weather.Weather",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Weather",
+                "location": "Seville",
+                "source_path": "<<utils.get_input_directory()>>/weather/NSRDB/Seville/Seville",
+                "data_source": 2,
+                "predictive_control": false
+            },
+            "config_full_classname": "hisim.components.weather.WeatherConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.generic_pv_system.PVSystem",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "PVSystem",
+                "time": 2021,
+                "location": "Seville",
+                "module_name": "Hanwha HSL60P6-PA-4-250T [2013]",
+                "integrate_inverter": true,
+                "inverter_name": "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+                "module_database": 1,
+                "inverter_database": 2,
+                "power_in_watt": 4000.0,
+                "azimuth": 180,
+                "tilt": 30,
+                "share_of_maximum_pv_potential": 1.0,
+                "load_module_data": false,
+                "source_weight": -1,
+                "device_co2_footprint_in_kg": 522.8,
+                "investment_costs_in_euro": 2143.24,
+                "lifetime_in_years": 25,
+                "maintenance_costs_in_euro_per_year": 21.432399999999998,
+                "subsidy_as_percentage_of_investment_costs": 0.0,
+                "predictive": false,
+                "predictive_control": false,
+                "prediction_horizon": null
+            },
+            "config_full_classname": "hisim.components.generic_pv_system.PVSystemConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.air_conditioner.AirConditioner",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "AirConditioner",
+                "manufacturer": "Panasonic",
+                "model_name": "CS-TZ71WKEW + CU-TZ71WKE",
+                "scale_factor": 0.5364243908677532,
+                "t_out_cooling_ref": [
+                    23,
+                    30,
+                    35
+                ],
+                "t_out_heating_ref": [
+                    -8,
+                    1,
+                    7
+                ],
+                "eer_ref": [
+                    4.1844,
+                    3.6138,
+                    3.17
+                ],
+                "cop_ref": [
+                    2.47,
+                    2.85,
+                    3.51
+                ],
+                "cooling_capacity_ref": [
+                    8520,
+                    7668,
+                    7100
+                ],
+                "heating_capacity_ref": [
+                    6130,
+                    7170,
+                    8600
+                ],
+                "investment_costs_in_euro": 4899.0,
+                "lifetime_in_years": 12,
+                "co2_emissions_kg_co2_eq": 165.84,
+                "maintenance_costs_in_euro_per_year": 244.95000000000002
+            },
+            "config_full_classname": "hisim.components.air_conditioner.AirConditionerConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.building.Building",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Building",
+                "heating_reference_temperature_in_celsius": 5.7,
+                "building_code": "ES.ME.SFH.04.Gen.ReEx.001.003",
+                "building_heat_capacity_class": "medium",
+                "initial_internal_temperature_in_celsius": 22,
+                "absolute_conditioned_floor_area_in_m2": null,
+                "total_base_area_in_m2": null,
+                "number_of_apartments": null,
+                "max_thermal_building_demand_in_watt": null,
+                "floor_u_value_in_watt_per_m2_per_kelvin": null,
+                "floor_area_in_m2": null,
+                "facade_u_value_in_watt_per_m2_per_kelvin": null,
+                "facade_area_in_m2": null,
+                "roof_u_value_in_watt_per_m2_per_kelvin": null,
+                "roof_area_in_m2": null,
+                "window_u_value_in_watt_per_m2_per_kelvin": null,
+                "window_area_in_m2": null,
+                "door_u_value_in_watt_per_m2_per_kelvin": null,
+                "door_area_in_m2": null,
+                "predictive": false,
+                "set_heating_temperature_in_celsius": 20,
+                "set_cooling_temperature_in_celsius": 24,
+                "enable_opening_windows": false,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.building.BuildingConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.air_conditioner.AirConditionerController",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "AirConditionerControllerConfig",
+                "heating_set_temperature_deg_c": 20.0,
+                "cooling_set_temperature_deg_c": 24.0,
+                "minimum_runtime_s": 1800,
+                "minimum_idle_time_s": 900,
+                "offset": 5.0,
+                "temperature_difference_full_power_deg_c": 3.0
+            },
+            "config_full_classname": "hisim.components.air_conditioner.AirConditionerControllerConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        }
+    ],
+    "connections": [
+        {
+            "source": {
+                "component_name": "AirConditioner",
+                "field_name": "ThermalPowerDelivered"
+            },
+            "target": {
+                "component_name": "Building",
+                "field_name": "ThermalPowerDelivered"
+            }
+        }
+    ]
+}

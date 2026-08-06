@@ -288,7 +288,7 @@ class EmissionFactorsAndCostsForFuelsConfig:
 """
 Sources for capex techno-economic parameters:
         [18]: http://dx.doi.org/10.1016/j.enbuild.2017.04.079
-        [19]: /hisim/modular_household/emission_factors_and_costs_devices.csv
+        [19]: /hisim/inputs/costs_and_emissions/why_project/emission_factors_and_costs_devices.csv
         (values are taken from WHY-project: https://cordis.europa.eu/project/id/891943/results but no concrete source was found)
         [20]: https://www.gebaeudeforum.de/service/downloads/ -> search for "Wärmeerzeugung im Bestand mit EE", January 2024
         [21]: https://  doi.org/10.3390/su13041938

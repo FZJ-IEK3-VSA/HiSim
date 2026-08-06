@@ -1,7 +1,7 @@
 """Test for generic air conditioner."""
 
 from typing import Any, Dict, Optional
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 import pytest
 from hisim.components.air_conditioner import (
     AirConditionerController,
@@ -29,8 +29,8 @@ from tests import functions_for_testing as fft
     ],
 )
 def test_determine_mode_returns_correct_operation_mode_for_temperature(
-    start_controller_mode, current_temperature_deg_c: float, mode: str
-):
+    start_controller_mode: str, current_temperature_deg_c: float, mode: str
+) -> None:
     """Test determine_operating_mode returns correct mode based on temperature."""
     testee = given_default_testee()
 
@@ -78,8 +78,8 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature(
     ],
 )
 def test_determine_mode_returns_correct_operation_mode_for_operating_time(
-    start_controller_mode, current_temperature_deg_c: float, expected_mode: str
-):
+    start_controller_mode: str, current_temperature_deg_c: float, expected_mode: str
+) -> None:
     """ Test determine_operation_mode."""
     """ GIVEN """
     testee = given_default_testee(
@@ -122,8 +122,10 @@ def test_determine_mode_returns_correct_operation_mode_for_operating_time(
     ],
 )
 def test_modulate_returns_correct_modulation_percentage(
-    operating_mode, current_temperature_deg_c, expected_modulation_percentage
-):
+    operating_mode: str,
+    current_temperature_deg_c: float,
+    expected_modulation_percentage: float,
+) -> None:
     """ Test modulate_power."""
 
     """ GIVEN """
@@ -152,12 +154,12 @@ def test_modulate_returns_correct_modulation_percentage(
 @patch.object(AirConditionerController, "modulate_power")
 @patch.object(AirConditionerController, "determine_operating_mode")
 def test_simulate_sets_correct_state_for_operation_mode(
-    mock_method_mode,
-    mock_method_modulate,
-    mocked_mode,
-    mocked_modulation,
-    expected_output,
-):
+    mock_method_mode: MagicMock,
+    mock_method_modulate: MagicMock,
+    mocked_mode: str,
+    mocked_modulation: float,
+    expected_output: float,
+) -> None:
     """ Test i_simulate."""
 
     """ GIVEN """

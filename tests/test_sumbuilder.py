@@ -11,8 +11,13 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_sum_builder_for_three_inputs():
-    """Test for SumBuilderForThreeInputs."""
+def test_sum_builder_for_three_inputs() -> None:
+    """Verify SumBuilderForThreeInputs outputs the sum of its three inputs.
+
+    Connects three fake ComponentOutput inputs, runs two simulation steps
+    with different value sets (including a negative input), and asserts the
+    component's output equals the arithmetic sum of the inputs each step.
+    """
     mysim: SimulationParameters = SimulationParameters.full_year(
         year=2021, seconds_per_timestep=60
     )
@@ -81,8 +86,13 @@ def test_sum_builder_for_three_inputs():
 
 
 @pytest.mark.base
-def test_sum_builder_for_two_inputs():
-    """Test for SumBuilderForTwoInputs."""
+def test_sum_builder_for_two_inputs() -> None:
+    """Verify SumBuilderForTwoInputs outputs the sum of its two inputs.
+
+    Connects two fake ComponentOutput inputs, runs two simulation steps
+    with different value sets (including a negative input), and asserts the
+    component's output equals the arithmetic sum of the inputs each step.
+    """
     mysim: SimulationParameters = SimulationParameters.full_year(
         year=2021, seconds_per_timestep=60
     )

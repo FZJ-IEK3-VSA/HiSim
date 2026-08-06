@@ -18,7 +18,7 @@ from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import postprocessingoptions
-from hisim.loadtypes import Units
+from hisim.loadtypes import UNITS_USING_MEAN_AGGREGATION
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 
 
@@ -42,11 +42,18 @@ class Simulator:
         my_simulation_parameters: Optional[SimulationParameters],
         setup_function: str = "setup_function",
         my_module_config: Optional[str] = None,
+        force_log_connections: bool = False,
     ) -> None:
         """Initializes the simulator class and creates the result directory."""
 
+        # When set, the simulation parameters used for this run always log component
+        # connections, so component_connections.json is written for post-processing/
+        # debugging. Enabled by the Python entry point to mirror the JSON path.
+        self._force_log_connections: bool = force_log_connections
         self._simulation_parameters: SimulationParameters
         if my_simulation_parameters is not None:
+            if self._force_log_connections:
+                my_simulation_parameters.log_connections = True
             self._simulation_parameters = my_simulation_parameters
             log.logger.logging_level = self._simulation_parameters.logging_level
         self.wrapped_components: List[ComponentWrapper] = []
@@ -65,6 +72,8 @@ class Simulator:
         """Sets the simulation parameters and the logging level at the same time."""
         self._simulation_parameters = my_simulation_parameters
         if self._simulation_parameters is not None:
+            if self._force_log_connections:
+                self._simulation_parameters.log_connections = True
             log.logger.logging_level = self._simulation_parameters.logging_level
 
     def get_simulation_parameters(self) -> SimulationParameters:
@@ -80,6 +89,9 @@ class Simulator:
         """Adds component to simulator and wraps it up the output in the register."""
         if self._simulation_parameters is None:
             raise ValueError("Simulation Parameters were not initialized")
+        # ensure result directory exists before any connect_input calls log to it
+        if not self._simulation_parameters.result_directory:
+            self.prepare_simulation_directory()
         # set the repository
         component.set_sim_repo(self.simulation_repository)
 
@@ -354,8 +366,6 @@ class Simulator:
         if (
                 postprocessingoptions.PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS in self._simulation_parameters.post_processing_options or
                 postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in self._simulation_parameters.post_processing_options or
-                postprocessingoptions.PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL in self._simulation_parameters.post_processing_options or
-                postprocessingoptions.PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL in self._simulation_parameters.post_processing_options or
                 postprocessingoptions.PostProcessingOptions.EXPORT_MONTHLY_RESULTS in self._simulation_parameters.post_processing_options
         ):
             log.information("Preparing std results for post processing")
@@ -379,7 +389,7 @@ class Simulator:
             mode=1,
             setup_function=self.setup_function,
             module_filename=self.module_filename,
-            my_module_config=self.my_module_config,
+            module_config=self.my_module_config,
             execution_time=execution_time,
             results_monthly=results_merged_monthly,
             results_cumulative=results_merged_cumulative,
@@ -428,19 +438,7 @@ class Simulator:
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Converts results into a pretty dataframe for post processing."""
 
-        units_mean = {
-            Units.CELSIUS,
-            Units.KELVIN,
-            Units.ANY,
-            Units.METER_PER_SECOND,
-            Units.DEGREES,
-            Units.WATT,
-            Units.KILOWATT,
-            Units.WATT_PER_SQUARE_METER,
-            Units.KG_PER_SEC,
-            Units.PERCENT,
-            Units.PASCAL,
-        }
+        units_mean = UNITS_USING_MEAN_AGGREGATION
 
         monthly_frames = []
         daily_frames = []

@@ -19,8 +19,15 @@ from hisim.simulationparameters import SimulationParameters
 
 
 @pytest.mark.base
-def test_heat_pump_hplib_new():
-    """Test heat pump hplib."""
+def test_heat_pump_hplib_new() -> None:
+    """Verify MoreAdvancedHeatPumpHPLib outputs for a space-heating-only step.
+
+    Constructs a Generic heat-pump config with domestic hot water preparation
+    disabled, wires fake ComponentOutput inputs for the on/off switch, primary
+    and secondary inlet temperatures, and ambient temperature, then runs a
+    single 60-second timestep and asserts the resulting thermal power, electrical
+    power, COP, supply temperature, mass flow, and on/off timing values.
+    """
 
     # Definitions for HeatPump init
     model: str = "Generic"

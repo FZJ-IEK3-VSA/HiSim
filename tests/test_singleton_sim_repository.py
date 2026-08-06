@@ -10,7 +10,7 @@ from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
-from hisim.sim_repository_singleton import SingletonSimRepository
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim import log
 from hisim import utils
 
@@ -136,6 +136,29 @@ def test_house(
     my_sim.run_all_timesteps()
 
     log.information("singleton sim repo" + str(SingletonSimRepository().my_dict))
+
+    # The components exchange data through the singleton sim repository while
+    # the simulation is built and run. Assert that the repository was actually
+    # populated during the run instead of only checking that "nothing raised" --
+    # this pins down the behaviour the docstring promises (a normal simulation
+    # works *with* the singleton sim repository).
+    repo = SingletonSimRepository()
+    assert repo.my_dict is not None
+    assert len(repo.my_dict) > 0
+    # Weather registers its location in the singleton during construction.
+    assert SingletonDictKeyEnum.LOCATION in repo.my_dict
+    assert repo.my_dict[SingletonDictKeyEnum.LOCATION] == my_weather_config.location
+    # Building registers its 5R1C thermal parameters in the singleton during build().
+    assert SingletonDictKeyEnum.THERMALCAPACITYENVELOPE in repo.my_dict
+    assert SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING in repo.my_dict
+    assert SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION in repo.my_dict
+    # The thermal parameters must carry real, positive computed values -- not just
+    # be present -- to confirm the building genuinely pushed its 5R1C results
+    # through the singleton sim repository during the run.
+    assert repo.my_dict[SingletonDictKeyEnum.THERMALCAPACITYENVELOPE] > 0
+    assert repo.my_dict[SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING] > 0
+    assert repo.my_dict[SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION] > 0
+    assert len(repo.my_dict) >= 7
 
     # https://medium.com/analytics-vidhya/how-to-create-a-thread-safe-singleton-class-in-python-822e1170a7f6
     first_singleton_sim_repository = SingletonSimRepository()

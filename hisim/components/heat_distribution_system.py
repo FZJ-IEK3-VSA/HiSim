@@ -698,7 +698,7 @@ class HeatDistribution(cp.Component):
                     # get energy from power
                     thermal_output_energy_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=thermal_output_power_values_in_watt,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     )
                     thermal_output_energy_hds_entry = KpiEntry(
                         name="Thermal output energy of heat distribution system",

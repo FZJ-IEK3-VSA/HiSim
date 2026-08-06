@@ -5,6 +5,7 @@
 from typing import Optional, Any, Union, List
 import re
 import os
+from repositories.HiSim.obsolete import generic_heat_source, generic_hot_water_storage_modular
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
     Households,
@@ -20,13 +21,11 @@ from hisim.components import (
     controller_l2_energy_management_system,
     heat_distribution_system,
     generic_district_heating,
-    generic_hot_water_storage_modular,
     controller_l1_heatpump,
     electricity_meter,
     advanced_ev_battery_bslib,
     controller_l1_generic_ev_charge,
     generic_car,
-    generic_heat_source,
 )
 from hisim.components.heat_distribution_system import PositionHotWaterStorageInSystemSetup
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum

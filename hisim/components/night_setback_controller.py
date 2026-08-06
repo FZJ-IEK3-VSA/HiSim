@@ -30,6 +30,13 @@ __version__ = "0.1"
 __maintainer__ = "Jonas Pfeiffer"
 __status__ = "development"
 
+# Conversion factors for time units. The night window is configured in hours of
+# the day (0..23), so the comparisons inside ``i_simulate`` are carried out in
+# seconds since midnight. Naming these explicitly keeps the h->s and day->s
+# conversions distinct from ``seconds_per_timestep`` and prevents silent mix-ups.
+SECONDS_PER_HOUR = 3600  # s per h
+SECONDS_PER_DAY = 24 * SECONDS_PER_HOUR  # s per day
+
 
 @dataclass_json
 @dataclass
@@ -134,10 +141,9 @@ class NightSetbackController(cp.Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Set the night setback value for the current timestep."""
-        seconds_per_day = 24 * 3600
-        current_second_of_day = (timestep * self.my_simulation_parameters.seconds_per_timestep) % seconds_per_day
-        night_start_second = self.night_start_hour * 3600
-        night_end_second = self.night_end_hour * 3600
+        current_second_of_day = (timestep * self.my_simulation_parameters.seconds_per_timestep) % SECONDS_PER_DAY
+        night_start_second = self.night_start_hour * SECONDS_PER_HOUR
+        night_end_second = self.night_end_hour * SECONDS_PER_HOUR
         if self.night_start_hour == self.night_end_hour:
             is_night = False
         elif self.night_start_hour < self.night_end_hour:

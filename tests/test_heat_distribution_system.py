@@ -11,17 +11,17 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_hds():
+def test_hds() -> None:
     """Test the heat distribution system across various scenarios.
 
-Verifies that the heat distribution system correctly handles:
-- Heating scenarios (positive thermal demand)
-- Cooling scenarios (negative thermal demand)
-- Zero-demand scenarios
-Across a range of water input temperatures and building thermal demands.
-Validates that water output temperatures and thermal power delivery
-are calculated correctly based on heat exchange physics.
-"""
+    Verifies that the heat distribution system correctly handles:
+    - Heating scenarios (positive thermal demand)
+    - Cooling scenarios (negative thermal demand)
+    - Zero-demand scenarios
+    Across a range of water input temperatures and building thermal demands.
+    Validates that water output temperatures and thermal power delivery
+    are calculated correctly based on heat exchange physics.
+    """
 
     # theoretical building thermal demands to test
     theoretical_thermal_building_demands_in_watt = [0, -10, +10, -8000, +3000, +1000000]
@@ -109,29 +109,29 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
 ) -> Tuple[float, float, float, float, float, float]:
     """Simulate and calculate heat distribution system outputs for a given scenario.
 
-Sets up a minimal HiSim simulation with fake component outputs, runs one
-timestep, and returns both the expected and simulated heat distribution
-outputs for validation.
+    Sets up a minimal HiSim simulation with fake component outputs, runs one
+    timestep, and returns both the expected and simulated heat distribution
+    outputs for validation.
 
-Args:
-    theoretical_building_demand_in_watt: The theoretical thermal demand
-        from the building in watts. Positive values indicate heating demand,
-        negative values indicate cooling demand.
-    water_input_temperature_in_celsius: The temperature of the water
-        entering the heat distribution system in degrees Celsius.
+    Args:
+        theoretical_building_demand_in_watt: The theoretical thermal demand
+            from the building in watts. Positive values indicate heating demand,
+            negative values indicate cooling demand.
+        water_input_temperature_in_celsius: The temperature of the water
+            entering the heat distribution system in degrees Celsius.
 
-Returns:
-    A 6-tuple of floats containing:
-    - input_water_temperature_in_celsius: The water input temperature
-    - residence_temperature_in_celsius: The indoor air temperature of the residence
-    - theoretical_building_demand_in_watt: The theoretical building thermal demand
-    - calculated_water_output_temperature_in_celsius: The expected water output
-        temperature based on heat exchange calculations
-    - water_output_temperature_after_heat_exchange: The actual water output
-        temperature from the simulation
-    - effective_thermal_power_delivered_in_watt: The actual thermal power
-        delivered by the heat distribution system
-"""
+    Returns:
+        A 6-tuple of floats containing:
+        - input_water_temperature_in_celsius: The water input temperature
+        - residence_temperature_in_celsius: The indoor air temperature of the residence
+        - theoretical_building_demand_in_watt: The theoretical building thermal demand
+        - calculated_water_output_temperature_in_celsius: The expected water output
+            temperature based on heat exchange calculations
+        - water_output_temperature_after_heat_exchange: The actual water output
+            temperature from the simulation
+        - effective_thermal_power_delivered_in_watt: The actual thermal power
+            delivered by the heat distribution system
+    """
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(

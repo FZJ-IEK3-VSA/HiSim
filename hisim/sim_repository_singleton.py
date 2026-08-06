@@ -44,7 +44,7 @@ class SingletonSimRepository(metaclass=SingletonMeta):
     def __init__(self) -> None:
         """Initializes the SimRepository."""
         self.my_dict: Dict[Any, Any] = {}
-        self.my_dynamic_dict: Dict[lt.ComponentType, Dict[int, Any]] = {elem: {} for elem in lt.ComponentType}
+        self.my_dynamic_dict: Dict[lt.ComponentType, Dict[int, Any]] = {component_type: {} for component_type in lt.ComponentType}
 
     def set_entry(self, key: Any, entry: Any) -> None:
         """Sets an entry in the SimRepository."""
@@ -54,7 +54,7 @@ class SingletonSimRepository(metaclass=SingletonMeta):
         """Gets an entry from the SimRepository."""
         return self.my_dict[key]
 
-    def exist_entry(self, key: Any) -> bool:
+    def entry_exists(self, key: Any) -> bool:
         """Checks if an entry exists."""
         if key in self.my_dict:
             return True
@@ -70,13 +70,13 @@ class SingletonSimRepository(metaclass=SingletonMeta):
 
     def get_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int) -> Any:
         """Gets a dynamic entry."""
-        component = self.my_dynamic_dict.get(component_type, None)
-        if component is None:
+        component_entries = self.my_dynamic_dict.get(component_type, None)
+        if component_entries is None:
             return None
-        value = component.get(source_weight, None)
+        value = component_entries.get(source_weight, None)
         return value
 
-    def get_dynamic_component_weights(self, component_type: lt.ComponentType) -> list:
+    def get_dynamic_component_weights(self, component_type: lt.ComponentType) -> list[int]:
         """Gets weights for dynamic components."""
         return list(self.my_dynamic_dict[component_type].keys())
 

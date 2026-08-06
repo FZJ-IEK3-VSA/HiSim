@@ -589,7 +589,7 @@ class WeatherDataImport:
     def era5_request(
         self,
     ):
-        """Fetch weather data from ERA5 reanalysis via the ECMWF CDS API.
+        r"""Fetch weather data from ERA5 reanalysis via the ECMWF CDS API.
 
         Retrieves hourly reanalysis data including 2m air temperature, 10m wind
         components, surface pressure, and solar radiation. Converts units

@@ -1,4 +1,8 @@
-"""Test for generic windturbine."""
+"""Tests for the generic windturbine component.
+
+Validates that a Windturbine component produces the expected electricity
+output when driven by Weather data for a given location and turbine type.
+"""
 import pytest
 from tests import functions_for_testing as fft
 from hisim import sim_repository
@@ -11,7 +15,14 @@ from hisim import log
 
 @pytest.mark.base
 def test_windturbine() -> None:
-    """Test generic windturbine."""
+    """Verify electricity output of a generic windturbine at a fixed timestep.
+
+    Sets up a Weather component (Aachen location) and a Windturbine component
+    (Vestas V126/3300), wires the windturbine's temperature, wind speed, and
+    pressure inputs to the corresponding weather outputs, then simulates a
+    single timestep (55535) and asserts the electricity output matches the
+    expected value of approximately 18816 W.
+    """
     # Sets inputs
     # weather_location = "Aachen"
     seconds_per_timestep = 60
@@ -26,7 +37,7 @@ def test_windturbine() -> None:
     # Weather: 3 outputs
     # Windturbine:  1 output
 
-    # Sets Occupancy
+    # Sets Weather
     my_weather_config = weather.WeatherConfig.get_default(
         location_entry=weather.LocationEnum.AACHEN
     )
@@ -60,4 +71,4 @@ def test_windturbine() -> None:
         stsv.values[my_windturbine.electricity_output_channel.global_index]))
 
     # check windturbine electricity output [W] in timestep 55535
-    assert stsv.values[my_windturbine.electricity_output_channel.global_index] == 18816.25770544808
+    assert stsv.values[my_windturbine.electricity_output_channel.global_index] == pytest.approx(18816.25770544808, rel=1e-9, abs=1e-6)

@@ -94,7 +94,7 @@
                 "building_name": "BUI1",
                 "name": "Weather",
                 "location": "Aachen",
-                "source_path": "<<utils.get_input_directory()>>\\weather\\test-reference-years_1995-2012_1-location\\data_processed\\aachen_center",
+                "source_path": "<<utils.get_input_directory()>>/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center",
                 "data_source": 1,
                 "predictive_control": false
             },
@@ -246,7 +246,8 @@
                 "lifetime_in_years": null,
                 "maintenance_costs_in_euro_per_year": null,
                 "subsidy_as_percentage_of_investment_costs": null,
-                "source_weight": 1
+                "source_weight": 1,
+                "delta_temperature_n_k": 10
             },
             "config_full_classname": "hisim.components.solar_thermal_system.SolarThermalSystemConfig",
             "inputs": [],
@@ -422,7 +423,7 @@
                         "Battery",
                         "Consumption with EMS control"
                     ],
-                    "source_weight": 5
+                    "source_weight": 6
                 }
             ],
             "outputs": [
@@ -457,7 +458,7 @@
             "config_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig",
             "inputs": [],
             "outputs": [],
-            "connect_automatically": true
+            "connect_automatically": false
         },
         {
             "component_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW",
@@ -472,7 +473,7 @@
             "config_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig",
             "inputs": [],
             "outputs": [],
-            "connect_automatically": true
+            "connect_automatically": false
         }
     ],
     "connections": [
@@ -614,6 +615,46 @@
             "target": {
                 "component_name": "L2EMSElectricityController",
                 "field_name": "Input_Battery_AcBatteryPowerUsed_7"
+            }
+        },
+        {
+            "source": {
+                "component_name": "HeatDistributionController",
+                "field_name": "HeatingFlowTemperature"
+            },
+            "target": {
+                "component_name": "MoreAdvancedHeatPumpHPLibControllerSH",
+                "field_name": "HeatingFlowTemperatureFromHeatDistributionSystem"
+            }
+        },
+        {
+            "source": {
+                "component_name": "Weather",
+                "field_name": "DailyAverageOutsideTemperatures"
+            },
+            "target": {
+                "component_name": "MoreAdvancedHeatPumpHPLibControllerSH",
+                "field_name": "DailyAverageOutsideTemperature"
+            }
+        },
+        {
+            "source": {
+                "component_name": "SimpleHotWaterStorage",
+                "field_name": "WaterTemperatureToHeatGenerator"
+            },
+            "target": {
+                "component_name": "MoreAdvancedHeatPumpHPLibControllerSH",
+                "field_name": "WaterTemperatureInput"
+            }
+        },
+        {
+            "source": {
+                "component_name": "DHWStorage",
+                "field_name": "WaterTemperatureToHeatGenerator"
+            },
+            "target": {
+                "component_name": "HeatPumpControllerDHW",
+                "field_name": "WaterTemperatureInputFromDHWStorage"
             }
         }
     ]

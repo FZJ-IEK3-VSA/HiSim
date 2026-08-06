@@ -1,6 +1,6 @@
 {
     "name": "Household gas solar thermal",
-    "description": "Basic household system setup. Shows how to set up a standard system.",
+    "description": "Household setup with gas boiler and solar thermal system for DHW.",
     "multiple_buildings": false,
     "components": [
         {
@@ -94,7 +94,7 @@
                 "building_name": "BUI1",
                 "name": "Weather",
                 "location": "Aachen",
-                "source_path": "<<utils.get_input_directory()>>\\weather\\test-reference-years_1995-2012_1-location\\data_processed\\aachen_center",
+                "source_path": "<<utils.get_input_directory()>>/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center",
                 "data_source": 1,
                 "predictive_control": false
             },
@@ -337,7 +337,8 @@
                 "lifetime_in_years": null,
                 "maintenance_costs_in_euro_per_year": null,
                 "subsidy_as_percentage_of_investment_costs": null,
-                "source_weight": 1
+                "source_weight": 1,
+                "delta_temperature_n_k": 10
             },
             "config_full_classname": "hisim.components.solar_thermal_system.SolarThermalSystemConfig",
             "inputs": [],

@@ -38,7 +38,7 @@ def test_electrolyzer_controller() -> None:
         max_load=max_load,
         warm_start_time=warm_start_time,
         cold_start_time=cold_start_time,
-        standby_load=5.0,
+        standby_load=5.0,  # [kW]
     )
     my_controller = controller_l1_electrolyzer_h2.ElectrolyzerController(
         config=my_controller_config, my_simulation_parameters=my_simulation_parameters
@@ -67,6 +67,6 @@ def test_electrolyzer_controller() -> None:
 
     # input load to current load
     # assert stsv.values[my_controller.distributed_load.global_index] == 0
-    assert stsv.values[my_controller.curtailed_load.global_index] == 700.0
+    assert stsv.values[my_controller.curtailed_load.global_index] == pytest.approx(700.0, rel=1e-9, abs=1e-9)
 
     # python -m pytest ../tests/test_controller_l1_generic_electrolyzer.py

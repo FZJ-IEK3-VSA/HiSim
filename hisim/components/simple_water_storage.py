@@ -583,7 +583,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
 
         self.mean_water_temperature_in_water_storage_in_celsius: float = 35
 
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR):
+        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR):
             self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = (
                 SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR)
             )
@@ -1269,7 +1269,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
                     heat_loss_in_kilowatt_hour = round(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=heat_loss_in_watt,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         ),
                         1,
                     )
@@ -1310,7 +1310,7 @@ class SimpleHotWaterStorageController(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR):
+        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR):
             self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = (
                 SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR)
             )
@@ -2160,7 +2160,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
                     heat_loss_in_kilowatt_hour = round(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=heat_loss_in_watt,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                         ),
                         1,
                     )

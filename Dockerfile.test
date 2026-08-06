@@ -14,6 +14,7 @@ RUN apt-get update \
         git \
         graphviz \
         libgomp1 \
+        libicu72 \
         pkg-config \
     && rm -rf /var/lib/apt/lists/*
 

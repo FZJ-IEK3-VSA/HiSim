@@ -488,7 +488,7 @@ class Weather(Component):
     ):
         """Initializes the entire class."""
         if my_simulation_parameters is None:
-            raise Exception("Simparameters was none")
+            raise ValueError("my_simulation_parameters was None")
         self.last_timestep_with_update = -1
         self.weather_config = config
         SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.LOCATION, entry=self.weather_config.location)
@@ -681,8 +681,8 @@ class Weather(Component):
             self.wind_speed_list = my_weather["Wspd"].tolist()
             try:
                 self.pressure_list = my_weather["Pressure"].tolist()
-            except Exception:
-                log.information("Weather key Pressure could not be found.")
+            except KeyError:
+                log.warning("Weather key 'Pressure' not found in cache; falling back to zeros.")
                 self.pressure_list = [0] * len(self.wind_speed_list)
         else:
             tmy_data = read_test_reference_year_data(

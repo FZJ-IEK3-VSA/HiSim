@@ -359,7 +359,7 @@ class GenericHeatPump(cp.Component):
                 break
 
         if not heat_pump_found or heat_pump is None:
-            raise Exception("Heat pump model not registered in the database")
+            raise ValueError(f"Heat pump '{manufacturer}' / '{name}' not registered in the database")
 
         # Interpolates COP data from the database
         self.cop_ref = []
@@ -399,7 +399,10 @@ class GenericHeatPump(cp.Component):
         if factor == 1:
             self.has_been_converted = False
         if self.has_been_converted is True:
-            raise Exception("It has been already converted!")
+            raise RuntimeError(
+                "Heat pump power values have already been converted; "
+                "set_time_correction cannot be called twice."
+            )
         self.max_heating_power_in_watt *= factor
         self.max_cooling_power_in_watt *= factor
         self.max_heating_power_variation_restriction_in_watt *= factor

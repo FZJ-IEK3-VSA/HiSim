@@ -4,7 +4,7 @@
 # clean
 import importlib
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any, List, Optional
 
 from dataclasses_json import dataclass_json
 
@@ -136,10 +136,12 @@ class L1GenericRuntimeController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: L1Config,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: Optional[DisplayConfig] = None,
     ) -> None:
         """Initializes the controller."""
         self.my_simulation_parameters = my_simulation_parameters
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
         self.config = config
         component_name = self.get_component_name()
         super().__init__(

@@ -295,7 +295,7 @@ class CarBattery(Component):
                 self.battery_config.total_charged_energy_in_kilowatthour = round(
                     KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     ),
                     1,
                 )
@@ -312,7 +312,7 @@ class CarBattery(Component):
                 self.battery_config.total_discharged_energy_in_kilowatthour = round(
                     KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     ),
                     1,
                 )
@@ -364,7 +364,7 @@ class CarBattery(Component):
                 self.battery_config.total_charged_energy_in_kilowatthour = round(
                     KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     ),
                     1,
                 )
@@ -389,7 +389,7 @@ class CarBattery(Component):
                 self.battery_config.total_discharged_energy_in_kilowatthour = round(
                     KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     ),
                     1,
                 )

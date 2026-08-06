@@ -88,6 +88,9 @@ Central registry of enums: `LoadTypes`, `Units`, `ComponentType`, `InandOutputTy
 ### units.py
 Provides a typed `Quantity` system (`Watt`, `KiloWattHour`, etc.) for stronger unit safety. Distinct from the `lt.Units` enum used in I/O declarations.
 
+### RenoVisor translator (`hisim/renovisor/`)
+All RenoVisor translation code lives in `hisim/renovisor/` — schema validation (`schema.py`), measure application (`measures.py`), request→setup mapping (`mapping.py`), TABULA lookup (`tabula_ie.py`), in-process simulation runner (`runner.py`), REST upload (`uploader.py`), and the CLI (`__main__.py`). Spec: `hisim/renovisor/spec.md`; usage: `hisim/renovisor/how_to_use.md`; example requests in `hisim/renovisor/examples/`. Tests: `tests/test_renovisor_*.py`. Run via `python -m hisim.renovisor run <request.json> --variant {base|measures}`.
+
 ## Adding a new component
 
 1. Create `hisim/components/my_component.py`, using `hisim/components/example_component.py` as a template.

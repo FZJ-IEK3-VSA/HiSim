@@ -1,6 +1,5 @@
 """Archetype config module."""
 
-# -*- coding: utf-8 -*-
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -13,11 +12,26 @@ class ArcheTypeConfig:
     """Archetype config class.
 
     Defines the system config for the modular household.
+
+    Photovoltaic orientation is given by two angle fields whose values are
+    always expressed in **degrees**, never radians. This matches the convention
+    used by the downstream PV component
+    (:class:`~hisim.components.generic_pv_system.PVSystemConfig`), which
+    interprets azimuth "from north in °" and tilt "from horizontal":
+
+    - ``pv_azimuth``: panel azimuth angle in degrees, measured clockwise from
+      north. The default ``180`` corresponds to a south-facing panel.
+    - ``pv_tilt``: panel tilt angle in degrees from the horizontal plane. The
+      default ``30`` corresponds to a 30° tilt.
+
+    Callers must pass these values in degrees; do not mix degrees and radians.
     """
 
     building_name: str = "BUI1"
     building_id: str = "default_building"
+    #: PV panel azimuth in degrees, measured clockwise from north (180° = south).
     pv_azimuth: float = 180
+    #: PV panel tilt in degrees from the horizontal plane.
     pv_tilt: float = 30
     pv_rooftop_capacity_in_kilowatt: Optional[float] = None
     pv_rooftop_generation_in_kilowatthour: Optional[float] = None
@@ -41,3 +55,18 @@ class ArcheTypeConfig:
     construction_year: int = 1964
     coordinates_latitude: float = 50.77664
     coordinates_longitude: float = 6.0834
+
+    # Optional building-envelope override. If any of these are set, the value is passed through to
+    # the Building component and used instead of the TABULA archetype default. If left None (default),
+    # the envelope is derived from the TABULA building_code exactly as before (opt-in, backward compatible).
+    building_heat_capacity_class: Optional[str] = None
+    floor_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
+    floor_area_in_m2: Optional[float] = None
+    facade_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
+    facade_area_in_m2: Optional[float] = None
+    roof_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
+    roof_area_in_m2: Optional[float] = None
+    window_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
+    window_area_in_m2: Optional[float] = None
+    door_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None
+    door_area_in_m2: Optional[float] = None

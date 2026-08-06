@@ -1,5 +1,7 @@
 """Generic heat water storage module."""
 
+from __future__ import annotations
+
 # clean
 
 # Generic/Built-in
@@ -47,7 +49,7 @@ class HeatStorageConfig(ConfigBase):
     def get_default_heat_storage_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> HeatStorageConfig:
         """Get default config."""
         config = HeatStorageConfig(
             building_name=building_name,
@@ -83,7 +85,7 @@ class HeatStorageControllerConfig(ConfigBase):
         cls,
         heating_load_of_building_in_watt: float,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> HeatStorageControllerConfig:
         """Get default config."""
         config = HeatStorageControllerConfig(
             building_name=building_name,

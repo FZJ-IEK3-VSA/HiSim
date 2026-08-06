@@ -1,0 +1,128 @@
+# Runs the full pytest suite (one parallel job per marker) inside the prebuilt
+# HiSim test image, then combines coverage from all of them in a single run.
+
+name: tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  # Cancel superseded runs on feature branches, but let every push to main finish.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  pytest:
+    name: pytest (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: base
+            marker: "base"
+          - name: buildingtest
+            marker: "buildingtest"
+          - name: extendedbase
+            marker: "extendedbase"
+          - name: jsonconfig
+            marker: "jsonconfig"
+          - name: postprocessingoptions
+            marker: "postprocessingoptions"
+            durations: "40"
+          - name: system-setups
+            marker: "system_setups"
+          - name: utsp
+            marker: "utsp"
+          - name: others
+            marker: "not base and not buildingtest and not system_setups and not extendedbase and not utsp and not jsonconfig and not postprocessingoptions"
+            allow_empty: "true"
+
+    steps:
+    - uses: actions/checkout@v6
+    - name: Mark workspace as safe for git
+      # The container runs as a different user than the one that owns the
+      # checked-out workspace, so git would otherwise refuse with
+      # "detected dubious ownership" (exit 128) on every git invocation.
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+    - name: Install HiSim package
+      run: |
+        uv pip install --system -e .
+    - name: Test with pytest
+      working-directory: ./tests/
+      env:
+        UTSP_URL: ${{ secrets.UTSP_URL }}
+        UTSP_API_KEY: ${{ secrets.UTSP_API_KEY }}
+      run: |
+        durations="${{ matrix.durations }}"
+        durations="${durations:-20}"
+        ret=0
+        coverage run --parallel-mode --source=../hisim -m pytest -m "${{ matrix.marker }}" --durations="$durations" || ret=$?
+        # pytest exit code 5 means "no tests collected"; only the catch-all
+        # "others" job is allowed to legitimately select zero tests.
+        if [ "${{ matrix.allow_empty }}" = "true" ] && [ "$ret" = "5" ]; then
+          ret=0
+        fi
+        exit "$ret"
+    - name: Upload coverage data
+      if: always()
+      uses: actions/upload-artifact@v6
+      with:
+        name: coverage-${{ matrix.name }}
+        path: tests/.coverage.*
+        include-hidden-files: true
+        if-no-files-found: warn
+
+  coverage:
+    name: combine coverage
+    needs: pytest
+    runs-on: ubuntu-latest
+    # Runs in the same image so the source paths recorded by the pytest jobs
+    # (/__w/HiSim/HiSim/...) resolve when generating the report.
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+    - uses: actions/checkout@v6
+    - name: Mark workspace as safe for git
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+    - name: Download coverage data from the pytest jobs
+      uses: actions/download-artifact@v4
+      with:
+        pattern: coverage-*
+        path: coverage-data
+        merge-multiple: true
+    - name: Combine coverage
+      run: |
+        mkdir -p coverage-combine
+        index=0
+        for coverage_file in $(find coverage-data -type f -name '.coverage*'); do
+          cp "$coverage_file" "coverage-combine/.coverage.$index"
+          index=$((index + 1))
+        done
+        coverage combine coverage-combine
+        coverage report
+        coverage xml -o coverage.xml
+        coverage html -d htmlcov
+    - name: Upload combined coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: combined-coverage-report
+        path: |
+          coverage.xml
+          htmlcov/
+        if-no-files-found: error

@@ -18,7 +18,15 @@ from hisim import log
 
 @pytest.mark.base
 def test_hydrogen_generator() -> None:
-    """Test hydrogen generator."""
+    """Verify electrolyzer output and hydrogen-storage charging at one fixed timestep.
+
+    Builds an AdvancedElectrolyzer and a HydrogenStorage from hardcoded
+    ElectrolyzerWithStorageConfig / ElectrolyzerWithHydrogenStorageConfig
+    values, wires fake ComponentOutputs (4000 W electricity input, zero
+    hydrogen-not-stored, zero discharge target), runs a single simulate
+    step at timestep 1000, and asserts the resulting water demand,
+    unused power, and storage delta match the expected constants.
+    """
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(

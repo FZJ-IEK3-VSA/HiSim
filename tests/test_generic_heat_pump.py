@@ -104,3 +104,37 @@ def test_generic_heat_pump():
     assert 1 == stsv.values[1]
     # Check if the delivered heat is indeed that corresponded to the heat pump model
     assert heat_pump_power == stsv.values[2]
+
+
+@pytest.mark.base
+def test_set_time_correction_raises_runtime_error_when_called_twice() -> None:
+    """Calling set_time_correction twice with a non-unit factor raises RuntimeError.
+
+    The conversion guard rejects double-application of a time-correction factor
+    because the power attributes would be scaled twice. A RuntimeError (not a
+    bare Exception) signals the runtime-state violation.
+    """
+    seconds_per_timestep = 60
+    my_simulation_parameters = SimulationParameters.one_day_only(
+        2017, seconds_per_timestep
+    )
+
+    my_heat_pump = generic_heat_pump.GenericHeatPump(
+        config=generic_heat_pump.GenericHeatPumpConfig(
+            building_name="BUI1",
+            manufacturer="Viessmann Werke GmbH & Co KG",
+            name="GenericHeatPump",
+            heat_pump_name="Vitocal 300-A AWO-AC 301.B07",
+            min_operation_time=30,
+            min_idle_time=15,
+        ),
+        my_simulation_parameters=my_simulation_parameters,
+    )
+
+    # First application with a non-unit factor converts and marks the pump.
+    my_heat_pump.set_time_correction(2.0)
+    assert my_heat_pump.has_been_converted is True
+
+    # Second application must raise RuntimeError (the reachable guard from #966).
+    with pytest.raises(RuntimeError, match="already been converted"):
+        my_heat_pump.set_time_correction(2.0)

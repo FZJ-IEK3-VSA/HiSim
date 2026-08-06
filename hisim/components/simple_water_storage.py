@@ -903,18 +903,13 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
                 self.water_temperature_secondary_heat_generator_input_channel
             )
 
-            # get water mass flow rate of heat generator either from singleton sim repo or from input value
-            if self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo is not None:
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
-                    self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo
-                )
-            else:
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
-                    self.water_mass_flow_rate_heat_generator_input_channel
-                )
-                water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second = stsv.get_input_value(
-                    self.water_mass_flow_rate_secondary_heat_generator_input_channel
-                )
+            # get water mass flow rate of heat generator from input value
+            water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
+                self.water_mass_flow_rate_heat_generator_input_channel
+            )
+            water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second = stsv.get_input_value(
+                self.water_mass_flow_rate_secondary_heat_generator_input_channel
+            )
         else:
             water_temperature_from_heat_generator_in_celsius = 0
             water_mass_flow_rate_from_heat_generator_in_kg_per_second = 0
@@ -1304,10 +1299,8 @@ class SimpleHotWaterStorageController(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = None
 
         self.controller_mode: str = "off"
-        self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = None
         # Inputs
         self.water_mass_flow_rate_heat_generator_input_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -1360,15 +1353,10 @@ class SimpleHotWaterStorageController(cp.Component):
         else:
             # Retrieves inputs
 
-            # get water mass flow rate of heat generator either from singleton sim repo or from input value
-            if self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo is not None:
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
-                    self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo
-                )
-            else:
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
-                    self.water_mass_flow_rate_heat_generator_input_channel
-                )
+            # get water mass flow rate of heat generator from input value
+            water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
+                self.water_mass_flow_rate_heat_generator_input_channel
+            )
 
             self.conditions_on_off(
                 water_mass_flow_rate_from_heat_generator_in_kg_per_second=water_mass_flow_rate_from_heat_generator_in_kg_per_second

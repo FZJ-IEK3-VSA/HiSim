@@ -23,7 +23,7 @@ from hisim.component import (
 )
 from hisim.components.configuration import PhysicsConfig
 from hisim.components import configuration
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.sim_repository import SingletonDictKeyEnum
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
@@ -582,13 +582,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.waterstorageconfig = config
 
         self.mean_water_temperature_in_water_storage_in_celsius: float = 35
-
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR):
-            self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = (
-                SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR)
-            )
-        else:
-            self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = None
+        self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = None
 
         self.position_hot_water_storage_in_system = self.waterstorageconfig.position_hot_water_storage_in_system
         self.build(heat_exchanger_is_present=self.waterstorageconfig.heat_exchanger_is_present)
@@ -1310,14 +1304,10 @@ class SimpleHotWaterStorageController(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR):
-            self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = (
-                SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR)
-            )
-        else:
-            self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = None
+        self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = None
 
         self.controller_mode: str = "off"
+        self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = None
         # Inputs
         self.water_mass_flow_rate_heat_generator_input_channel: ComponentInput = self.add_input(
             self.component_name,

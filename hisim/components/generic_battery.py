@@ -14,7 +14,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim.components.generic_ev_charger import SimpleStorageState
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.sim_repository import SingletonDictKeyEnum
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -318,24 +318,24 @@ class GenericBattery(cp.Component):
         """Prepares the simulation."""
         if self.config.predictive:
             # send battery specification to the mpc controller for planning the cost optimal operation
-            SingletonSimRepository().set_entry(
+            self.simulation_repository.set_entry(
                 key=SingletonDictKeyEnum.MAXIMUMBATTERYCAPACITY,
                 entry=self.max_stored_energy,
             )
-            SingletonSimRepository().set_entry(
+            self.simulation_repository.set_entry(
                 key=SingletonDictKeyEnum.MINIMUMBATTERYCAPACITY,
                 entry=self.min_stored_energy,
             )
-            SingletonSimRepository().set_entry(
+            self.simulation_repository.set_entry(
                 key=SingletonDictKeyEnum.MAXIMALCHARGINGPOWER,
                 entry=self.max_var_stored_energy / self.time_correction_factor,
             )
-            SingletonSimRepository().set_entry(
+            self.simulation_repository.set_entry(
                 key=SingletonDictKeyEnum.MAXIMALDISCHARGINGPOWER,
                 entry=-self.min_var_stored_energy / self.time_correction_factor,
             )
-            SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.BATTERYEFFICIENCY, entry=self.efficiency)
-            SingletonSimRepository().set_entry(
+            self.simulation_repository.set_entry(key=SingletonDictKeyEnum.BATTERYEFFICIENCY, entry=self.efficiency)
+            self.simulation_repository.set_entry(
                 key=SingletonDictKeyEnum.INVERTEREFFICIENCY,
                 entry=self.efficiency_inverter,
             )

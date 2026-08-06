@@ -15,7 +15,7 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.building import Building
 from hisim import log
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.sim_repository import SingletonDictKeyEnum
 
 __authors__ = "Marwa Alfouly"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -262,18 +262,18 @@ class PIDController(cp.Component):
     def build(self):
         """For calculating internal things and preparing the simulation."""
         """ getting building physical properties for state space model """
-        self.h_tr_w = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING)
-        self.h_tr_ms = SingletonSimRepository().get_entry(
+        self.h_tr_w = self.simulation_repository.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING)
+        self.h_tr_ms = self.simulation_repository.get_entry(
             key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS
         )
-        self.h_tr_em = SingletonSimRepository().get_entry(
+        self.h_tr_em = self.simulation_repository.get_entry(
             key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM
         )
-        self.h_ve_adj = SingletonSimRepository().get_entry(
+        self.h_ve_adj = self.simulation_repository.get_entry(
             key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION
         )
-        self.h_tr_is = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR)
-        self.c_m = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE)
+        self.h_tr_is = self.simulation_repository.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR)
+        self.c_m = self.simulation_repository.get_entry(key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE)
 
     def i_save_state(self):
         """Saves the internal state at the beginning of each timestep."""

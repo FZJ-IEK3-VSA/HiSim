@@ -17,7 +17,7 @@ from hisim import loadtypes as lt
 from hisim import log, utils
 from hisim.component import Component, ComponentOutput, ConfigBase, SingleTimeStepValues, DisplayConfig, OpexCostDataClass, CapexCostDataClass
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.sim_repository import SingletonDictKeyEnum
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
@@ -491,7 +491,6 @@ class Weather(Component):
             raise ValueError("my_simulation_parameters was None")
         self.last_timestep_with_update = -1
         self.weather_config = config
-        SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.LOCATION, entry=self.weather_config.location)
         self.parameter_string = my_simulation_parameters.get_unique_key()
 
         self.my_simulation_parameters = my_simulation_parameters
@@ -664,6 +663,9 @@ class Weather(Component):
             source_enum=self.weather_config.data_source,
         )
         self.simulation_repository.set_entry("weather_location", location_dict)
+        self.simulation_repository.set_entry(
+            key=SingletonDictKeyEnum.LOCATION, entry=self.weather_config.location
+        )
         cachefound, cache_filepath = utils.get_cache_file(self.config.name, self.weather_config, self.my_simulation_parameters)
         if cachefound:
             # read cached files
@@ -797,43 +799,43 @@ class Weather(Component):
 
         # write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
         if self.weather_config.predictive_control:
-            SingletonSimRepository().set_entry(
+            self.simulation_repository.set_entry(
                 key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST,
                 entry=self.temperature_list,
             )
-            SingletonSimRepository().set_entry(
+            self.simulation_repository.set_entry(
                 key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST,
                 entry=self.dhi_list,
             )
-            SingletonSimRepository().set_entry(
+            self.simulation_repository.set_entry(
                 key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST,
                 entry=self.dni_list,
             )
-            SingletonSimRepository().set_entry(
+            self.simulation_repository.set_entry(
                 key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST,
                 entry=self.dniextra_list,
             )
-            SingletonSimRepository().set_entry(
+            self.simulation_repository.set_entry(
                 key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST,
                 entry=self.ghi_list,
             )
-            SingletonSimRepository().set_entry(
+            self.simulation_repository.set_entry(
                 key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST,
                 entry=self.azimuth_list,
             )
-            SingletonSimRepository().set_entry(
+            self.simulation_repository.set_entry(
                 key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST,
                 entry=self.apparent_zenith_list,
             )
-            SingletonSimRepository().set_entry(
+            self.simulation_repository.set_entry(
                 key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST,
                 entry=self.wind_speed_list,
             )
-            SingletonSimRepository().set_entry(
+            self.simulation_repository.set_entry(
                 key=SingletonDictKeyEnum.WEATHERPRESSUREYEARLYFORECAST,
                 entry=self.pressure_list,
             )
-            SingletonSimRepository().set_entry(
+            self.simulation_repository.set_entry(
                 key=SingletonDictKeyEnum.WEATHERALTITUDEYEARLYFORECAST,
                 entry=self.altitude_list,
             )

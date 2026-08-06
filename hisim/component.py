@@ -219,8 +219,7 @@ class Component:
         self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
         if my_simulation_parameters is None:
             raise ValueError("My Simulation parameters was None.")
-        self.simulation_repository: SimRepository
-        # self.singleton_simulation_repository: SingletonSimRepository
+        self.simulation_repository: SimRepository = SimRepository()
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
         if isinstance(my_config, ConfigBase):
             self.config = my_config
@@ -270,6 +269,16 @@ class Component:
         """Sets the SimRepository."""
         if simulation_repository is None:
             raise ValueError("simulation repository was none")
+        # Merge any entries already stored during component initialization into
+        # the simulator's repository to preserve behavior when components are
+        # constructed before being added to the simulator.
+        for key, value in self.simulation_repository.entries.items():
+            if key not in simulation_repository.entries:
+                simulation_repository.entries[key] = value
+        for component_type, weights in self.simulation_repository.dynamic_entries.items():
+            for source_weight, entry in weights.items():
+                if source_weight not in simulation_repository.dynamic_entries[component_type]:
+                    simulation_repository.dynamic_entries[component_type][source_weight] = entry
         self.simulation_repository = simulation_repository
 
     def add_input(

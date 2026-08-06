@@ -46,7 +46,7 @@ from hisim import log, utils
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.sim_repository import SingletonDictKeyEnum
 
 # Constants for warm water fallback values used in i_simulate
 DEFAULT_WW_TEMPERATURE_INPUT = 40.45  # °C - default warm water temperature fallback
@@ -976,7 +976,7 @@ class UtspLpgConnector(cp.Component):
                     # no caching if predefined profile is used
 
                     if self.utsp_config.predictive:
-                        SingletonSimRepository().set_entry(
+                        self.simulation_repository.set_entry(
                             key=SingletonDictKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST,
                             entry=self.heating_by_residents,
                         )

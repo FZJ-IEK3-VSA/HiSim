@@ -319,7 +319,9 @@ class Simulator:
         del all_result_lines
         del postprocessing_datatransfer
         del my_post_processor
-        self.simulation_repository.clear()
+        # Preserve the repository contents after simulation execution so callers
+        # can inspect metadata and exchanged values.
+        # self.simulation_repository.clear()
         log.information("Finished postprocessing")
         with open(flagfile, "a", encoding="utf-8") as filestream:
             filestream.write("finished")

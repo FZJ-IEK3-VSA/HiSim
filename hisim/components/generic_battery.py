@@ -14,7 +14,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim.components.generic_ev_charger import SimpleStorageState
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository import SingletonDictKeyEnum
+from hisim.sim_repository import SimRepositoryKeyEnum
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -319,24 +319,24 @@ class GenericBattery(cp.Component):
         if self.config.predictive:
             # send battery specification to the mpc controller for planning the cost optimal operation
             self.simulation_repository.set_entry(
-                key=SingletonDictKeyEnum.MAXIMUMBATTERYCAPACITY,
+                key=SimRepositoryKeyEnum.MAXIMUMBATTERYCAPACITY,
                 entry=self.max_stored_energy,
             )
             self.simulation_repository.set_entry(
-                key=SingletonDictKeyEnum.MINIMUMBATTERYCAPACITY,
+                key=SimRepositoryKeyEnum.MINIMUMBATTERYCAPACITY,
                 entry=self.min_stored_energy,
             )
             self.simulation_repository.set_entry(
-                key=SingletonDictKeyEnum.MAXIMALCHARGINGPOWER,
+                key=SimRepositoryKeyEnum.MAXIMALCHARGINGPOWER,
                 entry=self.max_var_stored_energy / self.time_correction_factor,
             )
             self.simulation_repository.set_entry(
-                key=SingletonDictKeyEnum.MAXIMALDISCHARGINGPOWER,
+                key=SimRepositoryKeyEnum.MAXIMALDISCHARGINGPOWER,
                 entry=-self.min_var_stored_energy / self.time_correction_factor,
             )
-            self.simulation_repository.set_entry(key=SingletonDictKeyEnum.BATTERYEFFICIENCY, entry=self.efficiency)
+            self.simulation_repository.set_entry(key=SimRepositoryKeyEnum.BATTERYEFFICIENCY, entry=self.efficiency)
             self.simulation_repository.set_entry(
-                key=SingletonDictKeyEnum.INVERTEREFFICIENCY,
+                key=SimRepositoryKeyEnum.INVERTEREFFICIENCY,
                 entry=self.efficiency_inverter,
             )
 

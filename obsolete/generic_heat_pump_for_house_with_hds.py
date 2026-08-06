@@ -22,7 +22,7 @@ from hisim.components.configuration import PhysicsConfig
 from hisim.components.weather import Weather
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from HiSim.obsolete.singleton_sim_repository.sim_repository_singleton import SingletonSimRepository, SimRepositoryKeyEnum
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -237,7 +237,7 @@ class GenericHeatPumpNew(cp.Component):
             max_thermal_building_demand_in_watt=self.max_thermal_building_demand_in_watt
         )
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR,
+            key=SimRepositoryKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR,
             entry=self.heatpump_water_mass_flow_rate_in_kg_per_second,
         )
 

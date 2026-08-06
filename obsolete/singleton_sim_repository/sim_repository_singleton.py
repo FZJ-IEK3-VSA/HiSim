@@ -92,7 +92,7 @@ class SingletonSimRepository(metaclass=SingletonMeta):
         del self.my_dynamic_dict
 
 
-class SingletonDictKeyEnum(enum.Enum):
+class SimRepositoryKeyEnum(enum.Enum):
 
     """Class for setting dictionary keys in the singleton sim repository."""
 

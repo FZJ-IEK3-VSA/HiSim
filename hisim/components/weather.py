@@ -17,7 +17,7 @@ from hisim import loadtypes as lt
 from hisim import log, utils
 from hisim.component import Component, ComponentOutput, ConfigBase, SingleTimeStepValues, DisplayConfig, OpexCostDataClass, CapexCostDataClass
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository import SingletonDictKeyEnum
+from hisim.sim_repository import SimRepositoryKeyEnum
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
@@ -664,7 +664,7 @@ class Weather(Component):
         )
         self.simulation_repository.set_entry("weather_location", location_dict)
         self.simulation_repository.set_entry(
-            key=SingletonDictKeyEnum.LOCATION, entry=self.weather_config.location
+            key=SimRepositoryKeyEnum.LOCATION, entry=self.weather_config.location
         )
         cachefound, cache_filepath = utils.get_cache_file(self.config.name, self.weather_config, self.my_simulation_parameters)
         if cachefound:
@@ -800,43 +800,43 @@ class Weather(Component):
         # write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
         if self.weather_config.predictive_control:
             self.simulation_repository.set_entry(
-                key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST,
+                key=SimRepositoryKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST,
                 entry=self.temperature_list,
             )
             self.simulation_repository.set_entry(
-                key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST,
+                key=SimRepositoryKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST,
                 entry=self.dhi_list,
             )
             self.simulation_repository.set_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST,
+                key=SimRepositoryKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST,
                 entry=self.dni_list,
             )
             self.simulation_repository.set_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST,
+                key=SimRepositoryKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST,
                 entry=self.dniextra_list,
             )
             self.simulation_repository.set_entry(
-                key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST,
+                key=SimRepositoryKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST,
                 entry=self.ghi_list,
             )
             self.simulation_repository.set_entry(
-                key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST,
+                key=SimRepositoryKeyEnum.WEATHERAZIMUTHYEARLYFORECAST,
                 entry=self.azimuth_list,
             )
             self.simulation_repository.set_entry(
-                key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST,
+                key=SimRepositoryKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST,
                 entry=self.apparent_zenith_list,
             )
             self.simulation_repository.set_entry(
-                key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST,
+                key=SimRepositoryKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST,
                 entry=self.wind_speed_list,
             )
             self.simulation_repository.set_entry(
-                key=SingletonDictKeyEnum.WEATHERPRESSUREYEARLYFORECAST,
+                key=SimRepositoryKeyEnum.WEATHERPRESSUREYEARLYFORECAST,
                 entry=self.pressure_list,
             )
             self.simulation_repository.set_entry(
-                key=SingletonDictKeyEnum.WEATHERALTITUDEYEARLYFORECAST,
+                key=SimRepositoryKeyEnum.WEATHERALTITUDEYEARLYFORECAST,
                 entry=self.altitude_list,
             )
 

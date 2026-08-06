@@ -109,5 +109,3 @@ class SimRepositoryKeyEnum(enum.Enum):
     WEATHERPRESSUREYEARLYFORECAST = 46
     DESCRIPTION = 47
 
-
-SingletonDictKeyEnum = SimRepositoryKeyEnum

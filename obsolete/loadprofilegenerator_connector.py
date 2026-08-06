@@ -16,7 +16,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
+from HiSim.obsolete.singleton_sim_repository.sim_repository_singleton import SimRepositoryKeyEnum, SingletonSimRepository
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -539,7 +539,7 @@ class Occupancy(cp.Component):
 
         if self.occupancy_config.predictive:
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST,
+                key=SimRepositoryKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST,
                 entry=self.heating_by_residents,
             )
 

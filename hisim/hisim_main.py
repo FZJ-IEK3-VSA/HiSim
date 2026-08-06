@@ -17,7 +17,7 @@ try:
     import hisim.simulator as sim
     from hisim import log
     from hisim.simulationparameters import SimulationParameters
-    from hisim.sim_repository import SingletonDictKeyEnum
+    from hisim.sim_repository import SimRepositoryKeyEnum
 except ModuleNotFoundError:
     raise ModuleNotFoundError(
         "Could not import HiSim modules. "
@@ -100,7 +100,7 @@ def initialize_from_python(
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
     my_sim.simulation_repository.set_entry(
-        key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{get_description_from_py(path_obj)}",
+        key=SimRepositoryKeyEnum.DESCRIPTION, entry=f"{get_description_from_py(path_obj)}",
     )
 
     # Build method
@@ -150,7 +150,7 @@ def initialize_from_json(
 
     my_sim = _build_simulator_from_scenario(scenario_data, path_to_module, sim_params)
     my_sim.simulation_repository.set_entry(
-        key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}",
+        key=SimRepositoryKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}",
     )
 
     if delta:
@@ -218,7 +218,7 @@ def initialize_from_json_with_parameters(
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
     my_sim.simulation_repository.set_entry(
-        key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}",
+        key=SimRepositoryKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}",
     )
     my_simulation_parameters.multiple_buildings = scenario_data.get("multiple_buildings", False)
     my_simulation_parameters.log_connections = True  # For easy post-processing (and debugging)

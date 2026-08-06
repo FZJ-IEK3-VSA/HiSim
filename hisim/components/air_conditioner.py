@@ -27,7 +27,7 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.components.weather import Weather
 from hisim.components.building import Building
 from hisim import utils
-from hisim.sim_repository import SingletonDictKeyEnum
+from hisim.sim_repository import SimRepositoryKeyEnum
 
 __authors__ = "Marwa Alfouly, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -455,11 +455,11 @@ class AirConditioner(cp.Component):
 
         # Save coefficients for use by other components
         self.simulation_repository.set_entry(
-            SingletonDictKeyEnum.COEFFICIENT_OF_PERFORMANCE_HEATING,
+            SimRepositoryKeyEnum.COEFFICIENT_OF_PERFORMANCE_HEATING,
             self.cop_coef,
         )
         self.simulation_repository.set_entry(
-            SingletonDictKeyEnum.ENERGY_EFFICIENY_RATIO_COOLING, self.eer_coef
+            SimRepositoryKeyEnum.ENERGY_EFFICIENY_RATIO_COOLING, self.eer_coef
         )
 
     # Interpolation functions

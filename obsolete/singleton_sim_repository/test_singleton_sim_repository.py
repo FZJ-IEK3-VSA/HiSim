@@ -10,7 +10,7 @@ from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
-from hisim.sim_repository import SingletonDictKeyEnum
+from hisim.sim_repository import SimRepositoryKeyEnum
 from hisim import log
 from hisim import utils
 
@@ -140,18 +140,18 @@ def test_house(
     assert repo is not None
     assert len(repo.entries) > 0
     # Weather registers its location in the repository during preparation.
-    assert SingletonDictKeyEnum.LOCATION in repo.entries
-    assert repo.entries[SingletonDictKeyEnum.LOCATION] == my_weather_config.location
+    assert SimRepositoryKeyEnum.LOCATION in repo.entries
+    assert repo.entries[SimRepositoryKeyEnum.LOCATION] == my_weather_config.location
     # Building registers its 5R1C thermal parameters in the repository during build().
-    assert SingletonDictKeyEnum.THERMALCAPACITYENVELOPE in repo.entries
-    assert SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING in repo.entries
-    assert SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION in repo.entries
+    assert SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE in repo.entries
+    assert SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING in repo.entries
+    assert SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION in repo.entries
     # The thermal parameters must carry real, positive computed values -- not just
     # be present -- to confirm the building genuinely pushed its 5R1C results
     # through the repository during the run.
-    assert repo.entries[SingletonDictKeyEnum.THERMALCAPACITYENVELOPE] > 0
-    assert repo.entries[SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING] > 0
-    assert repo.entries[SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION] > 0
+    assert repo.entries[SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE] > 0
+    assert repo.entries[SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING] > 0
+    assert repo.entries[SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION] > 0
     assert len(repo.entries) >= 7
 
     # Sanity check - a non-singleton class should create two separate instances

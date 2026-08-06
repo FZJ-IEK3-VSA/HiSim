@@ -28,7 +28,7 @@ from hisim.components import (
     controller_l1_generic_ev_charge,
 )
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from HiSim.obsolete.singleton_sim_repository.sim_repository_singleton import SingletonSimRepository, SimRepositoryKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.loadtypes import HeatingSystems, ComponentType
@@ -591,7 +591,7 @@ def setup_function(
         )
 
     SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
+        key=SimRepositoryKeyEnum.RESULT_SCENARIO_NAME,
         entry=f"{scenario_hash_string}",
     )
 

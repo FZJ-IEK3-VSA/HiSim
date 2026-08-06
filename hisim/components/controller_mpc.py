@@ -31,7 +31,7 @@ from hisim.components.weather import Weather
 # from hisim.components.air_conditioner import AirConditioner
 # from hisim.components.generic_pv_system import PVSystem
 from hisim import log
-from hisim.sim_repository import SingletonDictKeyEnum
+from hisim.sim_repository import SimRepositoryKeyEnum
 
 __authors__ = "Marwa Alfouly"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -441,36 +441,36 @@ class MpcController(cp.Component):
         if self.mpcconfig.predictive:
             """Get forecasted disturbance (weather)"""
             self.temp_forecast = self.simulation_repository.get_entry(
-                key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST
+                key=SimRepositoryKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST
             )[: self.my_simulation_parameters.timesteps]
             self.phi_m_forecast = self.simulation_repository.get_entry(
-                key=SingletonDictKeyEnum.HEATFLUXTHERMALMASSNODEFORECAST
+                key=SimRepositoryKeyEnum.HEATFLUXTHERMALMASSNODEFORECAST
             )
             self.phi_st_forecast = self.simulation_repository.get_entry(
-                key=SingletonDictKeyEnum.HEATFLUXSURFACENODEFORECAST
+                key=SimRepositoryKeyEnum.HEATFLUXSURFACENODEFORECAST
             )
             self.phi_ia_forecast = self.simulation_repository.get_entry(
-                key=SingletonDictKeyEnum.HEATFLUXINDOORAIRNODEFORECAST
+                key=SimRepositoryKeyEnum.HEATFLUXINDOORAIRNODEFORECAST
             )
 
             """"getting pv forecast"""
-            self.pv_forecast_yearly = self.simulation_repository.get_entry(key=SingletonDictKeyEnum.PVFORECASTYEARLY)
+            self.pv_forecast_yearly = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.PVFORECASTYEARLY)
 
             """ getting battery specifications """
             self.maximum_storage_capacity = self.simulation_repository.get_entry(
-                key=SingletonDictKeyEnum.MAXIMUMBATTERYCAPACITY
+                key=SimRepositoryKeyEnum.MAXIMUMBATTERYCAPACITY
             )
             self.minimum_storage_capacity = self.simulation_repository.get_entry(
-                key=SingletonDictKeyEnum.MINIMUMBATTERYCAPACITY
+                key=SimRepositoryKeyEnum.MINIMUMBATTERYCAPACITY
             )
             self.maximum_charging_power = self.simulation_repository.get_entry(
-                key=SingletonDictKeyEnum.MAXIMALCHARGINGPOWER
+                key=SimRepositoryKeyEnum.MAXIMALCHARGINGPOWER
             )
             self.maximum_discharging_power = self.simulation_repository.get_entry(
-                key=SingletonDictKeyEnum.MAXIMALDISCHARGINGPOWER
+                key=SimRepositoryKeyEnum.MAXIMALDISCHARGINGPOWER
             )
-            self.battery_efficiency = self.simulation_repository.get_entry(key=SingletonDictKeyEnum.BATTERYEFFICIENCY)
-            self.inverter_efficiency = self.simulation_repository.get_entry(key=SingletonDictKeyEnum.INVERTEREFFICIENCY)
+            self.battery_efficiency = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.BATTERYEFFICIENCY)
+            self.inverter_efficiency = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.INVERTEREFFICIENCY)
             log.information(f"self.inverter_efficiency {format(self.inverter_efficiency)}")
 
     def build(self):
@@ -478,21 +478,21 @@ class MpcController(cp.Component):
         if self.mpcconfig.predictive:
             """getting building physical properties for state space model"""
             self.h_tr_w = self.simulation_repository.get_entry(
-                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING
+                key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING
             )
             self.h_tr_ms = self.simulation_repository.get_entry(
-                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS
+                key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS
             )
             self.h_tr_em = self.simulation_repository.get_entry(
-                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM
+                key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM
             )
             self.h_ve_adj = self.simulation_repository.get_entry(
-                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION
+                key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION
             )
             self.h_tr_is = self.simulation_repository.get_entry(
-                key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR
+                key=SimRepositoryKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR
             )
-            self.c_m = self.simulation_repository.get_entry(key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE)
+            self.c_m = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE)
             """"
             self.h_tr_w = my_simulation_repository.get_entry(
                 Building.Thermal_transmission_coefficient_glazing
@@ -515,8 +515,8 @@ class MpcController(cp.Component):
             """
 
             """ getting cop_coef and eer_coef from the air conditioner omponenent to be used in the cost optimization"""
-            self.cop_coef = self.simulation_repository.get_entry(key=SingletonDictKeyEnum.COEFFICIENT_OF_PERFORMANCE_HEATING)
-            self.eer_coef = self.simulation_repository.get_entry(key=SingletonDictKeyEnum.ENERGY_EFFICIENY_RATIO_COOLING)
+            self.cop_coef = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.COEFFICIENT_OF_PERFORMANCE_HEATING)
+            self.eer_coef = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.ENERGY_EFFICIENY_RATIO_COOLING)
 
     def statespace(self):
         """State Space Model of the 5R1C network, Used as a prediction model to the building behavior in the MPC."""
@@ -635,10 +635,10 @@ class MpcController(cp.Component):
         self.pv_forecast_24h_1min = self.pv_forecast_yearly[start_horizon : start_horizon + self.prediction_horizon]
 
         self.price_purchase_forecast_24h_1min = self.simulation_repository.get_entry(
-            key=SingletonDictKeyEnum.PRICEPURCHASEFORECAST24H
+            key=SimRepositoryKeyEnum.PRICEPURCHASEFORECAST24H
         )
         self.price_injection_forecast_24h_1min = self.simulation_repository.get_entry(
-            key=SingletonDictKeyEnum.PRICEINJECTIONFORECAST24H
+            key=SimRepositoryKeyEnum.PRICEINJECTIONFORECAST24H
         )
 
         # sampling of the data: Useful if you run hisim at 60 sec per time step and you want fast optimization:

@@ -33,14 +33,6 @@ postprocessing.compute\_kpis module
    :undoc-members:
    :show-inheritance:
 
-postprocessing.generate\_csv\_for\_housing\_database module
------------------------------------------------------------
-
-.. automodule:: postprocessing.generate_csv_for_housing_database
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 postprocessing.postprocessing\_datatransfer module
 --------------------------------------------------
 

@@ -67,7 +67,6 @@ class PostProcessor:
             allowed_options_for_docker = {
                 PostProcessingOptions.EXPORT_TO_CSV,
                 PostProcessingOptions.COMPUTE_KPIS,
-                PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE,
                 PostProcessingOptions.COMPUTE_OPEX,
                 PostProcessingOptions.COMPUTE_CAPEX,
                 PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON,
@@ -229,46 +228,6 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Computing and writing KPIs to report took " + f"{duration:1.2f}s.")
-
-        if PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE in ppdt.post_processing_options:
-            building_module = importlib.import_module("hisim.components.building")
-            lpg_connector_module = importlib.import_module("hisim.components.loadprofilegenerator_utsp_connector")
-            generate_csv_for_database = _load_attribute(
-                "hisim.postprocessing.generate_csv_for_housing_database",
-                "generate_csv_for_database",
-            )
-            all_building_data = pd.DataFrame()
-            occupancy_config = None
-            for elem in ppdt.wrapped_components:
-                if isinstance(elem.my_component, building_module.Building):
-                    building_data = elem.my_component.my_building_information.buildingdata_ref
-                    for building_object in building_objects_in_district_list:
-                        if (
-                            building_object in str(elem.my_component.component_name)
-                            or not ppdt.simulation_parameters.multiple_buildings
-                        ):
-                            building_data["Object_Name"] = building_object
-                    all_building_data = pd.concat([all_building_data, building_data], ignore_index=True)
-
-                elif isinstance(elem.my_component, lpg_connector_module.UtspLpgConnectorConfig):
-                    occupancy_config = elem.my_component.occupancy_config
-            if len(all_building_data) == 0:
-                log.warning("Building needs to be defined to generate csv for housing data base.")
-            else:
-                all_building_data.set_index("Object_Name", inplace=True)
-                log.information("Generating csv for housing data base. ")
-                start = timer()
-                generate_csv_for_database(
-                    all_outputs=ppdt.all_outputs,
-                    results=ppdt.results,
-                    simulation_parameters=ppdt.simulation_parameters,
-                    building_data=all_building_data,
-                    occupancy_config=occupancy_config,
-                    wrapped_components=ppdt.wrapped_components,
-                )
-                end = timer()
-                duration = end - start
-                log.information("Generating csv for housing data base took " + f"{duration:1.2f}s.")
 
         # only a single day has been calculated. This gets special charts for debugging.
         if (

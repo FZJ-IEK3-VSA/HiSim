@@ -62,7 +62,6 @@ OPTIONS_USING_SINGLE_DAY_MINUTELY_BASELINE = {
 }
 
 OPTIONS_USING_HOUSEHOLD_BASELINE = {
-    PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE,
     PostProcessingOptions.COMPUTE_OPEX,
     PostProcessingOptions.COMPUTE_CAPEX,
     PostProcessingOptions.COMPUTE_KPIS,

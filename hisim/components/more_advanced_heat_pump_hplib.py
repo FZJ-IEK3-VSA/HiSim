@@ -1615,11 +1615,18 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     )
 
                 elif output.field_name == self.TimeOnHeating:
-                    heating_time_in_seconds = sum(postprocessing_results.iloc[:, index])
+                    # TimeOnHeating is a running counter of the current continuous heating streak
+                    # (reset to 0 whenever heating stops), so count active timesteps instead of summing it.
+                    heating_time_in_seconds = (
+                        postprocessing_results.iloc[:, index] > 0
+                    ).sum() * self.my_simulation_parameters.seconds_per_timestep
                     heating_time_in_hours = heating_time_in_seconds / 3600
 
                 elif output.field_name == self.TimeOnCooling:
-                    cooling_time_in_seconds = sum(postprocessing_results.iloc[:, index])
+                    # Same running-counter caveat as TimeOnHeating above.
+                    cooling_time_in_seconds = (
+                        postprocessing_results.iloc[:, index] > 0
+                    ).sum() * self.my_simulation_parameters.seconds_per_timestep
                     cooling_time_in_hours = cooling_time_in_seconds / 3600
 
                 elif output.field_name == self.TemperatureOutputSH:

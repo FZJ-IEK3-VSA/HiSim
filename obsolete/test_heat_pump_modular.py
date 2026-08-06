@@ -3,7 +3,7 @@
 import pytest
 
 from hisim import component as cp
-from hisim.components import generic_heat_pump_modular
+from HiSim.obsolete.webtool_old import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters

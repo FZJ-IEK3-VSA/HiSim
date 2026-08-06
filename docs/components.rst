@@ -273,38 +273,6 @@ components.generic\_heat\_pump module
    :undoc-members:
    :show-inheritance:
 
-components.generic\_heat\_pump\_modular module
-----------------------------------------------
-
-.. automodule:: components.generic_heat_pump_modular
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-components.generic\_heat\_source module
----------------------------------------
-
-.. automodule:: components.generic_heat_source
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-components.generic\_heat\_water\_storage module
------------------------------------------------
-
-.. automodule:: components.generic_heat_water_storage
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-components.generic\_hot\_water\_storage\_modular module
--------------------------------------------------------
-
-.. automodule:: components.generic_hot_water_storage_modular
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 components.generic\_hydrogen\_storage module
 --------------------------------------------
 

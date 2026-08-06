@@ -2,7 +2,7 @@
 import pytest
 from tests import functions_for_testing as fft
 from hisim import component as cp
-from hisim.components import generic_heat_water_storage
+from HiSim.obsolete.webtool_old import generic_heat_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 

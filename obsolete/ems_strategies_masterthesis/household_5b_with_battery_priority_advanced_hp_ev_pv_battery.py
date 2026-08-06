@@ -12,7 +12,7 @@ from hisim.components import heat_distribution_system
 from hisim.components import building
 from hisim.components import simple_water_storage
 from hisim.components import generic_car
-from hisim.components import generic_heat_pump_modular
+from HiSim.obsolete.webtool_old import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
 from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 from hisim.components import electricity_meter

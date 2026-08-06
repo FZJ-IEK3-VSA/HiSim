@@ -5,6 +5,7 @@
 from dataclasses import dataclass
 from typing import Any, List, Optional
 
+from HiSim.obsolete.webtool_old import generic_heat_pump_modular
 from dataclasses_json import dataclass_json
 from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 from utspclient.helpers.lpgdata import (
@@ -27,7 +28,6 @@ from hisim.components import (
     controller_l2_energy_management_system,
     electricity_meter,
     generic_car,
-    generic_heat_pump_modular,
     generic_pv_system,
     heat_distribution_system,
     loadprofilegenerator_utsp_connector,

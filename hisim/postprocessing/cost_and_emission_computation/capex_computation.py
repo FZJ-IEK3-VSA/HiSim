@@ -1,4 +1,41 @@
-"""Module for capex and emission computation."""
+"""Module for CAPEX and emission computation.
+
+This module provides helper functions to compute capital expenditure (CAPEX)
+costs and CO2 emissions for energy components over a simulated period.
+
+Financial Modeling Assumptions
+------------------------------
+
+The CAPEX model uses a **linear straight-line proration** method with a **zero
+discount rate** (no time value of money is applied). Key assumptions:
+
+* **Depreciation:** Straight-line over the technical lifetime in years.
+  The investment cost and CO2 footprint are divided by the technical lifetime
+  and multiplied by the simulated period as a fraction of a year.
+* **Discount rate:** 0% -- no discounting or net present value conversion is
+  performed.
+* **Year length:** A fixed 365-day year is used
+  (``seconds_per_year = 365 * 24 * 60 * 60``), deliberately ignoring leap years
+  to ensure backward compatibility with historical simulation outputs.
+
+Unit Conventions
+----------------
+
+* Monetary values are expressed in **Euro (EUR)**.
+* CO2 footprints are expressed in **kilograms (kg)**.
+* Per-unit cost/emission factors are given as **EUR/kW**, **EUR/kWh**,
+  **EUR/liter**, **EUR/m²**, or a unitless **ANY** factor.
+* Technical lifetimes are in **years**.
+* Maintenance costs are annual rates in **EUR per year**.
+
+External Data Dependencies
+--------------------------
+
+When all CAPEX fields on a component config are ``None``, per-unit investment
+costs and CO2 footprints are looked up from
+:class:`~hisim.components.configuration.EmissionFactorsAndCostsForDevicesConfig`
+for the simulation year and country.
+"""
 
 from typing import Optional
 from hisim.component import CapexCostDataClass, ConfigBase

@@ -7,6 +7,7 @@ only during the heating period.
 It is a ping pong control with an optional input from the Energy Management System,
 which enforces heating with electricity from PV.
 The buffer is controlled accoring to four modes:
+
     (a) 0.5 * power when buffer temperature is within the upper half between upper target and increased upper target from Energy Management System (only in surplus case),
     (b) 0.75 * power when buffer temperature is within the lower half beweet upper target and increase upper target from Energy Management System (only in surplus case),
     (c) full power when building temperature is below lower target,
@@ -82,21 +83,21 @@ class L1BuildingHeatingConfig(cp.ConfigBase):
 class L1BuildingHeatControllerState:
     """Data class that saves the state of the controller."""
 
-    def __init__(self, state: float = 0):
+    def __init__(self, heating_percentage: float = 0):
         """Initialize the controller state.
 
         Args:
-            state: Initial state value representing heating control percentage (0-1).
+            heating_percentage: Initial heating control percentage (0-1).
         """
-        self.state: float = state
+        self.heating_percentage: float = heating_percentage
 
     def clone(self) -> "L1BuildingHeatControllerState":
         """Create a copy of the current state.
 
         Returns:
-            A new L1BuildingHeatControllerState instance with the same state value.
+            A new L1BuildingHeatControllerState instance with the same heating percentage.
         """
-        return L1BuildingHeatControllerState(state=self.state)
+        return L1BuildingHeatControllerState(heating_percentage=self.heating_percentage)
 
 
 class L1BuildingHeatController(cp.Component):
@@ -129,8 +130,17 @@ class L1BuildingHeatController(cp.Component):
         config: L1BuildingHeatingConfig,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
-        """For initializing."""
-        if not config.__class__.__name__ == L1BuildingHeatingConfig.__name__:
+        """Initialize the L1 building heat controller.
+
+        Args:
+            my_simulation_parameters: Simulation parameters providing timestep info.
+            config: Configuration holding set temperatures, heating-season bounds, and source weight.
+            my_display_config: Display configuration for the component.
+
+        Raises:
+            ValueError: If `config` is not an `L1BuildingHeatingConfig` instance.
+        """
+        if not isinstance(config, L1BuildingHeatingConfig):
             raise ValueError("Wrong config class.")
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -224,16 +234,16 @@ class L1BuildingHeatController(cp.Component):
     def get_default_connections_from_hot_water_storage(self) -> List[cp.ComponentConnection]:
         """Sets default connections for the buffer."""
         # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.generic_hot_water_storage_modular"
-        component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "HotWaterStorage")
+        storage_module_name = "hisim.components.generic_hot_water_storage_modular"
+        storage_module = importlib.import_module(name=storage_module_name)
+        storage_class = getattr(storage_module, "HotWaterStorage")
         connections = []
-        boiler_classname = component_class.get_classname()
+        storage_classname = storage_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 L1BuildingHeatController.BufferTemperature,
-                boiler_classname,
-                component_class.TemperatureMean,
+                storage_classname,
+                storage_class.TemperatureMean,
             )
         )
         return connections
@@ -242,40 +252,52 @@ class L1BuildingHeatController(cp.Component):
         """Prepares the simulation."""
         pass
 
-    def control_heating(
+    def _control_heating(
         self,
         timestep: int,
-        t_control: float,
-        t_buffer: float,
-        temperature_modifier: float,
+        building_temperature_in_celsius: float,
+        t_buffer_in_celsius: float,
+        temperature_modifier_in_celsius: float,
     ) -> None:
-        """Controls the heating from buffer to building."""
+        """Set the controller state based on building/buffer temperatures and EMS modifier.
+
+        Args:
+            timestep: Current simulation timestep.
+            building_temperature_in_celsius: Mean building temperature in °C.
+            t_buffer_in_celsius: Buffer storage temperature in °C (0 if unconnected).
+            temperature_modifier_in_celsius: EMS-provided temperature offset in °C; >0 signals surplus heating.
+
+        The controller sets `self.state.heating_percentage` to one of {0, 0.5, 0.75, 1}:
+          - 0: heating off (summer, or building above upper target).
+          - 1: full power (building below lower target).
+          - 0.75 / 0.5: partial surplus heating when buffer is hot and modifier > 0.
+        """
         # prevent heating in summer
         if self.heating_season_begin > timestep > self.heating_season_end:
-            self.state.state = 0
+            self.state.heating_percentage = 0
             return
         # activate heating when building temperature is below lower threshold
-        if t_control < self.config.t_min_heating_in_celsius:
+        if building_temperature_in_celsius < self.config.t_min_heating_in_celsius:
             # start heating if temperature goes below lower limit
-            self.state.state = 1
+            self.state.heating_percentage = 1
             return
         # deactivate heating when building temperature is above upper threshold
-        if t_control > self.config.t_max_heating_in_celsius + temperature_modifier:
-            self.state.state = 0
+        if building_temperature_in_celsius > self.config.t_max_heating_in_celsius + temperature_modifier_in_celsius:
+            self.state.heating_percentage = 0
             return
         # deactivate heating when temperature modifier is zero and signal comes from surplus control.
         # states 0.5 and 0.75 are only activated when temperature modifier is greater than zero, which is only the case in surplus control.
-        if self.state.state in [0.5, 0.75] and temperature_modifier == 0:
-            self.state.state = 0
+        if self.state.heating_percentage in [0.5, 0.75] and temperature_modifier_in_celsius == 0:
+            self.state.heating_percentage = 0
             return
         # "surplus heat control" when storage is getting hot
-        if temperature_modifier > 0 and t_buffer > self.config.t_buffer_activation_threshold_in_celsius:
+        if temperature_modifier_in_celsius > 0 and t_buffer_in_celsius > self.config.t_buffer_activation_threshold_in_celsius:
             # heat with 75 % power and building can still be heated
-            if t_control < self.config.t_max_heating_in_celsius + temperature_modifier / 2:
-                self.state.state = 0.75
+            if building_temperature_in_celsius < self.config.t_max_heating_in_celsius + temperature_modifier_in_celsius / 2:
+                self.state.heating_percentage = 0.75
             # heat with 50 % power when storage is getting hot and building can still be heated, but is already on the upper side of the tolerance interval
-            elif t_control < self.config.t_max_heating_in_celsius + temperature_modifier:
-                self.state.state = 0.5
+            elif building_temperature_in_celsius < self.config.t_max_heating_in_celsius + temperature_modifier_in_celsius:
+                self.state.heating_percentage = 0.5
         return
 
     def i_save_state(self) -> None:
@@ -291,25 +313,31 @@ class L1BuildingHeatController(cp.Component):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulates the control of the building temperature, when building is heated from buffer."""
+        """Simulate one timestep of building-temperature control.
+
+        Args:
+            timestep: Current simulation timestep index.
+            stsv: Single-time-step values object for reading inputs and writing outputs.
+            force_convergence: If True, skip control logic and hold the current output.
+        """
         if force_convergence:
             pass
         else:
             # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
-            t_control = stsv.get_input_value(self.building_temperature_channel)
+            building_temperature_in_celsius = stsv.get_input_value(self.building_temperature_channel)
             if self.buffer_temperature_channel.source_output is not None:
-                t_buffer = stsv.get_input_value(self.buffer_temperature_channel)
+                t_buffer_in_celsius = stsv.get_input_value(self.buffer_temperature_channel)
             else:
-                t_buffer = 0
-            temperature_modifier = stsv.get_input_value(self.building_temperature_modifier_channel)
-            self.control_heating(
+                t_buffer_in_celsius = 0
+            temperature_modifier_in_celsius = stsv.get_input_value(self.building_temperature_modifier_channel)
+            self._control_heating(
                 timestep=timestep,
-                t_control=t_control,
-                t_buffer=t_buffer,
-                temperature_modifier=temperature_modifier,
+                building_temperature_in_celsius=building_temperature_in_celsius,
+                t_buffer_in_celsius=t_buffer_in_celsius,
+                temperature_modifier_in_celsius=temperature_modifier_in_celsius,
             )
             self.processed_state = self.state.clone()
-        stsv.set_output_value(self.heat_controller_target_percentage_channel, self.processed_state.state)
+        stsv.set_output_value(self.heat_controller_target_percentage_channel, self.processed_state.heating_percentage)
 
     def write_to_report(self) -> List[str]:
         """Writes the information of the current component to the report."""

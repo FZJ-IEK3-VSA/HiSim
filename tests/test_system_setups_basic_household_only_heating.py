@@ -5,7 +5,7 @@ basic_household_only_heating.py setup and verifies it runs without
 errors for a one-day simulation and produces result files.
 """
 
-import os
+from pathlib import Path
 import pytest
 from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
@@ -36,18 +36,19 @@ def test_basic_household_only_heating() -> None:
     so checking for it (and a non-empty result directory) distinguishes a real
     run from a silent no-op.
     """
-    path = "../system_setups/basic_household_only_heating.py"
+    path = Path("../system_setups/basic_household_only_heating.py")
 
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    result_directory = hisim_main.main(path, sim_params)
-    log.information(os.getcwd())
+    result_directory = hisim_main.main(str(path), sim_params)
+    log.information(str(Path.cwd()))
 
     # The run must have produced outputs. finished.flag is written by
     # Simulator.run_all_timesteps once the simulation and post-processing have
     # finished, so its presence confirms a completed (not no-op) run.
+    result_path = Path(result_directory)
     assert result_directory, "no result directory was configured for the run"
-    assert os.path.isdir(result_directory), f"result directory does not exist: {result_directory}"
-    assert os.listdir(result_directory), f"result directory is empty: {result_directory}"
-    assert os.path.isfile(os.path.join(result_directory, "finished.flag")), (
+    assert result_path.is_dir(), f"result directory does not exist: {result_directory}"
+    assert any(result_path.iterdir()), f"result directory is empty: {result_directory}"
+    assert (result_path / "finished.flag").is_file(), (
         f"finished.flag not found in result directory: {result_directory}"
     )

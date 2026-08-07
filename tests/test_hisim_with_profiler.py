@@ -3,7 +3,7 @@
 The profiling orchestration (cProfile enable/disable, the three pstats text dumps
 and the binary ``.prof`` dump) used to live inline in the ``__main__`` block, so it
 could only be exercised by launching the script as a process - which runs a full
-``hsm.main()`` simulation (heavy I/O, network, file writes). It is now hoisted into
+``hisim_main.main()`` simulation (heavy I/O, network, file writes). It is now hoisted into
 :func:`profile_and_write_stats`, which accepts the callable to profile and the
 output directory; these tests drive it with a trivial callable and a ``tmp_path`` so
 no HiSim simulation has to run.

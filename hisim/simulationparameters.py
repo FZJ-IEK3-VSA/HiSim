@@ -2,7 +2,6 @@
 # clean
 from __future__ import annotations
 import os
-import inspect
 from typing import List, Optional, Sequence
 import enum
 
@@ -42,7 +41,7 @@ class SimulationParameters(JSONWizard):
         logging_level: int = log.LogPrio.INFORMATION,
         skip_finished_results: bool = False,
         surplus_control: bool = True,
-        cache_dir_path: str = os.path.join(os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))), "inputs", "cache"),  # type: ignore
+        cache_dir_path: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), "inputs", "cache"),
         multiple_buildings: bool = False,
         log_connections: bool = False,
     ):
@@ -108,61 +107,62 @@ class SimulationParameters(JSONWizard):
 
     def enable_all_options(self) -> None:
         """Enables all the post processing options ."""
-        for option in PostProcessingOptions:
-            self.post_processing_options.append(option)
+        self.post_processing_options.extend(PostProcessingOptions)
 
     def enable_plots_only(self) -> None:
         """Enables line and carpet plots."""
-        self.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-        self.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        # self.post_processing_options.append(PostProcessingOptions.PLOT_SANKEY)
-        self.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
-        self.post_processing_options.append(PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS)
-        self.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
+        self.post_processing_options.extend([
+            PostProcessingOptions.PLOT_LINE,
+            PostProcessingOptions.PLOT_CARPET,
+            # PostProcessingOptions.PLOT_SANKEY,
+            PostProcessingOptions.PLOT_SINGLE_DAYS,
+            PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS,
+            PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER,
+        ])
 
     @classmethod
     def full_year_all_options(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """Generates a parameter set for a full year with all the post processing, primarily for unit testing."""
-        pars = cls(
+        simulation_parameters = cls(
             datetime.datetime(year, 1, 1),
             datetime.datetime(year + 1, 1, 1),
             seconds_per_timestep,
         )
-        pars.enable_all_options()
-        return pars
+        simulation_parameters.enable_all_options()
+        return simulation_parameters
 
     @classmethod
     def full_year_with_only_plots(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """Generates a parameter set for a full year with all the post processing, primarily for unit testing."""
-        pars = cls(
+        simulation_parameters = cls(
             datetime.datetime(year, 1, 1),
             datetime.datetime(year + 1, 1, 1),
             seconds_per_timestep,
         )
-        pars.enable_plots_only()
-        return pars
+        simulation_parameters.enable_plots_only()
+        return simulation_parameters
 
     @classmethod
     def january_only_with_all_options(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """Generates a parameter set for a single january, primarily for unit testing."""
-        pars = cls(
+        simulation_parameters = cls(
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 31),
             seconds_per_timestep,
         )
-        pars.enable_all_options()
-        return pars
+        simulation_parameters.enable_all_options()
+        return simulation_parameters
 
     @classmethod
     def january_only_with_only_plots(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """Generates a parameter set for a single january, primarily for unit testing."""
-        pars = cls(
+        simulation_parameters = cls(
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 31),
             seconds_per_timestep,
         )
-        pars.enable_plots_only()
-        return pars
+        simulation_parameters.enable_plots_only()
+        return simulation_parameters
 
     @classmethod
     def three_months_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
@@ -176,13 +176,13 @@ class SimulationParameters(JSONWizard):
     @classmethod
     def three_months_with_plots_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """Generates a parameter set for a three months, primarily for unit testing."""
-        pars = cls(
+        simulation_parameters = cls(
             datetime.datetime(year, 6, 1),
             datetime.datetime(year, 8, 31),
             seconds_per_timestep,
         )
-        pars.enable_plots_only()
-        return pars
+        simulation_parameters.enable_plots_only()
+        return simulation_parameters
 
     @classmethod
     def one_week_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
@@ -196,14 +196,14 @@ class SimulationParameters(JSONWizard):
     @classmethod
     def one_week_with_only_plots(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """Generates a parameter set for a single week, primarily for unit testing."""
-        pars = cls(
+        simulation_parameters = cls(
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 8),
             seconds_per_timestep,
         )
 
-        pars.enable_plots_only()
-        return pars
+        simulation_parameters.enable_plots_only()
+        return simulation_parameters
 
     @classmethod
     def one_day_only(cls, year: int, seconds_per_timestep: int = 60) -> SimulationParameters:
@@ -217,51 +217,48 @@ class SimulationParameters(JSONWizard):
     @classmethod
     def one_day_only_with_all_options(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """Generates a parameter set for a single day, primarily for unit testing."""
-        pars = cls(
+        simulation_parameters = cls(
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 2),
             seconds_per_timestep,
         )
-        pars.enable_all_options()
-        return pars
+        simulation_parameters.enable_all_options()
+        return simulation_parameters
 
     @classmethod
     def one_day_only_with_only_plots(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """Generates a parameter set for a single day, primarily for unit testing."""
-        pars = cls(
+        simulation_parameters = cls(
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 2),
             seconds_per_timestep,
         )
-        pars.enable_plots_only()
-        return pars
+        simulation_parameters.enable_plots_only()
+        return simulation_parameters
 
     def get_unique_key(self) -> str:
         """Gets a unique key from a simulation parameter class."""
-        return (
-            str(self.start_date)
-            + "###"
-            + str(self.end_date)
-            + "###"
-            + str(self.seconds_per_timestep)
-            + "###"
-            + str(self.year)
-            + "###"
-            + str(self.timesteps)
-            + "###"
-            + str(self.country)
+        return "###".join(
+            str(value) for value in (
+                self.start_date,
+                self.end_date,
+                self.seconds_per_timestep,
+                self.year,
+                self.timesteps,
+                self.country,
+            )
         )
 
     def get_unique_key_as_list(self) -> List[str]:
         """Gets unique key from a simulation parameter class as list."""
-        lines = []
-        lines.append(f"Start date: {self.start_date}")
-        lines.append(f"End date: {self.end_date}")
-        lines.append(f"Simulation year: {self.year}")
-        lines.append(f"Seconds per timestep: {self.seconds_per_timestep}")
-        lines.append(f"Total number of timesteps: {self.timesteps}")
-        lines.append(f"Country: {self.country}")
-        return lines
+        return [
+            f"Start date: {self.start_date}",
+            f"End date: {self.end_date}",
+            f"Simulation year: {self.year}",
+            f"Seconds per timestep: {self.seconds_per_timestep}",
+            f"Total number of timesteps: {self.timesteps}",
+            f"Country: {self.country}",
+        ]
 
 
 class FigureFormat(str, enum.Enum):

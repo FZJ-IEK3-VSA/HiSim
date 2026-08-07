@@ -24,7 +24,6 @@ compute = ControllerHeat.compute_storage_control
 # --------------------------------------------------------------------------- #
 # Inactive storage: temperature_storage <= 0 leaves everything untouched.
 # --------------------------------------------------------------------------- #
-@pytest.mark.base
 def test_compute_storage_control_inactive_storage_keeps_signals_off() -> None:
     """A storage reporting a non-positive temperature never triggers heating."""
     result = compute(
@@ -44,7 +43,6 @@ def test_compute_storage_control_inactive_storage_keeps_signals_off() -> None:
     assert result == (0, 0, 0, 50.0, 0)
 
 
-@pytest.mark.base
 def test_compute_storage_control_negative_storage_temperature_is_inactive() -> None:
     """A negative storage temperature is treated the same as zero."""
     result = compute(
@@ -64,7 +62,6 @@ def test_compute_storage_control_negative_storage_temperature_is_inactive() -> N
 # --------------------------------------------------------------------------- #
 # delta_temperature > max_temperature_limit (5): turn everything on.
 # --------------------------------------------------------------------------- #
-@pytest.mark.base
 def test_compute_storage_control_large_positive_delta_turns_all_heaters_on() -> None:
     """A delta above the 5 K limit activates all three control signals at once."""
     result = compute(
@@ -85,7 +82,6 @@ def test_compute_storage_control_large_positive_delta_turns_all_heaters_on() -> 
     assert result[4] == 3
 
 
-@pytest.mark.base
 def test_compute_storage_control_large_delta_resets_target_even_if_already_hysteresis() -> None:
     """When heating is requested the carried target snaps back to the upper target."""
     result = compute(
@@ -105,7 +101,6 @@ def test_compute_storage_control_large_delta_resets_target_even_if_already_hyste
 # --------------------------------------------------------------------------- #
 # 0 < delta_temperature <= max_temperature_limit (5): the "small deficit" branch.
 # --------------------------------------------------------------------------- #
-@pytest.mark.base
 def test_compute_storage_control_small_positive_delta_turns_all_heaters_on() -> None:
     """A small positive delta (within the 5 K limit) also activates all heaters."""
     result = compute(
@@ -122,7 +117,6 @@ def test_compute_storage_control_small_positive_delta_turns_all_heaters_on() -> 
     assert result == (1, 1, 1, 50.0, 1)
 
 
-@pytest.mark.base
 def test_compute_storage_control_small_delta_boundary_zero_excluded() -> None:
     """Delta == 0 must NOT enter the small-positive branch; it falls through to delta <= 0."""
     result = compute(
@@ -141,7 +135,6 @@ def test_compute_storage_control_small_delta_boundary_zero_excluded() -> None:
     assert result == (0, 0, 0, 45.0, 5)
 
 
-@pytest.mark.base
 def test_compute_storage_control_small_delta_prev_signals_do_not_override_on() -> None:
     """The previous-signal comparisons in the small-delta branch are no-ops: signals stay on.
 
@@ -168,7 +161,6 @@ def test_compute_storage_control_small_delta_prev_signals_do_not_override_on() -
 # --------------------------------------------------------------------------- #
 # delta_temperature <= 0: the "warm enough" hysteresis branch.
 # --------------------------------------------------------------------------- #
-@pytest.mark.base
 def test_compute_storage_control_warm_enough_flips_to_hysteresis_target() -> None:
     """When the storage is warm enough and at the upper target, flip to the lower hysteresis target.
 
@@ -191,7 +183,6 @@ def test_compute_storage_control_warm_enough_flips_to_hysteresis_target() -> Non
     assert result == (0, 0, 0, 45.0, 7)
 
 
-@pytest.mark.base
 def test_compute_storage_control_warm_enough_turns_heaters_off() -> None:
     """When already on the hysteresis target and warm enough, turn all heaters off.
 
@@ -213,7 +204,6 @@ def test_compute_storage_control_warm_enough_turns_heaters_off() -> None:
     assert result == (0, 0, 0, 45.0, 0)
 
 
-@pytest.mark.base
 def test_compute_storage_control_warm_enough_same_timestep_does_nothing() -> None:
     """If the hysteresis was already flipped this timestep, neither sub-branch fires.
 
@@ -235,7 +225,6 @@ def test_compute_storage_control_warm_enough_same_timestep_does_nothing() -> Non
     assert result == (0, 0, 0, 50.0, 7)
 
 
-@pytest.mark.base
 def test_compute_storage_control_warm_enough_hysteresis_target_same_timestep_keeps_target() -> None:
     """Same-timestep guard with the hysteresis target active keeps that target."""
     result = compute(
@@ -255,7 +244,6 @@ def test_compute_storage_control_warm_enough_hysteresis_target_same_timestep_kee
 # --------------------------------------------------------------------------- #
 # The function is pure: it must not depend on any instance state.
 # --------------------------------------------------------------------------- #
-@pytest.mark.base
 def test_compute_storage_control_is_static_and_pure() -> None:
     """Calling the staticmethod twice with identical arguments yields identical results."""
     args = {
@@ -278,7 +266,6 @@ def test_compute_storage_control_is_static_and_pure() -> None:
     assert args["timestep_of_hysteresis"] == 3
 
 
-@pytest.mark.base
 def test_compute_storage_control_return_order_and_types() -> None:
     """The returned tuple follows the documented element order and types."""
     chp, gas, hp, target_c, hyst = compute(

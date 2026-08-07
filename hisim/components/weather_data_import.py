@@ -26,7 +26,7 @@ __credits__ = [" Jonas Hoppe "]
 __license__ = ""
 
 # Number of 10-minute intervals in a year
-INTERVALS_PER_YEAR_10MIN = 60 * 24 * 365 // 10 + 1
+INTERVALS_PER_YEAR_10MIN: int = 60 * 24 * 365 // 10 + 1
 __version__ = ""
 __maintainer__ = "  "
 __email__ = ""
@@ -46,7 +46,7 @@ class WeatherDataImport:
         distance_weather_stations: float,
         path_input_folder: str,
         weather_data_source: WeatherDataSourceEnum,
-    ):
+    ) -> None:
         """Initialize a weather data import request.
 
         Args:
@@ -93,15 +93,15 @@ class WeatherDataImport:
             KeyError: If `end_date` year precedes `start_date` year, or if
                 `weather_data_source` is neither DWD_10MIN nor ERA5.
         """
-        self.location = location
-        self.latitude = latitude
-        self.longitude = longitude
-        self.distance_weather_stations = distance_weather_stations
-        self.path_input_folder = path_input_folder
-        self.weather_data_source = weather_data_source
+        self.location: str = location
+        self.latitude: float = latitude
+        self.longitude: float = longitude
+        self.distance_weather_stations: float = distance_weather_stations
+        self.path_input_folder: str = path_input_folder
+        self.weather_data_source: WeatherDataSourceEnum = weather_data_source
 
-        self.long_round = round(self.longitude, 2)
-        self.lat_round = round(self.latitude, 2)
+        self.long_round: float = round(self.longitude, 2)
+        self.lat_round: float = round(self.latitude, 2)
 
         location_data = [
             {
@@ -110,7 +110,7 @@ class WeatherDataImport:
                 "latitude": self.latitude,
             }
         ]
-        self.location_df = pd.DataFrame(location_data)
+        self.location_df: pd.DataFrame = pd.DataFrame(location_data)
 
         start_year = start_date.year
 
@@ -121,10 +121,10 @@ class WeatherDataImport:
         else:
             raise KeyError("Check start and end date of weather data request!")
 
-        self.start_date_for_weather_data = datetime.datetime(
+        self.start_date_for_weather_data: datetime.datetime = datetime.datetime(
             year=start_year, month=1, day=1, hour=0, minute=0, second=0
         )
-        self.end_date_for_weather_data = datetime.datetime(year=end_year, month=1, day=1, hour=0, minute=0, second=0)
+        self.end_date_for_weather_data: datetime.datetime = datetime.datetime(year=end_year, month=1, day=1, hour=0, minute=0, second=0)
 
         print(
             f"Weatherdata request from {self.start_date_for_weather_data} to {self.end_date_for_weather_data} in {weather_data_source} database."
@@ -139,7 +139,7 @@ class WeatherDataImport:
         else:
             raise KeyError("Unknown data source. Only DWD_10MIN and ERA5.")
 
-    def safe_as_csv(self, weather_df, csv_path):
+    def save_as_csv(self, weather_df: pd.DataFrame, csv_path: str) -> None:
         """Save weather data as a CSV file at the given path.
 
         Writes the location header (`self.location_df`) first, then appends the
@@ -169,7 +169,7 @@ class WeatherDataImport:
 
     def dwd_10min_request(
         self,
-    ):
+    ) -> None:
         """Fetch weather data from the German Weather Service (DWD) 10-min API.
 
         Retrieves temperature, pressure, wind direction, wind speed, and solar
@@ -206,17 +206,17 @@ class WeatherDataImport:
         """
 
         csv_name = f"dwd_10min_{self.start_date_for_weather_data.year}-{self.end_date_for_weather_data.year}_{self.location}_{self.long_round}_{self.lat_round}.csv"
-        speicherpfad = Path(self.path_input_folder) / "weather" / "dwd_10min_data"
+        storage_path = Path(self.path_input_folder) / "weather" / "dwd_10min_data"
 
         # Abfrage, ob csv schon vorhanden
 
-        speicherpfad.mkdir(parents=True, exist_ok=True)
-        print(f"Directory {speicherpfad} created.")
+        storage_path.mkdir(parents=True, exist_ok=True)
+        print(f"Directory {storage_path} created.")
 
-        csv_path = speicherpfad / csv_name
+        csv_path = storage_path / csv_name
 
         if csv_path.is_file():
-            print(f"CSV file  {csv_name} under  {speicherpfad} already exists.")
+            print(f"CSV file  {csv_name} under  {storage_path} already exists.")
         else:
             print(f"Weather data is loaded from DWD and saved under {csv_path}.")
 
@@ -273,16 +273,16 @@ class WeatherDataImport:
             weights = 1 / (np.sqrt(radial_distance))
             weights = pd.DataFrame({"weights": weights})
 
-            values = request.values.all().df
-            values = values.to_pandas()
+            observations_df = request.values.all().df
+            observations_df = observations_df.to_pandas()
 
-            parameterlist = set()
-            for element in values["parameter"]:
-                parameterlist.add(element)
-            print(f"DWD Parameter names: {parameterlist}")
+            parameter_names = set()
+            for element in observations_df["parameter"]:
+                parameter_names.add(element)
+            print(f"DWD Parameter names: {parameter_names}")
 
             date_df = pd.DataFrame(columns=["date"])
-            date_df = pd.to_datetime(values["date"], utc=True)
+            date_df = pd.to_datetime(observations_df["date"], utc=True)
             date_df = pd.DataFrame({"date": date_df})
             date_df = date_df["date"].drop_duplicates()
 
@@ -337,7 +337,7 @@ class WeatherDataImport:
                     )
             print("Write Weather Data into Dataframe.")
             temperature_dwd_df = (
-                values[values["parameter"] == "temperature_air_mean_200"]
+                observations_df[observations_df["parameter"] == "temperature_air_mean_200"]
                 .groupby("date")["value"]
                 .apply(lambda x: ", ".join(map(str, x)))
                 .reset_index()
@@ -347,11 +347,11 @@ class WeatherDataImport:
                 lambda x: [float(val) if val != "nan" else np.nan for val in x.split(", ")]
             )
 
-            temperatur_air_list = []
+            temperature_air_list = []
             temperature_air_valid_data = pd.DataFrame()
-            for i in range(len(temperature_dwd_df)):
+            for temperature in temperature_dwd_df["temperature"]:
                 temperature_air_valid_data = pd.DataFrame(
-                    {"temperature": temperature_dwd_df["temperature"][i]}
+                    {"temperature": temperature}
                 ).dropna()
 
                 if temperature_air_valid_data.empty:
@@ -361,16 +361,16 @@ class WeatherDataImport:
                         temperature_air_valid_data["temperature"] * weights["weights"][temperature_air_valid_data.index]
                     ) / sum(weights["weights"][temperature_air_valid_data.index])
 
-                temperatur_air_list.append(temperature_location)
+                temperature_air_list.append(temperature_location)
 
-            temperature_air_df = pd.DataFrame(temperatur_air_list, columns=["temperature"])
+            temperature_air_df = pd.DataFrame(temperature_air_list, columns=["temperature"])
             temperature_air_df = temperature_air_df.interpolate(method="linear", limit_direction="backward")
 
             if temperature_air_df.empty:
                 raise KeyError("temperature_air_df is empty --> error in weather data request. Change location")
 
             pressure_dwd_df = (
-                values[values["parameter"] == "pressure_air_site"]
+                observations_df[observations_df["parameter"] == "pressure_air_site"]
                 .groupby("date")["value"]
                 .apply(lambda x: ", ".join(map(str, x)))
                 .reset_index()
@@ -382,8 +382,8 @@ class WeatherDataImport:
 
             pressure_list = []
             pressure_valid_data = pd.DataFrame()
-            for i in range(len(temperature_dwd_df)):
-                pressure_valid_data = pd.DataFrame({"pressure": pressure_dwd_df["pressure"][i]}).dropna()
+            for pressure in pressure_dwd_df["pressure"]:
+                pressure_valid_data = pd.DataFrame({"pressure": pressure}).dropna()
 
                 if pressure_valid_data.empty:
                     pressure_location = np.nan
@@ -401,7 +401,7 @@ class WeatherDataImport:
                 raise KeyError("pressure_df is empty --> error in weather data request. Change location")
 
             wind_direction_dwd_df = (
-                values[values["parameter"] == "wind_direction"]
+                observations_df[observations_df["parameter"] == "wind_direction"]
                 .groupby("date")["value"]
                 .apply(lambda x: ", ".join(map(str, x)))
                 .reset_index()
@@ -413,9 +413,9 @@ class WeatherDataImport:
 
             wind_direction_list = []
             wind_direction_valid_data = pd.DataFrame()
-            for i in range(len(wind_direction_dwd_df)):
+            for wind_direction in wind_direction_dwd_df["wind_direction"]:
                 wind_direction_valid_data = pd.DataFrame(
-                    {"wind_direction": wind_direction_dwd_df["wind_direction"][i]}
+                    {"wind_direction": wind_direction}
                 ).dropna()
 
                 if wind_direction_valid_data.empty:
@@ -435,7 +435,7 @@ class WeatherDataImport:
                 raise KeyError("wind_direction_df is empty --> error in weather data request. Change location")
 
             wind_speed_dwd_df = (
-                values[values["parameter"] == "wind_speed"]
+                observations_df[observations_df["parameter"] == "wind_speed"]
                 .groupby("date")["value"]
                 .apply(lambda x: ", ".join(map(str, x)))
                 .reset_index()
@@ -447,8 +447,8 @@ class WeatherDataImport:
 
             wind_speed_list = []
             wind_speed_valid_data = pd.DataFrame()
-            for i in range(len(wind_speed_dwd_df)):
-                wind_speed_valid_data = pd.DataFrame({"wind_speed": wind_speed_dwd_df["wind_speed"][i]}).dropna()
+            for wind_speed in wind_speed_dwd_df["wind_speed"]:
+                wind_speed_valid_data = pd.DataFrame({"wind_speed": wind_speed}).dropna()
 
                 if wind_speed_valid_data.empty:
                     wind_speed_location = np.nan
@@ -466,7 +466,7 @@ class WeatherDataImport:
                 raise KeyError("wind_speed_df is empty --> error in weather data request. Change location")
 
             diffuse_irradiance_dwd_df = (
-                values[values["parameter"] == "radiation_sky_short_wave_diffuse"]
+                observations_df[observations_df["parameter"] == "radiation_sky_short_wave_diffuse"]
                 .groupby("date")["value"]
                 .apply(lambda x: ", ".join(map(str, x)))
                 .reset_index()
@@ -478,9 +478,9 @@ class WeatherDataImport:
 
             diffuse_irradiance_list = []
             diffuse_irradiance_valid_data = pd.DataFrame()
-            for i in range(len(diffuse_irradiance_dwd_df)):
+            for diffuse_irradiance in diffuse_irradiance_dwd_df["diffuse_irradiance"]:
                 diffuse_irradiance_valid_data = pd.DataFrame(
-                    {"diffuse_irradiance": diffuse_irradiance_dwd_df["diffuse_irradiance"][i]}
+                    {"diffuse_irradiance": diffuse_irradiance}
                 ).dropna()
 
                 if diffuse_irradiance_valid_data.empty:
@@ -502,7 +502,7 @@ class WeatherDataImport:
                 raise KeyError("diffuse_irradiance_df is empty --> error in weather data request. Change location")
 
             global_irradiance_dwd_df = (
-                values[values["parameter"] == "radiation_global"]
+                observations_df[observations_df["parameter"] == "radiation_global"]
                 .groupby("date")["value"]
                 .apply(lambda x: ", ".join(map(str, x)))
                 .reset_index()
@@ -514,9 +514,9 @@ class WeatherDataImport:
 
             global_irradiance_list = []
             global_irradiance_valid_data = pd.DataFrame()
-            for i in range(len(global_irradiance_dwd_df)):
+            for global_irradiance in global_irradiance_dwd_df["global_irradiance"]:
                 global_irradiance_valid_data = pd.DataFrame(
-                    {"global_irradiance": global_irradiance_dwd_df["global_irradiance"][i]}
+                    {"global_irradiance": global_irradiance}
                 ).dropna()
 
                 if global_irradiance_valid_data.empty:
@@ -582,13 +582,13 @@ class WeatherDataImport:
             #         "The DataFrame weather_df contains NaN values. Check data or increase radius for station search."
             #     )
 
-            self.safe_as_csv(weather_df, csv_path)
+            self.save_as_csv(weather_df, str(csv_path))
         print("Safe Weatherdata successfully in .csv.")
         self.csv_path = str(csv_path)
 
     def era5_request(
         self,
-    ):
+    ) -> None:
         r"""Fetch weather data from ERA5 reanalysis via the ECMWF CDS API.
 
         Retrieves hourly reanalysis data including 2m air temperature, 10m wind
@@ -640,16 +640,16 @@ class WeatherDataImport:
             )
 
         csv_name = f"era5_1h_{self.start_date_for_weather_data.year}-{self.end_date_for_weather_data.year}_{self.location}_{self.long_round}_{self.lat_round}.csv"
-        speicherpfad = os.path.join(self.path_input_folder, "weather", "era5_data")
+        storage_path = os.path.join(self.path_input_folder, "weather", "era5_data")
 
-        if not os.path.exists(speicherpfad):
-            os.makedirs(speicherpfad)
-            print(f"Directory {speicherpfad} created.")
+        if not os.path.exists(storage_path):
+            os.makedirs(storage_path)
+            print(f"Directory {storage_path} created.")
 
-        csv_path = os.path.join(speicherpfad, csv_name)
+        csv_path = os.path.join(storage_path, csv_name)
 
         if os.path.isfile(csv_path):
-            print(f"CSV file  {csv_name} under  {speicherpfad} already exists.")
+            print(f"CSV file  {csv_name} under  {storage_path} already exists.")
         else:
             print(f"Weather data is loaded from DWD and saved under {csv_path}.")
 
@@ -914,6 +914,6 @@ class WeatherDataImport:
             # if weather_df.eq("nan").any().any():
             #     raise KeyError("The DataFrame weather_df contains NaN values. Check data")
 
-            self.safe_as_csv(weather_df, csv_path)
+            self.save_as_csv(weather_df, csv_path)
 
         self.csv_path = csv_path

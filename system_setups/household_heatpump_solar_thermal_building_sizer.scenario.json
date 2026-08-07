@@ -231,8 +231,8 @@
                 "building_name": "BUI1",
                 "name": "SolarThermalSystem",
                 "coordinates": {
-                    "latitude": 50.78,
-                    "longitude": 6.08
+                    "latitude_in_degrees": 50.78,
+                    "longitude_in_degrees": 6.08
                 },
                 "azimuth": 180.0,
                 "tilt": 30.0,

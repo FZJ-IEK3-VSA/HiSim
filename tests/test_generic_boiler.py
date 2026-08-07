@@ -16,8 +16,8 @@ from hisim.components.generic_boiler import (
     [
         "operating_mode",
         "min_state_time",
-        "water_temp_sh",
-        "water_temp_dhw",
+        "water_temp_sh_in_celsius",
+        "water_temp_dhw_in_celsius",
         "expected_mode",
     ],
     [
@@ -36,8 +36,8 @@ from hisim.components.generic_boiler import (
 def test_determine_mode_returns_correct_operation_mode_for_temperature_and_time(
     operating_mode: HeatingMode,
     min_state_time: int,
-    water_temp_sh: float,
-    water_temp_dhw: float,
+    water_temp_sh_in_celsius: float,
+    water_temp_dhw_in_celsius: float,
     expected_mode: str,
 ):
     """GIVEN."""
@@ -60,8 +60,8 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature_and_time(
     """ WHEN """
     _, _ = testee.determine_operating_mode(
         daily_avg_outside_temperature,
-        water_temp_sh,
-        water_temp_dhw,
+        water_temp_sh_in_celsius,
+        water_temp_dhw_in_celsius,
         heating_flow_temperature,
         timestep,
     )

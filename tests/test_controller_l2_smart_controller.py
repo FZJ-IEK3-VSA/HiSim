@@ -54,7 +54,7 @@ class _FakeWrappedController:
     """Lightweight stand-in for a wrapped controller.
 
     Mimics the small surface area that :class:`SmartController` relies on
-    (``inputs``/``outputs`` for ``add_io`` and the ``i_save_state``/
+    (``inputs``/``outputs`` for ``add_wrapped_controller_inputs_and_outputs`` and the ``i_save_state``/
     ``i_restore_state``/``i_simulate`` lifecycle hooks) without pulling in the
     real heat-pump or EV-charger controllers and their dependencies.
     """
@@ -114,7 +114,7 @@ def test_smart_controller_accepts_injected_wrapped_controllers() -> None:
 
     controller = SmartController(
         my_simulation_parameters=sp,
-        controllers=None,
+        controller_type_to_field_names=None,
         config=config,
         wrapped_controllers=[fake_hp, fake_ev],
     )
@@ -128,8 +128,8 @@ def test_smart_controller_accepts_injected_wrapped_controllers() -> None:
 
 
 @pytest.mark.base
-def test_smart_controller_add_io_aggregates_injected_inputs_and_outputs() -> None:
-    """add_io must aggregate the inputs/outputs of the injected controllers."""
+def test_smart_controller_add_wrapped_controller_io_aggregates_injected_inputs_and_outputs() -> None:
+    """add_wrapped_controller_inputs_and_outputs must aggregate the inputs/outputs of the injected controllers."""
     sp = _make_simulation_parameters()
     config = SmartControllerConfig.get_default_config_ems()
 
@@ -138,7 +138,7 @@ def test_smart_controller_add_io_aggregates_injected_inputs_and_outputs() -> Non
 
     controller = SmartController(
         my_simulation_parameters=sp,
-        controllers=None,
+        controller_type_to_field_names=None,
         config=config,
         wrapped_controllers=[fake_hp, fake_ev],
     )
@@ -162,7 +162,7 @@ def test_smart_controller_delegates_lifecycle_to_injected_controllers() -> None:
 
     controller = SmartController(
         my_simulation_parameters=sp,
-        controllers=None,
+        controller_type_to_field_names=None,
         config=config,
         wrapped_controllers=[fake_hp, fake_ev],
     )
@@ -188,7 +188,7 @@ def test_smart_controller_default_path_still_builds_real_controllers() -> None:
     # Only request the heat pump so we avoid the (separately broken) EV charger path.
     controller = SmartController(
         my_simulation_parameters=sp,
-        controllers={"HeatPump": ["mode"]},
+        controller_type_to_field_names={"HeatPump": ["mode"]},
         config=config,
     )
 

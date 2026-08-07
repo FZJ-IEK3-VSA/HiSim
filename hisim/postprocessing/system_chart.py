@@ -2,14 +2,16 @@
 
 # clean
 
-from typing import Optional
-from typing import List
-
+from collections import defaultdict
 from pathlib import Path
+from typing import List
+from typing import Optional
+from typing import TypedDict
+
 import pydot
 
 from hisim import log
-from hisim.component import ComponentOutput
+from hisim.component import ComponentInput, ComponentOutput
 from hisim.loadtypes import UNITS_USING_MEAN_AGGREGATION, Units
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import SystemChartEntry
@@ -35,6 +37,21 @@ def _cumulative_unit_for_sum(unit: Units) -> str:
     if text.endswith(suffix):
         return text[: -len(suffix)]
     return text
+
+
+class _ChartSpecRequired(TypedDict):
+    """Required keyword arguments for one :meth:`SystemChart.make_graphviz_chart` variant."""
+
+    with_labels: bool
+    with_class_names: bool
+    filename: str
+    caption: str
+
+
+class _ChartSpec(_ChartSpecRequired, total=False):
+    """A chart variant spec, adding the optional ``with_results`` flag."""
+
+    with_results: bool
 
 
 class SystemChart:
@@ -63,40 +80,39 @@ class SystemChart:
             A list of :class:`SystemChartEntry` objects, one per successfully
             generated chart variant.
         """
+        fig_format = self.ppdt.simulation_parameters.figure_format
+        chart_specs: list[_ChartSpec] = [
+            {
+                "with_labels": False,
+                "with_class_names": True,
+                "filename": f"System_no_Edge_with_class_labels{fig_format}",
+                "caption": "System Chart of all components",
+            },
+            {
+                "with_labels": False,
+                "with_class_names": False,
+                "filename": f"System_no_Edge_labels{fig_format}",
+                "caption": "System Chart of all components and all outputs.",
+            },
+            {
+                "with_labels": True,
+                "with_class_names": False,
+                "filename": f"System_with_Edge_labels{fig_format}",
+                "caption": "System Chart with labels on all edges.",
+            },
+            {
+                "with_labels": True,
+                "with_class_names": False,
+                "filename": f"System_with_Edge_labels_and_results{fig_format}",
+                "caption": "System Chart with labels and cumulative result values on all edges.",
+                "with_results": True,
+            },
+        ]
         files: List[SystemChartEntry] = []
-        file1 = self.make_graphviz_chart(
-            with_labels=False,
-            with_class_names=True,
-            filename=f"System_no_Edge_with_class_labels{self.ppdt.simulation_parameters.figure_format}",
-            caption="System Chart of all components",
-        )
-        if file1 is not None:
-            files.append(file1)
-        file2 = self.make_graphviz_chart(
-            with_labels=False,
-            with_class_names=False,
-            filename=f"System_no_Edge_labels{self.ppdt.simulation_parameters.figure_format}",
-            caption="System Chart of all components and all outputs.",
-        )
-        if file2 is not None:
-            files.append(file2)
-        file3 = self.make_graphviz_chart(
-            with_labels=True,
-            with_class_names=False,
-            filename=f"System_with_Edge_labels{self.ppdt.simulation_parameters.figure_format}",
-            caption="System Chart with labels on all edges.",
-        )
-        if file3 is not None:
-            files.append(file3)
-        file4 = self.make_graphviz_chart(
-            with_labels=True,
-            with_class_names=False,
-            filename=f"System_with_Edge_labels_and_results{self.ppdt.simulation_parameters.figure_format}",
-            caption="System Chart with labels and cumulative result values on all edges.",
-            with_results=True,
-        )
-        if file4 is not None:
-            files.append(file4)
+        for spec in chart_specs:
+            entry = self.make_graphviz_chart(**spec)
+            if entry is not None:
+                files.append(entry)
         return files
 
     def make_graphviz_chart(
@@ -144,8 +160,7 @@ class SystemChart:
             graph.write_png(fullpath)  # type: ignore[attr-defined]  # noqa: no-member
         except Exception as exc:  # noqa
             log.error(
-                "Failed to generate network charts. Probably Graphviz is missing on your system. The python error was: "
-                + str(exc)
+                f"Failed to generate network charts. Probably Graphviz is missing on your system. The python error was: {exc}"
             )
             system_chart_entry = None
         return system_chart_entry
@@ -209,11 +224,11 @@ class SystemChart:
                 fillcolor = "darkgray"
 
             if with_class_names:
-                node_name = node_name + "\n" + component.my_component.__class__.__name__
+                node_name = f"{node_name}\n{component.my_component.__class__.__name__}"
             my_node = pydot.Node(node_name, fillcolor=fillcolor)
             node_dict[component.my_component.component_name] = my_node
             graph.add_node(my_node)
-        edge_labels = {}
+        edge_labels: dict[tuple[pydot.Node, pydot.Node], list[str]] = defaultdict(list)
         for component in self.ppdt.wrapped_components:
             for component_input in component.component_inputs:
                 if component_input.src_object_name is None:
@@ -221,49 +236,92 @@ class SystemChart:
                 node_a = node_dict[component_input.src_object_name]
                 node_b = node_dict[component.my_component.component_name]
                 key = (node_a, node_b)
-                this_edge_label = (
-                    str(component_input.src_field_name)
-                    + " -> "
-                    + component_input.field_name
-                    + " in "
-                    + component_input.unit
-                )
-                if with_results:
-                    # The cumulative result from get_std_results() in simulator.py is either a
-                    # *mean* (for rate-like units such as W, °C) or a *sum* (for extensive units
-                    # such as Wh, L, kg, Euro) of the source output over all timesteps.  A mean
-                    # keeps the field's unit, but a sum is a cumulative total whose unit may
-                    # differ from the input field's unit (e.g. "kWh per timestep" sums to "kWh").
-                    # The "in <unit>" clause above describes the input field, not this aggregated
-                    # value, so the value is annotated with its own derived unit and the
-                    # aggregation kind (mean/sum) to avoid a unit-label mismatch.
-                    if isinstance(component_input.source_output, ComponentOutput):
-                        assert self.ppdt.results_cumulative is not None
-                        source_output = component_input.source_output
-                        output_cumulative_result = self.ppdt.results_cumulative.at[
-                            0, source_output.get_pretty_name()
-                        ]
-                        output_unit = source_output.unit
-                        if output_unit in UNITS_USING_MEAN_AGGREGATION:
-                            cumulative_unit = output_unit.value
-                            aggregation_kind = "mean"
-                        else:
-                            cumulative_unit = _cumulative_unit_for_sum(output_unit)
-                            aggregation_kind = "sum"
-                        this_edge_label += (
-                            f": {round(output_cumulative_result, 3)} {cumulative_unit}"
-                            f" ({aggregation_kind})"
-                        )
+                this_edge_label = self._format_edge_label(component_input, with_results)
+                edge_labels[key].append(this_edge_label)
 
-                this_edge_label = this_edge_label.replace("°C", "&#8451;")
-                if key not in edge_labels:
-                    edge_labels[key] = this_edge_label
-                else:
-                    edge_labels[key] = edge_labels[key] + "\\n" + this_edge_label
-
-        for node_key, label in edge_labels.items():
+        for (node_a, node_b), labels in edge_labels.items():
+            label = "\\n".join(labels)
             if with_labels:
-                graph.add_edge(pydot.Edge(node_key[0], node_key[1], label=label))
+                graph.add_edge(pydot.Edge(node_a, node_b, label=label))
             else:
-                graph.add_edge(pydot.Edge(node_key[0], node_key[1]))
+                graph.add_edge(pydot.Edge(node_a, node_b))
         return graph
+
+    def _format_edge_label(
+        self,
+        component_input: ComponentInput,
+        with_results: bool,
+    ) -> str:
+        """Build the full edge-label text for one input connection.
+
+        Assembles the ``"<src_field> -> <field> in <unit>"`` base label from the
+        input connection, optionally appends the cumulative result annotation
+        (when ``with_results`` is set and the input is backed by a
+        :class:`ComponentOutput`), and finally replaces the literal ``°C``
+        unit with its HTML entity (``&#8451;``) so Graphviz renders it correctly.
+
+        Args:
+            component_input: The input connection whose label is being built.
+            with_results: If True, append the cumulative result annotation for
+                inputs backed by a :class:`ComponentOutput`.
+
+        Returns:
+            The complete edge-label string.
+        """
+        label = (
+            f"{component_input.src_field_name} -> {component_input.field_name}"
+            f" in {component_input.unit.value}"
+        )
+        if with_results:
+            annotation = self._compute_result_annotation(component_input.source_output)
+            if annotation is not None:
+                label += annotation
+        return label.replace("°C", "&#8451;")
+
+    def _compute_result_annotation(
+        self,
+        source_output: Optional[ComponentOutput],
+    ) -> Optional[str]:
+        """Build the cumulative result ``": value unit (kind)"`` suffix for an edge.
+
+        Looks up the cumulative result value for ``source_output`` in
+        ``self.ppdt.results_cumulative``, determines whether the value is a
+        *mean* (for rate-like units such as W, °C) or a *sum* (for extensive
+        units such as Wh, L, kg, Euro) of the source output over all timesteps,
+        derives the unit to display next to the aggregated value, and returns
+        the annotation suffix.
+
+        A mean keeps the source output's unit, but a sum is a cumulative total
+        whose unit may differ from the input field's unit (e.g.
+        ``"kWh per timestep"`` sums to ``"kWh"``). The ``"in <unit>"`` clause of
+        the edge label describes the input field, not this aggregated value, so
+        the value is annotated with its own derived unit and the aggregation
+        kind (mean/sum) to avoid a unit-label mismatch.
+
+        Args:
+            source_output: The :class:`ComponentOutput` whose cumulative result
+                is annotated. ``None`` (or any non-:class:`ComponentOutput`)
+                yields no annotation.
+
+        Returns:
+            The ``": <value> <unit> (<kind>)"`` suffix, or ``None`` when
+            ``source_output`` is not a :class:`ComponentOutput` and there is no
+            cumulative value to annotate.
+        """
+        if not isinstance(source_output, ComponentOutput):
+            return None
+        assert self.ppdt.results_cumulative is not None
+        output_cumulative_result = self.ppdt.results_cumulative.at[
+            0, source_output.get_pretty_name()
+        ]
+        output_unit = source_output.unit
+        if output_unit in UNITS_USING_MEAN_AGGREGATION:
+            cumulative_unit = output_unit.value
+            aggregation_kind = "mean"
+        else:
+            cumulative_unit = _cumulative_unit_for_sum(output_unit)
+            aggregation_kind = "sum"
+        return (
+            f": {round(output_cumulative_result, 3)} {cumulative_unit}"
+            f" ({aggregation_kind})"
+        )

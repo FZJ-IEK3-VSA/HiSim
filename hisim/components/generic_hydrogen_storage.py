@@ -56,7 +56,20 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
         source_weight: int = 1,
         building_name: str = "BUI1",
     ) -> "GenericHydrogenStorageConfig":
-        """Returns default configuration for hydrogen storage."""
+        """Returns default configuration for hydrogen storage.
+
+        Args:
+            capacity: maximum storage capacity in kg of hydrogen.
+            max_charging_rate: maximum charging rate in kg/s.
+            max_discharging_rate: maximum discharging rate in kg/s.
+            source_weight: priority of the device in hierarchy (lower number = higher
+                priority).
+            building_name: name of the building the storage belongs to.
+
+        Returns:
+            A GenericHydrogenStorageConfig with zero losses, zero charge/discharge
+            energy demand, and the given capacity and rates.
+        """
         config = GenericHydrogenStorageConfig(
             building_name=building_name,
             name="HydrogenStorage",
@@ -75,13 +88,17 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
 class GenericHydrogenStorageState:
     """Generic hydrogen storage state that saves the state of the hydrogen storage."""
 
-    def __init__(self, fill: float = 0) -> None:
-        """Initialize the class."""
-        self.fill = fill
+    def __init__(self, fill_level_kg: float = 0) -> None:
+        """Initialize the hydrogen storage state.
+
+        Args:
+            fill_level_kg: initial hydrogen fill level in kg.
+        """
+        self.fill_level_kg = fill_level_kg
 
     def clone(self) -> "GenericHydrogenStorageState":
         """Clones the state."""
-        return GenericHydrogenStorageState(fill=self.fill)
+        return GenericHydrogenStorageState(fill_level_kg=self.fill_level_kg)
 
 
 class GenericHydrogenStorage(cp.Component):
@@ -105,9 +122,17 @@ class GenericHydrogenStorage(cp.Component):
         config: GenericHydrogenStorageConfig,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
-        """Initialize the class."""
+        """Initialize the generic hydrogen storage component.
+
+        Args:
+            my_simulation_parameters: simulation parameters providing timestep
+                duration and other global settings.
+            config: configuration defining capacity, charge/discharge rates,
+                losses, and energy demands.
+            my_display_config: display configuration for the component.
+        """
         self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
+        self.config: GenericHydrogenStorageConfig = config
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -116,11 +141,11 @@ class GenericHydrogenStorage(cp.Component):
             my_display_config=my_display_config,
         )
         self.config = config
-        self.loss_factor = (
+        self.loss_factor_per_timestep: float = (
             (config.loss_factor_per_day / 100) * self.my_simulation_parameters.seconds_per_timestep / (24 * 3600)
         )
-        self.state = GenericHydrogenStorageState()
-        self.previous_state = GenericHydrogenStorageState()
+        self.state: GenericHydrogenStorageState = GenericHydrogenStorageState()
+        self.previous_state: GenericHydrogenStorageState = GenericHydrogenStorageState()
 
         self.hydrogen_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -150,11 +175,19 @@ class GenericHydrogenStorage(cp.Component):
         self.add_default_connections(self.get_default_connections_from_generic_chp())
 
     def i_prepare_simulation(self) -> None:
-        """Prepares the simulation."""
+        """Prepare the simulation (no-op for this component).
+
+        This component has no pre-simulation setup requirements.
+        """
         pass
 
     def get_default_connections_from_generic_chp(self) -> List[cp.ComponentConnection]:
-        """Get default connections from generic chp."""
+        """Get default connections from generic chp.
+
+        Returns:
+            A list of ComponentConnection linking the storage's hydrogen output
+            (resp. input) to the corresponding CHP / electrolyzer output field.
+        """
 
         connections: List[cp.ComponentConnection] = []
         chp_classname = generic_chp.SimpleCHP.get_classname()
@@ -170,7 +203,12 @@ class GenericHydrogenStorage(cp.Component):
     def get_default_connections_from_generic_electrolyzer(
         self,
     ) -> List[cp.ComponentConnection]:
-        """Get default connections from generic electrolyzer."""
+        """Get default connections from generic electrolyzer.
+
+        Returns:
+            A list of ComponentConnection linking the storage's hydrogen output
+            (resp. input) to the corresponding CHP / electrolyzer output field.
+        """
 
         connections: List[cp.ComponentConnection] = []
         electrolyzer_classname = generic_electrolyzer.GenericElectrolyzer.get_classname()
@@ -188,16 +226,16 @@ class GenericHydrogenStorage(cp.Component):
 
         The requested ``charging_rate`` is first clipped to the configured
         ``max_charging_rate`` and then further reduced if the remaining free
-        capacity (``max_capacity_in_kg - state.fill``) cannot hold the full amount
-        over one timestep. The state of charge (``state.fill`` in kg) is
+        capacity (``max_capacity_in_kg - state.fill_level_kg``) cannot hold the full amount
+        over one timestep. The state of charge (``state.fill_level_kg`` in kg) is
         increased by the amount actually stored, and the electrical power
         demand of the charging process is computed from
         ``energy_for_charge`` (Wh/kg).
 
         :param charging_rate: requested hydrogen charging rate in kg/s.
-        :return: a tuple ``(actual_charging_rate, power_demand_W,
+        :return: a tuple ``(actual_charging_rate, power_demand_w,
             delta_not_stored_kg_s)`` where ``actual_charging_rate`` is the
-            rate in kg/s that was actually accepted, ``power_demand_W`` is the
+            rate in kg/s that was actually accepted, ``power_demand_w`` is the
             resulting electrical power demand in W (charging_rate *
             energy_for_charge * 3.6e3), and ``delta_not_stored_kg_s`` is the
             portion of the requested rate in kg/s that could not be stored
@@ -207,18 +245,18 @@ class GenericHydrogenStorage(cp.Component):
         # limitation of charging rate
         delta_not_stored: float = 0
         if charging_rate > self.config.max_charging_rate:
-            delta_not_stored = delta_not_stored + charging_rate - self.config.max_charging_rate
+            delta_not_stored += charging_rate - self.config.max_charging_rate
             charging_rate = self.config.max_charging_rate
 
         # limitation of storage size
         if (
-            self.state.fill + charging_rate * self.my_simulation_parameters.seconds_per_timestep
+            self.state.fill_level_kg + charging_rate * self.my_simulation_parameters.seconds_per_timestep
             < self.config.max_capacity_in_kg
         ):
             # fits completely
-            self.state.fill = self.state.fill + charging_rate * self.my_simulation_parameters.seconds_per_timestep
+            self.state.fill_level_kg += charging_rate * self.my_simulation_parameters.seconds_per_timestep
 
-        elif self.state.fill >= self.config.max_capacity_in_kg:
+        elif self.state.fill_level_kg >= self.config.max_capacity_in_kg:
             # tank is already full
             delta_not_stored += charging_rate
             charging_rate = 0
@@ -226,13 +264,13 @@ class GenericHydrogenStorage(cp.Component):
         else:
             # fits partially
             # returns amount which an be put in
-            amount_stored = self.config.max_capacity_in_kg - self.state.fill
-            self.state.fill += amount_stored
+            amount_stored = self.config.max_capacity_in_kg - self.state.fill_level_kg
+            self.state.fill_level_kg += amount_stored
             delta_not_stored = charging_rate - amount_stored / self.my_simulation_parameters.seconds_per_timestep
             charging_rate = amount_stored / self.my_simulation_parameters.seconds_per_timestep
 
-        power_demand = charging_rate * self.config.energy_for_charge * 3.6e3
-        return charging_rate, power_demand, delta_not_stored
+        power_demand_w = charging_rate * self.config.energy_for_charge * 3.6e3
+        return charging_rate, power_demand_w, delta_not_stored
 
     def withdraw(self, discharging_rate: float) -> Tuple[float, float, float]:
         """Withdraw hydrogen from the tank for one simulation timestep.
@@ -240,15 +278,15 @@ class GenericHydrogenStorage(cp.Component):
         The requested ``discharging_rate`` is first clipped to the configured
         ``max_discharging_rate`` and then further reduced if the available
         hydrogen above the ``min_capacity`` floor cannot cover the full
-        request over one timestep. The state of charge (``state.fill`` in kg)
+        request over one timestep. The state of charge (``state.fill_level_kg`` in kg)
         is decreased by the amount actually released, and the electrical
         power demand of the discharging process is computed from
         ``energy_for_discharge`` (Wh/kg).
 
         :param discharging_rate: requested hydrogen discharging rate in kg/s.
-        :return: a tuple ``(actual_discharging_rate, power_demand_W,
+        :return: a tuple ``(actual_discharging_rate, power_demand_w,
             delta_not_released_kg_s)`` where ``actual_discharging_rate`` is
-            the rate in kg/s that was actually provided, ``power_demand_W``
+            the rate in kg/s that was actually provided, ``power_demand_w``
             is the resulting electrical power demand in W (discharging_rate *
             energy_for_discharge * 3.6e3), and ``delta_not_released_kg_s`` is
             the portion of the requested rate in kg/s that could not be
@@ -259,42 +297,42 @@ class GenericHydrogenStorage(cp.Component):
         # limitations of discharging rate
         delta_not_released: float = 0
         if discharging_rate > self.config.max_discharging_rate:
-            delta_not_released = delta_not_released + discharging_rate - self.config.max_discharging_rate
+            delta_not_released += discharging_rate - self.config.max_discharging_rate
             discharging_rate = self.config.max_discharging_rate
 
         if (
-            self.state.fill
+            self.state.fill_level_kg
             > self.config.min_capacity + discharging_rate * self.my_simulation_parameters.seconds_per_timestep
         ):
             # has enough
-            self.state.fill -= discharging_rate * self.my_simulation_parameters.seconds_per_timestep
+            self.state.fill_level_kg -= discharging_rate * self.my_simulation_parameters.seconds_per_timestep
 
-        elif self.state.fill <= self.config.min_capacity:
+        elif self.state.fill_level_kg <= self.config.min_capacity:
             # empty
-            delta_not_released = delta_not_released + discharging_rate
+            delta_not_released += discharging_rate
             discharging_rate = 0
 
         else:
             # can provide hydrogen partially,
             # added recently :but in this case to simplify work of CHP, say that no hydrogen can be provided
-            amount_released = self.state.fill - self.config.min_capacity
-            self.state.fill -= amount_released
+            amount_released = self.state.fill_level_kg - self.config.min_capacity
+            self.state.fill_level_kg -= amount_released
             delta_not_released = discharging_rate - amount_released / self.my_simulation_parameters.seconds_per_timestep
             discharging_rate = amount_released / self.my_simulation_parameters.seconds_per_timestep
 
-        power_demand = discharging_rate * self.config.energy_for_discharge * 3.6e3
-        return discharging_rate, power_demand, delta_not_released
+        power_demand_w = discharging_rate * self.config.energy_for_discharge * 3.6e3
+        return discharging_rate, power_demand_w, delta_not_released
 
     def storage_losses(self) -> None:
         """Apply the standing hydrogen losses for one simulation timestep.
 
-        Reduces ``self.state.fill`` (in kg) by the configured permanent daily
+        Reduces ``self.state.fill_level_kg`` (in kg) by the configured permanent daily
         loss scaled to the timestep length, i.e. by
-        ``self.loss_factor`` (``loss_factor_per_day`` converted from a daily
+        ``self.loss_factor_per_timestep`` (``loss_factor_per_day`` converted from a daily
         percentage to a per-timestep fraction). This models the continuous
         leakage/boil-off of the storage and returns nothing.
         """
-        self.state.fill -= self.state.fill * self.loss_factor
+        self.state.fill_level_kg -= self.state.fill_level_kg * self.loss_factor_per_timestep
 
     def i_save_state(self) -> None:
         """Saves the state."""
@@ -305,7 +343,25 @@ class GenericHydrogenStorage(cp.Component):
         self.state = self.previous_state.clone()
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulates the component."""
+        """Simulate one timestep of hydrogen storage charge/discharge and losses.
+
+        Reads the hydrogen input (charging) and output (discharging) rates from
+        the timestep values. If both are positive simultaneously, the net flow is
+        computed so only one of `store` or `withdraw` is invoked. Standing losses
+        are applied via `storage_losses`, and the resulting state of charge in
+        percent is written to the `HydrogenSOC` output.
+
+        Args:
+            timestep: current simulation timestep index.
+            stsv: single-timestep values object for reading inputs and writing
+                outputs.
+            force_convergence: unused by this component; accepted for interface
+                compatibility.
+
+        Raises:
+            ValueError: if the charging or discharging rate read from inputs is
+                negative.
+        """
 
         # get input values
         charging_rate = stsv.get_input_value(self.hydrogen_input_channel)
@@ -337,15 +393,25 @@ class GenericHydrogenStorage(cp.Component):
         self.storage_losses()
 
         # delta not released and delta not stored is not used so far -> must be taken into account later
-        percent_fill = 100 * self.state.fill / self.config.max_capacity_in_kg
+        hydrogen_soc_percent = 100 * self.state.fill_level_kg / self.config.max_capacity_in_kg
 
-        stsv.set_output_value(self.hydrogen_soc, percent_fill)
+        stsv.set_output_value(self.hydrogen_soc, hydrogen_soc_percent)
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
-        """Doublechecks."""
+        """Double-check outputs (no-op for this component).
+
+        Args:
+            timestep: current simulation timestep index.
+            stsv: single-timestep values object.
+        """
         # alle ausgabewerte die zu überprüfen sind können hiermit fehlerausgabeüberprüft werden
         pass
 
     def write_to_report(self):
-        """Writes the information of the current component to the report."""
+        """Writes the information of the current component to the report.
+
+        Returns:
+            A string dictionary representation of the storage configuration suitable
+            for inclusion in the simulation report.
+        """
         return self.config.get_string_dict()

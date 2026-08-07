@@ -9,7 +9,6 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 
 
-@pytest.mark.base
 def test_heat_pump_modular():
     """Verify the modular heat pump turns on and delivers rated thermal power.
 

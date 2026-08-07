@@ -9,6 +9,7 @@ import itertools
 import json
 import os
 from dataclasses import dataclass
+from functools import lru_cache
 from functools import reduce as freduce
 from functools import wraps
 from timeit import default_timer as timer
@@ -32,7 +33,11 @@ __status__ = "development"
 
 
 def get_input_directory() -> str:
-    """Gets the absolute path to the inputs directory."""
+    """Gets the absolute path to the inputs directory.
+
+    Returns:
+        str: absolute path to the ``inputs`` subdirectory.
+    """
     return os.path.join(hisim_abs_path, "inputs")
 
 
@@ -181,15 +186,75 @@ HISIMPATH: Dict[str, Any] = {
 }
 
 
-def load_smart_appliance(name):  # noqa
-    """Loads file for a single smart appliance by name."""
+@lru_cache(maxsize=1)
+def _load_smart_appliances_file() -> Dict[str, Any]:
+    """Read and parse the smart-appliances JSON database once per process.
+
+    The smart-devices file (``HISIMPATH["smart_appliances"]``) is static for the
+    lifetime of a process, so the parsed dict is memoized to avoid repeated file
+    I/O and JSON parsing across the many component initializations in a
+    parametric study. The cache is never invalidated: if the underlying file
+    changes on disk during a process, callers must explicitly call
+    ``cache_clear()`` to pick up the new contents.
+
+    Returns:
+        The full JSON-decoded smart-appliances database keyed by appliance name.
+
+    Raises:
+        FileNotFoundError: if the smart-appliances file is missing.
+        json.JSONDecodeError: if the file is not valid JSON.
+        ValueError: if the decoded JSON is not a JSON object (dict) keyed by
+            appliance name.
+    """
     with open(HISIMPATH["smart_appliances"], encoding="utf-8") as filestream:
         data = json.load(filestream)
-    return data[name]
+    # Validate the structure immediately so a malformed file fails loudly at the
+    # source instead of surfacing as a confusing TypeError on the first lookup.
+    # Caching an unvalidated structure would also hide the error behind the cache.
+    if not isinstance(data, dict):
+        raise ValueError(
+            "Smart-appliances database at "
+            f"{HISIMPATH['smart_appliances']} must be a JSON object keyed by "
+            f"appliance name, got {type(data).__name__} instead."
+        )
+    return data
+
+
+def load_smart_appliance(name: str) -> Any:  # noqa
+    """Load a single smart appliance entry by name.
+
+    The smart-devices database is parsed once per process (see
+    :func:`_load_smart_appliances_file`); only the dict lookup runs per call.
+    A deep copy of the looked-up entry is returned so every caller receives an
+    independent object and cannot mutate the shared cache — preserving
+    reproducible results across the repeated component initializations of a
+    parametric study. The file read and full-file JSON parse (the expensive
+    part) still happen only once; deep-copying a single appliance entry is
+    comparatively cheap.
+
+    Args:
+        name: appliance entry name to look up in the smart-devices JSON.
+
+    Returns:
+        A deep copy of the JSON-decoded data for the requested appliance.
+
+    Raises:
+        KeyError: if ``name`` is not a key in the file.
+    """
+    return copy.deepcopy(_load_smart_appliances_file()[name])
 
 
 def convert_lpg_timestep_to_utc(data: List[int], year: int, seconds_per_timestep: int) -> List[int]:
-    """Tranform LPG timesteps (list of integers) from local time to UTC."""
+    """Transform LPG timesteps (list of integers) from local time to UTC.
+
+    Args:
+        data: list of integer timestep indices in Europe/Berlin local time.
+        year: simulation year for DST lookup.
+        seconds_per_timestep: seconds per index.
+
+    Returns:
+        List[int]: indices shifted to UTC.
+    """
     timeshifts = pytz.timezone("Europe/Berlin")._utc_transition_times  # type: ignore # pylint: disable=W0212
     timeshifts = [elem for elem in timeshifts if elem.year == year]
     steps_per_hour = int(3600 / seconds_per_timestep)
@@ -206,11 +271,23 @@ def convert_lpg_timestep_to_utc(data: List[int], year: int, seconds_per_timestep
             data_utc.append(elem - steps_per_hour)
         else:
             data_utc.append(elem - 2 * steps_per_hour)
-    return data
+    return data_utc
 
 
 def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
-    """Transform LPG data from local time (not having explicit time shifts) to UTC."""
+    """Transform LPG data from local time (not having explicit time shifts) to UTC.
+
+    Args:
+        data: DataFrame with a ``Time`` column of local-time strings.
+        year: simulation year for DST lookup.
+
+    Returns:
+        pd.DataFrame: data with reformatted UTC ``Time`` column.
+
+    Note:
+        The input DataFrame is modified in place; the returned object is the
+        same instance.
+    """
     # convert Time information to pandas datetime and make it to index
     data.index = pd.DatetimeIndex(pd.to_datetime(data["Time"]))
     lastdate = data.index[-1]
@@ -271,15 +348,27 @@ def get_cache_file(
     This will generate a file path based on any dataclass_json.
     It works by turning the class into a json string, hashing the string and then using that as filename.
     The idea is to have a unique file path for every possible configuration.
+
+    Args:
+        component_key: filename prefix for the component type.
+        parameter_class: dataclass with a ``to_json`` method; ``building_name`` is nulled before hashing.
+        my_simulation_parameters: provides the cache directory and a unique key appended before hashing.
+        cache_dir_path: optional override; defaults to ``my_simulation_parameters.cache_dir_path``.
+
+    Returns:
+        Tuple[bool, str]: ``(exists, absolute_path)``.
+
+    Raises:
+        ValueError: if ``my_simulation_parameters`` is None or the JSON string is too short.
     """
     parameter_class_copy = copy.deepcopy(parameter_class)
     if hasattr(parameter_class_copy, "building_name"):
         setattr(parameter_class_copy, "building_name", None)
     json_str = parameter_class_copy.to_json()
-    if cache_dir_path is None:
-        cache_dir_path = my_simulation_parameters.cache_dir_path
     if my_simulation_parameters is None:
         raise ValueError("Simulation parameters was none.")
+    if cache_dir_path is None:
+        cache_dir_path = my_simulation_parameters.cache_dir_path
     simulation_parameter_str = my_simulation_parameters.get_unique_key()
     json_str = json_str + simulation_parameter_str
     if len(json_str) < 5:
@@ -288,7 +377,7 @@ def get_cache_file(
     # Johanna Ganglbauer: python told me "TypeError: openssl_sha256() takes at most 1 argument (2 given)",
     # I removed the second input argument "usedforsecurity=False" and it works - maybe I need to update the hashlib package?
     sha_key = hashlib.sha256(json_str_encoded).hexdigest()
-    filename = component_key + "_" + sha_key + ".cache"
+    filename = f"{component_key}_{sha_key}.cache"
 
     cache_absolute_filepath = os.path.join(cache_dir_path, filename)
     if not os.path.isdir(cache_dir_path):
@@ -298,8 +387,18 @@ def get_cache_file(
     return False, cache_absolute_filepath
 
 
-def load_export_load_profile_generator(target):  # noqa
-    """Returns the paths for the SQL exported files from the Load Profile Generator."""
+def load_export_load_profile_generator(target: str) -> Dict[str, List[str]]:  # noqa
+    """Returns the paths for the SQL exported files from the Load Profile Generator.
+
+    Args:
+        target: subdirectory name within the LPG export directory.
+
+    Returns:
+        Dict[str, List[str]]: mapping of output types to SQL file paths.
+
+    Raises:
+        ValueError: if the target directory does not exist.
+    """
     targetpath = os.path.join(HISIMPATH["LoadProfileGenerator_export_directory"], target)
     if os.path.exists(targetpath):
         lpg_export_path = {
@@ -313,7 +412,14 @@ def load_export_load_profile_generator(target):  # noqa
 
 
 def measure_execution_time(my_function):  # noqa
-    """Utility function that works as decorator for measuring execution time."""
+    """Utility function that works as decorator for measuring execution time.
+
+    Args:
+        my_function: function to wrap.
+
+    Returns:
+        wrapped callable.
+    """
 
     @wraps(my_function)
     def function_wrapper_for_measuring_execution_time(*args, **kwargs):
@@ -331,11 +437,21 @@ def measure_execution_time(my_function):  # noqa
 
 
 def measure_memory_leak(my_function):  # noqa
-    """Utility function that works as decorator for measuring execution time."""
+    """Decorator that measures RSS memory delta before/after a call.
+
+    Logs the difference in MB via ``log.trace``. Intended for profiling
+    memory growth during simulation steps.
+
+    Args:
+        my_function: function to wrap.
+
+    Returns:
+        wrapped callable.
+    """
 
     @wraps(my_function)
     def function_wrapper_for_measuring_memory_leak(*args, **kwargs):
-        """Inner function for the time measuring utility decorator."""
+        """Inner function for the memory leak measuring utility decorator."""
         process = psutil.Process(os.getpid())
         rss_by_psutil_start = process.memory_info().rss / (1024 * 1024)
         result = my_function(*args, **kwargs)
@@ -351,11 +467,24 @@ def measure_memory_leak(my_function):  # noqa
 
 
 def measure_memory_leak_with_error(my_function):  # noqa
-    """Utility function that works as decorator for measuring execution time."""
+    """Decorator that measures RSS memory delta and raises if it exceeds 100 MB.
+
+    Logs the difference in MB via ``log.information`` and raises
+    ``ValueError`` when the leaked memory surpasses 100 MB.
+
+    Args:
+        my_function: function to wrap.
+
+    Returns:
+        wrapped callable.
+
+    Raises:
+        ValueError: if the measured RSS memory delta exceeds 100 MB.
+    """
 
     @wraps(my_function)
     def function_wrapper_for_measuring_memory_leak(*args, **kwargs):
-        """Inner function for the time measuring utility decorator."""
+        """Inner function for the memory leak measuring utility decorator."""
         process = psutil.Process(os.getpid())
         rss_by_psutil_start = process.memory_info().rss / (1024 * 1024)
         result = my_function(*args, **kwargs)
@@ -373,7 +502,15 @@ def measure_memory_leak_with_error(my_function):  # noqa
 
 
 def deprecated(message):
-    """Decorator for marking a function as deprecated."""
+    """Decorator for marking a function as deprecated.
+
+    Args:
+        message: deprecation notice shown in the warning.
+
+    Returns:
+        A decorator factory: calling it with a function returns the wrapped
+        function that emits the deprecation warning before delegating.
+    """
 
     def deprecated_decorator(func):
         """Decorator."""
@@ -389,13 +526,32 @@ def deprecated(message):
 
 
 def rsetattr(obj, attr, val):
-    """Recursive setattr for multi level attributes like `obj.attribute.subattribute`."""
+    """Recursive setattr for multi level attributes like `obj.attribute.subattribute`.
+
+    Args:
+        obj: object whose nested attribute should be set.
+        attr: dotted attribute path such as ``attribute.subattribute``.
+        val: value to assign to the final attribute.
+
+    Returns:
+        None (the return value of ``setattr``).
+    """
     pre, _, post = attr.rpartition(".")
     return setattr(rgetattr(obj, pre) if pre else obj, post, val)
 
 
 def rgetattr(obj, attr, *args):
-    """Recursive getattr for multi level attributes like `obj.attribute.subattribute`."""
+    """Recursive getattr for multi level attributes like `obj.attribute.subattribute`.
+
+    Args:
+        obj: object whose nested attribute should be retrieved.
+        attr: dotted attribute path such as ``attribute.subattribute``.
+        *args: optional default value forwarded to ``getattr`` when the
+            attribute is missing.
+
+    Returns:
+        The value of the nested attribute, or the default from ``*args``.
+    """
 
     def _getattr(obj, attr):
         return getattr(obj, attr, *args)
@@ -404,13 +560,30 @@ def rgetattr(obj, attr, *args):
 
 
 def rhasattr(obj, attr):
-    """Recursive hasattr for multi level attributes like `obj.attribute.subattribute`."""
+    """Recursive hasattr for multi level attributes like `obj.attribute.subattribute`.
+
+    Args:
+        obj: object whose nested attribute should be checked.
+        attr: dotted attribute path such as ``attribute.subattribute``.
+
+    Returns:
+        bool: ``True`` if the nested attribute exists, ``False`` otherwise.
+    """
     pre, _, post = attr.rpartition(".")
     return hasattr(rgetattr(obj, pre) if pre else obj, post)
 
 
 def set_attributes_of_dataclass_from_dict(dataclass_, dict_, nested=None):
-    """Set values in a Dataclass from a dictionary."""
+    """Set values in a Dataclass from a dictionary.
+
+    Args:
+        dataclass_: dataclass instance to update.
+        dict_: dictionary whose keys map to attributes; nested dicts traverse nested attributes.
+        nested: internal recursion accumulator; callers omit.
+
+    Raises:
+        AttributeError: if a key has no matching attribute.
+    """
     for key, value in dict_.items():
         if nested:
             path_list = nested + [key]
@@ -430,7 +603,19 @@ def set_attributes_of_dataclass_from_dict(dataclass_, dict_, nested=None):
 
 
 def get_environment_variable(key: str, default: Optional[str] = None) -> str:
-    """Get environment variable. Raise error if variable not found."""
+    """Get environment variable. Raise error if variable not found.
+
+    Args:
+        key: environment variable name.
+        default: optional fallback.
+
+    Returns:
+        str: the value.
+
+    Raises:
+        ValueError: if the variable is unset (or set to an empty string) and
+            no truthy default is provided.
+    """
     value = os.getenv(key, default)
     if not value:
         raise ValueError(

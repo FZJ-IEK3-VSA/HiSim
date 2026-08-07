@@ -209,7 +209,7 @@ def setup_function(
 
     # get household attribute jsonreferences from list of strings
     lpg_households: Union[JsonReference, List[JsonReference]]
-    if isinstance(arche_type_config_.lpg_households, List):
+    if isinstance(arche_type_config_.lpg_households, list):
         if len(arche_type_config_.lpg_households) == 1:
             lpg_households = getattr(Households, arche_type_config_.lpg_households[0])
         elif len(arche_type_config_.lpg_households) > 1:
@@ -357,7 +357,7 @@ def setup_function(
     # Build district heating For Space Heating and DHW
     my_district_heating_sh_config = generic_district_heating.DistrictHeatingConfig.get_default_district_heating_config(
         with_domestic_hot_water_preparation=True,
-        connected_load_w=my_building_information.max_thermal_building_demand_in_watt,
+        connected_load_in_w=my_building_information.max_thermal_building_demand_in_watt,
     )
 
     my_district_heating = generic_district_heating.DistrictHeating(
@@ -375,7 +375,7 @@ def setup_function(
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+        heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX,

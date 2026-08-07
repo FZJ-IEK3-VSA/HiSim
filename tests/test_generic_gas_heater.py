@@ -60,9 +60,14 @@ def test_gas_heater() -> None:
         lt.Units.CELSIUS,
     )
 
-    number_of_outputs = fft.get_number_of_outputs(
-        [control_signal_channel, operating_mode_channel, temperature_delta_channel, mass_flow_input_temperature_channel, my_gas_heater]
-    )
+    test_components = [
+        control_signal_channel,
+        operating_mode_channel,
+        temperature_delta_channel,
+        mass_flow_input_temperature_channel,
+        my_gas_heater,
+    ]
+    number_of_outputs = fft.get_number_of_outputs(test_components)
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     # Link inputs and outputs
@@ -74,9 +79,7 @@ def test_gas_heater() -> None:
     )
 
     # Add Global Index and set values for fake Inputs
-    fft.add_global_index_of_components(
-        [control_signal_channel, operating_mode_channel, temperature_delta_channel, mass_flow_input_temperature_channel, my_gas_heater]
-    )
+    fft.add_global_index_of_components(test_components)
     stsv.values[control_signal_channel.global_index] = 1
     stsv.values[operating_mode_channel.global_index] = 1
     stsv.values[temperature_delta_channel.global_index] = temperature_delta_in_celsius

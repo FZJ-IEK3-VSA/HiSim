@@ -135,6 +135,12 @@ def test_chp_system() -> None:
         my_electrolyzer_controller.i_simulate(ttt, stsv, False)
         my_electrolyzer.i_simulate(ttt, stsv, False)
 
+    # Confirm the electrolyzer was actually running before electricity is
+    # removed; otherwise the shutdown assertions below would be vacuously
+    # true (state carries over from scenario 2's high-SOC shutdown).
+    assert stsv.values[my_electrolyzer.electricity_output_channel.global_index] == 1.8e3
+    assert stsv.values[my_electrolyzer.hydrogen_output_channel.global_index] > 0
+
     stsv.values[electricity_target.global_index] = 0
     stsv.values[hydrogensoc.global_index] = 50
 
@@ -154,3 +160,28 @@ def test_chp_system() -> None:
 
     assert stsv.values[my_electrolyzer.electricity_output_channel.global_index] == 0
     assert stsv.values[my_electrolyzer.hydrogen_output_channel.global_index] == 0
+
+
+@pytest.mark.base
+def test_electrolyzer_controller_display_config_not_shared() -> None:
+    """Two controllers must not share a mutable DisplayConfig default."""
+    seconds_per_timestep = 60
+    my_simulation_parameters = SimulationParameters.one_day_only(
+        2017, seconds_per_timestep
+    )
+    config = controller_l1_electrolyzer.L1ElectrolyzerControllerConfig.get_default_config()
+
+    controller_a = controller_l1_electrolyzer.L1GenericElectrolyzerController(
+        config=config, my_simulation_parameters=my_simulation_parameters
+    )
+    controller_b = controller_l1_electrolyzer.L1GenericElectrolyzerController(
+        config=config, my_simulation_parameters=my_simulation_parameters
+    )
+
+    assert controller_a.my_display_config is not controller_b.my_display_config
+    assert isinstance(controller_a.my_display_config, cp.DisplayConfig)
+    assert isinstance(controller_b.my_display_config, cp.DisplayConfig)
+
+    # mutating one must not affect the other
+    controller_a.my_display_config.pretty_name = "controller_a"
+    assert controller_b.my_display_config.pretty_name is None

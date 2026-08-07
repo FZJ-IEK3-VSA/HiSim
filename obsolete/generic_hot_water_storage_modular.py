@@ -430,7 +430,7 @@ class HotWaterStorage(cp.Component):
             cp.ComponentConnection(
                 HotWaterStorage.ThermalPowerCHP,
                 chp_classname,
-                generic_chp.SimpleCHP.ThermalPowerOutputBoiler,
+                generic_chp.SimpleCHP.ThermalPowerOutputDHW,
             )
         )
         return connections

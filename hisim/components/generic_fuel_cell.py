@@ -1,10 +1,9 @@
-"""Example Transformer."""
+"""Generic fuel cell component modelling hydrogen-to-electricity conversion."""
 
 # clean
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from pathlib import Path
-from typing import List, Any
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -35,7 +34,12 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class FuelCellConfig(cp.ConfigBase):
-    """Configuration of the Example Transformer."""
+    """Configuration of the `FuelCell` component.
+
+    Holds configuration parameters for a PEM fuel cell: nominal, minimum
+    and maximum electrical power output, nominal hydrogen flow rate,
+    Faraday efficiency, nominal cell current, and ramp-up/ramp-down rates.
+    """
 
     @classmethod
     def get_main_classname(cls):
@@ -61,8 +65,8 @@ class FuelCellConfig(cp.ConfigBase):
     def get_default_pem_fuel_cell_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
-        """Gets a default PEM Eletrolyzer."""
+    ) -> "FuelCellConfig":
+        """Returns a default `FuelCellConfig` for a PEM fuel cell."""
         return FuelCellConfig(
             building_name=building_name,
             name="PEM_Fuel_Cell",
@@ -91,7 +95,7 @@ class FuelCellConfig(cp.ConfigBase):
         cls,
         fuel_cell_name: str,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "FuelCellConfig":
         """Get config of fuel cell."""
         config_json = cls.read_config(fuel_cell_name)
         config = FuelCellConfig(
@@ -111,28 +115,14 @@ class FuelCellConfig(cp.ConfigBase):
 
 
 class FuelCell(cp.Component):
-    """The Example Transformer class.
+    """PEM fuel cell component that converts hydrogen into electricity.
 
-    It is used to modify input values and return them as new output values.
-
-    Parameters
-    ----------
-    name : str
-        Name of the electrolyzer variant.
-
-    loadtype : lt.LoadTypes
-        A :py:class:`~hisim.loadtypes.LoadTypes` object that represents
-        the type of the loaded data.
-
-    unit : lt.Units
-        A :py:class:`~hisim.loadtypes.Units` object that represents
-        the unit of the loaded data.
-
-    min_load_electrolyzer : float
-        Minimum capable load of thr electrolyzer.
-
-    max_load_electrolyzer : float
-        Maximum capable load of thr electrolyzer.
+    The fuel cell consumes hydrogen and oxygen to generate electrical power,
+    producing water as a by-product. The power output tracks the configured
+    electricity demand subject to minimum/maximum power limits and ramp-rate
+    constraints. Efficiency is derived from a polarization curve that maps the
+    cell current density to the cell voltage, from which the hydrogen
+    consumption rate is interpolated for the current operating point.
 
     """
 
@@ -684,17 +674,15 @@ class FuelCell(cp.Component):
         stsv.set_output_value(self.operating_time, self.total_operating_time)
         stsv.set_output_value(self.current_efficiency_state, current_eff)
 
-    def write_to_report(self) -> List[str]:
+    def write_to_report(self) -> list[str]:
         """Writes a report."""
-        lines = []
-        for config_string in self.fuelcellconfig.get_string_dict():
-            lines.append(config_string)
-        lines.append("Component Name" + str(self.component_name))
-        lines.append("Total operating time during simulation: " + str(self.total_operating_time) + " [h]")
-        lines.append("Total hydrogen consumed during simulation: " + str(self.total_hydrogen_consumed) + " [kg]")
-        lines.append("Total oxygen consumed during simulation: " + str(self.total_oxygen_consumed) + " [kg]")
-        lines.append("Total water demand during simulation: " + str(self.total_water_produced) + " [kg]")
-        lines.append("Total energy produced during simulation: " + str(self.total_energy) + " [kWh]")
-        lines.append("Total ramp-up time during simulation: " + str(self.total_ramp_up_count_state) + " [s]")
-        lines.append("Total ramp-down time during simulation: " + str(self.total_ramp_down_count_state) + " [s]")
+        lines = list(self.fuelcellconfig.get_string_dict())
+        lines.append(f"Component Name{self.component_name}")
+        lines.append(f"Total operating time during simulation: {self.total_operating_time} [h]")
+        lines.append(f"Total hydrogen consumed during simulation: {self.total_hydrogen_consumed} [kg]")
+        lines.append(f"Total oxygen consumed during simulation: {self.total_oxygen_consumed} [kg]")
+        lines.append(f"Total water demand during simulation: {self.total_water_produced} [kg]")
+        lines.append(f"Total energy produced during simulation: {self.total_energy} [kWh]")
+        lines.append(f"Total ramp-up time during simulation: {self.total_ramp_up_count_state} [s]")
+        lines.append(f"Total ramp-down time during simulation: {self.total_ramp_down_count_state} [s]")
         return lines

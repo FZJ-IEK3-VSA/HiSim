@@ -16,11 +16,12 @@ every member of :class:`lt.ComponentType`, so any real enum member (here
 from typing import Any
 
 import pytest
+from pytest import MarkDecorator
 
 from hisim import loadtypes as lt
 from hisim.sim_repository import SimRepository
 
-pytestmark = pytest.mark.base
+pytestmark: MarkDecorator = pytest.mark.base
 
 # A representative ComponentType member. ``__init__`` pre-populates an empty
 # sub-dict for every ComponentType member, so PV needs no extra setup.
@@ -79,7 +80,7 @@ def test_set_entry_overwrites_existing_value() -> None:
 
 # --------------------------------------------------------------------------- #
 # Dynamic entries: set_dynamic_entry / get_dynamic_entry /
-#                  get_dynamic_component_weights / delete_dynamic_entry
+#                  get_dynamic_source_weights / delete_dynamic_entry
 # --------------------------------------------------------------------------- #
 def test_set_then_get_dynamic_entry_roundtrips_value() -> None:
     """``set_dynamic_entry`` stores a value that ``get_dynamic_entry`` returns."""
@@ -107,18 +108,18 @@ def test_get_dynamic_entry_unknown_component_type_returns_none() -> None:
     assert repo.get_dynamic_entry(not_a_component_type, 1) is None
 
 
-def test_get_dynamic_component_weights_empty_on_fresh_repo() -> None:
+def test_get_dynamic_source_weights_empty_on_fresh_repo() -> None:
     """A freshly constructed repo has no weights for any component type."""
     repo = SimRepository()
-    assert not repo.get_dynamic_component_weights(_CT)
+    assert not repo.get_dynamic_source_weights(_CT)
 
 
-def test_get_dynamic_component_weights_preserves_insertion_order() -> None:
+def test_get_dynamic_source_weights_preserves_insertion_order() -> None:
     """Weights are returned in insertion order (Python dict ordering)."""
     repo = SimRepository()
     repo.set_dynamic_entry(_CT, 1, "a")
     repo.set_dynamic_entry(_CT, 2, "b")
-    assert repo.get_dynamic_component_weights(_CT) == [1, 2]
+    assert repo.get_dynamic_source_weights(_CT) == [1, 2]
 
 
 def test_delete_dynamic_entry_removes_the_entry() -> None:
@@ -130,10 +131,10 @@ def test_delete_dynamic_entry_removes_the_entry() -> None:
     # The current implementation discards the ``dict.pop`` return value, so the
     # method returns ``None`` rather than the stored value. Pin that contract so a
     # future change to the return value is a deliberate, reviewed decision.
-    assert repo.delete_dynamic_entry(_CT, 1) is None
+    assert repo.delete_dynamic_entry(_CT, 1) is None  # type: ignore[func-returns-value]
 
     assert repo.get_dynamic_entry(_CT, 1) is None
-    assert repo.get_dynamic_component_weights(_CT) == [2]
+    assert repo.get_dynamic_source_weights(_CT) == [2]
 
 
 def test_delete_dynamic_entry_missing_weight_raises_keyerror() -> None:
@@ -151,8 +152,8 @@ def test_dynamic_entries_are_independent_per_component_type() -> None:
     repo.set_dynamic_entry(other, 1, "battery-value")
     assert repo.get_dynamic_entry(_CT, 1) == "pv-value"
     assert repo.get_dynamic_entry(other, 1) == "battery-value"
-    assert repo.get_dynamic_component_weights(_CT) == [1]
-    assert repo.get_dynamic_component_weights(other) == [1]
+    assert repo.get_dynamic_source_weights(_CT) == [1]
+    assert repo.get_dynamic_source_weights(other) == [1]
 
 
 # --------------------------------------------------------------------------- #

@@ -119,12 +119,7 @@ class GenericCarInformation:
     def get_meters_driven_from_occupancy_car_data(self, car_data_dict: Dict) -> List:
         """Get meters driven from occupancy car data."""
         driven_distances_list = car_data_dict["driving_distances"]
-        driven_meter_list = []
-        for driven_distance_data in driven_distances_list:
-            driven_meter_values = driven_distance_data["Values"]
-            driven_meter_list.append(driven_meter_values)
-
-        return driven_meter_list
+        return [driven_distance_data["Values"] for driven_distance_data in driven_distances_list]
 
     def prepare_data_dict_for_car_component(
         self, car_names: List, household_names: List, time_resolutions: List, car_locations: List, driven_meters: List
@@ -220,15 +215,15 @@ class CarConfig(cp.ConfigBase):
 
 def most_frequent(input_list: List) -> Any:
     """Returns most frequent value - needed for down sampling Location information from 1 minute resoultion to lower."""
-    counter = 0
-    num = input_list[0]
+    max_count = 0
+    most_frequent_value = input_list[0]
 
-    for i in input_list:
-        curr_frequency = input_list.count(i)
-        if curr_frequency > counter:
-            counter = curr_frequency
-            num = i
-    return num
+    for value in input_list:
+        curr_frequency = input_list.count(value)
+        if curr_frequency > max_count:
+            max_count = curr_frequency
+            most_frequent_value = value
+    return most_frequent_value
 
 
 class Car(cp.Component):
@@ -436,33 +431,33 @@ class Car(cp.Component):
                 heating_value_of_diesel_in_kwh_per_liter = 9.8
                 consumption_in_kwh = round((heating_value_of_diesel_in_kwh_per_liter * consumption_in_liter), 1)
 
-                my_kpi_entry = KpiEntry(
+                diesel_demand_in_liter_kpi_entry = KpiEntry(
                     name="Diesel demand for driving",
                     unit="liter",
                     value=consumption_in_liter,
                     tag=KpiTagEnumClass.CAR,
                     description=self.component_name,
                 )
-                list_of_kpi_entries.append(my_kpi_entry)
-                my_kpi_entry_2 = KpiEntry(
+                list_of_kpi_entries.append(diesel_demand_in_liter_kpi_entry)
+                diesel_demand_in_kwh_kpi_entry = KpiEntry(
                     name="Diesel demand for driving",
                     unit="kWh",
                     value=consumption_in_kwh,
                     tag=KpiTagEnumClass.CAR,
                     description=self.component_name,
                 )
-                list_of_kpi_entries.append(my_kpi_entry_2)
+                list_of_kpi_entries.append(diesel_demand_in_kwh_kpi_entry)
                 break
 
         distance_driven_in_km = round(sum(self.meters_driven) / 1000, 1)
-        my_kpi_entry_3 = KpiEntry(
+        distance_driven_kpi_entry = KpiEntry(
             name="Distance driven",
             unit="km",
             value=distance_driven_in_km,
             tag=KpiTagEnumClass.CAR,
             description=self.component_name,
         )
-        list_of_kpi_entries.append(my_kpi_entry_3)
+        list_of_kpi_entries.append(distance_driven_kpi_entry)
 
         return list_of_kpi_entries
 
@@ -570,9 +565,9 @@ class Car(cp.Component):
                 ]
 
             # save data in cache
-            database = pd.DataFrame({"car_location": self.car_location, "meters_driven": self.meters_driven})
-            database.to_csv(cache_filepath)
-            del database
+            car_cache_dataframe = pd.DataFrame({"car_location": self.car_location, "meters_driven": self.meters_driven})
+            car_cache_dataframe.to_csv(cache_filepath)
+            del car_cache_dataframe
 
     def resample_meters_driven(self, meters_driven: List, seconds_per_timestep: int) -> Any:
         """Resample meters driven according to simulation time resolution."""

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 # clean
 from pathlib import Path
-from typing import List, Any, cast
+from typing import Any, cast
 import json
 import math
 from dataclasses import dataclass
@@ -167,7 +167,7 @@ class XTPController(Component):
                 demand_to_system = demand_load
                 power_from_battery = 0.0
             elif self.standby_load <= demand_load < self.min_output:
-                # standby_load <= demand_load < min_output and demand_load < standby_load:
+                # standby_load <= demand_load < min_output:
                 demand_to_system = demand_load
                 power_from_battery = 0.0
             else:
@@ -261,6 +261,6 @@ class XTPController(Component):
         stsv.set_output_value(self.load_from_battery, power_from_battery * 1000)  # Battery Output in WATT
         stsv.set_output_value(self.demand_to_system, demand_to_system)
 
-    def write_to_report(self) -> List[str]:
+    def write_to_report(self) -> list[str]:
         """Writes a report."""
         return self.xtpcontrollerconfig.get_string_dict()

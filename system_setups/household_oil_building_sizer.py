@@ -121,16 +121,14 @@ def setup_function(
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         if os.path.exists(cache_dir_path_simuparams):
             my_simulation_parameters.cache_dir_path = cache_dir_path_simuparams
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
-        )
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON)
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER
-        )
+        my_simulation_parameters.post_processing_options.extend([
+            PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION,
+            PostProcessingOptions.COMPUTE_OPEX,
+            PostProcessingOptions.COMPUTE_CAPEX,
+            PostProcessingOptions.COMPUTE_KPIS,
+            PostProcessingOptions.WRITE_KPIS_TO_JSON,
+            PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER,
+        ])
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
@@ -383,7 +381,7 @@ def setup_function(
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+        heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,

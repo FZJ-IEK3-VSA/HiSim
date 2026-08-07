@@ -77,7 +77,7 @@ def setup_function(
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 19.0
     temperature_air_cooling_in_celsius = 24.0
-    offset = 0.5
+    offset_in_celsius = 0.5
     hp_mode = 2
 
     # =================================================================================================================================
@@ -136,7 +136,7 @@ def setup_function(
             name="GenericHeatPumpController",
             temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
             temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-            offset=offset,
+            offset_in_celsius=offset_in_celsius,
             mode=hp_mode,
         ),
         my_simulation_parameters=my_simulation_parameters,

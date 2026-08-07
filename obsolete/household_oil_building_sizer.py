@@ -322,7 +322,7 @@ def setup_function(
     my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
         absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
     )

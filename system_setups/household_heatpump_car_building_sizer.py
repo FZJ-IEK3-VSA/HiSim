@@ -337,7 +337,7 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters,
     )
     # Verknüpfung mit Luft als Umgebungswärmeqzuelle
-    if my_heatpump.parameters["Group"].iloc[0] == 1.0 or my_heatpump.parameters["Group"].iloc[0] == 4.0:
+    if my_heatpump.parameters["Group"].iloc[0] in (1.0, 4.0):
         my_heatpump.connect_input(
             my_heatpump.TemperatureInputPrimary,
             my_weather.component_name,
@@ -375,7 +375,7 @@ def setup_function(
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+        heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,

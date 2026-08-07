@@ -39,10 +39,9 @@ def _publish_url(cfg: ServerConfig) -> None:
     host = cfg.bind_host
     if host in ("0.0.0.0", "::"):
         try:  # the IP a compute node can reach, not just a login-node alias
-            probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            probe.connect(("10.255.255.255", 1))
-            host = probe.getsockname()[0]
-            probe.close()
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+                probe.connect(("10.255.255.255", 1))
+                host = probe.getsockname()[0]
         except OSError:
             host = socket.gethostbyname(socket.gethostname())
     target = Path(cfg.url_publish_path)

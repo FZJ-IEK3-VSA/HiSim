@@ -15,6 +15,16 @@ from tests import functions_for_testing as fft
 
 
 def _build_controller(operation_mode: str = "StandbyLoad") -> "controller_l2_xtp_fuel_cell_ems.XTPController":
+    """Build an XTPController backed by a one-day, 60 s-timestep simulation.
+
+    Args:
+        operation_mode: Operating mode forwarded to ``XTPControllerConfig``
+            (e.g. ``"StandbyLoad"``).
+
+    Returns:
+        A configured ``XTPController`` instance with nominal output 10 kW,
+        min output 2 kW, max output 10 kW, and standby load 1 kW.
+    """
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
         2021, seconds_per_timestep
@@ -65,32 +75,15 @@ def test_finite_demand_is_processed() -> None:
 
 
 @pytest.mark.base
-def test_nan_demand_input_raises() -> None:
-    """A NaN demand input must be rejected explicitly, not silently propagated."""
+@pytest.mark.parametrize("raw_value", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_demand_input_raises(raw_value: float) -> None:
+    """A non-finite (NaN/+inf/-inf) demand input must be rejected explicitly.
+
+    Adding a new non-finite sentinel is a one-line change: append it to the
+    parametrize list above.
+    """
     controller = _build_controller()
-    stsv = _set_demand(controller, float("nan"))
-
-    controller.i_restore_state()
-    with pytest.raises(AssertionError, match="Non-finite demand input"):
-        controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
-
-
-@pytest.mark.base
-def test_pos_inf_demand_input_raises() -> None:
-    """A +inf demand input must be rejected (would otherwise yield inf downstream)."""
-    controller = _build_controller()
-    stsv = _set_demand(controller, float("inf"))
-
-    controller.i_restore_state()
-    with pytest.raises(AssertionError, match="Non-finite demand input"):
-        controller.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
-
-
-@pytest.mark.base
-def test_neg_inf_demand_input_raises() -> None:
-    """A -inf demand input must be rejected."""
-    controller = _build_controller()
-    stsv = _set_demand(controller, float("-inf"))
+    stsv = _set_demand(controller, raw_value)
 
     controller.i_restore_state()
     with pytest.raises(AssertionError, match="Non-finite demand input"):

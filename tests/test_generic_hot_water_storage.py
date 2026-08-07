@@ -118,24 +118,24 @@ def test_storage() -> None:
 
     my_storage.i_restore_state()
     my_storage.i_simulate(timestep, stsv, False)
-    # WW-Storage is choosed to be heated up
-    assert 1 == stsv.values[control_signal_choose_storage.global_index]
+    # Verify that i_simulate did not overwrite the input control signal value
+    assert stsv.values[control_signal_choose_storage.global_index] == 1
     # Temperature of Heating-Water Storage sinks
     assert (
-        39.97334630595229
-        == stsv.values[
+        stsv.values[
             my_storage.water_output_temperature_heating_water_channel.global_index
         ]
+        == 39.97334630595229
     )
     # Temperature of Heating-Water Storage raise
     assert (
-        40.02265485276707
-        == stsv.values[
+        stsv.values[
             my_storage.water_output_temperature_warm_water_channel.global_index
         ]
+        == 40.02265485276707
     )
     # Energy Loss of Storage
-    assert 6.26 == stsv.values[my_storage.storage_energy_loss_channel.global_index]
+    assert stsv.values[my_storage.storage_energy_loss_channel.global_index] == 6.26
     # Temperature of choosed storage (warm-Water) to be heated up
     assert (
         stsv.values[my_storage.water_output_temperature_warm_water_channel.global_index]

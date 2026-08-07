@@ -71,10 +71,7 @@ def test_house(
 
     # this part is copied from hisim_main
     # Build Simulator
-    normalized_path = os.path.normpath(PATH)
-    path_in_list = normalized_path.split(os.sep)
-    if len(path_in_list) >= 1:
-        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
+    path_to_be_added = os.path.dirname(os.path.abspath(PATH))
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
@@ -128,7 +125,7 @@ def test_house(
     )
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+        heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
@@ -231,12 +228,12 @@ def test_house(
     co2_footprint_due_to_gas_use_in_kg = jsondata["Gas Meter"]["CO2 footprint of gas consumption from grid"].get("value")
 
     log.information(
-        f"Total {my_gas_meter_config.gas_loadtype.value} consumption [kWh] " + str(gas_consumption_of_boiler_in_kilowatt_hour)
+        f"Total {my_gas_meter_config.gas_loadtype.value} consumption [kWh] {gas_consumption_of_boiler_in_kilowatt_hour}"
     )
 
-    log.information(f"Total {my_gas_meter_config.gas_loadtype.value} consumption measured by gas meter [kWh] " + str(gas_consumption_in_kilowatt_hour))
-    log.information(f"Opex costs for total {my_gas_meter_config.gas_loadtype.value} consumption [€] " + str(opex_costs_for_gas_in_euro))
-    log.information(f"CO2 footprint for total {my_gas_meter_config.gas_loadtype.value} consumption [kg] " + str(co2_footprint_due_to_gas_use_in_kg))
+    log.information(f"Total {my_gas_meter_config.gas_loadtype.value} consumption measured by gas meter [kWh] {gas_consumption_in_kilowatt_hour}")
+    log.information(f"Opex costs for total {my_gas_meter_config.gas_loadtype.value} consumption [€] {opex_costs_for_gas_in_euro}")
+    log.information(f"CO2 footprint for total {my_gas_meter_config.gas_loadtype.value} consumption [kg] {co2_footprint_due_to_gas_use_in_kg}")
 
     # test and compare with relative error of 5%
     np.testing.assert_allclose(

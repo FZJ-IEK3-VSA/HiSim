@@ -130,9 +130,9 @@ def test_heat_pump_hplib_new() -> None:
     heatpump.i_simulate(timestep=timestep, stsv=stsv, force_convergence=force_convergence)
     # Check
     assert p_th_set == stsv.values[heatpump.p_th_sh.global_index]
-    assert 7074.033573088874 == stsv.values[heatpump.p_el_sh.global_index]
-    assert 1.4136206588052005 == stsv.values[heatpump.cop.global_index]
+    assert stsv.values[heatpump.p_el_sh.global_index] == pytest.approx(7074.033573088874)
+    assert stsv.values[heatpump.cop.global_index] == pytest.approx(1.4136206588052005)
     assert t_out == stsv.values[heatpump.t_out_sh.global_index]
-    assert 0.47619047619047616 == stsv.values[heatpump.m_dot_sh.global_index]
+    assert stsv.values[heatpump.m_dot_sh.global_index] == pytest.approx(0.47619047619047616)
     assert 60 == stsv.values[heatpump.time_on_heating.global_index]
     assert 0 == stsv.values[heatpump.time_off.global_index]

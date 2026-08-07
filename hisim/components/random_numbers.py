@@ -20,7 +20,7 @@ class RandomNumbersConfig(ConfigBase):
     """Configuration of the Random Numbers."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return RandomNumbers.get_full_classname()
 
@@ -31,7 +31,7 @@ class RandomNumbersConfig(ConfigBase):
     maximum: float
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(cls) -> "RandomNumbersConfig":
         """Gets a default config."""
         return RandomNumbersConfig(
             building_name="BUI1",
@@ -64,7 +64,7 @@ class RandomNumbers(Component):
         self,
         config: RandomNumbersConfig,
         my_simulation_parameters: SimulationParameters,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: Optional[DisplayConfig] = None,
         rng: Optional[random.Random] = None,
     ) -> None:
         """Initialize the class.
@@ -82,6 +82,8 @@ class RandomNumbers(Component):
                 ``random.Random(0)``) makes ``self.values`` reproducible,
                 which is what tests want.
         """
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()
@@ -101,7 +103,7 @@ class RandomNumbers(Component):
             timesteps=config.timesteps,
             rng=rng,
         )
-        self.output1 = self.add_output(
+        self.random_output = self.add_output(
             self.component_name,
             RandomNumbers.RandomOutput,
             lt.LoadTypes.ANY,
@@ -155,8 +157,8 @@ class RandomNumbers(Component):
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
 
-        val1: float = self.values[timestep]
-        stsv.set_output_value(self.output1, float(val1))
+        random_value: float = self.values[timestep]
+        stsv.set_output_value(self.random_output, float(random_value))
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doublechecks."""

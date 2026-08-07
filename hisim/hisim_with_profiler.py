@@ -1,4 +1,4 @@
-"""For calling a model with profiler and creating a log file."""
+"""Profiling harness that runs a HiSim setup under cProfile and writes sorted statistics to disk."""
 
 # clean
 from __future__ import annotations
@@ -8,16 +8,14 @@ import pstats
 from collections.abc import Callable
 from pathlib import Path
 
-import hisim.hisim_main as hsm
+from hisim import hisim_main
 
 
-def run_simulation() -> None:
-    """Run the HiSim simulation by calling hsm.main()."""
+def run_default_simulation() -> None:
+    """Run the HiSim simulation by calling hisim_main.main()."""
     # change call here as needed
-    # hsm.main("..\\system_setups\\modular_example.py")
-    hsm.main(
-        str(Path("../system_setups/household_heat_pump.py")),
-    )
+    # hisim_main.main("..\\system_setups\\modular_example.py")
+    hisim_main.main("../system_setups/household_heat_pump.py")
 
 
 def profile_and_write_stats(
@@ -33,7 +31,7 @@ def profile_and_write_stats(
     binary ``.prof`` dump that can be visualised with tools such as snakeviz.
 
     Args:
-        simulation_fn: zero-argument callable to profile (e.g. :func:`run_simulation`).
+        simulation_fn: zero-argument callable to profile (e.g. :func:`run_default_simulation`).
         results_path: directory to write the profiling artefacts into.
     """
     profiler = cProfile.Profile()
@@ -41,37 +39,20 @@ def profile_and_write_stats(
     simulation_fn()
     profiler.disable()
 
-    results_path = Path(results_path)
     results_path.mkdir(parents=True, exist_ok=True)
 
-    with open(
-        results_path.joinpath("profilingStatsAsTextSortedCumulative.txt"),
-        "w",
-        encoding="utf-8",
-    ) as f:
-        stats = pstats.Stats(profiler, stream=f).sort_stats("cumulative")
-        stats.print_stats()
-    with open(
-        results_path.joinpath("profilingStatsAsTextSortedcalls.txt"),
-        "w",
-        encoding="utf-8",
-    ) as f:
-        stats = pstats.Stats(profiler, stream=f).sort_stats("ncalls")
-        stats.print_stats()
-    with open(
-        results_path.joinpath("profilingStatsAsTextSortedTotalTime.txt"),
-        "w",
-        encoding="utf-8",
-    ) as f:
-        stats = pstats.Stats(profiler, stream=f).sort_stats("tottime")
-        stats.print_stats()
-    stats.dump_stats(results_path.joinpath("profile-export-data.prof"))
+    sort_specs = [
+        ("profilingStatsAsTextSortedCumulative.txt", "cumulative"),
+        ("profilingStatsAsTextSortedcalls.txt", "ncalls"),
+        ("profilingStatsAsTextSortedTotalTime.txt", "tottime"),
+    ]
+    for filename, sort_key in sort_specs:
+        with open(results_path / filename, "w", encoding="utf-8") as f:
+            pstats.Stats(profiler, stream=f).sort_stats(sort_key).print_stats()
+    pstats.Stats(profiler).dump_stats(results_path / "profile-export-data.prof")
 
 
 if __name__ == "__main__":
-    """Called from the command line.
-    This function calls HiSim main and performs a profiling with cprofile.
-    The results are dumped to various text files in the result directory
-    and the .prof file can be visualized with for example snakeviz.
-    """
-    profile_and_write_stats(run_simulation, Path("../system_setups/results/"))
+    # Called from the command line: runs HiSim main under cProfile and dumps
+    # sorted stats to text files plus a .prof file (visualizable with snakeviz).
+    profile_and_write_stats(run_default_simulation, Path("../system_setups/results/"))

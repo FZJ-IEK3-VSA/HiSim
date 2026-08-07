@@ -134,9 +134,11 @@ class ElectricHeating(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ElectricHeatingConfig,
-        my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
+        my_display_config: Optional[DisplayConfig] = None,
     ) -> None:
         """Construct all the neccessary attributes."""
+        if my_display_config is None:
+            my_display_config = DisplayConfig(display_in_webtool=True)
         self.electric_heating_config = config
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -280,24 +282,19 @@ class ElectricHeating(Component):
         """Get Controller Electric Heating default connections."""
         # use importlib for importing the other component in order to avoid circular-import errors
         component_class = ElectricHeatingController
-        connections = []
         controller_classname = component_class.get_classname()
-        connections.append(
+        return [
             ComponentConnection(
                 ElectricHeating.HeatingMode,
                 controller_classname,
                 component_class.OperatingMode,
-            )
-        )
-        connections.append(
+            ),
             ComponentConnection(
                 ElectricHeating.DeltaTemperatureNeededForDHW,
                 controller_classname,
                 component_class.DeltaTemperatureNeededForDHW,
-            )
-        )
-
-        return connections
+            ),
+        ]
 
     def get_default_connections_from_building(
         self,
@@ -305,23 +302,19 @@ class ElectricHeating(Component):
         """Get building default connections."""
 
         component_class = Building
-        connections = []
         building_classname = component_class.get_classname()
-        connections.append(
+        return [
             ComponentConnection(
                 ElectricHeating.TheoreticalHeatingDemand,
                 building_classname,
                 component_class.TheoreticalHeatingDemand,
-            )
-        )
-        connections.append(
+            ),
             ComponentConnection(
                 ElectricHeating.TheoreticalHeatingEnergyDemand,
                 building_classname,
                 component_class.TheoreticalHeatingEnergyDemand,
-            )
-        )
-        return connections
+            ),
+        ]
 
     def get_default_connections_from_simple_dhw_storage(
         self,
@@ -329,23 +322,19 @@ class ElectricHeating(Component):
         """Get simple dhw storage default connections."""
 
         component_class = SimpleDHWStorage
-        connections = []
         hws_classname = component_class.get_classname()
-        connections.append(
+        return [
             ComponentConnection(
                 ElectricHeating.WaterInputTemperatureDhw,
                 hws_classname,
                 component_class.WaterTemperatureToHeatGenerator,
-            )
-        )
-        connections.append(
+            ),
             ComponentConnection(
                 ElectricHeating.WaterInputMassFlowRateFromWarmWaterStorage,
                 hws_classname,
                 component_class.WaterMassFlowRateOfDHW,
-            )
-        )
-        return connections
+            ),
+        ]
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -817,9 +806,11 @@ class ElectricHeatingController(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ElectricHeatingControllerConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: Optional[DisplayConfig] = None,
     ) -> None:
         """Construct all the neccessary attributes."""
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
         self.electric_heating_controller_config = config
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -879,32 +870,28 @@ class ElectricHeatingController(Component):
     ):
         """Get simple_water_storage default connections."""
 
-        connections = []
         storage_classname = SimpleDHWStorage.get_classname()
-        connections.append(
+        return [
             ComponentConnection(
                 ElectricHeatingController.WaterTemperatureInputFromWarmWaterStorage,
                 storage_classname,
                 SimpleDHWStorage.WaterTemperatureToHeatGenerator,
-            )
-        )
-        return connections
+            ),
+        ]
 
     def get_default_connections_from_weather(
         self,
     ):
-        """Get simple_water_storage default connections."""
+        """Get weather default connections."""
 
-        connections = []
         weather_classname = Weather.get_classname()
-        connections.append(
+        return [
             ComponentConnection(
                 ElectricHeatingController.DailyAverageOutsideTemperature,
                 weather_classname,
                 Weather.DailyAverageOutsideTemperatures,
-            )
-        )
-        return connections
+            ),
+        ]
 
     def build(
         self,
@@ -1036,8 +1023,7 @@ class ElectricHeatingController(Component):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
-        opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
-        return opex_cost_data_class
+        return OpexCostDataClass.get_default_opex_cost_data_class()
 
     @staticmethod
     def get_cost_capex(
@@ -1045,8 +1031,7 @@ class ElectricHeatingController(Component):
         simulation_parameters: SimulationParameters,
     ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
-        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
-        return capex_cost_data_class
+        return CapexCostDataClass.get_default_capex_cost_data_class()
 
     def get_component_kpi_entries(
         self,

@@ -36,9 +36,9 @@ HANDLED_KPI_TO_FIELD: list[tuple[KPIForRatingInOptimization, str]] = [
      "annualized_investment_costs_in_euro_per_m2"),
     (KPIForRatingInOptimization.ANNUALIZED_NET_INVESTMENT_COSTS,
      "annualized_net_investment_costs_in_euro_per_m2"),
-    (KPIForRatingInOptimization.ANNUALIZED_TOTAL_CO2_EMISSION,
+    (KPIForRatingInOptimization.ANNUALIZED_TOTAL_CO2_EMISSIONS,
      "annualized_total_co2_emissions_in_kg_per_m2"),
-    (KPIForRatingInOptimization.ANNUALIZED_ENERGY_CO2_EMISSION,
+    (KPIForRatingInOptimization.ANNUALIZED_ENERGY_CO2_EMISSIONS,
      "annualized_energy_co2_emissions_in_kg_per_m2"),
     (KPIForRatingInOptimization.ANNUALIZED_PURCHASED_ENERGY_CONSUMPTION,
      "annualized_purchased_energy_consumption_in_kwh_per_m2"),
@@ -50,8 +50,8 @@ UNHANDLED_KPIS: list[KPIForRatingInOptimization] = [
     KPIForRatingInOptimization.ANNUALIZED_ELECTRICITY_FROM_GRID,
     KPIForRatingInOptimization.MIN_BUILDING_INDOOR_TEMP,
     KPIForRatingInOptimization.MAX_BUILDING_INDOOR_TEMP,
-    KPIForRatingInOptimization.DEV_FROM_MIN_BUILDING_INDOOR_TEMP,
-    KPIForRatingInOptimization.DEV_FROM_MAX_BUILDING_INDOOR_TEMP,
+    KPIForRatingInOptimization.DEVIATION_FROM_MIN_BUILDING_INDOOR_TEMP,
+    KPIForRatingInOptimization.DEVIATION_FROM_MAX_BUILDING_INDOOR_TEMP,
 ]
 
 
@@ -152,8 +152,8 @@ def test_enum_member_values_are_pinned() -> None:
         KPIForRatingInOptimization.ANNUALIZED_MAINTENANCE_COSTS: "Annualized Maintenance Costs [€/m2]",
         KPIForRatingInOptimization.ANNUALIZED_INVESTMENT_COSTS: "Annualized Investment Costs [€/m2]",
         KPIForRatingInOptimization.ANNUALIZED_NET_INVESTMENT_COSTS: "Annualized Net Investment Costs [€/m2]",
-        KPIForRatingInOptimization.ANNUALIZED_TOTAL_CO2_EMISSION: "Annualized Total CO2 Emissions [kg/m2]",
-        KPIForRatingInOptimization.ANNUALIZED_ENERGY_CO2_EMISSION: "Annualized Energy CO2 Emissions [kg/m2]",
+        KPIForRatingInOptimization.ANNUALIZED_TOTAL_CO2_EMISSIONS: "Annualized Total CO2 Emissions [kg/m2]",
+        KPIForRatingInOptimization.ANNUALIZED_ENERGY_CO2_EMISSIONS: "Annualized Energy CO2 Emissions [kg/m2]",
         KPIForRatingInOptimization.SELFSUFFICIENCY_ELECTRICITY: "Self-Sufficiency Rate For Electricity [%]",
         KPIForRatingInOptimization.SELFSUFFICIENCY_ALL_ENERGY: "Self-Sufficiency Rate All Energy [%]",
         KPIForRatingInOptimization.ANNUALIZED_PURCHASED_ENERGY_CONSUMPTION: "Annualized Energy Consumption [kWh/m2]",
@@ -161,8 +161,8 @@ def test_enum_member_values_are_pinned() -> None:
         KPIForRatingInOptimization.ANNUALIZED_ELECTRICITY_FROM_GRID: "Annualized Electricity From Grid [kWh/m2]",
         KPIForRatingInOptimization.MIN_BUILDING_INDOOR_TEMP: "Minimum Indoor Temperature [°C]",
         KPIForRatingInOptimization.MAX_BUILDING_INDOOR_TEMP: "Maximum Indoor Temperature [°C]",
-        KPIForRatingInOptimization.DEV_FROM_MIN_BUILDING_INDOOR_TEMP: "Deviation From Minimum Indoor Temperature [°C*h]",
-        KPIForRatingInOptimization.DEV_FROM_MAX_BUILDING_INDOOR_TEMP: "Deviation From Maximum Indoor Temperature [°C*h]",
+        KPIForRatingInOptimization.DEVIATION_FROM_MIN_BUILDING_INDOOR_TEMP: "Deviation From Minimum Indoor Temperature [°C*h]",
+        KPIForRatingInOptimization.DEVIATION_FROM_MAX_BUILDING_INDOOR_TEMP: "Deviation From Maximum Indoor Temperature [°C*h]",
     }
     for member, value in expected_values.items():
         assert member.value == value

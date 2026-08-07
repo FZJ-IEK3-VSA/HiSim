@@ -66,7 +66,7 @@ class HarnessClient:
         tries = 0
         while True:
             tries += 1
-            url = self.base_url() + API + path  # re-resolved each try (the server may have moved)
+            url = f"{self.base_url()}{API}{path}"  # re-resolved each try (the server may have moved)
             last_error = ""
             try:
                 response = self._client.post(url, json=body, headers=self._headers())
@@ -189,3 +189,9 @@ class HarnessClient:
     def close(self) -> None:
         """Close the underlying HTTP connection pool."""
         self._client.close()
+
+    def __enter__(self) -> "HarnessClient":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.close()

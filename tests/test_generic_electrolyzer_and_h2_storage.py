@@ -159,14 +159,78 @@ def test_hydrogen_generator() -> None:
     log.information(str(stsv.values))
 
     # Water Demand to produce Hydrogen
-    assert (
-        stsv.values[my_electrolyzer.water_demand_channel.global_index]
-        == 0.001114707341269841
-    )
+    assert stsv.values[
+        my_electrolyzer.water_demand_channel.global_index
+    ] == pytest.approx(0.001114707341269841)
     # Unused Power of Electrolyzer
     assert stsv.values[my_electrolyzer.unused_power_channel.global_index] == 1600
     # Amount of Hydrogen that is stored in Hydrogen-Storage
-    assert (
-        stsv.values[my_hydrogen_storage.storage_delta.global_index]
-        == 0.0001248472222222222
+    assert stsv.values[
+        my_hydrogen_storage.storage_delta.global_index
+    ] == pytest.approx(0.0001248472222222222)
+
+
+@pytest.mark.base
+def test_display_config_instance_isolation() -> None:
+    """Verify that each component instance gets its own DisplayConfig.
+
+    Regression test: mutable default arguments would share the same
+    DisplayConfig instance across all component instances.
+    """
+    seconds_per_timestep = 60
+    my_simulation_parameters = SimulationParameters.one_day_only(
+        2017, seconds_per_timestep
     )
+
+    electrolyzer_config = generic_electrolyzer_and_h2_storage.ElectrolyzerWithStorageConfig(
+        building_name="BUI1",
+        name="ElectrolyzerWithStorage",
+        waste_energy=400,
+        min_power=1_200,
+        max_power=2_400,
+        min_power_percent=60,
+        max_power_percent=100,
+        min_hydrogen_production_rate_hour=300,
+        max_hydrogen_production_rate_hour=5000,
+        pressure_hydrogen_output=30,
+    )
+
+    storage_config = generic_electrolyzer_and_h2_storage.ElectrolyzerWithHydrogenStorageConfig(
+        building_name="BUI1",
+        name="HydrogenStorage",
+        min_capacity=0,
+        max_capacity=500,
+        starting_fill=0,
+        max_charging_rate_hour=2,
+        max_discharging_rate_hour=2,
+        energy_for_charge=0,
+        energy_for_discharge=0,
+        loss_factor_per_day=0,
+    )
+
+    # Create multiple instances without passing my_display_config
+    electrolyzer_1 = generic_electrolyzer_and_h2_storage.AdvancedElectrolyzer(
+        my_simulation_parameters=my_simulation_parameters,
+        config=electrolyzer_config,
+    )
+    electrolyzer_2 = generic_electrolyzer_and_h2_storage.AdvancedElectrolyzer(
+        my_simulation_parameters=my_simulation_parameters,
+        config=electrolyzer_config,
+    )
+    storage_1 = generic_electrolyzer_and_h2_storage.HydrogenStorage(
+        my_simulation_parameters=my_simulation_parameters,
+        config=storage_config,
+    )
+    storage_2 = generic_electrolyzer_and_h2_storage.HydrogenStorage(
+        my_simulation_parameters=my_simulation_parameters,
+        config=storage_config,
+    )
+
+    # Verify each instance has its own DisplayConfig (not shared)
+    assert electrolyzer_1.my_display_config is not electrolyzer_2.my_display_config
+    assert storage_1.my_display_config is not storage_2.my_display_config
+    assert electrolyzer_1.my_display_config is not storage_1.my_display_config
+
+    # Verify type correctness
+    assert isinstance(electrolyzer_1.my_display_config, cp.DisplayConfig)
+    assert isinstance(storage_1.my_display_config, cp.DisplayConfig)

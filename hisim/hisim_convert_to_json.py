@@ -18,10 +18,22 @@ from hisim.json_generator import write_standalone_scenario_json, write_standalon
 load_dotenv()
 
 
-def get_description_from_py(path_obj: Path) -> str:
-    """Extract brief description from the first line of the system setup python file."""
+def get_description_from_py(setup_py_path: Path) -> str:
+    """Extract a brief description from the first line of a system setup file.
 
-    with open(path_obj, 'r', encoding="utf-8") as f:
+    Reads only the first line of the given Python file, strips a leading
+    triple-quote delimiter (triple double quotes or triple single quotes) if present, and returns
+    the remaining text. For an empty file an empty string is returned.
+
+    Args:
+        setup_py_path: Path to the Python setup file to read.
+
+    Returns:
+        The first line of the file with any surrounding triple quotes removed
+        and surrounding whitespace stripped; an empty string for an empty file.
+    """
+
+    with open(setup_py_path, 'r', encoding="utf-8") as f:
         first_line = f.readline().strip()
 
     desc = first_line
@@ -65,30 +77,30 @@ def main(
     log.information("#################################")
     log.information(f"Starting simulation of {path_to_module}")
     starttime = datetime.now()
-    starting_date_time_str = starttime.strftime("%d-%b-%Y %H:%M:%S")
-    log.information(f"Start @ {starting_date_time_str}")
-    log.profile(f"{path_to_module} {function_in_module} Start @ {starting_date_time_str}")
+    start_timestamp_str = starttime.strftime("%d-%b-%Y %H:%M:%S")
+    log.information(f"Start @ {start_timestamp_str}")
+    log.profile(f"{path_to_module} {function_in_module} Start @ {start_timestamp_str}")
     log.information("#################################")
 
     # Normalize module path and resolve absolute path
-    path_obj = Path(path_to_module).with_suffix(".py").resolve()
+    setup_py_path = Path(path_to_module).with_suffix(".py").resolve()
 
     # Get module name (filename without suffix)
-    module_filename = path_obj.stem
+    module_filename = setup_py_path.stem
 
     # Add parent directory to PYTHONPATH
-    module_dir = path_obj.parent
+    module_dir = setup_py_path.parent
     output_dir = Path(output_directory).resolve() if output_directory is not None else module_dir
     output_dir.mkdir(parents=True, exist_ok=True)
-    for parent in path_obj.parents:
+    for parent in setup_py_path.parents:
         if parent.exists():
             sys.path.append(str(parent))
         else:
             raise ValueError(f"Directory of module does not exist: {module_dir}")
 
     # Final check and import
-    if not path_obj.is_file():
-        raise ValueError(f"Python script {module_filename}.py could not be found at {path_obj}")
+    if not setup_py_path.is_file():
+        raise ValueError(f"Python script {module_filename}.py could not be found at {setup_py_path}")
 
     # Make setup function executable
     targetmodule = importlib.import_module(module_filename)
@@ -103,9 +115,9 @@ def main(
     )
 
     # Build method
-    model_init_method = getattr(targetmodule, function_in_module)
-    # Pass setup function to simulator
-    model_init_method(my_sim, my_simulation_parameters)
+    setup_function_ref = getattr(targetmodule, function_in_module)
+    # Call the setup function, passing the simulator as an argument
+    setup_function_ref(my_sim, my_simulation_parameters)
     # Write the simulation parameters now, then alter them to include advanced logging
     write_standalone_simulation_json(my_sim, path=str(output_dir / f"{module_filename}.simulation.json"))
 
@@ -113,37 +125,37 @@ def main(
     my_simulation_parameters.log_connections = True
 
     # Other name due to mypy no-redef
-    my_sim2: sim.Simulator = sim.Simulator(
+    sim_with_logging: sim.Simulator = sim.Simulator(
         module_directory=str(module_dir),
         module_filename=module_filename,
         setup_function=function_in_module,
         my_simulation_parameters=my_simulation_parameters,
         my_module_config=my_module_config,
     )
-    model_init_method(my_sim2, my_simulation_parameters)
+    setup_function_ref(sim_with_logging, my_simulation_parameters)
 
-    if my_sim2.my_module_config is not None:
-        log.warning(f"Module config is not None but not exported to JSON: {my_sim2.my_module_config}")
+    if sim_with_logging.my_module_config is not None:
+        log.warning(f"Module config is not None but not exported to JSON: {sim_with_logging.my_module_config}")
 
     # Do not run the simulation
-    my_sim2.prepare_calculation()
-    my_sim2.connect_all_components()
+    sim_with_logging.prepare_calculation()
+    sim_with_logging.connect_all_components()
 
-    desc = get_description_from_py(path_obj)
+    desc = get_description_from_py(setup_py_path)
 
     write_standalone_scenario_json(
         module_filename=module_filename,
-        my_sim=my_sim2,
+        my_sim=sim_with_logging,
         desc=desc,
         path=str(output_dir / f"{module_filename}.scenario.json"),
     )
 
     log.information("#################################")
     endtime = datetime.now()
-    starting_date_time_str = endtime.strftime("%d-%b-%Y %H:%M:%S")
-    log.information("finished @ " + starting_date_time_str)
-    log.profile("finished @ " + starting_date_time_str)
-    log.profile("duration: " + str((endtime - starttime).total_seconds()))
+    end_timestamp_str = endtime.strftime("%d-%b-%Y %H:%M:%S")
+    log.information(f"finished @ {end_timestamp_str}")
+    log.profile(f"finished @ {end_timestamp_str}")
+    log.profile(f"duration: {(endtime - starttime).total_seconds()}")
     log.information("#################################")
     log.information("")
 
@@ -155,10 +167,29 @@ def write_json_for_initialized_simulator(
     my_sim: sim.Simulator,
     output_directory: Optional[str] = None,
 ) -> Tuple[Path, Path]:
-    """Write JSON files for an already initialized simulator and return their paths."""
-    path_obj = Path(path_to_module).with_suffix(".py").resolve()
-    module_filename = path_obj.stem
-    output_dir = Path(output_directory).resolve() if output_directory is not None else path_obj.parent
+    """Write JSON configuration files for an already-initialized simulator.
+
+    Writes ``<module>.simulation.json`` and ``<module>.scenario.json`` for the
+    given simulator, using the description extracted from the first line of the
+    setup file. The simulator's ``log_connections`` flag is temporarily
+    disabled while writing the simulation JSON and restored afterwards.
+
+    Args:
+        path_to_module: Path or module name of the Python setup file (without
+            the ``.py`` extension); used to derive the module name and to read
+            the description.
+        my_sim: An initialized ``Simulator`` whose components are connected in
+            order to serialize the scenario.
+        output_directory: Optional directory for the output JSON files.
+            Defaults to the directory containing the setup file.
+
+    Returns:
+        A ``(scenario_path, simulation_parameters_path)`` tuple giving the
+        paths of the written scenario and simulation JSON files, in that order.
+    """
+    setup_py_path = Path(path_to_module).with_suffix(".py").resolve()
+    module_filename = setup_py_path.stem
+    output_dir = Path(output_directory).resolve() if output_directory is not None else setup_py_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
 
     simulation_parameters_path = output_dir / f"{module_filename}.simulation.json"
@@ -178,7 +209,7 @@ def write_json_for_initialized_simulator(
     my_sim.prepare_calculation()
     my_sim.connect_all_components()
 
-    desc = get_description_from_py(path_obj)
+    desc = get_description_from_py(setup_py_path)
     write_standalone_scenario_json(
         module_filename=module_filename,
         my_sim=my_sim,
@@ -195,11 +226,11 @@ if __name__ == "__main__":
     FILE_NAME = sys.argv[1]
     FUNCTION_NAME = "setup_function"
     if len(sys.argv) == 2:
-        log.information("calling " + FUNCTION_NAME + " from " + FILE_NAME)
+        log.information(f"calling {FUNCTION_NAME} from {FILE_NAME}")
         main(path_to_module=FILE_NAME)
     if len(sys.argv) == 3:
         MODULE_CONFIG = sys.argv[2]
-        log.information("calling " + FUNCTION_NAME + " from " + FILE_NAME + " with module config " + MODULE_CONFIG)
+        log.information(f"calling {FUNCTION_NAME} from {FILE_NAME} with module config {MODULE_CONFIG}")
         main(
             path_to_module=FILE_NAME,
             my_module_config=MODULE_CONFIG,

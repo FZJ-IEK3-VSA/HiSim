@@ -31,7 +31,7 @@ def test_example_component() -> None:
         example_component.ExampleComponentConfig.get_default_example_component()
     )
     log.information(
-        "default example component config " + str(my_example_component_config) + "\n"
+        f"default example component config {my_example_component_config}\n"
     )
     my_example_component = example_component.ExampleComponent(
         config=my_example_component_config, my_simulation_parameters=mysim
@@ -69,11 +69,11 @@ def test_example_component() -> None:
     )
     log.information("Build variables with non_default values: ")
     log.information(
-        "electricity output = " + str(my_example_component.electricity_output)
+        f"electricity output = {my_example_component.electricity_output}"
     )
-    log.information("storage capacity = " + str(my_example_component.capacity))
+    log.information(f"storage capacity = {my_example_component.capacity}")
     log.information(
-        "initial temperature = " + str(my_example_component.initial_temperature) + "\n"
+        f"initial temperature = {my_example_component.initial_temperature}\n"
     )
     assert my_example_component_config.capacity == my_example_component.capacity
     assert (
@@ -83,27 +83,23 @@ def test_example_component() -> None:
 
     # Test Simulation
     timestep = 10 * 60
-    log.information("timestep = " + str(timestep))
+    log.information(f"timestep = {timestep}")
     log.information(
-        "thermal energy delivered output [W]= "
-        + str(stsv.values[thermal_energy_delivered_output.global_index])
-        + "\n"
+        f"thermal energy delivered output [W]= {stsv.values[thermal_energy_delivered_output.global_index]}\n"
     )
 
     my_example_component.i_simulate(timestep, stsv, False)
     log.information("Output values after simulation: ")
     log.information(
-        "t_mC = " + str(stsv.values[my_example_component.t_m_c.global_index])
+        f"t_mC = {stsv.values[my_example_component.t_m_c.global_index]}"
     )
     log.information(
-        "electricity outputC = "
-        + str(stsv.values[my_example_component.electricity_output_c.global_index])
+        f"electricity outputC = {stsv.values[my_example_component.electricity_output_c.global_index]}"
     )
     log.information(
-        "stored energyC = "
-        + str(stsv.values[my_example_component.stored_energy_c.global_index])
+        f"stored energyC = {stsv.values[my_example_component.stored_energy_c.global_index]}"
     )
-    log.information("output values = " + str(stsv.values))
+    log.information(f"output values = {stsv.values}")
 
     assert 50 == stsv.values[thermal_energy_delivered_output.global_index]
     assert 25 == stsv.values[my_example_component.t_m_c.global_index]
@@ -112,3 +108,29 @@ def test_example_component() -> None:
         1626110.0999999999
         == stsv.values[my_example_component.stored_energy_c.global_index]
     )
+
+
+@pytest.mark.base
+def test_display_config_isolation() -> None:
+    """Verify that omitting my_display_config creates independent instances.
+
+    Regression test for mutable default argument: each call to __init__
+    without an explicit my_display_config must receive its own
+    DisplayConfig instance, not a shared one.
+    """
+    mysim: SimulationParameters = SimulationParameters.full_year(
+        year=2021, seconds_per_timestep=60
+    )
+    config = example_component.ExampleComponentConfig.get_default_example_component()
+
+    comp_a = example_component.ExampleComponent(
+        my_simulation_parameters=mysim, config=config
+    )
+    comp_b = example_component.ExampleComponent(
+        my_simulation_parameters=mysim, config=config
+    )
+
+    # Verify that my_display_config instances are distinct
+    assert (
+        comp_a.my_display_config is not comp_b.my_display_config
+    ), "my_display_config must not be shared across instances"

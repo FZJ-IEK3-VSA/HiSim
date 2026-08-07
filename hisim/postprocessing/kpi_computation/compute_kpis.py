@@ -23,7 +23,17 @@ class KpiGenerator(JSONWizard, KpiPreparation):
     building_objects_in_district_list: list
 
     def __post_init__(self):
-        """Build the dataclass from input data."""
+        """Build the dataclass from input data.
+
+        Orchestrates the KPI computation for every entry in
+        ``building_objects_in_district_list``. For each building the per-building
+        KPI collection is built with ``create_kpi_collection``; for each district
+        (entries whose name contains a ``DistrictNames`` token) the aggregated
+        district KPIs are built with ``create_overall_district_kpi``. The
+        unsorted KPI collection is then grouped by KPI tag
+        (``sort_kpi_collection_according_to_kpi_tags``) and formatted into the
+        report table (``return_table_for_report``).
+        """
         super().__init__(
             post_processing_data_transfer=self.post_processing_data_transfer,
             building_objects_in_district_list=self.building_objects_in_district_list,
@@ -43,7 +53,41 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         self.return_table_for_report()
 
     def create_kpi_collection(self, building_objects_in_district):
-        """Create kpi collection and write back into post processing data transfer."""
+        """Create kpi collection and write back into post processing data transfer.
+
+        Computes the electricity KPIs for a single ``building_objects_in_district``
+        from the simulation results and stores them in
+        ``kpi_collection_dict_unsorted``. Result time series are filtered by their
+        postprocessing flags and clipped to non-negative values before being
+        summed into energy quantities.
+
+        All energy KPIs share the conversion ``E_kWh = sum(P_W) *
+        seconds_per_timestep / 3.6e6``, where ``P_W`` is the aggregated power in
+        W and the factor ``3.6e6`` converts W*s to kWh; uniform sampling at
+        ``simulation_parameters.seconds_per_timestep`` is assumed. Computed
+        quantities and their units:
+
+        - Total electricity consumption, total production, PV, wind turbine and
+          building production in ``kWh``; battery losses are added to the total
+          consumption.
+        - Ratio of each production share to total consumption in ``%``,
+          as ``ratio = production_kWh / consumption_kWh * 100``.
+        - Self-consumption (``min(production, consumption)`` per time step), grid
+          injection, self-consumption rate
+          (``100 * self_consumption_kWh / production_kWh``) and self-sufficiency
+          rate (``100 * self_consumption_kWh / consumption_kWh``) in ``%``.
+        - Electricity taken from and fed to the grid from the electricity meter
+          in ``kWh`` and the relative electricity demand from the grid
+          (``100 * from_grid_kWh / consumption_kWh``) in ``%``.
+        - Self-consumption rate
+          (``100 * (production_kWh - to_grid_kWh) / production_kWh``) and
+          self-sufficiency rate (``100 - relative_demand_from_grid``) following
+          Weniger et al. (2017), HTW Berlin, in ``%``.
+        - CAPEX and OPEX costs read from the results.
+
+        KPIs are tagged ``KpiTagEnumClass.GENERAL`` for buildings and
+        ``KpiTagEnumClass.ELECTRICITY_GRID`` for districts.
+        """
         # get filtered result dataframe
         self.filtered_result_dataframe = self.filter_results_according_to_postprocessing_flags(
             all_outputs=self.all_outputs,
@@ -172,7 +216,29 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         self.read_opex_and_capex_costs_from_results(building_object=building_objects_in_district)
 
     def create_overall_district_kpi(self, district_name):
-        """Creation of overall district kpis."""
+        """Creation of overall district kpis.
+
+        Aggregates the per-building KPIs of a district (``district_name``) into
+        district-wide KPIs and stores them in ``kpi_collection_dict_unsorted``.
+        The aggregated production, consumption and self-consumption are obtained
+        in ``kWh`` (``create_overall_district_kpi_collection``), together with the
+        district cost, emission and contracting collections. From these the
+        following district KPIs are derived:
+
+        - Ratio between total production and total consumption in ``%``,
+          as ``ratio = production_kWh / consumption_kWh * 100``.
+        - Electricity taken from and fed to the grid from the electricity meter
+          in ``kWh`` and the relative electricity demand from the grid
+          (``100 * from_grid_kWh / consumption_kWh``) in ``%``.
+        - Overall self-sufficiency rate of electricity in ``%`` as
+          ``100 * self_consumption_kWh / consumption_kWh``.
+        - Self-consumption rate
+          (``100 * (production_kWh - to_grid_kWh) / production_kWh``) and
+          self-sufficiency rate (``100 - relative_demand_from_grid``) following
+          Weniger et al. (2017), HTW Berlin, in ``%``.
+
+        All district KPIs are tagged ``KpiTagEnumClass.GENERAL``.
+        """
 
         (
             overall_production_district_in_kilowatt_hour,
@@ -231,7 +297,15 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         )
 
     def return_table_for_report(self):
-        """Return a table with all kpis for the report."""
+        """Return a table with all kpis for the report.
+
+        Builds a list of rows from the tag-sorted KPI collection
+        (``kpi_collection_dict_sorted``). Each row has the columns
+        ``["Object", "KPI", "Value", "Unit"]``; numeric KPI values are rounded
+        to two decimal places and every cell is wrapped at 80 characters so the
+        table fits the report layout. The table is returned but not persisted on
+        the instance.
+        """
         table: List = []
         table.append(["Object", "KPI", "Value", "Unit"])
         for building_object in self.building_objects_in_district_list:
@@ -260,7 +334,14 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         return wrapped_table_data
 
     def sort_kpi_collection_according_to_kpi_tags(self, kpi_collection_dict_unsorted: Dict) -> Dict:
-        """Sort KPI collection dict according to KPI tags."""
+        """Sort KPI collection dict according to KPI tags.
+
+        Reorganises ``kpi_collection_dict_unsorted`` so that, for every building
+        object, each KPI entry is grouped under its ``KpiTagEnumClass`` tag. The
+        returned mapping has the shape
+        ``{building_object: {KpiTagEnumClass: {kpi_name: kpi_entry}}}`` and
+        preserves the building-object order of ``building_objects_in_district_list``.
+        """
 
         kpi_collection_dict_sorted: Dict[str, Dict] = {
             building_objects: {} for building_objects in self.building_objects_in_district_list

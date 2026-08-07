@@ -88,9 +88,9 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
     for out in component.outputs:
         if isinstance(component, DynamicComponent):
             output_matches = [
-                dyn_out
-                for dyn_out in component.my_component_outputs
-                if dyn_out.source_output_field_name == out.field_name
+                dynamic_output
+                for dynamic_output in component.my_component_outputs
+                if dynamic_output.source_output_field_name == out.field_name
             ]
             if len(output_matches) > 1:
                 raise ValueError(
@@ -107,7 +107,7 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
                         continue
 
                 # add_component_output has been used
-                dyn_out = output_matches[0]
+                dynamic_output = output_matches[0]
                 # Extract source_output_name from the field_name
                 match = re.match(r"^(.*?)(Output\d+)$", out.field_name)
                 if not match:
@@ -116,12 +116,12 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
                 outs.append({
                     "dynamic": True,
                     "source_output_name": source_object_name,
-                    "source_tags": dyn_out.source_tags,
-                    "source_load_type": dyn_out.source_load_type.value,
-                    "source_unit": dyn_out.source_unit.value,
-                    "source_weight": dyn_out.source_weight,
+                    "source_tags": dynamic_output.source_tags,
+                    "source_load_type": dynamic_output.source_load_type.value,
+                    "source_unit": dynamic_output.source_unit.value,
+                    "source_weight": dynamic_output.source_weight,
                     "output_description": out.output_description,
-                    "source_component_class": dyn_out.source_component_class if dyn_out.source_component_class is not None else None,
+                    "source_component_class": dynamic_output.source_component_class if dynamic_output.source_component_class is not None else None,
                 })
                 continue
 
@@ -131,9 +131,9 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
     for inp in component.inputs:
         if isinstance(component, DynamicComponent):
             input_matches = [
-                dyn_inp
-                for dyn_inp in component.my_component_inputs
-                if dyn_inp.source_component_class == inp.field_name
+                dynamic_input
+                for dynamic_input in component.my_component_inputs
+                if dynamic_input.source_component_class == inp.field_name
             ]
             if len(input_matches) > 1:
                 raise ValueError(
@@ -141,8 +141,8 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
                 )
             if len(input_matches) == 1:
                 # add_component_input(s)_and_connect has been used
-                dyn_inp = input_matches[0]
-                source_component_field_name = dyn_inp.source_component_field_name
+                dynamic_input = input_matches[0]
+                source_component_field_name = dynamic_input.source_component_field_name
 
                 # Extract source_object_name
                 pattern = rf"^Input_(.*?)_{re.escape(source_component_field_name)}_\d+$"
@@ -157,8 +157,8 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
                     "source_object_name": source_object_name,
                     "source_load_type": inp.loadtype.value,
                     "source_unit": inp.unit.value,
-                    "source_tags": dyn_inp.source_tags,
-                    "source_weight": dyn_inp.source_weight,
+                    "source_tags": dynamic_input.source_tags,
+                    "source_weight": dynamic_input.source_weight,
                 })
                 continue
 
@@ -220,11 +220,11 @@ def add_component_to_scenario(scenario: Scenario, config: ConfigBase, component:
         for idx, comp in enumerate(scenario.components):
             if comp.component_full_classname == "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector":
                 car_info = cast(Car, component).car_information_dict
-                my_comp = cast(UtspLpgConnector, my_sim.wrapped_components[idx].my_component)  # For mypy, we know that this is an UtspLpgConnector
-                new_gci = GenericCarInformation(my_occupancy_instance=my_comp).data_dict_for_car_component[car_info["household_name"]]
+                lpg_connector = cast(UtspLpgConnector, my_sim.wrapped_components[idx].my_component)  # For mypy, we know that this is an UtspLpgConnector
+                new_car_info = GenericCarInformation(my_occupancy_instance=lpg_connector).data_dict_for_car_component[car_info["household_name"]]
 
-                if new_gci["time_resolution"] == car_info["time_resolution"] and \
-                new_gci["car_location"] == car_info["car_location"] and new_gci["driven_meters"] == car_info["driven_meters"]:
+                if new_car_info["time_resolution"] == car_info["time_resolution"] and \
+                new_car_info["car_location"] == car_info["car_location"] and new_car_info["driven_meters"] == car_info["driven_meters"]:
                     # Cannot include car inside LPG connector, then not found for connections/inputs/outputs etc.
                     comp.configuration["cars"] = (comp.configuration.get("cars") or []) + [component_entry.configuration["name"]]
                     log.information(f"Added car information to LPG connector config for car {component.component_name}")
@@ -345,29 +345,29 @@ def delete_connections(target_component, source_component, unique_connections) -
             source_component=source_component
         )
         for dynamic_connection in dynamic_connections:
-            for c in unique_connections:
+            for connection in unique_connections:
                 if (
-                    c.source.component_name == source_component.component_name and
-                    c.source.field_name == dynamic_connection.source_component_field_name and
-                    c.target.component_name == target_component.component_name and
-                    c.target.field_name == dynamic_connection.source_component_field_name
+                    connection.source.component_name == source_component.component_name and
+                    connection.source.field_name == dynamic_connection.source_component_field_name and
+                    connection.target.component_name == target_component.component_name and
+                    connection.target.field_name == dynamic_connection.source_component_field_name
                 ):
-                    unique_connections.remove(c)
+                    unique_connections.remove(connection)
                     removed += 1
 
     elif isinstance(target_component, cp.Component):
         connections = target_component.get_default_connections(
             source_component=source_component
         )
-        for connection in connections:
-            for c in unique_connections:
+        for default_connection in connections:
+            for connection in unique_connections:
                 if (
-                    c.source.component_name == source_component.component_name and
-                    c.source.field_name == connection.source_output_name and
-                    c.target.component_name == target_component.component_name and
-                    c.target.field_name == connection.target_input_name
+                    connection.source.component_name == source_component.component_name and
+                    connection.source.field_name == default_connection.source_output_name and
+                    connection.target.component_name == target_component.component_name and
+                    connection.target.field_name == default_connection.target_input_name
                 ):
-                    unique_connections.remove(c)
+                    unique_connections.remove(connection)
                     removed += 1
 
     else:
@@ -385,35 +385,40 @@ def remove_automatic_connections(my_sim: "Simulator", scenario: Scenario, unique
     source_component_list = [wp.my_component for wp in my_sim.wrapped_components]
     removed = 0
     for target_component in source_component_list:
-        tg_comps = [
+        target_scenario_components = [
             c for c in scenario.components if (c.configuration.get("name") == target_component.component_name or
             f'{c.configuration.get("building_name")}_{c.configuration.get("name")}' == target_component.component_name)  # Needed for district configuration
         ]
         # This special case is not needed: "District" is simply the building_name
-        # if len(tg_comps) == 0 and target_component.component_name == "District_Weather":
+        # if len(target_scenario_components) == 0 and target_component.component_name == "District_Weather":
         #     # Special case for district weather
-        #     tg_comps = [
+        #     target_scenario_components = [
         #         c for c in scenario.components if c.configuration.get("name") == "Weather"
         #     ]
-        if len(tg_comps) != 1:
+        if len(target_scenario_components) != 1:
             raise ValueError(f"Expected to find exactly one component in scenario for component name {target_component.component_name}, "
-                             f"but found {len(tg_comps)}. Available configs: {[c.configuration for c in scenario.components]}")
-        tg_comp = tg_comps[0]
+                             f"but found {len(target_scenario_components)}. Available configs: {[c.configuration for c in scenario.components]}")
+        target_scenario_component = target_scenario_components[0]
 
         target_default_connection_dict = get_default_connection_dict(target_component)
 
         # check if target component has any default connections
         if bool(target_default_connection_dict) is True:
             # Check whether the target component is connected automatically (i.e., all default connections' keys are present in the seen_keys)
-            tg_comp.connect_automatically = compare_automatic_connections(target_default_connection_dict, source_component_list, target_component, seen_keys)
+            target_scenario_component.connect_automatically = compare_automatic_connections(
+                target_default_connection_dict,
+                source_component_list,
+                target_component,
+                seen_keys,
+            )
         else:
             # There are no default connections
             log.debug(f"Component {target_component.get_classname()} was not automatically connected: no default connections present")
-            tg_comp.connect_automatically = False
+            target_scenario_component.connect_automatically = False
 
-        if tg_comp.connect_automatically:
+        if target_scenario_component.connect_automatically:
             # Remove the connections that will be done automatically
-            # target_default_connection_dict is still correct for tg_comp
+            # target_default_connection_dict is still correct for target_scenario_component
             for source_component in source_component_list:
                 source_component_classname = source_component.get_classname()
 
@@ -440,15 +445,15 @@ def write_standalone_scenario_json(module_filename: str, my_sim: "Simulator", de
     for component in my_sim.wrapped_components:
         add_component_to_scenario(scenario=scenario, config=component.my_component.config, component=component.my_component, my_sim=my_sim)
 
-        for con in component.my_component.log_connections:
+        for connection in component.my_component.log_connections:
             component_connections += [Connection(
                 source=Endpoint(
-                    component_name=con["src_object_name"],
-                    field_name=con["src_field_name"],
+                    component_name=connection["src_object_name"],
+                    field_name=connection["src_field_name"],
                 ),
                 target=Endpoint(
                     component_name=component.my_component.component_name,
-                    field_name=con["input_fieldname"],
+                    field_name=connection["input_fieldname"],
                 ),
             )]
 

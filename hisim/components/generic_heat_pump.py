@@ -1,9 +1,9 @@
 """Generic Heat Pump module.
 
 This module contains the following classes:
-    1. GenericHeatPump State
+    1. GenericHeatPumpState
     2. GenericHeatPump
-    3. HeatPumpController
+    3. GenericHeatPumpController
 
 """
 
@@ -75,7 +75,7 @@ class GenericHeatPumpConfig(cp.ConfigBase):
 @dataclass_json
 @dataclass
 class GenericHeatPumpControllerConfig(cp.ConfigBase):
-    """Controller for the generic heat pump."""
+    """Configuration for the generic heat pump controller."""
 
     @classmethod
     def get_main_classname(cls):
@@ -86,7 +86,7 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
     name: str
     temperature_air_heating_in_celsius: float
     temperature_air_cooling_in_celsius: float
-    offset: float
+    offset_in_celsius: float
     mode: int
 
     @classmethod
@@ -97,7 +97,7 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
             name="HeatPumpController",
             temperature_air_heating_in_celsius=18.0,
             temperature_air_cooling_in_celsius=26.0,
-            offset=0.5,
+            offset_in_celsius=0.5,
             mode=1,
         )
 
@@ -139,7 +139,10 @@ class GenericHeatPumpState:
             self.cop = cop
             self.electricity_input_in_watt = abs(self.thermal_power_delivered_in_watt / self.cop)
         else:
-            raise Exception("Impossible Heat Pump State.")
+            raise ValueError(
+                f"Impossible Heat Pump State: thermal_power_delivered_in_watt={thermal_power_delivered_in_watt!r} "
+                f"is not zero, positive, or negative (possible NaN)."
+            )
 
     def clone(self) -> Any:
         """Clone heat pump state."""
@@ -304,32 +307,28 @@ class GenericHeatPump(cp.Component):
     def get_default_connections_from_weather(self) -> List[cp.ComponentConnection]:
         """Get weather default connections."""
 
-        connections = []
         weather_classname = Weather.get_classname()
-        connections.append(
+        return [
             cp.ComponentConnection(
                 GenericHeatPump.TemperatureOutside,
                 weather_classname,
                 Weather.TemperatureOutside,
             )
-        )
-        return connections
+        ]
 
     def get_default_connections_heatpump_controller(
         self,
     ) -> List[cp.ComponentConnection]:
         """Get heat pump controller default connections."""
 
-        connections = []
         controller_classname = GenericHeatPumpController.get_classname()
-        connections.append(
+        return [
             cp.ComponentConnection(
                 GenericHeatPump.State,
                 controller_classname,
                 GenericHeatPumpController.State,
             )
-        )
-        return connections
+        ]
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -351,14 +350,11 @@ class GenericHeatPump(cp.Component):
         # Retrieves heat pump from database - BEGIN
         heat_pumps_database = utils.load_smart_appliance("Heat Pump")
 
-        heat_pump_found = False
-        heat_pump = None
-        for heat_pump in heat_pumps_database:
-            if heat_pump["Manufacturer"] == manufacturer and heat_pump["Name"] == name:
-                heat_pump_found = True
-                break
-
-        if not heat_pump_found or heat_pump is None:
+        heat_pump = next(
+            (hp for hp in heat_pumps_database if hp["Manufacturer"] == manufacturer and hp["Name"] == name),
+            None,
+        )
+        if heat_pump is None:
             raise ValueError(f"Heat pump '{manufacturer}' / '{name}' not registered in the database")
 
         # Interpolates COP data from the database
@@ -395,10 +391,23 @@ class GenericHeatPump(cp.Component):
         self.set_time_correction()  # self.set_time_correction(self.time_correction_factor)
 
     def set_time_correction(self, factor: float = 1) -> None:
-        """Set time correction."""
+        """Scale heating and cooling power values by a timestep correction factor.
+
+        Applies ``factor`` to the maximum heating power, maximum cooling power,
+        and the corresponding power-variation restrictions.  When ``factor`` is 1
+        (the default) the component is marked as not-yet-converted and no scaling
+        occurs.
+
+        Args:
+            factor: Multiplicative correction factor applied to all power values.
+
+        Raises:
+            RuntimeError: If called a second time after a non-unit factor has
+                already been applied (power values would be double-scaled).
+        """
         if factor == 1:
             self.has_been_converted = False
-        if self.has_been_converted is True:
+        if self.has_been_converted:
             raise RuntimeError(
                 "Heat pump power values have already been converted; "
                 "set_time_correction cannot be called twice."
@@ -411,7 +420,17 @@ class GenericHeatPump(cp.Component):
             self.has_been_converted = True
 
     def calc_cop(self, t_out: float) -> float:
-        """Calculate cop."""
+        """Compute the coefficient of performance at a given outside temperature.
+
+        Uses the linear COP model fitted in :meth:`build` from the heat-pump
+        database entries.
+
+        Args:
+            t_out: Outside air temperature in degrees Celsius.
+
+        Returns:
+            The coefficient of performance (dimensionless).
+        """
         val: float = self.cop_coef[0] * t_out + self.cop_coef[1]
         return val
 
@@ -431,12 +450,10 @@ class GenericHeatPump(cp.Component):
 
     def write_to_report(self) -> List[str]:
         """Write important variables to report."""
-        lines = []
-        lines.append(f"Max Heating Power [kW]: {(self.max_heating_power_in_watt) * 1e-3:4.3f}")
-        lines.append(
-            f"Max Heating Power Variation Restriction [W]: {self.max_heating_power_variation_restriction_in_watt:4.3f}"
-        )
-        return self.heatpump_config.get_string_dict() + lines
+        return self.heatpump_config.get_string_dict() + [
+            f"Max Heating Power [kW]: {self.max_heating_power_in_watt * 1e-3:4.3f}",
+            f"Max Heating Power Variation Restriction [W]: {self.max_heating_power_variation_restriction_in_watt:4.3f}",
+        ]
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate heat pump."""
@@ -598,7 +615,7 @@ class GenericHeatPumpController(cp.Component):
         Minimum comfortable temperature for residents
     t_air_cooling: float
         Maximum comfortable temperature for residents
-    offset: float
+    offset_in_celsius: float
         Temperature offset to compensate the hysteresis
         correction for the building temperature change
     mode : int
@@ -636,7 +653,7 @@ class GenericHeatPumpController(cp.Component):
         self.build(
             temperature_air_cooling=self.heatpump_controller_config.temperature_air_cooling_in_celsius,
             temperature_air_heating=self.heatpump_controller_config.temperature_air_heating_in_celsius,
-            offset=self.heatpump_controller_config.offset,
+            offset_in_celsius=self.heatpump_controller_config.offset_in_celsius,
             mode=self.heatpump_controller_config.mode,
         )
 
@@ -686,22 +703,20 @@ class GenericHeatPumpController(cp.Component):
 
         from hisim.components.electricity_meter import ElectricityMeter  # pylint: disable=import-outside-toplevel
 
-        connections = []
         em_classname = ElectricityMeter.get_classname()
-        connections.append(
+        return [
             cp.ComponentConnection(
                 GenericHeatPumpController.ElectricityInput,
                 em_classname,
                 ElectricityMeter.ElectricityAvailable,
             )
-        )
-        return connections
+        ]
 
     def build(
         self,
         temperature_air_heating: float,
         temperature_air_cooling: float,
-        offset: float,
+        offset_in_celsius: float,
         mode: float,
     ) -> None:
         """Build function.
@@ -715,7 +730,7 @@ class GenericHeatPumpController(cp.Component):
         # Configuration
         self.temperature_set_heating = temperature_air_heating
         self.temperature_set_cooling = temperature_air_cooling
-        self.offset = offset
+        self.offset_in_celsius = offset_in_celsius
 
         self.mode = mode
 
@@ -756,17 +771,17 @@ class GenericHeatPumpController(cp.Component):
 
         if self.controller_heatpumpmode == "heating":
             state = 1
-        if self.controller_heatpumpmode == "cooling":
+        elif self.controller_heatpumpmode == "cooling":
             state = -1
-        if self.controller_heatpumpmode == "off":
+        elif self.controller_heatpumpmode == "off":
             state = 0
         stsv.set_output_value(self.state_channel, state)
 
     def conditions(self, set_temperature: float) -> None:
         """Set conditions for the heat pump controller mode."""
-        maximum_heating_set_temperature = self.temperature_set_heating + self.offset
+        maximum_heating_set_temperature = self.temperature_set_heating + self.offset_in_celsius
         minimum_heating_set_temperature = self.temperature_set_heating
-        minimum_cooling_set_temperature = self.temperature_set_cooling - self.offset
+        minimum_cooling_set_temperature = self.temperature_set_cooling - self.offset_in_celsius
         maximum_cooling_set_temperature = self.temperature_set_cooling
 
         if self.controller_heatpumpmode == "heating":  # and daily_avg_temp < 15:
@@ -790,14 +805,14 @@ class GenericHeatPumpController(cp.Component):
         """Set smart conditions for the heat pump controller mode."""
         smart_offset_upper = 3
         smart_offset_lower = 0.5
-        maximum_heating_set_temperature = self.temperature_set_heating + self.offset
+        maximum_heating_set_temperature = self.temperature_set_heating + self.offset_in_celsius
         if electricity_input < 0:
             maximum_heating_set_temperature += smart_offset_upper
         # maximum_heating_set_temp = self.t_set_heating
         minimum_heating_set_temperature = self.temperature_set_heating
         if electricity_input < 0:
             minimum_heating_set_temperature += smart_offset_lower
-        minimum_cooling_set_temperature = self.temperature_set_cooling - self.offset
+        minimum_cooling_set_temperature = self.temperature_set_cooling - self.offset_in_celsius
         # minimum_cooling_set_temp = self.t_set_cooling
         maximum_cooling_set_temperature = self.temperature_set_cooling
 

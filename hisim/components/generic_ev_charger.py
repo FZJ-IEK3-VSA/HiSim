@@ -1,10 +1,29 @@
-"""Generic ev charger module."""
+"""Components for modeling electric-vehicle charging in HiSim.
+
+This module provides the building blocks for simulating EV charging within
+a household energy system:
+
+- :class:`VehiclePure`: models an EV battery (state of charge and
+  discharge) whose availability and discharge profiles are loaded from the
+  Load Profile Generator (LPG).
+- :class:`Vehicle`: alternative, experimental EV battery model intended
+  for future releases.
+- :class:`EVCharger`: the wallbox hardware model that exchanges energy
+  between the household electricity grid and the connected vehicle's
+  battery.
+- :class:`EVChargerController`: charging-strategy controller whose
+  behavior is selected through :class:`EVChargerMode`.
+
+Each component is paired with its configuration dataclass
+(:class:`VehiclePureConfig`, :class:`VehicleConfig`,
+:class:`EVChargerConfig`, and :class:`EVChargerControllerConfig`).
+"""
 
 # clean
 
 # Generic/Built-in
 import os
-from typing import Any, List, NamedTuple, Optional, Union
+from typing import Any, List, NamedTuple, Optional, Union, cast
 import json
 import copy
 import sqlite3
@@ -44,7 +63,7 @@ class VehiclePureConfig(cp.ConfigBase):
     profile: str
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return VehiclePure.get_full_classname()
 
@@ -52,7 +71,7 @@ class VehiclePureConfig(cp.ConfigBase):
     def get_default_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "VehiclePureConfig":
         """Gets a default config."""
         return VehiclePureConfig(
             building_name=building_name,
@@ -114,7 +133,7 @@ class EVChargerControllerConfig(cp.ConfigBase):
             ) from exc
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return EVChargerController.get_full_classname()
 
@@ -122,7 +141,7 @@ class EVChargerControllerConfig(cp.ConfigBase):
     def get_default_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "EVChargerControllerConfig":
         """Gets a default config."""
         return EVChargerControllerConfig(
             name="ElectricalChargerController",
@@ -143,7 +162,7 @@ class VehicleConfig(cp.ConfigBase):
     soc: float
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return Vehicle.get_full_classname()
 
@@ -151,7 +170,7 @@ class VehicleConfig(cp.ConfigBase):
     def get_default_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "VehicleConfig":
         """Gets a default config."""
         return VehicleConfig(
             building_name=building_name,
@@ -171,10 +190,10 @@ class EVChargerConfig(cp.ConfigBase):
     name: str
     manufacturer: str
     charger_name: str
-    electric_vehicle: Any
+    electric_vehicle: Optional["VehiclePure"]
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return EVCharger.get_full_classname()
 
@@ -182,7 +201,7 @@ class EVChargerConfig(cp.ConfigBase):
     def get_default_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "EVChargerConfig":
         """Gets a default config."""
         return EVChargerConfig(
             building_name=building_name,
@@ -212,6 +231,13 @@ class VehiclePure(cp.Component):
 
     """
 
+    evconfig: VehiclePureConfig
+    max_capacity: float
+    min_capacity: float
+    capacity: float
+    car_in_charging_station: List[bool]
+    discharge: List[float]
+
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
@@ -234,7 +260,7 @@ class VehiclePure(cp.Component):
 
     def build(self) -> None:
         """Build function."""
-        if self.evconfig.soc > 1 or self.evconfig.soc < 0:
+        if not 0 <= self.evconfig.soc <= 1:
             raise Exception("Invalid State Of Charge.")
 
         # Gets flexibilities, including heat pump
@@ -269,24 +295,21 @@ class VehiclePure(cp.Component):
             self.config.name, self.evconfig, self.my_simulation_parameters
         )
         if cache_file_exists:
-            self.car_in_charging_station = pd.read_csv(cache_filepath, sep=",", decimal=".")[
-                "CarInChargingStation"
-            ].tolist()
-            self.discharge = pd.read_csv(cache_filepath, sep=",", decimal=".")["Discharge"].tolist()
+            cache_df = pd.read_csv(cache_filepath, sep=",", decimal=".")
+            self.car_in_charging_station = cache_df["CarInChargingStation"].tolist()
+            self.discharge = cache_df["Discharge"].tolist()
         else:
 
-            def open_sql(path, table_name):
+            def open_sql(path: str, table_name: str) -> pd.DataFrame:
                 with sqlite3.connect(path) as sql_file:
                     return pd.read_sql(f"SELECT * FROM {table_name};", sql_file)
 
-            def open_ev_json(filepath):
+            def open_ev_json(filepath: str) -> list:
                 with open(filepath, encoding="utf-8") as file:
                     data = json.load(file)
-                return data["Values"]
+                return data["Values"]  # type: ignore[no-any-return]
 
             filepath = utils.load_export_load_profile_generator(target=self.evconfig.profile)
-            if filepath is None:
-                filepath = utils.HISIMPATH
 
             ev_files = {}
             filepaths = open_sql(filepath["electric_vehicle"][1], "ResultFileEntries")
@@ -317,7 +340,7 @@ class VehiclePure(cp.Component):
             load_stats = []
             car_in_charging_station = []
             # car_state = []
-            discharge_stats = [0]
+            discharge_stats: List[float] = [0]
             # Gets transportation stats
             transportation_devices_stats = open_sql(filepath["electric_vehicle"][0], "TransportationDeviceStates")
             for _, column in transportation_devices_stats.iterrows():
@@ -340,7 +363,7 @@ class VehiclePure(cp.Component):
                         else:
                             discharge_stats.append(0)
 
-            data: List = []
+            data: List[list] = []
             data.append(car_in_charging_station)
             data.append(discharge_stats)
             data = list(map(list, zip(*data)))
@@ -388,11 +411,15 @@ class Vehicle(cp.Component):
 
     """
 
-    BeforeCapacity = "BeforeCapacity"
+    max_capacity: float
+    min_capacity: float
+    capacity: float
 
-    AfterCapacity = "AfterCapacity"
-    MaxCapacity = "MaxCapacity"
-    Discharge = "Discharge"
+    BeforeCapacity: str = "BeforeCapacity"
+
+    AfterCapacity: str = "AfterCapacity"
+    MaxCapacity: str = "MaxCapacity"
+    Discharge: str = "Discharge"
 
     def __init__(
         self,
@@ -433,7 +460,7 @@ class Vehicle(cp.Component):
 
     def build(self, manufacturer: str, model: str, soc: float) -> None:
         """Build function."""
-        if soc > 1 or soc < 0:
+        if not 0 <= soc <= 1:
             raise Exception("Invalid State Of Charge.")
 
         # Gets flexibilities, including heat pump
@@ -626,19 +653,19 @@ class EVCharger(cp.Component):
     """
 
     # Inputs
-    ElectricityInput = "ElectricityInput"
+    ElectricityInput: str = "ElectricityInput"
     # StoredEnergy = "StoredEnergy"
     # MaxStoredEnergy = "MaxStoredEnergy"
-    EVChargerState = "EVChargerState"
-    EVChargerMode = "EVChargerMode"
-    MinimumStateOfCharge = "MinimumStateOfCharge"
+    EVChargerState: str = "EVChargerState"
+    EVChargerMode: str = "EVChargerMode"
+    MinimumStateOfCharge: str = "MinimumStateOfCharge"
 
     # Outputs
-    StateOfCharge = "StateOfCharge"
-    AfterStoredEnergy = "AfterStoredEnergy"
-    Driving = "Driving"
-    AtChargingStation = "AtChargingStation"
-    ElectricityOutput = "ElectricityOutput"
+    StateOfCharge: str = "StateOfCharge"
+    AfterStoredEnergy: str = "AfterStoredEnergy"
+    Driving: str = "Driving"
+    AtChargingStation: str = "AtChargingStation"
+    ElectricityOutput: str = "ElectricityOutput"
 
     # Similar components to connect to:
     # 1. EVChargerController
@@ -888,14 +915,18 @@ class EVChargerController(cp.Component):
     uses as a Component Class in hisim.
     """
 
+    mode: EVChargerMode
+    mode_description: str
+    mode_extended_description: str
+
     # Inputs
-    ElectricityInput = "ElectricityInput"
-    StateOfCharge = "StateOfCharge"
+    ElectricityInput: str = "ElectricityInput"
+    StateOfCharge: str = "StateOfCharge"
 
     # Outputs
-    EVChargerState = "EVChargerState"
-    EVChargerMode = "EVChargerMode"
-    MinimumStateOfCharge = "MinimumStateOfCharge"
+    EVChargerState: str = "EVChargerState"
+    EVChargerMode: str = "EVChargerMode"
+    MinimumStateOfCharge: str = "MinimumStateOfCharge"
 
     # Similar components to connect to:
     # 1. Some ChargingInput
@@ -916,7 +947,7 @@ class EVChargerController(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.mode = config.mode
+        self.mode = cast(EVChargerMode, config.mode)
 
         if self.mode == EVChargerMode.STRAIGHT_CHARGING:
             self.mode_description = "Straight Charging"
@@ -954,7 +985,9 @@ class EVChargerController(cp.Component):
                 "Operate on Vehicle-to-Grid for SoC from 60% up to 100%"
             )
         else:
-            self.mode_description = "WRITE MODE DESCRIPTION HERE!"
+            # Defensive safety net; unreachable because __post_init__ validates mode
+            # and every EVChargerMode member is handled above.
+            self.mode_description = "WRITE MODE DESCRIPTION HERE!"  # type: ignore[unreachable]
             self.mode_extended_description = "WRITE MODE EXTENDED DESCRIPTION HERE!"
 
         # Inputs
@@ -1064,7 +1097,7 @@ class EVChargerController(cp.Component):
         stsv.set_output_value(self.min_soc_channel, minimum_state_of_charge)
         stsv.set_output_value(self.mode_channel, int(self.mode))
 
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         """Write to report."""
         lines = []
         lines.append(f"Mode Number: {int(self.mode)}")

@@ -69,7 +69,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         my_simulation_parameters=my_simulation_parameters,
     )
     my_transformer.connect_input(
-        input_fieldname=my_transformer.TransformerInput,  # Connect input from my transformer
+        input_fieldname=my_transformer.TransformerInput1,  # Connect input from my transformer
         src_object_name=my_rn2.component_name,  # to output of second random number object
         src_field_name=my_rn2.RandomOutput,
     )
@@ -89,6 +89,6 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_sum.connect_input(
         input_fieldname=my_sum.SumInput2,
         src_object_name=my_transformer.component_name,
-        src_field_name=my_transformer.TransformerOutput,
+        src_field_name=my_transformer.TransformerOutput1,
     )
     my_sim.add_component(my_sum)

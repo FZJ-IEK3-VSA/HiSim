@@ -7,7 +7,9 @@ happens outside ``tmp_path``.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, NoReturn
 
 import pytest
 
@@ -17,7 +19,7 @@ from scripts.runner import GoldenConfig, RunResult
 pytestmark = pytest.mark.base
 
 
-def _config_dict() -> dict:
+def _config_dict() -> dict[str, Any]:
     return {
         "check_subdir": "golden-ref-check",
         "setups": [{"id": "setup_a", "path": "system_setups/simple_system_setup_one.py"}],
@@ -39,7 +41,7 @@ def _write_config(tmp_path: Path) -> Path:
     return p
 
 
-def _run_fn_returning(results: list[RunResult]):
+def _run_fn_returning(results: list[RunResult]) -> Callable[[GoldenConfig, Path, Path, str], list[RunResult]]:
     def fake(_config: GoldenConfig, _results_root: Path, _repo_root: Path, _subdir: str) -> list[RunResult]:
         return results
     return fake
@@ -101,7 +103,7 @@ def test_manifest_only_mode_scans_existing_goldens(tmp_path: Path) -> None:
     (golden_dir / "setup_a__one_week_60s.json").write_text("{}")
     (golden_dir / "setup_b__full_year_60s.json").write_text("{}")
 
-    def run_fn_must_not_run(*_a, **_k):  # pragma: no cover
+    def run_fn_must_not_run(*_a: Any, **_k: Any) -> NoReturn:  # pragma: no cover
         raise AssertionError("manifest-only must not run simulations")
 
     rc = main(

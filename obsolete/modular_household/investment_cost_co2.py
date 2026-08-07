@@ -35,8 +35,12 @@ class InvestmentCostResult(NamedTuple):
 
 
 @lru_cache(maxsize=1)
-def read_in_component_costs() -> pd.DataFrame:
-    """Reads data for cost and co2 emissions of component installation/investment from csv.
+def _read_in_component_costs_cached() -> pd.DataFrame:
+    """Read and cache the component costs DataFrame from CSV.
+
+    The cached frame is an internal implementation detail; callers must use
+    :func:`read_in_component_costs` which hands out a fresh copy on every call
+    so that no two callers ever share the same mutable DataFrame object.
 
     :return: DataFrame with price and co2 footprint information of all relevant components.
     :rtype: pd.DataFrame
@@ -45,6 +49,19 @@ def read_in_component_costs() -> pd.DataFrame:
     price_frame.index = price_frame["Product/service"]  # type: ignore
     price_frame.drop(columns=["Product/service"], inplace=True)
     return price_frame
+
+
+def read_in_component_costs() -> pd.DataFrame:
+    """Reads data for cost and co2 emissions of component installation/investment from csv.
+
+    Returns a fresh, independent copy of the (cached) component-costs DataFrame
+    on every call so that in-place mutations by one caller cannot contaminate
+    subsequent callers.
+
+    :return: DataFrame with price and co2 footprint information of all relevant components.
+    :rtype: pd.DataFrame
+    """
+    return _read_in_component_costs_cached().copy()
 
 
 def compute_investment_cost(

@@ -182,3 +182,61 @@ def test_csvloader_column_deprecated_alias_returns_column_values() -> None:
     # The alias returns the same underlying array object.
     assert legacy is loader.column_values
     np.testing.assert_array_equal(legacy, np.asarray(values, dtype=float))
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "raw_value",
+    [
+        pytest.param(float("nan"), id="nan"),
+        pytest.param(float("inf"), id="pos_inf"),
+        pytest.param(float("-inf"), id="neg_inf"),
+    ],
+)
+def test_csvloader_non_finite_values_raise(raw_value: float) -> None:
+    """Non-finite CSV values (NaN/inf) are rejected at construction.
+
+    Empty cells or literal ``nan``/``inf`` tokens in a CSV are parsed by
+    pandas as non-finite floats and previously propagated silently through
+    ``i_simulate`` into downstream components, surfacing as NaN in KPIs
+    thousands of timesteps later with no traceable cause (issue #1059). The
+    loader now fails fast at construction with a diagnostic that names the
+    file, column, and offending rows.
+
+    The parametrized non-finite inputs cover the three pandas-parsable
+    non-finite float values; append a parameter to extend the guard's
+    coverage instead of copy-pasting a whole test function.
+    """
+    dataframe = pd.DataFrame({"Profile": [1.0, raw_value, 3.0]})
+    sim_params = _make_simulation_parameters(timesteps=len(dataframe))
+    config = _make_config(column=0)
+
+    with pytest.raises(ValueError, match="contains non-finite values"):
+        CSVLoader(
+            config=config,
+            my_simulation_parameters=sim_params,
+            dataframe=dataframe,
+        )
+
+
+@pytest.mark.base
+def test_csvloader_non_finite_error_message_names_file_column_and_rows() -> None:
+    """The diagnostic names the CSV file, the column, and the offending rows."""
+    # Rows 2 and 5 are NaN; the message should report both (capped at 10).
+    values = [1.0, 2.0, float("nan"), 4.0, 5.0, float("nan")]
+    dataframe = pd.DataFrame({"Profile": values})
+    sim_params = _make_simulation_parameters(timesteps=len(values))
+    config = _make_config(column=0, column_name="Profile")
+
+    with pytest.raises(ValueError) as excinfo:
+        CSVLoader(
+            config=config,
+            my_simulation_parameters=sim_params,
+            dataframe=dataframe,
+        )
+
+    message = str(excinfo.value)
+    assert "fake_profile.csv" in message
+    assert "'Profile'" in message
+    assert "non-finite" in message
+    assert "[2, 5]" in message

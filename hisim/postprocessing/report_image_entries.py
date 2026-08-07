@@ -16,11 +16,11 @@ class SystemChartEntry:
     """Describe a single system/network chart to embed in a report.
 
     Attributes:
-        path: Filesystem path to the rendered chart image file.
+        file_path: Filesystem path to the rendered chart image file.
         caption: Human-readable caption displayed alongside the chart.
     """
 
-    path: str
+    file_path: str
     caption: str
 
 
@@ -31,6 +31,14 @@ class ReportImageEntry:
     optional category, description, and unit describing one figure produced
     for a component output during post-processing.
     """
+
+    component_name: str
+    output_type: str
+    file_path: str
+    component_output_folder_path: str
+    category: Optional[str]
+    output_description: Optional[str]
+    unit: Optional[str]
 
     def __init__(
         self,

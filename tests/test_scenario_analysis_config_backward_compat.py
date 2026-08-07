@@ -15,6 +15,7 @@ explicit in the field name (GitLab issue #816).  These tests verify that:
 
 import json
 import warnings
+from typing import Any
 
 import pytest
 
@@ -24,10 +25,9 @@ from hisim.postprocessing.scenario_evaluation.scenario_analysis_complete_with_co
 )
 
 
-def _default_dict() -> dict:
+def _default_dict() -> dict[str, Any]:
     """Return the default config as a plain dict (new field name)."""
-    config_dict: dict = ScenarioAnalysisConfig.get_default().to_dict()
-    return config_dict
+    return ScenarioAnalysisConfig.get_default().to_dict()  # type: ignore[no-any-return]
 
 
 @pytest.mark.base

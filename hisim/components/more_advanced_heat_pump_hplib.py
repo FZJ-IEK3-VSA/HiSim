@@ -1772,8 +1772,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 try:
                     if off_time != 0 and postprocessing_results.iloc[:, index].values[time_index + 1] == 0:
                         number_of_cycles = number_of_cycles + 1
-
-                except Exception:
+                except IndexError:
+                    # Expected on the last element: time_index + 1 is out of bounds.
                     pass
 
         return number_of_cycles
@@ -1803,19 +1803,19 @@ class MoreAdvancedHeatPumpHPLib(Component):
             mean_temperature_difference_between_flow_and_return_in_celsius,
             max_temperature_difference_between_flow_and_return_in_celsius,
             min_temperature_difference_between_flow_and_return_in_celsius,
-        ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=temperature_diff_flow_and_return_in_celsius)
+        ) = KpiHelperClass.compute_mean_max_min_values(list_or_pandas_series=temperature_diff_flow_and_return_in_celsius)
 
         (
             mean_flow_temperature_in_celsius,
             max_flow_temperature_in_celsius,
             min_flow_temperature_in_celsius,
-        ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=flow_temperature_list_in_celsius)
+        ) = KpiHelperClass.compute_mean_max_min_values(list_or_pandas_series=flow_temperature_list_in_celsius)
 
         (
             mean_return_temperature_in_celsius,
             max_return_temperature_in_celsius,
             min_return_temperature_in_celsius,
-        ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=return_temperature_list_in_celsius)
+        ) = KpiHelperClass.compute_mean_max_min_values(list_or_pandas_series=return_temperature_list_in_celsius)
 
         # make kpi entries and append to list
         mean_flow_temperature_sh_entry = KpiEntry(
@@ -2647,8 +2647,8 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         self.thermalpower_dhw_is_constant = self.config.thermalpower_dhw_is_constant
         self.p_th_max_dhw = self.config.p_th_max_dhw_in_watt
 
-        if self.thermalpower_dhw_is_constant is True:
-            print("INFO: DHW Power is constant with " + str(self.p_th_max_dhw) + " Watt.")
+        if self.thermalpower_dhw_is_constant:
+            print(f"INFO: DHW Power is constant with {self.p_th_max_dhw} Watt.")
         elif self.thermalpower_dhw_is_constant is False:
             print("INFO: DHW Power is modulating")
             self.p_th_max_dhw = 0.0

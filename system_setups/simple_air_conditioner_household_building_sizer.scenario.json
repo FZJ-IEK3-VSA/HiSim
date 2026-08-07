@@ -1,0 +1,99 @@
+{
+    "name": "Simple Air Conditioner Household Building Sizer",
+    "description": "Household with a simple Carnot-efficiency air conditioner for cooling.",
+    "multiple_buildings": false,
+    "components": [
+        {
+            "component_full_classname": "hisim.components.building.Building",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Building",
+                "heating_reference_temperature_in_celsius": -7.0,
+                "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
+                "building_heat_capacity_class": "medium",
+                "initial_internal_temperature_in_celsius": 22.0,
+                "absolute_conditioned_floor_area_in_m2": 121.2,
+                "total_base_area_in_m2": null,
+                "number_of_apartments": 1,
+                "max_thermal_building_demand_in_watt": null,
+                "floor_u_value_in_watt_per_m2_per_kelvin": null,
+                "floor_area_in_m2": null,
+                "facade_u_value_in_watt_per_m2_per_kelvin": null,
+                "facade_area_in_m2": null,
+                "roof_u_value_in_watt_per_m2_per_kelvin": null,
+                "roof_area_in_m2": null,
+                "window_u_value_in_watt_per_m2_per_kelvin": null,
+                "window_area_in_m2": null,
+                "door_u_value_in_watt_per_m2_per_kelvin": null,
+                "door_area_in_m2": null,
+                "predictive": false,
+                "set_heating_temperature_in_celsius": 20.0,
+                "set_cooling_temperature_in_celsius": 25.0,
+                "enable_opening_windows": true,
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.building.BuildingConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.weather.Weather",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Weather",
+                "location": "Aachen",
+                "source_path": "<<utils.get_input_directory()>>\\weather\\test-reference-years_1995-2012_1-location\\data_processed\\aachen_center",
+                "data_source": 1,
+                "predictive_control": false
+            },
+            "config_full_classname": "hisim.components.weather.WeatherConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.simple_air_conditioner.SimpleAirConditioner",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "SimpleAirConditioner",
+                "nominal_cooling_power_w": 2000.0,
+                "eta_carnot": 0.3,
+                "temperature_epsilon_k": 0.01
+            },
+            "config_full_classname": "hisim.components.simple_air_conditioner.SimpleAirConditionerConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.simple_air_conditioner.SimpleAirConditionerController",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "SimpleAirConditionerController",
+                "setpoint_temperature_c": 24.0,
+                "deadband_k": 0.5
+            },
+            "config_full_classname": "hisim.components.simple_air_conditioner.SimpleAirConditionerControllerConfig",
+            "inputs": [],
+            "outputs": [],
+            "connect_automatically": true
+        }
+    ],
+    "connections": [
+        {
+            "source": {
+                "component_name": "SimpleAirConditioner",
+                "field_name": "ThermalPowerDelivered"
+            },
+            "target": {
+                "component_name": "Building",
+                "field_name": "ThermalPowerDelivered"
+            }
+        }
+    ]
+}

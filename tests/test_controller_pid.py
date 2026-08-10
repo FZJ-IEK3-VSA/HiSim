@@ -14,7 +14,7 @@ from hisim.components.controller_pid import (
     compute_pi_gains,
 )
 from hisim.loadtypes import LoadTypes, Units
-from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
+from hisim.sim_repository import SingletonSimRepository, SimRepositoryKeyEnum
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 
@@ -53,12 +53,12 @@ def populated_sim_repository() -> Iterator[None]:
     """
     repo = SingletonSimRepository()
     repo.reset()
-    repo.set_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING, entry=H_TR_W)
-    repo.set_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS, entry=H_TR_MS)
-    repo.set_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM, entry=H_TR_EM)
-    repo.set_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION, entry=H_VE_ADJ)
-    repo.set_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR, entry=H_TR_IS)
-    repo.set_entry(key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE, entry=C_M)
+    repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING, entry=H_TR_W)
+    repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS, entry=H_TR_MS)
+    repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM, entry=H_TR_EM)
+    repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION, entry=H_VE_ADJ)
+    repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR, entry=H_TR_IS)
+    repo.set_entry(key=SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE, entry=C_M)
     yield
     repo.reset()
 

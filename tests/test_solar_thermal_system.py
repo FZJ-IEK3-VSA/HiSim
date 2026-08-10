@@ -11,7 +11,7 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_solar_thermal_system():
+def test_solar_thermal_system() -> None:
     """Verify a SolarThermalSystem produces the expected thermal power on a summer noon step.
 
     Builds a Weather and SolarThermalSystem with a 4 m² collector, drives them with a
@@ -71,8 +71,7 @@ def test_solar_thermal_system():
     my_weather.i_simulate(timestep, stsv, False)
     my_sts.i_simulate(timestep, stsv, False)
     log.information(
-        "heat power output [W]: "
-        + str(stsv.values[my_sts.thermal_power_w_output_channel.global_index])
+        f"heat power output [W]: {stsv.values[my_sts.thermal_power_w_output_channel.global_index]}"
     )
     print(stsv.values)
 
@@ -85,7 +84,7 @@ def test_solar_thermal_system():
 
 
 @pytest.mark.base
-def test_precalc():
+def test_precalc() -> None:
     """Verify oemof's flat_plate_precalc yields zero heat under zero irradiance.
 
     Calls flat_plate_precalc with Aachen coordinates, a 30° tilt, and zero
@@ -97,7 +96,7 @@ def test_precalc():
     eta_0: float = 0.78
     a_1_w_m2_k: float = 3.2  # W/(m2*K)
     a_2_w_m2_k: float = 0.015  # W/(m2*K2)
-    coordinates = component.Coordinates(latitude=50.78, longitude=6.08)
+    coordinates = component.Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08)
 
     temperature_collector_inlet_deg_c = 55
     delta_temperature_n_k = 10
@@ -111,8 +110,8 @@ def test_precalc():
     )
 
     precalc_data = flat_plate_precalc(
-        lat=coordinates.latitude,
-        long=coordinates.longitude,
+        lat=coordinates.latitude_in_degrees,
+        long=coordinates.longitude_in_degrees,
         collector_tilt=tilt,
         collector_azimuth=azimuth,
         eta_0=eta_0,  # optical efficiency of the collector

@@ -150,6 +150,11 @@ class ElectrolyzerSimulation:
         self.max_hydrogen_production_rate_hour = max_hydrogen_production_rate
         self.waste_energy = waste_energy
         self.pressure_hydrogen_output = pressure_hydrogen_output  # not used so far
+        # Density of green hydrogen is a physical constant (standard conditions);
+        # cache it once instead of calling get_properties_for_energy_carrier on every timestep.
+        self.hydrogen_density = PhysicsConfig.get_properties_for_energy_carrier(
+            energy_carrier=lt.LoadTypes.GREEN_HYDROGEN
+        ).density_in_kg_per_m3
 
     def convert_electricity(self, electricity_input, hydrogen_not_stored):
         """Convert electricity.
@@ -182,22 +187,14 @@ class ElectrolyzerSimulation:
         )
         assert self.min_hydrogen_production_rate <= hydrogen_output_liter <= self.max_hydrogen_production_rate
         # kg/s = l/s / 1000 * kg/m³
-        hydrogen_output = (hydrogen_output_liter / 1000) * PhysicsConfig.get_properties_for_energy_carrier(
-            energy_carrier=lt.LoadTypes.GREEN_HYDROGEN
-        ).density_in_kg_per_m3
+        hydrogen_output = (hydrogen_output_liter / 1000) * self.hydrogen_density
         oxygen_output = hydrogen_output * (88.8 / 11.2)
 
         if hydrogen_not_stored > 0:
             hydrogen_real = hydrogen_output - hydrogen_not_stored
             if hydrogen_real == 0:
                 return hydrogen_output, 0, 0, 0
-            hydrogen_output_liter_real = (
-                hydrogen_real
-                * 1000
-                / PhysicsConfig.get_properties_for_energy_carrier(
-                    energy_carrier=lt.LoadTypes.GREEN_HYDROGEN
-                ).density_in_kg_per_m3
-            )
+            hydrogen_output_liter_real = hydrogen_real * 1000 / self.hydrogen_density
             power_level_real = self.min_power_percent + (
                 hydrogen_output_liter_real - self.min_hydrogen_production_rate
             ) * (self.max_power_percent - self.min_power_percent) / (
@@ -273,9 +270,11 @@ class AdvancedElectrolyzer(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ElectrolyzerWithStorageConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: DisplayConfig | None = None,
     ):
         """Initialize the class."""
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
 
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -515,9 +514,11 @@ class HydrogenStorageSimulation:
         The hydrogen inflow is restricted by this. If its too high the delta cant be stored.
 
         Calculate the new fill level.
-        Possible restrictions due to a full tank.
-            Nothing can be loaded
+        Possible restrictions due to a full tank:
+
+            Nothing can be loaded.
             Parts of the hydrogen inflow can be loaded.
+
         Calculate the energy consumption which is needed for the process.
 
         :param      hydrogen_input:         Hydrogen to the tank [kg_H2]
@@ -525,6 +526,7 @@ class HydrogenStorageSimulation:
         :return:    hydrogen_input [kg]     Amount of hydrogen which was stored in this timestep
                     energy_demand [W]       Consumed Energy for storing
                     delta_not_stored [kg]   Amount of hydrogen which was not stored in this timestep
+
         """
         max_charging = self.max_charging_rate * seconds_per_timestep
 
@@ -560,6 +562,7 @@ class HydrogenStorageSimulation:
         """Withdraw.
 
         Discharging function. Functionality its the reverse of the store function.
+
         :param      hydrogen_output:        Demand on hydrogen [kg_H2]
         :param      seconds_per_timestep:   Seconds in this timestep [s]
         :return:    hydrogen_output [kg]    Amount of hydrogen which was released in this timestep
@@ -636,9 +639,11 @@ class HydrogenStorage(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ElectrolyzerWithHydrogenStorageConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: DisplayConfig | None = None,
     ):
         """Initialize the class."""
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
 
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config

@@ -169,3 +169,68 @@ def test_get_cost_opex_raises_when_dhw_output_missing() -> None:
         electric_heating.get_cost_opex(
             all_outputs=all_outputs, postprocessing_results=postprocessing_results
         )
+
+
+def test_electric_heating_display_config_default_instances_are_isolated() -> None:
+    """Omitting ``my_display_config`` must not share one default across instances.
+
+    Regression guard for the mutable-default-argument pitfall: each
+    :class:`ElectricHeating` constructed without an explicit
+    ``my_display_config`` must receive its own :class:`DisplayConfig`
+    instance, and the default must keep ``display_in_webtool=True``.
+    """
+    my_simulation_parameters = SimulationParameters.one_day_only(
+        year=2021, seconds_per_timestep=_SECONDS_PER_TIMESTEP
+    )
+    config = ElectricHeatingConfig.get_default_electric_heating_config()
+
+    first = ElectricHeating(
+        my_simulation_parameters=my_simulation_parameters,
+        config=config,
+    )
+    second = ElectricHeating(
+        my_simulation_parameters=my_simulation_parameters,
+        config=config,
+    )
+
+    assert isinstance(first.my_display_config, DisplayConfig)
+    assert isinstance(second.my_display_config, DisplayConfig)
+    assert first.my_display_config is not second.my_display_config
+    assert first.my_display_config.display_in_webtool is True
+    assert second.my_display_config.display_in_webtool is True
+
+    # Mutating one must not propagate to the other.
+    first.my_display_config.display_in_webtool = False
+    assert second.my_display_config.display_in_webtool is True
+
+
+def test_electric_heating_controller_display_config_default_instances_are_isolated() -> None:
+    """The controller default ``my_display_config`` must also be per-instance."""
+    from hisim.components.generic_electric_heating import (
+        ElectricHeatingController,
+        ElectricHeatingControllerConfig,
+    )
+
+    my_simulation_parameters = SimulationParameters.one_day_only(
+        year=2021, seconds_per_timestep=_SECONDS_PER_TIMESTEP
+    )
+    config = ElectricHeatingControllerConfig.get_default_electric_heating_controller_config()
+
+    first = ElectricHeatingController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=config,
+    )
+    second = ElectricHeatingController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=config,
+    )
+
+    assert isinstance(first.my_display_config, DisplayConfig)
+    assert isinstance(second.my_display_config, DisplayConfig)
+    assert first.my_display_config is not second.my_display_config
+    # The controller default is DisplayConfig() -> display_in_webtool False.
+    assert first.my_display_config.display_in_webtool is False
+    assert second.my_display_config.display_in_webtool is False
+
+    first.my_display_config.display_in_webtool = True
+    assert second.my_display_config.display_in_webtool is False

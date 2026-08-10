@@ -2,13 +2,15 @@
 
 # clean
 
-from pathlib import Path
 import json
+from pathlib import Path
 from typing import Optional
-import pytest
+
 import numpy as np
+import pandas as pd
+import pytest
+
 import hisim.simulator as sim
-from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import (
@@ -18,8 +20,8 @@ from hisim.components import (
     idealized_electric_heater,
 )
 from hisim import utils, loadtypes
-
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.simulator import SimulationParameters
 from hisim import log
 
 
@@ -27,39 +29,14 @@ from hisim import log
 PATH: str = "../system_setups/household_for_test_electricity_meter.py"
 
 
-@utils.measure_execution_time
-@pytest.mark.extendedbase
-def test_house(
-    my_simulation_parameters: Optional[SimulationParameters] = None,
-) -> None:  # noqa: too-many-statements
-    """The test should check if a normal simulation works with the electricity grid implementation."""
+def _build_system(
+    my_simulation_parameters: SimulationParameters,
+) -> tuple[sim.Simulator, electricity_meter.ElectricityMeter, pd.DataFrame]:
+    """Construct, wire, register, and run the electricity-meter test system.
 
-    # =========================================================================================================================================================
-    # System Parameters
-
-    # Set Simulation Parameters
-    year = 2021
-    seconds_per_timestep = 60 * 60
-
-    # =========================================================================================================================================================
-    # Build Components
-
-    # Build Simulation Parameters
-    if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
-
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.EXPORT_TO_CSV
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_KPIS
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.WRITE_KPIS_TO_JSON
-        )
-
+    Owns component construction, predefined and manual connections, component
+    registration on the simulator, and the full timestep simulation.
+    """
     # this part is copied from hisim_main
     # Build Simulator
     path_to_be_added = str(Path(PATH).resolve().parent)
@@ -167,75 +144,56 @@ def test_house(
 
     my_sim.run_all_timesteps()
 
-    # =========================================================================================================================================================
-    # Compare with kpi computation results
+    return my_sim, my_electricity_meter, my_sim.results_data_frame
 
-    # read kpi data
-    with open(str(Path(my_sim._simulation_parameters.result_directory) / "all_kpis.json"), "r", encoding="utf-8") as file:  # pylint: disable=W0212
+
+def _load_kpi_summary(result_directory: str) -> dict:
+    """Load the ``BUI1`` KPI summary dict from the simulation result directory."""
+    with open(str(Path(result_directory) / "all_kpis.json"), "r", encoding="utf-8") as file:
         jsondata = json.load(file)
 
-    jsondata = jsondata["BUI1"]
+    return jsondata["BUI1"]  # type: ignore[no-any-return]
 
-    cumulative_consumption_kpi_in_kilowatt_hour = jsondata["General"]["Total electricity consumption"].get("value")
 
-    cumulative_production_kpi_in_kilowatt_hour = jsondata["General"]["Total electricity production"].get("value")
+def _assert_kpis_match_simulation(kpis: dict, results_df: pd.DataFrame) -> None:
+    """Compare KPI JSON values against the electricity-meter simulation results.
 
-    electricity_from_grid_kpi_in_kilowatt_hour = jsondata["Electricity Meter"]["Total energy from grid"].get("value")
+    Converts the simulation results from Wh to kWh and checks them against the
+    KPI summary with a relative tolerance of 10%.
+    """
+    cumulative_consumption_kpi_in_kilowatt_hour = kpis["General"]["Total electricity consumption"].get("value")
+    cumulative_production_kpi_in_kilowatt_hour = kpis["General"]["Total electricity production"].get("value")
+    electricity_from_grid_kpi_in_kilowatt_hour = kpis["Electricity Meter"]["Total energy from grid"].get("value")
 
     # simulation results from grid energy balancer (last entry)
     simulation_results_electricity_meter_cumulative_production_in_watt_hour = (
-        my_sim.results_data_frame["ElectricityMeter - CumulativeProduction [Electricity - Wh]"].iloc[-1]
+        results_df["ElectricityMeter - CumulativeProduction [Electricity - Wh]"].iloc[-1]
     )
     simulation_results_electricity_meter_cumulative_consumption_in_watt_hour = (
-        my_sim.results_data_frame["ElectricityMeter - CumulativeConsumption [Electricity - Wh]"].iloc[-1]
+        results_df["ElectricityMeter - CumulativeConsumption [Electricity - Wh]"].iloc[-1]
     )
     simulation_results_electricity_from_grid_in_watt_hour = (
-        my_sim.results_data_frame["ElectricityMeter - ElectricityFromGrid [Electricity - Wh]"]
+        results_df["ElectricityMeter - ElectricityFromGrid [Electricity - Wh]"]
     )
     simulation_results_electricity_consumption_in_watt_hour = (
-        my_sim.results_data_frame["ElectricityMeter - ElectricityConsumption [Electricity - Wh]"]
+        results_df["ElectricityMeter - ElectricityConsumption [Electricity - Wh]"]
     )
     sum_electricity_from_grid_in_kilowatt_hour = sum(simulation_results_electricity_from_grid_in_watt_hour) / 1000
     sum_electricity_consumption_in_kilowatt_hour = sum(simulation_results_electricity_consumption_in_watt_hour) / 1000
 
-    log.information(
-        "kpi cumulative production [kWh] "
-        + str(cumulative_production_kpi_in_kilowatt_hour)
-    )
-    log.information(
-        "kpi cumulative consumption [kWh] "
-        + str(cumulative_consumption_kpi_in_kilowatt_hour)
-    )
-    log.information(
-        "kpi energy from grid [kWh] "
-        + str(electricity_from_grid_kpi_in_kilowatt_hour)
-    )
+    log.information(f"kpi cumulative production [kWh] {cumulative_production_kpi_in_kilowatt_hour}")
+    log.information(f"kpi cumulative consumption [kWh] {cumulative_consumption_kpi_in_kilowatt_hour}")
+    log.information(f"kpi energy from grid [kWh] {electricity_from_grid_kpi_in_kilowatt_hour}")
     log.information(
         "ElectricityMeter cumulative production [kWh] "
-        + str(
-            simulation_results_electricity_meter_cumulative_production_in_watt_hour
-            * 1e-3
-        )
+        f"{simulation_results_electricity_meter_cumulative_production_in_watt_hour * 1e-3}"
     )
     log.information(
         "ElectricityMeter cumulative consumption [kWh] "
-        + str(
-            simulation_results_electricity_meter_cumulative_consumption_in_watt_hour
-            * 1e-3
-        )
+        f"{simulation_results_electricity_meter_cumulative_consumption_in_watt_hour * 1e-3}"
     )
-    log.information(
-        "ElectricityMeter energy from grid [kWh] "
-        + str(
-            sum_electricity_from_grid_in_kilowatt_hour
-        )
-    )
-    log.information(
-        "ElectricityMeter consumption [kWh] "
-        + str(
-            sum_electricity_consumption_in_kilowatt_hour
-        )
-    )
+    log.information(f"ElectricityMeter energy from grid [kWh] {sum_electricity_from_grid_in_kilowatt_hour}")
+    log.information(f"ElectricityMeter consumption [kWh] {sum_electricity_consumption_in_kilowatt_hour}")
 
     # test and compare with relative error of 10%
     np.testing.assert_allclose(
@@ -255,3 +213,43 @@ def test_house(
         sum_electricity_from_grid_in_kilowatt_hour,
         rtol=0.1,
     )
+
+
+@utils.measure_execution_time
+@pytest.mark.extendedbase
+def test_house(
+    my_simulation_parameters: Optional[SimulationParameters] = None,
+) -> None:
+    """The test should check if a normal simulation works with the electricity grid implementation."""
+
+    # =========================================================================================================================================================
+    # System Parameters
+
+    # Set Simulation Parameters
+    year = 2021
+    seconds_per_timestep = 60 * 60
+
+    # =========================================================================================================================================================
+    # Build Components
+
+    # Build Simulation Parameters
+    if my_simulation_parameters is None:
+        my_simulation_parameters = SimulationParameters.one_day_only(
+            year=year, seconds_per_timestep=seconds_per_timestep
+        )
+
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.EXPORT_TO_CSV
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.COMPUTE_KPIS
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.WRITE_KPIS_TO_JSON
+        )
+
+    my_sim, _, results_df = _build_system(my_simulation_parameters)
+
+    kpis = _load_kpi_summary(my_sim._simulation_parameters.result_directory)  # pylint: disable=W0212
+
+    _assert_kpis_match_simulation(kpis, results_df)

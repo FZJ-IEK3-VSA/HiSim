@@ -1,7 +1,8 @@
 """Simple implementation of an electrolyzer.
 
-The electrolyzer can moderate in a certain range,but the efficiency changes only
-linarly. Recovery heat is not considered so far.
+The electrolyzer can moderate in a certain range, but the hydrogen production
+rate is linearly interpolated between the configured minimum and maximum
+operating points. Recovery heat is not considered so far.
 """
 
 from dataclasses import dataclass
@@ -48,7 +49,18 @@ class GenericElectrolyzerConfig(cp.ConfigBase):
         p_el: float,
         building_name: str = "BUI1",
     ) -> "GenericElectrolyzerConfig":
-        """Returns the default configuration of an electrolyzer."""
+        """Return a default electrolyzer configuration.
+
+        Args:
+            p_el: Nominal electrical power in Watt; sets `max_power` and derives
+                `min_power` (50% of `p_el`) and the min/max hydrogen production
+                rates.
+            building_name: Identifier of the building the electrolyzer belongs to.
+
+        Returns:
+            A `GenericElectrolyzerConfig` with default name, source weight, and
+                power/production values derived from `p_el`.
+        """
         config = GenericElectrolyzerConfig(
             building_name=building_name,
             name="Electrolyzer",
@@ -61,16 +73,12 @@ class GenericElectrolyzerConfig(cp.ConfigBase):
         return config
 
 
+@dataclass
 class ElectrolyzerState:
     """Saves the state of the electrolyzer."""
 
-    hydrogen: float
-    electricity: float
-
-    def __init__(self, hydrogen: float = 0, electricity: float = 0):
-        """Initialize an instance."""
-        self.hydrogen = hydrogen
-        self.electricity = electricity
+    hydrogen: float = 0.0
+    electricity: float = 0.0
 
     def clone(self) -> "ElectrolyzerState":
         """Return a second instance of this class with same attributes."""
@@ -80,7 +88,8 @@ class ElectrolyzerState:
 class GenericElectrolyzer(cp.Component):
     """Generic electrolyzer component.
 
-    The electrolyzer converts electrical energy [kWh] into hydrogen [kg]. It can
+    The electrolyzer converts electrical power [W] into a hydrogen mass flow
+    [kg/s]. It can
     work in a certain range from x to 100% or be switched off = 0%. The
     conversion rate is given by the supplier and is directly used. Maybe a
     change to efficiency can be made but its just making things more complex
@@ -107,11 +116,20 @@ class GenericElectrolyzer(cp.Component):
         my_simulation_parameters: SimulationParameters,
         config: GenericElectrolyzerConfig,
         my_display_config: Optional[cp.DisplayConfig] = None,
-    ):
-        """Initialize an instance."""
+    ) -> None:
+        """Initialize the electrolyzer component.
 
-        self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
+        Args:
+            my_simulation_parameters: Parameters controlling the time-step
+                simulation.
+            config: Configuration defining the electrolyzer's power range and
+                hydrogen production rates.
+            my_display_config: Optional display configuration for post-processing;
+                defaults to a default `DisplayConfig` when `None`.
+        """
+
+        self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
+        self.config: GenericElectrolyzerConfig = config
         if my_display_config is None:
             my_display_config = cp.DisplayConfig()
         component_name = self.get_component_name()
@@ -123,8 +141,8 @@ class GenericElectrolyzer(cp.Component):
         )
 
         self.config = config
-        self.state = ElectrolyzerState()
-        self.previous_state = ElectrolyzerState()
+        self.state: ElectrolyzerState = ElectrolyzerState()
+        self.previous_state: ElectrolyzerState = ElectrolyzerState()
 
         # Intputs
         self.electricity_target_channel: cp.ComponentInput = self.add_input(
@@ -163,7 +181,13 @@ class GenericElectrolyzer(cp.Component):
     def get_default_connections_from_l1_generic_electrolyzer_controller(
         self,
     ) -> List[cp.ComponentConnection]:
-        """Sets default connections of the controller in the Electroylzer."""
+        """Return default connections from the L1 electrolyzer controller.
+
+        Returns:
+            A list of `ComponentConnection` objects wiring the controller's
+                available-electricity output to this electrolyzer's
+                `AvailableElectricity` input.
+        """
 
         connections: List[cp.ComponentConnection] = []
         controller_classname = controller_l1_electrolyzer.L1GenericElectrolyzerController.get_classname()
@@ -185,12 +209,33 @@ class GenericElectrolyzer(cp.Component):
         self.state = self.previous_state.clone()
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
-        """Doublecheck."""
+        """No-op consistency check invoked after a simulation step.
+
+        Args:
+            timestep: The current simulation timestep index.
+            stsv: The single time step values container holding inputs and
+                outputs.
+        """
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
-        """Simulate."""
+        """Simulate one timestep of the electrolyzer.
+
+        Reads the available-electricity target, clamps it to the configured
+        operating range (off below `min_power`, capped at `max_power`), and
+        linearly interpolates the hydrogen production rate between the configured
+        minimum and maximum. Writes the hydrogen and electricity outputs.
+
+        Args:
+            timestep: The current simulation timestep index.
+            stsv: The single time step values container used to read inputs and
+                write outputs.
+            force_convergence: If `True`, the component should skip iterative
+                convergence logic; this implementation performs no extra action.
+
+        Raises:
+            ValueError: If the electricity target is negative.
+        """
         if force_convergence:
             pass
 

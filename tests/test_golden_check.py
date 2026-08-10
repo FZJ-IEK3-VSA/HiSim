@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from scripts.golden_check import _parse_args, golden_filename, main
-from scripts.runner import GoldenConfig, RunResult
+from scripts.runner import GoldenConfig, RunResult, select_pairs
 
 pytestmark = pytest.mark.base
 
@@ -47,6 +47,21 @@ def _write_golden(golden_dir: Path, kpis: dict) -> None:
 def _run_fn(kpis: dict, error: str | None = None):
     def fake(_config: GoldenConfig, _results_root: Path, _repo_root: Path, _subdir: str) -> list[RunResult]:
         return [RunResult("setup_a", "one_week_60s", "rd", kpis=kpis, error=error)]
+    return fake
+
+
+def _config_aware_run_fn(kpis: dict, error: str | None = None):
+    """A ``run_fn`` returning a ``RunResult`` for every pair in ``select_pairs(config)``.
+
+    Unlike ``_run_fn`` (which ignores its ``config`` argument and always returns one
+    hardcoded pair), this honors the config's filtered pair set so that
+    setup/param narrowing is observable in the report.
+    """
+    def fake(config: GoldenConfig, _results_root: Path, _repo_root: Path, _subdir: str) -> list[RunResult]:
+        return [
+            RunResult(setup.id, param.id, "rd", kpis=kpis, error=error)
+            for setup, param in select_pairs(config)
+        ]
     return fake
 
 
@@ -178,14 +193,55 @@ def test_cli_mode_and_advisory_flags() -> None:
 
 
 def test_setup_param_filter_narrows_to_one_pair(tmp_path: Path) -> None:
-    """The setup/param filter narrows the run to the single selected pair."""
-    config_path = _write_config(tmp_path)
-    golden_dir = tmp_path / "golden_references"
-    _write_golden(golden_dir, {"a": 1.0})
+    """The setup/param filter narrows the run to the single selected pair.
 
+    Uses a config with two parameter sets and a ``run_fn`` that honors
+    ``select_pairs(config)`` so narrowing is observable: unfiltered, both pairs
+    appear in the report; filtered to ``setup_a``/``one_week_60s``, only that
+    pair survives and the other is absent.
+    """
+    config = _config_dict()
+    config["parameter_sets"].append({
+        "id": "one_day_60s",
+        "factory": "one_day_only",
+        "year": 2021,
+        "seconds_per_timestep": 60,
+        "post_processing_options": ["COMPUTE_KPIS", "WRITE_KPIS_TO_JSON"],
+        "nondeterministic": False,
+    })
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(config))
+
+    golden_dir = tmp_path / "golden_references"
+    kpis = {"a": 1.0}
+    _write_golden(golden_dir, kpis)
+    (golden_dir / golden_filename("setup_a", "one_day_60s")).write_text(json.dumps(kpis))
+    run_fn = _config_aware_run_fn(kpis)
+
+    # Without the filter, both pairs run and appear in the report — this confirms
+    # the config genuinely holds two pairs and run_fn returns both, so the filter
+    # is the only thing that could narrow the result below.
+    rc = main(
+        config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
+        repo_root=tmp_path, run_fn=run_fn,
+    )
+    assert rc == 0
+    report = _read_report(tmp_path)
+    assert len(report["pairs"]) == 2
+    pair_ids = {(p["setup_id"], p["parameter_set_id"]) for p in report["pairs"]}
+    assert pair_ids == {("setup_a", "one_week_60s"), ("setup_a", "one_day_60s")}
+
+    # With the filter, only the selected pair survives.
     rc = main(
         config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
         repo_root=tmp_path, setup_id="setup_a", param_id="one_week_60s",
-        run_fn=_run_fn({"a": 1.0}),
+        run_fn=run_fn,
     )
     assert rc == 0
+    report = _read_report(tmp_path)
+    assert len(report["pairs"]) == 1
+    assert report["pairs"][0]["setup_id"] == "setup_a"
+    assert report["pairs"][0]["parameter_set_id"] == "one_week_60s"
+    # The non-selected pair is absent, pinning the narrowing semantics.
+    pair_ids = {(p["setup_id"], p["parameter_set_id"]) for p in report["pairs"]}
+    assert ("setup_a", "one_day_60s") not in pair_ids

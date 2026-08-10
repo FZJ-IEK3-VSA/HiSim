@@ -75,13 +75,21 @@ class L1ElectrolyzerControllerState:
         )
 
     def activate(self, timestep: int) -> None:
-        """Activates the heat pump and remembers the time step."""
+        """Activate the electrolyzer and record the activation timestep.
+
+        Args:
+            timestep: The current simulation timestep at which activation occurs.
+        """
         if self.state == 0:
             self.activation_time_step = timestep
         self.state = 1
 
     def deactivate(self, timestep: int) -> None:
-        """Deactivates the heat pump and remembers the time step."""
+        """Deactivate the electrolyzer and record the deactivation timestep.
+
+        Args:
+            timestep: The current simulation timestep at which deactivation occurs.
+        """
         if self.state == 1:
             self.deactivation_time_step = timestep
         self.state = 0
@@ -113,10 +121,12 @@ class L1GenericElectrolyzerController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: L1ElectrolyzerControllerConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: cp.DisplayConfig | None = None,
     ) -> None:
         """Initialize the class."""
 
+        if my_display_config is None:
+            my_display_config = cp.DisplayConfig()
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()

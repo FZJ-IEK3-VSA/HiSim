@@ -82,6 +82,7 @@ def default_sbatch(
     log_dir: Optional[str] = None,
     worker_config: Optional[str] = None,
     worker_runner: Optional[str] = None,
+    runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
 ) -> List[str]:
     """Submit ``n`` worker jobs; returns the Slurm job ids actually submitted.
 
@@ -97,6 +98,9 @@ def default_sbatch(
     A total failure raises ``RuntimeError`` carrying sbatch's **stderr** (so the reason
     is visible in the log and on the autoscaler dashboard, not just an opaque exit
     code). A partial failure keeps the jobs already submitted and stops early.
+
+    ``runner`` is the ``sbatch`` invocation function (defaulting to
+    ``subprocess.run``); tests inject a fake to avoid monkeypatching the module.
     """
     if not worker_script:
         raise RuntimeError("autoscale.worker_script is not set")
@@ -121,7 +125,7 @@ def default_sbatch(
     job_ids: List[str] = []
     for _ in range(n):
         try:
-            out = subprocess.run(
+            out = runner(
                 ["sbatch", "--parsable", *log_args, *export_args, worker_script],
                 capture_output=True, text=True, timeout=60, check=False,
             )

@@ -1,4 +1,9 @@
-"""District Heating Module."""
+"""District heating module.
+
+This module provides the :class:`DistrictHeating` component and the
+:class:`DistrictHeatingController` for simulating a district heating
+supply to space heating and domestic hot water circuits.
+"""
 
 # clean
 # Owned
@@ -64,7 +69,7 @@ class DistrictHeatingConfig(ConfigBase):
     building_name: str
     name: str
     # Maximum thermal power that can be delivered
-    connected_load_w: float
+    connected_load_in_w: float
     #: CO2 footprint of investment in kg
     device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
@@ -79,13 +84,25 @@ class DistrictHeatingConfig(ConfigBase):
 
     @classmethod
     def get_default_district_heating_config(
-        cls, building_name: str = "BUI1", with_domestic_hot_water_preparation=False, connected_load_w: float = 20000
+        cls, building_name: str = "BUI1", with_domestic_hot_water_preparation=False, connected_load_in_w: float = 20000
     ) -> Any:
-        """Get a default district heating."""
+        """Return a default DistrictHeatingConfig with sensible preset values.
+
+        Args:
+            building_name: Identifier for the building this district heating serves.
+            with_domestic_hot_water_preparation: Whether the system also prepares
+                domestic hot water (adds DHW inputs/outputs).
+            connected_load_in_w: Maximum thermal power the district heating connection
+                can deliver, in watts.
+
+        Returns:
+            A DistrictHeatingConfig with capex/emissions left as None (calculated
+            later in get_cost_capex).
+        """
         config = DistrictHeatingConfig(
             building_name=building_name,
             name="DistrictHeating",
-            connected_load_w=connected_load_w,
+            connected_load_in_w=connected_load_in_w,
             # capex and device emissions are calculated in get_cost_capex function by default
             device_co2_footprint_in_kg=None,
             investment_costs_in_euro=None,
@@ -98,7 +115,15 @@ class DistrictHeatingConfig(ConfigBase):
 
 
 class DistrictHeating(Component):
-    """District Heating class."""
+    """District heating component.
+
+    This component delivers heat from a district heating network to a
+    space-heating circuit and, optionally, a domestic hot water (DHW)
+    circuit. Its operation is modulated by a
+    :class:`DistrictHeatingController`, and the maximum thermal power
+    the connection can deliver is configurable via
+    :attr:`DistrictHeatingConfig.connected_load_in_w`.
+    """
 
     # Inputs
     HeatingMode = "HeatingMode"
@@ -127,9 +152,11 @@ class DistrictHeating(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: DistrictHeatingConfig,
-        my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
+        my_display_config: Optional[DisplayConfig] = None,
     ) -> None:
         """Construct all the neccessary attributes."""
+        if my_display_config is None:
+            my_display_config = DisplayConfig(display_in_webtool=True)
         self.district_heating_config = config
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -378,18 +405,18 @@ class DistrictHeating(Component):
 
             # Calculate
             (
-                thermal_power_delivered_w,
+                thermal_power_delivered_in_w,
                 thermal_energy_delivered_in_watt_hour,
                 water_output_temperature_deg_c,
             ) = self._calculate_space_heating_outputs(
                 water_mass_flow_rate_for_sh_in_kg_per_s,
                 delta_temperature_needed_for_sh_in_celsius,
                 water_input_temperature_for_sh_deg_c,
-                available_load_in_w=self.config.connected_load_w,
+                available_load_in_w=self.config.connected_load_in_w,
             )
 
             # Set outputs
-            stsv.set_output_value(self.thermal_output_power_sh_channel, thermal_power_delivered_w)
+            stsv.set_output_value(self.thermal_output_power_sh_channel, thermal_power_delivered_in_w)
             stsv.set_output_value(
                 self.thermal_output_energy_sh_channel,
                 thermal_energy_delivered_in_watt_hour,
@@ -421,7 +448,7 @@ class DistrictHeating(Component):
 
             # Calculate
             (
-                thermal_power_delivered_w,
+                thermal_power_delivered_in_w,
                 thermal_energy_delivered_in_watt_hour,
                 water_output_temperature_deg_c,
                 water_mass_flow_rate_in_kg_per_s,
@@ -433,7 +460,7 @@ class DistrictHeating(Component):
             # Set outputs
             stsv.set_output_value(
                 self.thermal_output_power_dhw_channel,
-                thermal_power_delivered_w,
+                thermal_power_delivered_in_w,
             )
             stsv.set_output_value(
                 self.thermal_output_energy_dhw_channel,
@@ -498,9 +525,9 @@ class DistrictHeating(Component):
             # Now calculate for space heating
             # Calculate
             # raise value error if thermal power delivered of both are higher than maximal load
-            if self.config.connected_load_w - thermal_power_delivered_for_dhw_w <= 0:
+            if self.config.connected_load_in_w - thermal_power_delivered_for_dhw_w <= 0:
                 raise ValueError(
-                    f"Thermal load for DHW {thermal_power_delivered_for_dhw_w}W is equal or higher than maximal connected load {self.config.connected_load_w}. "
+                    f"Thermal load for DHW {thermal_power_delivered_for_dhw_w}W is equal or higher than maximal connected load {self.config.connected_load_in_w}. "
                 )
             (
                 thermal_power_delivered_for_sh_w,
@@ -510,7 +537,7 @@ class DistrictHeating(Component):
                 water_mass_flow_rate_for_sh_in_kg_per_s,
                 delta_temperature_needed_for_sh_in_celsius,
                 water_input_temperature_for_sh_deg_c,
-                available_load_in_w=self.config.connected_load_w - thermal_power_delivered_for_dhw_w,
+                available_load_in_w=self.config.connected_load_in_w - thermal_power_delivered_for_dhw_w,
             )
 
             # Set outputs
@@ -568,7 +595,7 @@ class DistrictHeating(Component):
         water_input_temperature_deg_c: float,
         available_load_in_w: float,
     ) -> Tuple[float, float, float]:
-        thermal_power_delivered_w = (
+        thermal_power_delivered_in_w = (
             water_mass_flow_rate_in_kg_per_s
             * PhysicsConfig.get_properties_for_energy_carrier(
                 energy_carrier=LoadTypes.WATER
@@ -576,11 +603,11 @@ class DistrictHeating(Component):
             * delta_temperature_needed_in_celsius
         )
 
-        if thermal_power_delivered_w > available_load_in_w:
+        if thermal_power_delivered_in_w > available_load_in_w:
             # make sure that not more power is delivered than available
             logging.debug("The needed thermal power for space heating is higher than the maximum connected load.")
-            thermal_power_delivered_w = available_load_in_w
-            delta_temperature_achieved = thermal_power_delivered_w / (
+            thermal_power_delivered_in_w = available_load_in_w
+            delta_temperature_achieved = thermal_power_delivered_in_w / (
                 water_mass_flow_rate_in_kg_per_s
                 * PhysicsConfig.get_properties_for_energy_carrier(
                     energy_carrier=LoadTypes.WATER
@@ -591,9 +618,9 @@ class DistrictHeating(Component):
             water_output_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
 
         thermal_energy_delivered_in_watt_hour = (
-            thermal_power_delivered_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
+            thermal_power_delivered_in_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )
-        return thermal_power_delivered_w, thermal_energy_delivered_in_watt_hour, water_output_temperature_deg_c
+        return thermal_power_delivered_in_w, thermal_energy_delivered_in_watt_hour, water_output_temperature_deg_c
 
     def _calculate_dhw_outputs(self, water_input_temperature_deg_c: float, delta_temperature_needed_in_celsius: float):
         water_target_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
@@ -601,25 +628,25 @@ class DistrictHeating(Component):
         # calculate thermal power delivered Q = m * cw * dT
         if delta_temperature_needed_in_celsius > 0:
             # regulate thermal output power based on deltaT needed
-            thermal_power_delivered_w = min(
-                self.config.connected_load_w * delta_temperature_needed_in_celsius / 100.0, self.config.connected_load_w
+            thermal_power_delivered_in_w = min(
+                self.config.connected_load_in_w * delta_temperature_needed_in_celsius / 100.0, self.config.connected_load_in_w
             )
-            water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_w / (
+            water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_in_w / (
                 PhysicsConfig.get_properties_for_energy_carrier(
                     energy_carrier=LoadTypes.WATER
                 ).specific_heat_capacity_in_joule_per_kg_per_kelvin
                 * delta_temperature_needed_in_celsius
             )
         else:
-            thermal_power_delivered_w = 0
+            thermal_power_delivered_in_w = 0
             water_mass_flow_rate_in_kg_per_s = 0
 
         water_target_temperature_deg_c = water_input_temperature_deg_c + delta_temperature_needed_in_celsius
         thermal_energy_delivered_in_watt_hour = (
-            thermal_power_delivered_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
+            thermal_power_delivered_in_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )
         return (
-            thermal_power_delivered_w,
+            thermal_power_delivered_in_w,
             thermal_energy_delivered_in_watt_hour,
             water_target_temperature_deg_c,
             water_mass_flow_rate_in_kg_per_s,
@@ -698,7 +725,7 @@ class DistrictHeating(Component):
         component_type = ComponentType.DISTRICT_HEATING
         kpi_tag = KpiTagEnumClass.DISTRICT_HEATING
         unit = Units.KILOWATT
-        size_of_energy_system = config.connected_load_w * 1e-3
+        size_of_energy_system = config.connected_load_in_w * 1e-3
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
             simulation_parameters=simulation_parameters,
@@ -838,7 +865,7 @@ class DistrictHeatingControllerConfig(ConfigBase):
     name: str
     set_heating_threshold_outside_temperature_in_celsius: float
     with_domestic_hot_water_preparation: bool
-    hysteresis_water_temperature_offset: float
+    hysteresis_water_temperature_offset_in_celsius: float
     parallel_space_heating_and_dhw_option: bool
 
     @classmethod
@@ -855,7 +882,7 @@ class DistrictHeatingControllerConfig(ConfigBase):
             name="DistrictHeatingController",
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-            hysteresis_water_temperature_offset=15,
+            hysteresis_water_temperature_offset_in_celsius=15,
             parallel_space_heating_and_dhw_option=parallel_space_heating_and_dhw_option,
         )
 
@@ -882,9 +909,11 @@ class DistrictHeatingController(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: DistrictHeatingControllerConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: Optional[DisplayConfig] = None,
     ) -> None:
         """Construct all the neccessary attributes."""
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
         self.district_heating_controller_config = config
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -1131,7 +1160,7 @@ class DistrictHeatingController(Component):
             set_temperatures=SetTemperatureConfig(
                 set_temperature_space_heating=sh_set_temperature_deg_c,
                 set_temperature_dhw=self.warm_water_temperature_aim_in_celsius,
-                hysteresis_water_temperature_offset=self.config.hysteresis_water_temperature_offset,
+                hysteresis_water_temperature_offset=self.config.hysteresis_water_temperature_offset_in_celsius,
                 outside_temperature_threshold=self.district_heating_controller_config.set_heating_threshold_outside_temperature_in_celsius,
             ),
             parallel_space_heating_and_dhw_option=self.config.parallel_space_heating_and_dhw_option,
@@ -1154,7 +1183,7 @@ class DistrictHeatingController(Component):
                     self.warm_water_temperature_aim_in_celsius - dhw_current_temperature_deg_c,
                     0.0,
                 )
-                + self.config.hysteresis_water_temperature_offset
+                + self.config.hysteresis_water_temperature_offset_in_celsius
             )
             delta_temperature_for_space_heating_in_celsius = 0.0
         elif self.controller_mode == HeatingMode.OFF:
@@ -1167,7 +1196,7 @@ class DistrictHeatingController(Component):
                     self.warm_water_temperature_aim_in_celsius - dhw_current_temperature_deg_c,
                     0.0,
                 )
-                + self.config.hysteresis_water_temperature_offset
+                + self.config.hysteresis_water_temperature_offset_in_celsius
             )
             delta_temperature_for_space_heating_in_celsius = float(
                 max(

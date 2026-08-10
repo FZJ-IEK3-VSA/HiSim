@@ -196,7 +196,7 @@ class Windturbine(cp.Component):
         )
 
         # Berechnungsmethoden Winddaten
-        self.calculation_setup = ModelChain(
+        self.model_chain = ModelChain(
             power_plant=self.windturbine_module,
             wind_speed_model=self.wind_speed_model,
             temperature_model=self.temperature_model,
@@ -313,17 +313,17 @@ class Windturbine(cp.Component):
 
         wind_speed_10m_in_m_per_sec = stsv.get_input_value(self.wind_speed_channel)
         temperature_2m_in_celsius = stsv.get_input_value(self.t_out_channel)
-        pressure_standorthoehe_in_pascal = stsv.get_input_value(self.pressure_channel)
+        pressure_at_site_in_pascal = stsv.get_input_value(self.pressure_channel)
 
         temperature_2m_in_kelvin = temperature_2m_in_celsius + 273.15
 
         roughness_length_in_m = 0.15
 
-        data = [
+        weather_data = [
             [
                 wind_speed_10m_in_m_per_sec,
                 temperature_2m_in_kelvin,
-                pressure_standorthoehe_in_pascal,
+                pressure_at_site_in_pascal,
                 roughness_length_in_m,
             ]
         ]
@@ -342,12 +342,12 @@ class Windturbine(cp.Component):
         ]
 
         # calculation of windturbine power
-        windturbine_power = self.get_cached_results_or_run_windpowerlib_simulation(data=data, columns=columns)
+        windturbine_simulation_result = self.get_cached_results_or_run_windpowerlib_simulation(weather_data=weather_data, columns=columns)
 
         # write power output time series to WindTurbine object
-        windturbine_power.power_output = windturbine_power.power_output
+        windturbine_simulation_result.power_output = windturbine_simulation_result.power_output
 
-        power_output_windturbine_in_watt = windturbine_power.power_output
+        power_output_windturbine_in_watt = windturbine_simulation_result.power_output
 
         df_electric_power_output_windturbine_in_watt = pd.DataFrame(power_output_windturbine_in_watt)
 
@@ -420,36 +420,36 @@ class Windturbine(cp.Component):
 
     def get_cached_results_or_run_windpowerlib_simulation(
         self,
-        data: list,
+        weather_data: list,
         columns: list,
     ) -> Any:
         """Use caching of results of windpowerlib simulation."""
 
         # rounding of variable values
-        wind_speed_10m_in_m_per_sec = round(data[0][0], 2)
-        temperature_2m_in_kelvin = round(data[0][1], 2)
-        pressure_standorthoehe_in_pascal = round(data[0][2], 2)
-        roughness_length_in_m = round(data[0][3], 2)
+        wind_speed_10m_in_m_per_sec = round(weather_data[0][0], 2)
+        temperature_2m_in_kelvin = round(weather_data[0][1], 2)
+        pressure_at_site_in_pascal = round(weather_data[0][2], 2)
+        roughness_length_in_m = round(weather_data[0][3], 2)
 
-        my_data_class = CalculationRequest(
+        calculation_request = CalculationRequest(
             wind_speed_10m_in_m_per_sec=wind_speed_10m_in_m_per_sec,
             temperature_2m_in_kelvin=temperature_2m_in_kelvin,
-            pressure_standorthoehe_in_pascal=pressure_standorthoehe_in_pascal,
+            pressure_at_site_in_pascal=pressure_at_site_in_pascal,
             roughness_length_in_m=roughness_length_in_m,
         )
-        my_json_key = my_data_class.get_key()
-        my_hash_key = hashlib.sha256(my_json_key.encode("utf-8")).hexdigest()
+        cache_key_string = calculation_request.get_key()
+        cache_hash = hashlib.sha256(cache_key_string.encode("utf-8")).hexdigest()
 
-        if my_hash_key in self.calculation_cache:
-            windturbine_power = self.calculation_cache[my_hash_key]
+        if cache_hash in self.calculation_cache:
+            windturbine_simulation_result = self.calculation_cache[cache_hash]
 
         else:
-            weather_df = pd.DataFrame(data, columns=columns)  # dataframe, due to package windpowerlib only work with it
-            windturbine_power = self.calculation_setup.run_model(weather_df)
+            weather_df = pd.DataFrame(weather_data, columns=columns)  # dataframe, due to package windpowerlib only work with it
+            windturbine_simulation_result = self.model_chain.run_model(weather_df)
 
-            self.calculation_cache[my_hash_key] = windturbine_power
+            self.calculation_cache[cache_hash] = windturbine_simulation_result
 
-        return windturbine_power
+        return windturbine_simulation_result
 
 
 @dataclass
@@ -458,20 +458,17 @@ class CalculationRequest(JSONWizard):
 
     wind_speed_10m_in_m_per_sec: float
     temperature_2m_in_kelvin: float
-    pressure_standorthoehe_in_pascal: float
+    pressure_at_site_in_pascal: float
     roughness_length_in_m: float
 
     def get_key(self):
         """Get key of class with important parameters."""
 
         return (
-            str(self.wind_speed_10m_in_m_per_sec)
-            + " "
-            + str(self.temperature_2m_in_kelvin)
-            + " "
-            + str(self.pressure_standorthoehe_in_pascal)
-            + " "
-            + str(self.roughness_length_in_m)
+            f"{self.wind_speed_10m_in_m_per_sec} "
+            f"{self.temperature_2m_in_kelvin} "
+            f"{self.pressure_at_site_in_pascal} "
+            f"{self.roughness_length_in_m}"
         )
 
 

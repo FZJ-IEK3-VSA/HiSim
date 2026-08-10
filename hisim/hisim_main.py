@@ -31,10 +31,10 @@ except ModuleNotFoundError:
 
 load_dotenv()
 
-__authors__ = "Valentin Janser"
-__credits__ = ["Noah Pflugradt", "Katharina Rieck"]
-__maintainer__ = "Valentin Janser"
-__email__ = "v.janser@fz-juelich.de"
+__authors__: str = "Valentin Janser"
+__credits__: list[str] = ["Noah Pflugradt", "Katharina Rieck"]
+__maintainer__: str = "Valentin Janser"
+__email__: str = "v.janser@fz-juelich.de"
 
 
 def is_hisim_root(path: Path) -> bool:
@@ -43,7 +43,17 @@ def is_hisim_root(path: Path) -> bool:
 
 
 def get_description_from_py(path_obj: Path) -> str:
-    """Extract brief description from the first line of the system setup python file."""
+    """Extract a brief description from the first line of a system-setup Python file.
+
+    The first line is expected to be a docstring or comment. Surrounding triple
+    quotes (triple double quotes or triple single quotes) are stripped if present.
+
+    Args:
+        path_obj: Path to the ``.py`` file whose first line is read.
+
+    Returns:
+        The cleaned-up first line of the file.
+    """
     with path_obj.open("r", encoding="utf-8") as file:
         first_line = file.readline().strip()
 
@@ -60,7 +70,28 @@ def initialize_from_python(
     my_simulation_parameters: Optional[SimulationParameters] = None,
     my_module_config: Optional[str] = None,
 ) -> sim.Simulator:
-    """Initialize the simulator based on a Python household configuration and optional simulation parameters and module config."""
+    """Initialize the simulator from a Python household configuration file.
+
+    Resolves *path_to_module* to an absolute ``.py`` file, adds parent
+    directories to ``sys.path``, records the first-line description in the
+    singleton sim repository, imports the module, and calls its
+    ``setup_function`` to wire the component graph.
+
+    Args:
+        path_to_module: Path (with or without ``.py`` suffix) to the setup
+            module.
+        my_simulation_parameters: Optional pre-built simulation parameters;
+            if ``None`` the ``Simulator`` defaults apply.
+        my_module_config: Optional config string forwarded to the setup
+            function.
+
+    Returns:
+        The initialized ``Simulator`` with its component graph wired.
+
+    Raises:
+        ValueError: If a parent directory does not exist or the ``.py``
+            file cannot be found.
+    """
 
     function_in_module = "setup_function"
 
@@ -113,7 +144,19 @@ def initialize_from_python(
 
 
 def load_json_file(path_str: str) -> dict[str, Any]:
-    """Load a JSON file and return it as a Python dict."""
+    """Load a JSON file and return it as a Python dict.
+
+    Args:
+        path_str: Path to the JSON file (``~`` is expanded to the home
+            directory).
+
+    Returns:
+        The parsed JSON content as a dictionary.
+
+    Raises:
+        ValueError: If the file cannot be read or does not contain valid
+            JSON.
+    """
     # This function was created with the help of ChatGPT
 
     path = Path(path_str).expanduser().resolve()
@@ -133,7 +176,28 @@ def initialize_from_json(
     path_to_module: str,
     delta: Optional[str],
 ) -> sim.Simulator:
-    """Initialize the simulator based on JSON scenario and simulation parameters."""
+    """Initialize the simulator from JSON scenario and simulation-parameter files.
+
+    Loads both JSON files, deserializes ``SimulationParameters`` (converting
+    ISO date strings and post-processing option names), and delegates to
+    ``_build_simulator_from_scenario``.
+
+    Args:
+        scenario: Path to the scenario ``.json`` file.
+        simulation_parameters: Path to the simulation-parameters ``.json``
+            file.
+        path_to_module: Path whose parent directory is added to
+            ``sys.path`` for component imports.
+        delta: Optional path to a delta ``.json`` file. Currently
+            unsupported -- a warning is logged and the value is ignored.
+
+    Returns:
+        The initialized ``Simulator`` with its component graph wired.
+
+    Raises:
+        ValueError: If either JSON file is invalid or the module directory
+            does not exist.
+    """
 
     # Load JSON files
     scenario_data = load_json_file(scenario)
@@ -185,7 +249,7 @@ def _build_simulator_from_scenario(
     else:
         raise ValueError(f"Directory of module does not exist: {module_dir}")
 
-    my_sim = sim.Simulator(
+    my_sim: sim.Simulator = sim.Simulator(
         module_directory=str(module_dir),
         module_filename=module_filename,
         setup_function="setup_function",  # In JSON mode we do not use a setup function; but must not be None for post-processing
@@ -193,7 +257,7 @@ def _build_simulator_from_scenario(
         my_simulation_parameters=sim_params,
     )
 
-    my_sim = setup_components_and_connections(scenario_data, my_sim, sim_params)
+    setup_components_and_connections(scenario_data, my_sim, sim_params)
     return my_sim
 
 
@@ -209,6 +273,16 @@ def initialize_from_json_with_parameters(
     :class:`SimulationParameters` object it would use for the Python setup — same
     dates, timestep, post-processing options and ``result_directory`` — so the two
     runs are comparable with no risk of parameter drift.
+
+    Args:
+        scenario: Path to the ``.scenario.json`` file describing the component
+            graph.
+        my_simulation_parameters: A pre-built ``SimulationParameters`` instance
+            to drive the scenario (dates, timestep, post-processing options,
+            result directory).
+
+    Returns:
+        The initialized ``Simulator`` with its component graph wired.
     """
     scenario_data = load_json_file(scenario)
     SingletonSimRepository().set_entry(
@@ -220,7 +294,13 @@ def initialize_from_json_with_parameters(
 
 
 def run_simulation(my_sim: sim.Simulator, path_to_module: Optional[str]) -> None:
-    """Runs the simulation (for both Python-based and JSON-based executions)."""
+    """Run all time steps of an initialized simulator and log timing.
+
+    Args:
+        my_sim: An initialized ``Simulator`` (from ``initialize_from_python``
+            or ``initialize_from_json``).
+        path_to_module: Path to the setup module, used only for log messages.
+    """
 
     # If debugging is needed, this may be used to print components and their inputs/outputs
     for comp in my_sim.wrapped_components:
@@ -284,7 +364,20 @@ def parse_args() -> argparse.Namespace:
 
 
 def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
-    """Check the provided command-line arguments for validity and determine execution mode."""
+    """Validate command-line arguments and determine the execution mode.
+
+    Args:
+        args: Parsed arguments from ``parse_args``.
+
+    Returns:
+        A dict with key ``"mode"`` (``"python"`` or ``"json"``) plus
+        mode-specific keys: ``module_file``/``module_config`` for Python
+        mode, ``scenario``/``simulation``/``delta`` for JSON mode.
+
+    Raises:
+        ValueError: If the arguments match neither expected mode.
+        FileNotFoundError: If a required input file does not exist.
+    """
 
     inputs = args.inputs
 
@@ -340,7 +433,18 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
 
 
 def get_required_config_value(config: dict[str, Optional[str]], key: str) -> str:
-    """Return a required command-line config value."""
+    """Return a required command-line config value.
+
+    Args:
+        config: The config dict produced by ``validate_args``.
+        key: The key to look up in *config*.
+
+    Returns:
+        The non-``None`` string value stored under *key*.
+
+    Raises:
+        ValueError: If the value under *key* is ``None``.
+    """
     value = config[key]
     if value is None:
         raise ValueError(f"Missing required command-line argument: {key}")
@@ -402,6 +506,14 @@ def main(path_to_module: str, my_simulation_parameters: Optional[SimulationParam
     state is a mutable side channel. The singleton continues to be populated
     exactly as before, so existing callers that still read it are unaffected.
 
+    Args:
+        path_to_module: Path (with or without ``.py``) to the Python setup
+            module whose ``setup_function`` wires the component graph.
+        my_simulation_parameters: Optional pre-built simulation parameters;
+            if ``None`` the ``Simulator`` defaults apply.
+        my_module_config: Optional config string forwarded to the setup
+            function.
+
     Returns:
         The absolute path of the directory the simulation wrote its results to.
     """
@@ -424,6 +536,12 @@ def main_json(scenario: str, my_simulation_parameters: SimulationParameters) -> 
     post-processing, and returns the filesystem path of the result directory the
     simulator actually wrote to. Used by the golden-reference runner to execute a
     JSON setup with the same parameters as its Python twin and compare KPIs.
+
+    Args:
+        scenario: Path to the ``.scenario.json`` file describing the component
+            graph.
+        my_simulation_parameters: A pre-built ``SimulationParameters`` instance
+            to drive the scenario.
 
     Returns:
         The absolute path of the directory the simulation wrote its results to.

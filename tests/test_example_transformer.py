@@ -30,9 +30,7 @@ def test_example_transformer() -> None:
         example_transformer.ExampleTransformerConfig.get_default_transformer()
     )
     print("\n")
-    log.information(
-        "default transformer config " + str(my_example_transformer_config) + "\n"
-    )
+    log.information(f"default transformer config {my_example_transformer_config}\n")
     my_example_transformer = example_transformer.ExampleTransformer(
         config=my_example_transformer_config, my_simulation_parameters=mysim
     )
@@ -69,26 +67,23 @@ def test_example_transformer() -> None:
 
     # Test Simulation
     timestep = 10 * 60
-    log.information("timestep = " + str(timestep))
+    log.information(f"timestep = {timestep}")
     log.information(
-        "transformer input1 = "
-        + str(stsv.values[transformerinput1_output.global_index])
+        f"transformer input1 = {stsv.values[transformerinput1_output.global_index]}"
     )
     log.information(
-        "transformer input2= "
-        + str(stsv.values[transformerinput2_output.global_index])
-        + "\n"
+        f"transformer input2= {stsv.values[transformerinput2_output.global_index]}\n"
     )
 
     my_example_transformer.i_simulate(timestep, stsv, False)
     log.information("Output values after simulation: ")
     log.information(
-        "output1 = " + str(stsv.values[my_example_transformer.output1.global_index])
+        f"output1 = {stsv.values[my_example_transformer.output1.global_index]}"
     )
     log.information(
-        "output2 = " + str(stsv.values[my_example_transformer.output2.global_index])
+        f"output2 = {stsv.values[my_example_transformer.output2.global_index]}"
     )
-    log.information("output values = " + str(stsv.values) + "\n")
+    log.information(f"output values = {stsv.values}\n")
 
     assert 50 == stsv.values[transformerinput1_output.global_index]
     assert 10 == stsv.values[transformerinput2_output.global_index]

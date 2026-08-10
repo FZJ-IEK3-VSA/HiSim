@@ -40,6 +40,108 @@ def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:
     return all(isclose(float(value), reference, rel_tol=relative_tolerance, abs_tol=0.1) for value in lst)
 
 
+# Multiplicative factor for the order-of-magnitude check on computed
+# (non-invariant) components.  Empirically derived from the largest observed
+# max/min ratio (~11.1 for MoreAdvancedHeatPumpHPLib|Time|TimeOff) across
+# 15/30/60-min resolutions; provides ~35% margin while catching gross
+# regressions such as a 20x error.  See values_are_same_order_of_magnitude.
+_ORDER_OF_MAGNITUDE_FACTOR: float = 15.0
+
+
+def values_are_same_order_of_magnitude(lst: List, factor: float = _ORDER_OF_MAGNITUDE_FACTOR) -> bool:
+    """Check if values are within a multiplicative *factor* of each other.
+
+    This is a looser check than :func:`values_are_similar`, intended for
+    computed (non-invariant) components whose aggregated results legitimately
+    vary across time resolutions due to different integration step sizes and
+    control decisions.  The check uses absolute values so that quantities which
+    can legitimately cross zero (e.g. ``SimpleHotWaterStorage|Heating|
+    ThermalEnergyIncreaseInStorage`` going from -521 to +2262) are not flagged
+    as regressions.  When at least two values are non-zero the max/min ratio of
+    absolute values must stay below *factor*; when fewer than two values are
+    non-zero the ratio check is skipped because dividing by zero is undefined.
+
+    The default factor of 15 was chosen by running the test once and inspecting
+    the printed divergences: the largest observed max/min ratio for non-zero
+    absolute values is ~11.1 (``MoreAdvancedHeatPumpHPLib|Time|TimeOff``), so 15
+    provides a ~35% margin while still catching gross regressions such as a 20x
+    error.
+
+    Known limitations (by design):
+
+    - **Zero-at-one-resolution is not flagged.**  Several computed components
+      legitimately produce 0 at one or two resolutions but not all three --
+      e.g. ``Battery`` charging power/energy/losses (the EMS only triggers
+      charging at 60-min resolution), ``ElectricityMeter`` feed-in
+      (``ElectricityToGrid`` is non-zero only at 15-min), and
+      ``L2EMSElectricityController`` storage temperature modifiers.  When
+      fewer than two values are non-zero the function returns ``True``, so a
+      future regression that zeroes out a previously non-zero output at one
+      resolution would not be caught by this check alone.  Such divergences
+      are still *printed* by the test loop (the ``print(key, values, ...)``
+      line) and are visible in the test output for manual inspection.
+    - **Sign flips of equal magnitude are not flagged.**  Because absolute
+      values are used, a regression that flips a value from +X to -X (same
+      magnitude) yields a ratio of 1.0 and passes.  This is the trade-off for
+      handling the legitimate zero-crossing case above; a sign-aware check
+      would falsely flag ``ThermalEnergyIncreaseInStorage``.
+    """
+    abs_vals = [av for v in lst if (av := abs(float(v))) > 1e-12]
+    if len(abs_vals) < 2:
+        return True  # All zero or a single non-zero -- no ratio to check.
+    return max(abs_vals) / min(abs_vals) < factor
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "values, expected",
+    [
+        # All equal -- trivially within factor.
+        ([1.0, 1.0, 1.0], True),
+        # Within factor -- similar.
+        ([1.0, 10.0, 5.0], True),
+        # Just below factor boundary -- similar (strict <).
+        ([1.0, 14.99], True),
+        # At factor boundary -- NOT similar (15.0 is not < 15.0).
+        ([1.0, 15.0], False),
+        # Across factor -- NOT similar.
+        ([1.0, 16.0], False),
+        ([1.0, 100.0], False),
+        # Zero-crossing -- legitimate (e.g. ThermalEnergyIncreaseInStorage
+        # goes from -521 to +2262; abs ratio ~4.7 < 15).
+        ([-521.0, 483.0, 2262.0], True),
+        # All zero -- no ratio to check.
+        ([0.0, 0.0, 0.0], True),
+        # Single non-zero -- no ratio to check (documented: battery only
+        # charges at one resolution).
+        ([100.0, 0.0, 0.0], True),
+        ([0.0, 0.0, 13.9], True),
+        # Empty list -- no ratio to check.
+        ([], True),
+        # Mixed zero within factor -- non-zero values are similar, zero is
+        # skipped (documented behavior).
+        ([100.0, 100.0, 0.0], True),
+        # Mixed zero across factor -- non-zero values differ too much.
+        ([1.0, 20.0, 0.0], False),
+        # Consistent negative values -- ratio of absolute values.
+        ([-100.0, -200.0, -150.0], True),
+        # Sign flip of equal magnitude -- NOT detected (documented
+        # limitation; abs-value ratio is 1.0).
+        ([100.0, -100.0], True),
+        # Value below near-zero threshold is treated as zero.
+        ([1e-13, 1.0], True),
+    ],
+)
+def test_values_are_same_order_of_magnitude(values: List, expected: bool) -> None:
+    """Unit tests for the order-of-magnitude similarity helper.
+
+    Covers edge cases that the extendedbase integration test does not exercise
+    in the base CI gate: factor boundary, zero-crossing, all-zero, single
+    non-zero, mixed zero, sign-flip limitation, and empty list.
+    """
+    assert values_are_same_order_of_magnitude(lst=values) == expected
+
+
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_test_timeresolutions.py"
 
@@ -94,13 +196,27 @@ def test_cluster_house_for_several_time_resolutions():
     # substring match no longer hits any yearly-result key).
     seen_invariant_yearly_components = set()
     for key, values in result_dict.items():
+        is_invariant = False
         # for these components the outputs must be identical as they are predefined input data
         for component_name in invariant_yearly_component_names:
             if component_name in key:
+                is_invariant = True
                 seen_invariant_yearly_components.add(component_name)
                 assert values_are_similar(lst=values), f"{key}: {values} not all similar."
         if not values_are_similar(lst=values):
             print(key, values, "not all similar. ")
+            if not is_invariant:
+                # Computed (non-invariant) components legitimately vary across
+                # time resolutions, but should stay within a multiplicative
+                # factor -- a larger divergence signals a numerical regression.
+                non_zero = [abs(float(v)) for v in values if abs(float(v)) > 1e-12]
+                observed_ratio = max(non_zero) / min(non_zero) if len(non_zero) >= 2 else float("inf")
+                assert values_are_same_order_of_magnitude(lst=values), (
+                    f"{key}: {values} differ by more than a factor of "
+                    f"{_ORDER_OF_MAGNITUDE_FACTOR} (observed max/min ratio = "
+                    f"{observed_ratio:.1f}) across time resolutions, indicating "
+                    f"a likely regression."
+                )
 
     missing_invariant_yearly_components = (
         set(invariant_yearly_component_names) - seen_invariant_yearly_components
@@ -141,14 +257,28 @@ def test_cluster_house_for_several_time_resolutions():
     for key, values in opex_consumption_dict.items():
         if not isinstance(key, str):
             continue
+        is_invariant = False
         for component_name in invariant_opex_component_names:
             if component_name in key:
+                is_invariant = True
                 seen_invariant_components.add(component_name)
                 # for these components the consumption must be similar as they are
                 # predefined input data
                 assert values_are_similar(lst=values), f"{key}: {values} not all similar."
         if not values_are_similar(lst=values):
             print(key, values, "not all similar. ")
+            if not is_invariant:
+                # Computed (non-invariant) components legitimately vary across
+                # time resolutions, but should stay within a multiplicative
+                # factor -- a larger divergence signals a numerical regression.
+                non_zero = [abs(float(v)) for v in values if abs(float(v)) > 1e-12]
+                observed_ratio = max(non_zero) / min(non_zero) if len(non_zero) >= 2 else float("inf")
+                assert values_are_same_order_of_magnitude(lst=values), (
+                    f"{key}: {values} differ by more than a factor of "
+                    f"{_ORDER_OF_MAGNITUDE_FACTOR} (observed max/min ratio = "
+                    f"{observed_ratio:.1f}) across time resolutions, indicating "
+                    f"a likely regression."
+                )
 
     missing_invariant_components = set(invariant_opex_component_names) - seen_invariant_components
     assert not missing_invariant_components, (
@@ -342,7 +472,7 @@ def run_cluster_house(
     my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
         absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
         heating_system=my_hds_controller_information.hds_controller_config.heating_system,

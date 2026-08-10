@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import ClassVar, List, Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -35,7 +35,7 @@ class FuelMeterConfig(cp.ConfigBase):
     """Fuel Meter Config."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return FuelMeter.get_full_classname()
 
@@ -67,21 +67,23 @@ class FuelMeter(DynamicComponent):
     """Fuel meter class."""
 
     # Outputs
-    HeatConsumption = "HeatConsumption"
-    CumulativeConsumption = "CumulativeConsumption"
+    HeatConsumption: ClassVar[str] = "HeatConsumption"
+    CumulativeConsumption: ClassVar[str] = "CumulativeConsumption"
 
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: FuelMeterConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
-    ):
+        my_display_config: Optional[cp.DisplayConfig] = None,
+    ) -> None:
         """Initialize the component."""
-        self.config = config
-        self.name = self.config.name
+        if my_display_config is None:
+            my_display_config = cp.DisplayConfig(display_in_webtool=True)
+        self.config: FuelMeterConfig = config
+        self.name: str = self.config.name
         self.my_component_inputs: List[DynamicConnectionInput] = []
         self.my_component_outputs: List[DynamicConnectionOutput] = []
-        self.my_simulation_parameters = my_simulation_parameters
+        self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -91,7 +93,7 @@ class FuelMeter(DynamicComponent):
             my_config=config,
             my_display_config=my_display_config,
         )
-        # check if component has valid gas loadtype
+        # check if component has valid fuel loadtype
         if self.config.fuel_loadtype not in [
             lt.LoadTypes.OIL,
             lt.LoadTypes.PELLETS,
@@ -107,10 +109,10 @@ class FuelMeter(DynamicComponent):
         self.production_inputs: List[ComponentInput] = []
         self.consumption_uncontrolled_inputs: List[ComponentInput] = []
 
-        self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        self.seconds_per_timestep: int = self.my_simulation_parameters.seconds_per_timestep
         # Component has states
-        self.state = FuelMeterState(cumulative_consumption_in_watt_hour=0)
-        self.previous_state = self.state.self_copy()
+        self.state: FuelMeterState = FuelMeterState(cumulative_consumption_in_watt_hour=0)
+        self.previous_state: FuelMeterState = self.state.self_copy()
 
         self.heat_consumption_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -135,7 +137,7 @@ class FuelMeter(DynamicComponent):
 
     def get_default_connections_from_generic_district_heating(
         self,
-    ):
+    ) -> List[DynamicComponentConnection]:
         """Get generic district heating default connections."""
 
         from hisim.components.generic_district_heating import DistrictHeating  # pylint: disable=import-outside-toplevel
@@ -172,7 +174,7 @@ class FuelMeter(DynamicComponent):
 
     def get_default_connections_from_generic_boiler(
         self,
-    ):
+    ) -> List[DynamicComponentConnection]:
         """Get generic district boiler default connections."""
 
         from hisim.components.generic_boiler import GenericBoiler  # pylint: disable=import-outside-toplevel
@@ -207,7 +209,7 @@ class FuelMeter(DynamicComponent):
         )
         return dynamic_connections
 
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         """Writes relevant information to report."""
         return self.config.get_string_dict()
 
@@ -228,7 +230,16 @@ class FuelMeter(DynamicComponent):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulate the grid energy balancer."""
+        """Simulate the fuel meter for a single time step.
+
+        Sums all heat-consumption inputs, writes the per-step and cumulative
+        consumption to outputs, and updates the internal state.
+
+        Args:
+            timestep: Current simulation timestep index.
+            stsv: Single-time-step values object for reading inputs / writing outputs.
+            force_convergence: Whether convergence should be forced.
+        """
 
         if timestep == 0:
             self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_CONSUMPTION])
@@ -257,10 +268,19 @@ class FuelMeter(DynamicComponent):
 
     def get_cost_opex(
         self,
-        all_outputs: List,
+        all_outputs: List[cp.ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
-        """Calculate OPEX costs, consisting of gas costs and revenues."""
+        """Calculate OPEX fuel costs and CO2 emissions for the simulation period.
+
+        Args:
+            all_outputs: List of all component outputs from the simulation.
+            postprocessing_results: DataFrame of time-series results for all outputs.
+
+        Returns:
+            An OpexCostDataClass with energy cost, CO2 footprint, and total
+            consumption for the configured fuel type.
+        """
         total_heat_consumed_in_kwh: float
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
@@ -321,7 +341,7 @@ class FuelMeter(DynamicComponent):
 
     def get_component_kpi_entries(
         self,
-        all_outputs: List,
+        all_outputs: List[cp.ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
@@ -389,8 +409,12 @@ class FuelMeterState:
 
     def self_copy(
         self,
-    ):
-        """Copy the GasMeterState."""
+    ) -> "FuelMeterState":
+        """Create a copy of this FuelMeterState.
+
+        Returns:
+            A new FuelMeterState with the same cumulative consumption.
+        """
         return FuelMeterState(
             self.cumulative_consumption_in_watt_hour,
         )

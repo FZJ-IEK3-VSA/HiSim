@@ -8,19 +8,20 @@ The module contains the following classes:
     2. class BuildingControllerState - constructs the building controller state.
     3. class BuildingConfig - json dataclass, configurates the building class.
     4. class BuildingControllerConfig -  json dataclass, configurates the building controller class.
-    5. class Building -  main class, involves building properties taken from EPISCOPE/TABULA project database* and
-       calculations from RC_BuildingSimulator project**. Inputs of the building class are the heating device, occupancy and weather.
+    5. class Building -  main class, involves building properties taken from the EPISCOPE/TABULA project database and
+       calculations from the RC_BuildingSimulator project (see notes below).
+       Inputs of the building class are the heating device, occupancy and weather.
        Outputs are for example temperature, stored energy and solar gains through windows.
     6. class Window - taken from the RC simulator project, calculates for example solar gains through windows.
     7. class BuildingInformation - gets important building parameters and properties
 
-*EPISCOPE/TABULA project:
+Note on the EPISCOPE/TABULA project:
      Ths project involves a collection of multiple typologies of residences from 12 European countries, listing among others,
      heat coefficient, area, volumes, light transmissibility, house heat capacity for various residence construction elements.
      These typologies are categorized by year of construction, residence type and degree of refurbishment.
      For information, please access site: https://episcope.eu/building-typology/webtool/
 
-**RC_BuildingSimulator project:
+Note on the RC_BuildingSimulator project:
     The functions cited in this module are at some degree based on the RC_BuildingSimulator project:
     [rc_buildingsimulator-jayathissa]:
     [1] Jayathissa, Prageeth, et al. "Optimising building net energy demand with dynamic BIPV shading." Applied Energy 202 (2017): 726-735.
@@ -33,7 +34,7 @@ The module contains the following classes:
     the thermal capacitance C analogous to the electrical capacitance C and
     the temperatures T which are analogous to the electrical voltage V.
 
-*** Another paper using the 5R1C model from EN ISO 13790:
+Another paper using the 5R1C model from EN ISO 13790:
     [2] I. Horvat et al. "Dynamic method for calculating energy need in HVAC systems." Transactions of Famena 40 (2016): 47-62.
 
 """
@@ -77,9 +78,9 @@ class BuildingConfig(cp.ConfigBase):
     """Configuration of the Building class."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Return the full class name of the base class."""
-        return Building.get_full_classname()
+        return Building.get_full_classname()  # type: ignore[no-any-return]
 
     building_name: str
     name: str
@@ -134,8 +135,43 @@ class BuildingConfig(cp.ConfigBase):
         door_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None,
         door_area_in_m2: Optional[float] = None,
         building_name: str = "BUI1",
-    ) -> Any:
-        """Get a default Building."""
+    ) -> "BuildingConfig":
+        """Create a BuildingConfig for a default German single-family home.
+
+        Uses TABULA building code "DE.N.SFH.05.Gen.ReEx.001.002" with a medium
+        heat-capacity class and 121.2 m² conditioned floor area. Envelope
+        U-values, areas, and temperature setpoints can be overridden via the
+        optional parameters; when left as None the TABULA defaults are used.
+
+        Args:
+            set_heating_temperature_in_celsius: Heating setpoint in °C.
+            set_cooling_temperature_in_celsius: Cooling setpoint in °C.
+            heating_reference_temperature_in_celsius: Reference outdoor
+                temperature for heating-demand sizing in °C.
+            max_thermal_building_demand_in_watt: Optional override for the
+                maximum thermal demand in W; if None, computed from the
+                building's heat conductances and temperature difference.
+            floor_u_value_in_watt_per_m2_per_kelvin: Optional floor U-value
+                override in W/(m²·K).
+            floor_area_in_m2: Optional floor area override in m².
+            facade_u_value_in_watt_per_m2_per_kelvin: Optional facade U-value
+                override in W/(m²·K).
+            facade_area_in_m2: Optional facade area override in m².
+            roof_u_value_in_watt_per_m2_per_kelvin: Optional roof U-value
+                override in W/(m²·K).
+            roof_area_in_m2: Optional roof area override in m².
+            window_u_value_in_watt_per_m2_per_kelvin: Optional window U-value
+                override in W/(m²·K).
+            window_area_in_m2: Optional window area override in m².
+            door_u_value_in_watt_per_m2_per_kelvin: Optional door U-value
+                override in W/(m²·K).
+            door_area_in_m2: Optional door area override in m².
+            building_name: Identifier for the building instance.
+
+        Returns:
+            A BuildingConfig configured for a German single-family home with
+            the specified or default TABULA parameters.
+        """
         config = BuildingConfig(
             building_name=building_name,
             name="Building",
@@ -177,7 +213,7 @@ class BuildingState:
         self,
         thermal_mass_temperature_in_celsius: float,
         thermal_capacitance_in_joule_per_kelvin: float,
-    ):
+    ) -> None:
         """Construct all the neccessary attributes for the BuildingState object."""
         # this is labeled as t_m in the paper [1] (** Check header)
         self.thermal_mass_temperature_in_celsius: float = thermal_mass_temperature_in_celsius
@@ -193,7 +229,7 @@ class BuildingState:
 
     def self_copy(
         self,
-    ):
+    ) -> "BuildingState":
         """Copy the Building State."""
         return BuildingState(
             self.thermal_mass_temperature_in_celsius,
@@ -272,7 +308,7 @@ class Building(cp.Component):
         my_simulation_parameters: SimulationParameters,
         config: BuildingConfig,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
-    ):
+    ) -> None:
         """Construct all the neccessary attributes."""
         self.buildingconfig = config
 
@@ -397,7 +433,7 @@ class Building(cp.Component):
             self.HeatingByResidents,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
-            True,
+            mandatory=False,
         )
 
         self.device_heat_gain_channel: cp.ComponentInput = self.add_input(
@@ -405,7 +441,7 @@ class Building(cp.Component):
             self.HeatingByDevices,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
-            True,
+            mandatory=False,
         )
 
         self.building_temperature_modifier_channel: cp.ComponentInput = self.add_input(
@@ -911,6 +947,21 @@ class Building(cp.Component):
         self,
     ) -> None:
         """Prepare the simulation."""
+        # Warn when internal-heat-gain inputs are not connected.  These inputs
+        # are optional so that setups without an occupancy component (e.g. the
+        # simple air-conditioner household) can run, but silently defaulting the
+        # heat gains to 0 W changes the thermal balance.  A warning makes the
+        # omission visible without failing the simulation.
+        if self.occupancy_heat_gain_channel.source_output is None:
+            log.warning(
+                f"Building '{self.component_name}': the 'HeatingByResidents' input is not "
+                "connected. Internal heat gains from occupants default to 0 W."
+            )
+        if self.device_heat_gain_channel.source_output is None:
+            log.warning(
+                f"Building '{self.component_name}': the 'HeatingByDevices' input is not "
+                "connected. Internal heat gains from devices default to 0 W."
+            )
         if self.buildingconfig.predictive:
             # get weather forecast to compute forecasted solar gains
 
@@ -2422,6 +2473,26 @@ class BuildingInformation:
             buildingdata=self.buildingdata_ref,
             scaled_conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2,)
 
+    @property
+    def u_value_wall(self) -> float:
+        """Actual U-value of the wall element from the TABULA reference data [W/(m2 K)]."""
+        return float(self.buildingdata_ref["U_Actual_Wall_1"].values[0])
+
+    @property
+    def u_value_window(self) -> float:
+        """Actual U-value of the window element from the TABULA reference data [W/(m2 K)]."""
+        return float(self.buildingdata_ref["U_Actual_Window_1"].values[0])
+
+    @property
+    def u_value_door(self) -> float:
+        """Actual U-value of the door element from the TABULA reference data [W/(m2 K)]."""
+        return float(self.buildingdata_ref["U_Actual_Door_1"].values[0])
+
+    @property
+    def u_value_roof(self) -> float:
+        """Actual U-value of the roof element from the TABULA reference data [W/(m2 K)]."""
+        return float(self.buildingdata_ref["U_Actual_Roof_1"].values[0])
+
     def get_building_from_tabula(
         self,
     ):
@@ -2893,7 +2964,7 @@ class BuildingInformation:
             * self.scaled_conditioned_floor_area_in_m2
         )
 
-    def get_max_thermal_building_demand(self):
+    def get_max_thermal_building_demand(self) -> None:
         """Calculate max thermal demand."""
         if self.buildingconfig.max_thermal_building_demand_in_watt is None:
 
@@ -2910,7 +2981,7 @@ class BuildingInformation:
         self,
         conditioned_floor_area_in_m2: float,
         scaling_factor: float,
-        buildingdata: Any,
+        buildingdata: pd.DataFrame,
     ) -> float:
         """Get number of apartments.
 
@@ -2948,7 +3019,7 @@ class BuildingInformation:
         return number_of_apartments
 
     def get_some_reference_data_from_tabula(
-        self, buildingdata: Any, scaled_conditioned_floor_area_in_m2: float
+        self, buildingdata: pd.DataFrame, scaled_conditioned_floor_area_in_m2: float
     ) -> Tuple[float, float, float, float, float, float, float, float, float, float, float]:
         """Get some reference parameter from Tabula."""
 

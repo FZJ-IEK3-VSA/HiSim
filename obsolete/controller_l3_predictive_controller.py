@@ -194,7 +194,7 @@
 #         )
 #
 #         # substract PV production from laod, if available
-#         for elem in self.simulation_repository.get_dynamic_component_weights(
+#         for elem in self.simulation_repository.get_dynamic_source_weights(
 #             component_type=lt.ComponentType.PV
 #         ):
 #             pvforecast = self.simulation_repository.get_dynamic_entry(

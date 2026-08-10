@@ -8,7 +8,7 @@ import pytest
 
 from hpc_harness import db
 
-pytestmark = pytest.mark.base
+pytestmark = pytest.mark.hpcharness
 
 MAX_ATTEMPTS = 4  # max_retries=3 -> up to 4 runs
 

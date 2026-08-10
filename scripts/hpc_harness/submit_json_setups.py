@@ -91,16 +91,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
 
     batch = args.batch or f"json-{args.name_filter}-{datetime.date.today().isoformat()}"
+    sim_params_str = str(sim_params)
     jobs = []
     for scenario in scenarios:
-        jobs.append(
-            {
-                "payload": {"scenario": str(scenario.resolve()), "sim_params": str(sim_params)},
-                "label": scenario.name[: -len(".scenario.json")],
-                "dedup_key": f"{scenario.resolve()}|{sim_params}",
-                "priority": args.priority,
-            }
-        )
+        resolved = scenario.resolve()
+        jobs.append({
+            "payload": {"scenario": str(resolved), "sim_params": sim_params_str},
+            "label": scenario.name[: -len(".scenario.json")],
+            "dedup_key": f"{resolved}|{sim_params}",
+            "priority": args.priority,
+        })
 
     print(f"Batch {batch!r}: {len(jobs)} JSON scenario(s) matching {args.name_filter!r}, "
           f"sim_params={sim_params.name}")

@@ -228,7 +228,7 @@ def test_get_default_config_chp_basic() -> None:
     assert config.p_th == 1000
     assert config.p_el == pytest.approx(660)
     assert config.p_fuel == pytest.approx(2000)
-    assert config.use == lt.LoadTypes.GAS
+    assert config.fuel_type == lt.LoadTypes.GAS
     assert config.name == "CHP"
     assert config.source_weight == 1
     assert config.building_name == "BUI1"
@@ -269,7 +269,7 @@ def test_get_default_config_fuelcell_basic() -> None:
     assert config.p_th == 1000
     assert config.p_el == pytest.approx((0.48 / 0.43) * 1000)
     assert config.p_fuel == pytest.approx((1 / 0.43) * 1000)
-    assert config.use == lt.LoadTypes.GREEN_HYDROGEN
+    assert config.fuel_type == lt.LoadTypes.GREEN_HYDROGEN
 
 
 @pytest.mark.base

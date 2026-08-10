@@ -1,17 +1,61 @@
-"""Module for generating reports."""
+"""Generate the structured PDF simulation report from postprocessing results.
+
+This module assembles the multi-page PDF report that HiSim writes next to a
+finished simulation run. The
+:class:`~hisim.postprocessing.reportgenerator.ReportGenerator` class builds a
+linear ``story`` of ReportLab platypus flowables (paragraphs, spacers, images,
+and tables) and renders it to ``report.pdf`` in the requested results
+directory.
+
+Report generation process
+--------------------------
+
+Constructing a :class:`~hisim.postprocessing.reportgenerator.ReportGenerator`
+opens the document, writes a preamble (the HiSim and FZJ logos, the report
+title, the author list, the institute address, and the current timestamp),
+inserts a table of contents, and immediately calls
+:meth:`~hisim.postprocessing.reportgenerator.ReportGenerator.close`. That call
+runs ``BaseDocTemplate.multiBuild`` to finalise the PDF. Additional content
+(headings, figures, KPI tables, and page breaks) is appended afterwards
+through the ``write_*`` methods. Because ``multiBuild`` already ran during
+construction, :meth:`~hisim.postprocessing.reportgenerator.ReportGenerator.close`
+must be called again as a mandatory flush step after every batch of new content
+so that it appears in the generated file.
+
+Template usage
+--------------
+
+:class:`~hisim.postprocessing.reportgenerator.MyDocTemplate` is a
+``BaseDocTemplate`` subclass that configures a single page template with one
+frame and disables automatic flowable splitting (``allow_splitting = 0``). Its
+``afterFlowable`` hook inspects every rendered ``Paragraph`` and, for the
+``Heading1`` and ``Heading2`` styles, notifies the ``TableOfContents`` so that
+the table of contents is populated automatically. Page numbers are drawn by
+:meth:`~hisim.postprocessing.reportgenerator.ReportGenerator.add_page_number`
+through the template's ``onPage`` and ``onPageEnd`` callbacks.
+
+Output format
+-------------
+
+The sole output format is a multi-page PDF produced with ReportLab. Figure
+images are embedded at a few fixed sizes, tabular KPI data is rendered with
+``Table`` flowables, and the document is paginated with an automatically
+generated table of contents and footer page numbers.
+"""
 
 # clean
 from pathlib import Path
 import copy
 import time
-from typing import Any, Optional, List, Union
+from typing import Any
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import Paragraph, Spacer, Image, PageBreak, Table
+from reportlab.platypus import Paragraph, Spacer, Image, PageBreak, Table, Flowable
 from reportlab.platypus.doctemplate import PageTemplate, BaseDocTemplate
 from reportlab.platypus.frames import Frame
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle, StyleSheet1
 from reportlab.lib.units import inch, cm, mm
+from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus.tableofcontents import TableOfContents
 from hisim import utils
 
@@ -19,11 +63,11 @@ from hisim import utils
 class MyDocTemplate(BaseDocTemplate):
     """MyDocTemplate class."""
 
-    def __init__(self, filename, **kw):
+    def __init__(self, filename: str | Path, **kw: Any) -> None:
         """Initialize the doc template."""
         self.allow_splitting = 0
         super().__init__(filename, **kw)
-        self.template = PageTemplate("normal", [Frame(2.5 * cm, 2.5 * cm, 15 * cm, 25 * cm, id="F1")])
+        self.template: PageTemplate = PageTemplate("normal", [Frame(2.5 * cm, 2.5 * cm, 15 * cm, 25 * cm, id="F1")])
         self.addPageTemplates(self.template)
 
     # Entries to the table of contents can be done either manually by
@@ -36,9 +80,9 @@ class MyDocTemplate(BaseDocTemplate):
     # afterFlowable(), making notification calls using the notify() method
     # with appropriate data.
 
-    def afterFlowable(self, flowable):
+    def afterFlowable(self, flowable: Flowable) -> None:
         """Registers TOC entries."""
-        if flowable.__class__.__name__ == "Paragraph":
+        if isinstance(flowable, Paragraph):
             text = flowable.getPlainText()
             style = flowable.style.name
             if style == "Heading1":
@@ -54,18 +98,18 @@ class ReportGenerator:
         """Initialize the pdf report."""
         if dirpath is None:
             raise ValueError("Result path for the report was none.")
-        self.story: Any
-        self.toc = TableOfContents()
+        self.story: list[Flowable] = []
+        self.toc: TableOfContents = TableOfContents()
 
-        self.filepath = str(Path(dirpath) / "report.pdf")
+        self.filepath: str = str(Path(dirpath) / "report.pdf")
         self.open()
         self.write_preamble()
         self.write_table_of_contents()
         self.close()
 
-    def open(self):
+    def open(self) -> None:
         """Open a file."""
-        self.doc = MyDocTemplate(
+        self.doc: MyDocTemplate = MyDocTemplate(
             self.filepath,
             pagesize=letter,
             rightMargin=72,
@@ -74,7 +118,7 @@ class ReportGenerator:
             bottomMargin=18,
         )
 
-        self.styles = getSampleStyleSheet()
+        self.styles: StyleSheet1 = getSampleStyleSheet()
         self.styles.add(ParagraphStyle(name="Justify", alignment=TA_JUSTIFY))
         self.styles.add(ParagraphStyle(name="Normal_CENTER", parent=self.styles["Normal"], alignment=TA_CENTER))
         self.styles.add(
@@ -87,10 +131,10 @@ class ReportGenerator:
                 spaceAfter=40,
             )
         )
-        self.style_h1 = ParagraphStyle(name="Heading1", fontSize=12, leading=16, spaceBefore=20)
-        self.style_h2 = ParagraphStyle(name="Heading2", fontSize=12, leading=14, spaceBefore=10)
+        self.style_h1: ParagraphStyle = ParagraphStyle(name="Heading1", fontSize=12, leading=16, spaceBefore=20)
+        self.style_h2: ParagraphStyle = ParagraphStyle(name="Heading2", fontSize=12, leading=14, spaceBefore=10)
 
-    def write_table_of_contents(self):
+    def write_table_of_contents(self) -> None:
         """Write the table of contents."""
 
         # Create an instance of TableOfContents. Override the level styles (optional)
@@ -105,7 +149,7 @@ class ReportGenerator:
         self.story.append(PageBreak())
 
     @utils.deprecated("Use write_table_of_contents instead.")
-    def write_table_of_content(self):
+    def write_table_of_content(self) -> None:
         """Deprecated alias for :meth:`write_table_of_contents`.
 
         .. deprecated::
@@ -115,7 +159,7 @@ class ReportGenerator:
         """
         self.write_table_of_contents()
 
-    def write_preamble(self):
+    def write_preamble(self) -> None:
         """Write the preamble."""
         # Configuration taken mostly from following tutorial
         # https://www.blog.pythonlibrary.org/2010/03/08/a-simple-step-by-step-reportlab-tutorial/
@@ -196,12 +240,12 @@ class ReportGenerator:
         self.story = story
         self.story.append(PageBreak())
 
-    def copy_story(self):
+    def copy_story(self) -> None:
         """Replace the story with a deep copy of itself."""
         self.story = copy.deepcopy(self.story)
 
     @utils.deprecated("Use copy_story instead.")
-    def get_story(self):
+    def get_story(self) -> None:
         """Deprecated alias for :meth:`copy_story`.
 
         .. deprecated::
@@ -211,7 +255,7 @@ class ReportGenerator:
         """
         self.copy_story()
 
-    def write_with_normal_alignment(self, text: Union[List[str], List[Optional[str]]]) -> None:
+    def write_with_normal_alignment(self, text: list[str | None]) -> None:
         """Write a paragraph."""
         if len(text) != 0:
             for part in text:
@@ -225,7 +269,7 @@ class ReportGenerator:
             self.story.append(Spacer(1, 10))
         self.story.append(Spacer(1, 20))
 
-    def write_with_center_alignment(self, text: List[str]) -> None:
+    def write_with_center_alignment(self, text: list[str]) -> None:
         """Write a paragraph."""
         if len(text) != 0:
             for part in text:
@@ -267,7 +311,7 @@ class ReportGenerator:
         else:
             raise ValueError("no files found")
 
-    def write_tables_to_report(self, table_as_list_of_lists: List) -> None:
+    def write_tables_to_report(self, table_as_list_of_lists: list[list[Any]]) -> None:
         """Add table to the report."""
 
         table = Table(
@@ -280,7 +324,7 @@ class ReportGenerator:
         )
         self.story.append(table)
 
-    def write_heading_with_style_heading_one(self, text: List[str]) -> None:
+    def write_heading_with_style_heading_one(self, text: list[str]) -> None:
         """Write text as heading."""
         if len(text) != 0:
             for part in text:
@@ -289,7 +333,7 @@ class ReportGenerator:
             self.story.append(Spacer(1, 10))
         self.story.append(Spacer(1, 30))
 
-    def write_heading_with_style_heading_two(self, text: List[str]) -> None:
+    def write_heading_with_style_heading_two(self, text: list[str]) -> None:
         """Write text as heading."""
         if len(text) != 0:
             for part in text:
@@ -297,15 +341,15 @@ class ReportGenerator:
                 self.story.append(Paragraph(paragraph_text, self.style_h2))
             self.story.append(Spacer(1, 10))
 
-    def page_break(self):
+    def page_break(self) -> None:
         """Make a page break."""
         self.story.append(PageBreak())
 
-    def add_spacer(self):
+    def add_spacer(self) -> None:
         """Add spacer."""
         self.story.append(Spacer(1, 30))
 
-    def add_page_number(self, canvas, doc):
+    def add_page_number(self, canvas: Canvas, doc: BaseDocTemplate) -> None:
         """Add page number to report."""
         canvas.saveState()
         canvas.setFont(self.styles["Heading2"].fontName, self.styles["Heading2"].fontSize)
@@ -313,7 +357,7 @@ class ReportGenerator:
         canvas.drawRightString(200 * mm, 20 * mm, page_number_text)
         canvas.restoreState()
 
-    def close(self):
+    def close(self) -> None:
         """Close the report."""
         story = copy.deepcopy(self.story)
         self.doc.template.onPage = self.add_page_number

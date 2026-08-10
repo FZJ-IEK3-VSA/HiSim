@@ -132,3 +132,33 @@ def test_component_default_rng_stays_in_bounds() -> None:
     )
     assert len(component.values) == 25
     assert all(10.0 <= v < 30.0 for v in component.values)
+
+
+@pytest.mark.base
+def test_default_display_config_not_shared_between_instances() -> None:
+    """Omitting ``my_display_config`` must not share one object across instances.
+
+    A mutable default argument (``DisplayConfig()`` evaluated at definition
+    time) would make every component that omits the argument reference the
+    same ``DisplayConfig`` instance, so mutating one would affect all others.
+    Using ``None`` as a sentinel and creating a fresh ``DisplayConfig`` inside
+    ``__init__`` prevents that shared state.
+    """
+    sp = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
+    config = _make_config(timesteps=5, minimum=1.0, maximum=20.0)
+
+    # The seeded rng is only required to satisfy the constructor signature;
+    # the assertions concern display-config identity, not RNG output.
+    first = RandomNumbers(
+        config=config,
+        my_simulation_parameters=sp,
+        rng=random.Random(0),
+    )
+    second = RandomNumbers(
+        config=config,
+        my_simulation_parameters=sp,
+        rng=random.Random(0),
+    )
+
+    assert first.my_display_config is not None
+    assert first.my_display_config is not second.my_display_config

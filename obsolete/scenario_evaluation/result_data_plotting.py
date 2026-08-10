@@ -6,6 +6,8 @@ import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+from matplotlib.axes import Axes
 from ordered_set import OrderedSet
 import seaborn as sns
 
@@ -39,7 +41,7 @@ class ScenarioChartGeneration:
         data_format_type: str,
         scenario_config_name: str,
         time_resolution_of_data_set: str,
-        dict_with_extra_information_for_specific_plot: Dict[str, Dict],
+        dict_with_extra_information_for_specific_plot: Dict[str, Dict[str, Any]],
         variables_to_check: Optional[List[str]] = None,
         dict_of_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
     ) -> None:
@@ -48,9 +50,10 @@ class ScenarioChartGeneration:
         warnings.filterwarnings("ignore")
 
         self.show_plot_legend: bool = True
-        self.data_processing_mode = data_processing_mode
+        self.data_processing_mode: str = data_processing_mode
         self.path_addition: str = ""
         self.plot_path_complete: str = ""
+        self.path_for_plots: str = ""
         self.data_format_type: str = data_format_type
         self.scenario_config_name: str = scenario_config_name
 
@@ -64,7 +67,7 @@ class ScenarioChartGeneration:
         else:
             raise ValueError("DataProcessingMode not known.")
 
-        self.result_folder = os.path.join(
+        self.result_folder: str = os.path.join(
             os.getcwd(),
             os.pardir,
             os.pardir,
@@ -78,7 +81,7 @@ class ScenarioChartGeneration:
         if not os.path.exists(self.result_folder):
             os.makedirs(self.result_folder)
 
-        self.hisim_chartbase = ChartFontsAndSize()
+        self.hisim_chartbase: ChartFontsAndSize = ChartFontsAndSize()
         self.hisim_chartbase.figsize = (10, 6)
         self.hisim_chartbase.dpi = 100
 
@@ -112,7 +115,7 @@ class ScenarioChartGeneration:
         full_dataframe: pd.DataFrame,
         simulation_duration_key: str,
         variables_to_check: List[str],
-        dict_with_extra_information_for_specific_plot: Dict[str, Dict],
+        dict_with_extra_information_for_specific_plot: Dict[str, Dict[str, Any]],
     ) -> None:
         """Make plots for different kind of data."""
 
@@ -230,7 +233,7 @@ class ScenarioChartGeneration:
         output_value_keys: List[str],
         unit: str,
         variable_to_check: str,
-        dict_with_extra_information_for_specific_plot: Dict[str, Dict],
+        dict_with_extra_information_for_specific_plot: Dict[str, Dict[str, Any]],
     ) -> None:
         """Process yearly data."""
         kind_of_data_set = "yearly"
@@ -298,7 +301,7 @@ class ScenarioChartGeneration:
         output_value_keys: List[str],
         unit: str,
         variable_to_check: str,
-        dict_with_extra_information_for_specific_plot: Dict[str, Dict],
+        dict_with_extra_information_for_specific_plot: Dict[str, Dict[str, Any]],
         time_resolution_of_data_set: str,
     ) -> None:
         """Process time series data."""
@@ -386,7 +389,6 @@ class ScenarioChartGeneration:
         log.information("Make bar plot.")
 
         fig, a_x = plt.subplots(figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi)
-        x_data: Any
         y_data = x_and_y_plot_data.iloc[0, 1:]
         bar_labels = x_and_y_plot_data.columns[1:]
 
@@ -806,17 +808,17 @@ class ScenarioChartGeneration:
 
     def set_ticks_labels_legend_and_save_fig(
         self,
-        fig: Any,
-        a_x: Any,
+        fig: Figure,
+        a_x: Axes,
         show_legend: bool,
         plot_type_name: str,
         y_axis_label: str = "",
         y_axis_unit: str = "",
         x_axis_label: str = "",
         x_axis_unit: str = "",
-        legend_labels: Optional[Any] = None,
-        x_ticks: Any = None,
-        x_tick_labels: Any = None,
+        legend_labels: Optional[List[str]] = None,
+        x_ticks: Optional[np.ndarray] = None,
+        x_tick_labels: Optional[List[str]] = None,
         show_x_ticks: bool = True,
         rotate_x_ticks: bool = False,
     ) -> None:
@@ -870,7 +872,7 @@ class ScenarioChartGeneration:
         if rotate_x_ticks:
             if x_ticks is None and x_tick_labels is None:
                 a_x.tick_params(axis="x", labelrotation=45)
-            else:
+            elif x_ticks is not None and x_tick_labels is not None:
                 a_x.set_xticks(x_ticks, x_tick_labels, rotation=45, ha="right", rotation_mode="anchor")
 
         if show_x_ticks:
@@ -904,20 +906,17 @@ class ScenarioChartGeneration:
         # color_palette = list(mcolors.TABLEAU_COLORS.values())
         color_palette = sns.color_palette("Spectral", n_colors=number_of_scenarios)  #
 
-        color: List[str] = []
-        edgecolor: Optional[str] = None
         if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA.name:
-            for i in range(0, number_of_scenarios):
-                color.append("blue")
+            color = ["blue"] * number_of_scenarios
+            edgecolor = None
         else:
-            for i in range(0, number_of_scenarios):
-                color.append(color_palette[i])
+            color = list(color_palette)
             edgecolor = "black"
         return color, edgecolor
 
     def sort_y_values_according_to_data_processing_mode(
-        self, data_processing_mode: str, zip_list_one: List, zip_list_two: List
-    ) -> Tuple[List, List]:
+        self, data_processing_mode: str, zip_list_one: List[Any], zip_list_two: List[Any]
+    ) -> Tuple[List[Any], List[Any]]:
         """Decide whether to sort y values or not."""
         # if all data is processed and no scenario is chosen, the y values for plots should be sorted
         if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA.name:

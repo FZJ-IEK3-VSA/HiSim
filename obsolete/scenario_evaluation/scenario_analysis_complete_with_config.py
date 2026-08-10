@@ -1,4 +1,83 @@
-"""Data Collection for Scenario Comparison."""
+"""Scenario analysis orchestration and configuration.
+
+This module provides the configuration schema and the entry point that
+drives the complete scenario-comparison pipeline: collecting simulation
+results, processing them, and generating comparison charts.
+
+Configuration Schema
+--------------------
+
+:class:`ScenarioAnalysisConfig` (a :class:`~hisim.component.ConfigBase`
+dataclass) controls every aspect of the analysis.  Key fields include:
+
+* **Paths** -- ``cluster_storage_path``, ``module_results_directory``,
+  ``result_folder_description_one``/``two`` identify where aggregated
+  result data lives (``system_setups/results/<...>``).
+* **Data format and resolution** -- ``data_format_type`` (CSV or Excel) and
+  ``time_resolution_of_data_set`` (e.g. yearly, hourly) determine how the
+  :class:`~hisim.postprocessing.scenario_evaluation.result_data_collection.ResultDataCollection`
+  layer reads and interprets raw outputs.
+* **Processing controls** -- ``data_processing_mode`` selects between
+  ``PROCESS_ALL_DATA`` (compare across all varied parameters) and
+  ``PROCESS_FOR_DIFFERENT_BUILDING_CODES`` (group by building code); see
+  :class:`~hisim.postprocessing.scenario_evaluation.result_data_processing.ResultDataProcessingModeEnum`.
+* **Evaluation scope** -- ``simulation_duration_to_check_in_days`` (default
+  "365"), ``variables_to_check``, and ``dict_with_scenarios_to_check``
+  specify which metrics and scenarios are analysed.
+* **Plot customisation** -- ``dict_with_extra_information_for_specific_plot``
+  provides chart-specific overrides (e.g. scatter plot x-axis variable).
+
+The config can be loaded from a JSON file via :func:`main` or
+:meth:`ScenarioAnalysisConfig.from_json`; the default config is obtained
+through :meth:`ScenarioAnalysisConfig.get_default`.  Backward-compatible
+deserialization handles the renamed field
+``simulation_duration_to_check`` to
+``simulation_duration_to_check_in_days`` (see
+:func:`_migrate_legacy_field_names`).
+
+Analysis Pipeline
+-----------------
+
+:class:`ScenarioAnalysisWithConfig` orchestrates the pipeline in two
+sequential steps:
+
+1. **Collection** --
+   :class:`~hisim.postprocessing.scenario_evaluation.result_data_collection.ResultDataCollection`
+   scans the configured result folders, reads each scenario's aggregated CSV
+   or Excel output, and concatenates everything into a single pandas
+   DataFrame (the file path is stored in
+   :attr:`~hisim.postprocessing.scenario_evaluation.result_data_collection.ResultDataCollection.filepath_of_aggregated_dataframe`).
+
+2. **Processing and plotting** --
+   :class:`~hisim.postprocessing.scenario_evaluation.result_data_plotting.ScenarioChartGeneration`
+   consumes the aggregated DataFrame, filters by output variable, computes
+   per-scenario statistics, writes them to an Excel summary, and renders
+   comparison charts (line, bar, box, histogram, scatter, stacked-bar).
+
+Output Structure
+----------------
+
+The pipeline writes:
+
+* An aggregated DataFrame (CSV or Excel, depending on ``data_format_type``)
+  containing all scenario results in a single file.
+* An Excel workbook with per-scenario descriptive statistics
+  (``pandas.DataFrame.describe`` output).
+* A directory of chart images, one file per chart type and output variable.
+
+All outputs are written under the ``module_results_directory`` configured in
+the scenario analysis configuration.
+
+Submodules
+----------
+
+* :mod:`~hisim.postprocessing.scenario_evaluation.result_data_collection` --
+  scans result folders and concatenates scenario outputs.
+* :mod:`~hisim.postprocessing.scenario_evaluation.result_data_processing` --
+  filters, reshapes, and aggregates the collected data.
+* :mod:`~hisim.postprocessing.scenario_evaluation.result_data_plotting` --
+  computes statistics and generates comparison charts.
+"""
 
 # clean
 import time
@@ -32,7 +111,7 @@ _LEGACY_FIELD_NAMES: "dict[str, str]" = {
 _A = TypeVar("_A")
 
 
-def _migrate_legacy_field_names(kvs: Any) -> Any:
+def _migrate_legacy_field_names(kvs: dict[str, Any] | Any) -> dict[str, Any] | Any:
     """Rename legacy JSON keys to their current field names.
 
     ``ScenarioAnalysisConfig`` was previously serialized with the field name
@@ -99,11 +178,11 @@ class ScenarioAnalysisConfig(ConfigBase):
     # Duration (in days) of the simulation results to collect and evaluate; e.g. "365" = one year.
     simulation_duration_to_check_in_days: str
     variables_to_check: List[str]
-    dict_with_scenarios_to_check: Optional[Dict]
-    dict_with_extra_information_for_specific_plot: Dict[str, Dict]
+    dict_with_scenarios_to_check: Optional[Dict[str, Any]]
+    dict_with_extra_information_for_specific_plot: Dict[str, Dict[str, Any]]
 
     @classmethod
-    def get_default(cls):
+    def get_default(cls) -> "ScenarioAnalysisConfig":
         """Get default ScenarioAnalysisConfig."""
 
         return ScenarioAnalysisConfig(
@@ -136,7 +215,7 @@ class ScenarioAnalysisConfig(ConfigBase):
 
 @classmethod
 def _scenario_analysis_config_from_dict(
-    cls: Type[_A], kvs: Any, *, infer_missing: bool = False
+    cls: Type[_A], kvs: dict[str, Any] | Any, *, infer_missing: bool = False
 ) -> _A:
     """Deserialize a dict into a :class:`ScenarioAnalysisConfig`.
 
@@ -207,7 +286,7 @@ class ScenarioAnalysisWithConfig:
         )
 
 
-def main():
+def main() -> None:
     """Main function to execute the scenario analysis."""
 
     # Get inputs for scenario analysis
@@ -225,7 +304,7 @@ def main():
         )
 
     my_config: ScenarioAnalysisConfig
-    if use_default_scenario_analysis_config is False:
+    if not use_default_scenario_analysis_config:
         if isinstance(scenario_analysis_config_path, str) and Path(
             scenario_analysis_config_path.rstrip("\r")
         ).exists():
@@ -241,7 +320,7 @@ def main():
             # cannot open file for scenario analysis config so default config will be used
             use_default_scenario_analysis_config = True
 
-    if use_default_scenario_analysis_config is True:
+    if use_default_scenario_analysis_config:
         my_config = ScenarioAnalysisConfig.get_default()
 
         log.information("No scenario analysis config path was given or could be opened. Default config is used.")

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 # clean
 # Owned
-from typing import List, Any
+from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -30,9 +30,9 @@ class IdealizedHeaterConfig(cp.ConfigBase):
     """Configuration of the Idealized Heater."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
-        return IdealizedElectricHeater.get_full_classname()
+        return IdealizedElectricHeater.get_full_classname()  # type: ignore[no-any-return]
 
     building_name: str
     name: str
@@ -43,7 +43,7 @@ class IdealizedHeaterConfig(cp.ConfigBase):
     def get_default_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> IdealizedHeaterConfig:
         """Gets a default Idealized Heater."""
         return IdealizedHeaterConfig(
             building_name=building_name,
@@ -57,11 +57,11 @@ class IdealizedElectricHeater(cp.Component):
     """Idealized Electric Heater System."""
 
     # Inputs
-    TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
+    TheoreticalThermalBuildingDemand: str = "TheoreticalThermalBuildingDemand"
 
     # Outputs
-    ThermalPowerDelivered = "ThermalPowerDelivered"
-    HeatingPowerDelivered = "HeatingPowerDelivered"
+    ThermalPowerDelivered: str = "ThermalPowerDelivered"
+    HeatingPowerDelivered: str = "HeatingPowerDelivered"
 
     # Similar components to connect to:
     # 1. Building
@@ -70,10 +70,11 @@ class IdealizedElectricHeater(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: IdealizedHeaterConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: cp.DisplayConfig | None = None,
     ) -> None:
         """Construct all the necessary attributes."""
         self.my_simulation_parameters = my_simulation_parameters
+        my_display_config = my_display_config or cp.DisplayConfig()
         self.config = config
         component_name = self.get_component_name()
         super().__init__(
@@ -167,7 +168,7 @@ class IdealizedElectricHeater(cp.Component):
 
     def get_cost_opex(
         self,
-        all_outputs: List,
+        all_outputs: List[cp.ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
@@ -182,7 +183,7 @@ class IdealizedElectricHeater(cp.Component):
 
     def get_component_kpi_entries(
         self,
-        all_outputs: List,
+        all_outputs: List[cp.ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""

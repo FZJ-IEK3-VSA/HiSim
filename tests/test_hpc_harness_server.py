@@ -15,7 +15,7 @@ from hpc_harness.server.app import create_app
 from hpc_harness.server.autoscaler import Autoscaler
 from hpc_harness.server.service import HarnessService
 
-pytestmark = pytest.mark.base
+pytestmark = pytest.mark.hpcharness
 
 TOKEN = "secret-token"
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
@@ -627,9 +627,8 @@ def test_snapshot_writes_shared_fs_copy(client, service, tmp_path):
     service.snapshot()
     snapshot_path = tmp_path / "snapshot.db"
     assert snapshot_path.exists()
-    check = db.connect(str(snapshot_path))
-    assert db.counts(check)["total"] == 1
-    check.close()
+    with db.connect(str(snapshot_path)) as check:
+        assert db.counts(check)["total"] == 1
 
 
 def test_warm_restart_keeps_live_leases_cold_restart_requeues(tmp_path):

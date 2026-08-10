@@ -40,11 +40,16 @@ def test_weather() -> None:
     fft.add_global_index_of_components([my_weather])
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
-    # Simulate
-    dni: list[float] = []
+    # Simulate.  The global_index is constant for the whole simulation, so
+    # hoist the attribute lookup out of the 525 600-iteration loop.  A running
+    # accumulator adds the per-timestep DNI values in the same left-to-right
+    # order as sum(dni) would, so the result is bit-identical while avoiding a
+    # ~525 K-element list allocation and a second O(n) reduction pass.
+    idx: int = my_weather.dni_output.global_index
+    total_dni: float = 0.0
     for i in range(60 * 24 * 365):
         my_weather.i_simulate(i, stsv, False)
-        dni.append(stsv.values[my_weather.dni_output.global_index])
+        total_dni += stsv.values[idx]
 
     # Each per-timestep DNI value is an irradiance in W/m^2. Summing it
     # across timesteps gives W/m^2*timesteps; multiply by the timestep
@@ -53,7 +58,7 @@ def test_weather() -> None:
     seconds_per_hour: int = 3600
     watt_second_to_kwh: float = 1 / (1000 * seconds_per_hour)  # W*s -> kWh
     annual_dni_kwh_per_m2: float = (
-        sum(dni) * mysim.seconds_per_timestep * watt_second_to_kwh
+        total_dni * mysim.seconds_per_timestep * watt_second_to_kwh
     )
     assert annual_dni_kwh_per_m2 > 950  # kWh/m^2/year
 
@@ -210,3 +215,35 @@ def test_weather_cache_pressure_non_keyerror_propagates(
     monkeypatch.setattr(weather.pd, "read_csv", fake_read_csv)
     with pytest.raises(ValueError, match="simulated cache corruption"):
         my_weather.i_prepare_simulation()
+
+
+@pytest.mark.base
+def test_weather_default_display_config_is_not_shared() -> None:
+    """Two Weather instances using the default display config get distinct instances.
+
+    Regression test for the mutable default argument ``DisplayConfig()`` in
+    ``Weather.__init__``: each call relying on the default must construct a
+    fresh ``DisplayConfig`` rather than sharing a single definition-time
+    instance (see KB-3284 for the identity-isolation testing approach).
+    """
+    mysim: SimulationParameters = SimulationParameters.one_day_only(
+        year=2021, seconds_per_timestep=3600
+    )
+    my_config: weather.WeatherConfig = weather.WeatherConfig.get_default(
+        location_entry=weather.LocationEnum.AACHEN
+    )
+    first: weather.Weather = weather.Weather(
+        config=my_config, my_simulation_parameters=mysim
+    )
+    second: weather.Weather = weather.Weather(
+        config=my_config, my_simulation_parameters=mysim
+    )
+
+    assert isinstance(first.my_display_config, component.DisplayConfig)
+    assert isinstance(second.my_display_config, component.DisplayConfig)
+    # Identity check: must not be the same shared instance.
+    assert first.my_display_config is not second.my_display_config
+
+    # Mutation must not propagate across instances.
+    first.my_display_config.pretty_name = "first"
+    assert second.my_display_config.pretty_name is None

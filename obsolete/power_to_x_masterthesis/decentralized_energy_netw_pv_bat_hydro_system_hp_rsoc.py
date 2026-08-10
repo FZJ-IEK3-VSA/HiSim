@@ -67,17 +67,17 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # my_simulation_parameters.enable_all_options( )
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
-    )
+    my_simulation_parameters.post_processing_options.extend([
+        PostProcessingOptions.PLOT_LINE,
+        PostProcessingOptions.PLOT_CARPET,
+        PostProcessingOptions.MAKE_NETWORK_CHARTS,
+        PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT,
+        PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT,
+        PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT,
+        PostProcessingOptions.GENERATE_PDF_REPORT,
+        PostProcessingOptions.COMPUTE_OPEX,
+        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION,
+    ])
 
     my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.get_default_config()
     my_advanced_battery_config_1.system_id = "SG1"
@@ -106,7 +106,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
     my_rsoc = Rsoc(
         my_simulation_parameters=my_simulation_parameters,
-        config=RsocConfig.config_rsoc(
+        config=RsocConfig.from_rsoc_name(
             rsoc_name=rsoc_name,
         ),
     )

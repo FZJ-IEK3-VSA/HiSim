@@ -43,7 +43,7 @@ def child_main(sock: socket.socket, runner: Any) -> None:
         try:
             Path(staging_dir).mkdir(parents=True, exist_ok=True)
             log_fd = os.open(
-                str(Path(staging_dir) / CONSOLE_LOG_NAME),
+                Path(staging_dir) / CONSOLE_LOG_NAME,
                 os.O_WRONLY | os.O_CREAT | os.O_APPEND,
                 0o644,
             )

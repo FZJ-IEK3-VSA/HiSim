@@ -3,7 +3,6 @@
 # clean
 
 from pathlib import Path
-from typing import List, Optional
 
 import pytest
 
@@ -23,7 +22,7 @@ class _RecordingProvider:
     last_instance: "_RecordingProvider | None" = None
 
     def __init__(self) -> None:
-        self.configure_calls: List[dict] = []
+        self.configure_calls: list[dict] = []
         self.get_calls: int = 0
         self._directory: str = str(Path("/fake/results/test/example"))
         type(self).last_instance = self
@@ -37,7 +36,7 @@ class _RecordingProvider:
         """Record the configure call arguments."""
         self.configure_calls.append(dict(kwargs))
 
-    def get_result_directory_name(self) -> Optional[str]:
+    def get_result_directory_name(self) -> str | None:
         """Return the stub directory and count the call."""
         self.get_calls += 1
         return self._directory
@@ -46,7 +45,7 @@ class _RecordingProvider:
 class _NoneDirectoryProvider(_RecordingProvider):
     """A stub provider whose get_result_directory_name() returns None."""
 
-    def get_result_directory_name(self) -> Optional[str]:  # pylint: disable=useless-return
+    def get_result_directory_name(self) -> str | None:  # pylint: disable=useless-return
         """Return None to simulate an unset result directory."""
         self.get_calls += 1
         return None

@@ -4,12 +4,11 @@ from __future__ import annotations
 # clean
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
+from hisim.component import StatelessComponent, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ConfigBase
@@ -42,28 +41,38 @@ class TransformerConfig(ConfigBase):
     efficiency: float  # conversion efficiency as a fraction in [0, 1] (not a percentage)
 
     @classmethod
-    def get_default_transformer(cls) -> TransformerConfig:
-        """Gets a default Transformer."""
+    def get_default_transformer_config(cls) -> TransformerConfig:
+        """Gets a default ``TransformerConfig`` instance."""
         return TransformerConfig(building_name="BUI1", name="Generic Transformer and rectifier Unit", efficiency=0.95)
 
 
-class Transformer(Component):
+class Transformer(StatelessComponent):
     """The Example Transformer class.
 
     It is used to modify input values and return them as new output values.
 
+    The single input (``TransformerInput``) is scaled by
+    :attr:`TransformerConfig.efficiency` (a dimensionless fraction in [0, 1])
+    to produce the single output (``TransformerOutput``). Both the input and
+    output are declared with :attr:`lt.LoadTypes.ELECTRICITY` and
+    :attr:`lt.Units.KILOWATT`, so the transformer carries an implicit unit
+    contract: a caller must feed ``electricity_input`` in kW and read
+    ``electricity_output`` in kW.
+
     Parameters
     ----------
-    component_name : str
+    my_simulation_parameters : SimulationParameters
         Passed to initialize :py:class:`~hisim.component.Component`.
 
-    loadtype : LoadType
-        A :py:class:`~hisim.loadtypes.LoadTypes` object that represents
-        the type of the loaded data.
+    config : TransformerConfig
+        The :py:class:`TransformerConfig` object that holds the transformer
+        configuration (building name, component name, and conversion
+        ``efficiency`` expressed as a fraction in [0, 1]).
 
-    unit: LoadTypes.Units
-        A :py:class:`~hisim.loadtypes.Units` object that represents
-        the unit of the loaded data.
+    my_display_config : DisplayConfig, optional
+        A :py:class:`~hisim.component.DisplayConfig` object that controls
+        how the component is displayed in the simulation results.
+        Defaults to an empty :py:class:`~hisim.component.DisplayConfig`.
 
     """
 
@@ -76,7 +85,7 @@ class Transformer(Component):
         config: TransformerConfig,
         my_display_config: DisplayConfig | None = None,
     ) -> None:
-        """Constructs all the neccessary attributes."""
+        """Constructs all the necessary attributes."""
         self.transformerconfig = config
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -89,7 +98,7 @@ class Transformer(Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.input1: ComponentInput = self.add_input(
+        self.electricity_input: ComponentInput = self.add_input(
             self.component_name,
             Transformer.TransformerInput,
             lt.LoadTypes.ELECTRICITY,
@@ -97,42 +106,37 @@ class Transformer(Component):
             True,
         )
 
-        self.output1: ComponentOutput = self.add_output(
+        self.electricity_output: ComponentOutput = self.add_output(
             self.component_name,
             Transformer.TransformerOutput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
             postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
-            output_description="Output 1",
+            output_description="Electricity output",
         )
 
-    def i_save_state(self) -> None:
-        """Saves the current state."""
-        pass
-
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
-        """Doublechecks."""
-        pass
-
-    def i_restore_state(self) -> None:
-        """Restores previous state."""
-        pass
-
-    def i_prepare_simulation(self) -> None:
-        """Prepares the simulation."""
-        pass
-
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulates the transformer."""
-        startval_1 = stsv.get_input_value(self.input1)
-        # print(f"Input from CSV: {startval_1}")
+        """Scale the electricity input by the configured efficiency to produce output.
+
+        Reads the input power value (``electricity_input``) from ``stsv``, multiplies it by
+        :attr:`TransformerConfig.efficiency`, and writes the result to ``electricity_output``.
+
+        Args:
+            timestep: The current simulation timestep index.
+            stsv: The single-timestep values container holding inputs and outputs.
+            force_convergence: Whether to force convergence (unused in this component).
+        """
+        input_value = stsv.get_input_value(self.electricity_input)
+        # print(f"Input from CSV: {input_value}")
         efficiency = self.transformerconfig.efficiency
         # print(f"individual efficiency: {efficiency}")
 
-        stsv.set_output_value(self.output1, float(startval_1 * efficiency))
+        stsv.set_output_value(self.electricity_output, float(input_value * efficiency))
 
-    def write_to_report(self) -> List[str]:
-        """Writes a report."""
-        lines = []
-        lines.append("Transformer: " + self.component_name)
-        return lines
+    def write_to_report(self) -> list[str]:
+        """Return report lines describing this transformer.
+
+        Returns:
+            A list containing a single string with the component name.
+        """
+        return [f"Transformer: {self.component_name}"]

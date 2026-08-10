@@ -175,7 +175,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
             self.test_name = sanitize_path_component(test_name)  # type: ignore[arg-type]
 
     @staticmethod
-    def _validate_configure_arguments(run_mode: RunMode, provided_arguments: dict) -> None:
+    def _validate_configure_arguments(run_mode: RunMode, provided_arguments: dict[str, Optional[Union[str, SortingOptionEnum]]]) -> None:
         """Ensure that exactly the arguments meaningful for ``run_mode`` are provided."""
         if run_mode not in REQUIRED_CONFIGURE_ARGS_FOR_MODE:
             raise ValueError(f"Unknown run mode {run_mode!r}.")
@@ -263,7 +263,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         """Get the result directory path."""
 
         if self.run_mode == RunMode.TEST:
-            return self._get_test_directory_name()
+            return self._get_test_directory_path()
 
         if (
             self.base_path is not None
@@ -302,7 +302,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
 
         return None
 
-    def _get_test_directory_name(self) -> Optional[str]:
+    def _get_test_directory_path(self) -> Optional[str]:
         """Build the result directory for a test run, identified by the test name alone."""
         if self.base_path is None or self.test_name is None:
             return None

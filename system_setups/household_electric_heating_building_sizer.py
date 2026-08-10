@@ -168,7 +168,7 @@ def setup_function(
 
     # get household attribute jsonreferences from list of strings
     lpg_households: Union[JsonReference, List[JsonReference]]
-    if isinstance(arche_type_config_.lpg_households, List):
+    if isinstance(arche_type_config_.lpg_households, list):
         if len(arche_type_config_.lpg_households) == 1:
             lpg_households = getattr(Households, arche_type_config_.lpg_households[0])
         elif len(arche_type_config_.lpg_households) > 1:

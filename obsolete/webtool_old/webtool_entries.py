@@ -103,7 +103,7 @@ class WebtoolDict(JSONWizard):
                     computed_values_key = computed_values[0][idx_column + 1]
                     try:
                         computed_values_name, computed_values_unit = computed_values_key.split(" in ")
-                    except Exception as exc:
+                    except ValueError as exc:
                         match = re.match(r"^(.*?)\s*\[(.*?)\]$", computed_values_key)
                         if match:
                             computed_values_name, computed_values_unit = match.groups()

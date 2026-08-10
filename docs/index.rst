@@ -108,3 +108,8 @@ This project has received funding from the Federal Ministry for Economic Affairs
 
 .. _iek3link:
 
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+
+   agent_pages

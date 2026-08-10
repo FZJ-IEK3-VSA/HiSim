@@ -41,8 +41,69 @@ instantiates components, configures them, and wires them together. This mode is 
 and supports arbitrary Python logic (loops, conditionals, helper functions). It remains
 fully supported for now but is not recommended for new setups.
 
+### Which files should a setup ship?
 
+| What the setup ships | Allowed? | What you have to do |
+|---|---|---|
+| `.scenario.json` only | **Yes — encouraged** | Nothing. There is no `.py` to keep in sync |
+| `.py` + `.scenario.json` | Yes | Edit the `.py`, then regenerate the JSON with the translator |
+| `.py` only | No | Run the translator to generate the missing JSON |
 
+#### A `.json`-only scenario is fine — and preferred
+
+You do **not** need to write a `.py` setup at all. Shipping a scenario as a
+`.scenario.json` on its own is fully supported and is the recommended way to add a new
+scenario: it is declarative, quicker to write, and easier to maintain and review than the
+equivalent imperative setup function.
+
+It is also the option that cannot rot. Both consistency checks described below walk the
+`*.py` setups only, so a JSON-only scenario has no sibling to drift from and is never at
+risk of failing them.
+
+#### Keeping a `.py` and its `.scenario.json` in sync
+
+Most setups currently in this folder ship in **both** formats. Whenever that is the case,
+the `.scenario.json` is a **generated artifact**, not a hand-maintained file: it is
+derived from its `.py` sibling by the converter `hisim/hisim_convert_to_json.py`.
+
+**If a setup has both a `.py` and a `.scenario.json`, edit only the `.py` and then
+regenerate the JSON with the translator — do not hand-edit the JSON**, and never change one
+of the two formats without the other:
+
+```bash
+# From the repository root
+python scripts/regenerate_scenario_jsons.py --only <setup>   # regenerate one setup
+python scripts/regenerate_scenario_jsons.py                  # regenerate every setup (the default)
+python scripts/regenerate_scenario_jsons.py -j 4             # ... 4 setups at a time
+python scripts/regenerate_scenario_jsons.py --dry-run        # list what would be rebuilt, change nothing
+```
+
+Each setup is converted in its own subprocess, and a per-setup log is written to
+`results/regenerate_scenario_jsons/`. Run the script with `--help` for the full option list.
+
+This also applies to a **newly added** `.py` setup that has no JSON yet: run the script to
+generate the missing sibling, because every `.py` setup is required to ship an
+up-to-date `.scenario.json`.
+
+#### Why this is mandatory
+
+Two automated checks assert that the committed JSON is exactly the one the converter would
+produce right now, so a hand-edited or stale JSON fails CI:
+
+| Check | What it does |
+|---|---|
+| `scenario-json-freshness` workflow | Regenerates a scenario JSON for **every** `.py` setup from scratch and fails on any difference from the committed file — stale JSON, missing JSON, or a setup that cannot be converted at all |
+| `tests/test_json_configs.py` | Builds one simulator from the `.py` and a second from the exported JSON, and asserts both wrap the same number of components and register the same number of outputs |
+
+Note that a JSON can go stale **without its `.py` ever being touched**: changing a
+component's config dataclass or its `add_default_connections()` declarations changes the
+generated output of every setup that uses that component. After such a change, regenerate
+all setups rather than only the one you edited.
+
+The two weather setups (`basic_household_with_weather_data_request` and
+`simple_weather_data_import`) are currently the exception — they are excluded from the freshness
+workflow and skipped by the test, because they need the optional `wetterdienst` package,
+which is for now disabled in `requirements.txt`. They are therefore not required to ship a JSON and consistency is unchecked.
 
 
 ---

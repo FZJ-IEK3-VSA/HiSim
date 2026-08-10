@@ -162,12 +162,12 @@ def guard_against_stray_files() -> Iterator[None]:
     result_dir = _result_dir()
     stray = _compute_stray(before=before, after=_git_status(), result_dir=result_dir)
     if _should_fail(stray):
+        stray_text = "\n".join(stray)
         raise AssertionError(
-            "Test left files outside the result directory (would pollute a merge request):\n"
-            + "\n".join(stray)
-            + "\n\n"
-            + _stray_file_diagnostics(stray_status_lines=stray, result_dir=result_dir)
-            + "\n\nWrite into the ResultPathProviderSingleton result directory, "
-            "or add a legitimate output location to .gitignore."
+            f"Test left files outside the result directory (would pollute a merge request):\n"
+            f"{stray_text}\n\n"
+            f"{_stray_file_diagnostics(stray_status_lines=stray, result_dir=result_dir)}\n\n"
+            f"Write into the ResultPathProviderSingleton result directory, "
+            f"or add a legitimate output location to .gitignore."
         )
     print("No stray files left behind!")

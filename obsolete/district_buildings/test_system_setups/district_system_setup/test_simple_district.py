@@ -22,7 +22,6 @@ from hisim.components.weather import WeatherDataSourceEnum
 from system_setups.district_system_setup.simple_district import DistrictConfig
 
 
-@pytest.mark.base
 def test_get_default_scalar_fields() -> None:
     """``get_default`` populates the scalar defaults documented in the issue."""
     cfg = DistrictConfig.get_default()
@@ -40,7 +39,6 @@ def test_get_default_scalar_fields() -> None:
     assert cfg.prediction_horizon_pv_district is None
 
 
-@pytest.mark.base
 def test_get_default_datetime_fields() -> None:
     """``get_default`` returns the expected start/end datetimes."""
     cfg = DistrictConfig.get_default()
@@ -49,7 +47,6 @@ def test_get_default_datetime_fields() -> None:
     assert cfg.end_date == datetime.datetime(2023, 2, 1, 0, 0, 0)
 
 
-@pytest.mark.base
 def test_get_default_enum_fields() -> None:
     """``get_default`` selects the documented enum members and district name."""
     cfg = DistrictConfig.get_default()
@@ -70,7 +67,6 @@ def test_get_default_enum_fields() -> None:
     assert cfg.district_name == loadtypes.DistrictNames.DISTRICT.value
 
 
-@pytest.mark.base
 def test_get_default_computed_product_fields() -> None:
     """The CO2 footprint and investment costs are products of the documented factors."""
     cfg = DistrictConfig.get_default()
@@ -81,7 +77,6 @@ def test_get_default_computed_product_fields() -> None:
     )
 
 
-@pytest.mark.base
 def test_get_default_location_propagation_default() -> None:
     """The default call propagates ``"AACHEN"`` to both location fields."""
     cfg = DistrictConfig.get_default()
@@ -90,7 +85,6 @@ def test_get_default_location_propagation_default() -> None:
     assert cfg.location_pv_district == "AACHEN"
 
 
-@pytest.mark.base
 def test_get_default_location_propagation_custom() -> None:
     """A custom location is propagated to both ``location_district`` and ``location_pv_district``."""
     cfg = DistrictConfig.get_default(location_district="BERLIN")
@@ -99,7 +93,6 @@ def test_get_default_location_propagation_custom() -> None:
     assert cfg.location_pv_district == "BERLIN"
 
 
-@pytest.mark.base
 def test_get_default_location_empty_string() -> None:
     """An empty-string location is propagated verbatim (no validation is performed)."""
     cfg = DistrictConfig.get_default(location_district="")
@@ -108,7 +101,6 @@ def test_get_default_location_empty_string() -> None:
     assert cfg.location_pv_district == ""
 
 
-@pytest.mark.base
 def test_get_default_is_deterministic_and_independent() -> None:
     """Repeated calls return equal but distinct instances that do not share state."""
     cfg1 = DistrictConfig.get_default()

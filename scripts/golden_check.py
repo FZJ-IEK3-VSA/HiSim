@@ -93,7 +93,7 @@ class ComparisonReport:
             reasons.append(f"{diverged} with KPI divergences")
         if missing:
             reasons.append(f"{missing} missing a golden reference")
-        return f"GOLDEN CHECK FAILED ({total} pair(s)): " + ", ".join(reasons)
+        return f"GOLDEN CHECK FAILED ({total} pair(s)): {', '.join(reasons)}"
 
 
 def _print_failure_details(report: ComparisonReport, out_dir: Path, advisory: bool) -> None:

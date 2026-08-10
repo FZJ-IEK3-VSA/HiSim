@@ -1,4 +1,9 @@
-"""Controller l1 example module."""
+"""Example L1 controller demonstrating a simple hysteresis gas-heater controller.
+
+Provides ``SimpleController`` and ``SimpleControllerConfig`` as a reference
+level-1 controller that toggles a gas heater on/off based on a storage
+fill-level threshold.
+"""
 
 # clean
 
@@ -25,7 +30,12 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class SimpleControllerConfig(ConfigBase):
-    """Config class."""
+    """Configuration dataclass for the SimpleController example controller.
+
+    Attributes:
+        building_name: Identifier for the building this controller belongs to.
+        name: Human-readable name of the controller instance.
+    """
 
     building_name: str
     name: str
@@ -46,7 +56,12 @@ class SimpleControllerConfig(ConfigBase):
 
 
 class SimpleController(Component):
-    """Simple controller class."""
+    """Example L1 controller that toggles a gas heater via storage fill-level hysteresis.
+
+    Reads a storage fill-level percentage input and sets a gas-heater power
+    output to 1 (on) when the level drops below the low threshold and to 0
+    (off) when it exceeds the high threshold.
+    """
 
     StorageFillLevel: str = "Fill Level Percent"
     GasHeaterPowerPercent: str = "Gas Heater Power Level"
@@ -59,10 +74,20 @@ class SimpleController(Component):
         name: str,
         my_simulation_parameters: SimulationParameters,
         config: SimpleControllerConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: DisplayConfig | None = None,
     ) -> None:
-        """Initialize the class."""
+        """Initialize the controller and register its input/output channels.
 
+        Args:
+            name: Name of the controller instance.
+            my_simulation_parameters: Parameters of the current simulation.
+            config: Configuration providing the building name and component name.
+            my_display_config: Optional display configuration; defaults to a new
+                DisplayConfig when None.
+        """
+
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()
@@ -72,38 +97,48 @@ class SimpleController(Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.input1_channel: ComponentInput = self.add_input(
+        self.storage_fill_level_channel: ComponentInput = self.add_input(
             self.component_name,
             SimpleController.StorageFillLevel,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KWH,
             True,
         )
-        self.output1_channel: ComponentOutput = self.add_output(
+        self.gas_heater_power_channel: ComponentOutput = self.add_output(
             self.component_name,
             SimpleController.GasHeaterPowerPercent,
             lt.LoadTypes.GAS,
             lt.Units.PERCENT,
         )
-        self.state: int = 0
-        self.previous_state: int = self.state
+        self.heater_state: int = 0
+        self.previous_heater_state: int = self.heater_state
 
     def i_save_state(self) -> None:
         """Saves the state."""
-        self.previous_state = self.state
+        self.previous_heater_state = self.heater_state
 
     def i_restore_state(self) -> None:
         """Restores the state."""
-        self.state = self.previous_state
+        self.heater_state = self.previous_heater_state
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulates the component."""
+        """Simulate one time step: read fill level and set gas-heater power output.
+
+        When the storage fill level is below the low threshold the heater state
+        is set to 1 (on); when above the high threshold it is set to 0 (off).
+        The state is written to the gas-heater power output channel.
+
+        Args:
+            timestep: Current simulation time-step index.
+            stsv: Container for the current step's input and output values.
+            force_convergence: If True, skip computation and return immediately.
+        """
 
         if force_convergence:
             return
-        percent = stsv.get_input_value(self.input1_channel)
-        if percent < SimpleController.FILL_LEVEL_LOW_THRESHOLD:
-            self.state = 1
-        if percent > SimpleController.FILL_LEVEL_HIGH_THRESHOLD:
-            self.state = 0
-        stsv.set_output_value(self.output1_channel, self.state)
+        fill_level = stsv.get_input_value(self.storage_fill_level_channel)
+        if fill_level < SimpleController.FILL_LEVEL_LOW_THRESHOLD:
+            self.heater_state = 1
+        if fill_level > SimpleController.FILL_LEVEL_HIGH_THRESHOLD:
+            self.heater_state = 0
+        stsv.set_output_value(self.gas_heater_power_channel, self.heater_state)

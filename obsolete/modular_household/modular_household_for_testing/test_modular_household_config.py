@@ -24,14 +24,12 @@ from repositories.HiSim.obsolete.modular_household.interface_configs.modular_hou
 from repositories.HiSim.obsolete.modular_household.interface_configs import archetype_config
 
 
-@pytest.mark.base
 def test_get_default_returns_modular_household_config() -> None:
     """``get_default`` returns a fully populated ``ModularHouseholdConfig`` instance."""
     cfg: ModularHouseholdConfig = ModularHouseholdConfig.get_default()
     assert isinstance(cfg, ModularHouseholdConfig)
 
 
-@pytest.mark.base
 def test_get_default_populates_system_config() -> None:
     """``get_default`` populates ``system_config_`` with a ``SystemConfig`` instance."""
     cfg: ModularHouseholdConfig = ModularHouseholdConfig.get_default()
@@ -39,7 +37,6 @@ def test_get_default_populates_system_config() -> None:
     assert isinstance(cfg.system_config_, system_config.SystemConfig)
 
 
-@pytest.mark.base
 def test_get_default_populates_archetype_config() -> None:
     """``get_default`` populates ``archetype_config_`` with an ``ArcheTypeConfigModular``."""
     cfg: ModularHouseholdConfig = ModularHouseholdConfig.get_default()
@@ -47,7 +44,6 @@ def test_get_default_populates_archetype_config() -> None:
     assert isinstance(cfg.archetype_config_, archetype_config.ArcheTypeConfigModular)
 
 
-@pytest.mark.base
 def test_get_default_yields_distinct_instances() -> None:
     """Repeated ``get_default`` calls return distinct instances with no shared mutable state."""
     first: ModularHouseholdConfig = ModularHouseholdConfig.get_default()
@@ -62,7 +58,6 @@ def test_get_default_yields_distinct_instances() -> None:
     assert type(first.archetype_config_) is type(second.archetype_config_)
 
 
-@pytest.mark.base
 def test_direct_construction_leaves_sub_configs_none() -> None:
     """Constructing ``ModularHouseholdConfig`` directly leaves the sub-configs as ``None``.
 
@@ -88,14 +83,12 @@ def _assert_default_config(cfg: ModularHouseholdConfig) -> None:
     assert isinstance(cfg.archetype_config_, archetype_config.ArcheTypeConfigModular)
 
 
-@pytest.mark.base
 def test_read_config_with_none_pathname_returns_default() -> None:
     """``read_config(None)`` falls back to a default config with both sub-configs."""
     cfg = read_config(None)
     _assert_default_config(cfg)
 
 
-@pytest.mark.base
 def test_read_config_with_missing_file_returns_default(tmp_path: Path) -> None:
     """A non-existent path triggers the ``FileNotFoundError`` fallback to defaults."""
     missing = tmp_path / "does_not_exist.json"
@@ -103,7 +96,6 @@ def test_read_config_with_missing_file_returns_default(tmp_path: Path) -> None:
     _assert_default_config(cfg)
 
 
-@pytest.mark.base
 def test_read_config_with_empty_object_returns_default(tmp_path: Path) -> None:
     """An empty JSON object (no ``system_setup_config`` key) falls back to defaults.
 
@@ -116,7 +108,6 @@ def test_read_config_with_empty_object_returns_default(tmp_path: Path) -> None:
     _assert_default_config(cfg)
 
 
-@pytest.mark.base
 def test_read_config_with_both_subconfigs_missing_returns_default(
     tmp_path: Path,
 ) -> None:
@@ -132,7 +123,6 @@ def test_read_config_with_both_subconfigs_missing_returns_default(
     _assert_default_config(cfg)
 
 
-@pytest.mark.base
 def test_read_config_both_missing_logs_warning(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
@@ -145,7 +135,6 @@ def test_read_config_both_missing_logs_warning(
     assert "neither a system nor an archetype config" in captured.out
 
 
-@pytest.mark.base
 def test_read_config_missing_file_logs_warning(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
@@ -157,7 +146,6 @@ def test_read_config_missing_file_logs_warning(
     assert "Could not read" in captured.out
 
 
-@pytest.mark.base
 def test_read_config_preserves_present_subconfig(tmp_path: Path) -> None:
     """When only one sub-config is present, it is preserved and the other is defaulted."""
     config_path = tmp_path / "sys_only.json"
@@ -178,7 +166,6 @@ def test_read_config_preserves_present_subconfig(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.base
 def test_config_from_setup_dict_migrates_legacy_archetype_keys() -> None:
     """The pure core migrates deprecated archetype keys without a JSON file."""
     setup_dict = {
@@ -206,7 +193,6 @@ def test_config_from_setup_dict_migrates_legacy_archetype_keys() -> None:
     assert any(issubclass(w.category, DeprecationWarning) for w in caught)
 
 
-@pytest.mark.base
 def test_config_from_setup_dict_fills_missing_subconfigs() -> None:
     """An empty setup dict yields a config with both sub-configs defaulted."""
     cfg = _config_from_setup_dict({})
@@ -215,7 +201,6 @@ def test_config_from_setup_dict_fills_missing_subconfigs() -> None:
     assert isinstance(cfg.archetype_config_, archetype_config.ArcheTypeConfigModular)
 
 
-@pytest.mark.base
 def test_config_from_setup_dict_preserves_present_subconfig() -> None:
     """A present system config is preserved; the missing archetype is defaulted."""
     cfg = _config_from_setup_dict({"system_config_": {"pv_peak_power": 4242.0}})
@@ -224,7 +209,6 @@ def test_config_from_setup_dict_preserves_present_subconfig() -> None:
     assert isinstance(cfg.archetype_config_, archetype_config.ArcheTypeConfigModular)
 
 
-@pytest.mark.base
 def test_config_from_setup_dict_none_raises_parse_error() -> None:
     """A ``None`` setup dict is a parse failure that propagates from the pure core."""
     with pytest.raises(ParseError):

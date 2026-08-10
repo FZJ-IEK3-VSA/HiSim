@@ -45,7 +45,6 @@ def _needs_ems(
     )
 
 
-@pytest.mark.base
 @pytest.mark.parametrize(
     ("expected", "kwargs"),
     [

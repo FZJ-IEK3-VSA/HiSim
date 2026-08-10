@@ -2,6 +2,10 @@
 
 # clean
 
+# This test deliberately clears the singleton metaclass's private instance
+# cache to verify thread-safe first access.
+# pylint: disable=protected-access
+
 from typing import Optional
 from pathlib import Path
 import pytest
@@ -24,9 +28,10 @@ PATH: str = "../system_setups/household_for_test_sim_repository.py"
 def test_house(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """The test should check if a normal simulation works with the singleton sim repository implementation.
+    """Check that a normal simulation works with the singleton sim repository implementation.
 
-    Also the singleton property is checked.
+    The singleton identity property is verified separately in
+    ``test_singleton_returns_same_instance``.
     """
 
     # =========================================================================================================================================================
@@ -163,3 +168,40 @@ def test_house(
         pass
 
     assert NonSingleton() is not NonSingleton()
+
+
+@pytest.mark.base
+def test_singleton_concurrent_first_access_is_thread_safe() -> None:
+    """Verify double-checked locking: concurrent first accesses yield one instance.
+
+    ``SingletonMeta.__call__`` uses double-checked locking so that the lock is
+    only acquired on the creation path. This test stresses that path by clearing
+    the instance cache and instantiating from many threads at once; the result
+    must still be a single shared instance (no duplicate construction).
+    """
+    import threading
+
+    from hisim.sim_repository_singleton import SingletonMeta
+
+    # Reset the metaclass instance cache so the very first call from each
+    # thread races through the outer (lock-free) check.
+    SingletonMeta._instances.clear()
+
+    results: list = []
+    num_threads = 32
+
+    def worker() -> None:
+        results.append(SingletonSimRepository())
+
+    threads = [threading.Thread(target=worker) for _ in range(num_threads)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(results) == num_threads
+    first = results[0]
+    assert all(r is first for r in results), "concurrent first access created distinct instances"
+
+    # A subsequent call must still return the same instance (fast path).
+    assert SingletonSimRepository() is first

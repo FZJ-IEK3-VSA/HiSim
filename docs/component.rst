@@ -1,7 +1,7 @@
 Component Module
 ================
 
-.. automodule:: component
+.. automodule:: hisim.component
    :members:
    :undoc-members:
    :show-inheritance:

@@ -273,29 +273,24 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     )
     print(calculated_water_output_temperature_in_celsius)
     log.information(
-        "water input temperature in celsius "
-        + str(stsv.values[water_temperature_input_from_water_storage.global_index])
+        f"water input temperature in celsius {stsv.values[water_temperature_input_from_water_storage.global_index]}"
     )
     log.information(
-        "residence temperature in celsius "
-        + str(stsv.values[residence_temperature_indoor_air.global_index])
+        f"residence temperature in celsius {stsv.values[residence_temperature_indoor_air.global_index]}"
     )
     log.information(
-        "theoretical thermal building demand in watt "
-        + str(theoretical_building_demand_in_watt)
+        f"theoretical thermal building demand in watt {theoretical_building_demand_in_watt}"
     )
     log.information(
-        "theoretical water output temperature after heat exchange with building "
-        + str(calculated_water_output_temperature_in_celsius)
+        f"theoretical water output temperature after heat exchange with building "
+        f"{calculated_water_output_temperature_in_celsius}"
     )
     log.information(
-        "real water output temperature after heat exchange with building "
-        + str(water_output_temperature_in_celsius_from_simulation)
+        f"real water output temperature after heat exchange with building "
+        f"{water_output_temperature_in_celsius_from_simulation}"
     )
     log.information(
-        "real thermal output delivered from hds "
-        + str(effective_thermal_power_delivered_in_watt)
-        + "\n"
+        f"real thermal output delivered from hds {effective_thermal_power_delivered_in_watt}\n"
     )
     return (
         stsv.values[water_temperature_input_from_water_storage.global_index],
@@ -305,3 +300,26 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         water_output_temperature_in_celsius_from_simulation,
         effective_thermal_power_delivered_in_watt,
     )
+
+
+@pytest.mark.base
+def test_get_cost_capex_raises_on_unknown_heating_system() -> None:
+    """Unknown heating_system values must raise ValueError, not silently return defaults.
+
+    Regression test for the silent-default ``else`` branch in
+    ``HeatDistribution.get_cost_capex``: an invalid ``heating_system`` used to
+    return a default ``CapexCostDataClass`` (zero/default CAPEX), masking
+    configuration errors. It must now raise a ``ValueError`` naming the
+    offending value.
+    """
+    invalid_heating_system = 99  # not a valid HeatDistributionSystemType value
+    config = heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
+        water_mass_flow_rate_in_kg_per_second=0.1,
+        absolute_conditioned_floor_area_in_m2=100.0,
+        heating_system=invalid_heating_system,
+    )
+    simulation_parameters = SimulationParameters.one_day_only(2017, 60)
+    with pytest.raises(ValueError, match="Unknown heating_system type"):
+        heat_distribution_system.HeatDistribution.get_cost_capex(
+            config=config, simulation_parameters=simulation_parameters
+        )

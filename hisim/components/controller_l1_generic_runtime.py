@@ -4,7 +4,7 @@
 # clean
 import importlib
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from dataclasses_json import dataclass_json
 
@@ -39,11 +39,11 @@ class L1Config(ConfigBase):
     def get_default_config(
         name: str,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "L1Config":
         """Default config."""
         config = L1Config(
             building_name=building_name,
-            name="RuntimeController_" + name,
+            name=f"RuntimeController_{name}",
             source_weight=1,
             min_operation_time_in_seconds=3600,
             min_idle_time_in_seconds=900,
@@ -54,11 +54,11 @@ class L1Config(ConfigBase):
     def get_default_config_heatpump(
         name: str,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "L1Config":
         """Gets a default config for heat pumps."""
         config = L1Config(
             building_name=building_name,
-            name="L1RuntimeController" + name,
+            name=f"L1RuntimeController{name}",
             source_weight=1,
             min_operation_time_in_seconds=3600 * 3,
             min_idle_time_in_seconds=3600,
@@ -80,7 +80,7 @@ class L1GenericRuntimeControllerState:
         self.activation_time_step: int = activation_time_step
         self.deactivation_time_step: int = deactivation_time_step
 
-    def clone(self) -> Any:
+    def clone(self) -> "L1GenericRuntimeControllerState":
         """Generates a new state."""
         return L1GenericRuntimeControllerState(
             activation_time_step=self.activation_time_step,
@@ -123,11 +123,11 @@ class L1GenericRuntimeController(cp.Component):
     """
 
     # Inputs
-    L2DeviceSignal = "l2_DeviceSignal"
+    L2DeviceSignal: str = "l2_DeviceSignal"
 
     # Outputs
-    L1DeviceSignal = "L1DeviceSignal"
-    L1RunTimeSignal = "L1RunTimeSignal"
+    L1DeviceSignal: str = "L1DeviceSignal"
+    L1RunTimeSignal: str = "L1RunTimeSignal"
 
     # Similar components to connect to:
     # 1. building_name
@@ -139,10 +139,10 @@ class L1GenericRuntimeController(cp.Component):
         my_display_config: Optional[DisplayConfig] = None,
     ) -> None:
         """Initializes the controller."""
-        self.my_simulation_parameters = my_simulation_parameters
+        self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
         if my_display_config is None:
             my_display_config = DisplayConfig()
-        self.config = config
+        self.config: L1Config = config
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -151,17 +151,17 @@ class L1GenericRuntimeController(cp.Component):
             my_display_config=my_display_config,
         )
         self.config = config
-        self.name = config.name
-        self.source_weight = config.source_weight
-        self.minimum_runtime_in_timesteps = int(
+        self.name: str = config.name
+        self.source_weight: int = config.source_weight
+        self.minimum_runtime_in_timesteps: int = int(
             config.min_operation_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
         )
-        self.minimum_resting_time_in_timesteps = int(
+        self.minimum_resting_time_in_timesteps: int = int(
             config.min_idle_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
         )
 
-        self.state = L1GenericRuntimeControllerState(0, 0, 0)
-        self.previous_state = self.state.clone()
+        self.state: L1GenericRuntimeControllerState = L1GenericRuntimeControllerState(0, 0, 0)
+        self.previous_state: L1GenericRuntimeControllerState = self.state.clone()
         # add inputs
         self.l2_device_signal_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -248,6 +248,6 @@ class L1GenericRuntimeController(cp.Component):
     def write_to_report(self) -> List[str]:
         """Writes config to report."""
         lines: List[str] = []
-        lines.append("Generic Controller L1: " + self.component_name)
+        lines.append(f"Generic Controller L1: {self.component_name}")
         lines.extend(self.config.get_string_dict())
         return lines

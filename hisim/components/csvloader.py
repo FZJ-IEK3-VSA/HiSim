@@ -1,4 +1,12 @@
-"""Csvloader module."""
+"""CSV loader component for HiSim simulations.
+
+This module provides the :class:`CSVLoader` component, which reads a load
+profile from a CSV file and exposes it as a time-indexed output channel for
+HiSim simulations. The accompanying :class:`CSVLoaderConfig` dataclass
+collects the file path, column index, separator, multiplier, and other
+parameters needed to read a profile and feed it into a simulation as a
+single output channel.
+"""
 
 # clean
 
@@ -20,7 +28,21 @@ from hisim.simulationparameters import SimulationParameters
 @dataclass_json
 @dataclass
 class CSVLoaderConfig(cp.ConfigBase):
-    """Csvloader config class."""
+    """Configuration for the :class:`CSVLoader` component.
+
+    Args:
+        building_name: Name of the building this loader belongs to.
+        name: Display name of the load profile.
+        csv_filename: Filename of the CSV file containing the profile data.
+        column: Zero-based index of the column holding the profile values.
+        loadtype: Physical load type of the data (e.g. electricity, heat).
+        unit: Unit of the loaded data.
+        column_name: Human-readable name of the profile column.
+        sep: Column separator used in the CSV file.
+        decimal: Decimal separator used in the CSV file.
+        multiplier: Factor applied to every loaded value.
+        output_description: Description text for the output channel.
+    """
 
     building_name: str
     name: str
@@ -167,12 +189,19 @@ class CSVLoader(cp.Component):
         self.column_name: str = self.csvconfig.column_name
         if len(dfcolumn) < self.my_simulation_parameters.timesteps:
             raise ValueError(
-                f"CSV \'{self.csvconfig.csv_filename}\' has {len(dfcolumn)} rows, "
+                f"CSV '{self.csvconfig.csv_filename}' has {len(dfcolumn)} rows, "
                 f"which is fewer than the {self.my_simulation_parameters.timesteps} "
                 "simulation timesteps."
             )
 
         self.column_values: np.ndarray = dfcolumn.to_numpy(dtype=float)
+        if not np.all(np.isfinite(self.column_values)):
+            bad_rows = np.where(~np.isfinite(self.column_values))[0]
+            raise ValueError(
+                f"CSV '{self.csvconfig.csv_filename}' column "
+                f"'{self.column_name}' contains non-finite values "
+                f"(NaN/inf) at rows {bad_rows[:10].tolist()}"
+            )
         self.values: List[float] = []
 
     @property
@@ -276,25 +305,59 @@ class CSVLoader(cp.Component):
         return self._read_csv(self.csvconfig, inputs_dir)
 
     def i_restore_state(self) -> None:
-        """Restores the state."""
+        """No-op override of the component state-restore lifecycle hook.
+
+        CSVLoader holds no mutable runtime state across timesteps, so
+        restoring a previously saved state requires no action.
+        """
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulates the component."""
+        """Write the profile value for *timestep* to the output channel.
+
+        Looks up ``self.column_values[timestep]``, multiplies it by
+        ``self.multiplier``, and stores the result in *stsv* via
+        ``self.output1_channel``.
+
+        Args:
+            timestep: Index of the current simulation timestep.
+            stsv: Single-time-step values container to write the output into.
+            force_convergence: Unused; accepted for interface compatibility
+                with the component lifecycle.
+        """
         stsv.set_output_value(self.output1_channel, float(self.column_values[timestep]) * self.multiplier)
 
     def i_prepare_simulation(self) -> None:
-        """Prepare the simulation."""
+        """No-op override of the pre-simulation preparation hook.
+
+        All profile data is loaded in ``__init__``, so no additional
+        preparation is needed before the simulation loop begins.
+        """
         pass
 
     def i_save_state(self) -> None:
-        """Saves the state."""
+        """No-op override of the component state-save lifecycle hook.
+
+        CSVLoader holds no mutable runtime state across timesteps, so
+        there is nothing to snapshot.
+        """
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
-        """Doublechecks."""
+        """No-op override of the post-step consistency-check hook.
+
+        Args:
+            timestep: Index of the current simulation timestep.
+            stsv: Single-time-step values container (unused).
+        """
         pass
 
     def write_to_report(self) -> List[str]:
-        """Writes a report."""
+        """Return the loader configuration as a string dictionary for reports.
+
+        Returns:
+            The string dictionary produced by
+            ``self.csvconfig.get_string_dict()``, suitable for inclusion in
+            the simulation report.
+        """
         return self.csvconfig.get_string_dict()

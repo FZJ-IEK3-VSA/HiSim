@@ -9,12 +9,21 @@ from hisim import log
 
 
 class ComponentWrapper:
-    """Wraps components for use."""
+    """Wraps a Component for use in the simulator.
+
+    Manages the component's inputs and outputs, registers outputs in the
+    global list, connects inputs to matching outputs, and delegates state
+    save/restore and simulation calls to the wrapped component.
+    """
 
     def __init__(self, component: cp.Component, is_cachable: bool, connect_automatically: bool):
-        """Initializes the component wrapper.
+        """Initialize the wrapper with a component and caching/connect flags.
 
-        Used to handle the connection of inputs and outputs.
+        Args:
+            component: The Component instance to wrap.
+            is_cachable: Whether the component's simulation results may be cached.
+            connect_automatically: Whether inputs should be connected automatically
+                during wiring.
         """
         self.my_component: cp.Component = component
         self.component_inputs: List[cp.ComponentInput] = []
@@ -32,9 +41,23 @@ class ComponentWrapper:
     def register_component_outputs(
         self, all_outputs: List[cp.ComponentOutput], wrapped_components_so_far: List["ComponentWrapper"]
     ) -> None:
-        """Registers component outputs in the global list of components."""
+        """Register the wrapped component's outputs in the global outputs list.
 
-        log.debug("Registering component outputs on " + self.my_component.component_name)
+        Filters out dynamic outputs whose source component has not yet been
+        wrapped, assigns each remaining output a global index, and appends it
+        to both the global list and this wrapper's component_outputs.
+
+        Args:
+            all_outputs: Global list of all ComponentOutput objects registered so far.
+            wrapped_components_so_far: ComponentWrappers already registered, used to
+                check whether dynamic-output source components exist.
+
+        Raises:
+            ValueError: If an output with the same full_name is already registered,
+                or if the component ends up with no outputs registered.
+        """
+
+        log.debug(f"Registering component outputs on {self.my_component.component_name}")
 
         # Collect classnames of already wrapped components once
         wrapped_class_names_so_far = {component.my_component.get_classname() for component in wrapped_components_so_far}
@@ -83,14 +106,19 @@ class ComponentWrapper:
             # add the output column to the global list of outputs
             all_outputs.append(output)
             self.component_outputs.append(output)
-            log.debug("Registered output " + output.full_name)
+            log.debug(f"Registered output {output.full_name}")
             if not self.component_outputs:
                 raise ValueError(f"The component {self.my_component.component_name} has no outputs registered.")
 
     def register_component_inputs(self, global_column_dict: dict[str, cp.ComponentInput]) -> None:
-        """Gets the inputs for the current component from the global column dict and puts them into component_inputs."""
+        """Register the wrapped component's inputs from the global column dict.
 
-        log.debug("Registering component inputs for " + self.my_component.component_name)
+        Args:
+            global_column_dict: Mapping from input full name to ComponentInput
+                containing all inputs registered across all components.
+        """
+
+        log.debug(f"Registering component inputs for {self.my_component.component_name}")
         # look up input columns and cache, so we only have the correct columns saved
         input_columns: List[cp.ComponentInput] = self.my_component.get_input_definitions()
         for col in input_columns:
@@ -105,13 +133,14 @@ class ComponentWrapper:
         """
         self.my_component.i_save_state()
 
-    def doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
-        """Wrapper for i_doublecheck.
+    def doublecheck(self, timestep: int, single_time_step_values: cp.SingleTimeStepValues) -> None:
+        """Delegate to the component's i_doublecheck for optional post-iteration checks.
 
-        Doublecheck is completely optional call that can be used while debugging to
-        double check the component results after the iteration finished for a timestep.
+        Args:
+            timestep: The current simulation timestep index.
+            single_time_step_values: The converged values for this timestep.
         """
-        self.my_component.i_doublecheck(timestep, stsv)
+        self.my_component.i_doublecheck(timestep, single_time_step_values)
 
     def restore_state(self) -> None:
         """Wrapper for i_restore_state.
@@ -120,25 +149,44 @@ class ComponentWrapper:
         """
         self.my_component.i_restore_state()
 
-    def calculate_component(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Wrapper for the core simulation function in each component."""
-        self.my_component.i_simulate(timestep, stsv, force_convergence)
+    def calculate_component(self, timestep: int, single_time_step_values: cp.SingleTimeStepValues, force_convergence: bool) -> None:
+        """Delegate to the component's i_simulate for one simulation step.
+
+        Args:
+            timestep: The current simulation timestep index.
+            single_time_step_values: The values vector for this timestep, read from
+                and written to by the component.
+            force_convergence: Whether to force convergence regardless of the
+                component's internal convergence check.
+        """
+        self.my_component.i_simulate(timestep, single_time_step_values, force_convergence)
 
     def prepare_calculation(self) -> None:
         """Wrapper for i_prepare_calculation."""
-        log.information("Preparing " + self.my_component.component_name + " for simulation.")
+        log.information(f"Preparing {self.my_component.component_name} for simulation.")
         self.my_component.i_prepare_simulation()
 
     def connect_inputs(self, all_outputs: List[cp.ComponentOutput]) -> None:
-        """Connects cp.ComponentOutputs to ComponentInputs of WrapperComponent."""
+        """Connect each of the component's inputs to a matching global output.
+
+        Matches by source component name and field name, verifying unit
+        compatibility (a warning is logged for ANY-unit matches).
+
+        Args:
+            all_outputs: Global list of all ComponentOutput objects to match against.
+
+        Raises:
+            ValueError: If a matched input and output have incompatible units, or
+                if a mandatory input has no matching output.
+        """
 
         # Returns a List of ComponentInputs
         self.my_component.get_input_definitions()
 
         # Loop through lists of inputs of self component
-        for cinput in self.my_component.inputs:
+        for component_input in self.my_component.inputs:
             # Adds to the ComponentInput List of ComponentWrapper
-            self.component_inputs.append(cinput)
+            self.component_inputs.append(component_input)
 
             # Creates a ComponentOutput variable
             global_output: cp.ComponentOutput
@@ -147,46 +195,48 @@ class ComponentWrapper:
             for global_output in all_outputs:
                 # Check if ComponentOutput and ComponentInput match
                 if (
-                    global_output.component_name == cinput.src_object_name
-                    and global_output.field_name == cinput.src_field_name
+                    global_output.component_name == component_input.src_object_name
+                    and global_output.field_name == component_input.src_field_name
                 ):
                     # Check if ComponentOutput and ComponentInput have the same units
-                    if cinput.unit != global_output.unit:
+                    if component_input.unit != global_output.unit:
                         # Check the use of "Units.Any"
-                        if (cinput.unit == lt.Units.ANY and global_output.unit != lt.Units.ANY) or (
-                            cinput.unit != lt.Units.ANY and global_output.unit == lt.Units.ANY
+                        if (component_input.unit == lt.Units.ANY and global_output.unit != lt.Units.ANY) or (
+                            component_input.unit != lt.Units.ANY and global_output.unit == lt.Units.ANY
                         ):
                             log.warning(
-                                f"The input {cinput.field_name} (cp: {cinput.component_name}, unit: {cinput.unit}) "
+                                f"The input {component_input.field_name} (cp: {component_input.component_name}, unit: {component_input.unit}) "
                                 f"and output {global_output.field_name}(cp: {global_output.component_name}, unit: {global_output.unit}) "
                                 f"might not have compatible units."
                             )  #
                             # Connect, i.e, save ComponentOutput in ComponentInput
-                            cinput.source_output = global_output
-                            log.debug("Connected input '" + cinput.fullname + "' to '" + global_output.full_name + "'")
+                            component_input.source_output = global_output
+                            log.debug(f"Connected input '{component_input.fullname}' to '{global_output.full_name}'")
                         else:
                             raise ValueError(
-                                f"The input {cinput.field_name} (cp: {cinput.component_name}, unit: {cinput.unit}) and "
+                                f"The input {component_input.field_name} (cp: {component_input.component_name}, unit: {component_input.unit}) and "
                                 f"output {global_output.field_name}(cp: {global_output.component_name}, unit: {global_output.unit}) "
                                 f"do not have the same unit!"
                             )  #
                     else:
                         # Connect, i.e, save ComponentOutput in ComponentInput
-                        cinput.source_output = global_output
-                        log.debug(f"connected input {cinput.fullname} to {global_output.full_name}")
+                        component_input.source_output = global_output
+                        log.debug(f"connected input {component_input.fullname} to {global_output.full_name}")
 
             # Check if there are inputs that have been not connected
-            if cinput.is_mandatory and cinput.source_output is None:
-                if cinput.src_object_name == "HeatPumpHPLib" and cinput.src_field_name == "ElectricalInputPowerDHW":
+            if component_input.is_mandatory and component_input.source_output is None:
+                if component_input.allow_unconnected_mandatory:
                     log.warning(
-                        f"The input {cinput.field_name} (cp: {cinput.component_name}, unit: {cinput.unit}) is not connected to any ComponentOutput. "
-                        "Likely, the heat pump has DHW deactivated. Therefore, this is ignored for now."
+                        f"The input {component_input.field_name} (cp: {component_input.component_name}, "
+                        f"unit: {component_input.unit}) is not connected to any ComponentOutput. "
+                        "This mandatory input is marked as allow_unconnected_mandatory, so the simulation proceeds without it. "
+                        "Likely, the source component does not provide this output in the current configuration."
                     )
                 else:
                     raise ValueError(
-                        f"The ComponentInput {cinput.field_name} (cp: {cinput.component_name}, "
-                        f"unit: {cinput.unit}) is not connected to any ComponentOutput. "
+                        f"The ComponentInput {component_input.field_name} (cp: {component_input.component_name}, "
+                        f"unit: {component_input.unit}) is not connected to any ComponentOutput. "
                         "You could run debug mode (logging_level=4) to check all inputs, outputs and connections. "
-                        f"Likely, no match was found between {cinput.src_object_name} and {[a.component_name for a in all_outputs]} & "
-                        f"and between {cinput.src_field_name} and {[a.field_name for a in all_outputs]}."
+                        f"Likely, no match was found between {component_input.src_object_name} and {[output.component_name for output in all_outputs]} & "
+                        f"and between {component_input.src_field_name} and {[output.field_name for output in all_outputs]}."
                     )  #

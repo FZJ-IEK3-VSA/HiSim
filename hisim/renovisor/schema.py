@@ -83,6 +83,22 @@ def parse_translator_input(data: dict) -> TranslatorInput:
     Unknown keys anywhere in the input are ignored (forward compatibility). Only structural
     problems that make the request impossible to translate raise
     :class:`RequestValidationError`.
+
+    Args:
+        data: Parsed JSON dict representing the translator input envelope
+            (``job`` plus ``request``).
+
+    Returns:
+        A validated :class:`TranslatorInput` holding the job-id, submission
+        config, simulation overrides, and the raw RenoVisor request dict.
+
+    Raises:
+        RequestValidationError: If required fields are missing, fields have
+            unexpected types, ``jobId`` is empty, ``contractVersion`` is not
+            ``1.x``, ``dwellingType``/``heating.primary`` is unknown,
+            ``constructionYear``/``floorAreaM2``/``occupants`` are out of
+            range, or a post-processing override name is not a known
+            ``PostProcessingOptions`` member.
     """
     _require_type(data, dict, "<root>")
     job = _require_type(_require(data, "job", "job"), dict, "job")
@@ -123,10 +139,10 @@ def _parse_simulation_overrides(raw: Any) -> SimulationOverrides:
             raise RequestValidationError("Field 'job.simulationOverrides.secondsPerTimestep' must be positive.")
     options = raw.get("postProcessingOptions", [])
     _require_type(options, list, "job.simulationOverrides.postProcessingOptions")
-    option_names: List[str] = []
-    for index, name in enumerate(options):
+    option_names: List[str] = [
         _require_type(name, str, f"job.simulationOverrides.postProcessingOptions[{index}]")
-        option_names.append(name)
+        for index, name in enumerate(options)
+    ]
     _validate_post_processing_option_names(option_names)
     return SimulationOverrides(year=year, seconds_per_timestep=seconds, post_processing_options=option_names)
 

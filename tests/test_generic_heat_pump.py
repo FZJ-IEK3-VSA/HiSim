@@ -8,7 +8,7 @@ from hisim.simulationparameters import SimulationParameters
 
 
 @pytest.mark.base
-def test_generic_heat_pump():
+def test_generic_heat_pump() -> None:
     """Test GenericHeatPump and GenericHeatPumpController with fake temperature inputs.
 
     Verifies that:
@@ -32,7 +32,7 @@ def test_generic_heat_pump():
     # Heat Pump Controller
     temperature_air_heating_in_celsius = 18.0
     temperature_air_cooling_in_celsius = 28.0
-    offset = 1
+    offset_in_celsius = 1
     hp_mode = 1
 
     number_of_outputs = 8
@@ -59,7 +59,7 @@ def test_generic_heat_pump():
             name="GenericHeatPumpController",
             temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
             temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-            offset=offset,
+            offset_in_celsius=offset_in_celsius,
             mode=hp_mode,
         ),
         my_simulation_parameters=my_simulation_parameters,

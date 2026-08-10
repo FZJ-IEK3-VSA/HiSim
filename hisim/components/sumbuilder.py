@@ -69,7 +69,7 @@ class CalculateOperation(cp.Component):
         self.loadtype = config.loadtype
         self.unit = config.unit
         self.output1: cp.ComponentOutput = self.add_output(
-            self.component_name, self.Output, config.loadtype, config.unit
+            self.component_name, self.Output, config.loadtype, config.unit, output_description="Result of the calculation"
         )
 
     def add_numbered_input(self) -> cp.ComponentInput:
@@ -95,13 +95,13 @@ class CalculateOperation(cp.Component):
             if operation in self.operations_available:
                 self.operations.append(operation)
             else:
-                raise Exception("Operation not implemented!")
+                raise ValueError("Operation not implemented!")
         elif num_inputs >= num_operations + 1:
-            raise Exception(
+            raise ValueError(
                 f"Inputs connected without operation! {num_inputs - (num_operations + 1)} operations are missing!"
             )
         else:
-            raise Exception(
+            raise ValueError(
                 f"Inputs connected without operation! {(num_operations + 1) - num_inputs} operations are missing!"
             )
         return operation
@@ -140,12 +140,16 @@ class CalculateOperation(cp.Component):
             elif self.operations[index - 1] == "Divide":
                 total = total / val1
             else:
-                raise Exception("Operation invalid!")
+                raise ValueError("Operation invalid!")
         stsv.set_output_value(self.output1, total)
 
 
 class SumBuilderForTwoInputs(Component):
-    """Adds two outputs."""
+    """Sums two component inputs into a single output.
+
+    Reads two inputs of the same load type and unit, adds them at each
+    time step, and writes the result to one output channel.
+    """
 
     SumInput1: str = "Input 1"
     SumInput2: str = "Input 2"

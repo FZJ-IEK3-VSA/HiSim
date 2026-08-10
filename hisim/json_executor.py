@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, cast
 from hisim import log, utils, loadtypes as lt
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
-import hisim.simulator as sim
+from hisim import simulator
 from hisim.components.generic_car import GenericCarInformation
 try:
     import humps
@@ -18,13 +18,16 @@ except ModuleNotFoundError:
         "Please install it with 'pip install -e .'."
     ) from None
 
-__authors__ = "Valentin Janser"
-__credits__ = ["Noah Pflugradt", "Katharina Rieck"]
-__maintainer__ = "Valentin Janser"
-__email__ = "v.janser@fz-juelich.de"
+__authors__: str = "Valentin Janser"
+__credits__: list[str] = ["Noah Pflugradt", "Katharina Rieck"]
+__maintainer__: str = "Valentin Janser"
+__email__: str = "v.janser@fz-juelich.de"
 
 
-def import_from_string(full_classname: str):
+__all__: list[str] = ["import_from_string", "setup_components_and_connections"]
+
+
+def import_from_string(full_classname: str) -> type[Any]:
     """Import a class from a fully qualified dotted module path.
 
     Args:
@@ -52,12 +55,12 @@ def import_from_string(full_classname: str):
         raise ImportError(f"Could not import module '{module_path}'") from e
 
     try:
-        return getattr(module, class_name)
+        return cast(type[Any], getattr(module, class_name))
     except AttributeError as e:
         raise ImportError(f"Module '{module_path}' has no class '{class_name}'") from e
 
 
-def _get_default_config(config_class: type) -> Any:
+def _get_default_config(config_class: type[Any]) -> Any:
     """Find and invoke the single get_default_* classmethod on config_class.
 
     Raises ValueError if no such method exists on the class itself or if
@@ -92,7 +95,7 @@ def _get_default_config(config_class: type) -> Any:
         ) from e
 
 
-def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.Simulator, sim_params: sim.SimulationParameters) -> sim.Simulator:
+def setup_components_and_connections(scenario_data: dict[str, Any], sim: simulator.Simulator, sim_params: simulator.SimulationParameters) -> None:
     """Set up components and connections in the simulator from JSON scenario data.
 
     Iterates the ``components`` list in ``scenario_data``, instantiating each
@@ -103,16 +106,24 @@ def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.
     resolving path placeholders, pascal-casing JSON keys, generating car
     info dicts).
 
+    The ``sim`` parameter was renamed from ``my_sim`` for consistency with the
+    ``system_setups/`` convention, where setup functions receive the simulator
+    as ``sim``. This is a breaking change for callers that passed it by keyword
+    (``my_sim=...``); pass it positionally or use the new name ``sim``.
+
     Args:
         scenario_data: Parsed scenario JSON containing ``components`` and
             ``connections`` sections.
-        my_sim: The simulator instance to populate with components.
+        sim: The simulator instance to populate with components. Formerly
+            named ``my_sim``; renamed for convention consistency.
         sim_params: Simulation parameters forwarded to each component
             constructor.
 
     Returns:
-        The same simulator instance, now populated with components and
-        connections.
+        None. ``sim`` is mutated in place (components are added and
+        connections wired via ``add_component`` / ``connect_input``). The
+        caller should continue using the passed-in ``sim`` instance; no
+        separate return value is provided.
 
     Raises:
         ValueError: If no components are defined in the scenario, if a
@@ -121,17 +132,17 @@ def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.
             malformed (missing required keys).
     """
 
-    component_dict = {}
+    component_dict: dict[str, Any] = {}
 
     # Build Components
     components = scenario_data.get("components", [])
     if not components:
         raise ValueError("No components defined in scenario")
 
-    for comp_def in components:
-        component_class = import_from_string(comp_def["component_full_classname"])
-        if "config_full_classname" in comp_def:
-            config_class = import_from_string(comp_def["config_full_classname"])
+    for component_def in components:
+        component_class = import_from_string(component_def["component_full_classname"])
+        if "config_full_classname" in component_def:
+            config_class = import_from_string(component_def["config_full_classname"])
         else:
             try:
                 hints = typing.get_type_hints(component_class.__init__)
@@ -142,7 +153,7 @@ def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.
                     "Please add 'config_full_classname' to the scenario JSON."
                 ) from e
         try:
-            config_dict = comp_def.get("configuration") or {}
+            config_dict = component_def.get("configuration") or {}
 
             if not config_dict:
                 log.information(
@@ -151,7 +162,7 @@ def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.
                 config = _get_default_config(config_class)
             else:
                 # Fill in the absolute paths we have filled with placeholders in JSON
-                if comp_def["component_full_classname"] == "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector":
+                if component_def["component_full_classname"] == "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector":
                     if config_dict["result_dir_path"] == "<<utils.HISIMPATH['utsp_results']>>":
                         config_dict["result_dir_path"] = utils.HISIMPATH["utsp_results"]
                     else:
@@ -162,9 +173,9 @@ def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.
                     config_dict["travel_route_set"] = humps.pascalize(config_dict["travel_route_set"])
                     config_dict["transportation_device_set"] = humps.pascalize(config_dict["transportation_device_set"])
                     config_dict["charging_station_set"] = humps.pascalize(config_dict["charging_station_set"])
-                elif comp_def["component_full_classname"] == "hisim.components.controller_l1_generic_ev_charge.L1Controller":
+                elif component_def["component_full_classname"] == "hisim.components.controller_l1_generic_ev_charge.L1Controller":
                     config_dict["charging_station_set"] = humps.pascalize(config_dict["charging_station_set"])
-                elif comp_def["component_full_classname"] == "hisim.components.weather.Weather":
+                elif component_def["component_full_classname"] == "hisim.components.weather.Weather":
                     if "<<utils.get_input_directory()>>" in config_dict["source_path"]:
                         config_dict["source_path"] = _resolve_input_directory_placeholder(
                             path_with_placeholder=config_dict["source_path"]
@@ -177,15 +188,17 @@ def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.
                 # Use the JSONWizard from_dict method to get ConfigBase instance
                 config = config_class.from_dict(config_dict)
 
-            if comp_def["component_full_classname"] == "hisim.components.generic_car.Car":
+            if component_def["component_full_classname"] == "hisim.components.generic_car.Car":
                 # We have to generate the car_info_dict
-                car_info = None
+                car_info: Any | None = None
                 utsp_connector_found = False
-                for comp in my_sim.wrapped_components:
-                    if comp.my_component.get_full_classname() == "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector":
-                        if config_dict["name"] in comp.my_component.config.cars:
+                for wrapped_component in sim.wrapped_components:
+                    if wrapped_component.my_component.get_full_classname() == "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector":
+                        if config_dict["name"] in wrapped_component.my_component.config.cars:
                             utsp_connector_found = True
-                            car_info = GenericCarInformation(cast(UtspLpgConnector, comp.my_component)).data_dict_for_car_component[config_dict["household_name"]]
+                            car_info = GenericCarInformation(
+                                cast(UtspLpgConnector, wrapped_component.my_component),
+                            ).data_dict_for_car_component[config_dict["household_name"]]
                 if not utsp_connector_found:
                     raise ValueError(f"The car '{config_dict['name']}' was not associated with any UTSP connector.")
                 component = component_class(
@@ -204,7 +217,7 @@ def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.
             ) from e
 
         # Create inputs/outputs
-        for input_def in comp_def.get("inputs", []):
+        for input_def in component_def.get("inputs", []):
             if input_def["dynamic"]:
                 component.add_component_input_and_connect(
                     source_component_output=input_def["source_component_output"],
@@ -222,7 +235,7 @@ def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.
                     unit=lt.Units(input_def["unit"]),
                     mandatory=input_def["mandatory"],
                 )
-        for output_def in comp_def.get("outputs", []):
+        for output_def in component_def.get("outputs", []):
             if output_def["dynamic"]:
                 component.add_component_output(
                     source_output_name=output_def["source_output_name"],
@@ -244,7 +257,7 @@ def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.
                     output_description=output_def.get("output_description", None),
                 )
 
-        my_sim.add_component(component, connect_automatically=comp_def["connect_automatically"])
+        sim.add_component(component, connect_automatically=component_def["connect_automatically"])
         component_dict[component.config.name] = component
 
     # Connect components
@@ -283,8 +296,6 @@ def setup_components_and_connections(scenario_data: dict[str, Any], my_sim: sim.
 
         except KeyError as e:
             raise ValueError(f"Malformed connection entry: missing {e}") from e
-
-    return my_sim
 
 
 def _resolve_input_directory_placeholder(path_with_placeholder: str) -> str:

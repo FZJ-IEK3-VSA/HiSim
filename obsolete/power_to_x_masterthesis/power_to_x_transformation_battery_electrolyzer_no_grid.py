@@ -94,18 +94,18 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
             year=year, seconds_per_timestep=seconds_per_timestep
         )  # use a full year for testing
     my_sim.set_simulation_parameters(my_simulation_parameters)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
-    )
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT)
+    my_simulation_parameters.post_processing_options.extend([
+        PostProcessingOptions.PLOT_LINE,
+        PostProcessingOptions.PLOT_SINGLE_DAYS,
+        PostProcessingOptions.PLOT_CARPET,
+        PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS,
+        PostProcessingOptions.MAKE_NETWORK_CHARTS,
+        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION,
+        PostProcessingOptions.GENERATE_PDF_REPORT,
+        PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT,
+        PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT,
+        PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT,
+    ])
     # =================================================================================================================================
     # Build Components
 
@@ -129,7 +129,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     my_transformer = Transformer(
         my_simulation_parameters=my_simulation_parameters,
-        config=TransformerConfig.get_default_transformer(),
+        config=TransformerConfig.get_default_transformer_config(),
     )
     # Setup the battery
     """
@@ -187,7 +187,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_battery.connect_input(
         my_battery.LoadingPowerInput,
         my_ptx_controller.component_name,
-        my_ptx_controller.PowerToThird
+        my_ptx_controller.PowerToBattery
     )
     """
     my_electrolyzer_controller.connect_input(

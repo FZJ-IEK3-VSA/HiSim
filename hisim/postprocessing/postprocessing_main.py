@@ -1,4 +1,46 @@
-"""Main postprocessing module that starts all other modules."""
+"""Main post-processing entry point that orchestrates every post-processing step.
+
+This module is the central entry point for HiSim's post-processing stage. After the
+time-step simulation loop in :class:`hisim.simulator.Simulator` converges, the simulator
+constructs a :class:`PostProcessor` and calls its
+:meth:`PostProcessor.run` method, passing a
+:class:`~hisim.postprocessing.postprocessing_datatransfer.PostProcessingDataTransfer`
+instance (``ppdt``) that bundles the result ``DataFrame``, the list of
+:class:`~hisim.component.ComponentOutput` entries, the wrapped components, and the
+:class:`~hisim.simulationparameters.SimulationParameters`.
+
+Configuration requirements
+--------------------------
+The post-processing behaviour is driven entirely by the flags stored in
+``ppdt.post_processing_options``, a list of
+:class:`~hisim.postprocessingoptions.PostProcessingOptions` enum members. Each enabled
+option triggers a corresponding step inside :meth:`PostProcessor.run`; disabled options are
+silently skipped. When the ``HISIM_IN_DOCKER_CONTAINER`` environment variable is set to a
+truthy value (``"true"``, ``"yes"``, ``"y"``, or ``"1"``), the option set is restricted
+in-place to a container-safe subset (CSV, KPI, cost, and JSON exports) and all chart and
+PDF generation is disabled. Output files are written into
+``ppdt.simulation_parameters.result_directory``, so that directory must exist and be
+writable before :meth:`PostProcessor.run` is called.
+
+Execution flow
+--------------
+:meth:`PostProcessor.run` executes the enabled steps in a fixed order:
+
+1. **Plots** -- line, carpet, single-day, and (for near-year-long runs) monthly bar charts
+   are generated and collected as report image entries.
+2. **Exports** -- the result ``DataFrame`` is written to CSV and/or Pickle.
+3. **Network charts** -- system/connection diagrams showing how component outputs feed
+   into inputs are produced.
+4. **PDF report** -- a :class:`~hisim.postprocessing.reportgenerator.ReportGenerator` is
+   instantiated and simulation parameters, components, outputs, and network charts are
+   written into it.
+5. **Costs and KPIs** -- OPEX, CAPEX, and key-performance-indicator computations run and
+   are written to the open report when one exists.
+6. **Database and scenario evaluation** -- CSV generation for the housing database and
+   pyam-style output preparation for scenario evaluation.
+7. **JSON outputs** -- component configurations, scenario-evaluation configs, and KPIs
+   (including the building-sizer format) are written to JSON files.
+"""
 from __future__ import annotations
 import importlib
 import json
@@ -32,10 +74,22 @@ def _load_attribute(module_name: str, attribute_name: str) -> Any:
 
 
 class PostProcessor:
-    """Core Post processor class."""
+    """Entry point that orchestrates HiSim's post-processing stage.
+
+    A single instance is constructed by :class:`~hisim.simulator.Simulator` once the
+    time-step simulation loop has converged, then driven through its :meth:`run` method
+    with a :class:`~hisim.postprocessing.postprocessing_datatransfer.PostProcessingDataTransfer`
+    instance (``ppdt``). Which steps execute is selected by
+    ``ppdt.post_processing_options``, a list of
+    :class:`~hisim.postprocessingoptions.PostProcessingOptions` members; all output files
+    are written into ``ppdt.simulation_parameters.result_directory``. See :meth:`run` for
+    the fixed execution order and the artifacts it produces (charts, CSV/Pickle exports, a
+    PDF report, housing-database and scenario-evaluation CSVs, and JSON files for component
+    configurations and KPIs).
+    """
 
     @utils.measure_execution_time
-    def __init__(self):
+    def __init__(self) -> None:
         """Initializes the post processing."""
         self.dirname: str
         self.chapter_counter: int = 1
@@ -47,7 +101,7 @@ class PostProcessor:
         self.year: int = 2021
         self.description: str = ""
 
-    def set_dir_results(self, dirname: Optional[str] = None) -> None:
+    def set_results_directory(self, dirname: Optional[str] = None) -> None:
         """Sets the results directory."""
         if dirname is None:
             raise ValueError("No results directory name was defined.")
@@ -55,10 +109,52 @@ class PostProcessor:
 
     @utils.measure_execution_time
     @utils.measure_memory_leak
-    def run(self, ppdt: PostProcessingDataTransfer, my_sim: "Simulator") -> None:  # noqa: MC0001
-        """Runs the main post processing."""
+    def run(self, ppdt: PostProcessingDataTransfer, simulator: "Simulator") -> None:  # noqa: MC0001
+        """Run every enabled post-processing step for a finished simulation.
+
+        This is the primary entry point of the post-processing stage, called by
+        :class:`~hisim.simulator.Simulator` after the time-step loop has converged. Which
+        steps execute is driven entirely by ``ppdt.post_processing_options``, a list of
+        :class:`~hisim.postprocessingoptions.PostProcessingOptions` members: each enabled
+        option triggers a corresponding step and disabled options are skipped. When the
+        ``HISIM_IN_DOCKER_CONTAINER`` environment variable is set to a truthy value
+        (``"true"``, ``"yes"``, ``"y"``, or ``"1"``), ``ppdt.post_processing_options`` is
+        restricted in place to a container-safe subset (CSV, KPI, cost, and JSON exports)
+        before any step runs, disabling all chart and PDF generation. Depending on the
+        enabled options, this method writes files into
+        ``ppdt.simulation_parameters.result_directory`` (CSV and Pickle exports, a PDF
+        report, housing-database CSVs, scenario-evaluation outputs, and JSON files for
+        component configurations and KPIs), generates plot images (line, carpet,
+        single-day, monthly bar, and network charts), and may open the result directory in
+        the system file explorer.
+
+        Args:
+            ppdt: :class:`~hisim.postprocessing.postprocessing_datatransfer.PostProcessingDataTransfer`
+                bundling the result ``DataFrame`` (``ppdt.results``), the list of
+                :class:`~hisim.component.ComponentOutput` entries, the wrapped components,
+                the :class:`~hisim.simulationparameters.SimulationParameters` (notably
+                ``result_directory`` and ``duration``), and the ``post_processing_options``
+                list that selects which steps run. ``ppdt.post_processing_options`` may be
+                mutated in place when running inside a Docker container.
+            simulator: The :class:`~hisim.simulator.Simulator` instance that ran the
+                simulation; passed through to the scenario-evaluation and JSON export steps.
+
+        Returns:
+            None. All output is produced through the file I/O and plotting side effects
+            described above.
+
+        Raises:
+            ValueError: If ``WRITE_COMPONENTS_TO_REPORT``, ``WRITE_ALL_OUTPUTS_TO_REPORT``,
+                or ``WRITE_NETWORK_CHARTS_TO_REPORT`` is enabled while
+                ``GENERATE_PDF_REPORT`` is not, because the report object would be ``None``.
+        """
         # Define the directory name
         log.information("Main post processing function")
+        # Log the selected post-processing options (moved here from
+        # PostProcessingDataTransfer.__init__ to keep the DTO a pure data carrier).
+        log.information(f"Selected {len(ppdt.post_processing_options)} post processing options:")
+        for option in ppdt.post_processing_options:
+            log.information(f"Selected post processing option: {option}")
         report_image_entries: List[ReportImageEntry] = []
         # Check whether HiSim is running in a docker container
         docker_flag = os.getenv("HISIM_IN_DOCKER_CONTAINER", "false")
@@ -81,9 +177,9 @@ class PostProcessor:
                 ppdt.post_processing_options = valid_options
                 log.warning("Hisim is running in a docker container. Disabled invalid postprocessing options.")
         report: Optional[reportgenerator.ReportGenerator] = None
-        days = {"month": 0, "day": 0}
+        single_day_plot_selection = {"month": 0, "day": 0}
         system_chart_entries: List[SystemChartEntry] = []
-        building_objects_in_district_list = self.get_building_object_in_district(ppdt)
+        building_objects_in_district_list = self.get_building_objects_in_district(ppdt)
 
         # Make plots
         if PostProcessingOptions.PLOT_LINE in ppdt.post_processing_options:
@@ -103,7 +199,7 @@ class PostProcessor:
         if PostProcessingOptions.PLOT_SINGLE_DAYS in ppdt.post_processing_options:
             log.information("Making single day plots.")
             start = timer()
-            self.make_single_day_plots(days, ppdt, report_image_entries=report_image_entries)
+            self.make_single_day_plots(single_day_plot_selection, ppdt, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information("Making single day plots took " + f"{duration:1.2f}s.")
@@ -288,7 +384,7 @@ class PostProcessor:
         if PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in ppdt.post_processing_options:
             log.information("Prepare results for scenario evaluation.")
             start = timer()
-            self.prepare_results_for_scenario_evaluation(ppdt, my_sim=my_sim)
+            self.prepare_results_for_scenario_evaluation(ppdt, my_sim=simulator)
             end = timer()
             duration = end - start
             log.information("Preparing results for scenario evaluation took " + f"{duration:1.2f}s.")
@@ -300,11 +396,11 @@ class PostProcessor:
 
         if PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON in ppdt.post_processing_options:
             log.information("Writing component configurations to JSON file.")
-            self.write_component_configurations_to_json(ppdt, my_sim=my_sim)
+            self.write_component_configurations_to_json(ppdt, my_sim=simulator)
 
         if PostProcessingOptions.WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON in ppdt.post_processing_options:
             log.information("Writing component configurations for scenario evaluation to JSON file.")
-            self.write_config_data_for_scenario_evaluation(ppdt, my_sim=my_sim)
+            self.write_config_data_for_scenario_evaluation(ppdt, my_sim=simulator)
 
         if PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER in ppdt.post_processing_options:
             log.information("Writing KPIs to JSON file for building sizer.")
@@ -336,7 +432,7 @@ class PostProcessor:
                     component_name=output.component_name,
                     units=output.unit,
                     directory_path=ppdt.simulation_parameters.result_directory,
-                    time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
+                    time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
                     data=ppdt.results.iloc[:, index],
                     day=0,
                     month=0,
@@ -350,7 +446,7 @@ class PostProcessor:
                     component_name=output.component_name,
                     units=output.unit,
                     directory_path=ppdt.simulation_parameters.result_directory,
-                    time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
+                    time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
                     data=ppdt.results.iloc[:, index],
                     day=0,
                     month=0,
@@ -384,7 +480,7 @@ class PostProcessor:
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=os.path.join(ppdt.simulation_parameters.result_directory),
-                time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
+                time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
@@ -405,7 +501,7 @@ class PostProcessor:
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
-                time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
+                time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
                 day=days["day"],
                 month=days["month"],
                 data=ppdt.results.iloc[:, index],
@@ -429,7 +525,7 @@ class PostProcessor:
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
-                time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
+                time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
@@ -456,7 +552,7 @@ class PostProcessor:
                 component_name=output.component_name,
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
-                time_correction_factor=ppdt.time_correction_factor_in_hours_per_timestep,
+                time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
@@ -679,7 +775,7 @@ class PostProcessor:
         report.write_heading_with_style_heading_one([str(self.chapter_counter) + ". System Network Charts"])
         for entry in system_chart_entries:
             report.write_figures_to_report_with_size_four_six(
-                os.path.join(ppdt.simulation_parameters.result_directory, entry.path)
+                os.path.join(ppdt.simulation_parameters.result_directory, entry.file_path)
             )
             report.write_with_center_alignment(["Fig." + str(self.figure_counter) + ": " + entry.caption])
             self.figure_counter = self.figure_counter + 1
@@ -1272,9 +1368,9 @@ class PostProcessor:
                 pathname = os.path.join(
                     ppdt.simulation_parameters.result_directory, f"{building_object}_kpi_config_for_building_sizer.json"
                 )
-                config_file_written = json.dumps(kpi_dict, ensure_ascii=False, indent=4)
+                kpi_config_json = json.dumps(kpi_dict, ensure_ascii=False, indent=4)
                 with open(pathname, "w", encoding="utf-8") as outfile:
-                    outfile.write(config_file_written)
+                    outfile.write(kpi_config_json)
 
         else:
             raise ValueError(
@@ -1282,7 +1378,7 @@ class PostProcessor:
                 f"{PostProcessingOptions.COMPUTE_KPIS} is set in your system setup."
             )
 
-    def get_building_object_in_district(self, ppdt: PostProcessingDataTransfer) -> list[str]:
+    def get_building_objects_in_district(self, ppdt: PostProcessingDataTransfer) -> list[str]:
         """Get building names in district."""
 
         building_objects_in_district = set()

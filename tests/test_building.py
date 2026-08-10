@@ -30,9 +30,7 @@ def test_building() -> None:
     building config's initial internal temperature.
     """
 
-    starttime = datetime.datetime.now()
-    formatted_start_time = starttime.strftime("%d-%b-%Y %H:%M:%S")
-    log.profile("Test Building start @ " + formatted_start_time)
+    log.profile(f"Test Building start @ {datetime.datetime.now():%d-%b-%Y %H:%M:%S}")
 
     t_one = time.perf_counter()
 
@@ -142,8 +140,8 @@ def test_building() -> None:
 
     for seconds_per_timestep in [60, 60 * 15, 60 * 60]:
 
-        log.trace("Seconds per Timestep: " + str(seconds_per_timestep))
-        log.information("Seconds per Timestep: " + str(seconds_per_timestep))
+        log.trace(f"Seconds per Timestep: {seconds_per_timestep}")
+        log.information(f"Seconds per Timestep: {seconds_per_timestep}")
 
         my_residence.seconds_per_timestep = seconds_per_timestep
 
@@ -168,6 +166,4 @@ def test_building() -> None:
 
     t_seven = time.perf_counter()
     log.profile(f"T6: {t_seven - t_six}")
-    starttime = datetime.datetime.now()
-    formatted_start_time = starttime.strftime("%d-%b-%Y %H:%M:%S")
-    log.profile("Finished @ " + formatted_start_time)
+    log.profile(f"Finished @ {datetime.datetime.now():%d-%b-%Y %H:%M:%S}")

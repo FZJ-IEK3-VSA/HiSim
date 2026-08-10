@@ -84,12 +84,11 @@ def validate_setup(
 
 
 def _scan_all_setups(repo_root: Path) -> list[SetupConfig]:
-    setups = []
-    for path in sorted((repo_root / "system_setups").glob("*.py")):
-        if path.name.startswith("_"):
-            continue
-        setups.append(SetupConfig(id=path.stem, path=f"system_setups/{path.name}"))
-    return setups
+    return [
+        SetupConfig(id=path.stem, path=f"system_setups/{path.name}")
+        for path in sorted((repo_root / "system_setups").glob("*.py"))
+        if not path.name.startswith("_")
+    ]
 
 
 def main(argv: Optional[list[str]] = None) -> int:

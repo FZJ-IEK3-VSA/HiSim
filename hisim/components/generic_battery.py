@@ -36,16 +36,16 @@ class GenericBatteryState:
         min_stored_energy: float | None = None,
         max_var_stored_energy: float | None = None,
         min_var_stored_energy: float | None = None,
-    ):
+    ) -> None:
         """Initialize the class."""
-        self.stored_energy = init_stored_energy
-        self.max_stored_energy = max_stored_energy
-        self.min_stored_energy = min_stored_energy
-        self.max_var_stored_energy = max_var_stored_energy
-        self.min_var_stored_energy = min_var_stored_energy
+        self.stored_energy: float = init_stored_energy
+        self.max_stored_energy: float | None = max_stored_energy
+        self.min_stored_energy: float | None = min_stored_energy
+        self.max_var_stored_energy: float | None = max_var_stored_energy
+        self.min_var_stored_energy: float | None = min_var_stored_energy
         self.charge_wh: float = 0.0
 
-    def charge(self, energy):
+    def charge(self, energy: float) -> None:
         """Charge."""
         assert self.max_stored_energy is not None
         assert self.max_var_stored_energy is not None
@@ -61,7 +61,7 @@ class GenericBatteryState:
         self.stored_energy = charge + self.stored_energy
         self.charge_wh = charge
 
-    def discharge(self, energy):
+    def discharge(self, energy: float) -> None:
         """Discharge."""
         assert self.min_stored_energy is not None
         assert self.min_var_stored_energy is not None
@@ -84,7 +84,7 @@ class GenericBatteryConfig(cp.ConfigBase):
     """Configuration of the Generic Battery."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return GenericBattery.get_full_classname()
 
@@ -100,7 +100,7 @@ class GenericBatteryConfig(cp.ConfigBase):
     def get_default_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "GenericBatteryConfig":
         """Gets a default config."""
         return GenericBatteryConfig(
             building_name=building_name,
@@ -119,7 +119,7 @@ class BatteryControllerConfig(cp.ConfigBase):
     """Configuration of the Generic Battery Controller."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return BatteryController.get_full_classname()
 
@@ -130,7 +130,7 @@ class BatteryControllerConfig(cp.ConfigBase):
     def get_default_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "BatteryControllerConfig":
         """Gets a default config."""
         return BatteryControllerConfig(
             building_name=building_name,
@@ -167,13 +167,13 @@ class GenericBattery(cp.Component):
     """Generic Battery class."""
 
     # Imports
-    ElectricityInput = "ElectricityInput"
-    State = "State"
+    ElectricityInput: str = "ElectricityInput"
+    State: str = "State"
 
     # Outputs
-    StoredEnergy = "StoredEnergy"
-    StateOfCharge = "StateOfCharge"
-    ElectricityOutput = "ElectricityOutput"
+    StoredEnergy: str = "StoredEnergy"
+    StateOfCharge: str = "StateOfCharge"
+    ElectricityOutput: str = "ElectricityOutput"
 
     # simulation repository
     # MaximumBatteryCapacity = "MaximumBatteryCapacity"
@@ -220,12 +220,12 @@ class GenericBattery(cp.Component):
             battery_database=battery_database,
         )
 
-        self.state = SimpleStorageState(
+        self.state: SimpleStorageState = SimpleStorageState(
             max_var_val=self.max_var_stored_energy,
             min_var_val=self.min_var_stored_energy,
             stored_energy=self.max_stored_energy * config.soc,
         )
-        self.previous_state = copy.deepcopy(self.state)
+        self.previous_state: SimpleStorageState = copy.deepcopy(self.state)
 
         self.input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -262,7 +262,13 @@ class GenericBattery(cp.Component):
             output_description=f"here a description for {self.ElectricityOutput} will follow.",
         )
 
-    def build(self, manufacturer, model, base, battery_database=None):
+    def build(
+        self,
+        manufacturer: str,
+        model: str,
+        base: bool,
+        battery_database: list[dict[str, Any]] | None = None,
+    ) -> None:
         """Build function.
 
         Args:
@@ -274,9 +280,9 @@ class GenericBattery(cp.Component):
                 input file via :func:`hisim.utils.load_smart_appliance`, keeping
                 the production behaviour unchanged.
         """
-        self.base = base
-        self.time_correction_factor = 1 / self.my_simulation_parameters.seconds_per_timestep
-        self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        self.base: bool = base
+        self.time_correction_factor: float = 1 / self.my_simulation_parameters.seconds_per_timestep
+        self.seconds_per_timestep: float = self.my_simulation_parameters.seconds_per_timestep
 
         # Load the battery spec database on demand so tests can inject an
         # in-memory list of dicts and avoid the file read.
@@ -289,21 +295,20 @@ class GenericBattery(cp.Component):
             model=model,
         )
 
-        self.max_stored_energy = battery["Capacity"] * 1e3
-        self.min_stored_energy = self.max_stored_energy * 0.0
-        self.efficiency = battery["Efficiency"]
-        self.efficiency_inverter = battery["Inverter Efficiency"]
-        self.max_var_stored_energy = battery["Maximal Charging Power"] * 1e3 * self.time_correction_factor
+        self.max_stored_energy: float = battery["Capacity"] * 1e3
+        self.min_stored_energy: float = 0.0
+        self.efficiency: float = battery["Efficiency"]
+        self.efficiency_inverter: float = battery["Inverter Efficiency"]
+        self.max_var_stored_energy: float = battery["Maximal Charging Power"] * 1e3 * self.time_correction_factor
         if "Maximal Discharging Power" in battery:
-            self.min_var_stored_energy = -battery["Maximal Discharging Power"] * 1e3 * self.time_correction_factor
+            min_var_stored_energy = -battery["Maximal Discharging Power"] * 1e3 * self.time_correction_factor
         else:
-            self.min_var_stored_energy = -self.max_var_stored_energy
+            min_var_stored_energy = -self.max_var_stored_energy
+        self.min_var_stored_energy: float = min_var_stored_energy
 
-    def write_to_report(self):
+    def write_to_report(self) -> list[str]:
         """Writes to report."""
-        lines = []
-        lines.append(f"MaxStoredEnergy: {self.max_stored_energy}")
-        return lines
+        return [f"MaxStoredEnergy: {self.max_stored_energy}"]
 
     # def i_save_state(self):
     #    self.previous_state = copy.copy(self.state)
@@ -385,8 +390,8 @@ class GenericBattery(cp.Component):
 class BatteryController(cp.Component):
     """Battery Controller class."""
 
-    ElectricityInput = "ElectricityInput"
-    State = "State"
+    ElectricityInput: str = "ElectricityInput"
+    State: str = "State"
 
     def __init__(
         self,
@@ -435,9 +440,8 @@ class BatteryController(cp.Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         load = stsv.get_input_value(self.input_channel)
-        state: float = 0
         if load < 0.0:
-            state = 1
+            state: float = 1
         elif load > 0.0:
             state = -1
         else:

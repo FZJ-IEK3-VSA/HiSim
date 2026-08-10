@@ -7,7 +7,7 @@ import math
 import os
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -382,19 +382,19 @@ class WeatherConfig(ConfigBase):
     predictive_control: bool
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Get the name of the main class."""
-        return Weather.get_full_classname()
+        return Weather.get_full_classname()  # type: ignore[no-any-return]
 
     @classmethod
     def get_default(
         cls,
-        location_entry: Any,
+        location_entry: Union[LocationEnum, str],
         name: str = "Weather",
         building_name: str = "BUI1",
         weather_direct_filepath: Optional[str] = None,
         weather_direct_data_source: Optional[WeatherDataSourceEnum] = None,
-    ) -> Any:
+    ) -> "WeatherConfig":
         """Gets the default configuration for a given location."""
 
         enum_entry = None
@@ -457,18 +457,18 @@ class Weather(Component):
     # None
 
     # Outputs
-    TemperatureOutside = "TemperatureOutside"
-    DirectNormalIrradiance = "DirectNormalIrradiance"
-    DiffuseHorizontalIrradiance = "DiffuseHorizontalIrradiance"
-    DirectNormalIrradianceExtra = "DirectNormalIrradianceExtra"
-    GlobalHorizontalIrradiance = "GlobalHorizontalIrradiance"
-    Altitude = "Altitude"
-    Azimuth = "Azimuth"
-    ApparentZenith = "ApparentZenith"
-    WindSpeed = "WindSpeed"
-    Pressure = "Pressure"
-    Weather_Temperature_Forecast_24h = "Weather_Temperature_Forecast_24h"
-    DailyAverageOutsideTemperatures = "DailyAverageOutsideTemperatures"
+    TemperatureOutside: str = "TemperatureOutside"
+    DirectNormalIrradiance: str = "DirectNormalIrradiance"
+    DiffuseHorizontalIrradiance: str = "DiffuseHorizontalIrradiance"
+    DirectNormalIrradianceExtra: str = "DirectNormalIrradianceExtra"
+    GlobalHorizontalIrradiance: str = "GlobalHorizontalIrradiance"
+    Altitude: str = "Altitude"
+    Azimuth: str = "Azimuth"
+    ApparentZenith: str = "ApparentZenith"
+    WindSpeed: str = "WindSpeed"
+    Pressure: str = "Pressure"
+    Weather_Temperature_Forecast_24h: str = "Weather_Temperature_Forecast_24h"
+    DailyAverageOutsideTemperatures: str = "DailyAverageOutsideTemperatures"
 
     # Weather_TemperatureOutside_yearly_forecast = "Weather_TemperatureOutside_yearly_forecast"
     # Weather_DiffuseHorizontalIrradiance_yearly_forecast = "Weather_DiffuseHorizontalIrradiance_yearly_forecast"
@@ -477,18 +477,29 @@ class Weather(Component):
     # Weather_GlobalHorizontalIrradiance_yearly_forecast = "Weather_GlobalHorizontalIrradiance_yearly_forecast"
     # Weather_Azimuth_yearly_forecast = "Weather_Azimuth_yearly_forecast"
     # Weather_ApparentZenith_yearly_forecast = "Weather_ApparentZenith_yearly_forecast"
-    Weather_WindSpeed_yearly_forecast = "Weather_WindSpeed_yearly_forecast"
+    Weather_WindSpeed_yearly_forecast: str = "Weather_WindSpeed_yearly_forecast"
 
     @utils.measure_execution_time
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: WeatherConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
-    ):
-        """Initializes the entire class."""
+        my_display_config: Optional[DisplayConfig] = None,
+    ) -> None:
+        """Initialize the Weather component and register its outputs.
+
+        Args:
+            my_simulation_parameters: Simulation parameters controlling time
+                stepping and duration.
+            config: Weather configuration specifying location, data source, and
+                file path.
+            my_display_config: Optional display configuration; defaults to a
+                new DisplayConfig if None.
+        """
         if my_simulation_parameters is None:
             raise ValueError("my_simulation_parameters was None")
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
         self.last_timestep_with_update = -1
         self.weather_config = config
         self.parameter_string = my_simulation_parameters.get_unique_key()

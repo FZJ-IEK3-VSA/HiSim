@@ -4,10 +4,10 @@ This module provides the PostProcessingOptions IntEnum class which defines vario
 for enabling or disabling specific post-processing features such as plotting, exporting,
 report generation, and KPI calculations.
 """
-# clean
-from enum import IntEnum
+from enum import IntEnum, unique
 
 
+@unique
 class PostProcessingOptions(IntEnum):
 
     """Enum class for enabling / disabling parts of the post processing."""

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 # clean
-from typing import Any, List
+from typing import Any
 from pathlib import Path
 import json
 from dataclasses import dataclass
@@ -83,7 +83,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
         """Initializes the config variables based on the JSON-file."""
 
         config_json = cls.read_config(electrolyzer_name)
-        log.information("Electrolyzer config: " + str(config_json))
+        log.information(f"Electrolyzer config: {config_json}")
 
         config = ElectrolyzerControllerConfig(
             building_name=building_name,
@@ -116,9 +116,11 @@ class ElectrolyzerController(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ElectrolyzerControllerConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: DisplayConfig | None = None,
     ) -> None:
         """Initialize the class."""
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
         self.controllerconfig: ElectrolyzerControllerConfig = config
 
         self.nom_load: float = config.nom_load
@@ -128,7 +130,7 @@ class ElectrolyzerController(Component):
         self.warm_start_time: float = config.warm_start_time
         self.cold_start_time: float = config.cold_start_time
 
-        self.my_simulation_parameters = my_simulation_parameters
+        self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
         self.config: ElectrolyzerControllerConfig = config
         component_name = self.get_component_name()
         super().__init__(
@@ -370,13 +372,11 @@ class ElectrolyzerController(Component):
         stsv.set_output_value(self.total_off_count, self.off_count)
         stsv.set_output_value(self.standby_count_total, self.standby_count)
 
-    def write_to_report(self) -> List[str]:
+    def write_to_report(self) -> list[str]:
         """Writes a report."""
-        lines = []
-        for config_string in self.controllerconfig.get_string_dict():
-            lines.append(config_string)
-        lines.append("Component Name" + str(self.component_name))
-        lines.append("Total curtailed load: " + str(self.curtailed_load_count) + " [kW]")
-        lines.append("Number of times the system was switched off: " + str(self.off_count) + " [#]")
-        lines.append("Number of times the system was switched to standby mode: " + str(self.standby_count) + " [#]")
+        lines = list(self.controllerconfig.get_string_dict())
+        lines.append(f"Component Name{self.component_name}")
+        lines.append(f"Total curtailed load: {self.curtailed_load_count} [kW]")
+        lines.append(f"Number of times the system was switched off: {self.off_count} [#]")
+        lines.append(f"Number of times the system was switched to standby mode: {self.standby_count} [#]")
         return lines

@@ -1,6 +1,5 @@
 """ Tests for the basic household system setup. """
 # clean
-import os
 from pathlib import Path
 
 import pytest
@@ -25,7 +24,7 @@ def test_basic_household() -> None:
     path = "../system_setups/basic_household.py"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     hisim_main.main(path, mysimpar)
-    log.information(os.getcwd())
+    log.information(str(Path.cwd()))
 
     # The simulator populates ``result_directory`` while preparing the run and
     # writes a ``finished.flag`` file once all timesteps and post-processing are

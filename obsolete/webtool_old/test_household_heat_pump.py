@@ -11,6 +11,7 @@ import copy
 import json
 import shutil
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -31,7 +32,7 @@ MY_SIMULATION_PARAMETERS = {
 }
 
 
-def create_results_directory(result_directory):
+def create_results_directory(result_directory: str | Path) -> None:
     """Ensure a fresh, empty results directory exists at the given path.
 
     If a directory already exists at ``result_directory`` it is removed first
@@ -46,7 +47,7 @@ def create_results_directory(result_directory):
     Path(result_directory).mkdir(parents=True, exist_ok=True)
 
 
-def run_system(config_json, result_directory):
+def run_system(config_json: dict[str, Any], result_directory: str | Path) -> None:
     """Build and execute a household heat pump system setup from a JSON config.
 
     Translates ``config_json`` into a module path, simulation parameters, and
@@ -64,7 +65,7 @@ def run_system(config_json, result_directory):
         module_config_path,
     ) = make_system_setup(
         parameters_json=config_json,
-        result_directory=result_directory,
+        result_directory=str(result_directory),
     )
     main(
         path_to_module,
@@ -73,7 +74,7 @@ def run_system(config_json, result_directory):
     )
 
 
-def remove_results_directory(result_directory):
+def remove_results_directory(result_directory: str | Path) -> None:
     """Remove the results directory if it exists.
 
     Errors during removal are ignored.

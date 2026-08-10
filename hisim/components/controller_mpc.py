@@ -3,7 +3,7 @@
 # clean
 
 import datetime
-from typing import List, Optional, Any
+from typing import List, Optional
 
 # from typing import Any
 from dataclasses import dataclass
@@ -58,137 +58,137 @@ class MpcControllerConfig(ConfigBase):
     # my_simulation_parameters: SimulationParameters
     name: str
     mpc_scheme: str
-    min_comfort_temp: float
-    max_comfort_temp: float
-    optimizer_sampling_rate: int
-    initial_temperature: float
+    min_comfort_temp_in_celsius: float
+    max_comfort_temp_in_celsius: float
+    optimizer_sampling_rate_in_min: int
+    initial_temperature_in_celsius: float
     flexibility_element: str
     initial_state_of_charge: float
     # my_simulation_repository: Optional[ cp.SimRepository ]
     # getting forecasted disturbance (weather)
-    temp_forecast: List[float]
-    phi_m_forecast: List[float]
-    phi_st_forecast: list
-    phi_ia_forecast: list
+    temp_forecast_in_celsius: List[float]
+    phi_m_forecast_in_watt: List[float]
+    phi_st_forecast_in_watt: list
+    phi_ia_forecast_in_watt: list
     # getting pv forecast
-    pv_forecast_yearly: list
+    pv_forecast_yearly_in_watt: list
     # getting battery specifications
-    maximum_storage_capacity: float
-    minimum_storage_capacity: float
-    maximum_charging_power: float
-    maximum_discharging_power: float
+    maximum_storage_capacity_in_watt_hour: float
+    minimum_storage_capacity_in_watt_hour: float
+    maximum_charging_power_in_watt: float
+    maximum_discharging_power_in_watt: float
     battery_efficiency: float
     inverter_efficiency: float
     # forecasts
-    temperature_forecast_24h_1min: list
-    phi_m_forecast_24h_1min: list
-    phi_ia_forecast_24h_1min: list
-    phi_st_forecast_24h_1min: list
-    pv_forecast_24h_1min: list
-    price_purchase_forecast_24h_1min: list
-    price_injection_forecast_24h_1min: list
-    optimal_cost: list
-    revenues: list
-    air_conditioning_electricity: list
-    cost_optimal_temperature_set_point: list
-    pv2load: list
-    electricity_from_grid: list
-    electricity_to_grid: list
-    battery_to_load: list
-    pv_to_battery_timestep: list
-    battery_power_flow_timestep: list
+    temperature_forecast_24h_1min_in_celsius: list
+    phi_m_forecast_24h_1min_in_watt: list
+    phi_ia_forecast_24h_1min_in_watt: list
+    phi_st_forecast_24h_1min_in_watt: list
+    pv_forecast_24h_1min_in_watt: list
+    price_purchase_forecast_24h_1min_in_eur_per_kwh: list
+    price_injection_forecast_24h_1min_in_eur_per_kwh: list
+    optimal_cost_in_eur: list
+    revenues_in_eur: list
+    air_conditioning_electricity_in_watt: list
+    cost_optimal_temperature_set_point_in_celsius: list
+    pv2load_in_watt: list
+    electricity_from_grid_in_watt: list
+    electricity_to_grid_in_watt: list
+    battery_to_load_in_watt: list
+    pv_to_battery_timestep_in_watt: list
+    battery_power_flow_timestep_in_watt: list
     battery_control_state: list
-    batt_soc_actual_timestep: list
+    batt_energy_content_in_watt_hour_timestep: list
     batt_soc_normalized_timestep: list
     # thermal building model
-    h_tr_w: float
-    h_tr_ms: float
-    h_tr_em: float
-    h_ve_adj: float
-    h_tr_is: float
-    c_m: float
+    h_tr_w_in_watt_per_kelvin: float
+    h_tr_ms_in_watt_per_kelvin: float
+    h_tr_em_in_watt_per_kelvin: float
+    h_ve_adj_in_watt_per_kelvin: float
+    h_tr_is_in_watt_per_kelvin: float
+    c_m_in_joule_per_kelvin: float
     cop_coef: List
     eer_coef: List
     predictive: bool
-    prediction_horizon: Optional[int]
+    prediction_horizon_in_s: Optional[int]
 
     @classmethod
     def get_default_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "MpcControllerConfig":
         """Gets a default MPC controller."""
         return MpcControllerConfig(
             building_name=building_name,
             name="MpcController",
             mpc_scheme="optimization_once_aday_only",
-            min_comfort_temp=21.0,
-            max_comfort_temp=23.0,
-            optimizer_sampling_rate=15,
-            initial_temperature=22.0,
+            min_comfort_temp_in_celsius=21.0,
+            max_comfort_temp_in_celsius=23.0,
+            optimizer_sampling_rate_in_min=15,
+            initial_temperature_in_celsius=22.0,
             flexibility_element="basic_buidling_configuration",
             initial_state_of_charge=10 / 15,
             # my_simulation_repository = [],
             # getting forecasted disturbance (weather)
-            temp_forecast=[],
-            phi_m_forecast=[],
-            phi_st_forecast=[],
-            phi_ia_forecast=[],
+            temp_forecast_in_celsius=[],
+            phi_m_forecast_in_watt=[],
+            phi_st_forecast_in_watt=[],
+            phi_ia_forecast_in_watt=[],
             # getting pv forecast
-            pv_forecast_yearly=[],
+            pv_forecast_yearly_in_watt=[],
             # getting battery specifications
-            maximum_storage_capacity=0.0,
-            minimum_storage_capacity=0.0,
-            maximum_charging_power=0.0,
-            maximum_discharging_power=0.0,
+            maximum_storage_capacity_in_watt_hour=0.0,
+            minimum_storage_capacity_in_watt_hour=0.0,
+            maximum_charging_power_in_watt=0.0,
+            maximum_discharging_power_in_watt=0.0,
             battery_efficiency=0.0,
             inverter_efficiency=0.0,
             # forecasts
-            temperature_forecast_24h_1min=[],
-            phi_m_forecast_24h_1min=[],
-            phi_ia_forecast_24h_1min=[],
-            phi_st_forecast_24h_1min=[],
-            pv_forecast_24h_1min=[],
-            price_purchase_forecast_24h_1min=[],
-            price_injection_forecast_24h_1min=[],
-            optimal_cost=[],
-            revenues=[],
-            air_conditioning_electricity=[],
-            cost_optimal_temperature_set_point=[],
-            pv2load=[],
-            electricity_from_grid=[],
-            electricity_to_grid=[],
-            battery_to_load=[],
-            pv_to_battery_timestep=[],
-            battery_power_flow_timestep=[],
+            temperature_forecast_24h_1min_in_celsius=[],
+            phi_m_forecast_24h_1min_in_watt=[],
+            phi_ia_forecast_24h_1min_in_watt=[],
+            phi_st_forecast_24h_1min_in_watt=[],
+            pv_forecast_24h_1min_in_watt=[],
+            price_purchase_forecast_24h_1min_in_eur_per_kwh=[],
+            price_injection_forecast_24h_1min_in_eur_per_kwh=[],
+            optimal_cost_in_eur=[],
+            revenues_in_eur=[],
+            air_conditioning_electricity_in_watt=[],
+            cost_optimal_temperature_set_point_in_celsius=[],
+            pv2load_in_watt=[],
+            electricity_from_grid_in_watt=[],
+            electricity_to_grid_in_watt=[],
+            battery_to_load_in_watt=[],
+            pv_to_battery_timestep_in_watt=[],
+            battery_power_flow_timestep_in_watt=[],
             battery_control_state=[],
-            batt_soc_actual_timestep=[],
+            batt_energy_content_in_watt_hour_timestep=[],
             batt_soc_normalized_timestep=[],
-            h_tr_w=0.0,
-            h_tr_ms=0.0,
-            h_tr_em=0.0,
-            h_ve_adj=0.0,
-            h_tr_is=0.0,
-            c_m=0.0,
+            h_tr_w_in_watt_per_kelvin=0.0,
+            h_tr_ms_in_watt_per_kelvin=0.0,
+            h_tr_em_in_watt_per_kelvin=0.0,
+            h_ve_adj_in_watt_per_kelvin=0.0,
+            h_tr_is_in_watt_per_kelvin=0.0,
+            c_m_in_joule_per_kelvin=0.0,
             cop_coef=[0] * 2,
             eer_coef=[0] * 2,
             predictive=True,
-            prediction_horizon=0,
+            prediction_horizon_in_s=0,
         )
 
 
 class MPCcontrollerState:
     """Controller state."""
 
-    def __init__(self, temperature_mean: float, soc: float, cost_optimal_thermal_power: list):
+    def __init__(self, temperature_mean_in_celsius: float, soc: float, cost_optimal_thermal_power_in_watt: list):
         """Constructs all the neccessary attributes for the MPCcontrollerState object."""
-        self.temperature_mean: float = temperature_mean
+        self.temperature_mean_in_celsius: float = temperature_mean_in_celsius
         self.soc: float = soc
-        self.cost_optimal_thermal_power: list = cost_optimal_thermal_power
+        self.cost_optimal_thermal_power_in_watt: list = cost_optimal_thermal_power_in_watt
 
     def clone(self):
         """Copies the Controller State."""
-        return MPCcontrollerState(self.temperature_mean, self.soc, self.cost_optimal_thermal_power)
+        return MPCcontrollerState(self.temperature_mean_in_celsius, self.soc, self.cost_optimal_thermal_power_in_watt)
 
 
 class MpcController(cp.Component):
@@ -241,12 +241,12 @@ class MpcController(cp.Component):
 
         self.mpcconfig = config
 
-        self.h_tr_w = self.mpcconfig.h_tr_w
-        self.h_tr_ms = self.mpcconfig.h_tr_ms
-        self.h_tr_em = self.mpcconfig.h_tr_em
-        self.h_ve_adj = self.mpcconfig.h_ve_adj
-        self.h_tr_is = self.mpcconfig.h_tr_is
-        self.c_m = self.mpcconfig.c_m
+        self.h_tr_w_in_watt_per_kelvin = self.mpcconfig.h_tr_w_in_watt_per_kelvin
+        self.h_tr_ms_in_watt_per_kelvin = self.mpcconfig.h_tr_ms_in_watt_per_kelvin
+        self.h_tr_em_in_watt_per_kelvin = self.mpcconfig.h_tr_em_in_watt_per_kelvin
+        self.h_ve_adj_in_watt_per_kelvin = self.mpcconfig.h_ve_adj_in_watt_per_kelvin
+        self.h_tr_is_in_watt_per_kelvin = self.mpcconfig.h_tr_is_in_watt_per_kelvin
+        self.c_m_in_joule_per_kelvin = self.mpcconfig.c_m_in_joule_per_kelvin
         self.cop_coef = self.mpcconfig.cop_coef
         self.eer_coef = self.mpcconfig.eer_coef
 
@@ -324,11 +324,11 @@ class MpcController(cp.Component):
             output_description=f"here a description for {self.PV2Battery} will follow.",
         )
 
-        self.batt_soc_actual_channel: cp.ComponentOutput = self.add_output(
+        self.batt_energy_content_in_watt_hour_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.BatteryEnergyContent,
             LoadTypes.ELECTRICITY,
-            Units.WATT,
+            Units.WATT_HOUR,
             output_description=f"here a description for {self.BatteryEnergyContent} will follow.",
         )
         self.battery_control_state_channel: cp.ComponentOutput = self.add_output(
@@ -372,54 +372,54 @@ class MpcController(cp.Component):
 
         self.add_default_connections(self.get_weather_default_connections())
 
-        if self.mpcconfig.prediction_horizon is not None:
+        if self.mpcconfig.prediction_horizon_in_s is not None:
             self.prediction_horizon = int(
-                self.mpcconfig.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep
+                self.mpcconfig.prediction_horizon_in_s / self.my_simulation_parameters.seconds_per_timestep
             )
         self.state: MPCcontrollerState = MPCcontrollerState(
-            temperature_mean=self.mpcconfig.initial_temperature,
+            temperature_mean_in_celsius=self.mpcconfig.initial_temperature_in_celsius,
             soc=self.mpcconfig.initial_state_of_charge,
-            cost_optimal_thermal_power=self.prediction_horizon * [0],
+            cost_optimal_thermal_power_in_watt=self.prediction_horizon * [0],
         )
         self.previous_state = self.state.clone()
 
         self.mpc_scheme = self.mpcconfig.mpc_scheme
-        self.min_comfort_temp = self.mpcconfig.min_comfort_temp
-        self.max_comfort_temp = self.mpcconfig.max_comfort_temp
-        self.sampling_rate = self.mpcconfig.optimizer_sampling_rate
+        self.min_comfort_temp_in_celsius = self.mpcconfig.min_comfort_temp_in_celsius
+        self.max_comfort_temp_in_celsius = self.mpcconfig.max_comfort_temp_in_celsius
+        self.sampling_rate_in_min = self.mpcconfig.optimizer_sampling_rate_in_min
         self.flexibility_element = self.mpcconfig.flexibility_element
 
-        self.temp_forecast = self.mpcconfig.temp_forecast
-        self.phi_m_forecast = self.mpcconfig.phi_m_forecast
-        self.phi_st_forecast = self.mpcconfig.phi_st_forecast
-        self.phi_ia_forecast = self.mpcconfig.phi_ia_forecast
-        self.pv_forecast_yearly = self.mpcconfig.pv_forecast_yearly
-        self.maximum_storage_capacity = self.mpcconfig.maximum_storage_capacity
-        self.minimum_storage_capacity = self.mpcconfig.minimum_storage_capacity
-        self.maximum_charging_power = self.mpcconfig.maximum_charging_power
-        self.maximum_discharging_power = self.mpcconfig.maximum_discharging_power
+        self.temp_forecast_in_celsius = self.mpcconfig.temp_forecast_in_celsius
+        self.phi_m_forecast_in_watt = self.mpcconfig.phi_m_forecast_in_watt
+        self.phi_st_forecast_in_watt = self.mpcconfig.phi_st_forecast_in_watt
+        self.phi_ia_forecast_in_watt = self.mpcconfig.phi_ia_forecast_in_watt
+        self.pv_forecast_yearly_in_watt = self.mpcconfig.pv_forecast_yearly_in_watt
+        self.maximum_storage_capacity_in_watt_hour = self.mpcconfig.maximum_storage_capacity_in_watt_hour
+        self.minimum_storage_capacity_in_watt_hour = self.mpcconfig.minimum_storage_capacity_in_watt_hour
+        self.maximum_charging_power_in_watt = self.mpcconfig.maximum_charging_power_in_watt
+        self.maximum_discharging_power_in_watt = self.mpcconfig.maximum_discharging_power_in_watt
         self.battery_efficiency = self.mpcconfig.battery_efficiency
         self.inverter_efficiency = self.mpcconfig.inverter_efficiency
 
-        self.temperature_forecast_24h_1min = self.mpcconfig.temperature_forecast_24h_1min
-        self.phi_m_forecast_24h_1min = self.mpcconfig.phi_m_forecast_24h_1min
-        self.phi_ia_forecast_24h_1min = self.mpcconfig.phi_ia_forecast_24h_1min
-        self.phi_st_forecast_24h_1min = self.mpcconfig.phi_st_forecast_24h_1min
-        self.pv_forecast_24h_1min = self.mpcconfig.pv_forecast_24h_1min
-        self.price_purchase_forecast_24h_1min = self.mpcconfig.price_purchase_forecast_24h_1min
-        self.price_injection_forecast_24h_1min = self.mpcconfig.price_injection_forecast_24h_1min
-        self.optimal_cost = self.mpcconfig.optimal_cost
-        self.revenues = self.mpcconfig.revenues
-        self.air_conditioning_electricity = self.mpcconfig.air_conditioning_electricity
-        self.cost_optimal_temperature_set_point = self.mpcconfig.cost_optimal_temperature_set_point
-        self.pv2load = self.mpcconfig.pv2load
-        self.electricity_from_grid = self.mpcconfig.electricity_from_grid
-        self.electricity_to_grid = self.mpcconfig.electricity_to_grid
-        self.battery_to_load = self.mpcconfig.battery_to_load
-        self.pv_to_battery_timestep = self.mpcconfig.pv_to_battery_timestep
-        self.battery_power_flow_timestep = self.mpcconfig.battery_power_flow_timestep
+        self.temperature_forecast_24h_1min_in_celsius = self.mpcconfig.temperature_forecast_24h_1min_in_celsius
+        self.phi_m_forecast_24h_1min_in_watt = self.mpcconfig.phi_m_forecast_24h_1min_in_watt
+        self.phi_ia_forecast_24h_1min_in_watt = self.mpcconfig.phi_ia_forecast_24h_1min_in_watt
+        self.phi_st_forecast_24h_1min_in_watt = self.mpcconfig.phi_st_forecast_24h_1min_in_watt
+        self.pv_forecast_24h_1min_in_watt = self.mpcconfig.pv_forecast_24h_1min_in_watt
+        self.price_purchase_forecast_24h_1min_in_eur_per_kwh = self.mpcconfig.price_purchase_forecast_24h_1min_in_eur_per_kwh
+        self.price_injection_forecast_24h_1min_in_eur_per_kwh = self.mpcconfig.price_injection_forecast_24h_1min_in_eur_per_kwh
+        self.optimal_cost_in_eur = self.mpcconfig.optimal_cost_in_eur
+        self.revenues_in_eur = self.mpcconfig.revenues_in_eur
+        self.air_conditioning_electricity_in_watt = self.mpcconfig.air_conditioning_electricity_in_watt
+        self.cost_optimal_temperature_set_point_in_celsius = self.mpcconfig.cost_optimal_temperature_set_point_in_celsius
+        self.pv2load_in_watt = self.mpcconfig.pv2load_in_watt
+        self.electricity_from_grid_in_watt = self.mpcconfig.electricity_from_grid_in_watt
+        self.electricity_to_grid_in_watt = self.mpcconfig.electricity_to_grid_in_watt
+        self.battery_to_load_in_watt = self.mpcconfig.battery_to_load_in_watt
+        self.pv_to_battery_timestep_in_watt = self.mpcconfig.pv_to_battery_timestep_in_watt
+        self.battery_power_flow_timestep_in_watt = self.mpcconfig.battery_power_flow_timestep_in_watt
         self.battery_control_state = self.mpcconfig.battery_control_state
-        self.batt_soc_actual_timestep = self.mpcconfig.batt_soc_actual_timestep
+        self.batt_energy_content_in_watt_hour_timestep = self.mpcconfig.batt_energy_content_in_watt_hour_timestep
         self.batt_soc_normalized_timestep = self.mpcconfig.batt_soc_normalized_timestep
 
     def get_weather_default_connections(self):
@@ -440,6 +440,7 @@ class MpcController(cp.Component):
         """Prepares the simulation."""
         if self.mpcconfig.predictive:
             """Get forecasted disturbance (weather)"""
+<<<<<<< HEAD
             self.temp_forecast = self.simulation_repository.get_entry(
                 key=SimRepositoryKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST
             )[: self.my_simulation_parameters.timesteps]
@@ -468,6 +469,36 @@ class MpcController(cp.Component):
             )
             self.maximum_discharging_power = self.simulation_repository.get_entry(
                 key=SimRepositoryKeyEnum.MAXIMALDISCHARGINGPOWER
+=======
+            self.temp_forecast_in_celsius = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST
+            )[: self.my_simulation_parameters.timesteps]
+            self.phi_m_forecast_in_watt = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.HEATFLUXTHERMALMASSNODEFORECAST
+            )
+            self.phi_st_forecast_in_watt = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.HEATFLUXSURFACENODEFORECAST
+            )
+            self.phi_ia_forecast_in_watt = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.HEATFLUXINDOORAIRNODEFORECAST
+            )
+
+            """"getting pv forecast"""
+            self.pv_forecast_yearly_in_watt = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.PVFORECASTYEARLY)
+
+            """ getting battery specifications """
+            self.maximum_storage_capacity_in_watt_hour = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.MAXIMUMBATTERYCAPACITY
+            )
+            self.minimum_storage_capacity_in_watt_hour = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.MINIMUMBATTERYCAPACITY
+            )
+            self.maximum_charging_power_in_watt = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.MAXIMALCHARGINGPOWER
+            )
+            self.maximum_discharging_power_in_watt = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.MAXIMALDISCHARGINGPOWER
+>>>>>>> e2033174cc7b89c411056eb6ce5f566a2ddcdac4
             )
             self.battery_efficiency = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.BATTERYEFFICIENCY)
             self.inverter_efficiency = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.INVERTEREFFICIENCY)
@@ -477,6 +508,7 @@ class MpcController(cp.Component):
         """Build function: The function sets important constants and parameters for the calculations."""
         if self.mpcconfig.predictive:
             """getting building physical properties for state space model"""
+<<<<<<< HEAD
             self.h_tr_w = self.simulation_repository.get_entry(
                 key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING
             )
@@ -493,23 +525,41 @@ class MpcController(cp.Component):
                 key=SimRepositoryKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR
             )
             self.c_m = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE)
+=======
+            self.h_tr_w_in_watt_per_kelvin = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING
+            )
+            self.h_tr_ms_in_watt_per_kelvin = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS
+            )
+            self.h_tr_em_in_watt_per_kelvin = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM
+            )
+            self.h_ve_adj_in_watt_per_kelvin = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION
+            )
+            self.h_tr_is_in_watt_per_kelvin = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR
+            )
+            self.c_m_in_joule_per_kelvin = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE)
+>>>>>>> e2033174cc7b89c411056eb6ce5f566a2ddcdac4
             """"
-            self.h_tr_w = my_simulation_repository.get_entry(
+            self.h_tr_w_in_watt_per_kelvin = my_simulation_repository.get_entry(
                 Building.Thermal_transmission_coefficient_glazing
             )
-            self.h_tr_ms = my_simulation_repository.get_entry(
+            self.h_tr_ms_in_watt_per_kelvin = my_simulation_repository.get_entry(
                 Building.Thermal_transmission_coefficient_opaque_ms
             )
-            self.h_tr_em = my_simulation_repository.get_entry(
+            self.h_tr_em_in_watt_per_kelvin = my_simulation_repository.get_entry(
                 Building.Thermal_transmission_coefficient_opaque_em
             )
-            self.h_ve_adj = my_simulation_repository.get_entry(
+            self.h_ve_adj_in_watt_per_kelvin = my_simulation_repository.get_entry(
                 Building.Thermal_transmission_coefficient_ventillation
             )
-            self.h_tr_is = my_simulation_repository.get_entry(
+            self.h_tr_is_in_watt_per_kelvin = my_simulation_repository.get_entry(
                 Building.Thermal_transmission_Surface_IndoorAir
             )
-            self.c_m = my_simulation_repository.get_entry(
+            self.c_m_in_joule_per_kelvin = my_simulation_repository.get_entry(
                 Building.Thermal_capacity_envelope
             )
             """
@@ -523,52 +573,68 @@ class MpcController(cp.Component):
 
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
 
-        state_space_matrix_coefficient_x = ((self.h_tr_w + self.h_tr_ms) * (self.h_ve_adj + self.h_tr_is)) + (
-            self.h_ve_adj * self.h_tr_is
+        state_space_matrix_coefficient_x = (
+            (self.h_tr_w_in_watt_per_kelvin + self.h_tr_ms_in_watt_per_kelvin)
+            * (self.h_ve_adj_in_watt_per_kelvin + self.h_tr_is_in_watt_per_kelvin)
+        ) + (
+            self.h_ve_adj_in_watt_per_kelvin * self.h_tr_is_in_watt_per_kelvin
         )
 
         # Entries for system matrix
         a11 = (
-            ((self.h_tr_ms**2) * (self.h_tr_is + self.h_ve_adj) / state_space_matrix_coefficient_x)
-            - self.h_tr_ms
-            - self.h_tr_em
+            ((self.h_tr_ms_in_watt_per_kelvin**2) * (self.h_tr_is_in_watt_per_kelvin + self.h_ve_adj_in_watt_per_kelvin) / state_space_matrix_coefficient_x)
+            - self.h_tr_ms_in_watt_per_kelvin
+            - self.h_tr_em_in_watt_per_kelvin
         ) / (
-            self.c_m / seconds_per_timestep
+            self.c_m_in_joule_per_kelvin / seconds_per_timestep
         )  # ((self.c_m_ref * self.A_f) * 3600)
 
         # Entries for input matrix
-        b11 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * state_space_matrix_coefficient_x)
+        b11 = (self.h_tr_ms_in_watt_per_kelvin * self.h_tr_is_in_watt_per_kelvin) / (
+            (self.c_m_in_joule_per_kelvin / seconds_per_timestep) * state_space_matrix_coefficient_x
+        )
 
         b_d11 = (
-            (self.h_tr_ms * self.h_tr_w * (self.h_tr_is + self.h_ve_adj) / state_space_matrix_coefficient_x)
-            + self.h_tr_em
-        ) / (self.c_m / seconds_per_timestep)
-        b_d12 = (self.h_tr_ms * self.h_tr_is * self.h_ve_adj) / (
-            (self.c_m / seconds_per_timestep) * state_space_matrix_coefficient_x
+            (
+                self.h_tr_ms_in_watt_per_kelvin
+                * self.h_tr_w_in_watt_per_kelvin
+                * (self.h_tr_is_in_watt_per_kelvin + self.h_ve_adj_in_watt_per_kelvin)
+                / state_space_matrix_coefficient_x
+            )
+            + self.h_tr_em_in_watt_per_kelvin
+        ) / (self.c_m_in_joule_per_kelvin / seconds_per_timestep)
+        b_d12 = (self.h_tr_ms_in_watt_per_kelvin * self.h_tr_is_in_watt_per_kelvin * self.h_ve_adj_in_watt_per_kelvin) / (
+            (self.c_m_in_joule_per_kelvin / seconds_per_timestep) * state_space_matrix_coefficient_x
         )
-        b_d13 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * state_space_matrix_coefficient_x)
-        b_d14 = (self.h_tr_ms * (self.h_tr_is + self.h_ve_adj)) / (
-            (self.c_m / seconds_per_timestep) * state_space_matrix_coefficient_x
+        b_d13 = (self.h_tr_ms_in_watt_per_kelvin * self.h_tr_is_in_watt_per_kelvin) / (
+            (self.c_m_in_joule_per_kelvin / seconds_per_timestep) * state_space_matrix_coefficient_x
         )
-        b_d15 = 1 / (self.c_m / seconds_per_timestep)
+        b_d14 = (self.h_tr_ms_in_watt_per_kelvin * (self.h_tr_is_in_watt_per_kelvin + self.h_ve_adj_in_watt_per_kelvin)) / (
+            (self.c_m_in_joule_per_kelvin / seconds_per_timestep) * state_space_matrix_coefficient_x
+        )
+        b_d15 = 1 / (self.c_m_in_joule_per_kelvin / seconds_per_timestep)
 
         # Entries for output matrix
-        c11 = (self.h_tr_ms * self.h_tr_is) / state_space_matrix_coefficient_x
-        c21 = (self.h_tr_ms * (self.h_tr_is + self.h_ve_adj)) / state_space_matrix_coefficient_x
+        c11 = (self.h_tr_ms_in_watt_per_kelvin * self.h_tr_is_in_watt_per_kelvin) / state_space_matrix_coefficient_x
+        c21 = (self.h_tr_ms_in_watt_per_kelvin * (self.h_tr_is_in_watt_per_kelvin + self.h_ve_adj_in_watt_per_kelvin)) / state_space_matrix_coefficient_x
 
         # Entries for feedthrough matrix
-        d11 = (self.h_tr_ms + self.h_tr_w + self.h_tr_is) / state_space_matrix_coefficient_x
-        d21 = self.h_tr_is / state_space_matrix_coefficient_x
+        d11 = (self.h_tr_ms_in_watt_per_kelvin + self.h_tr_w_in_watt_per_kelvin + self.h_tr_is_in_watt_per_kelvin) / state_space_matrix_coefficient_x
+        d21 = self.h_tr_is_in_watt_per_kelvin / state_space_matrix_coefficient_x
 
-        d_d11 = (self.h_tr_w * self.h_tr_is) / state_space_matrix_coefficient_x
-        d_d12 = (self.h_tr_ms + self.h_tr_is + self.h_tr_w) * self.h_ve_adj / state_space_matrix_coefficient_x
-        d_d13 = (self.h_tr_ms + self.h_tr_is + self.h_tr_w) / state_space_matrix_coefficient_x
-        d_d14 = self.h_tr_is / state_space_matrix_coefficient_x
+        d_d11 = (self.h_tr_w_in_watt_per_kelvin * self.h_tr_is_in_watt_per_kelvin) / state_space_matrix_coefficient_x
+        d_d12 = (
+            (self.h_tr_ms_in_watt_per_kelvin + self.h_tr_is_in_watt_per_kelvin + self.h_tr_w_in_watt_per_kelvin)
+            * self.h_ve_adj_in_watt_per_kelvin
+            / state_space_matrix_coefficient_x
+        )
+        d_d13 = (self.h_tr_ms_in_watt_per_kelvin + self.h_tr_is_in_watt_per_kelvin + self.h_tr_w_in_watt_per_kelvin) / state_space_matrix_coefficient_x
+        d_d14 = self.h_tr_is_in_watt_per_kelvin / state_space_matrix_coefficient_x
         d_d15 = 0
-        d_d21 = (self.h_tr_w * (self.h_tr_is + self.h_ve_adj)) / state_space_matrix_coefficient_x
-        d_d22 = (self.h_tr_is * self.h_ve_adj) / state_space_matrix_coefficient_x
-        d_d23 = self.h_tr_is / state_space_matrix_coefficient_x
-        d_d24 = (self.h_tr_is + self.h_ve_adj) / state_space_matrix_coefficient_x
+        d_d21 = (self.h_tr_w_in_watt_per_kelvin * (self.h_tr_is_in_watt_per_kelvin + self.h_ve_adj_in_watt_per_kelvin)) / state_space_matrix_coefficient_x
+        d_d22 = (self.h_tr_is_in_watt_per_kelvin * self.h_ve_adj_in_watt_per_kelvin) / state_space_matrix_coefficient_x
+        d_d23 = self.h_tr_is_in_watt_per_kelvin / state_space_matrix_coefficient_x
+        d_d24 = (self.h_tr_is_in_watt_per_kelvin + self.h_ve_adj_in_watt_per_kelvin) / state_space_matrix_coefficient_x
         d_d25 = 0
 
         # Build arrays for state space representation
@@ -624,33 +690,41 @@ class MpcController(cp.Component):
         lines.append("tbd")
         return lines
 
-    def get_forecast_24h(self, start_horizon, sampling_rate):
+    def get_forecast_24h(self, start_horizon, sampling_rate_in_min):
         """Get yearly weather forecast."""
         # slicing yearly forecast to extract data points for the prediction horizon (24 hours)
         # number of data points extracted equals= self.prediction_horizon = 3600 * 24 h / seconds_per_timestep
-        self.temperature_forecast_24h_1min = self.temp_forecast[start_horizon : start_horizon + self.prediction_horizon]
-        self.phi_m_forecast_24h_1min = self.phi_m_forecast[start_horizon : start_horizon + self.prediction_horizon]
-        self.phi_ia_forecast_24h_1min = self.phi_ia_forecast[start_horizon : start_horizon + self.prediction_horizon]
-        self.phi_st_forecast_24h_1min = self.phi_st_forecast[start_horizon : start_horizon + self.prediction_horizon]
-        self.pv_forecast_24h_1min = self.pv_forecast_yearly[start_horizon : start_horizon + self.prediction_horizon]
+        self.temperature_forecast_24h_1min_in_celsius = self.temp_forecast_in_celsius[start_horizon : start_horizon + self.prediction_horizon]
+        self.phi_m_forecast_24h_1min_in_watt = self.phi_m_forecast_in_watt[start_horizon : start_horizon + self.prediction_horizon]
+        self.phi_ia_forecast_24h_1min_in_watt = self.phi_ia_forecast_in_watt[start_horizon : start_horizon + self.prediction_horizon]
+        self.phi_st_forecast_24h_1min_in_watt = self.phi_st_forecast_in_watt[start_horizon : start_horizon + self.prediction_horizon]
+        self.pv_forecast_24h_1min_in_watt = self.pv_forecast_yearly_in_watt[start_horizon : start_horizon + self.prediction_horizon]
 
+<<<<<<< HEAD
         self.price_purchase_forecast_24h_1min = self.simulation_repository.get_entry(
             key=SimRepositoryKeyEnum.PRICEPURCHASEFORECAST24H
         )
         self.price_injection_forecast_24h_1min = self.simulation_repository.get_entry(
             key=SimRepositoryKeyEnum.PRICEINJECTIONFORECAST24H
+=======
+        self.price_purchase_forecast_24h_1min_in_eur_per_kwh = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.PRICEPURCHASEFORECAST24H
+        )
+        self.price_injection_forecast_24h_1min_in_eur_per_kwh = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.PRICEINJECTIONFORECAST24H
+>>>>>>> e2033174cc7b89c411056eb6ce5f566a2ddcdac4
         )
 
         # sampling of the data: Useful if you run hisim at 60 sec per time step and you want fast optimization:
         # Recommended to use 15 min or 20 min
 
-        temperature_forecast_24h = self.temperature_forecast_24h_1min[0::sampling_rate]
-        phi_m_forecast_24h = self.phi_m_forecast_24h_1min[0::sampling_rate]
-        phi_ia_forecast_24h = self.phi_ia_forecast_24h_1min[0::sampling_rate]
-        phi_st_forecast_24h = self.phi_st_forecast_24h_1min[0::sampling_rate]
-        price_purchase_forecast_24h = self.price_purchase_forecast_24h_1min[0::sampling_rate]
-        price_injection_forecast_24h = self.price_injection_forecast_24h_1min[0::sampling_rate]
-        pv_forecast_24h = self.pv_forecast_24h_1min[0::sampling_rate]
+        temperature_forecast_24h = self.temperature_forecast_24h_1min_in_celsius[0::sampling_rate_in_min]
+        phi_m_forecast_24h = self.phi_m_forecast_24h_1min_in_watt[0::sampling_rate_in_min]
+        phi_ia_forecast_24h = self.phi_ia_forecast_24h_1min_in_watt[0::sampling_rate_in_min]
+        phi_st_forecast_24h = self.phi_st_forecast_24h_1min_in_watt[0::sampling_rate_in_min]
+        price_purchase_forecast_24h = self.price_purchase_forecast_24h_1min_in_eur_per_kwh[0::sampling_rate_in_min]
+        price_injection_forecast_24h = self.price_injection_forecast_24h_1min_in_eur_per_kwh[0::sampling_rate_in_min]
+        pv_forecast_24h = self.pv_forecast_24h_1min_in_watt[0::sampling_rate_in_min]
 
         # only take positive values from PV, otherwise mpc will have an ill-posed problem which will raise errors
         pv_forecast_24h = [max(0, value) for value in pv_forecast_24h]
@@ -677,12 +751,12 @@ class MpcController(cp.Component):
         scaled_horizon,
     ):
         """MPC implementation."""
-        sampling_rate = int(self.prediction_horizon / scaled_horizon)
+        sampling_rate_in_min = int(self.prediction_horizon / scaled_horizon)
         # scaled_horizon = scaled_horizon  # scaled prediction horizon
 
         # Discretization of the state space model:
         identity_matrix = np.identity(self.state_space_system_matrix_a.shape[0])  # this is an identity matrix
-        matrix_a_d = np.array(np.exp(self.state_space_system_matrix_a * sampling_rate))
+        matrix_a_d = np.array(np.exp(self.state_space_system_matrix_a * sampling_rate_in_min))
         matrix_b_d = (
             np.linalg.inv(self.state_space_system_matrix_a)
             * (matrix_a_d - identity_matrix)
@@ -703,11 +777,11 @@ class MpcController(cp.Component):
         cop_timestep = []
         eer_timestep = []
         for k in range(int(self.prediction_horizon)):
-            cop_timestep.append(self.cop_coef[0] * self.temperature_forecast_24h_1min[k] + self.cop_coef[1])  # cop
-            eer_timestep.append(self.eer_coef[0] * self.temperature_forecast_24h_1min[k] + self.eer_coef[1])  # eer
+            cop_timestep.append(self.cop_coef[0] * self.temperature_forecast_24h_1min_in_celsius[k] + self.cop_coef[1])  # cop
+            eer_timestep.append(self.eer_coef[0] * self.temperature_forecast_24h_1min_in_celsius[k] + self.eer_coef[1])  # eer
 
-        cop_sampled = cop_timestep[0::sampling_rate]
-        eer_sampled = eer_timestep[0::sampling_rate]
+        cop_sampled = cop_timestep[0::sampling_rate_in_min]
+        eer_sampled = eer_timestep[0::sampling_rate_in_min]
 
         cop_sampled_array: np.ndarray = np.reshape(np.array(cop_sampled), (1, len(cop_sampled)))
         eer_sampled_array: np.ndarray = np.reshape(np.array(eer_sampled), (1, len(eer_sampled)))
@@ -844,17 +918,17 @@ class MpcController(cp.Component):
                     optvar_battery_soc[:, k + 1]
                     == optvar_battery_soc[:, k]
                     + (optvar_battery_power_flow[:, k])
-                    * (self.my_simulation_parameters.seconds_per_timestep * sampling_rate / 3600)
+                    * (self.my_simulation_parameters.seconds_per_timestep * sampling_rate_in_min / 3600)
                 )
 
-        opti.subject_to(opti.bounded(self.min_comfort_temp, optvar_temperature, self.max_comfort_temp))
+        opti.subject_to(opti.bounded(self.min_comfort_temp_in_celsius, optvar_temperature, self.max_comfort_temp_in_celsius))
 
         """ a Terminal Constraint is added if Hisim resolution is different than the optimizer resolution:
             e.g, if you run hisim at 60 sec per time step and you would like to reduce the optimization is done by sampling each 20 or 15 min
             This ensures that inital guess at the following optimization is within the constraint"""
 
-        if sampling_rate != 1:
-            opti.subject_to(optvar_temperature[-1] > self.min_comfort_temp + 0.3)
+        if sampling_rate_in_min != 1:
+            opti.subject_to(optvar_temperature[-1] > self.min_comfort_temp_in_celsius + 0.3)
 
         opti.subject_to(opti.bounded(0, ca.fabs(optvar_power_thermal_delivered), 16000))
 
@@ -884,16 +958,16 @@ class MpcController(cp.Component):
             """Battery charging and discharging bounds / making sure that charging and discharging doesn't occur at the same time"""
             opti.subject_to(
                 opti.bounded(
-                    self.minimum_storage_capacity,
+                    self.minimum_storage_capacity_in_watt_hour,
                     optvar_battery_soc,
-                    self.maximum_storage_capacity,
+                    self.maximum_storage_capacity_in_watt_hour,
                 )
             )
             opti.subject_to(
                 opti.bounded(
-                    -self.maximum_discharging_power,
+                    -self.maximum_discharging_power_in_watt,
                     optvar_battery_power_flow,
-                    self.maximum_charging_power,
+                    self.maximum_charging_power_in_watt,
                 )
             )
             opti.subject_to(
@@ -912,7 +986,7 @@ class MpcController(cp.Component):
                     0,
                 )
             )
-            opti.subject_to(opti.bounded(0, optvar_battery_power_charging, self.maximum_charging_power))
+            opti.subject_to(opti.bounded(0, optvar_battery_power_charging, self.maximum_charging_power_in_watt))
 
             """ Energy Balance constraint for Grid , PV , Battery interaction"""
 
@@ -997,7 +1071,7 @@ class MpcController(cp.Component):
 
         # numerical values of the parameter
 
-        opti.set_value(initial_temperature_state, self.state.temperature_mean)
+        opti.set_value(initial_temperature_state, self.state.temperature_mean_in_celsius)
         opti.set_value(disturbance_forecast, disturbance_values)
         opti.set_value(cop_values, cop_sampled_array)
         opti.set_value(eer_values, eer_sampled_array)
@@ -1018,8 +1092,8 @@ class MpcController(cp.Component):
         grid_import = sol.value(optvar_power_bought_from_grid)
 
         # solution for actual HiSim timestep
-        p_th_opt_timstep = np.repeat(p_th_opt, sampling_rate).tolist()
-        grid_import_timestep = np.repeat(grid_import, sampling_rate).tolist()
+        p_th_opt_timstep = np.repeat(p_th_opt, sampling_rate_in_min).tolist()
+        grid_import_timestep = np.repeat(grid_import, sampling_rate_in_min).tolist()
 
         energy_efficiency_timestep = [0] * int(self.prediction_horizon)
         for i in range(int(self.prediction_horizon)):
@@ -1046,8 +1120,8 @@ class MpcController(cp.Component):
             grid_export = sol.value(optvar_power_sold_to_grid)
 
             # solution for actual HiSim timestep
-            pv_consumption_timestep = np.repeat(pv_consumption, sampling_rate).tolist()
-            grid_export_timestep = np.repeat(grid_export, sampling_rate).tolist()
+            pv_consumption_timestep = np.repeat(pv_consumption, sampling_rate_in_min).tolist()
+            grid_export_timestep = np.repeat(grid_export, sampling_rate_in_min).tolist()
 
             # optimizer solution might lead to values like 1.5e-9 ---> these are replaces with zeros
             for i in range(self.prediction_horizon):
@@ -1059,56 +1133,56 @@ class MpcController(cp.Component):
 
         if self.flexibility_element == "PV_and_Battery":
             # solution optimize resolution
-            battery_to_load = sol.value(optvar_battery_power_discharging)
+            battery_to_load_in_watt = sol.value(optvar_battery_power_discharging)
             pv_to_battery = sol.value(optvar_battery_power_charging)
             optvar_battery_power_flow = sol.value(optvar_battery_power_flow)
-            batt_soc_actual = sol.value(optvar_battery_soc)
-            batt_soc_normalized = sol.value(optvar_battery_soc) / self.maximum_storage_capacity
+            batt_energy_content_in_watt_hour = sol.value(optvar_battery_soc)
+            batt_soc_normalized = sol.value(optvar_battery_soc) / self.maximum_storage_capacity_in_watt_hour
             if self.mpc_scheme == "optimization_once_aday_only":
-                self.state.soc = batt_soc_actual[-1]
-                if self.state.soc < 0.2 * self.maximum_storage_capacity:
-                    self.state.soc = 0.2 * self.maximum_storage_capacity
+                self.state.soc = batt_energy_content_in_watt_hour[-1]
+                if self.state.soc < 0.2 * self.maximum_storage_capacity_in_watt_hour:
+                    self.state.soc = 0.2 * self.maximum_storage_capacity_in_watt_hour
             if self.mpc_scheme == "moving_horizon_control":
-                self.state.soc = batt_soc_actual[1]
+                self.state.soc = batt_energy_content_in_watt_hour[1]
 
             # solution for actual HiSim timestep
-            battery_to_load_timstep = np.repeat(battery_to_load, sampling_rate).tolist()
-            pv_to_battery_timestep = np.repeat(pv_to_battery, sampling_rate).tolist()
-            batt_soc_actual_timestep = np.repeat(batt_soc_actual, sampling_rate).tolist()
-            batt_soc_normalized_timestep = np.repeat(batt_soc_normalized, sampling_rate).tolist()
-            battery_power_flow_timestep = np.repeat(optvar_battery_power_flow, sampling_rate).tolist()
+            battery_to_load_timstep = np.repeat(battery_to_load_in_watt, sampling_rate_in_min).tolist()
+            pv_to_battery_timestep_in_watt = np.repeat(pv_to_battery, sampling_rate_in_min).tolist()
+            batt_energy_content_in_watt_hour_timestep = np.repeat(batt_energy_content_in_watt_hour, sampling_rate_in_min).tolist()
+            batt_soc_normalized_timestep = np.repeat(batt_soc_normalized, sampling_rate_in_min).tolist()
+            battery_power_flow_timestep_in_watt = np.repeat(optvar_battery_power_flow, sampling_rate_in_min).tolist()
 
             # optimizer solution might lead to values like 1.5e-9 ---> these are replaces with zeros
             for i in range(self.prediction_horizon):
                 if abs(battery_to_load_timstep[i]) < 0.1:
                     battery_to_load_timstep[i] = 0
 
-                if abs(pv_to_battery_timestep[i]) < 0.1:
-                    pv_to_battery_timestep[i] = 0
+                if abs(pv_to_battery_timestep_in_watt[i]) < 0.1:
+                    pv_to_battery_timestep_in_watt[i] = 0
 
-                if abs(batt_soc_actual_timestep[i]) < 0.1:
-                    batt_soc_actual_timestep[i] = 0
+                if abs(batt_energy_content_in_watt_hour_timestep[i]) < 0.1:
+                    batt_energy_content_in_watt_hour_timestep[i] = 0
 
                 if abs(batt_soc_normalized_timestep[i]) < 0.1:
                     batt_soc_normalized_timestep[i] = 0
 
-                if abs(battery_power_flow_timestep[i]) < 0.1:
-                    battery_power_flow_timestep[i] = 0
+                if abs(battery_power_flow_timestep_in_watt[i]) < 0.1:
+                    battery_power_flow_timestep_in_watt[i] = 0
 
         # calculated and can be used later if the control structure is modified to casacaded PID-
         t_m_opt_timestep = []
-        t_m_init = self.state.temperature_mean
+        t_m_init = self.state.temperature_mean_in_celsius
         matrix_a_d = np.linalg.inv(identity_matrix - self.state_space_system_matrix_a)
         matrix_b_d = matrix_a_d * self.state_space_system_matrix_b
         for i in range(int(self.prediction_horizon)):
             t_m_next = (
                 matrix_a_d * t_m_init
                 + matrix_b_d[0, 0] * p_th_opt_timstep[i]
-                + matrix_b_d[0, 1] * self.temperature_forecast_24h_1min[i]
-                + matrix_b_d[0, 2] * self.temperature_forecast_24h_1min[i]
-                + matrix_b_d[0, 3] * self.phi_ia_forecast_24h_1min[i]
-                + matrix_b_d[0, 4] * self.phi_st_forecast_24h_1min[i]
-                + matrix_b_d[0, 5] * self.phi_m_forecast_24h_1min[i]
+                + matrix_b_d[0, 1] * self.temperature_forecast_24h_1min_in_celsius[i]
+                + matrix_b_d[0, 2] * self.temperature_forecast_24h_1min_in_celsius[i]
+                + matrix_b_d[0, 3] * self.phi_ia_forecast_24h_1min_in_watt[i]
+                + matrix_b_d[0, 4] * self.phi_st_forecast_24h_1min_in_watt[i]
+                + matrix_b_d[0, 5] * self.phi_m_forecast_24h_1min_in_watt[i]
             )
             t_m_init = t_m_next
             t_m_opt_timestep.append(t_m_next[0, 0])
@@ -1138,9 +1212,9 @@ class MpcController(cp.Component):
                 grid_import_timestep,
                 grid_export_timestep,
                 battery_to_load_timstep,
-                pv_to_battery_timestep,
-                battery_power_flow_timestep,
-                batt_soc_actual_timestep,
+                pv_to_battery_timestep_in_watt,
+                battery_power_flow_timestep_in_watt,
+                batt_energy_content_in_watt_hour_timestep,
                 batt_soc_normalized_timestep,
                 t_m_opt_timestep,
             )
@@ -1149,24 +1223,24 @@ class MpcController(cp.Component):
 
     def cost_calculation(self, grid_export_timestep, grid_import_timestep):
         """Calculate cost of cooling consumption and revenue for buildings with renewables."""
-        optimal_cost = []
+        optimal_cost_in_eur = []
         revenue = []
         for i in range(int(self.prediction_horizon)):
-            costs = grid_import_timestep[i] * self.price_purchase_forecast_24h_1min[i]
-            revenues = grid_export_timestep[i] * self.price_injection_forecast_24h_1min[i]
-            optimal_cost.append(costs)
-            revenue.append(revenues)
+            costs = grid_import_timestep[i] * self.price_purchase_forecast_24h_1min_in_eur_per_kwh[i]
+            revenues_in_eur = grid_export_timestep[i] * self.price_injection_forecast_24h_1min_in_eur_per_kwh[i]
+            optimal_cost_in_eur.append(costs)
+            revenue.append(revenues_in_eur)
 
-        return optimal_cost, revenue
+        return optimal_cost_in_eur, revenue
 
     def cost_calculation_no_flexibility_element(self, air_conditioning_electricity_consumption):
         """Calculate cost of cooling for buildings without renewables."""
-        optimal_cost = []
+        optimal_cost_in_eur = []
         for i in range(int(self.prediction_horizon)):
-            costs = air_conditioning_electricity_consumption[i] * self.price_purchase_forecast_24h_1min[i]
-            optimal_cost.append(costs)
+            costs = air_conditioning_electricity_consumption[i] * self.price_purchase_forecast_24h_1min_in_eur_per_kwh[i]
+            optimal_cost_in_eur.append(costs)
 
-        return optimal_cost
+        return optimal_cost_in_eur
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:  # noqa: C901
         """Start simulation of the MPC here."""
@@ -1177,11 +1251,11 @@ class MpcController(cp.Component):
                 and timestep <= self.my_simulation_parameters.timesteps - self.prediction_horizon
             ):
                 if self.my_simulation_parameters.seconds_per_timestep >= 15 * 60:
-                    sampling_rate = 1
+                    sampling_rate_in_min = 1
                 else:
-                    sampling_rate = self.sampling_rate
+                    sampling_rate_in_min = self.sampling_rate_in_min
                 scaled_horizon = int(
-                    self.prediction_horizon / sampling_rate
+                    self.prediction_horizon / sampling_rate_in_min
                 )  # number of points are reduced from 1440 to this value
 
                 (
@@ -1192,7 +1266,7 @@ class MpcController(cp.Component):
                     price_purchase_forecast_24h,
                     price_injection_forecast_24h,
                     pv_forecast_24h,
-                ) = self.get_forecast_24h(timestep, sampling_rate)
+                ) = self.get_forecast_24h(timestep, sampling_rate_in_min)
 
                 if self.flexibility_element == "basic_buidling_configuration":
                     (
@@ -1209,14 +1283,14 @@ class MpcController(cp.Component):
                         pv_forecast_24h,
                         scaled_horizon,
                     )
-                    self.optimal_cost = self.cost_calculation_no_flexibility_element(
+                    self.optimal_cost_in_eur = self.cost_calculation_no_flexibility_element(
                         air_conditioning_electricity_consumption
                     )
-                    self.revenues = [0] * self.prediction_horizon
+                    self.revenues_in_eur = [0] * self.prediction_horizon
 
-                    self.state.cost_optimal_thermal_power = p_th_opt_timstep
-                    self.air_conditioning_electricity = air_conditioning_electricity_consumption
-                    self.cost_optimal_temperature_set_point = t_m_opt_timestep
+                    self.state.cost_optimal_thermal_power_in_watt = p_th_opt_timstep
+                    self.air_conditioning_electricity_in_watt = air_conditioning_electricity_consumption
+                    self.cost_optimal_temperature_set_point_in_celsius = t_m_opt_timestep
 
                 if self.flexibility_element == "PV_only":
                     (
@@ -1236,14 +1310,14 @@ class MpcController(cp.Component):
                         pv_forecast_24h,
                         scaled_horizon,
                     )
-                    self.optimal_cost, self.revenues = self.cost_calculation(grid_export_timestep, grid_import_timestep)
+                    self.optimal_cost_in_eur, self.revenues_in_eur = self.cost_calculation(grid_export_timestep, grid_import_timestep)
 
-                    self.state.cost_optimal_thermal_power = p_th_opt_timstep
-                    self.air_conditioning_electricity = air_conditioning_electricity_consumption
-                    self.pv2load = pv_consumption_timestep
-                    self.electricity_from_grid = grid_import_timestep
-                    self.electricity_to_grid = grid_export_timestep
-                    self.cost_optimal_temperature_set_point = t_m_opt_timestep
+                    self.state.cost_optimal_thermal_power_in_watt = p_th_opt_timstep
+                    self.air_conditioning_electricity_in_watt = air_conditioning_electricity_consumption
+                    self.pv2load_in_watt = pv_consumption_timestep
+                    self.electricity_from_grid_in_watt = grid_import_timestep
+                    self.electricity_to_grid_in_watt = grid_export_timestep
+                    self.cost_optimal_temperature_set_point_in_celsius = t_m_opt_timestep
 
                 if self.flexibility_element == "PV_and_Battery":
                     (
@@ -1253,9 +1327,9 @@ class MpcController(cp.Component):
                         grid_import_timestep,
                         grid_export_timestep,
                         battery_to_load_timstep,
-                        pv_to_battery_timestep,
-                        battery_power_flow_timestep,
-                        batt_soc_actual_timestep,
+                        pv_to_battery_timestep_in_watt,
+                        battery_power_flow_timestep_in_watt,
+                        batt_energy_content_in_watt_hour_timestep,
                         batt_soc_normalized_timestep,
                         t_m_opt_timestep,
                     ) = self.optimize(
@@ -1268,39 +1342,39 @@ class MpcController(cp.Component):
                         pv_forecast_24h,
                         scaled_horizon,
                     )
-                    self.optimal_cost, self.revenues = self.cost_calculation(grid_export_timestep, grid_import_timestep)
+                    self.optimal_cost_in_eur, self.revenues_in_eur = self.cost_calculation(grid_export_timestep, grid_import_timestep)
 
-                    self.state.cost_optimal_thermal_power = p_th_opt_timstep
-                    self.air_conditioning_electricity = air_conditioning_electricity_consumption
-                    self.pv2load = pv_consumption_timestep
-                    self.electricity_from_grid = grid_import_timestep
-                    self.electricity_to_grid = grid_export_timestep
-                    self.battery_to_load = battery_to_load_timstep
-                    self.pv_to_battery_timestep = pv_to_battery_timestep
-                    self.battery_power_flow_timestep = battery_power_flow_timestep
+                    self.state.cost_optimal_thermal_power_in_watt = p_th_opt_timstep
+                    self.air_conditioning_electricity_in_watt = air_conditioning_electricity_consumption
+                    self.pv2load_in_watt = pv_consumption_timestep
+                    self.electricity_from_grid_in_watt = grid_import_timestep
+                    self.electricity_to_grid_in_watt = grid_export_timestep
+                    self.battery_to_load_in_watt = battery_to_load_timstep
+                    self.pv_to_battery_timestep_in_watt = pv_to_battery_timestep_in_watt
+                    self.battery_power_flow_timestep_in_watt = battery_power_flow_timestep_in_watt
 
                     self.battery_control_state = []
                     for i in range(int(self.prediction_horizon)):
                         if battery_to_load_timstep[i] != 0:
                             state = -1  # inform the battery that energy is withdrawn
                             self.battery_control_state.append(state)
-                        elif pv_to_battery_timestep[i] != 0:
+                        elif pv_to_battery_timestep_in_watt[i] != 0:
                             state = 1
                             self.battery_control_state.append(state)  # inform the battery that energy is charged
                         else:
                             state = 0  # No cahrging or discharging
                             self.battery_control_state.append(state)
 
-                    self.batt_soc_actual_timestep = batt_soc_actual_timestep
+                    self.batt_energy_content_in_watt_hour_timestep = batt_energy_content_in_watt_hour_timestep
                     self.batt_soc_normalized_timestep = batt_soc_normalized_timestep
-                    self.cost_optimal_temperature_set_point = t_m_opt_timestep
+                    self.cost_optimal_temperature_set_point_in_celsius = t_m_opt_timestep
 
         if self.mpc_scheme == "optimization_once_aday_only":
             applied_optimal_solution_index = timestep % self.prediction_horizon
-            self.state.temperature_mean = self.cost_optimal_temperature_set_point[-1]
+            self.state.temperature_mean_in_celsius = self.cost_optimal_temperature_set_point_in_celsius[-1]
         elif self.mpc_scheme == "moving_horizon_control":
             applied_optimal_solution_index = 0
-            self.state.temperature_mean = self.cost_optimal_temperature_set_point[0]
+            self.state.temperature_mean_in_celsius = self.cost_optimal_temperature_set_point_in_celsius[0]
         if (
             self.mpc_scheme == "moving_horizon_control"
             and timestep > self.my_simulation_parameters.timesteps - self.prediction_horizon
@@ -1309,9 +1383,9 @@ class MpcController(cp.Component):
 
         """ the air conditioner recieves electric power signal (always +ve). The binary variable operating_mode will distinguish
         heating and cooling: heating = 1 , cooling = -1 , off = 0"""
-        if self.state.cost_optimal_thermal_power[applied_optimal_solution_index] > 0:
+        if self.state.cost_optimal_thermal_power_in_watt[applied_optimal_solution_index] > 0:
             operating_mode = 1
-        elif self.state.cost_optimal_thermal_power[applied_optimal_solution_index] < 0:
+        elif self.state.cost_optimal_thermal_power_in_watt[applied_optimal_solution_index] < 0:
             operating_mode = -1
         else:
             operating_mode = 0
@@ -1319,47 +1393,47 @@ class MpcController(cp.Component):
         stsv.set_output_value(self.operating_mode_channel, operating_mode)
         stsv.set_output_value(
             self.p_th_mpc_channel,
-            self.state.cost_optimal_thermal_power[applied_optimal_solution_index],
+            self.state.cost_optimal_thermal_power_in_watt[applied_optimal_solution_index],
         )
         stsv.set_output_value(
             self.p_elec_mpc_channel,
-            self.air_conditioning_electricity[applied_optimal_solution_index],
+            self.air_conditioning_electricity_in_watt[applied_optimal_solution_index],
         )
-        stsv.set_output_value(self.costs_channel, self.optimal_cost[applied_optimal_solution_index])
-        stsv.set_output_value(self.revenues_channel, self.revenues[applied_optimal_solution_index])
+        stsv.set_output_value(self.costs_channel, self.optimal_cost_in_eur[applied_optimal_solution_index])
+        stsv.set_output_value(self.revenues_channel, self.revenues_in_eur[applied_optimal_solution_index])
 
         if self.flexibility_element == "basic_buidling_configuration":
             stsv.set_output_value(
                 self.grid_import_channel,
-                self.air_conditioning_electricity[applied_optimal_solution_index],
+                self.air_conditioning_electricity_in_watt[applied_optimal_solution_index],
             )
 
         if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
             stsv.set_output_value(
                 self.pv_consumption_channel,
-                self.pv2load[applied_optimal_solution_index],
+                self.pv2load_in_watt[applied_optimal_solution_index],
             )
             stsv.set_output_value(
                 self.grid_import_channel,
-                self.electricity_from_grid[applied_optimal_solution_index],
+                self.electricity_from_grid_in_watt[applied_optimal_solution_index],
             )
             stsv.set_output_value(
                 self.grid_export_channel,
-                self.electricity_to_grid[applied_optimal_solution_index],
+                self.electricity_to_grid_in_watt[applied_optimal_solution_index],
             )
 
         if self.flexibility_element == "PV_and_Battery":
             stsv.set_output_value(
                 self.battery_to_load_channel,
-                self.battery_to_load[applied_optimal_solution_index],
+                self.battery_to_load_in_watt[applied_optimal_solution_index],
             )
             stsv.set_output_value(
                 self.pv_to_battery_channel,
-                self.pv_to_battery_timestep[applied_optimal_solution_index],
+                self.pv_to_battery_timestep_in_watt[applied_optimal_solution_index],
             )
             stsv.set_output_value(
-                self.batt_soc_actual_channel,
-                self.batt_soc_actual_timestep[applied_optimal_solution_index],
+                self.batt_energy_content_in_watt_hour_channel,
+                self.batt_energy_content_in_watt_hour_timestep[applied_optimal_solution_index],
             )
             stsv.set_output_value(
                 self.batt_soc_normalized_channel,
@@ -1371,7 +1445,7 @@ class MpcController(cp.Component):
             )
             stsv.set_output_value(
                 self.battery_charging_discharging_power_channel,
-                abs(self.battery_power_flow_timestep[applied_optimal_solution_index]),
+                abs(self.battery_power_flow_timestep_in_watt[applied_optimal_solution_index]),
             )
 
         """end MPC here """

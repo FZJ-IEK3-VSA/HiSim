@@ -2,14 +2,95 @@
 
 # clean
 
+import math
+from typing import NamedTuple
+
 import pytest
 
 from hisim import component as cp
 from hisim.components import advanced_fuel_cell
 from hisim import loadtypes as lt
-from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
+
+
+class _ChpTestSetup(NamedTuple):
+    """A wired-up CHP system under test plus its fake input channels."""
+
+    chp: advanced_fuel_cell.CHP
+    stsv: cp.SingleTimeStepValues
+    control_signal: cp.ComponentOutput
+    massflow_input_temperature: cp.ComponentOutput
+    electricity_target: cp.ComponentOutput
+
+
+def build_chp_system(
+    operating_mode: str,
+    gas_type: str = "Hydrogen",
+    seconds_per_timestep: int = 60,
+) -> _ChpTestSetup:
+    """Build and wire a CHP system with fake control, mass-flow, and target inputs.
+
+    Constructs an ``advanced_fuel_cell.CHP`` from the default config with the
+    requested ``operating_mode`` and ``gas_type``, connects three fake
+    ``ComponentOutput`` sources to its input channels, allocates a
+    ``SingleTimeStepValues`` buffer, and assigns global indices. The returned
+    fake outputs' ``global_index`` attributes can be used to inject input
+    values before calling ``chp.i_simulate``.
+    """
+    my_simulation_parameters = SimulationParameters.one_day_only(
+        2017, seconds_per_timestep
+    )
+
+    my_chp_system_config = advanced_fuel_cell.CHPConfig.get_default_config()
+    my_chp_system_config.operating_mode = operating_mode
+    my_chp_system_config.gas_type = gas_type
+
+    my_chp_system = advanced_fuel_cell.CHP(
+        config=my_chp_system_config, my_simulation_parameters=my_simulation_parameters
+    )
+
+    # Set Fake Outputs for CHP System
+    control_signal = cp.ComponentOutput(
+        "FakeControlSignal", "ControlSignal", lt.LoadTypes.ANY, lt.Units.PERCENT
+    )
+    massflow_input_temperature = cp.ComponentOutput(
+        "FakeMassflowInputTemperature",
+        "MassflowInputTemperature",
+        lt.LoadTypes.WATER,
+        lt.Units.CELSIUS,
+    )
+    electricity_from_chp_target = cp.ComponentOutput(
+        "FakeElectricityFromCHPTarget",
+        "ElectricityFromCHPTarget",
+        lt.LoadTypes.ELECTRICITY,
+        lt.Units.WATT,
+    )
+
+    my_chp_system.control_signal_channel.source_output = control_signal
+    my_chp_system.mass_inp_temp_channel.source_output = massflow_input_temperature
+    my_chp_system.electricity_target_channel.source_output = electricity_from_chp_target
+
+    components = [
+        control_signal,
+        massflow_input_temperature,
+        electricity_from_chp_target,
+        my_chp_system,
+    ]
+    number_of_outputs = fft.get_number_of_outputs(components)
+    stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
+
+    # Add Global Index for fake Inputs
+    fft.add_global_index_of_components(components)
+
+    return _ChpTestSetup(
+        chp=my_chp_system,
+        stsv=stsv,
+        control_signal=control_signal,
+        massflow_input_temperature=massflow_input_temperature,
+        electricity_target=electricity_from_chp_target,
+    )
 
 
 @pytest.mark.base
@@ -23,100 +104,34 @@ def test_chp_system() -> None:
     timestep and asserts that mass flow, output temperature, gas demand, electrical
     power, thermal power, and cycle count match expected values.
     """
+    setup = build_chp_system(operating_mode="electricity", gas_type="Methan")
 
-    seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
-
-    # CHP-System
-    # min_operation_time=60
-    # min_idle_time = 15
-    # gas_type = "Methan"
-    # operating_mode = "electricity"
-    # p_el_max=3_000
-
-    # ===================================================================================================================
-    # Set CHP System
-    my_chp_system_config = advanced_fuel_cell.CHPConfig.get_default_config()
-    my_chp_system_config.min_operation_time = 60
-    my_chp_system_config.min_idle_time = 15
-    my_chp_system_config.gas_type = "Methan"
-    my_chp_system_config.operating_mode = "electricity"
-    my_chp_system_config.p_el_max = 3_000
-
-    my_chp_system = advanced_fuel_cell.CHP(
-        config=my_chp_system_config, my_simulation_parameters=my_simulation_parameters
-    )
-    # Set Fake Outputs for CHP System
-    control_signal = cp.ComponentOutput(
-        "FakeControlSignal", "ControlSignal", lt.LoadTypes.ANY, lt.Units.PERCENT
-    )
-
-    massflow_input_temperature = cp.ComponentOutput(
-        "FakeMassflowInputTemperature",
-        "MassflowInputTemperature",
-        lt.LoadTypes.WATER,
-        lt.Units.CELSIUS,
-    )
-
-    electricity_from_chp_target = cp.ComponentOutput(
-        "FakeElectricityFromCHPTarget",
-        "ElectricityFromCHPTarget",
-        lt.LoadTypes.ELECTRICITY,
-        lt.Units.WATT,
-    )
-
-    my_chp_system.control_signal_channel.source_output = control_signal
-    my_chp_system.mass_inp_temp_channel.source_output = massflow_input_temperature
-    my_chp_system.electricity_target_channel.source_output = electricity_from_chp_target
-
-    number_of_outputs = fft.get_number_of_outputs(
-        [
-            control_signal,
-            massflow_input_temperature,
-            electricity_from_chp_target,
-            my_chp_system,
-        ]
-    )
-    stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
-
-    # Add Global Index and set values for fake Inputs
-    fft.add_global_index_of_components(
-        [
-            control_signal,
-            massflow_input_temperature,
-            electricity_from_chp_target,
-            my_chp_system,
-        ]
-    )
-
-    stsv.values[control_signal.global_index] = 0
-    stsv.values[massflow_input_temperature.global_index] = 50
-    stsv.values[electricity_from_chp_target.global_index] = 300
+    setup.stsv.values[setup.control_signal.global_index] = 0
+    setup.stsv.values[setup.massflow_input_temperature.global_index] = 50
+    setup.stsv.values[setup.electricity_target.global_index] = 300
 
     timestep = 100
 
     # Simulate
-    my_chp_system.i_simulate(timestep, stsv, False)
-    log.information(str(stsv.values))
+    setup.chp.i_simulate(timestep, setup.stsv, False)
+    log.information(str(setup.stsv.values))
 
     # Check if the delivered electricity demand got produced by chp
     #
-    assert stsv.values[my_chp_system.mass_out_channel.global_index] == 0.011
+    assert setup.stsv.values[setup.chp.mass_out_channel.global_index] == 0.011
     assert (
-        stsv.values[my_chp_system.mass_out_temp_channel.global_index]
+        setup.stsv.values[setup.chp.mass_out_temp_channel.global_index]
         == 82.6072779444372
     )
     assert (
-        stsv.values[my_chp_system.gas_demand_target_channel.global_index]
+        setup.stsv.values[setup.chp.gas_demand_target_channel.global_index]
         == 9.994428193341691e-05
     )
-    assert stsv.values[my_chp_system.el_power_channel.global_index] == 400.0
-    assert stsv.values[my_chp_system.number_of_cycles_channel.global_index] == 1
-    assert stsv.values[my_chp_system.th_power_channel.global_index] == 1500.0
+    assert setup.stsv.values[setup.chp.el_power_channel.global_index] == 400.0
+    assert setup.stsv.values[setup.chp.number_of_cycles_channel.global_index] == 1
+    assert setup.stsv.values[setup.chp.th_power_channel.global_index] == 1500.0
     assert (
-        stsv.values[my_chp_system.gas_demand_real_used_channel.global_index]
+        setup.stsv.values[setup.chp.gas_demand_real_used_channel.global_index]
         == 9.994428193341691e-05
     )
 
@@ -130,61 +145,107 @@ def test_chp_raises_value_error_for_out_of_range_control_signal() -> None:
     rejected with a specific, catchable exception rather than the bare
     ``Exception`` base class.
     """
+    setup = build_chp_system(operating_mode="heat")
 
-    seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
-
-    my_chp_system_config = advanced_fuel_cell.CHPConfig.get_default_config()
-    my_chp_system_config.operating_mode = "heat"
-
-    my_chp_system = advanced_fuel_cell.CHP(
-        config=my_chp_system_config, my_simulation_parameters=my_simulation_parameters
-    )
-
-    control_signal = cp.ComponentOutput(
-        "FakeControlSignal", "ControlSignal", lt.LoadTypes.ANY, lt.Units.PERCENT
-    )
-    massflow_input_temperature = cp.ComponentOutput(
-        "FakeMassflowInputTemperature",
-        "MassflowInputTemperature",
-        lt.LoadTypes.WATER,
-        lt.Units.CELSIUS,
-    )
-    electricity_from_chp_target = cp.ComponentOutput(
-        "FakeElectricityFromCHPTarget",
-        "ElectricityFromCHPTarget",
-        lt.LoadTypes.ELECTRICITY,
-        lt.Units.WATT,
-    )
-
-    my_chp_system.control_signal_channel.source_output = control_signal
-    my_chp_system.mass_inp_temp_channel.source_output = massflow_input_temperature
-    my_chp_system.electricity_target_channel.source_output = electricity_from_chp_target
-
-    number_of_outputs = fft.get_number_of_outputs(
-        [
-            control_signal,
-            massflow_input_temperature,
-            electricity_from_chp_target,
-            my_chp_system,
-        ]
-    )
-    stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
-
-    fft.add_global_index_of_components(
-        [
-            control_signal,
-            massflow_input_temperature,
-            electricity_from_chp_target,
-            my_chp_system,
-        ]
-    )
-
-    stsv.values[control_signal.global_index] = 1.5  # out of range (> 1)
-    stsv.values[massflow_input_temperature.global_index] = 50
-    stsv.values[electricity_from_chp_target.global_index] = 300
+    setup.stsv.values[setup.control_signal.global_index] = 1.5  # out of range (> 1)
+    setup.stsv.values[setup.massflow_input_temperature.global_index] = 50
+    setup.stsv.values[setup.electricity_target.global_index] = 300
 
     with pytest.raises(ValueError, match="control signal between 0 and 1"):
-        my_chp_system.i_simulate(100, stsv, False)
+        setup.chp.i_simulate(100, setup.stsv, False)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("target", "expected"),
+    [
+        # Below the shutdown threshold -> control signal 0.
+        (0.0, 0),
+        (29.0, 0),
+        # Static deadband [30, p_el_min * eff_el_min) -> fixed 0.4 signal.
+        (30.0, 0.4),
+        (200.0, 0.4),
+        (399.0, 0.4),
+        # Above the saturation point p_el_max * eff_el_max -> full output 1.
+        (1200.1, 1),
+        (2000.0, 1),
+    ],
+)
+def test_calculate_control_signal_branches(target: float, expected: float) -> None:
+    """calculate_control_signal returns the documented early-return values.
+
+    Covers the three guard branches (shutdown, deadband, saturation) that the
+    hoisted implementation must preserve unchanged.
+    """
+    setup = build_chp_system(operating_mode="electricity")
+    setup.stsv.values[setup.electricity_target.global_index] = target
+    assert setup.chp.calculate_control_signal(setup.stsv) == expected
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("target", [400.0, 500.0, 800.0, 1000.0, 1200.0])
+def test_calculate_control_signal_quadratic_matches_reference(target: float) -> None:
+    """The hoisted quadratic solution is bit-identical to the original formula.
+
+    The refactor only caches invariants (input lookup, p_el_max, the efficiency
+    span, the discriminant/square root, the denominator); the arithmetic and
+    its evaluation grouping are unchanged. This locks that invariant in by
+    comparing against the original un-hoisted expression for targets in the
+    modulating region [p_el_min * eff_el_min, p_el_max * eff_el_max].
+    """
+    setup = build_chp_system(operating_mode="electricity")
+    chp = setup.chp
+    setup.stsv.values[setup.electricity_target.global_index] = target
+
+    p_el_max = chp.p_el_max
+    eff_el_min = chp.eff_el_min
+    eff_el_max = chp.eff_el_max
+    d_eff = eff_el_max - eff_el_min
+
+    # Reference: the original pre-hoisting arithmetic (identical grouping).
+    discriminant = (p_el_max * eff_el_min) ** 2 + 4 * (target * p_el_max * d_eff)
+    sqrt_disc = math.sqrt(discriminant)
+    denom = 2 * p_el_max * d_eff
+    x_1 = (-p_el_max - sqrt_disc) / denom
+    x_2 = (-p_el_max + sqrt_disc) / denom
+    if 0 < x_1 < 1:
+        if 0 < x_2 < 1:
+            expected = x_2 if x_1 < x_2 else x_1
+        else:
+            expected = x_1
+    else:
+        expected = x_2
+
+    assert chp.calculate_control_signal(setup.stsv) == expected
+
+
+@pytest.mark.base
+def test_chp_state_defaults() -> None:
+    """Class CHPState initialises to zero-valued int fields when given no arguments.
+
+    The original untyped signature used ``None`` defaults for
+    ``start_timestep`` and ``cycle_number``.  These were changed to ``int``
+    defaults (0) because the fields participate in arithmetic and are
+    assigned to int counters without null checks, so ``None`` would raise
+    TypeError at runtime.  All production callers pass explicit values, but
+    CHPState is a module-level class that downstream code may instantiate
+    with no arguments, so the zero defaults must be verified.
+    """
+    state = advanced_fuel_cell.CHPState()
+    assert state.start_timestep == 0
+    assert state.electricity_output == 0.0
+    assert state.cycle_number == 0
+    assert state.activation == 0
+
+    # Positive electricity output activates the CHP.
+    active = advanced_fuel_cell.CHPState(
+        start_timestep=5, electricity_output=400.0, cycle_number=2
+    )
+    assert active.start_timestep == 5
+    assert active.electricity_output == 400.0
+    assert active.cycle_number == 2
+    assert active.activation == 1
+
+    # Negative electricity output is rejected.
+    with pytest.raises(ValueError, match="Impossible CHPState"):
+        advanced_fuel_cell.CHPState(electricity_output=-1.0)

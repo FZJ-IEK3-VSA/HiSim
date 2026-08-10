@@ -61,7 +61,7 @@ class CarBatteryConfig(ConfigBase):
 
     @classmethod
     def get_main_classname(cls):
-        """Return the full class name of the base class."""
+        """Return the full class name of the main component class."""
         return CarBattery.get_full_classname()
 
     @classmethod
@@ -215,15 +215,41 @@ class CarBattery(Component):
         self.state = self.previous_state.clone()
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
-        """Doublechecks."""
+        """No-op hook for post-convergence verification.
+
+        This component does not perform a double-check pass; the method exists
+        to satisfy the Component interface.
+
+        Args:
+            timestep: Current simulation timestep index.
+            stsv: Single-time-step values container (unused).
+        """
         pass
 
     def i_prepare_simulation(self) -> None:
-        """Prepares the simulation."""
+        """No-op hook for simulation preparation.
+
+        This component does not perform any pre-simulation setup; the method
+        exists to satisfy the Component interface.
+        """
         pass
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulates the component."""
+        """Simulate one timestep of AC-coupled EV battery charging or discharging.
+
+        When the target power is positive the bslib ACBatMod model is used to
+        compute AC/DC charging power and the resulting state of charge. When the
+        target power is negative the battery is discharged with a simple loss-free
+        model (losses are accounted for in the car consumption component) and a
+        ValueError is raised if the SOC would drop below zero.
+
+        Args:
+            timestep: Current simulation timestep index.
+            stsv: Single-time-step values container used to read inputs and write
+                outputs (AcBatteryChargingPower, DcBatteryChargingPower,
+                StateOfCharge, AcBatteryDischargingPower).
+            force_convergence: Unused by this component.
+        """
         # Parameters
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
 
@@ -251,7 +277,7 @@ class CarBattery(Component):
             if soc < 0:
                 raise ValueError(
                     "Car cannot drive, because battery is empty."
-                    + "This points towards a major problem in the battery configuration - or the consumption pattern of the car."
+                    "This points towards a major problem in the battery configuration - or the consumption pattern of the car."
                 )
             ac_charging_power_in_watt = 0.0
             dc_charging_power_in_watt = 0.0
@@ -308,7 +334,9 @@ class CarBattery(Component):
                 and output.load_type == LoadTypes.ELECTRICITY
                 and output.unit == Units.WATT
             ):
-                # take only negative values for discharging amount
+                # AcBatteryDischargingPower is non-negative: it is 0.0 while
+                # charging and a positive power (W) while discharging, so
+                # summing the full timeseries yields the total discharged energy.
                 self.battery_config.total_discharged_energy_in_kilowatthour = round(
                     KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=postprocessing_results.iloc[:, index],
@@ -385,7 +413,9 @@ class CarBattery(Component):
                 and output.load_type == LoadTypes.ELECTRICITY
                 and output.unit == Units.WATT
             ):
-                # take only negative values for discharging amount
+                # AcBatteryDischargingPower is non-negative: it is 0.0 while
+                # charging and a positive power (W) while discharging, so
+                # summing the full timeseries yields the total discharged energy.
                 self.battery_config.total_discharged_energy_in_kilowatthour = round(
                     KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=postprocessing_results.iloc[:, index],

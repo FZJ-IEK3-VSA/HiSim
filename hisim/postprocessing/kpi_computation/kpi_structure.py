@@ -56,7 +56,19 @@ class KpiTagEnumClass(Enum):
 
 @dataclass
 class KpiEntry(JSONWizard):
-    """Class for storing one kpi entry."""
+    """Class for storing one KPI entry.
+
+    Attributes:
+        name: Human-readable name of the KPI.
+        unit: Unit of the KPI value (e.g. "kWh", "EUR", "kg CO2eq").
+        value: Numeric KPI value as a float, or a string for descriptive
+            or non-numeric KPIs. May be ``None`` if not yet computed.
+        description: Optional human-readable description of the KPI.
+        tag: Optional category tag from :class:`KpiTagEnumClass` used to
+            group KPIs by component or domain.
+        name_of_source_component: Optional name of the component that
+            produced this KPI.
+    """
 
     name: str
     unit: str
@@ -67,11 +79,21 @@ class KpiEntry(JSONWizard):
 
 
 class KpiHelperClass:
-    """Class for providing some helper fucntions for calculating KPIs."""
+    """Class for providing some helper functions for calculating KPIs."""
 
     @staticmethod
     def compute_total_energy_from_power_timeseries(power_timeseries_in_watt: pd.Series, time_resolution_in_seconds: float) -> float:
-        """Computes the energy in kWh from a power timeseries in W."""
+        """Compute total energy in kWh from a power time series in watts.
+
+        Args:
+            power_timeseries_in_watt: Power values in watts sampled at a fixed
+                time resolution. An empty series yields 0.0.
+            time_resolution_in_seconds: Constant time step between samples, in
+                seconds.
+
+        Returns:
+            The total energy in kilowatt-hours as a float.
+        """
         if power_timeseries_in_watt.empty:
             return 0.0
 
@@ -79,8 +101,15 @@ class KpiHelperClass:
         return energy_in_kilowatt_hour
 
     @staticmethod
-    def calc_mean_max_min_value(list_or_pandas_series: Union[List, pd.Series]) -> Tuple[float, float, float]:
-        """Calc mean, max and min values from List or pd.Series with numpy."""
+    def compute_mean_max_min_values(list_or_pandas_series: Union[List[float], pd.Series]) -> Tuple[float, float, float]:
+        """Calculate mean, maximum, and minimum values of a numeric sequence.
+
+        Args:
+            list_or_pandas_series: A list or pandas Series of numeric values.
+
+        Returns:
+            A tuple ``(mean_value, max_value, min_value)`` of floats.
+        """
 
         # Convert the input to an ndarray once and reuse it. Passing a plain
         # ``list`` to ``np.mean``/``np.max``/``np.min`` would internally call

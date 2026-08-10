@@ -1,8 +1,13 @@
-"""Gas meter module to measure gas consumption, costs and co2 emission. """
+"""Gas meter module providing a DynamicComponent-based gas meter.
+
+The GasMeter tracks gas production and consumption per timestep, accumulates the
+running totals in GasMeterState, and supplies OPEX/CAPEX and KPI data for the
+post-processing cost and emission computation.
+"""
 
 # clean
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import ClassVar, List, Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -10,7 +15,7 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
-from hisim.component import ComponentInput, OpexCostDataClass, CapexCostDataClass
+from hisim.component import ComponentInput, ComponentOutput, OpexCostDataClass, CapexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -25,7 +30,11 @@ from hisim.postprocessing.cost_and_emission_computation.capex_computation import
 @dataclass_json
 @dataclass
 class GasMeterConfig(cp.ConfigBase):
-    """Gas Meter Config."""
+    """Configuration dataclass for the GasMeter component.
+
+    Holds the building name, gas load type (GAS or GREEN_HYDROGEN), and optional
+    CAPEX/emission parameters used by the cost computation post-processing.
+    """
 
     @classmethod
     def get_main_classname(cls) -> str:
@@ -76,19 +85,19 @@ class GasMeter(DynamicComponent):
     """
 
     # Outputs
-    GasAvailable = "GasAvailable"
-    GasFromGrid = "GasFromGrid"
-    GasConsumption = "GasConsumption"
-    GasProduction = "GasProduction"
-    CumulativeConsumption = "CumulativeConsumption"
-    CumulativeProduction = "CumulativeProduction"
+    GasAvailable: ClassVar[str] = "GasAvailable"
+    GasFromGrid: ClassVar[str] = "GasFromGrid"
+    GasConsumption: ClassVar[str] = "GasConsumption"
+    GasProduction: ClassVar[str] = "GasProduction"
+    CumulativeConsumption: ClassVar[str] = "CumulativeConsumption"
+    CumulativeProduction: ClassVar[str] = "CumulativeProduction"
 
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: GasMeterConfig,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
-    ):
+    ) -> None:
         """Initialize the component."""
         self.grid_energy_balancer_config = config
         self.name = self.grid_energy_balancer_config.name
@@ -178,7 +187,7 @@ class GasMeter(DynamicComponent):
 
     def get_default_connections_from_generic_gas_heater(
         self,
-    ):
+    ) -> List[dynamic_component.DynamicComponentConnection]:
         """Get gas heater default connections."""
 
         from hisim.components.generic_boiler import (  # pylint: disable=import-outside-toplevel
@@ -211,8 +220,10 @@ class GasMeter(DynamicComponent):
         )
         return dynamic_connections
 
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         """Writes relevant information to report."""
+        # Note: despite the name, ConfigBase.get_string_dict() returns a List[str]
+        # (one formatted "key: value" string per config field), not a dict.
         return self.grid_energy_balancer_config.get_string_dict()
 
     def i_save_state(self) -> None:
@@ -303,11 +314,11 @@ class GasMeter(DynamicComponent):
 
     def get_cost_opex(
         self,
-        all_outputs: List,
+        all_outputs: List[ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of gas costs and revenues."""
-        total_energy_from_grid_in_kwh: float
+        total_energy_from_grid_in_kwh: float = 0.0
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
                 if output.field_name == self.GasFromGrid:
@@ -338,7 +349,7 @@ class GasMeter(DynamicComponent):
 
     def get_component_kpi_entries(
         self,
-        all_outputs: List,
+        all_outputs: List[ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
@@ -415,14 +426,19 @@ class GasMeter(DynamicComponent):
 
 @dataclass
 class GasMeterState:
-    """GasMeterState class."""
+    """Mutable state for the GasMeter, tracking cumulative gas production and consumption.
+
+    Attributes:
+        cumulative_production_in_watt_hour: Total gas produced across all timesteps.
+        cumulative_consumption_in_watt_hour: Total gas consumed across all timesteps.
+    """
 
     cumulative_production_in_watt_hour: float
     cumulative_consumption_in_watt_hour: float
 
     def self_copy(
         self,
-    ):
+    ) -> "GasMeterState":
         """Copy the GasMeterState."""
         return GasMeterState(
             self.cumulative_production_in_watt_hour,

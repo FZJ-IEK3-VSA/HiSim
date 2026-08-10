@@ -105,11 +105,9 @@ def test_building_scalability() -> None:
 
     fft.add_global_index_of_components([my_occupancy, my_weather, my_residence])
 
-    log.information("Seconds per Timestep: " + str(seconds_per_timestep))
+    log.information(f"Seconds per Timestep: {seconds_per_timestep}")
     log.information(
-        "Absolute conditioned floor area without scaling "
-        + str(absolute_conditioned_floor_area_in_m2)
-        + "\n"
+        f"Absolute conditioned floor area without scaling {absolute_conditioned_floor_area_in_m2}\n"
     )
 
     my_residence.seconds_per_timestep = seconds_per_timestep
@@ -129,7 +127,7 @@ def test_building_scalability() -> None:
 
     window_areas_without_scaling = my_residence.my_building_information.scaled_window_areas_in_m2
 
-    log.information(str(window_areas_without_scaling))
+    log.information(f"{window_areas_without_scaling}")
 
     # check building test with different absolute conditioned floor areas
     scaling_factors = [1, 5, 12]
@@ -138,10 +136,7 @@ def test_building_scalability() -> None:
             factor * absolute_conditioned_floor_area_in_m2
         )
         log.information(
-            "Absolute conditioned floor area "
-            + str(factor)
-            + " times upscaled: "
-            + str(absolute_conditioned_floor_area_in_m2_scaled)
+            f"Absolute conditioned floor area {factor} times upscaled: {absolute_conditioned_floor_area_in_m2_scaled}"
         )
         my_residence_config.absolute_conditioned_floor_area_in_m2 = (
             absolute_conditioned_floor_area_in_m2_scaled
@@ -170,18 +165,10 @@ def test_building_scalability() -> None:
             x * scaling_factor_for_window_areas for x in window_areas_without_scaling
         ]
         log.information(
-            "Opaque surface areas "
-            + str(factor)
-            + " times upscaled: "
-            + str(opaque_surfaces_with_scaling)
-            + "\n"
+            f"Opaque surface areas {factor} times upscaled: {opaque_surfaces_with_scaling}\n"
         )
         log.information(
-            "window areas "
-            + str(factor)
-            + " times upscaled: "
-            + str(window_areas_with_scaling)
-            + "\n"
+            f"window areas {factor} times upscaled: {window_areas_with_scaling}\n"
         )
 
         # test if opaque envelope surface areas of building scale with conditioned floor area

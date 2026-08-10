@@ -34,7 +34,7 @@ from hisim import log
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../system_setups/household_for_test_fuel_meter.py"
+PATH: str = "../system_setups/household_for_test_fuel_meter.py"
 
 
 @utils.measure_execution_time
@@ -60,14 +60,14 @@ def test_house(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60 * 60
+    timestep_duration_in_s = 60 * 60  # duration of one timestep in seconds
 
     # =========================================================================================================================================================
     # Build Components
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.one_day_only(year=year, seconds_per_timestep=timestep_duration_in_s)
 
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
@@ -130,7 +130,7 @@ def test_house(
     )
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+        heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,
@@ -189,7 +189,7 @@ def test_house(
         config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
 
-    # Build heating Meter
+    # Build Fuel Meter
     my_fuel_meter_config = fuel_meter.FuelMeterConfig.get_fuel_meter_default_config(
         fuel_loadtype=my_oil_heater_config.energy_carrier,
         heating_value_of_fuel_in_kwh_per_liter=my_oil_heater.heating_value_of_fuel_in_kwh_per_liter,
@@ -241,21 +241,17 @@ def test_house(
     co2_footprint_due_to_heating_use_in_kg = jsondata["Fuel Meter"]["OPEX - CO2 Footprint"].get("value")
 
     log.information(
-        f"Total {my_fuel_meter_config.fuel_loadtype.value} consumption [kWh] "
-        + str(oil_consumption_in_kilowatt_hour)
+        f"Total {my_fuel_meter_config.fuel_loadtype.value} consumption [kWh] {oil_consumption_in_kilowatt_hour}"
     )
 
     log.information(
-        f"Total {my_fuel_meter_config.fuel_loadtype.value} consumption measured by fuel meter [kWh] "
-        + str(heat_consumption_in_kilowatt_hour)
+        f"Total {my_fuel_meter_config.fuel_loadtype.value} consumption measured by fuel meter [kWh] {heat_consumption_in_kilowatt_hour}"
     )
     log.information(
-        f"Opex costs for total {my_fuel_meter_config.fuel_loadtype.value} consumption [€] "
-        + str(opex_costs_for_heating_in_euro)
+        f"Opex costs for total {my_fuel_meter_config.fuel_loadtype.value} consumption [€] {opex_costs_for_heating_in_euro}"
     )
     log.information(
-        f"CO2 footprint for total {my_fuel_meter_config.fuel_loadtype.value} consumption [kg] "
-        + str(co2_footprint_due_to_heating_use_in_kg)
+        f"CO2 footprint for total {my_fuel_meter_config.fuel_loadtype.value} consumption [kg] {co2_footprint_due_to_heating_use_in_kg}"
     )
 
     # test and compare with relative error of 5%

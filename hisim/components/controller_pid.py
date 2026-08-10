@@ -2,7 +2,6 @@
 
 # clean
 
-from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import control
@@ -33,7 +32,7 @@ class PIDControllerConfig(cp.ConfigBase):
     """Configuration of the PID Controller."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return PIDController.get_full_classname()
 
@@ -44,7 +43,7 @@ class PIDControllerConfig(cp.ConfigBase):
     def get_default_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "PIDControllerConfig":
         """Gets a default pid controller."""
         return PIDControllerConfig(
             building_name=building_name,
@@ -63,7 +62,7 @@ class PIDState:
         integrator_d4: float,
         integrator_d5: float,
         manipulated_variable: float,
-    ):
+    ) -> None:
         """Initializes the state of the PID."""
         self.integrator: float = integrator
         self.derivator: float = derivator
@@ -72,7 +71,7 @@ class PIDState:
         self.integrator_d_five: float = integrator_d5
         self.manipulated_variable: float = manipulated_variable
 
-    def clone(self):
+    def clone(self) -> "PIDState":
         """Storing last timestep errors."""
         return PIDState(
             self.integrator,
@@ -84,6 +83,240 @@ class PIDState:
         )
 
 
+class BuildingThermalModel5R1C:
+    """5R1C building thermal model used to identify the PID controller tuning.
+
+    Owns the 5R1C thermal-transmission coefficients and the building thermal
+    capacity, builds the single-state state-space representation of the
+    thermal-mass node, and derives the process gain, time constant, and
+    disturbance gains consumed by the PI controller and its feed-forward path.
+
+    The coefficients are read from the singleton simulation repository, which
+    must be pre-populated (e.g. by the building component) before a model is
+    constructed.
+    """
+
+    def __init__(
+        self,
+        h_tr_w: float,
+        h_tr_ms: float,
+        h_tr_em: float,
+        h_ve_adj: float,
+        h_tr_is: float,
+        c_m: float,
+        seconds_per_timestep: float,
+    ) -> None:
+        """Initializes the 5R1C thermal model and identifies its open-loop gains."""
+        self.h_tr_w: float = h_tr_w
+        self.h_tr_ms: float = h_tr_ms
+        self.h_tr_em: float = h_tr_em
+        self.h_ve_adj: float = h_ve_adj
+        self.h_tr_is: float = h_tr_is
+        self.c_m: float = c_m
+        self.seconds_per_timestep: float = seconds_per_timestep
+        # Derived state-space and open-loop quantities (populated by identify()).
+        self.transition_matrix: np.ndarray
+        self.selection_matrix: np.ndarray
+        self.process_gain: float
+        self.t_out_gain: float
+        self.phi_ia_gain: float
+        self.phi_st_gain: float
+        self.phi_m_gain: float
+        self.time_constant: float
+        self.identify()
+
+    @classmethod
+    def from_sim_repository(cls, seconds_per_timestep: float) -> "BuildingThermalModel5R1C":
+        """Reads the 5R1C thermal coefficients from the singleton simulation repository."""
+        repo = SingletonSimRepository()
+        return cls(
+            h_tr_w=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING),
+            h_tr_ms=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS),
+            h_tr_em=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM),
+            h_ve_adj=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION),
+            h_tr_is=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR),
+            c_m=repo.get_entry(key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE),
+            seconds_per_timestep=seconds_per_timestep,
+        )
+
+    def _build_state_space(self) -> tuple[np.ndarray, np.ndarray]:
+        """Builds the single-state 5R1C state-space matrices of the thermal-mass node.
+
+        Returns the transition (state) matrix and the selection (input) matrix.
+        The 0.5 scaling applied to both matrices is a deliberate factor baked
+        into the original gain calculation and must be preserved when the
+        thermal model parameters or timestep change.
+        """
+        seconds_per_timestep = self.seconds_per_timestep
+        x_value = ((self.h_tr_w + self.h_tr_ms) * (self.h_ve_adj + self.h_tr_is)) + (self.h_ve_adj * self.h_tr_is)
+        a11 = (((self.h_tr_ms**2) * (self.h_tr_is + self.h_ve_adj) / x_value) - self.h_tr_ms - self.h_tr_em) / (
+            self.c_m / seconds_per_timestep
+        )  # ((self.c_m_ref * self.A_f) * 3600)
+
+        b11 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * x_value)
+
+        b_d11 = ((self.h_tr_ms * self.h_tr_w * (self.h_tr_is + self.h_ve_adj) / x_value) + self.h_tr_em) / (
+            self.c_m / seconds_per_timestep
+        )
+        b_d12 = (self.h_tr_ms * self.h_tr_is * self.h_ve_adj) / ((self.c_m / seconds_per_timestep) * x_value)
+        b_d13 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * x_value)
+        b_d14 = (self.h_tr_ms * (self.h_tr_is + self.h_ve_adj)) / ((self.c_m / seconds_per_timestep) * x_value)
+        b_d15 = 1 / (self.c_m / seconds_per_timestep)
+
+        """ #comment out due to pylint warning W0612 (unused-variable)
+        c11=(self.h_tr_ms*self.h_tr_is)/X
+        c21=(self.h_tr_ms*(self.h_tr_is+self.h_ve_adj))/X
+
+        d11=(self.h_tr_ms+self.h_tr_w+self.h_tr_is)/X
+        d21=self.h_tr_is/X
+
+        d_d11=(self.h_tr_w*self.h_tr_is)/X
+        d_d12=(self.h_tr_ms+self.h_tr_is+self.h_tr_w)*self.h_ve_adj/X
+        d_d13=(self.h_tr_ms+self.h_tr_is+self.h_tr_w)/X
+        d_d14=self.h_tr_is/X
+        d_d15=0
+        d_d21=(self.h_tr_w*(self.h_tr_is+self.h_ve_adj))/X
+        d_d22=(self.h_tr_is*self.h_ve_adj)/X
+        d_d23=self.h_tr_is/X
+        d_d24=(self.h_tr_is+self.h_ve_adj)/X
+        d_d25=0
+        """
+
+        transition_matrix = np.array([[a11]])  # transition matrix
+        selection_matrix = np.array([[b11, b_d11, b_d12, b_d13, b_d14, b_d15]])  # selection matrix
+        # C=np.matrix([[c11],[c21]]) #design matrix #comment out due to pylint warning W0612 (unused-variable)
+        # D=np.matrix([[d11,d_d11, d_d12,d_d13,d_d14,d_d15],[d21,d_d21, d_d22,d_d23,d_d24,d_d25]]) #comment out due to pylint warning W0612 (unused-variable)
+
+        transition_matrix = transition_matrix * 0.5
+        selection_matrix = selection_matrix * 0.5
+
+        return transition_matrix, selection_matrix
+
+    def _compute_open_loop_response(
+        self, transition_matrix: np.ndarray, selection_matrix: np.ndarray
+    ) -> float:
+        """Simulates the open-loop step response and returns the time constant.
+
+        Converts the single-state state-space model into a transfer function,
+        drives it with a step input, and extracts the time constant as the time
+        at which the response reaches 63.2% of its steady-state value.
+        """
+        """ time scale and arbitrary input signal to observe the open loop repsone """
+
+        # choosing a sufficiently long interval
+        time_interval_ns = 20000
+        time_scale = np.linspace(0, time_interval_ns, time_interval_ns + 1)
+        # input step signal
+        input_step_signal = np.zeros(time_interval_ns + 1)
+        for i in range(time_interval_ns):
+            if i == 0:
+                input_step_signal = 0 * np.ones(time_interval_ns + 1)
+            else:
+                input_step_signal = 22 * np.ones(time_interval_ns + 1)
+
+        """ Converting the state space model into transfer function.
+        We have one state variable wich is the thermal mass temperature and 6 inputs...
+        Thermal power delivered is the only controlled input, rest are disturbances.
+        Therefore, the transfer function below shows the change in T_m in reponse the constrolled input (thermal power)
+        """
+        # transfer function:
+        tf_tm = control.TransferFunction([selection_matrix[0, 0]], [1, -(transition_matrix[0, 0])])
+
+        # open loop step response:
+        # timestep_tm_o, tm_o = control.forced_response(tf_tm, t, u)
+        _, tm_o = control.forced_response(tf_tm, time_scale, input_step_signal)
+        # save 'timestep_tm_o' in dummy variable due to pylint warning W0612 (unused-variable)
+        # since function 'control.forced_response' can only be used with a return value with a tuple of length 2
+        # dummy1 = timestep_tm_o
+
+        # steady state value:
+        tm_steady_state = tm_o[time_interval_ns]
+
+        # time constant "value at 63.2%" :
+        t_m_initial = 0
+        tm_at_tau = t_m_initial - 0.632 * (t_m_initial - tm_steady_state)
+
+        # find time constant tau_p
+
+        def find_nearest(array: np.ndarray, value: float) -> float:
+            array = np.asarray(array)
+            idx = (np.abs(array - value)).argmin()
+            return float(array[idx])
+
+        tm_at_tau_tf_tm = find_nearest(tm_o, tm_at_tau)
+        time_constant_tm = 0
+        for i in range(time_interval_ns):
+            if tm_o[i] == tm_at_tau_tf_tm:
+                time_constant_tm = i
+
+        return time_constant_tm
+
+    def identify(self) -> None:
+        """Builds the state-space model and derives the open-loop gains and time constant."""
+        self.transition_matrix, self.selection_matrix = self._build_state_space()
+
+        """ Gains of the uncontrolled systems, used for feedforward implementation """
+
+        # Tm(s)/Pth(s)= K/Ts+1
+        self.process_gain = self.selection_matrix[0, 0] / -self.transition_matrix[0, 0]
+        # Tm(s)/Tout(s)= K/Ts+1
+        self.t_out_gain = self.selection_matrix[0, 1] / -self.transition_matrix[0, 0]
+        # Tm(s)/phi_ia(s)= K/Ts+1
+        self.phi_ia_gain = self.selection_matrix[0, 3] / -self.transition_matrix[0, 0]
+        # Tm(s)/phi_st(s)= K/Ts+1
+        self.phi_st_gain = self.selection_matrix[0, 4] / -self.transition_matrix[0, 0]
+        # Tm(s)/phi_m(s)= K/Ts+1
+        self.phi_m_gain = self.selection_matrix[0, 5] / -self.transition_matrix[0, 0]
+
+        self.time_constant = self._compute_open_loop_response(self.transition_matrix, self.selection_matrix)
+
+
+def compute_pi_gains(thermal_model: BuildingThermalModel5R1C) -> tuple[float, float, float]:
+    """Computes PI controller gains via pole placement from the identified thermal model.
+
+    The derivative gain is zero, so the controller is PI only. The settling
+    time and overshoot assumptions translate the identified open-loop time
+    constant into the desired closed-loop pole locations.
+
+    The following description is based on slides 12 to 14 in the file:
+    https://fac.ksu.edu.sa/sites/default/files/control_design_by_pole_placement.pdf
+
+    settling time (Ts) = 4/ (damping ratio * natural frequency (omega_n))
+    damping frequency (omega_d)=natural frequency * sqrt(1-damping ratio^2)
+
+    desired pole = (- natural frequency * damping ratio) +/-  j (natural frequency * sqrt(1-damping ratio^2))
+
+    Closed loop transfer function =
+        (transfer function plant * transfer function controller ) / (1+(transfer function plant * transfer function controller ))
+
+    simplified Closed loop transfer function of a first order system 1/ms+b= (Kp s + Ki) / ms^2+(b+Kp)s+Ki
+
+    denominator = s^2 + (2 * damping ratio * natural frequency ) s + (natural frequency)^2
+    """
+    time_constant_tm = thermal_model.time_constant
+    selection_matrix = thermal_model.selection_matrix
+    transition_matrix = thermal_model.transition_matrix
+
+    # Few assumptions
+    settling_time = time_constant_tm * 0.3
+    over_shooting = 20
+
+    damping_ratio = -np.log(over_shooting / 100) / (np.pi**2 + (np.log(over_shooting / 100)) ** 2) ** (1 / 2)
+    natural_frequency = 4 / (settling_time * damping_ratio)
+    # damping_frequency=natural_frequency * np.sqrt(1-damping_ratio**2) #comment out due to pylint warning W0612 (unused-variable)
+
+    m_value = 1 / selection_matrix[0, 0]
+    b_value = -transition_matrix[0, 0] / selection_matrix[0, 0]
+
+    integral_gain = natural_frequency**2 * m_value
+    proportional_gain = (natural_frequency * damping_ratio * 2 * m_value) - b_value
+    derivative_gain = 0
+
+    log.information(f"gain Ki= {integral_gain}")
+    log.information(f"gain Kp= {proportional_gain}")
+    return proportional_gain, integral_gain, derivative_gain
+
+
 class PIDController(cp.Component):
     """PID Controller class.
 
@@ -92,22 +325,22 @@ class PIDController(cp.Component):
     """
 
     # Inputs
-    TemperatureMean = "Residence Temperature"  # uncontrolled temperature
-    TemperatureMeanPrevious = "TemperatureMeanPrevious"
-    TemperatureAir = "TemperatureAir"
-    HeatFluxWallNode = "HeatFluxWallNode"
-    HeatFluxThermalMassNode = "HeatFluxThermalMassNode"
+    TemperatureMean: str = "Residence Temperature"  # uncontrolled temperature
+    TemperatureMeanPrevious: str = "TemperatureMeanPrevious"
+    TemperatureAir: str = "TemperatureAir"
+    HeatFluxWallNode: str = "HeatFluxWallNode"
+    HeatFluxThermalMassNode: str = "HeatFluxThermalMassNode"
 
     # ouput
-    ThermalPowerPID = "ThermalPowerPID"
-    ThermalEnergyDelivered = "ThermalEnergyDelivered"
-    error_pvalue = "error_p_value"
-    error_dvalue = "error_d_value"
-    error_ivalue = "error_i_value"
-    error = "error_value"
-    derivator = "derivator"
-    integrator = "integrator"
-    FeedForwardSignal = "FeedForwardSignal"
+    ThermalPowerPID: str = "ThermalPowerPID"
+    ThermalEnergyDelivered: str = "ThermalEnergyDelivered"
+    error_pvalue: str = "error_p_value"
+    error_dvalue: str = "error_d_value"
+    error_ivalue: str = "error_i_value"
+    error: str = "error_value"
+    derivator: str = "derivator"
+    integrator: str = "integrator"
+    FeedForwardSignal: str = "FeedForwardSignal"
 
     def __init__(
         self,
@@ -126,16 +359,19 @@ class PIDController(cp.Component):
             my_display_config=my_display_config,
         )
 
-        self.build()
-        proportional_gain, integral_gain, derivative_gain = self.pid_tuning()
+        # Identify the building thermal model and tune the PI controller from it.
+        self.thermal_model: BuildingThermalModel5R1C = BuildingThermalModel5R1C.from_sim_repository(
+            self.my_simulation_parameters.seconds_per_timestep
+        )
+        proportional_gain, integral_gain, derivative_gain = compute_pi_gains(self.thermal_model)
         # --------------------------------------------------
         # control saturation
-        self.mv_min = 0
-        self.mv_max = 5000
-        self.integral_gain = integral_gain
-        self.proportional_gain = proportional_gain
-        self.derivative_gain = derivative_gain
-        self.state = PIDState(
+        self.mv_min: float = 0
+        self.mv_max: float = 5000
+        self.integral_gain: float = integral_gain
+        self.proportional_gain: float = proportional_gain
+        self.derivative_gain: float = derivative_gain
+        self.state: PIDState = PIDState(
             integrator=0,
             integrator_d3=0,
             integrator_d4=0,
@@ -143,7 +379,7 @@ class PIDController(cp.Component):
             derivator=0,
             manipulated_variable=0,
         )
-        self.previous_state = self.state.clone()
+        self.previous_state: PIDState = self.state.clone()
 
         self.temperature_mean_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -226,7 +462,7 @@ class PIDController(cp.Component):
             output_description=f"here a description for PV {self.FeedForwardSignal} will follow.",
         )
 
-    def get_building_default_connections(self):
+    def get_building_default_connections(self) -> list[cp.ComponentConnection]:
         """Get default inputs from the building component."""
 
         connections = []
@@ -259,6 +495,7 @@ class PIDController(cp.Component):
         """Prepare the simulation."""
         pass
 
+<<<<<<< HEAD
     def build(self):
         """For calculating internal things and preparing the simulation."""
         """ getting building physical properties for state space model """
@@ -276,10 +513,13 @@ class PIDController(cp.Component):
         self.c_m = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE)
 
     def i_save_state(self):
+=======
+    def i_save_state(self) -> None:
+>>>>>>> e2033174cc7b89c411056eb6ce5f566a2ddcdac4
         """Saves the internal state at the beginning of each timestep."""
         self.previous_state = self.state.clone()
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         """Restores the internal state after each iteration."""
         self.state = self.previous_state.clone()
 
@@ -287,7 +527,7 @@ class PIDController(cp.Component):
         """Double check results after iteration."""
         pass
 
-    def write_to_report(self):
+    def write_to_report(self) -> list[str]:
         """Logs the most important config stuff to the report."""
         lines = []
         lines.append("PID Controller")
@@ -356,165 +596,19 @@ class PIDController(cp.Component):
         stsv.set_output_value(self.thermal_power_channel, manipulated_variable)
         stsv.set_output_value(self.feed_forward_signal_channel, feed_forward_signal)
 
-    def feedforward(self, phi_st, phi_m):
-        """The following gains are computed using the state space model in the function PIDtuning()."""
-        process_gain: float = self.process_gain
-        phi_st_gain: float = self.phi_st_gain
-        phi_m_gain: float = self.phi_m_gain
+    def feedforward(self, phi_st: float, phi_m: float) -> float:
+        """Computes the feed-forward disturbance compensation signal.
+
+        The gains are derived from the 5R1C state-space model identified by
+        :class:`BuildingThermalModel5R1C`.
+        """
+        process_gain: float = self.thermal_model.process_gain
+        phi_st_gain: float = self.thermal_model.phi_st_gain
+        phi_m_gain: float = self.thermal_model.phi_m_gain
 
         feed_forward_signal = -((phi_st_gain * phi_st) + (phi_m_gain * phi_m)) / process_gain
 
         return feed_forward_signal
-
-    def pid_tuning(self) -> tuple[float, float, float]:
-        """State space model of a building with 5R1C configuration.
-
-        The model is used to:
-            1. analyze open loop response,
-            2. get system time constant,
-            3. get steady state value,
-        given these data one could find an acceptable tuning of a PI controller.
-        """
-        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
-        x_value = ((self.h_tr_w + self.h_tr_ms) * (self.h_ve_adj + self.h_tr_is)) + (self.h_ve_adj * self.h_tr_is)
-        a11 = (((self.h_tr_ms**2) * (self.h_tr_is + self.h_ve_adj) / x_value) - self.h_tr_ms - self.h_tr_em) / (
-            self.c_m / seconds_per_timestep
-        )  # ((self.c_m_ref * self.A_f) * 3600)
-
-        b11 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * x_value)
-
-        b_d11 = ((self.h_tr_ms * self.h_tr_w * (self.h_tr_is + self.h_ve_adj) / x_value) + self.h_tr_em) / (
-            self.c_m / seconds_per_timestep
-        )
-        b_d12 = (self.h_tr_ms * self.h_tr_is * self.h_ve_adj) / ((self.c_m / seconds_per_timestep) * x_value)
-        b_d13 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * x_value)
-        b_d14 = (self.h_tr_ms * (self.h_tr_is + self.h_ve_adj)) / ((self.c_m / seconds_per_timestep) * x_value)
-        b_d15 = 1 / (self.c_m / seconds_per_timestep)
-
-        """ #comment out due to pylint warning W0612 (unused-variable)
-        c11=(self.h_tr_ms*self.h_tr_is)/X
-        c21=(self.h_tr_ms*(self.h_tr_is+self.h_ve_adj))/X
-
-        d11=(self.h_tr_ms+self.h_tr_w+self.h_tr_is)/X
-        d21=self.h_tr_is/X
-
-        d_d11=(self.h_tr_w*self.h_tr_is)/X
-        d_d12=(self.h_tr_ms+self.h_tr_is+self.h_tr_w)*self.h_ve_adj/X
-        d_d13=(self.h_tr_ms+self.h_tr_is+self.h_tr_w)/X
-        d_d14=self.h_tr_is/X
-        d_d15=0
-        d_d21=(self.h_tr_w*(self.h_tr_is+self.h_ve_adj))/X
-        d_d22=(self.h_tr_is*self.h_ve_adj)/X
-        d_d23=self.h_tr_is/X
-        d_d24=(self.h_tr_is+self.h_ve_adj)/X
-        d_d25=0
-        """
-
-        transition_matrix = np.array([[a11]])  # transition matrix
-        selection_matrix = np.array([[b11, b_d11, b_d12, b_d13, b_d14, b_d15]])  # selection matrix
-        # C=np.matrix([[c11],[c21]]) #design matrix #comment out due to pylint warning W0612 (unused-variable)
-        # D=np.matrix([[d11,d_d11, d_d12,d_d13,d_d14,d_d15],[d21,d_d21, d_d22,d_d23,d_d24,d_d25]]) #comment out due to pylint warning W0612 (unused-variable)
-
-        transition_matrix = transition_matrix * 0.5
-        selection_matrix = selection_matrix * 0.5
-
-        """ Gains of the uncontrolled systems, used for feedforward implementation """
-
-        # Tm(s)/Pth(s)= K/Ts+1
-        self.process_gain = selection_matrix[0, 0] / -transition_matrix[0, 0]
-        # Tm(s)/Tout(s)= K/Ts+1
-        self.t_out_gain = selection_matrix[0, 1] / -transition_matrix[0, 0]
-        # Tm(s)/phi_ia(s)= K/Ts+1
-        self.phi_ia_gain = selection_matrix[0, 3] / -transition_matrix[0, 0]
-        # Tm(s)/phi_st(s)= K/Ts+1
-        self.phi_st_gain = selection_matrix[0, 4] / -transition_matrix[0, 0]
-        # Tm(s)/phi_m(s)= K/Ts+1
-        self.phi_m_gain = selection_matrix[0, 5] / -transition_matrix[0, 0]
-
-        """ time scale and arbitrary input signal to observe the open loop repsone """
-
-        # choosing a sufficiently long interval
-        time_interval_ns = 20000
-        time_scale = np.linspace(0, time_interval_ns, time_interval_ns + 1)
-        # input step signal
-        input_step_signal = np.zeros(time_interval_ns + 1)
-        for i in range(time_interval_ns):
-            if i == 0:
-                input_step_signal = 0 * np.ones(time_interval_ns + 1)
-            else:
-                input_step_signal = 22 * np.ones(time_interval_ns + 1)
-
-        """ Converting the state space model into transfer function.
-        We have one state variable wich is the thermal mass temperature and 6 inputs...
-        Thermal power delivered is the only controlled input, rest are disturbances.
-        Therefore, the transfer function below shows the change in T_m in reponse the constrolled input (thermal power)
-        """
-        # transfer function:
-        tf_tm = control.TransferFunction([selection_matrix[0, 0]], [1, -(transition_matrix[0, 0])])
-
-        # open loop step response:
-        # timestep_tm_o, tm_o = control.forced_response(tf_tm, t, u)
-        _, tm_o = control.forced_response(tf_tm, time_scale, input_step_signal)
-        # save 'timestep_tm_o' in dummy variable due to pylint warning W0612 (unused-variable)
-        # since function 'control.forced_response' can only be used with a return value with a tuple of length 2
-        # dummy1 = timestep_tm_o
-
-        # steady state value:
-        tm_steady_state = tm_o[time_interval_ns]
-
-        # time constant "value at 63.2%" :
-        t_m_initial = 0
-        tm_at_tau = t_m_initial - 0.632 * (t_m_initial - tm_steady_state)
-
-        # find time constant tau_p
-
-        def find_nearest(array, value):
-            array = np.asarray(array)
-            idx = (np.abs(array - value)).argmin()
-            return array[idx]
-
-        tm_at_tau_tf_tm = find_nearest(tm_o, tm_at_tau)
-        for i in range(time_interval_ns):
-            if tm_o[i] == tm_at_tau_tf_tm:
-                time_constant_tm = i
-
-        """ PI Controller tuning with Pole Placement for controlling t_m:
-
-
-        The following description is based on slides 12 to 14 in the file: https://fac.ksu.edu.sa/sites/default/files/control_design_by_pole_placement.pdf
-
-        settling time (Ts) = 4/ (damping ratio * natural frequency (omega_n))
-        damping frequency (omega_d)=natural frequency * sqrt(1-damping ratio^2)
-
-        desired pole = (- natural frequency * damping ratio) +/-  j (natural frequency * sqrt(1-damping ratio^2))
-
-        Closed loop transfer function =
-            (transfer function plant * transfer function controller ) / (1+(transfer function plant * transfer function controller ))
-
-        simplified Closed loop transfer function of a first order system 1/ms+b= (Kp s + Ki) / ms^2+(b+Kp)s+Ki
-
-        denominator = s^2 + (2 * damping ratio * natural frequency ) s + (natural frequency)^2
-
-        """
-
-        # Few assumptions
-        settling_time = time_constant_tm * 0.3
-        over_shooting = 20
-
-        damping_ratio = -np.log(over_shooting / 100) / (np.pi**2 + (np.log(over_shooting / 100)) ** 2) ** (1 / 2)
-        natural_frequency = 4 / (settling_time * damping_ratio)
-        # damping_frequency=natural_frequency * np.sqrt(1-damping_ratio**2) #comment out due to pylint warning W0612 (unused-variable)
-
-        m_value = 1 / selection_matrix[0, 0]
-        b_value = -transition_matrix[0, 0] / selection_matrix[0, 0]
-
-        integral_gain = natural_frequency**2 * m_value
-        proportional_gain = (natural_frequency * damping_ratio * 2 * m_value) - b_value
-        derivative_gain = 0
-
-        log.information(f"gain Ki= {integral_gain}")
-        log.information(f"gain Kp= {proportional_gain}")
-        return proportional_gain, integral_gain, derivative_gain
 
     def determine_conditions(self, current_temperature: float, set_point: float) -> str:
         """For determining heating and cooling mode and implementing a dead zone. Currently disabled."""

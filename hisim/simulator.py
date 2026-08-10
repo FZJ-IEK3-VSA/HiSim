@@ -32,7 +32,11 @@ __status__ = "production"
 
 class Simulator:
 
-    """Core class of HiSim: Runs the main loop."""
+    """Core class of HiSim that orchestrates the simulation lifecycle.
+
+    Manages component registration, input/output connections, timestep iteration
+    with convergence checking, and post-processing of results.
+    """
 
     @utils.measure_execution_time
     def __init__(
@@ -44,7 +48,17 @@ class Simulator:
         my_module_config: Optional[str] = None,
         force_log_connections: bool = False,
     ) -> None:
-        """Initializes the simulator class and creates the result directory."""
+        """Initializes the simulator with module path, parameters, and setup config.
+
+        Args:
+            module_directory: Path to the directory containing the simulation module.
+            module_filename: Filename of the simulation module.
+            my_simulation_parameters: Simulation parameters controlling timesteps,
+                duration, etc. May be None if set later via set_simulation_parameter.
+            setup_function: Name of the setup function to call within the module.
+            my_module_config: Optional module configuration identifier.
+            force_log_connections: If True, forces logging of component connections.
+        """
 
         # When set, the simulation parameters used for this run always log component
         # connections, so component_connections.json is written for post-processing/
@@ -68,8 +82,12 @@ class Simulator:
         self.iteration_logging_path: str = ""
         self.config_dictionary: Dict[str, Any] = {}
 
-    def set_simulation_parameters(self, my_simulation_parameters: Optional[SimulationParameters]) -> None:
-        """Sets the simulation parameters and the logging level at the same time."""
+    def set_simulation_parameters(self, my_simulation_parameters: SimulationParameters) -> None:
+        """Sets the simulation parameters and the logging level at the same time.
+
+        Args:
+            my_simulation_parameters: The simulation parameters to use for this run.
+        """
         self._simulation_parameters = my_simulation_parameters
         if self._simulation_parameters is not None:
             if self._force_log_connections:
@@ -77,7 +95,11 @@ class Simulator:
             log.logger.logging_level = self._simulation_parameters.logging_level
 
     def get_simulation_parameters(self) -> SimulationParameters:
-        """Returns the simulation parameters for exporting them to JSON."""
+        """Returns the simulation parameters for exporting them to JSON.
+
+        Returns:
+            The SimulationParameters instance used by this simulator.
+        """
         return self._simulation_parameters
 
     def add_component(
@@ -86,7 +108,17 @@ class Simulator:
         is_cachable: bool = False,
         connect_automatically: bool = False,
     ) -> None:
-        """Adds component to simulator and wraps it up the output in the register."""
+        """Adds a component to the simulator and registers its outputs.
+
+        Args:
+            component: The component instance to add.
+            is_cachable: Whether the component's results can be cached.
+            connect_automatically: Whether to attempt automatic default connections.
+
+        Raises:
+            ValueError: If simulation parameters are not initialized or a duplicate
+                component name is added.
+        """
         if self._simulation_parameters is None:
             raise ValueError("Simulation Parameters were not initialized")
         # ensure result directory exists before any connect_input calls log to it
@@ -100,7 +132,7 @@ class Simulator:
         wrap.register_component_outputs(self.all_outputs, wrapped_components_so_far=self.wrapped_components)
         self.wrapped_components.append(wrap)
         if component.component_name in self.config_dictionary:
-            raise ValueError("duplicate component name : " + component.component_name)
+            raise ValueError(f"duplicate component name : {component.component_name}")
         self.config_dictionary[component.component_name] = component.config
 
     @utils.measure_execution_time
@@ -111,7 +143,13 @@ class Simulator:
 
     @utils.measure_execution_time
     def prepare_calculation(self) -> None:
-        """Connects the inputs from every component to the corresponding outputs."""
+        """Prepares all components for the simulation run.
+
+        For each wrapped component, if automatic connection is enabled, attempts to
+        connect it to matching source components via default connections. Then calls
+        `prepare_calculation` on every wrapped component so they can initialise
+        internal state before the timestep loop begins.
+        """
         for wrapped_component in self.wrapped_components:
             # check if component should be connected to default connections automatically
             if wrapped_component.connect_automatically is True:
@@ -179,7 +217,7 @@ class Simulator:
                 force_convergence = True
             if iterative_tries > 100:
                 list_of_changed_values = stsv.get_differences_for_error_msg(previous_values, self.all_outputs)
-                raise ValueError("More than 100 tries in time step " + str(timestep) + "\n" + list_of_changed_values)
+                raise ValueError(f"More than 100 tries in time step {timestep}\n{list_of_changed_values}")
             # Copies actual values to previous variable
             previous_values.copy_values_from_other(stsv)
             iterative_tries += 1
@@ -189,7 +227,14 @@ class Simulator:
         return (stsv, iterative_tries, force_convergence)
 
     def prepare_simulation_directory(self):
-        """Prepares the simulation directory. Determines the filename if nothing is set."""
+        """Prepares the simulation directory, creating it if necessary.
+
+        If no result directory is set, uses one from ResultPathProviderSingleton or
+        builds a flat result path.
+
+        Raises:
+            ValueError: If the result path provider does not return a directory.
+        """
 
         if (
             self._simulation_parameters.result_directory is None
@@ -202,9 +247,7 @@ class Simulator:
             if result_directory is not None:
                 self._simulation_parameters.result_directory = result_directory
                 log.information(
-                    "Using result directory: "
-                    + self._simulation_parameters.result_directory
-                    + " which is set manually."
+                    f"Using result directory: {self._simulation_parameters.result_directory} which is set manually."
                 )
             else:
                 # if not, build a flat result path itself
@@ -234,7 +277,12 @@ class Simulator:
     # @profile
     # @utils.measure_execution_time
     def run_all_timesteps(self) -> None:
-        """Performs all the timesteps of the simulation and saves the results in the attribute results."""
+        """Performs all timesteps and saves results for post-processing.
+
+        Raises:
+            ValueError: If simulation parameters are not initialized, no components
+                are defined, or post-processing data transfer is None.
+        """
         # Error Tests
         # Test if all parameters were initialized
         if self._simulation_parameters is None:
@@ -250,7 +298,7 @@ class Simulator:
 
         flagfile = os.path.join(self._simulation_parameters.result_directory, "finished.flag")
         if self._simulation_parameters.skip_finished_results and os.path.exists(flagfile):
-            log.warning("Found " + flagfile + ". This calculation seems finished. Quitting.")
+            log.warning(f"Found {flagfile}. This calculation seems finished. Quitting.")
             return
         # Starts time counter
         start_counter = time.perf_counter()
@@ -258,15 +306,12 @@ class Simulator:
         # Connects all components
         self.connect_all_components()
         log.information(
-            "finished connecting all components. A total of "
-            + str(len(self.wrapped_components))
-            + " components were defined. They have a total of "
-            + str(len(self.all_outputs))
-            + " outputs."
+            f"finished connecting all components. A total of {len(self.wrapped_components)} "
+            f"components were defined. They have a total of {len(self.all_outputs)} outputs."
         )
         all_result_lines = []
-        log.information("Starting simulation for year " + str(self._simulation_parameters.year))
-        log.information("Starting simulation for " + str(self._simulation_parameters.timesteps) + " timesteps")
+        log.information(f"Starting simulation for year {self._simulation_parameters.year}")
+        log.information(f"Starting simulation for {self._simulation_parameters.timesteps} timesteps")
         lastmessage = datetime.datetime.now()
         last_step: int = 0
         starttime = datetime.datetime.now()
@@ -313,7 +358,7 @@ class Simulator:
         from hisim.postprocessing import postprocessing_main as pp  # pylint: disable=import-outside-toplevel
 
         my_post_processor = pp.PostProcessor()
-        my_post_processor.run(ppdt=postprocessing_datatransfer, my_sim=self)
+        my_post_processor.run(ppdt=postprocessing_datatransfer, simulator=self)
         for wrapped_component in self.wrapped_components:
             wrapped_component.clear()
         del all_result_lines
@@ -353,7 +398,7 @@ class Simulator:
         for _index, entry in enumerate(self.all_outputs):
             column_name = entry.get_pretty_name()
             colum_names.append(column_name)
-            log.debug("Output column: " + column_name)
+            log.debug(f"Output column: {column_name}")
         self.results_data_frame = pd.DataFrame(data=all_result_lines, columns=colum_names)
         df_index = pd.date_range(
             start=self._simulation_parameters.start_date,
@@ -392,7 +437,7 @@ class Simulator:
             setup_function=self.setup_function,
             module_filename=self.module_filename,
             module_config=self.my_module_config,
-            execution_time=execution_time,
+            execution_time_in_s=execution_time,
             results_monthly=results_merged_monthly,
             results_cumulative=results_merged_cumulative,
             results_hourly=results_merged_hourly,
@@ -409,7 +454,18 @@ class Simulator:
         last_step: int,
         force_covergence: bool,
     ) -> datetime.datetime:
-        """Makes the pretty progress messages with time estimate."""
+        """Logs a progress message with elapsed time, speed, and time estimate.
+
+        Args:
+            starttime: When the simulation started.
+            step: Current timestep index.
+            total_iteration_tries: Convergence iterations since last progress message.
+            last_step: Timestep index of the last progress message.
+            force_covergence: Whether convergence was forced in the current timestep.
+
+        Returns:
+            The current datetime, to use as the timestamp for the next message.
+        """
         # calculates elapsed time
         elapsed = datetime.datetime.now() - starttime
         elapsed_minutes, elapsed_seconds = divmod(elapsed.seconds, 60)
@@ -438,42 +494,89 @@ class Simulator:
     def get_std_results(
         self, results_data_frame: pd.DataFrame
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """Converts results into a pretty dataframe for post processing."""
+        """Converts results into aggregated DataFrames for post-processing.
+
+        Computes monthly, daily, hourly, and cumulative aggregations, using mean
+        aggregation for units in UNITS_USING_MEAN_AGGREGATION and sum otherwise.
+
+        Args:
+            results_data_frame: DataFrame with raw per-timestep simulation results.
+
+        Returns:
+            A tuple of (cumulative, monthly, daily, hourly) DataFrames.
+        """
 
         units_mean = UNITS_USING_MEAN_AGGREGATION
-
-        monthly_frames = []
-        daily_frames = []
-        cumulative_data = {}
-        hourly_frames = []
-
         use_hourly_resample = self._simulation_parameters.seconds_per_timestep != 3600
 
+        # Split columns once by aggregation rule and resample each sub-DataFrame
+        # in a single call. ``mean``/``sum`` are column-wise reductions, so this
+        # is numerically identical to the previous per-column resampling but
+        # issues ~6 resample calls instead of ~3 * n_columns (GitLab #1687).
+        # Selection and recombination are positional (``iloc``) so the result is
+        # independent of column-label uniqueness.
+        column_count = len(results_data_frame.columns)
+        mean_indices = [
+            i for i in range(column_count) if self.all_outputs[i].unit in units_mean
+        ]
+        sum_indices = [
+            i for i in range(column_count) if self.all_outputs[i].unit not in units_mean
+        ]
+        mean_df = results_data_frame.iloc[:, mean_indices]
+        sum_df = results_data_frame.iloc[:, sum_indices]
+        log.debug(
+            f"get_std_results: {len(mean_indices)} mean-aggregated and "
+            f"{len(sum_indices)} sum-aggregated of {column_count} columns"
+        )
+
+        def _resample_group(frame: pd.DataFrame, freq: str, how: str) -> pd.DataFrame:
+            # resample on a column-less frame is valid but pointless; skip it to
+            # avoid creating a spurious (empty) index that misaligns on concat.
+            if frame.shape[1] == 0:
+                return pd.DataFrame(columns=frame.columns)
+            return frame.resample(freq).agg(how)
+
+        monthly_mean = _resample_group(mean_df, "ME", "mean")
+        monthly_sum = _resample_group(sum_df, "ME", "sum")
+        daily_mean = _resample_group(mean_df, "D", "mean")
+        daily_sum = _resample_group(sum_df, "D", "sum")
+        if use_hourly_resample:
+            hourly_mean = _resample_group(mean_df, "60min", "mean")
+            hourly_sum = _resample_group(sum_df, "60min", "sum")
+        else:
+            # No resampling needed when the simulation already runs on an hourly
+            # grid; pass the raw slices through unchanged.
+            hourly_mean = mean_df
+            hourly_sum = sum_df
+
+        # Cumulative scalars (``.mean()``/``.sum()``) are cheap column-wise
+        # reductions; keep them per-column to preserve the previous scalar
+        # aggregation (and dict-keyed column order) exactly.
+        cumulative_data: Dict[Any, Any] = {}
         for i, column_name in enumerate(results_data_frame.columns):
-            log.debug(f"Processing column {i + 1}/{len(results_data_frame.columns)} - {column_name}")
             col_data = results_data_frame.iloc[:, i]
-            unit = self.all_outputs[i].unit
-
-            if unit in units_mean:
-                monthly = col_data.resample("ME").mean()
-                daily = col_data.resample("D").mean()
-                hourly = col_data.resample("60min").mean() if use_hourly_resample else col_data
-                cumulative = col_data.mean()
+            if self.all_outputs[i].unit in units_mean:
+                cumulative_data[column_name] = col_data.mean()
             else:
-                monthly = col_data.resample("ME").sum()
-                daily = col_data.resample("D").sum()
-                hourly = col_data.resample("60min").sum() if use_hourly_resample else col_data
-                cumulative = col_data.sum()
+                cumulative_data[column_name] = col_data.sum()
 
-            monthly_frames.append(monthly.rename(column_name))
-            daily_frames.append(daily.rename(column_name))
-            hourly_frames.append(hourly.rename(column_name))
-            cumulative_data[column_name] = cumulative
+        # Recombine the mean/sum groups in the original column order. After the
+        # concat the columns sit in [mean_indices..., sum_indices...] order, so
+        # map every original index back to its concatenated position and select
+        # positionally.
+        def _combine_in_order(mean_frame: pd.DataFrame, sum_frame: pd.DataFrame) -> pd.DataFrame:
+            combined = pd.concat([mean_frame, sum_frame], axis=1)
+            position_in_combined: Dict[int, int] = {}
+            for position, original_index in enumerate(mean_indices):
+                position_in_combined[original_index] = position
+            for position, original_index in enumerate(sum_indices):
+                position_in_combined[original_index] = len(mean_indices) + position
+            reorder = [position_in_combined[original_index] for original_index in range(column_count)]
+            return combined.iloc[:, reorder]
 
-        # Combine at once to avoid per-column index assignment
-        results_merged_monthly = pd.concat(monthly_frames, axis=1)
-        results_merged_daily = pd.concat(daily_frames, axis=1)
-        results_merged_hourly = pd.concat(hourly_frames, axis=1)
+        results_merged_monthly = _combine_in_order(monthly_mean, monthly_sum)
+        results_merged_daily = _combine_in_order(daily_mean, daily_sum)
+        results_merged_hourly = _combine_in_order(hourly_mean, hourly_sum)
         results_merged_cumulative = pd.DataFrame([cumulative_data])
 
         return (
@@ -488,7 +591,17 @@ class Simulator:
         source_component_list: Union[List[cp.Component], List[dcp.DynamicComponent]],
         target_component: Union[cp.Component, dcp.DynamicComponent],
     ) -> None:
-        """Connect chosen target component in the sytem setups automatically based on its default connections."""
+        """Connects a target component to source components via default connections.
+
+        Args:
+            source_component_list: Candidate source components to connect from.
+            target_component: The component whose default connections to resolve.
+
+        Raises:
+            TypeError: If target_component is not a Component or DynamicComponent.
+            KeyError: If no source matches the target's default connections, or the
+                target has no default connections defined.
+        """
 
         # prepare the target components' default connection lists
         target_default_connection_dict: Union[

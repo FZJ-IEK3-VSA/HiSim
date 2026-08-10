@@ -277,9 +277,10 @@ class PriceSignal(cp.Component):
             index_col=0,
         )
 
-        if "Fixed_Price_" + self.price_signal_config.country in price_purchase:
+        country = self.price_signal_config.country
+        if f"Fixed_Price_{country}" in price_purchase:
             self.price_signal_config.price_signal_type = "Prices at second half of 2021"
-            fixed_price = price_purchase["Fixed_Price_" + self.price_signal_config.country].tolist()
+            fixed_price = price_purchase[f"Fixed_Price_{country}"].tolist()
             # convert euro/kWh to cent/kW-timestep
             p_conversion = 100 / (1000 * 3600 / self.my_simulation_parameters.seconds_per_timestep)
             fixed_price = [element * p_conversion for element in fixed_price]
@@ -288,7 +289,7 @@ class PriceSignal(cp.Component):
                 int(3600 / self.my_simulation_parameters.seconds_per_timestep),
             ).tolist()
 
-            static_tou_price = price_purchase["Static_TOU_Price_" + self.price_signal_config.country].tolist()
+            static_tou_price = price_purchase[f"Static_TOU_Price_{country}"].tolist()
             static_tou_price = [element * p_conversion for element in static_tou_price]
             self.price_signal_config.static_tou_price = np.repeat(
                 static_tou_price,

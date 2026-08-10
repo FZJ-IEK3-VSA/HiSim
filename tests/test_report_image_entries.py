@@ -12,9 +12,9 @@ from hisim.postprocessing.report_image_entries import (
 
 @pytest.mark.base
 def test_system_chart_entry_fields() -> None:
-    """Ensure SystemChartEntry stores path and caption by field order."""
-    entry = SystemChartEntry(path="/tmp/chart.png", caption="My Chart")
-    assert entry.path == "/tmp/chart.png"
+    """Ensure SystemChartEntry stores file_path and caption by field order."""
+    entry = SystemChartEntry(file_path="/tmp/chart.png", caption="My Chart")
+    assert entry.file_path == "/tmp/chart.png"
     assert entry.caption == "My Chart"
 
 
@@ -84,4 +84,22 @@ def test_report_image_entry_output_description_none_raises() -> None:
             category="electricity",
             output_description=None,
             unit="W",
+        )
+
+
+@pytest.mark.base
+def test_report_image_entry_both_none_raises_component_name_first() -> None:
+    """The component_name check fires first when both are None.
+
+    component_name is validated before output_description.
+    """
+    with pytest.raises(ValueError, match="Component name was None"):
+        ReportImageEntry(
+            component_name=None,  # type: ignore[arg-type]
+            output_type="power",
+            file_path="/tmp/x.png",
+            component_output_folder_path="/tmp/",
+            category=None,
+            output_description=None,
+            unit=None,
         )

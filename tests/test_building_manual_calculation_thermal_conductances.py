@@ -73,14 +73,14 @@ def test_building_thermal_conductance_calculation() -> None:
             ].values[0]
         )
         # with H_Tr = U * A * b_tr [W/K] -> by calculating H_tr manually one can later scale this up by scaling up A_Calc
-        h_tr_i = (
+        h_tr_i_in_watt_per_kelvin = (
             my_residence.my_building_information.buildingdata_ref["U_Actual_" + w_i].values[
                 0
             ]
             * my_residence.my_building_information.buildingdata_ref["A_" + w_i].values[0]
             * 1.0
         )
-        list_h_tr_window_calculated_in_watt_per_kelvin.append(h_tr_i)
+        list_h_tr_window_calculated_in_watt_per_kelvin.append(h_tr_i_in_watt_per_kelvin)
         k = k + 1
 
     # check if calculated H_tr is equal to H_tr which was read from buildingdata directly
@@ -96,17 +96,17 @@ def test_building_thermal_conductance_calculation() -> None:
         "Floor_1",
         "Floor_2",
     ]
-    list_h_tr_opaque = []
-    list_h_tr_opaque_calculated = []
+    list_h_tr_opaque_in_watt_per_kelvin = []
+    list_h_tr_opaque_calculated_in_watt_per_kelvin = []
     k = 0
     for o_p in opaque_walls:
-        list_h_tr_opaque.append(
+        list_h_tr_opaque_in_watt_per_kelvin.append(
             my_residence.my_building_information.buildingdata_ref[
                 "H_Transmission_" + o_p
             ].values[0]
         )
         # with H_Tr = U * A * b_tr [W/K] -> by calculating H_tr manually one can later scale this up by scaling up A_Calc
-        h_tr_i = (
+        h_tr_i_in_watt_per_kelvin = (
             my_residence.my_building_information.buildingdata_ref["U_Actual_" + o_p].values[
                 0
             ]
@@ -116,8 +116,8 @@ def test_building_thermal_conductance_calculation() -> None:
             ].values[0]
         )
 
-        list_h_tr_opaque_calculated.append(h_tr_i)
+        list_h_tr_opaque_calculated_in_watt_per_kelvin.append(h_tr_i_in_watt_per_kelvin)
         k = k + 1
 
     # check if calculated H_tr is equal to H_tr which was read from buildingdata directly
-    np.testing.assert_allclose(list_h_tr_opaque, list_h_tr_opaque_calculated, atol=0.02)
+    np.testing.assert_allclose(list_h_tr_opaque_in_watt_per_kelvin, list_h_tr_opaque_calculated_in_watt_per_kelvin, atol=0.02)

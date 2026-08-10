@@ -14,7 +14,7 @@ from hisim.components.controller_pid import (
     compute_pi_gains,
 )
 from hisim.loadtypes import LoadTypes, Units
-from hisim.sim_repository import SingletonSimRepository, SimRepositoryKeyEnum
+from hisim.sim_repository import SimRepositoryKeyEnum, SimRepository
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 
@@ -27,6 +27,7 @@ H_TR_IS = 10.0
 C_M = 1.5e7
 SECONDS_PER_TIMESTEP = 60
 
+sim_repository = SimRepository()
 
 def _build_thermal_model() -> BuildingThermalModel5R1C:
     """Constructs a thermal model with explicit coefficients (no singleton dependency)."""
@@ -51,8 +52,11 @@ def populated_sim_repository() -> Iterator[None]:
     setup and teardown to guarantee a clean slate and prevent stale-state
     leakage across test runs (KB-5646).
     """
-    repo = SingletonSimRepository()
-    repo.reset()
+    repo = sim_repository
+    # if repo.entries:
+    #     repo.clear()
+    # else:
+    #     print("sim repo entries were already empty")
     repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING, entry=H_TR_W)
     repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS, entry=H_TR_MS)
     repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM, entry=H_TR_EM)
@@ -60,7 +64,7 @@ def populated_sim_repository() -> Iterator[None]:
     repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR, entry=H_TR_IS)
     repo.set_entry(key=SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE, entry=C_M)
     yield
-    repo.reset()
+    repo.clear()
 
 
 @pytest.mark.base
@@ -107,13 +111,13 @@ def test_from_sim_repository_reads_coefficients() -> None:
 @pytest.mark.base
 def test_from_sim_repository_raises_when_coefficients_missing() -> None:
     """Missing coefficients must raise loudly instead of degrading silently (KB-5214)."""
-    repo = SingletonSimRepository()
-    repo.reset()
+    repo = sim_repository
+    repo.clear()
     try:
         with pytest.raises(KeyError):
             BuildingThermalModel5R1C.from_sim_repository(SECONDS_PER_TIMESTEP)
     finally:
-        repo.reset()
+        repo.clear()
 
 
 @pytest.mark.base

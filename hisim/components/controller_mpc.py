@@ -440,7 +440,6 @@ class MpcController(cp.Component):
         """Prepares the simulation."""
         if self.mpcconfig.predictive:
             """Get forecasted disturbance (weather)"""
-<<<<<<< HEAD
             self.temp_forecast = self.simulation_repository.get_entry(
                 key=SimRepositoryKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST
             )[: self.my_simulation_parameters.timesteps]
@@ -468,37 +467,35 @@ class MpcController(cp.Component):
                 key=SimRepositoryKeyEnum.MAXIMALCHARGINGPOWER
             )
             self.maximum_discharging_power = self.simulation_repository.get_entry(
-                key=SimRepositoryKeyEnum.MAXIMALDISCHARGINGPOWER
-=======
-            self.temp_forecast_in_celsius = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST
+                key=SimRepositoryKeyEnum.MAXIMALDISCHARGINGPOWER)
+            self.temp_forecast_in_celsius = self.simulation_repository.get_entry(
+                key=SimRepositoryKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST
             )[: self.my_simulation_parameters.timesteps]
-            self.phi_m_forecast_in_watt = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.HEATFLUXTHERMALMASSNODEFORECAST
+            self.phi_m_forecast_in_watt = self.simulation_repository.get_entry(
+                key=SimRepositoryKeyEnum.HEATFLUXTHERMALMASSNODEFORECAST
             )
-            self.phi_st_forecast_in_watt = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.HEATFLUXSURFACENODEFORECAST
+            self.phi_st_forecast_in_watt = self.simulation_repository.get_entry(
+                key=SimRepositoryKeyEnum.HEATFLUXSURFACENODEFORECAST
             )
-            self.phi_ia_forecast_in_watt = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.HEATFLUXINDOORAIRNODEFORECAST
+            self.phi_ia_forecast_in_watt = self.simulation_repository.get_entry(
+                key=SimRepositoryKeyEnum.HEATFLUXINDOORAIRNODEFORECAST
             )
 
             """"getting pv forecast"""
-            self.pv_forecast_yearly_in_watt = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.PVFORECASTYEARLY)
+            self.pv_forecast_yearly_in_watt = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.PVFORECASTYEARLY)
 
             """ getting battery specifications """
-            self.maximum_storage_capacity_in_watt_hour = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.MAXIMUMBATTERYCAPACITY
+            self.maximum_storage_capacity_in_watt_hour = self.simulation_repository.get_entry(
+                key=SimRepositoryKeyEnum.MAXIMUMBATTERYCAPACITY
             )
-            self.minimum_storage_capacity_in_watt_hour = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.MINIMUMBATTERYCAPACITY
+            self.minimum_storage_capacity_in_watt_hour = self.simulation_repository.get_entry(
+                key=SimRepositoryKeyEnum.MINIMUMBATTERYCAPACITY
             )
-            self.maximum_charging_power_in_watt = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.MAXIMALCHARGINGPOWER
+            self.maximum_charging_power_in_watt = self.simulation_repository.get_entry(
+                key=SimRepositoryKeyEnum.MAXIMALCHARGINGPOWER
             )
-            self.maximum_discharging_power_in_watt = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.MAXIMALDISCHARGINGPOWER
->>>>>>> e2033174cc7b89c411056eb6ce5f566a2ddcdac4
+            self.maximum_discharging_power_in_watt = self.simulation_repository.get_entry(
+                key=SimRepositoryKeyEnum.MAXIMALDISCHARGINGPOWER
             )
             self.battery_efficiency = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.BATTERYEFFICIENCY)
             self.inverter_efficiency = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.INVERTEREFFICIENCY)
@@ -508,41 +505,22 @@ class MpcController(cp.Component):
         """Build function: The function sets important constants and parameters for the calculations."""
         if self.mpcconfig.predictive:
             """getting building physical properties for state space model"""
-<<<<<<< HEAD
-            self.h_tr_w = self.simulation_repository.get_entry(
+            self.h_tr_w_in_watt_per_kelvin = self.simulation_repository.get_entry(
                 key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING
             )
-            self.h_tr_ms = self.simulation_repository.get_entry(
+            self.h_tr_ms_in_watt_per_kelvin = self.simulation_repository.get_entry(
                 key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS
             )
-            self.h_tr_em = self.simulation_repository.get_entry(
+            self.h_tr_em_in_watt_per_kelvin = self.simulation_repository.get_entry(
                 key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM
             )
-            self.h_ve_adj = self.simulation_repository.get_entry(
+            self.h_ve_adj_in_watt_per_kelvin = self.simulation_repository.get_entry(
                 key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION
             )
-            self.h_tr_is = self.simulation_repository.get_entry(
+            self.h_tr_is_in_watt_per_kelvin = self.simulation_repository.get_entry(
                 key=SimRepositoryKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR
             )
-            self.c_m = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE)
-=======
-            self.h_tr_w_in_watt_per_kelvin = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING
-            )
-            self.h_tr_ms_in_watt_per_kelvin = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS
-            )
-            self.h_tr_em_in_watt_per_kelvin = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM
-            )
-            self.h_ve_adj_in_watt_per_kelvin = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION
-            )
-            self.h_tr_is_in_watt_per_kelvin = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR
-            )
-            self.c_m_in_joule_per_kelvin = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE)
->>>>>>> e2033174cc7b89c411056eb6ce5f566a2ddcdac4
+            self.c_m_in_joule_per_kelvin = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE)
             """"
             self.h_tr_w_in_watt_per_kelvin = my_simulation_repository.get_entry(
                 Building.Thermal_transmission_coefficient_glazing
@@ -700,19 +678,16 @@ class MpcController(cp.Component):
         self.phi_st_forecast_24h_1min_in_watt = self.phi_st_forecast_in_watt[start_horizon : start_horizon + self.prediction_horizon]
         self.pv_forecast_24h_1min_in_watt = self.pv_forecast_yearly_in_watt[start_horizon : start_horizon + self.prediction_horizon]
 
-<<<<<<< HEAD
         self.price_purchase_forecast_24h_1min = self.simulation_repository.get_entry(
             key=SimRepositoryKeyEnum.PRICEPURCHASEFORECAST24H
         )
         self.price_injection_forecast_24h_1min = self.simulation_repository.get_entry(
-            key=SimRepositoryKeyEnum.PRICEINJECTIONFORECAST24H
-=======
-        self.price_purchase_forecast_24h_1min_in_eur_per_kwh = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.PRICEPURCHASEFORECAST24H
+            key=SimRepositoryKeyEnum.PRICEINJECTIONFORECAST24H)
+        self.price_purchase_forecast_24h_1min_in_eur_per_kwh = self.simulation_repository.get_entry(
+            key=SimRepositoryKeyEnum.PRICEPURCHASEFORECAST24H
         )
-        self.price_injection_forecast_24h_1min_in_eur_per_kwh = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.PRICEINJECTIONFORECAST24H
->>>>>>> e2033174cc7b89c411056eb6ce5f566a2ddcdac4
+        self.price_injection_forecast_24h_1min_in_eur_per_kwh = self.simulation_repository.get_entry(
+            key=SimRepositoryKeyEnum.PRICEINJECTIONFORECAST24H
         )
 
         # sampling of the data: Useful if you run hisim at 60 sec per time step and you want fast optimization:

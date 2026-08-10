@@ -114,16 +114,15 @@ class SimRepository:
 
     def clear(self) -> None:
         """Clears all dictionaries at the end of the simulation to enable garbage collection and reduce memory consumption.
-
-        Using `del` (instead of in-place `.clear()` or reassignment to `{}`) is
-        intentional: it removes the attribute reference so Python can reclaim the
-        memory for the old dict objects as quickly as possible, which is important
-        after a large simulation run.
         """
-        self.entries.clear()
-        del self.entries
-        self.dynamic_entries.clear()
-        del self.dynamic_entries
+        if self.entries:
+            self.entries.clear()
+        else:
+            raise ValueError("Sim repo entries are already empty: ", self.entries)
+        if self.dynamic_entries:
+            self.dynamic_entries.clear()
+        else:
+            raise ValueError("Sim repo dynamic entries are already empty: ", self.dynamic_entries)
 
 
 class SimRepositoryKeyEnum(enum.Enum):

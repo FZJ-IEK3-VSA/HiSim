@@ -2,6 +2,7 @@
 # clean
 from __future__ import annotations
 from typing import Any
+import enum
 
 from hisim import loadtypes as lt
 

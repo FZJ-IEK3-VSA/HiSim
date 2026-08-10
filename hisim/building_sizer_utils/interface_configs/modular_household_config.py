@@ -1,4 +1,52 @@
-"""Modular household config module."""
+"""Configuration for the *modular household* framework used by the Building Sizer.
+
+A modular household is assembled from two independently configured modules that the
+simulator wires together to produce a household's final time-resolved load profile:
+
+- **Demand side -- archetype config**
+  (:class:`~hisim.building_sizer_utils.interface_configs.archetype_config.ArcheTypeConfig`):
+  describes the building envelope and its occupants. The occupancy, appliance set and
+  activity schedule are not listed field by field but selected through
+  ``lpg_households`` -- a list of Load Profile Generator (LPG) household profile names.
+  Each name (e.g. the default ``"CHR01_Couple_both_at_Work"``) stands for a complete
+  predefined household: its residents, their daily activity schedules, and the
+  associated appliance set. Listing several names stacks those households in one
+  building. The archetype also fixes the climate (``weather_location``,
+  ``coordinates_latitude`` / ``coordinates_longitude``) and the building geometry
+  (``building_code``, ``conditioned_floor_area_in_m2`` in m^2, ``construction_year``,
+  ``norm_heating_load_in_kilowatt`` in kW) that drive the space-heating and
+  domestic-hot-water demand.
+
+- **Supply side -- energy system config**
+  (:class:`~hisim.building_sizer_utils.interface_configs.system_config.EnergySystemConfig`):
+  describes the technology that serves the demand: the ``heating_system``
+  (a :class:`~hisim.loadtypes.HeatingSystems` member) that covers both space heating
+  and domestic hot water, the ``heat_distribution_system``, the rooftop PV size as
+  ``share_of_maximum_pv_potential`` (dimensionless fraction in ``[0.0, 1.0]``, default
+  ``1.0`` = full rooftop potential), and the ``use_battery_and_ems`` flag (``bool``,
+  default ``True``) that enables both the battery and the energy-management system.
+
+The two modules are combined in a :class:`ModularHouseholdConfig`. At simulation time
+the LPG household profile(s) generate the occupancy-driven electricity load (appliances
+and activities), the building envelope together with the climate is passed to the
+thermal load calculator -- the downstream :class:`~hisim.components.building.Building`
+component, which resolves the archetype envelope from the EPISCOPE/TABULA typology and
+integrates a single-node RC model (EN ISO 13790) to compute the space-heating and
+domestic-hot-water demand -- and the energy system supplies both through its heating,
+PV, battery and EMS components; the resulting component interactions produce the
+household's final electricity and heat load profiles.
+
+The defaults are not free parameters but draw on empirical datasets: the LPG profiles
+encode occupancy and appliance use derived from time-use surveys, while the building
+envelope defaults (U-values, thermal mass, normative heating load) are resolved
+downstream from the EPISCOPE/TABULA building-typology database, an empirical
+classification of the European building stock. The ``get_default_config_for_household_*``
+classmethods pair such a default archetype with each available heating system.
+Configurations are exchanged as :mod:`dataclasses_json` JSON objects whose structure
+mirrors the nested ``energy_system_config_`` and ``archetype_config_`` fields:
+:func:`write_config` serializes a configuration to the ``modular_example_config.json``
+file, and :func:`read_in_configs` reads a configuration from a caller-supplied JSON path.
+"""
 from __future__ import annotations
 
 # clean
@@ -9,6 +57,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.building_sizer_utils.interface_configs import archetype_config, system_config
 from hisim import log
+from hisim.loadtypes import HeatingSystems
 from hisim.system_setup_configuration import SystemSetupConfigBase
 
 
@@ -64,7 +113,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         Returns:
             ModularHouseholdConfig: Default modular household configuration with a gas heating system.
         """
-        energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_gas()
+        energy_system_config_ = system_config.EnergySystemConfig.get_default_config(HeatingSystems.GAS_HEATING)
         archetype_config_ = archetype_config.ArcheTypeConfig()
         household_config = ModularHouseholdConfig(
             energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
@@ -85,7 +134,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         Returns:
             ModularHouseholdConfig: Default modular household configuration with an oil heating system.
         """
-        energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_oil()
+        energy_system_config_ = system_config.EnergySystemConfig.get_default_config(HeatingSystems.OIL_HEATING)
         archetype_config_ = archetype_config.ArcheTypeConfig()
         household_config = ModularHouseholdConfig(
             energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
@@ -106,7 +155,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         Returns:
             ModularHouseholdConfig: Default modular household configuration with a heat pump heating system.
         """
-        energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_heatpump()
+        energy_system_config_ = system_config.EnergySystemConfig.get_default_config(HeatingSystems.HEAT_PUMP)
         archetype_config_ = archetype_config.ArcheTypeConfig()
         household_config = ModularHouseholdConfig(
             energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
@@ -127,7 +176,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         Returns:
             ModularHouseholdConfig: Default modular household configuration with a district heating system.
         """
-        energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_district_heating()
+        energy_system_config_ = system_config.EnergySystemConfig.get_default_config(HeatingSystems.DISTRICT_HEATING)
         archetype_config_ = archetype_config.ArcheTypeConfig()
         household_config = ModularHouseholdConfig(
             energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
@@ -148,7 +197,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         Returns:
             ModularHouseholdConfig: Default modular household configuration with a pellet heating system.
         """
-        energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_pellet_heating()
+        energy_system_config_ = system_config.EnergySystemConfig.get_default_config(HeatingSystems.PELLET_HEATING)
         archetype_config_ = archetype_config.ArcheTypeConfig()
         household_config = ModularHouseholdConfig(
             energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
@@ -169,9 +218,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         Returns:
             ModularHouseholdConfig: Default modular household configuration with a wood chip heating system.
         """
-        energy_system_config_ = (
-            system_config.EnergySystemConfig.get_default_config_for_energy_system_wood_chip_heating()
-        )
+        energy_system_config_ = system_config.EnergySystemConfig.get_default_config(HeatingSystems.WOOD_CHIP_HEATING)
         archetype_config_ = archetype_config.ArcheTypeConfig()
         household_config = ModularHouseholdConfig(
             energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
@@ -192,7 +239,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         Returns:
             ModularHouseholdConfig: Default modular household configuration with a hydrogen heating system.
         """
-        energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_hydrogen()
+        energy_system_config_ = system_config.EnergySystemConfig.get_default_config(HeatingSystems.HYDROGEN_HEATING)
         archetype_config_ = archetype_config.ArcheTypeConfig()
         household_config = ModularHouseholdConfig(
             energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
@@ -213,7 +260,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         Returns:
             ModularHouseholdConfig: Default modular household configuration with an electric heating system.
         """
-        energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_electric()
+        energy_system_config_ = system_config.EnergySystemConfig.get_default_config(HeatingSystems.ELECTRIC_HEATING)
         archetype_config_ = archetype_config.ArcheTypeConfig()
         household_config = ModularHouseholdConfig(
             energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
@@ -235,9 +282,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         Returns:
             ModularHouseholdConfig: Default modular household configuration with a gas and solar thermal heating system.
         """
-        energy_system_config_ = (
-            system_config.EnergySystemConfig.get_default_config_for_energy_system_gas_solar_thermal()
-        )
+        energy_system_config_ = system_config.EnergySystemConfig.get_default_config(HeatingSystems.GAS_SOLAR_THERMAL)
         archetype_config_ = archetype_config.ArcheTypeConfig()
         household_config = ModularHouseholdConfig(
             energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
@@ -259,8 +304,8 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         Returns:
             ModularHouseholdConfig: Default modular household configuration with a heat pump and solar thermal heating system.
         """
-        energy_system_config_ = (
-            system_config.EnergySystemConfig.get_default_config_for_energy_system_heatpump_solar_thermal()
+        energy_system_config_ = system_config.EnergySystemConfig.get_default_config(
+            HeatingSystems.HEAT_PUMP_SOLAR_THERMAL
         )
         archetype_config_ = archetype_config.ArcheTypeConfig()
         household_config = ModularHouseholdConfig(

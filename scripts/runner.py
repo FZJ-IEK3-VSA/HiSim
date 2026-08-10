@@ -127,9 +127,9 @@ def load_config(config_path: Path) -> GoldenConfig:
 
     setups_raw = raw["setups"]
     param_sets_raw = raw["parameter_sets"]
-    if not isinstance(setups_raw, list) or len(setups_raw) == 0:
+    if not isinstance(setups_raw, list) or not setups_raw:
         raise ValueError("Golden config 'setups' must be a non-empty list.")
-    if not isinstance(param_sets_raw, list) or len(param_sets_raw) == 0:
+    if not isinstance(param_sets_raw, list) or not param_sets_raw:
         raise ValueError("Golden config 'parameter_sets' must be a non-empty list.")
 
     setups: list[SetupConfig] = []

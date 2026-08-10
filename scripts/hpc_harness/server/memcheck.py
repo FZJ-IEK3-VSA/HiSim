@@ -7,6 +7,7 @@ Lowering is manual only (``POST /admin/config``). The effective budget is persis
 ``meta`` so a server restart keeps a raised value.
 """
 
+import bisect
 import math
 from typing import Any, Callable, Dict, List, Optional
 
@@ -30,7 +31,7 @@ class MemBudget:
         self.cfg = cfg
         self.persist_fn = persist_fn
         self.effective = max(cfg.per_job_mem_gb, initial_effective or 0.0)
-        self.peaks_mb: List[float] = list(initial_peaks_mb or [])
+        self.peaks_mb: List[float] = sorted(initial_peaks_mb or [])
         self.last_raise: Optional[Dict[str, Any]] = None
 
     @staticmethod
@@ -42,7 +43,7 @@ class MemBudget:
         """Feed one reported peak; returns True when this observation auto-raised the budget."""
         if peak_mem_mb is None or peak_mem_mb <= 0:
             return False
-        self.peaks_mb.append(float(peak_mem_mb))
+        bisect.insort(self.peaks_mb, float(peak_mem_mb))
         if not self.cfg.mem_autoraise or len(self.peaks_mb) < self.cfg.mem_min_samples:
             return False
         target = self.p99_gb() + self.cfg.mem_autoraise_margin_gb
@@ -65,13 +66,12 @@ class MemBudget:
         """99th percentile of observed peaks in GB (0 when no samples)."""
         if not self.peaks_mb:
             return 0.0
-        ordered = sorted(self.peaks_mb)
-        idx = min(len(ordered) - 1, max(0, math.ceil(0.99 * len(ordered)) - 1))
-        return ordered[idx] / _MB_PER_GB
+        idx = min(len(self.peaks_mb) - 1, max(0, math.ceil(0.99 * len(self.peaks_mb)) - 1))
+        return self.peaks_mb[idx] / _MB_PER_GB
 
     def max_gb(self) -> float:
         """Maximum observed peak in GB."""
-        return max(self.peaks_mb) / _MB_PER_GB if self.peaks_mb else 0.0
+        return self.peaks_mb[-1] / _MB_PER_GB if self.peaks_mb else 0.0
 
     def warning(self) -> Optional[Dict[str, Any]]:
         """Dashboard warning: budget raised, or budget too high (wasted slots)."""

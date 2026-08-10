@@ -5,7 +5,7 @@ such as pv system, battery, heat pumps, water storage, etc. need to be scaled up
 """
 # clean
 
-from typing import Tuple
+from typing import Dict
 import pytest
 import numpy as np
 from hisim.components import (
@@ -28,110 +28,82 @@ def test_energy_system_scalability() -> None:
 
     Sizes the energy system with a scaling factor of 1 and again with 5, then asserts
     that PV output, hplib thermal power, space-heating storage volume, and battery
-    capacity scale by ~5×, while the DHW heat pump and DHW storage scale with the
+    capacity scale by ~5×, while the DHW storage scales with the
     number of apartments (within 1 % relative tolerance).
     """
 
-    # calculate energy system sizes for original case (scaling factors = 1)
-    (
-        number_of_apartments,
-        original_pv_electricity_output_in_watt,
-        original_hplib_thermal_output_power_in_watt,
-        original_storage_size_for_space_heating_in_liter,
-        original_battery_size_in_kilowatt_hours,
-        original_storage_size_in_liter_for_dhw,
-    ) = simulation_for_one_timestep(
-        scaling_factor_for_absolute_conditioned_floor_area=1,
-    )
+    scaling_factor = 5
 
-    log.information(
-        "original size pv in watt " + str(original_pv_electricity_output_in_watt)
-    )
-    log.information(
-        "original size hplib in watt "
-        + str(original_hplib_thermal_output_power_in_watt)
-    )
-    log.information(
-        "original size storage for space heating in liter "
-        + str(original_storage_size_for_space_heating_in_liter)
-    )
-    log.information(
-        "original size battery in kWh " + str(original_battery_size_in_kilowatt_hours)
-    )
-    log.information(
-        "original size storage for dwh in liter "
-        + str(original_storage_size_in_liter_for_dhw)
-        + "\n"
+    # calculate energy system sizes for original case (scaling factors = 1)
+    original = simulation_for_one_timestep(
+        scaling_factor_for_absolute_conditioned_floor_area=1,
     )
 
     # calculate sizes and respective scaling factor when
     # the rooftop and floor area are scaled with factor=5
-    (
-        number_of_apartments,
-        scaled_pv_electricity_output_in_watt,
-        scaled_hplib_thermal_output_power_in_watt,
-        scaled_storage_size_for_space_heating_in_liter,
-        scaled_battery_size_in_kilowatt_hours,
-        scaled_storage_size_in_liter_for_dhw,
-    ) = simulation_for_one_timestep(
-        scaling_factor_for_absolute_conditioned_floor_area=5,
+    scaled = simulation_for_one_timestep(
+        scaling_factor_for_absolute_conditioned_floor_area=scaling_factor,
     )
 
-    log.information(
-        "original size pv in watt " + str(scaled_pv_electricity_output_in_watt)
-    )
-    log.information(
-        "original size hplib in watt " + str(scaled_hplib_thermal_output_power_in_watt)
-    )
-    log.information(
-        "original size storage for space heating in liter "
-        + str(scaled_storage_size_for_space_heating_in_liter)
-    )
-    log.information(
-        "original size battery in kWh " + str(scaled_battery_size_in_kilowatt_hours)
-    )
-    log.information(
-        "original size storage for dwh in liter "
-        + str(scaled_storage_size_in_liter_for_dhw)
-        + "\n"
-    )
+    # DHW storage is modular and scales with the number of apartments in the
+    # scaled building; all other components scale with the floor-area factor.
+    number_of_apartments = scaled["number_of_apartments"]
+
+    # Declarative expectation table: (component name, expected scaling factor).
+    # Adding a component means adding one construction line in
+    # simulation_for_one_timestep and one entry here -- no other edits needed.
+    expected_scalings = [
+        ("pv", scaling_factor),
+        ("hplib", scaling_factor),
+        ("sh_storage", scaling_factor),
+        ("battery", scaling_factor),
+        ("dhw_storage", number_of_apartments),
+    ]
+
+    # log original and scaled sizes for each component
+    for name, _ in expected_scalings:
+        log.information(f"original size {name}: {original[name]}")
+    log.information("")
+
+    for name, _ in expected_scalings:
+        log.information(f"scaled size {name}: {scaled[name]}")
+    log.information("")
 
     # now compare the two results and test if sizes are upscaled correctly
-    np.testing.assert_allclose(
-        scaled_pv_electricity_output_in_watt,
-        original_pv_electricity_output_in_watt * 5,
-        rtol=0.01,
-    )
+    for name, factor in expected_scalings:
+        np.testing.assert_allclose(
+            scaled[name],
+            original[name] * factor,
+            rtol=0.01,
+        )
 
-    np.testing.assert_allclose(
-        scaled_hplib_thermal_output_power_in_watt,
-        original_hplib_thermal_output_power_in_watt * 5,
-        rtol=0.01,
-    )
 
-    np.testing.assert_allclose(
-        scaled_storage_size_for_space_heating_in_liter,
-        original_storage_size_for_space_heating_in_liter * 5,
-        rtol=0.01,
-    )
+def _log_building_properties(
+    config: building.BuildingConfig,
+    info: building.BuildingInformation,
+) -> None:
+    """Emit diagnostic building properties used while sizing the energy system.
 
-    np.testing.assert_allclose(
-        scaled_battery_size_in_kilowatt_hours,
-        original_battery_size_in_kilowatt_hours * 5,
-        rtol=0.01,
+    Kept separate from the sizing/construction logic so that changes to the logged
+    property set or message format do not require editing the sizing function.
+    """
+    log.information("Building code" + str(config.building_code))
+    log.information("Rooftop area " + str(info.roof_area_in_m2))
+    log.information(
+        "Floor area " + str(info.scaled_conditioned_floor_area_in_m2)
     )
-
-    # storage modular for dhw scales with number of apartments
-    np.testing.assert_allclose(
-        scaled_storage_size_in_liter_for_dhw,
-        original_storage_size_in_liter_for_dhw * number_of_apartments,
-        rtol=0.01,
+    log.information(
+        "Heating load of building in W "
+        + str(info.max_thermal_building_demand_in_watt)
+    )
+    log.information(
+        "Number of apartmens in building " + str(info.number_of_apartments)
     )
 
 
 def simulation_for_one_timestep(
     scaling_factor_for_absolute_conditioned_floor_area: int,
-) -> Tuple[int, float, float, float, float, float]:
+) -> Dict[str, float]:
     """Build a scaled energy system and return the sized component values for one timestep.
 
     Constructs a German single-family-home building scaled by the given factor, then
@@ -145,13 +117,13 @@ def simulation_for_one_timestep(
             number of apartments via the building config.
 
     Returns:
-        A tuple of:
-          number_of_apartments: Number of apartments in the scaled building.
-          pv_power_in_watt: Rated electric power of the scaled PV system [W].
-          hplib_thermal_power_in_watt: Thermal output power set for the hplib heat pump [W].
-          simple_hot_water_storage_size_in_liter: Volume of the space-heating water storage [L].
-          battery_capacity_in_kilowatt_hours: Battery capacity [kWh].
-          water_storage_size_for_dhw_in_liter: Volume of the DHW storage [L].
+        A dict mapping component names to their sized values:
+          "number_of_apartments": Number of apartments in the scaled building.
+          "pv": Rated electric power of the scaled PV system [W].
+          "hplib": Thermal output power set for the hplib heat pump [W].
+          "sh_storage": Volume of the space-heating water storage [L].
+          "battery": Battery capacity [kWh].
+          "dhw_storage": Volume of the DHW storage [L].
     """
 
     # Set building inputs
@@ -169,23 +141,7 @@ def simulation_for_one_timestep(
 
     my_residence_information = building.BuildingInformation(config=my_residence_config)
 
-    log.information("Building code" + str(my_residence_config.building_code))
-    log.information(
-        "Rooftop area " + str(my_residence_information.roof_area_in_m2)
-    )
-    log.information(
-        "Floor area "
-        + str(my_residence_information.scaled_conditioned_floor_area_in_m2)
-    )
-
-    log.information(
-        "Heating load of building in W "
-        + str(my_residence_information.max_thermal_building_demand_in_watt)
-    )
-    log.information(
-        "Number of apartmens in building "
-        + str(my_residence_information.number_of_apartments)
-    )
+    _log_building_properties(my_residence_config, my_residence_information)
 
     # Set PV
     my_pv_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
@@ -224,11 +180,11 @@ def simulation_for_one_timestep(
     )
     water_storage_size_for_dhw_in_liter = my_dhw_storage_config.volume_heating_water_storage_in_liter
 
-    return (
-        my_residence_information.number_of_apartments,
-        pv_power_in_watt,
-        hplib_thermal_power_in_watt.value,
-        simple_hot_water_storage_size_in_liter,
-        battery_capacity_in_kilowatt_hours,
-        water_storage_size_for_dhw_in_liter,
-    )
+    return {
+        "number_of_apartments": my_residence_information.number_of_apartments,
+        "pv": pv_power_in_watt,
+        "hplib": hplib_thermal_power_in_watt.value,
+        "sh_storage": simple_hot_water_storage_size_in_liter,
+        "battery": battery_capacity_in_kilowatt_hours,
+        "dhw_storage": water_storage_size_for_dhw_in_liter,
+    }

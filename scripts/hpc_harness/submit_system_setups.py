@@ -138,10 +138,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         token=args.token or os.environ.get("HARNESS_TOKEN"),
         max_tries=3,
     )
-    try:
+    with client:
         result = client.submit_jobs("hisim_setup", jobs, batch)
-    finally:
-        client.close()
     print(f"Inserted {result['inserted']} job(s), skipped {result['skipped']} duplicate(s).")
     print("Reminder: workers must run with --runner hisim_setup to pick these up.")
     return 0

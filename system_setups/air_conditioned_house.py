@@ -1,7 +1,7 @@
 """Air-conditioned household."""
 
 # clean
-import os
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -67,10 +67,10 @@ def setup_function(
     """
 
     # Delete all files in cache:
-    dir_cache = "..//hisim//inputs//cache"
-    if os.path.isdir(dir_cache):
-        for file in os.listdir(dir_cache):
-            os.remove(os.path.join(dir_cache, file))
+    dir_cache = Path("..") / "hisim" / "inputs" / "cache"
+    if dir_cache.is_dir():
+        for file in dir_cache.iterdir():
+            file.unlink()
 
     # Set general simulation parameters
     year = 2021
@@ -85,10 +85,12 @@ def setup_function(
         # my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(year, seconds_per_timestep)
         my_simulation_parameters = SimulationParameters.full_year_with_only_plots(year, seconds_per_timestep)
         my_simulation_parameters.enable_plots_only()
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+        my_simulation_parameters.post_processing_options.extend([
+            PostProcessingOptions.COMPUTE_KPIS,
+            PostProcessingOptions.COMPUTE_CAPEX,
+            PostProcessingOptions.COMPUTE_OPEX,
+            PostProcessingOptions.GENERATE_PDF_REPORT,
+        ])
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

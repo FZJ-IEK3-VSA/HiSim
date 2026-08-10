@@ -1,4 +1,9 @@
-"""Example Transformer."""
+"""Example transformer component that scales two inputs into two outputs.
+
+Provides a minimal reference :class:`ExampleTransformer` demonstrating how a
+HiSim :class:`~hisim.component.Component` reads inputs, applies fixed gains,
+and writes outputs each timestep.
+"""
 
 # clean
 
@@ -6,7 +11,6 @@ from __future__ import annotations
 
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -37,7 +41,16 @@ class ExampleTransformerConfig(ConfigBase):
         cls,
         building_name: str = "BUI1",
     ) -> ExampleTransformerConfig:
-        """Gets a default Transformer."""
+        """Returns a default :class:`ExampleTransformerConfig`.
+
+        Args:
+            building_name: Identifier for the building the transformer belongs to.
+                Defaults to ``"BUI1"``.
+
+        Returns:
+            A config with ``LoadTypes.ANY`` / ``Units.ANY`` and the name
+            ``"Example Transformer default"``.
+        """
         return ExampleTransformerConfig(
             building_name=building_name,
             name="Example Transformer default",
@@ -84,9 +97,9 @@ class ExampleTransformer(Component):
 
     """
 
-    TransformerInput: str = "Input1"
+    TransformerInput1: str = "Input1"
     TransformerInput2: str = "Optional Input1"
-    TransformerOutput: str = "MyTransformerOutput"
+    TransformerOutput1: str = "MyTransformerOutput"
     TransformerOutput2: str = "MyTransformerOutput2"
 
     # Dimensionless gain applied to ``input1`` to produce ``output1``.
@@ -103,12 +116,12 @@ class ExampleTransformer(Component):
         config: ExampleTransformerConfig,
         my_display_config: DisplayConfig | None = None,
     ) -> None:
-        """Constructs all the necessary attributes."""
+        """Initializes the transformer with two inputs and two outputs."""
         if my_display_config is None:
             my_display_config = DisplayConfig()
-        self.transformerconfig = config
+        self.transformerconfig: ExampleTransformerConfig = config
         self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
+        self.config: ExampleTransformerConfig = config
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -118,7 +131,7 @@ class ExampleTransformer(Component):
         )
         self.input1: ComponentInput = self.add_input(
             self.transformerconfig.name,
-            ExampleTransformer.TransformerInput,
+            ExampleTransformer.TransformerInput1,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             True,
@@ -132,7 +145,7 @@ class ExampleTransformer(Component):
         )
         self.output1: ComponentOutput = self.add_output(
             self.transformerconfig.name,
-            ExampleTransformer.TransformerOutput,
+            ExampleTransformer.TransformerOutput1,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description="Output 1",
@@ -182,8 +195,12 @@ class ExampleTransformer(Component):
         stsv.set_output_value(self.output1, input_value_1 * ExampleTransformer.OUTPUT1_GAIN)
         stsv.set_output_value(self.output2, input_value_2 * ExampleTransformer.KW_TO_W)
 
-    def write_to_report(self) -> List[str]:
-        """Writes a report."""
+    def write_to_report(self) -> list[str]:
+        """Returns report lines describing this transformer.
+
+        Returns:
+            A list of strings for inclusion in the simulation report.
+        """
         lines = []
         lines.append("Transformer: " + self.component_name)
         return lines

@@ -30,7 +30,7 @@ class ElectricityMeterConfig(cp.ConfigBase):
 
     @classmethod
     def get_main_classname(cls):
-        """Returns the full class name of the base class."""
+        """Return the fully qualified class name of the main component class."""
         return ElectricityMeter.get_full_classname()
 
     building_name: str
@@ -382,6 +382,10 @@ class ElectricityMeter(DynamicComponent):
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 ],
                 source_weight=999,
+                # The DHW electrical power output only exists when the heat pump
+                # has domestic hot water preparation enabled; allow this mandatory
+                # input to remain unconnected when DHW is deactivated.
+                allow_unconnected_mandatory=True,
             )
         )
         return dynamic_connections
@@ -708,12 +712,12 @@ class ElectricityMeter(DynamicComponent):
         (mean_total_power_from_grid_in_watt,
         max_total_power_from_grid_in_watt,
         min_total_power_from_grid_in_watt,
-         ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=total_power_from_grid_in_watt)
+         ) = KpiHelperClass.compute_mean_max_min_values(list_or_pandas_series=total_power_from_grid_in_watt)
 
         (mean_total_power_to_grid_in_watt,
         max_total_power_to_grid_in_watt,
         min_total_power_to_grid_in_watt,
-         ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=total_power_to_grid_in_watt)
+         ) = KpiHelperClass.compute_mean_max_min_values(list_or_pandas_series=total_power_to_grid_in_watt)
 
         total_energy_from_grid_in_kwh_entry = KpiEntry(
             name="Total energy from grid",

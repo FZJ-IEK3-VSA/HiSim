@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import List, Optional, Any
+from typing import List, Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -33,10 +33,14 @@ __status__ = ""
 @dataclass_json
 @dataclass
 class HeatingMeterConfig(cp.ConfigBase):
-    """Heating Meter Config."""
+    """Configuration dataclass for the HeatingMeter component.
+
+    Holds the building name and component name used to instantiate
+    a HeatingMeter.
+    """
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return HeatingMeter.get_full_classname()
 
@@ -47,7 +51,7 @@ class HeatingMeterConfig(cp.ConfigBase):
     def get_heating_meter_default_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "HeatingMeterConfig":
         """Gets a default HeatingMeter config."""
         return HeatingMeterConfig(
             building_name=building_name,
@@ -56,31 +60,36 @@ class HeatingMeterConfig(cp.ConfigBase):
 
 
 class HeatingMeter(DynamicComponent):
-    """Heating meter class."""
+    """Dynamic component that meters district-heating production and consumption.
+
+    Sums heat-delivered and heat-consumption inputs from dynamically connected
+    sources (e.g. heat pumps) and consumers (e.g. heat distribution systems),
+    computes per-timestep and cumulative energy in watt-hours, and derives
+    OPEX costs and CO2 emissions for district heating.
+    """
 
     # Outputs
-    HeatAvailableInWatt = "HeatAvailableInWatt"
-    HeatConsumptionInWatt = "HeatConsumptionInWatt"
-    HeatProductionInWatt = "HeatProductionInWatt"
-    HeatAvailable = "HeatAvailable"
-    HeatConsumption = "HeatConsumption"
-    HeatProduction = "HeatProduction"
-    CumulativeConsumption = "CumulativeConsumption"
-    CumulativeProduction = "CumulativeProduction"
+    HeatAvailableInWatt: str = "HeatAvailableInWatt"
+    HeatConsumptionInWatt: str = "HeatConsumptionInWatt"
+    HeatProductionInWatt: str = "HeatProductionInWatt"
+    HeatAvailable: str = "HeatAvailable"
+    HeatConsumption: str = "HeatConsumption"
+    HeatProduction: str = "HeatProduction"
+    CumulativeConsumption: str = "CumulativeConsumption"
+    CumulativeProduction: str = "CumulativeProduction"
 
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatingMeterConfig,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
-    ):
+    ) -> None:
         """Initialize the component."""
-        self.grid_energy_balancer_config = config
-        self.name = self.grid_energy_balancer_config.name
+        self.config: HeatingMeterConfig = config
+        self.name: str = self.config.name
         self.my_component_inputs: List[DynamicConnectionInput] = []
         self.my_component_outputs: List[DynamicConnectionOutput] = []
-        self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
+        self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -94,10 +103,10 @@ class HeatingMeter(DynamicComponent):
         self.production_inputs: List[ComponentInput] = []
         self.consumption_uncontrolled_inputs: List[ComponentInput] = []
 
-        self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        self.seconds_per_timestep: int = self.my_simulation_parameters.seconds_per_timestep
         # Component has states
-        self.state = HeatingMeterState(cumulative_production_in_watt_hour=0, cumulative_consumption_in_watt_hour=0)
-        self.previous_state = self.state.self_copy()
+        self.state: HeatingMeterState = HeatingMeterState(cumulative_production_in_watt_hour=0, cumulative_consumption_in_watt_hour=0)
+        self.previous_state: HeatingMeterState = self.state.self_copy()
 
         #
         self.heat_available_in_watt_channel: cp.ComponentOutput = self.add_output(
@@ -177,7 +186,7 @@ class HeatingMeter(DynamicComponent):
 
     def get_default_connections_from_heat_distribution_system(
         self,
-    ):
+    ) -> List[dynamic_component.DynamicComponentConnection]:
         """Get default connections from HeatDistribution system."""
 
         from hisim.components.heat_distribution_system import (  # pylint: disable=import-outside-toplevel
@@ -201,7 +210,7 @@ class HeatingMeter(DynamicComponent):
 
     def get_default_connections_from_more_advanced_heat_pump(
         self,
-    ):
+    ) -> List[dynamic_component.DynamicComponentConnection]:
         """Get default connections from MoreAdvancedHeatPump."""
 
         from hisim.components.more_advanced_heat_pump_hplib import (  # pylint: disable=import-outside-toplevel
@@ -223,9 +232,9 @@ class HeatingMeter(DynamicComponent):
         )
         return dynamic_connections
 
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         """Writes relevant information to report."""
-        return self.grid_energy_balancer_config.get_string_dict()
+        return self.config.get_string_dict()
 
     def i_save_state(self) -> None:
         """Saves the state."""
@@ -244,7 +253,20 @@ class HeatingMeter(DynamicComponent):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulate the grid energy balancer."""
+        """Simulate one timestep, summing heat production and consumption inputs.
+
+        On the first timestep the dynamic input channels for heat-delivered and
+        heat-consumption tags are resolved. Each iteration sums all production and
+        uncontrolled-consumption inputs, computes the net difference, converts
+        powers to watt-hours, updates cumulative totals, and writes all eight
+        output channels.
+
+        Args:
+            timestep: Current simulation timestep index.
+            stsv: Single-time-step values object for reading inputs and writing outputs.
+            force_convergence: If True, the solver is requesting convergence; this
+                method does not short-circuit on it.
+        """
 
         if timestep == 0:
             self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_DELIVERED])
@@ -324,11 +346,11 @@ class HeatingMeter(DynamicComponent):
 
     def get_cost_opex(
         self,
-        all_outputs: List,
+        all_outputs: List[cp.ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs for district heating consumption."""
-        total_used_energy_in_kwh: float
+        total_used_energy_in_kwh: Optional[float] = None
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
                 if output.field_name == self.HeatConsumption:
@@ -339,6 +361,9 @@ class HeatingMeter(DynamicComponent):
                         power_timeseries_in_watt=total_used_energy_in_watt,
                         time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
                     )
+
+        if total_used_energy_in_kwh is None:
+            total_used_energy_in_kwh = 0.0
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year, self.my_simulation_parameters.country
@@ -361,7 +386,7 @@ class HeatingMeter(DynamicComponent):
 
     def get_component_kpi_entries(
         self,
-        all_outputs: List,
+        all_outputs: List[cp.ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
@@ -418,14 +443,19 @@ class HeatingMeter(DynamicComponent):
 
 @dataclass
 class HeatingMeterState:
-    """HeatingMeterState class."""
+    """Mutable state holding cumulative heat energy totals for the HeatingMeter.
+
+    Attributes:
+        cumulative_production_in_watt_hour: Total heat produced since simulation start.
+        cumulative_consumption_in_watt_hour: Total heat consumed since simulation start.
+    """
 
     cumulative_production_in_watt_hour: float
     cumulative_consumption_in_watt_hour: float
 
     def self_copy(
         self,
-    ):
+    ) -> "HeatingMeterState":
         """Copy the HeatingMeterState."""
         return HeatingMeterState(
             self.cumulative_production_in_watt_hour,

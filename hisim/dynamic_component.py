@@ -2,7 +2,7 @@
 # clean
 
 from dataclasses import dataclass
-from typing import Any, List, Union, Dict, cast, Optional
+from typing import List, Union, Dict, cast, Optional
 import dataclasses as dc
 import hisim.loadtypes as lt
 from hisim import log
@@ -15,7 +15,7 @@ class DynamicComponentConnection:
 
     """Used in the dynamic component class for defining a dynamic connection."""
 
-    source_component_class: Any  # Component
+    source_component_class: type[Component]
     source_class_name: str
     source_component_field_name: str
     source_load_type: lt.LoadTypes
@@ -23,6 +23,7 @@ class DynamicComponentConnection:
     source_tags: List[Union[lt.ComponentType, lt.InandOutputType]]
     source_weight: int
     source_instance_name: Optional[str] = None
+    allow_unconnected_mandatory: bool = False
 
 
 @dataclass
@@ -34,7 +35,7 @@ class DynamicConnectionInput:
     source_component_field_name: str
     source_load_type: lt.LoadTypes
     source_unit: lt.Units
-    source_tags: list
+    source_tags: List[Union[lt.ComponentType, lt.InandOutputType]]
     source_weight: int
 
 
@@ -45,7 +46,7 @@ class DynamicConnectionOutput:
 
     source_component_label: str
     source_output_field_name: str
-    source_tags: list
+    source_tags: List[Union[lt.ComponentType, lt.InandOutputType]]
     source_weight: int
     source_load_type: lt.LoadTypes
     source_unit: lt.Units  # noqa
@@ -93,7 +94,7 @@ class DynamicComponent(Component):
         my_simulation_parameters: SimulationParameters,
         my_config: ConfigBase,
         my_display_config: DisplayConfig,
-    ):
+    ) -> None:
         """Initializes a dynamic component."""
         super().__init__(
             name=name,
@@ -109,7 +110,7 @@ class DynamicComponent(Component):
     def add_component_output(
         self,
         source_output_name: str,
-        source_tags: list,
+        source_tags: List[Union[lt.ComponentType, lt.InandOutputType]],
         source_load_type: lt.LoadTypes,
         source_unit: lt.Units,
         source_weight: int,
@@ -157,6 +158,7 @@ class DynamicComponent(Component):
         source_unit: lt.Units,
         source_tags: List[Union[lt.ComponentType, lt.InandOutputType]],
         source_weight: int,
+        allow_unconnected_mandatory: bool = False,
     ) -> None:
         """Adds a component input and connects it at once."""
         # Label Input and generate variable
@@ -166,7 +168,14 @@ class DynamicComponent(Component):
 
         log.trace(f"Added component input and connection {label}")
         # Define Input as Component Input and add it to inputs
-        myinput = ComponentInput(self.component_name, label, source_load_type, source_unit, True)
+        myinput = ComponentInput(
+            self.component_name,
+            label,
+            source_load_type,
+            source_unit,
+            True,
+            allow_unconnected_mandatory=allow_unconnected_mandatory,
+        )
         self.inputs.append(myinput)
         myinput.src_object_name = source_object_name
         myinput.src_field_name = str(source_component_output)
@@ -246,6 +255,7 @@ class DynamicComponent(Component):
                 source_tags=connection.source_tags,
                 source_weight=connection.source_weight,
                 source_object_name=src_name,
+                allow_unconnected_mandatory=connection.allow_unconnected_mandatory,
             )
 
     def add_dynamic_default_connections(self, connections: List[DynamicComponentConnection]) -> None:
@@ -303,25 +313,25 @@ class DynamicComponent(Component):
         self,
         tags: List[Union[lt.ComponentType, lt.InandOutputType]],
         weight_counter: int,
-    ) -> Any:
+    ) -> Optional[ComponentOutput]:
         """Sets all output values with given component type and weight."""
 
         # check if component of component type is available
 
-        for _, element in enumerate(self.my_component_outputs):  # loop over all outputs
+        for element in self.my_component_outputs:  # loop over all outputs
             if search_and_compare(
                 weight_to_search=weight_counter,
                 weight_of_component=element.source_weight,
                 tags_to_search=tags,
                 tags_of_component=element.source_tags,
             ):
-                return getattr(self, element.source_component_label)
+                return getattr(self, element.source_component_label)  # type: ignore[no-any-return]
 
         return None
 
     def get_all_dynamic_outputs(
         self, tags: List[Union[lt.ComponentType, lt.InandOutputType]], weight_counter: int
-    ) -> Any:
+    ) -> List[ComponentOutput]:
         """Sets all output values with given component type and weight."""
         outputs = []
 

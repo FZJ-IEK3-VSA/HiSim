@@ -172,7 +172,7 @@ def setup_function(
 
     # get household attribute jsonreferences from list of strings
     lpg_households: Union[JsonReference, List[JsonReference]]
-    if isinstance(arche_type_config_.lpg_households, List):
+    if isinstance(arche_type_config_.lpg_households, list):
         if len(arche_type_config_.lpg_households) == 1:
             lpg_households = getattr(Households, arche_type_config_.lpg_households[0])
         elif len(arche_type_config_.lpg_households) > 1:
@@ -367,7 +367,7 @@ def setup_function(
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+        heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             heating_system=my_hds_controller_information.hds_controller_config.heating_system,

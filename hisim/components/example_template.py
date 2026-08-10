@@ -62,28 +62,16 @@ class ComponentNameConfig(ConfigBase):
 
 
 class ComponentName(Component):
-    """Some instructions to document a class.
+    """Example template component showing how to build a new HiSim component.
 
-    First write a summary of the class that is as accurate as possible.
-    It should contain information about what functionalities the class has
-    and what its purpose is in the HiSim project.
+    This class is a simplified template demonstrating the steps required to
+    create a new component module (config, inputs/outputs, state, simulate).
+    It has no functional purpose in HiSim beyond serving as a reference.
 
-    This is an example class. It can be used as a template for creating new
-    component modules. Its functionalities serve no further purpose for HiSim.
-
-    Parameters
-    ----------
-    component_name : str
-        Passed to initialize :py:class:`~hisim.component.Component`.
-
-    loadtype : LoadType
-        A :py:class:`~hisim.loadtypes.LoadTypes` object that represents
-        the type of the loaded data.
-
-    unit: LoadTypes.Units
-        A :py:class:`~hisim.loadtypes.Units` object that represents
-        the unit of the loaded data.
-
+    Attributes:
+        InputFromOtherComponent: Name of the input field read from another component.
+        OutputWithState: Name of the output field whose value is held in state.
+        OutputWithoutState: Name of the stateless output field.
     """
 
     # Inputs
@@ -99,12 +87,19 @@ class ComponentName(Component):
         config: ComponentNameConfig,
         my_display_config: Optional[DisplayConfig] = None,
     ) -> None:
-        """Constructs all the neccessary attributes."""
+        """Initialize the ComponentName template component.
+
+        Args:
+            my_simulation_parameters: Simulation parameters for the current run.
+            config: :py:class:`ComponentNameConfig` providing name, loadtype and unit.
+            my_display_config: Optional display configuration; defaults to a new
+                :py:class:`DisplayConfig` when ``None``.
+        """
         if my_display_config is None:
             my_display_config = DisplayConfig()
         self.componentnameconfig: ComponentNameConfig = config
-        self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
+        self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
+        self.config: ComponentNameConfig = config
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -145,18 +140,33 @@ class ComponentName(Component):
 
     def i_save_state(self) -> None:
         """Saves the current state."""
-        self.previous_state = deepcopy(self.state)
+        self.previous_state = ComponentNameState(output_with_state=self.state.output_with_state)
 
     def i_restore_state(self) -> None:
         """Restores previous state."""
-        self.state = deepcopy(self.previous_state)
+        self.state = ComponentNameState(output_with_state=self.previous_state.output_with_state)
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
-        """Doublechecks."""
+        """No-op hook for optional post-simulation consistency checks.
+
+        Args:
+            timestep: Current simulation timestep index.
+            stsv: Single-time-step values for the current timestep.
+        """
         pass
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        """Simulates the component."""
+        """Compute outputs for the current timestep.
+
+        Reads the external input and the previous in-state output, computes the
+        two outputs (one accumulated into state, one stateless) and writes them
+        back to ``stsv`` and to :py:attr:`state`.
+
+        Args:
+            timestep: Current simulation timestep index.
+            stsv: Container to read inputs from and write outputs to.
+            force_convergence: Whether to force convergence (unused in this template).
+        """
         # define local variables
         input_1 = stsv.get_input_value(self.input_from_other_component)
         input_2 = self.state.output_with_state
@@ -180,8 +190,8 @@ class ComponentNameState:
     Parameters
     ----------
     output_with_state : int
-    Stores the state of the output_with_state value from
-    :py:class:`~hisim.component.ComponentName`.
+        Stores the state of the output_with_state value from
+        :py:class:`~hisim.component.ComponentName`.
 
     """
 

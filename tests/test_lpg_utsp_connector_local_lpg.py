@@ -46,34 +46,32 @@ def test_occupancy_scaling_with_utsp() -> None:
             "Here the use of the Local LPG was not possible. Therefore this test will be ignored."
         )
 
-    else:
+    log.information("number of residents in 1 household " + str(number_of_residents_one))
 
-        log.information("number of residents in 1 household " + str(number_of_residents_one))
+    # run occupancy for two identical households
+    household_list = [
+        Households.CHR02_Couple_30_64_age_with_work,
+        Households.CHR02_Couple_30_64_age_with_work,
+    ]
+    (
+        number_of_residents_two,
+        heating_by_residents_two,
+        heating_by_devices_two,
+        electricity_consumption_two,
+        water_consumption_two,
+        data_acquisition_mode_after_initialization,
+    ) = initialize_lpg_utsp_connector_and_return_results(households=household_list)
 
-        # run occupancy for two identical households
-        household_list = [
-            Households.CHR02_Couple_30_64_age_with_work,
-            Households.CHR02_Couple_30_64_age_with_work,
-        ]
-        (
-            number_of_residents_two,
-            heating_by_residents_two,
-            heating_by_devices_two,
-            electricity_consumption_two,
-            water_consumption_two,
-            data_acquisition_mode_after_initialization,
-        ) = initialize_lpg_utsp_connector_and_return_results(households=household_list)
+    log.information(f"number of residents in {len(household_list)} households " + str(number_of_residents_two))
 
-        log.information(f"number of residents in {len(household_list)} households " + str(number_of_residents_two))
-
-        # now test if results are doubled when occupancy is initialzed with 2 households
-        np.testing.assert_allclose(number_of_residents_two, len(household_list) * number_of_residents_one, rtol=0.01)
-        np.testing.assert_allclose(heating_by_residents_two, len(household_list) * heating_by_residents_one, rtol=0.01)
-        np.testing.assert_allclose(heating_by_devices_two, len(household_list) * heating_by_devices_one, rtol=0.01)
-        np.testing.assert_allclose(
-            electricity_consumption_two, len(household_list) * electricity_consumption_one, rtol=0.01
-        )
-        np.testing.assert_allclose(water_consumption_two, len(household_list) * water_consumption_one, rtol=0.01)
+    # now test if results are doubled when occupancy is initialzed with 2 households
+    np.testing.assert_allclose(number_of_residents_two, len(household_list) * number_of_residents_one, rtol=0.01)
+    np.testing.assert_allclose(heating_by_residents_two, len(household_list) * heating_by_residents_one, rtol=0.01)
+    np.testing.assert_allclose(heating_by_devices_two, len(household_list) * heating_by_devices_one, rtol=0.01)
+    np.testing.assert_allclose(
+        electricity_consumption_two, len(household_list) * electricity_consumption_one, rtol=0.01
+    )
+    np.testing.assert_allclose(water_consumption_two, len(household_list) * water_consumption_one, rtol=0.01)
 
 
 def initialize_lpg_utsp_connector_and_return_results(

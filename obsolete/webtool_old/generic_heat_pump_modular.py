@@ -356,7 +356,9 @@ class ModularHeatPump(cp.Component):
                 break
 
         if not heat_pump_found or heat_pump is None:
-            raise Exception("Heat pump model not registered in the database")
+            raise ValueError(
+                f"Heat pump model {self.config.manufacturer} / {self.config.device_name} not registered in the database"
+            )
 
         # Interpolates COP data from the database
         self.cop_ref = []

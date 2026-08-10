@@ -1,7 +1,7 @@
 """Air Conditioner Component."""
 
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 from dataclasses_json import dataclass_json
 
 import numpy as np
@@ -46,7 +46,7 @@ __status__ = "development"
 MAINTENANCE_COST_AS_PERCENTAGE_OF_INVESTMENT_PER_YEAR = 0.05
 
 
-def get_price_in_euro(air_conditioner: dict) -> float:
+def get_price_in_euro(air_conditioner: Dict[str, Any]) -> float:
     """Return the purchase price of a smart-devices air conditioner entry in euro.
 
     Prices in the smart-devices database are given either as a plain number or as a
@@ -71,7 +71,7 @@ def get_price_in_euro(air_conditioner: dict) -> float:
     return float(amount)
 
 
-def get_installation_cost_in_euro(air_conditioner: dict) -> float:
+def get_installation_cost_in_euro(air_conditioner: Dict[str, Any]) -> float:
     """Return the installation costs of a smart-devices air conditioner entry in euro.
 
     Based on https://www.obi.de/magazin/bauen/haustechnik/klimaanlage/klima-splitgeraet#Kosten
@@ -109,7 +109,7 @@ class AirConditionerConfig(ConfigBase):
     maintenance_costs_in_euro_per_year: float
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Return the full class name of the main component class."""
         return AirConditioner.get_full_classname()
 
@@ -184,16 +184,25 @@ class AirConditionerConfig(ConfigBase):
         heating_load: float,
         heating_reference_temperature: float,
         building_name: str = "BUI1",
-    ) -> Any:
-        """Return default air-conditioner configuration."""
+    ) -> "AirConditionerConfig":
+        """Return an air-conditioner configuration scaled to the building heating load.
+
+        Searches the smart-devices database for the air conditioner whose heating
+        capacity at the outdoor reference temperature closest to
+        ``heating_reference_temperature`` best matches the building's
+        ``heating_load``. The configuration is then returned with a
+        ``scale_factor`` of ``relevant_heating_capacity * 0.6 / heating_load``
+        (the factor of 0.6 was determined heuristically), so the selected unit is
+        sized down to the building's demand rather than used at its nominal rating.
+        """
         air_conditioners = utils.load_smart_appliance("Air Conditioner")
         air_conditioner_df = pd.DataFrame(air_conditioners)
 
         # Select air conditioner whose heating capacity (at temperature closes to heating reference temperature) is closest
         # to heating load of building
         def get_relevant_heating_capacity_for_temperature(
-            temperature_range, capacity
-        ):
+            temperature_range: List[float], capacity: List[float]
+        ) -> float:
             closest_temperature_index = min(
                 range(len(temperature_range)),
                 key=lambda i: abs(
@@ -239,25 +248,25 @@ class AirConditioner(cp.Component):
     """Simulates an air conditioner that provides heating and cooling based on a modulating signal."""
 
     # Input and output channel names
-    OperatingState = "State"
-    ModulatingPowerSignal = "ModulatingPowerSignal"
-    OutdoorAirTemperature = "TemperatureOutside"
-    GridImport = "GridImport"
-    PV2load = "PV2load"
-    Battery2Load = "Battery2Load"
-    ThermalPowerDelivered = "ThermalPowerDelivered"
-    ThermalEnergyDelivered = "ThermalEnergyDelivered"
-    ElectricalPowerConsumption = "ElectricalPowerConsumption"
-    ElectricalEnergyConsumption = "ElectricalEnergyConsumption"
-    Efficiency = "EnergyEfficiencyRatio"
-    CoefficientOfPerformance = "CoefficientOfPerformance"
+    OperatingState: ClassVar[str] = "State"
+    ModulatingPowerSignal: ClassVar[str] = "ModulatingPowerSignal"
+    OutdoorAirTemperature: ClassVar[str] = "TemperatureOutside"
+    GridImport: ClassVar[str] = "GridImport"
+    PV2load: ClassVar[str] = "PV2load"
+    Battery2Load: ClassVar[str] = "Battery2Load"
+    ThermalPowerDelivered: ClassVar[str] = "ThermalPowerDelivered"
+    ThermalEnergyDelivered: ClassVar[str] = "ThermalEnergyDelivered"
+    ElectricalPowerConsumption: ClassVar[str] = "ElectricalPowerConsumption"
+    ElectricalEnergyConsumption: ClassVar[str] = "ElectricalEnergyConsumption"
+    Efficiency: ClassVar[str] = "EnergyEfficiencyRatio"
+    CoefficientOfPerformance: ClassVar[str] = "CoefficientOfPerformance"
 
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: AirConditionerConfig,
         my_display_config: DisplayConfig = DisplayConfig(),
-    ):
+    ) -> None:
         """Initialize the air conditioner component."""
         self.air_conditioner_config = config
         self.my_simulation_parameters = my_simulation_parameters
@@ -339,7 +348,7 @@ class AirConditioner(cp.Component):
             Units.WATT_HOUR,
             output_description="Electrical energy consumption",
         )
-        self.efficiency = self.add_output(
+        self.eer_channel = self.add_output(
             self.component_name,
             self.Efficiency,
             LoadTypes.ANY,
@@ -355,7 +364,7 @@ class AirConditioner(cp.Component):
             self.get_default_connections_from_controller()
         )
 
-    def get_default_connections_from_weather(self):
+    def get_default_connections_from_weather(self) -> List[cp.ComponentConnection]:
         """Connect to default weather component for outside temperature."""
         return [
             cp.ComponentConnection(
@@ -365,7 +374,7 @@ class AirConditioner(cp.Component):
             )
         ]
 
-    def get_default_connections_from_controller(self):
+    def get_default_connections_from_controller(self) -> List[cp.ComponentConnection]:
         """Connect to default controller for power modulation signal."""
         return [
             cp.ComponentConnection(
@@ -404,7 +413,7 @@ class AirConditioner(cp.Component):
         )
 
     def get_cost_opex(
-        self, all_outputs: List, postprocessing_results: pd.DataFrame
+        self, all_outputs: List[cp.ComponentOutput], postprocessing_results: pd.DataFrame
     ) -> OpexCostDataClass:
         """Return operational expenditure (OPEX) including maintenance."""
 
@@ -439,7 +448,7 @@ class AirConditioner(cp.Component):
 
         return opex_cost_data_class
 
-    def build(self):
+    def build(self) -> None:
         """Initialize internal variables using values from air conditioner database."""
 
         # Fit polynomials to simulate continuous values based on temperature
@@ -486,7 +495,7 @@ class AirConditioner(cp.Component):
             return 0
         return abs(thermal_energy / efficiency)
 
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         """Output relevant info to final simulation report."""
         return self.air_conditioner_config.get_string_dict()
 
@@ -563,7 +572,7 @@ class AirConditioner(cp.Component):
         )
 
         # Write outputs
-        stsv.set_output_value(self.efficiency, efficiency)
+        stsv.set_output_value(self.eer_channel, efficiency)
         stsv.set_output_value(
             self.electrical_power_consumption_channel,
             electrical_power_consumption_w,
@@ -581,7 +590,7 @@ class AirConditioner(cp.Component):
 
     def get_component_kpi_entries(
         self,
-        all_outputs: List,
+        all_outputs: List[cp.ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
@@ -761,15 +770,15 @@ class AirConditionerControllerState:
         mode: str,
         activation_time_step: int,
         deactivation_time_step: int,
-        percentage: float,
+        power_modulation_percentage: float,
     ) -> None:
         """Constructor."""
 
         self.mode = mode  # can be "heating", "cooling", or "off"
         self.activation_time_step = activation_time_step
         self.deactivation_time_step = deactivation_time_step
-        self.percentage = (
-            percentage  # current power modulation level (0.0 - 1.0)
+        self.power_modulation_percentage = (
+            power_modulation_percentage  # current power modulation level (0.1 - 1.0)
         )
 
     def clone(self) -> "AirConditionerControllerState":
@@ -778,7 +787,7 @@ class AirConditionerControllerState:
             self.mode,
             self.activation_time_step,
             self.deactivation_time_step,
-            self.percentage,
+            self.power_modulation_percentage,
         )
 
     def i_prepare_simulation(self) -> None:
@@ -804,10 +813,10 @@ class AirConditionerControllerState:
 class AirConditionerController(cp.Component):
     """Controller component for modulating air conditioner behavior based on temperature."""
 
-    TemperatureIndoorAir = "TemperatureIndoorAir"
-    ElectricityInput = "ElectricityInput"
-    OperatingState = "OperatingState"
-    ModulatingPowerSignal = "ModulatingPowerSignal"
+    TemperatureIndoorAir: ClassVar[str] = "TemperatureIndoorAir"
+    ElectricityInput: ClassVar[str] = "ElectricityInput"
+    OperatingState: ClassVar[str] = "OperatingState"
+    ModulatingPowerSignal: ClassVar[str] = "ModulatingPowerSignal"
 
     @utils.measure_execution_time
     def __init__(
@@ -838,7 +847,7 @@ class AirConditionerController(cp.Component):
         # State initialization
         self.state = AirConditionerControllerState("off", 0, 0, 0.0)
         self.previous_state = self.state.clone()
-        self.processed_state = self.state.clone()
+        self.last_committed_state = self.state.clone()
 
         self.add_connections()
 
@@ -864,7 +873,7 @@ class AirConditionerController(cp.Component):
             self.get_default_connections_from_building()
         )
 
-    def get_default_connections_from_building(self):
+    def get_default_connections_from_building(self) -> List[cp.ComponentConnection]:
         """Connects the component's input to the building temperature."""
         log.information(
             "Setting building default connections in AirConditionerController"
@@ -895,7 +904,7 @@ class AirConditionerController(cp.Component):
         """Doublechecks."""
         pass
 
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         """Writes to report."""
 
         return self.config.get_string_dict() + [
@@ -911,25 +920,19 @@ class AirConditionerController(cp.Component):
     ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         # Returns default class, as controller itself has no opex cost
-        capex_cost_data_class = (
-            CapexCostDataClass.get_default_capex_cost_data_class()
-        )
-        return capex_cost_data_class
+        return CapexCostDataClass.get_default_capex_cost_data_class()
 
     def get_cost_opex(
-        self, all_outputs: List, postprocessing_results: pd.DataFrame
+        self, all_outputs: List[cp.ComponentOutput], postprocessing_results: pd.DataFrame
     ) -> OpexCostDataClass:
         """Returns opex costs of component."""
 
         # Returns default class, as controller itself has no opex cost
-        opex_cost_data_class = (
-            OpexCostDataClass.get_default_opex_cost_data_class()
-        )
-        return opex_cost_data_class
+        return OpexCostDataClass.get_default_opex_cost_data_class()
 
     def get_component_kpi_entries(
         self,
-        all_outputs: List,
+        all_outputs: List[cp.ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
@@ -943,7 +946,7 @@ class AirConditionerController(cp.Component):
     ) -> None:
         """Main simulation step."""
         if force_convergence:
-            self.state = self.processed_state.clone()
+            self.state = self.last_committed_state.clone()
             mode = self.state.mode
         else:
             indoor_air_temperature_deg_c = stsv.get_input_value(
@@ -952,27 +955,29 @@ class AirConditionerController(cp.Component):
             mode = self.determine_operating_mode(
                 indoor_air_temperature_deg_c, timestep
             )
-            percentage = self.modulate_power(
+            power_modulation_percentage = self.modulate_power(
                 indoor_air_temperature_deg_c, mode
             )
 
             self.state.mode = mode
-            self.state.percentage = percentage
-            self.processed_state = self.state.clone()
+            self.state.power_modulation_percentage = power_modulation_percentage
+            self.last_committed_state = self.state.clone()
 
         # Encode state as signed power level (heating = +%, cooling = -%, off = 0)
         if mode == "heating":
-            value = self.state.percentage
+            signed_modulating_signal = self.state.power_modulation_percentage
         elif mode == "cooling":
-            value = -self.state.percentage
+            signed_modulating_signal = -self.state.power_modulation_percentage
         elif mode == "off":
-            value = 0.0
+            signed_modulating_signal = 0.0
         else:
             raise ValueError(f"Unhandled mode case: {mode}")
 
-        stsv.set_output_value(self.operation_modulating_signal_channel, value)
+        stsv.set_output_value(
+            self.operation_modulating_signal_channel, signed_modulating_signal
+        )
 
-    def _check_minimum_operation_and_idle_time(self, timestep) -> Optional[str]:
+    def _check_minimum_operation_and_idle_time(self, timestep: int) -> Optional[str]:
         # Enforce minimum operation time
         if self.state.mode in {"heating", "cooling"}:
             if (
@@ -1008,7 +1013,7 @@ class AirConditionerController(cp.Component):
         # Stay in heating if within heating deadband
         if (
             self.state.mode == "heating"
-            or self.processed_state.mode == "heating"
+            or self.last_committed_state.mode == "heating"
         ) and current_temperature_deg_c < heating_setpoint + offset:
             if self.state.mode != "heating":
                 self.state.activate_heating(timestep)
@@ -1017,7 +1022,7 @@ class AirConditionerController(cp.Component):
         # Stay in cooling if within cooling deadband
         if (
             self.state.mode == "cooling"
-            or self.processed_state.mode == "cooling"
+            or self.last_committed_state.mode == "cooling"
         ) and current_temperature_deg_c > cooling_setpoint - offset:
             if self.state.mode != "cooling":
                 self.state.activate_cooling(timestep)
@@ -1026,7 +1031,7 @@ class AirConditionerController(cp.Component):
         # Switch to cooling if temperature exceeds upper cooling threshold (and previously not heating)
         if current_temperature_deg_c > cooling_setpoint and (
             self.state.mode != "heating"
-            and self.processed_state.mode != "heating"
+            and self.last_committed_state.mode != "heating"
         ):
             if self.state.mode != "cooling":
                 self.state.activate_cooling(timestep)
@@ -1035,7 +1040,7 @@ class AirConditionerController(cp.Component):
         # Switch to heating if temperature drops below lower heating threshold (and previously not cooling)
         if current_temperature_deg_c < heating_setpoint and (
             self.state.mode != "cooling"
-            and self.processed_state.mode != "cooling"
+            and self.last_committed_state.mode != "cooling"
         ):
             if self.state.mode != "heating":
                 self.state.activate_heating(timestep)
@@ -1083,6 +1088,6 @@ class AirConditionerController(cp.Component):
             / self.config.temperature_difference_full_power_deg_c,
             1.0,
         )
-        percentage = float(max(1 - (1 - capped_ratio) ** 2, 0.1))
+        power_modulation_percentage = float(max(1 - (1 - capped_ratio) ** 2, 0.1))
 
-        return percentage
+        return power_modulation_percentage

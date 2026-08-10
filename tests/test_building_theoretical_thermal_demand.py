@@ -2,7 +2,7 @@
 
 import shutil
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 import numpy as np
 import pytest
 
@@ -24,71 +24,25 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 # SYSTEM_SETUP_SCRIPT_PATH and FUNC needed to build simulator, SYSTEM_SETUP_SCRIPT_PATH is fake
-SYSTEM_SETUP_SCRIPT_PATH = "../system_setups/household_for_test_building_theoretical_heat_demand.py"
+SYSTEM_SETUP_SCRIPT_PATH: str = "../system_setups/household_for_test_building_theoretical_heat_demand.py"
 
 
-@pytest.mark.buildingtest
-def test_house_with_idealized_electric_heater_for_heating_test(
-    my_simulation_parameters: Optional[SimulationParameters] = None,
-) -> None:  # noqa: too-many-statements
-    """Test that an idealized electric heater holds indoor temperature within setpoints.
+def _build_components(
+    my_simulation_parameters: SimulationParameters,
+) -> Tuple[
+    "weather.Weather",
+    "idealized_electric_heater.IdealizedElectricHeater",
+    "building.Building",
+    "loadprofilegenerator_utsp_connector.UtspLpgConnector",
+]:
+    """Build the weather, idealized heater, building, and occupancy components.
 
-    Builds a one-week household simulation (weather, occupancy, building, and an
-    idealized electric heater that supplies exactly the building's theoretical
-    thermal demand) and asserts that the resulting indoor air temperature stays
-    between the configured heating and cooling set temperatures at every timestep.
-
-    Args:
-        my_simulation_parameters: Optional pre-built simulation parameters. If
-            `None`, a one-week simulation for 2021 with hourly timesteps is
-            constructed and used.
+    The heater is configured with a narrow heating/cooling band so that it supplies
+    exactly the building's theoretical thermal demand.
     """
-
-    # =========================================================================================================================================================
-    # System Parameters
-
-    # Set Simulation Parameters
-    year = 2021
-    seconds_per_timestep = 60 * 60
-
-    # Set Fake Heater
+    # Set Fake Heater set temperatures
     set_heating_temperature_for_building_in_celsius = 20
     set_cooling_temperature_for_building_in_celsius = 22
-
-    # =========================================================================================================================================================
-    # Build Components
-
-    # Build Simulation Parameters
-    if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_week_only(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
-    my_simulation_parameters.result_directory = TestingUtils.get_result_directory()
-    shutil.rmtree(my_simulation_parameters.result_directory, ignore_errors=True)
-
-    # # in case ou want to check on all TABULA buildings -> run test over all building_codes
-    # d_f = pd.read_csv(
-    #     utils.HISIMPATH["housing"],
-    #     decimal=",",
-    #     sep=";",
-    #     encoding="cp1252",
-    #     low_memory=False,
-    # )
-
-    # for building_code in d_f["Code_BuildingVariant"]:
-    #     if isinstance(building_code, str):
-    #         log.information("building code " + str(building_code))
-
-    # this part is copied from hisim_main
-    # Build Simulator
-    system_setup_directory = str(Path(SYSTEM_SETUP_SCRIPT_PATH).resolve().parent)
-
-    my_sim: sim.Simulator = sim.Simulator(
-        module_directory=system_setup_directory,
-        my_simulation_parameters=my_simulation_parameters,
-        module_filename="household_for_test_building_theoretical_heat_demand",
-    )
-    my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(
@@ -123,9 +77,21 @@ def test_house_with_idealized_electric_heater_for_heating_test(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    # =========================================================================================================================================================
-    # Connect Components
+    return my_weather, my_idealized_electric_heater, my_building, my_occupancy
 
+
+def _connect_components(
+    my_weather: weather.Weather,
+    my_idealized_electric_heater: idealized_electric_heater.IdealizedElectricHeater,
+    my_building: building.Building,
+    my_occupancy: loadprofilegenerator_utsp_connector.UtspLpgConnector,
+) -> None:
+    """Wire the building's inputs to weather, occupancy, and the heater.
+
+    The building consumes irradiance/temperature from the weather, internal gains
+    from occupancy, and the delivered thermal power from the idealized heater. The
+    heater in turn reads the building's theoretical thermal demand.
+    """
     # Building
     my_building.connect_input(
         my_building.Altitude, my_weather.component_name, my_weather.Altitude
@@ -184,20 +150,14 @@ def test_house_with_idealized_electric_heater_for_heating_test(
         my_building.TheoreticalThermalBuildingDemand,
     )
 
-    # =========================================================================================================================================================
-    # Add Components to Simulator and run all timesteps
 
-    my_sim.add_component(my_weather)
-    my_sim.add_component(my_occupancy)
-    my_sim.add_component(my_building)
-    my_sim.add_component(my_idealized_electric_heater)
-
-    my_sim.run_all_timesteps()
-
-    # =========================================================================================================================================================
-    # Test Air Temperature of Building
-
-    building_indoor_air_temperatures = my_sim.results_data_frame["Building - TemperatureIndoorAir [Temperature - °C]"]
+def _assert_indoor_temperature(
+    my_sim: sim.Simulator, my_building: building.Building
+) -> None:
+    """Assert the indoor air temperature stays within the building's set temperatures."""
+    building_indoor_air_temperatures = my_sim.results_data_frame[
+        "Building - TemperatureIndoorAir [Temperature - °C]"
+    ]
 
     for air_temperature in building_indoor_air_temperatures.values:
         # check if air temperature in building is held between set temperatures
@@ -206,3 +166,80 @@ def test_house_with_idealized_electric_heater_for_heating_test(
             <= np.round(air_temperature)
             <= my_building.set_cooling_temperature_in_celsius
         )
+
+
+@pytest.mark.buildingtest
+def test_house_with_idealized_electric_heater_for_heating_test(
+    my_simulation_parameters: Optional[SimulationParameters] = None,
+) -> None:
+    """Test that an idealized electric heater holds indoor temperature within setpoints.
+
+    Builds a one-week household simulation (weather, occupancy, building, and an
+    idealized electric heater that supplies exactly the building's theoretical
+    thermal demand) and asserts that the resulting indoor air temperature stays
+    between the configured heating and cooling set temperatures at every timestep.
+
+    Args:
+        my_simulation_parameters: Optional pre-built simulation parameters. If
+            `None`, a one-week simulation for 2021 with hourly timesteps is
+            constructed and used.
+    """
+
+    # =========================================================================================================================================================
+    # Simulation Parameters
+
+    # Set Simulation Parameters
+    year = 2021
+    seconds_per_timestep = 60 * 60
+
+    # Build Simulation Parameters
+    if my_simulation_parameters is None:
+        my_simulation_parameters = SimulationParameters.one_week_only(
+            year=year, seconds_per_timestep=seconds_per_timestep
+        )
+    my_simulation_parameters.result_directory = TestingUtils.get_result_directory()
+    shutil.rmtree(my_simulation_parameters.result_directory, ignore_errors=True)
+
+    # # in case ou want to check on all TABULA buildings -> run test over all building_codes
+    # d_f = pd.read_csv(
+    #     utils.HISIMPATH["housing"],
+    #     decimal=",",
+    #     sep=";",
+    #     encoding="cp1252",
+    #     low_memory=False,
+    # )
+
+    # for building_code in d_f["Code_BuildingVariant"]:
+    #     if isinstance(building_code, str):
+    #         log.information("building code " + str(building_code))
+
+    # this part is copied from hisim_main
+    # Build Simulator
+    system_setup_directory = str(Path(SYSTEM_SETUP_SCRIPT_PATH).resolve().parent)
+
+    my_sim: sim.Simulator = sim.Simulator(
+        module_directory=system_setup_directory,
+        my_simulation_parameters=my_simulation_parameters,
+        module_filename="household_for_test_building_theoretical_heat_demand",
+    )
+    my_sim.set_simulation_parameters(my_simulation_parameters)
+
+    # =========================================================================================================================================================
+    # Build, connect, run, and assert
+
+    my_weather, my_idealized_electric_heater, my_building, my_occupancy = _build_components(
+        my_simulation_parameters
+    )
+    _connect_components(
+        my_weather, my_idealized_electric_heater, my_building, my_occupancy
+    )
+
+    # Add Components to Simulator and run all timesteps
+    my_sim.add_component(my_weather)
+    my_sim.add_component(my_occupancy)
+    my_sim.add_component(my_building)
+    my_sim.add_component(my_idealized_electric_heater)
+
+    my_sim.run_all_timesteps()
+
+    _assert_indoor_temperature(my_sim, my_building)

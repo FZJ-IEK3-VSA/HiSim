@@ -1,4 +1,8 @@
-"""Unit tests for the charts module."""
+"""Tests for Chart and Carpet postprocessing chart helpers.
+
+Covers Carpet.plot behaviour on invalid input data, Chart constructor path-checking
+and lazy output-directory creation, and rescale_y_axis unit conversion.
+"""
 
 from __future__ import annotations
 
@@ -28,7 +32,7 @@ def test_carpet_plot_returns_none_on_invalid_data() -> None:
             component_name="TestComponent",
             units="kWh",
             directory_path=tmpdir,
-            time_correction_factor=3600,
+            time_correction_factor_in_hours=3600,
             output_description="Test output description",
             figure_format=FigureFormat.PNG,
         )
@@ -74,7 +78,7 @@ def chart_with_injected_checker(tmp_path: Path) -> _ChartFixture:
         chart_type="Line",
         units="kW",
         directory_path=str(tmp_path),
-        time_correction_factor=3600,
+        time_correction_factor_in_hours=3600,
         figure_format=FigureFormat.PNG,
         path_checker=fake_path_checker,
     )
@@ -132,7 +136,7 @@ def test_chart_constructor_defaults_to_global_path_checker(tmp_path: Path) -> No
         chart_type="Bar",
         units="kWh",
         directory_path=str(tmp_path),
-        time_correction_factor=3600,
+        time_correction_factor_in_hours=3600,
         figure_format=FigureFormat.PNG,
     )
 

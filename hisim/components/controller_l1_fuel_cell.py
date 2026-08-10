@@ -185,8 +185,8 @@ class FuelCellController(Component):
             self.component_name,
             FuelCellController.PowerNotProvided,
             lt.LoadTypes.ELECTRICITY,
-            lt.Units.KILOWATT,
-            output_description="Sums up the power which can not be provided from the system",
+            lt.Units.KWH,
+            output_description="Sums up the energy which can not be provided from the system",
         )
 
         self.total_off_count: ComponentOutput = self.add_output(
@@ -213,11 +213,18 @@ class FuelCellController(Component):
         self.activation_runtime_previous = self.activation_runtime
 
     def load_check(self, current_demand, min_output, max_output, standby_load):
-        """Make a load check."""
+        """Make a load check.
+
+        ``power_not_provided_count`` accumulates the *energy* (in kWh) that the
+        fuel cell cannot deliver.  Each per-timestep power deficit in kW is
+        therefore scaled by the timestep duration ``dt`` (in hours) before being
+        added, so the total is independent of the simulation resolution.
+        """
+        dt = self.my_simulation_parameters.seconds_per_timestep / 3600.0
 
         if current_demand > max_output:
             current_demand_to_system = max_output
-            self.power_not_provided_count += current_demand - max_output
+            self.power_not_provided_count += (current_demand - max_output) * dt
             state = "ON"
 
         elif min_output <= current_demand <= max_output:
@@ -227,12 +234,12 @@ class FuelCellController(Component):
 
         elif standby_load <= current_demand < min_output:
             current_demand_to_system = standby_load
-            self.power_not_provided_count += current_demand - standby_load
+            self.power_not_provided_count += (current_demand - standby_load) * dt
             state = "STANDBY"
 
         else:
             current_demand_to_system = 0.0
-            self.power_not_provided_count += current_demand
+            self.power_not_provided_count += current_demand * dt
             state = "OFF"
 
         return current_demand_to_system, state, self.power_not_provided_count

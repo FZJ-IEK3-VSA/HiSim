@@ -29,7 +29,7 @@ LABEL_MONTHS: list[str] = [
 ]
 
 
-def _make_series(n_steps: int) -> pd.Series:
+def _make_series(n_steps: int) -> pd.Series[float]:
     """A plain pandas Series of ``n_steps`` rows with an integer RangeIndex."""
     return pd.Series(np.arange(n_steps, dtype=float))
 
@@ -44,13 +44,13 @@ def test_build_day_slice_is_static_and_needs_no_chart_construction() -> None:
 
 def test_build_day_slice_first_day_of_january_with_hourly_resolution() -> None:
     """Day 0 / month 0 -> January 1st, the first 24 timesteps of the series (slice path)."""
-    # 1 / time_correction_factor == 1 -> one timestep per hour.
+    # 1 / time_correction_factor_in_hours == 1 -> one timestep per hour.
     data = _make_series(24 * 31)  # 31 days of hourly data
     data_slice, plot_title = ChartSingleDay.build_day_slice(
         data=data,
         month=0,
         day=0,
-        time_correction_factor=1.0,
+        time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS,
         title="Temperature",
     )
@@ -70,7 +70,7 @@ def test_build_day_slice_slice_path_requires_more_than_one_day_of_data() -> None
         data=data,
         month=0,
         day=0,
-        time_correction_factor=1.0,
+        time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS,
         title="T",
     )
@@ -86,19 +86,19 @@ def test_build_day_slice_ordinal_suffixes() -> None:
     """
     data = _make_series(5)  # len <= 24 -> fall-through, no slicing
     _, t1 = ChartSingleDay.build_day_slice(
-        data=data, month=0, day=0, time_correction_factor=1.0,
+        data=data, month=0, day=0, time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS, title="X")
     _, t2 = ChartSingleDay.build_day_slice(
-        data=data, month=0, day=1, time_correction_factor=1.0,
+        data=data, month=0, day=1, time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS, title="X")
     _, t3 = ChartSingleDay.build_day_slice(
-        data=data, month=0, day=2, time_correction_factor=1.0,
+        data=data, month=0, day=2, time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS, title="X")
     _, t4 = ChartSingleDay.build_day_slice(
-        data=data, month=0, day=3, time_correction_factor=1.0,
+        data=data, month=0, day=3, time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS, title="X")
     _, t11 = ChartSingleDay.build_day_slice(
-        data=data, month=0, day=10, time_correction_factor=1.0,
+        data=data, month=0, day=10, time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS, title="X")
 
     assert t1 == "X January 1st"
@@ -115,7 +115,7 @@ def test_build_day_slice_month_label_and_offset_in_title() -> None:
         data=data,
         month=1,
         day=2,
-        time_correction_factor=1.0,
+        time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS,
         title="Demand",
     )
@@ -126,13 +126,13 @@ def test_build_day_slice_month_label_and_offset_in_title() -> None:
 def test_build_day_slice_firstindex_offset_for_subhourly_resolution() -> None:
     """15-minute resolution -> 4 timesteps per hour, 96 per day, sliced from offset 0."""
     seconds_per_timestep = 900
-    time_correction_factor = seconds_per_timestep / 3600.0  # 0.25
+    time_correction_factor_in_hours = seconds_per_timestep / 3600.0  # 0.25
     data = _make_series(96 * 31)
     data_slice, plot_title = ChartSingleDay.build_day_slice(
         data=data,
         month=0,
         day=0,
-        time_correction_factor=time_correction_factor,
+        time_correction_factor_in_hours=time_correction_factor_in_hours,
         label_months_lowercase=LABEL_MONTHS,
         title="PV",
     )
@@ -149,7 +149,7 @@ def test_build_day_slice_returns_full_data_when_slice_exceeds_length() -> None:
         data=short_data,
         month=0,
         day=0,
-        time_correction_factor=1.0,
+        time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS,
         title="Short",
     )
@@ -168,7 +168,7 @@ def test_build_day_slice_does_not_mutate_input_series() -> None:
         data=data,
         month=0,
         day=0,
-        time_correction_factor=1.0,
+        time_correction_factor_in_hours=1.0,
         label_months_lowercase=LABEL_MONTHS,
         title="T",
     )
@@ -187,7 +187,7 @@ def test_get_day_data_delegates_to_build_day_slice(tmp_path: Path) -> None:
         component_name="House",
         units="C",
         directory_path=str(tmp_path),
-        time_correction_factor=1.0 / timesteps_per_hour,
+        time_correction_factor_in_hours=1.0 / timesteps_per_hour,
         output_description="temperature",
         data=data,
         day=0,
@@ -204,7 +204,7 @@ def test_get_day_data_delegates_to_build_day_slice(tmp_path: Path) -> None:
         data=data,
         month=0,
         day=0,
-        time_correction_factor=1.0 / timesteps_per_hour,
+        time_correction_factor_in_hours=1.0 / timesteps_per_hour,
         label_months_lowercase=chart.label_months_lowercase,
         title=chart.title,
     )

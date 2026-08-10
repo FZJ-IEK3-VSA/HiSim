@@ -1,6 +1,6 @@
 """Test for running multiple requests with lpg utsp connector and scaling up the results."""
 
-from typing import List, Tuple, Any
+from typing import List, Tuple
 import pytest
 import numpy as np
 from utspclient.helpers.lpgdata import (
@@ -28,14 +28,17 @@ def test_occupancy_scaling_with_utsp():
 
     # run occupancy for one household only
     household = Households.CHR02_Couple_30_64_age_with_work
+    my_occupancy, data_acquisition_mode_after_initialization = build_lpg_utsp_connector(households=household)
+    # Assign global indices explicitly here so the process-wide component-index
+    # registry mutation stays visible at the call site (see KB-4368 / KB-5627).
+    fft.add_global_index_of_components([my_occupancy])
     (
         number_of_residents_one,
         heating_by_residents_one,
         heating_by_devices_one,
         electricity_consumption_one,
         water_consumption_one,
-        data_acquisition_mode_after_initialization,
-    ) = initialize_lpg_utsp_connector_and_return_results(households=household)
+    ) = simulate_and_read_occupancy_outputs(my_occupancy)
 
     if (
         data_acquisition_mode_after_initialization
@@ -47,7 +50,22 @@ def test_occupancy_scaling_with_utsp():
 
     else:
 
-        log.information("number of residents in 1 household " + str(number_of_residents_one))
+        # Guard against a vacuously-satisfied scaling test: if any
+        # single-household baseline were zero, every assert_allclose(N * 0, 0)
+        # below would pass even if the connector ignored the household count
+        # entirely, giving false confidence that scaling works (issue #1788).
+        # The baselines are summed over the first 24 hours (see
+        # simulate_and_read_occupancy_outputs) to avoid timestep-0 zeros, but
+        # these guards provide an explicit fail-loud check. They run before the
+        # second UTSP call so a zero baseline short-circuits without wasting a
+        # network round-trip.
+        assert number_of_residents_one > 0, "baseline residents must be non-zero for scaling test to be meaningful"
+        assert heating_by_residents_one > 0, "baseline heating-by-residents must be non-zero"
+        assert heating_by_devices_one > 0, "baseline heating-by-devices must be non-zero"
+        assert electricity_consumption_one > 0, "baseline electricity must be non-zero"
+        assert water_consumption_one > 0, "baseline water must be non-zero"
+
+        log.information(f"number of residents in 1 household {number_of_residents_one}")
 
         # run occupancy for two identical households
         household_list = [
@@ -56,16 +74,17 @@ def test_occupancy_scaling_with_utsp():
             # Households.CHR02_Couple_30_64_age_with_work,
             # Households.CHR02_Couple_30_64_age_with_work,
         ]
+        my_occupancy, _ = build_lpg_utsp_connector(households=household_list)
+        fft.add_global_index_of_components([my_occupancy])
         (
             number_of_residents_two,
             heating_by_residents_two,
             heating_by_devices_two,
             electricity_consumption_two,
             water_consumption_two,
-            data_acquisition_mode_after_initialization,
-        ) = initialize_lpg_utsp_connector_and_return_results(households=household_list)
+        ) = simulate_and_read_occupancy_outputs(my_occupancy)
 
-        log.information(f"number of residents in {len(household_list)} households " + str(number_of_residents_two))
+        log.information(f"number of residents in {len(household_list)} households {number_of_residents_two}")
 
         # now test if results are doubled when occupancy is initialzed with 2 households
         np.testing.assert_allclose(number_of_residents_two, len(household_list) * number_of_residents_one, rtol=0.01)
@@ -77,20 +96,19 @@ def test_occupancy_scaling_with_utsp():
         np.testing.assert_allclose(water_consumption_two, len(household_list) * water_consumption_one, rtol=0.01)
 
 
-def initialize_lpg_utsp_connector_and_return_results(
+def build_lpg_utsp_connector(
     households: JsonReference | List[JsonReference]
 ) -> Tuple[
-    float | Any,
-    float | Any,
-    float | Any,
-    float | Any,
-    float | Any,
+    loadprofilegenerator_utsp_connector.UtspLpgConnector,
     loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode,
 ]:
-    """Initialize the LPG UTSP connector and simulate a single timestep.
+    """Build an ``UtspLpgConnector`` for the given household reference(s).
 
-    Builds an `UtspLpgConnector` with the given household reference(s), runs one
-    simulation step, and reads back the occupancy-related output channels.
+    Constructs the connector configuration and instance but performs no
+    simulation step and does **not** mutate the process-wide component-index
+    registry. The caller owns the registry lifecycle and must assign global
+    indices (e.g. via :func:`fft.add_global_index_of_components`) before
+    simulating the returned connector.
 
     Args:
         households: A single household reference or a list of household
@@ -98,14 +116,12 @@ def initialize_lpg_utsp_connector_and_return_results(
 
     Returns:
         A tuple of:
-        - number_of_residents: Total number of residents across the household(s).
-        - heating_by_residents: Heating energy attributable to residents.
-        - heating_by_devices: Heating energy attributable to devices.
-        - electricity_consumption: Electricity consumption from the connector.
-        - water_consumption: Water consumption from the connector.
-        - data_acquisition_mode_after_initialization: The `LpgDataAcquisitionMode`
-          resolved after initialization (may differ from the requested mode when
-          UTSP is unavailable, e.g. falling back to `USE_PREDEFINED_PROFILE`).
+        - The constructed ``UtspLpgConnector`` instance (outputs not yet
+          globally indexed).
+        - data_acquisition_mode_after_initialization: The
+          ``LpgDataAcquisitionMode`` resolved after initialization (may differ
+          from the requested mode when UTSP is unavailable, e.g. falling back
+          to ``USE_PREDEFINED_PROFILE``).
     """
     # Set Simu Params
     year = 2021
@@ -145,19 +161,72 @@ def initialize_lpg_utsp_connector_and_return_results(
     )
     my_occupancy_data_acquisition_mode_after_initialization = my_occupancy.utsp_config.data_acquisition_mode
 
+    return my_occupancy, my_occupancy_data_acquisition_mode_after_initialization
+
+
+def simulate_and_read_occupancy_outputs(
+    my_occupancy: loadprofilegenerator_utsp_connector.UtspLpgConnector,
+) -> Tuple[float, float, float, float, float]:
+    """Run simulation steps and read back the occupancy output channels.
+
+    Constructs a :class:`component.SingleTimeStepValues` buffer sized to the
+    component's outputs, runs ``i_simulate`` over the first 24 hours, and
+    reads the occupancy-related outputs by their global index.
+
+    Energy, water, and heating outputs are **summed** across the 24-hour
+    range rather than read at a single timestep. At timestep 0 (midnight)
+    these channels may legitimately be zero (no activity), which would make
+    ``assert_allclose(N * 0, 0)`` pass vacuously even if the connector
+    ignored the household count (issue #1788). Summing over a full day
+    guarantees a non-zero baseline so the scaling comparison is meaningful.
+    ``number_of_residents`` is a constant count, so it is read once at
+    timestep 0.
+
+    The caller must have assigned global indices to ``my_occupancy``'s output
+    channels beforehand (e.g. via
+    :func:`fft.add_global_index_of_components`). This function deliberately
+    does **not** perform that mutation so the process-wide registry lifecycle
+    stays explicit and owned by the caller (see KB-4368).
+
+    Args:
+        my_occupancy: An ``UtspLpgConnector`` whose output channels already have
+            global indices assigned.
+
+    Returns:
+        A tuple of:
+        - number_of_residents: Total number of residents across the household(s)
+          (read at timestep 0; constant across the simulation).
+        - heating_by_residents: Sum of heating energy attributable to residents
+          over the first 24 hours.
+        - heating_by_devices: Sum of heating energy attributable to devices
+          over the first 24 hours.
+        - electricity_consumption: Sum of electricity consumption over the
+          first 24 hours.
+        - water_consumption: Sum of water consumption over the first 24 hours.
+    """
     stsv = component.SingleTimeStepValues(fft.get_number_of_outputs([my_occupancy]))
 
-    # Add Global Index and set values for fake Inputs
-    fft.add_global_index_of_components([my_occupancy])
-
-    timestep = 0
-    my_occupancy.i_simulate(timestep, stsv, False)
+    # number_of_residents is a constant count; read it once at timestep 0.
+    my_occupancy.i_simulate(0, stsv, False)
     number_of_residents = stsv.values[my_occupancy.number_of_residents_channel.global_index]
-    heating_by_residents = stsv.values[my_occupancy.heating_by_residents_channel.global_index]
-    heating_by_devices = stsv.values[my_occupancy.heating_by_devices_channel.global_index]
-    electricity_consumption = stsv.values[my_occupancy.electricity_output_channel.global_index]
 
-    water_consumption = stsv.values[my_occupancy.water_consumption_channel.global_index]
+    # Sum energy/water/heating outputs over the first 24 hours so the baseline
+    # is non-zero by construction. At timestep 0 these channels may legitimately
+    # be zero (issue #1788), which would make scaling assertions vacuously pass.
+    seconds_per_timestep = my_occupancy.my_simulation_parameters.seconds_per_timestep
+    timesteps_per_day = int(24 * 3600 / seconds_per_timestep)
+
+    heating_by_residents = 0.0
+    heating_by_devices = 0.0
+    electricity_consumption = 0.0
+    water_consumption = 0.0
+
+    for timestep in range(timesteps_per_day):
+        my_occupancy.i_simulate(timestep, stsv, False)
+        heating_by_residents += stsv.values[my_occupancy.heating_by_residents_channel.global_index]
+        heating_by_devices += stsv.values[my_occupancy.heating_by_devices_channel.global_index]
+        electricity_consumption += stsv.values[my_occupancy.electricity_output_channel.global_index]
+        water_consumption += stsv.values[my_occupancy.water_consumption_channel.global_index]
 
     return (
         number_of_residents,
@@ -165,5 +234,4 @@ def initialize_lpg_utsp_connector_and_return_results(
         heating_by_devices,
         electricity_consumption,
         water_consumption,
-        my_occupancy_data_acquisition_mode_after_initialization,
     )

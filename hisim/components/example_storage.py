@@ -4,7 +4,6 @@
 
 # Generic/Built-in
 import copy
-from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -66,7 +65,7 @@ class SimpleStorageConfig(ConfigBase):
     """Configuration of the Simple Storage."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return SimpleStorage.get_full_classname()
 
@@ -82,7 +81,7 @@ class SimpleStorageConfig(ConfigBase):
     def get_default_thermal_storage(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "SimpleStorageConfig":
         """Gets a default Simple Storage."""
         return SimpleStorageConfig(
             building_name=building_name,
@@ -96,22 +95,24 @@ class SimpleStorageConfig(ConfigBase):
 class SimpleStorage(Component):
     """A class to simulate the Simple Storage."""
 
-    ChargingAmount = "Charging Amount"
-    DischargingAmount = "Discharging Amount"
-    ActualStorageDelta = "Actual Storage Delta"
-    CurrentFillLevel = "Current Fill Level Absolute"
-    CurrentFillLevelPercent = "Current Fill Level Percent"
+    ChargingAmount: str = "Charging Amount"
+    DischargingAmount: str = "Discharging Amount"
+    ActualStorageDelta: str = "Actual Storage Delta"
+    CurrentFillLevel: str = "Current Fill Level Absolute"
+    CurrentFillLevelPercent: str = "Current Fill Level Percent"
 
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: SimpleStorageConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: DisplayConfig | None = None,
     ) -> None:
         """Constructs all the neccessary attributes for the SimpleStorage object."""
-        self.simplestorageconfig = config
-        self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
+        self.simplestorageconfig: SimpleStorageConfig = config
+        self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
+        self.config: SimpleStorageConfig = config
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -120,9 +121,9 @@ class SimpleStorage(Component):
             my_display_config=my_display_config,
         )
         # Initialized variables
-        self.state = ExampleStorageState(0, self.simplestorageconfig.capacity)
-        self.capacity = self.simplestorageconfig.capacity
-        self.previous_state = copy.copy(self.state)
+        self.state: ExampleStorageState = ExampleStorageState(0, self.simplestorageconfig.capacity)
+        self.capacity: float = self.simplestorageconfig.capacity
+        self.previous_state: ExampleStorageState = copy.copy(self.state)
 
         self.charging_input: ComponentInput = self.add_input(
             self.simplestorageconfig.name,

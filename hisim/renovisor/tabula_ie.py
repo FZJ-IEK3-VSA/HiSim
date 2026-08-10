@@ -5,6 +5,70 @@ Builds an in-memory index of the generic example codes
 ``Building`` component reads, and selects the code matching a country, building type,
 construction year and refurbishment variant — with nearest-neighbour fallbacks for the gaps
 in the table (e.g. the Irish apartment archetypes lack the early age bands).
+
+Reference dataset
+-----------------
+The index is built from the *IEE TABULA + EPISCOPE* building-typology project
+(www.episcope.eu), whose ``tabula-calculator.xlsx`` workbook HiSim ships in processed form
+at ``hisim/inputs/housing/data_processed/episcope-tabula.csv`` (Latin-1, ``;``-delimited).
+This module reads only the columns needed for code selection and never modifies the dataset.
+
+Typology code grammar
+---------------------
+Every selectable row carries a code of the form
+``<CC>.N.<TYPE>.<band>.Gen.ReEx.001.<variant>``:
+
+``<CC>``
+    ISO 3166-1 alpha-2 country code (``IE`` for Ireland, the country currently exercised by
+    the RenoVisor translator; other codes present in the CSV are indexed but untested).
+
+``<TYPE>``
+    Building typology: ``SFH`` (single-family house), ``TH`` (terraced house) or ``AB``
+    (apartment block).  The CSV also holds ``MFH`` (multi-family house), but the RenoVisor
+    request schema maps dwelling types to the first three only.
+
+``<band>``
+    Two-digit construction-year class (``01``–``10``); the year ranges are read from the CSV
+    columns ``Year1_Building`` / ``Year2_Building``.
+
+``Gen.ReEx.001``
+    Fixed qualifiers: generic example (*Gen*), reference example (*ReEx*), dataset ``001``.
+
+``<variant>``
+    Refurbishment level: ``1`` existing/unrenovated, ``2`` usual refurbishment, ``3``
+    advanced refurbishment.  Special sub-typology codes (e.g. ``IE.N.SFH.01.325SB...``) are
+    deliberately excluded by ``_CODE_PATTERN``.
+
+Mapping to HiSim physical models
+--------------------------------
+The selected code is consumed by the ``Building`` component
+(:mod:`hisim.components.building`), which loads the matching CSV row's envelope parameters
+— element U-values, areas and thermal conductances — and feeds them into a 5R1C
+resistor-capacitor model per EN ISO 13790.  This module performs **no** physical
+calculation; it only resolves *which* typology row the simulator should load.
+
+Unit conventions
+----------------
+- U-values: W/m²K (e.g. ``U_Wall_1``, ``U_Window_1``, ``U_Door_1``).
+- Element areas: m² (e.g. ``A_Door_1``, ``A_Window_1``).
+- Specific energy demand: kWh/m²a (TABULA reference heating need, column ``q_h_nd``).
+- Building thermal capacity: Wh/m²K.
+
+Valid parameter ranges
+----------------------
+``country``
+    A two-letter code present in the CSV (see :func:`available_countries`); otherwise
+    :class:`TabulaLookupError` is raised.
+
+``building_type``
+    One of ``SFH``, ``TH``, ``AB`` for the requested country.
+
+``construction_year``
+    Any integer year; values outside every band are clamped to the nearest usable band.
+
+``refurbishment_variant``
+    ``1``, ``2`` or ``3``; if absent for the chosen band, the nearest available variant is
+    selected (ties resolve to the *less* refurbished variant).
 """
 
 import csv
@@ -17,7 +81,7 @@ from hisim import utils
 
 # Matches only the generic example variants; special sub-typologies (e.g. IE.N.SFH.01.325SB...)
 # are excluded on purpose.
-_CODE_PATTERN = re.compile(
+_CODE_PATTERN: re.Pattern[str] = re.compile(
     r"^(?P<country>[A-Z]{2})\.N\.(?P<building_type>[A-Z]+)\.(?P<band>\d{2})\.Gen\.ReEx\.001\.0*(?P<variant>\d+)$"
 )
 

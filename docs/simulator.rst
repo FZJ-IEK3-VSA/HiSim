@@ -1,6 +1,7 @@
-Simulator
+Simulator Module
 ================
-.. automodule:: simulator
+
+.. automodule:: hisim.simulator
    :members:
    :undoc-members:
    :show-inheritance:

@@ -49,8 +49,8 @@ from hisim.component import OpexCostDataClass
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 # Constants for warm water fallback values used in i_simulate
-DEFAULT_WW_TEMPERATURE_INPUT = 40.45  # °C - default warm water temperature fallback
-DEFAULT_WW_MASS_INPUT = 9.3  # kg/s - default warm water mass input fallback
+DEFAULT_WW_TEMPERATURE_INPUT: float = 40.45  # °C - default warm water temperature fallback
+DEFAULT_WW_MASS_INPUT: float = 9.3  # kg/s - default warm water mass input fallback
 
 
 class LpgDataAcquisitionMode(enum.Enum):
@@ -86,15 +86,15 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     cars: Optional[List[str]] = None
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
-        return UtspLpgConnector.get_full_classname()
+        return UtspLpgConnector.get_full_classname()  # type: ignore[no-any-return]
 
     @classmethod
     def get_default_utsp_connector_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "UtspLpgConnectorConfig":
         """Creates a default configuration. Chooses default values for the LPG parameters."""
 
         config = UtspLpgConnectorConfig(
@@ -130,23 +130,23 @@ class UtspLpgConnector(cp.Component):
     """
 
     # Inputs
-    WW_MassInput = "Warm Water Mass Input"  # kg/s
-    WW_TemperatureInput = "Warm Water Temperature Input"  # °C
+    WW_MassInput: str = "Warm Water Mass Input"  # kg/s
+    WW_TemperatureInput: str = "Warm Water Temperature Input"  # °C
 
     # Outputs
-    WW_MassOutput = "Mass Output"  # kg/s
-    WW_TemperatureOutput = "Temperature Output"  # °C
-    EnergyDischarged = "Energy Discharged"  # W
-    DemandSatisfied = "Demand Satisfied"  # 0 or 1
+    WW_MassOutput: str = "Mass Output"  # kg/s
+    WW_TemperatureOutput: str = "Temperature Output"  # °C
+    EnergyDischarged: str = "Energy Discharged"  # W
+    DemandSatisfied: str = "Demand Satisfied"  # 0 or 1
 
-    NumberOfResidents = "NumberOfResidents"
-    HeatingByResidents = "HeatingByResidents"
-    HeatingByDevices = "HeatingByDevices"
-    ElectricalPowerConsumption = "ElectricalPowerConsumption"
-    ElectricalEnergyConsumption = "ElectricalEnergyConsumption"
-    WaterConsumption = "WaterConsumption"
+    NumberOfResidents: str = "NumberOfResidents"
+    HeatingByResidents: str = "HeatingByResidents"
+    HeatingByDevices: str = "HeatingByDevices"
+    ElectricalPowerConsumption: str = "ElectricalPowerConsumption"
+    ElectricalEnergyConsumption: str = "ElectricalEnergyConsumption"
+    WaterConsumption: str = "WaterConsumption"
 
-    Electricity_Demand_Forecast_24h = "Electricity_Demand_Forecast_24h"
+    Electricity_Demand_Forecast_24h: str = "Electricity_Demand_Forecast_24h"
 
     # Similar components to connect to:
     # None
@@ -158,7 +158,7 @@ class UtspLpgConnector(cp.Component):
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initializes the component and retrieves the LPG data."""
-        self.utsp_config = config
+        self.utsp_config: UtspLpgConnectorConfig = config
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()
@@ -168,10 +168,10 @@ class UtspLpgConnector(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.name_of_predefined_loadprofile = config.name_of_predefined_loadprofile
-        self.predefined_loadprofile_filepaths = config.predefined_loadprofile_filepaths
+        self.name_of_predefined_loadprofile: Optional[str] = config.name_of_predefined_loadprofile
+        self.predefined_loadprofile_filepaths: Optional[str] = config.predefined_loadprofile_filepaths
 
-        self.calculation_index_for_local_lpg = config.calculation_index_for_local_lpg
+        self.calculation_index_for_local_lpg: Optional[int] = config.calculation_index_for_local_lpg
         if not self.calculation_index_for_local_lpg:
             # Fall back to 1, but allow an override via env var so that several local-LPG
             # runs in parallel (e.g. batch scenario-JSON regeneration) use distinct
@@ -284,16 +284,14 @@ class UtspLpgConnector(cp.Component):
             )
 
             if ww_energy_demand > 0 and (ww_mass_input == 0 and ww_temperature_input == 0):
-                """first iteration --> random numbers"""
+                # first iteration --> random numbers
                 ww_temperature_input = DEFAULT_WW_TEMPERATURE_INPUT
                 ww_mass_input = DEFAULT_WW_MASS_INPUT
 
-            """
-            Warm water is provided by the warmwater stoage.
-            The household needs water at a certain temperature. To get the correct temperature the amount of water from
-            the wws is regulated and is depending on the temperature provided by the wws. The backflowing water to wws
-            is cooled down to the temperature of (freshwater+temperature_difference_cold) --> ww_temperature_output.
-            """
+            # Warm water is provided by the warmwater stoage.
+            # The household needs water at a certain temperature. To get the correct temperature the amount of water from
+            # the wws is regulated and is depending on the temperature provided by the wws. The backflowing water to wws
+            # is cooled down to the temperature of (freshwater+temperature_difference_cold) --> ww_temperature_output.
             if ww_energy_demand > 0:
                 # heating up the freshwater. The mass is consistent
                 energy_discharged = ww_energy_demand + energy_losses
@@ -337,20 +335,37 @@ class UtspLpgConnector(cp.Component):
         return str(resolution)
 
     def get_profiles_from_utsp(self, lpg_households: Union[JsonReference, List[JsonReference]], guid: str) -> Tuple[
-        Union[str, List],
-        Union[str, List],
-        Union[str, List],
-        Union[str, List],
-        Union[str, List],
-        Union[str, List],
-        Union[str, List],
-        Union[str, List],
-        Union[str, List],
+        Union[str, List[str]],
+        Union[str, List[str]],
+        Union[str, List[str]],
+        Union[str, List[str]],
+        Union[str, List[str]],
+        Union[str, List[str]],
+        Union[str, List[str]],
+        Union[str, List[str]],
+        Union[str, List[str]],
     ]:
         """Requests the required load profiles from a UTSP server. Returns raw, unparsed result file contents.
 
-        :return: a tuple of all result file contents (electricity, warm water, high bodily activity and low bodily activity),
-                 and a list of filenames of all additionally saved files
+        :param lpg_households: a single household reference to request a profile for,
+            or a list of household references to request profiles for in parallel
+        :param guid: unique identifier for the calculation request
+
+        :return: a tuple of nine raw, unparsed result file contents (one entry per
+            requested LPG result file). Each entry is the decoded file content as a
+            string when a single household is requested, or a list of per-household
+            file contents when multiple households are requested in parallel. The
+            nine entries, in order, are:
+
+            - electricity consumption
+            - warm water consumption
+            - inner device heat gains
+            - high bodily activity
+            - low bodily activity
+            - flexibility events (an empty string when the file is unavailable)
+            - car states
+            - car locations
+            - driving distances
         """
         # Create an LPG configuration and set the simulation parameters
         start_date = self.my_simulation_parameters.start_date.strftime("%Y-%m-%d")
@@ -1867,9 +1882,9 @@ class UtspLpgConnector(cp.Component):
             list_of_data.append(data)
         return list_of_data
 
-    def transform_dict_values(self, dict_to_check: Dict) -> Dict:
+    def transform_dict_values(self, dict_to_check: Dict[str, str]) -> Dict[str, Any]:
         """Function to convert string representations of data in a dictionary back to their original types."""
-        transformed_data = {}
+        transformed_data: Dict[str, Any] = {}
         for key, value in dict_to_check.items():
             try:
                 # Attempt to evaluate the string value to a Python data type
@@ -1882,7 +1897,7 @@ class UtspLpgConnector(cp.Component):
 
     def get_component_kpi_entries(
         self,
-        all_outputs: List,
+        all_outputs: List[cp.ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
@@ -1964,7 +1979,7 @@ class UtspLpgConnector(cp.Component):
 
     def get_cost_opex(
         self,
-        all_outputs: List,
+        all_outputs: List[cp.ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, snd write total energy consumption to component-config.

@@ -90,9 +90,6 @@ def test_electrolyzer() -> None:
     log.information(str(stsv.values))
 
     # Checking differnt values
-    assert (
-        pytest.approx(stsv.values[my_fuelcell.current_hydrogen_demand.global_index])
-        == 0.3650165
-    )
+    assert stsv.values[my_fuelcell.current_hydrogen_demand.global_index] == pytest.approx(0.3650165)
 
     # python -m pytest ../tests/test_generic_fuel_cell.py

@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 import datetime
-from typing import List, Optional
+from typing import ClassVar, List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -81,11 +81,29 @@ class SolarThermalSystemConfig(ConfigBase):
     # Temperature difference between collector inlet and mean temperature
     delta_temperature_n_k: float = 10  # K
 
+    @staticmethod
+    def _compute_device_co2_footprint(area_m2: float) -> float:
+        """Compute the CO2 footprint of a solar thermal system in kg.
+
+        Emission factors are derived from:
+        https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1255
+        """
+        return (
+            area_m2 * (240.1 / 2.03)  # material solar collector
+            + area_m2 * (34.74 / 2.03)
+            + 108.28  # material external support
+            + area_m2 * (8.64 / 2.03)  # manufacturing solar collector
+            + area_m2 * (2.53 / 2.03)  # manufacturing external support
+            + area_m2 * (4.39 * 0.56 / 2.03)
+            # 56% (share of mass of solar collector+support/total, i.e.,
+            # including storage) of transport phase 1
+        )
+
     @classmethod
     def get_default_solar_thermal_system(
         cls,
         building_name: str = "BUI1",
-        coordinates: Coordinates = Coordinates(latitude=50.78, longitude=6.08),
+        coordinates: Coordinates = Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08),
         azimuth: float = 180.0,
         tilt: float = 30.0,
         area_m2: float = 1.5,
@@ -124,7 +142,7 @@ class SolarThermalSystemConfig(ConfigBase):
     def get_default_solar_thermal_system_manually_calculated_capex(
         cls,
         building_name: str = "BUI1",
-        coordinates: Coordinates = Coordinates(latitude=50.78, longitude=6.08),
+        coordinates: Coordinates = Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08),
         azimuth: float = 180.0,
         tilt: float = 30.0,
         area_m2: float = 1.5,
@@ -150,15 +168,9 @@ class SolarThermalSystemConfig(ConfigBase):
             a_1_w_m2_k=a_1_w_m2_k,  # W/(m2*K)
             a_2_w_m2_k=a_2_w_m2_k,  # W/(m2*K2)
             old_solar_pump=old_solar_pump,
-            device_co2_footprint_in_kg=(
-                area_m2 * (240.1 / 2.03)  # material solar collector
-                + area_m2 * (34.74 / 2.03)
-                + 108.28  # material external support
-                + area_m2 * (8.64 / 2.03)  # manufacturing solar collector
-                + area_m2 * (2.53 / 2.03)  # manufacturing external support
-                + area_m2 * (4.39 * 0.56 / 2.03)
-            ),  # 56% (share of mass of solar collector+support/total, i.e., including storage)
-            # of transport phase 1 https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1255
+            device_co2_footprint_in_kg=SolarThermalSystemConfig._compute_device_co2_footprint(
+                area_m2
+            ),
             investment_costs_in_euro=area_m2 * 797,  # Flachkollektoren
             # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
             maintenance_costs_in_euro_per_year=100,  # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
@@ -176,21 +188,21 @@ class SolarThermalSystem(Component):
     """
 
     # Inputs
-    TemperatureOutsideDegC = "TemperatureOutsideDegC"
-    DiffuseHorizontalIrradianceWM2 = "DiffuseHorizontalIrradianceWM2"
-    GlobalHorizontalIrradianceWM2 = "GlobalHorizontalIrradianceWM2"
-    Azimuth = "Azimuth"
-    ApparentZenith = "ApparentZenith"
-    TemperatureCollectorInletDegC = "TemperatureCollectorInletDegC"
-    ControlSignal = "ControlSignal"
+    TemperatureOutsideDegC: ClassVar[str] = "TemperatureOutsideDegC"
+    DiffuseHorizontalIrradianceWM2: ClassVar[str] = "DiffuseHorizontalIrradianceWM2"
+    GlobalHorizontalIrradianceWM2: ClassVar[str] = "GlobalHorizontalIrradianceWM2"
+    Azimuth: ClassVar[str] = "Azimuth"
+    ApparentZenith: ClassVar[str] = "ApparentZenith"
+    TemperatureCollectorInletDegC: ClassVar[str] = "TemperatureCollectorInletDegC"
+    ControlSignal: ClassVar[str] = "ControlSignal"
 
     # Outputs
-    ThermalPowerOutput = "ThermalPowerOutput"
-    ThermalEnergyOutput = "ThermalEnergyOutput"
-    RequiredWaterMassFlowOutput = "RequiredWaterMassFlowOutput"
-    WaterMassFlowOutput = "WaterMassFlowOutput"
-    WaterTemperatureOutput = "WaterTemperatureOutput"
-    ElectricityConsumptionOutput = "ElectricityConsumptionOutput"
+    ThermalPowerOutput: ClassVar[str] = "ThermalPowerOutput"
+    ThermalEnergyOutput: ClassVar[str] = "ThermalEnergyOutput"
+    RequiredWaterMassFlowOutput: ClassVar[str] = "RequiredWaterMassFlowOutput"
+    WaterMassFlowOutput: ClassVar[str] = "WaterMassFlowOutput"
+    WaterTemperatureOutput: ClassVar[str] = "WaterTemperatureOutput"
+    ElectricityConsumptionOutput: ClassVar[str] = "ElectricityConsumptionOutput"
 
     def __init__(
         self,
@@ -199,9 +211,9 @@ class SolarThermalSystem(Component):
         my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Constructs all the neccessary attributes."""
-        self.componentnameconfig = config
-        self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
+        self.componentnameconfig: SolarThermalSystemConfig = config
+        self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
+        self.config: SolarThermalSystemConfig = config
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -211,10 +223,10 @@ class SolarThermalSystem(Component):
         )
 
         # If a component requires states, this can be implemented here.
-        self.state = SolarThermalSystemState()
-        self.previous_state = deepcopy(self.state)
+        self.state: SolarThermalSystemState = SolarThermalSystemState()
+        self.previous_state: SolarThermalSystemState = deepcopy(self.state)
         # Initialized variables
-        self.factor = 1.0
+        self.factor: float = 1.0
         self.precalc_data_for_all_timesteps_data: List[Optional[pd.DataFrame]] = []
         self.precalc_data_for_all_timesteps_output: List[pd.DataFrame] = []
         self.cache_filepath: Optional[str] = None
@@ -359,7 +371,7 @@ class SolarThermalSystem(Component):
     ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
         """Calculate OPEX."""
-        electricity_consumption_in_kilowatt_hour = None
+        electricity_consumption_in_kilowatt_hour: Optional[float] = None
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == self.component_name
@@ -367,7 +379,7 @@ class SolarThermalSystem(Component):
                 and output.unit == loadtypes.Units.WATT
             ):
                 electricity_consumption_in_kilowatt_hour = round(
-                    sum(postprocessing_results.iloc[:, index])
+                    postprocessing_results.iloc[:, index].sum()
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
                     1,
@@ -410,7 +422,7 @@ class SolarThermalSystem(Component):
             if output.component_name == self.component_name:
                 if output.field_name == self.ThermalEnergyOutput and output.unit == loadtypes.Units.WATT_HOUR:
                     dhw_thermal_energy_delivered_in_kilowatt_hour = round(
-                        sum(postprocessing_results.iloc[:, index]) * 1e-3, 1
+                        postprocessing_results.iloc[:, index].sum() * 1e-3, 1
                     )
 
         assert dhw_thermal_energy_delivered_in_kilowatt_hour is not None
@@ -523,7 +535,7 @@ class SolarThermalSystem(Component):
     ) -> List[ComponentConnection]:
         """Get simple_water_storage default connections."""
 
-        connections = []
+        connections: List[ComponentConnection] = []
         storage_classname = SimpleDHWStorage.get_classname()
         connections.append(
             ComponentConnection(
@@ -537,7 +549,7 @@ class SolarThermalSystem(Component):
     def get_default_connections_from_weather(self) -> List[ComponentConnection]:
         """Get default connections from weather."""
 
-        connections = []
+        connections: List[ComponentConnection] = []
         weather_classname = Weather.get_classname()
         connections.append(
             ComponentConnection(
@@ -575,7 +587,7 @@ class SolarThermalSystem(Component):
     ) -> List[ComponentConnection]:
         """Get Controller default connections."""
         component_class = SolarThermalSystemController
-        connections = []
+        connections: List[ComponentConnection] = []
         l1_controller_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
@@ -655,8 +667,8 @@ class SolarThermalSystem(Component):
             )
 
             precalc_data = flat_plate_precalc(
-                lat=self.config.coordinates.latitude,
-                long=self.config.coordinates.longitude,
+                lat=self.config.coordinates.latitude_in_degrees,
+                long=self.config.coordinates.longitude_in_degrees,
                 collector_tilt=self.config.tilt,
                 collector_azimuth=self.config.azimuth,
                 eta_0=self.config.eta_0,  # optical efficiency of the collector
@@ -738,8 +750,8 @@ class SolarThermalSystemState:
     Parameters
     ----------
     output_with_state : int
-    Stores the state of the output_with_state value from
-    :py:class:`~hisim.component.ComponentName`.
+        Stores the state of the output_with_state value from
+        :py:class:`~hisim.component.ComponentName`.
 
     """
 
@@ -790,12 +802,12 @@ class SolarThermalSystemController(Component):
     """
 
     # Inputs
-    MeanWaterTemperatureInStorage = "MeanWaterTemperatureInStorage"
-    CollectorTemperature = "CollectorTemperature"
-    MassFlow = "MassFlow"
+    MeanWaterTemperatureInStorage: ClassVar[str] = "MeanWaterTemperatureInStorage"
+    CollectorTemperature: ClassVar[str] = "CollectorTemperature"
+    MassFlow: ClassVar[str] = "MassFlow"
 
     # Outputs
-    ControlSignalToSolarThermalSystem = "ControlSignalToSolarThermalSystem"
+    ControlSignalToSolarThermalSystem: ClassVar[str] = "ControlSignalToSolarThermalSystem"
 
     def __init__(
         self,
@@ -864,7 +876,7 @@ class SolarThermalSystemController(Component):
     ) -> List[ComponentConnection]:
         """Get simple_water_storage default connections."""
 
-        connections = []
+        connections: List[ComponentConnection] = []
         storage_classname = SimpleDHWStorage.get_classname()
         connections.append(
             ComponentConnection(
@@ -878,9 +890,15 @@ class SolarThermalSystemController(Component):
     def get_default_connections_from_solar_thermal_system(
         self,
     ) -> List[ComponentConnection]:
-        """Get simple_water_storage default connections."""
+        """Get default connections from the SolarThermalSystem component.
 
-        connections = []
+        Returns:
+            List[ComponentConnection]: Connections wiring the collector
+                temperature and required mass-flow outputs from
+                SolarThermalSystem into this controller's inputs.
+        """
+
+        connections: List[ComponentConnection] = []
         storage_classname = SolarThermalSystem.get_classname()
         connections.append(
             ComponentConnection(

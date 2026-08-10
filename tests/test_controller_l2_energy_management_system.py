@@ -39,7 +39,25 @@ PATH = "../system_setups/household_for_test_ems.py"
 def test_house(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """The test should check if a normal simulation works with the ems implementation."""
+    """Run a one-week household simulation with an EMS and compare outputs to KPIs.
+
+    Builds a residential energy system (building, occupancy loads via UTSP LPG,
+    PV, space-heating and DHW heat pumps, hot-water storages, battery, and an
+    L2 energy management system), runs the simulation, then reads KPI values
+    from the post-processed ``all_kpis.json`` and asserts that the EMS
+    time-series outputs for total electricity consumption, grid consumption,
+    and grid injection agree with the corresponding KPI values and with the
+    sum of per-component consumptions (5 % relative tolerance).
+
+    Args:
+        my_simulation_parameters: Optional simulation parameters. When None,
+            defaults to one week of 2021 with 60-second timesteps and KPI
+            post-processing options enabled.
+
+    Raises:
+        AssertionError: If any EMS output disagrees with the corresponding
+            KPI value or component sum beyond a 5 % relative tolerance.
+    """
 
     # =========================================================================================================================================================
     # System Parameters
@@ -166,7 +184,7 @@ def test_house(
         my_simulation_parameters=my_simulation_parameters,
     )
     # Verknüpfung mit Luft als Umgebungswärmeqzuelle
-    if my_heatpump.parameters["Group"].iloc[0] == 1.0 or my_heatpump.parameters["Group"].iloc[0] == 4.0:
+    if my_heatpump.parameters["Group"].iloc[0] in (1.0, 4.0):
         my_heatpump.connect_input(
             my_heatpump.TemperatureInputPrimary,
             my_weather.component_name,
@@ -203,7 +221,7 @@ def test_house(
     my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
         building_name=building_name,
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
         absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
@@ -357,7 +375,7 @@ def test_house(
     ]
 
     ems_total_consumption_in_kilowatt_hour = (
-        sum(simulation_results_ems_total_consumption_in_watt) * seconds_per_timestep / 3.6e6
+        simulation_results_ems_total_consumption_in_watt.sum() * seconds_per_timestep / 3.6e6
     )
 
     # Get EMS output ElectricityToOrFromGrid -> get grid consumption by filterig only values < 0
@@ -368,7 +386,7 @@ def test_house(
         ]
     )
     ems_grid_consumption_in_kilowatt_hour = (
-        sum(simulation_results_ems_grid_consumption_in_watt) * seconds_per_timestep / 3.6e6
+        simulation_results_ems_grid_consumption_in_watt.sum() * seconds_per_timestep / 3.6e6
     )
 
     # Get EMS output ElectricityToOrFromGrid -> get grid injection by filterig only values > 0
@@ -377,7 +395,7 @@ def test_house(
         my_sim.results_data_frame["L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"] > 0.0
     ]
     ems_grid_injection_in_kilowatt_hour = (
-        sum(simulation_results_ems_grid_injection_in_watt) * seconds_per_timestep / 3.6e6
+        simulation_results_ems_grid_injection_in_watt.sum() * seconds_per_timestep / 3.6e6
     )
 
     # =========================================================================================================================================================

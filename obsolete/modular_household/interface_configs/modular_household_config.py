@@ -5,6 +5,7 @@ system-level equipment configuration (:class:`system_config.SystemConfig`) with
 archetype-level framework configuration (:class:`archetype_config.ArcheTypeConfigModular`)
 for household energy simulations.
 """
+from __future__ import annotations
 
 # clean
 
@@ -38,7 +39,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
     archetype_config_: Optional[archetype_config.ArcheTypeConfigModular] = None
 
     @classmethod
-    def get_default(cls):
+    def get_default(cls) -> ModularHouseholdConfig:
         """Return a default modular household configuration.
 
         Returns:

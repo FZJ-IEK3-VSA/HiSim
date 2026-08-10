@@ -75,7 +75,9 @@ def run_command(arguments: argparse.Namespace) -> int:
     """Execute the full pipeline for one request (spec overview diagram)."""
     try:
         translator_input = _load_and_validate(arguments.request_file)
-        translation = mapping.translate(translator_input.request, arguments.variant, translator_input.job_id)
+        translation = mapping.translate(
+        translator_input.request, variant=arguments.variant, job_id=translator_input.job_id
+    )
         result_directory, directory_is_temporary = _prepare_result_directory(arguments, translator_input.job_id)
         simulation_parameters = runner.build_simulation_parameters(
             translator_input.simulation_overrides, result_directory
@@ -132,10 +134,10 @@ def _load_and_validate(request_file: str) -> TranslatorInput:
     if not request_path.is_file():
         raise RequestValidationError(f"Request file not found: {request_path}")
     try:
-        data = json.loads(request_path.read_text(encoding="utf-8-sig"))
+        request_payload = json.loads(request_path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as error:
         raise RequestValidationError(f"Request file is not valid JSON: {error}") from error
-    return parse_translator_input(data)
+    return parse_translator_input(request_payload)
 
 
 def _prepare_result_directory(arguments: argparse.Namespace, job_id: str) -> Tuple[Path, bool]:
@@ -185,7 +187,7 @@ def _write_mapping_report(
     result_directory: Path,
 ) -> Path:
     """Write ``renovisor_mapping_report.json`` into the result directory (spec section 6)."""
-    report_dict = mapping.build_mapping_report_dict(translation, translator_input.job_id, variant)
+    report_dict = mapping.build_mapping_report_dict(translation, variant=variant, job_id=translator_input.job_id)
     report_path = result_directory / MAPPING_REPORT_FILENAME
     report_path.write_text(json.dumps(report_dict, indent=2), encoding="utf-8")
     return report_path

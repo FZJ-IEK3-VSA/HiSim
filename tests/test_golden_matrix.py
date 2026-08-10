@@ -1,7 +1,7 @@
 """Unit tests for ``scripts/golden_matrix.py`` — the CI matrix emitter.
 
-``build_matrix`` is stdlib-only and reads a plain config dict, so these tests need
-neither HiSim nor the committed config on disk. One test does load the real
+``build_matrix`` is stdlib-only and reads a plain config dict, so most tests
+need neither HiSim nor the committed config on disk. Two tests load the real
 ``golden_config.json`` to confirm the emitter agrees with the shipped config.
 """
 from __future__ import annotations

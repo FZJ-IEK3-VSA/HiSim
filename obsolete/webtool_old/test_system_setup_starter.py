@@ -193,7 +193,6 @@ def test_system_setup_starter_scaling() -> None:
     shutil.rmtree(result_directory)
 
 
-@pytest.mark.base
 def test_make_system_setup_rejects_list(tmp_path: Path) -> None:
     """A list of setups is not supported and must raise a clear error.
 
@@ -209,7 +208,6 @@ def test_make_system_setup_rejects_list(tmp_path: Path) -> None:
         make_system_setup(parameters_json=[], result_directory=str(tmp_path))  # type: ignore[arg-type]
 
 
-@pytest.mark.base
 def test_make_system_setup_builds_config_from_dict(tmp_path: Path) -> None:
     """A valid parameter dict yields the module path, simulation parameters, and config files.
 

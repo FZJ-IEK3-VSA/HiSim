@@ -93,7 +93,7 @@ def setup_function(
             name="GenericHeatPumpController",
             temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
             temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-            offset=temperature_offset_in_kelvin,
+            offset_in_celsius=temperature_offset_in_kelvin,
             mode=hp_mode,
         ),
         my_simulation_parameters=my_simulation_parameters,

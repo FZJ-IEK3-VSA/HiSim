@@ -10,8 +10,9 @@ is reduced during the night.
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
+import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim import component as cp
@@ -34,8 +35,8 @@ __status__ = "development"
 # the day (0..23), so the comparisons inside ``i_simulate`` are carried out in
 # seconds since midnight. Naming these explicitly keeps the h->s and day->s
 # conversions distinct from ``seconds_per_timestep`` and prevents silent mix-ups.
-SECONDS_PER_HOUR = 3600  # s per h
-SECONDS_PER_DAY = 24 * SECONDS_PER_HOUR  # s per day
+SECONDS_PER_HOUR: int = 3600  # s per h
+SECONDS_PER_DAY: int = 24 * SECONDS_PER_HOUR  # s per day
 
 
 @dataclass_json
@@ -44,9 +45,9 @@ class NightSetbackConfig(cp.ConfigBase):
     """Configuration of the night setback controller."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Return the full class name of the controller."""
-        return NightSetbackController.get_full_classname()
+        return NightSetbackController.get_full_classname()  # type: ignore[no-any-return]
 
     building_name: str
     name: str
@@ -77,16 +78,18 @@ class NightSetbackController(cp.Component):
     during the night.
     """
 
-    BuildingTemperatureModifier = "BuildingTemperatureModifier"
+    BuildingTemperatureModifier: str = "BuildingTemperatureModifier"
 
     @utils.measure_execution_time
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: NightSetbackConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: Optional[cp.DisplayConfig] = None,
     ) -> None:
         """Construct the controller."""
+        if my_display_config is None:
+            my_display_config = cp.DisplayConfig()
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()
@@ -100,6 +103,24 @@ class NightSetbackController(cp.Component):
         self.setback_delta_in_kelvin = config.setback_delta_in_kelvin
         self.night_start_hour = config.night_start_hour
         self.night_end_hour = config.night_end_hour
+
+        # Hoist the time-invariant night-window arithmetic out of the per-timestep
+        # hot path. ``night_start_hour``/``night_end_hour`` are fixed at construction
+        # time and never mutated, so the corresponding second-of-day bounds and which
+        # of the three evaluation branches applies are constant for the whole
+        # simulation. Per KB-5685, ``timestep`` is assumed to align with 00:00, so
+        # the modulo against SECONDS_PER_DAY below preserves the existing semantics.
+        self._night_start_time_in_seconds: int = self.night_start_hour * SECONDS_PER_HOUR
+        self._night_end_time_in_seconds: int = self.night_end_hour * SECONDS_PER_HOUR
+        if self.night_start_hour == self.night_end_hour:
+            # No night window configured.
+            self._night_mode: str = "none"
+        elif self.night_start_hour < self.night_end_hour:
+            # Window lies entirely within the same day.
+            self._night_mode = "within"
+        else:
+            # Window wraps across midnight.
+            self._night_mode = "wrap"
 
         # Units.CELSIUS is required here because Building.BuildingTemperatureModifier
         # declares its input as CELSIUS. The value is a delta-T, so 1 K == 1 degC numerically.
@@ -141,22 +162,20 @@ class NightSetbackController(cp.Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Set the night setback value for the current timestep."""
-        current_second_of_day = (timestep * self.my_simulation_parameters.seconds_per_timestep) % SECONDS_PER_DAY
-        night_start_second = self.night_start_hour * SECONDS_PER_HOUR
-        night_end_second = self.night_end_hour * SECONDS_PER_HOUR
-        if self.night_start_hour == self.night_end_hour:
+        current_time_of_day_in_seconds = (timestep * self.my_simulation_parameters.seconds_per_timestep) % SECONDS_PER_DAY
+        if self._night_mode == "none":
             is_night = False
-        elif self.night_start_hour < self.night_end_hour:
-            is_night = night_start_second <= current_second_of_day < night_end_second
-        else:
-            is_night = current_second_of_day >= night_start_second or current_second_of_day < night_end_second
-        modifier = self.setback_delta_in_kelvin if is_night else 0.0
-        stsv.set_output_value(self.building_temperature_modifier_channel, modifier)
+        elif self._night_mode == "within":
+            is_night = self._night_start_time_in_seconds <= current_time_of_day_in_seconds < self._night_end_time_in_seconds
+        else:  # "wrap": the night window crosses midnight.
+            is_night = current_time_of_day_in_seconds >= self._night_start_time_in_seconds or current_time_of_day_in_seconds < self._night_end_time_in_seconds
+        modifier_in_kelvin = self.setback_delta_in_kelvin if is_night else 0.0
+        stsv.set_output_value(self.building_temperature_modifier_channel, modifier_in_kelvin)
 
     def get_cost_opex(
         self,
-        all_outputs: List,
-        postprocessing_results,
+        all_outputs: List[cp.ComponentOutput],
+        postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Return the default opex structure."""
         return OpexCostDataClass.get_default_opex_cost_data_class()
@@ -168,8 +187,8 @@ class NightSetbackController(cp.Component):
 
     def get_component_kpi_entries(
         self,
-        all_outputs: List,
-        postprocessing_results,
+        all_outputs: List[cp.ComponentOutput],
+        postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Return no dedicated KPI entries."""
         return []

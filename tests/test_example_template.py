@@ -28,9 +28,7 @@ def test_example_template() -> None:
         example_template.ComponentNameConfig.get_default_template_component()
     )
     print("\n")
-    log.information(
-        "default componentname config " + str(my_example_template_config) + "\n"
-    )
+    log.information(f"default componentname config {my_example_template_config}\n")
     my_example_template = example_template.ComponentName(
         config=my_example_template_config, my_simulation_parameters=mysim
     )
@@ -59,48 +57,46 @@ def test_example_template() -> None:
 
     # Test Simulation
     timestep: int = 10 * 60
-    log.information("timestep = " + str(timestep))
+    log.information(f"timestep = {timestep}")
     log.information(
         "input_from_another_component_output = "
-        + str(stsv.values[input_from_another_component_output.global_index])
-        + "\n"
+        f"{stsv.values[input_from_another_component_output.global_index]}\n"
     )
 
     my_example_template.i_simulate(timestep, stsv, False)
     log.information("Output values after simulation: ")
     log.information(
         "output with state = "
-        + str(stsv.values[my_example_template.output_with_state.global_index])
+        f"{stsv.values[my_example_template.output_with_state.global_index]}"
     )
     log.information(
         "output without state = "
-        + str(stsv.values[my_example_template.output_without_state.global_index])
+        f"{stsv.values[my_example_template.output_without_state.global_index]}"
     )
-    log.information("output values = " + str(stsv.values) + "\n")
+    log.information(f"output values = {stsv.values}\n")
 
     assert 50 == stsv.values[input_from_another_component_output.global_index]
     assert 3000 == stsv.values[my_example_template.output_with_state.global_index]
     assert 51.0 == stsv.values[my_example_template.output_without_state.global_index]
 
     timestep = 10 * 60 + 1
-    log.information("timestep = " + str(timestep))
+    log.information(f"timestep = {timestep}")
     log.information(
         "input_from_another_component_output = "
-        + str(stsv.values[input_from_another_component_output.global_index])
-        + "\n"
+        f"{stsv.values[input_from_another_component_output.global_index]}\n"
     )
 
     my_example_template.i_simulate(timestep, stsv, False)
     log.information("Output values after simulation: ")
     log.information(
         "output with state = "
-        + str(stsv.values[my_example_template.output_with_state.global_index])
+        f"{stsv.values[my_example_template.output_with_state.global_index]}"
     )
     log.information(
         "output without state = "
-        + str(stsv.values[my_example_template.output_without_state.global_index])
+        f"{stsv.values[my_example_template.output_without_state.global_index]}"
     )
-    log.information("output values = " + str(stsv.values))
+    log.information(f"output values = {stsv.values}")
 
     assert 50 == stsv.values[input_from_another_component_output.global_index]
     assert 6000 == stsv.values[my_example_template.output_with_state.global_index]

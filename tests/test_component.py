@@ -589,3 +589,263 @@ def test_component_name_with_multiple_buildings() -> None:
     log.information(f"Component name with multiple_buildings=True: {comp_name}")
     log.information(f"Component name with multiple_buildings=False: {comp_name2}")
     log.information("Component name with multiple buildings tests passed!")
+
+
+@pytest.mark.base
+def test_stateless_component_provides_noop_state_hooks() -> None:
+    """The StatelessComponent class overrides i_save_state and i_restore_state with no-ops.
+
+    A stateless component has no mutable per-timestep state, so saving and
+    restoring state are no-ops.  The overrides live directly on
+    StatelessComponent (not inherited from Component) so that subclasses
+    inherit them without providing their own stub implementations.
+    """
+    assert issubclass(cp.StatelessComponent, cp.Component)
+    # The state-management hooks are overridden on StatelessComponent itself.
+    assert "i_save_state" in cp.StatelessComponent.__dict__
+    assert "i_restore_state" in cp.StatelessComponent.__dict__
+    assert "i_prepare_simulation" in cp.StatelessComponent.__dict__
+    # i_doublecheck already has a no-op default on Component; StatelessComponent
+    # inherits it rather than re-declaring it.
+    assert "i_doublecheck" not in cp.StatelessComponent.__dict__
+
+
+@pytest.mark.base
+def test_component_base_still_raises_not_implemented_for_state_hooks() -> None:
+    """Component base class keeps NotImplementedError for state-management hooks.
+
+    This is a deliberate fail-loudly guard: a stateFUL component that forgets
+    to implement i_save_state / i_restore_state / i_prepare_simulation must
+    crash visibly rather than silently skipping state management.  Only
+    StatelessComponent (opt-in) provides the no-op defaults.
+    """
+    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = cp.ConfigBase(name="TestComponent", building_name="BUI1")
+
+    class _StatefulComponent(cp.Component):
+        """A minimal Component that does NOT override the state hooks."""
+
+        def __init__(self, config: cp.ConfigBase, my_simulation_parameters: SimulationParameters) -> None:
+            super().__init__(
+                name="TestComponent",
+                my_simulation_parameters=my_simulation_parameters,
+                my_config=config,
+                my_display_config=cp.DisplayConfig(),
+            )
+
+        def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
+            pass
+
+        def write_to_report(self) -> list[str]:
+            return []
+
+    component = _StatefulComponent(config, sim_params)
+    with pytest.raises(NotImplementedError):
+        component.i_save_state()
+    with pytest.raises(NotImplementedError):
+        component.i_restore_state()
+    with pytest.raises(NotImplementedError):
+        component.i_prepare_simulation()
+
+
+@pytest.mark.base
+def test_stateless_component_noop_hooks_are_callable() -> None:
+    """The no-op lifecycle hooks on a StatelessComponent subclass do not raise.
+
+    A concrete StatelessComponent subclass only needs to implement i_simulate
+    and write_to_report; the state-management and preparation hooks are
+    inherited as no-ops.
+    """
+    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = cp.ConfigBase(name="TestComponent", building_name="BUI1")
+
+    class _MinimalStateless(cp.StatelessComponent):
+        """Minimal stateless component for testing inherited no-op hooks."""
+
+        def __init__(self, config: cp.ConfigBase, my_simulation_parameters: SimulationParameters) -> None:
+            super().__init__(
+                name="TestComponent",
+                my_simulation_parameters=my_simulation_parameters,
+                my_config=config,
+                my_display_config=cp.DisplayConfig(),
+            )
+
+        def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
+            pass
+
+        def write_to_report(self) -> list[str]:
+            return []
+
+    component = _MinimalStateless(config, sim_params)
+    # These must not raise — they are inherited no-ops from StatelessComponent.
+    component.i_save_state()
+    component.i_restore_state()
+    component.i_prepare_simulation()
+    # i_doublecheck is inherited as a no-op from Component.
+    component.i_doublecheck(0, cp.SingleTimeStepValues(0))
+
+
+@pytest.mark.base
+def test_component_input_allow_unconnected_mandatory_default() -> None:
+    """Test that ComponentInput.allow_unconnected_mandatory defaults to False."""
+    component_input = cp.ComponentInput(
+        object_name="TestComponent",
+        field_name="TestInput",
+        load_type=lt.LoadTypes.HEATING,
+        unit=lt.Units.CELSIUS,
+        mandatory=True,
+    )
+    assert component_input.allow_unconnected_mandatory is False
+
+    optional_input = cp.ComponentInput(
+        object_name="TestComponent",
+        field_name="TestInput",
+        load_type=lt.LoadTypes.HEATING,
+        unit=lt.Units.CELSIUS,
+        mandatory=True,
+        allow_unconnected_mandatory=True,
+    )
+    assert optional_input.allow_unconnected_mandatory is True
+
+
+@pytest.mark.base
+def test_connect_inputs_raises_for_unconnected_mandatory() -> None:
+    """Test that connect_inputs raises ValueError for an unconnected mandatory input."""
+    from hisim.component_wrapper import ComponentWrapper
+
+    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = example_component.ExampleComponentConfig.get_default_example_component()
+    component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
+
+    mandatory_input = cp.ComponentInput(
+        object_name=component.component_name,
+        field_name="MandatoryUnconnected",
+        load_type=lt.LoadTypes.ELECTRICITY,
+        unit=lt.Units.WATT,
+        mandatory=True,
+    )
+    mandatory_input.src_object_name = "NonExistentSource"
+    mandatory_input.src_field_name = "NonExistentOutput"
+    component.inputs.append(mandatory_input)
+
+    wrapper = ComponentWrapper(component, is_cachable=False, connect_automatically=False)
+    with pytest.raises(ValueError, match="not connected to any ComponentOutput"):
+        wrapper.connect_inputs(all_outputs=[])
+
+
+@pytest.mark.base
+def test_connect_inputs_warns_for_allow_unconnected_mandatory() -> None:
+    """Test that connect_inputs warns instead of raising when allow_unconnected_mandatory is True."""
+    from hisim.component_wrapper import ComponentWrapper
+
+    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = example_component.ExampleComponentConfig.get_default_example_component()
+    component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
+
+    optional_mandatory_input = cp.ComponentInput(
+        object_name=component.component_name,
+        field_name="OptionalMandatory",
+        load_type=lt.LoadTypes.ELECTRICITY,
+        unit=lt.Units.WATT,
+        mandatory=True,
+        allow_unconnected_mandatory=True,
+    )
+    optional_mandatory_input.src_object_name = "NonExistentSource"
+    optional_mandatory_input.src_field_name = "NonExistentOutput"
+    component.inputs.append(optional_mandatory_input)
+
+    wrapper = ComponentWrapper(component, is_cachable=False, connect_automatically=False)
+    # Should not raise — the input is marked as allow_unconnected_mandatory.
+    wrapper.connect_inputs(all_outputs=[])
+    assert optional_mandatory_input.source_output is None
+
+
+@pytest.mark.base
+def test_dynamic_component_connection_allow_unconnected_mandatory_field() -> None:
+    """Test that DynamicComponentConnection has allow_unconnected_mandatory field."""
+    from hisim.dynamic_component import DynamicComponentConnection
+
+    conn = DynamicComponentConnection(
+        source_component_class=cp.Component,
+        source_class_name="TestSource",
+        source_component_field_name="TestOutput",
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[],
+        source_weight=1,
+    )
+    assert conn.allow_unconnected_mandatory is False
+
+    conn_opt = DynamicComponentConnection(
+        source_component_class=cp.Component,
+        source_class_name="TestSource",
+        source_component_field_name="TestOutput",
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[],
+        source_weight=1,
+        allow_unconnected_mandatory=True,
+    )
+    assert conn_opt.allow_unconnected_mandatory is True
+
+
+@pytest.mark.base
+def test_add_component_input_and_connect_propagates_allow_unconnected() -> None:
+    """Test that add_component_input_and_connect propagates allow_unconnected_mandatory."""
+    from hisim.dynamic_component import DynamicComponent
+
+    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = cp.ConfigBase(name="TestDynamic", building_name="BUI1")
+    dyn_component = DynamicComponent(
+        my_component_inputs=[],
+        my_component_outputs=[],
+        name="TestDynamic",
+        my_simulation_parameters=sim_params,
+        my_config=config,
+        my_display_config=cp.DisplayConfig(),
+    )
+
+    dyn_component.add_component_input_and_connect(
+        source_component_output="TestOutput",
+        source_object_name="TestSource",
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=1,
+        allow_unconnected_mandatory=True,
+    )
+
+    assert len(dyn_component.inputs) == 1
+    created_input = dyn_component.inputs[0]
+    assert created_input.is_mandatory is True
+    assert created_input.allow_unconnected_mandatory is True
+    assert created_input.src_object_name == "TestSource"
+    assert created_input.src_field_name == "TestOutput"
+
+
+@pytest.mark.base
+def test_electricity_meter_dhw_connection_allow_unconnected() -> None:
+    """Test that the electricity meter marks the DHW heat-pump connection as allow_unconnected_mandatory."""
+    from hisim.components.electricity_meter import ElectricityMeter
+    from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
+
+    # get_default_connections_from_more_advanced_heat_pump does not use self,
+    # so we bypass __init__ to avoid constructing the full component.
+    meter = ElectricityMeter.__new__(ElectricityMeter)
+    connections = meter.get_default_connections_from_more_advanced_heat_pump()
+
+    dhw_connections = [
+        c
+        for c in connections
+        if c.source_component_field_name == MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW
+    ]
+    assert len(dhw_connections) == 1
+    assert dhw_connections[0].allow_unconnected_mandatory is True
+
+    sh_connections = [
+        c
+        for c in connections
+        if c.source_component_field_name == MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH
+    ]
+    assert len(sh_connections) == 1
+    assert sh_connections[0].allow_unconnected_mandatory is False

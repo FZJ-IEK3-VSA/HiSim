@@ -2,7 +2,6 @@
 
 # clean
 from math import ceil
-from copy import deepcopy
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 
@@ -20,9 +19,68 @@ from hisim import log
 class ExtendedControllerSimulation:
     """Extended Controller Simulation."""
 
-    def __init__(self, config: ExtendedControllerConfig) -> None:
-        """Initialize the class."""
-        pass
+    def __init__(self) -> None:
+        """Initialize the class.
+
+        Precomputes the tank-layer indices for the upper/lower temperature
+        sensors of both the CHP and the gas heater. The sensor heights and tank
+        layers are invariant config constants, so the matching indices are
+        computed once here instead of scanning ``heights_in_tank`` every
+        timestep in the regulate methods. All four sensor heights are validated
+        unconditionally at construction (regardless of ``chp_mode`` or the
+        ``gas_heater`` flag) so that a misconfigured height fails loudly at
+        setup time rather than silently each timestep; this also closes the
+        previous ``or``-short-circuit bug that never checked the lower sensors.
+        """
+        # sensor indices are precomputed once here (config constants are invariant)
+        self._chp_upper_idx: int = self._sensor_index(
+            CHPControllerConfig.heights_in_tank,
+            CHPControllerConfig.height_upper_sensor,
+            "CHP",
+            "upper",
+        )
+        self._chp_lower_idx: int = self._sensor_index(
+            CHPControllerConfig.heights_in_tank,
+            CHPControllerConfig.height_lower_sensor,
+            "CHP",
+            "lower",
+        )
+        self._gas_upper_idx: int = self._sensor_index(
+            CHPControllerConfig.heights_in_tank,
+            GasControllerConfig.height_upper_sensor,
+            "gas heater",
+            "upper",
+        )
+        self._gas_lower_idx: int = self._sensor_index(
+            CHPControllerConfig.heights_in_tank,
+            GasControllerConfig.height_lower_sensor,
+            "gas heater",
+            "lower",
+        )
+
+    @staticmethod
+    def _sensor_index(
+        heights_in_tank: list[int],
+        sensor_height: int,
+        controller_name: str,
+        sensor_label: str,
+    ) -> int:
+        """Return the index of ``sensor_height`` within ``heights_in_tank``.
+
+        Validates that the configured sensor height is one of the available tank
+        layers, raising a clear error on misconfiguration instead of silently
+        scanning every timestep.
+        """
+        for i, height_in_tank in enumerate(heights_in_tank):
+            if height_in_tank == sensor_height:
+                return i
+        msg = (
+            f"Wrong sensor setting for the {controller_name} {sensor_label} sensor: "
+            f"{sensor_height} not in {heights_in_tank}. "
+            f"Only {heights_in_tank} are allowed."
+        )
+        log.error(msg)
+        raise ValueError(msg)
 
     def regulate_chp_mode_power(
         self,
@@ -131,24 +189,9 @@ class ExtendedControllerSimulation:
 
         # the heat model has no modulation because there is a buffer (warm water storage)
 
-        heights_in_tank = CHPControllerConfig.heights_in_tank
-
-        if (CHPControllerConfig.height_upper_sensor or CHPControllerConfig.height_lower_sensor) not in heights_in_tank:
-            log.error(
-                "Wrong sensor setting. Only 0, 20, 40, 60, 80, 100% are allowed.\n"
-                "You tried "
-                + str(CHPControllerConfig.height_upper_sensor)
-                + " and "
-                + str(CHPControllerConfig.height_lower_sensor)
-            )
-            raise ValueError
-
-        # get temperatures at the chosen sensors
-        for i, height_in_tank in enumerate(heights_in_tank):
-            if CHPControllerConfig.height_upper_sensor == height_in_tank:
-                temperature_upper_sensor = temperatures_in_tank[i]
-            if CHPControllerConfig.height_lower_sensor == height_in_tank:
-                temperature_lower_sensor = temperatures_in_tank[i]
+        # sensor indices are precomputed once in __init__ (config constants are invariant)
+        temperature_upper_sensor = temperatures_in_tank[self._chp_upper_idx]
+        temperature_lower_sensor = temperatures_in_tank[self._chp_lower_idx]
         state_chp = previous_state
         # upper sensor
         if temperature_upper_sensor < CHPControllerConfig.temperature_switch_on:
@@ -159,7 +202,7 @@ class ExtendedControllerSimulation:
         if state_chp == 1:
             if temperature_lower_sensor > CHPControllerConfig.temperature_switch_off:
                 minimum_timesteps = (CHPControllerConfig.minimum_runtime_minutes * 60) / seconds_per_timestep
-                if runtime_chp > minimum_timesteps:
+                if runtime_chp >= minimum_timesteps:
                     # switch off is possible if chp has run at least xx min
                     state_chp = 0
 
@@ -188,22 +231,9 @@ class ExtendedControllerSimulation:
         # the gas_heater model has no modulation because there is a buffer (warm water storage)
         # ToDo: future --> make modulating possible if the waste energy is to high? reduce power, increase mass_flow
 
-        heights_in_tank = CHPControllerConfig.heights_in_tank
-        if (GasControllerConfig.height_upper_sensor or GasControllerConfig.height_lower_sensor) not in heights_in_tank:
-            log.error(
-                "Wrong sensor setting. Only 0, 20, 40, 60, 80, 100% are allowed.\n"
-                "You tried "
-                + str(GasControllerConfig.height_upper_sensor)
-                + " and "
-                + str(GasControllerConfig.height_lower_sensor)
-            )
-            raise ValueError
-
-        for i, height_in_tank in enumerate(heights_in_tank):
-            if GasControllerConfig.height_upper_sensor == height_in_tank:
-                temperature_upper_sensor = temperatures_in_tank[i]
-            if GasControllerConfig.height_lower_sensor == height_in_tank:
-                temperature_lower_sensor = temperatures_in_tank[i]
+        # sensor indices are precomputed once in __init__ (config constants are invariant)
+        temperature_upper_sensor = temperatures_in_tank[self._gas_upper_idx]
+        temperature_lower_sensor = temperatures_in_tank[self._gas_lower_idx]
         state_gas_heater = previous_state
         # upper sensor
         if temperature_upper_sensor < GasControllerConfig.temperature_switch_on:
@@ -214,7 +244,7 @@ class ExtendedControllerSimulation:
         if state_gas_heater == 1:
             if temperature_lower_sensor > GasControllerConfig.temperature_switch_off:
                 minimum_timesteps = (GasControllerConfig.minimum_runtime_minutes * 60) / seconds_per_timestep
-                if runtime_counter > minimum_timesteps:
+                if runtime_counter >= minimum_timesteps:
                     # switch off is possible if gas_heater has run at least xx min
                     state_gas_heater = 0
             else:
@@ -395,7 +425,7 @@ class ExtendedController(Component):
             lt.Units.ANY,
         )
 
-        self.extended_controller: ExtendedControllerSimulation = ExtendedControllerSimulation(config)
+        self.extended_controller: ExtendedControllerSimulation = ExtendedControllerSimulation()
         self.seconds_per_timestep: int = my_simulation_parameters.seconds_per_timestep
 
         # CHP state/runtime & Gas state/runtime
@@ -419,18 +449,18 @@ class ExtendedController(Component):
     def i_save_state(self) -> None:
         """Saves the state."""
         # self.previous_state = self.extended_controller.begin_new_timestep()
-        self.previous_state_chp = deepcopy(self.state_chp)
-        self.previous_runtime_chp = deepcopy(self.runtime_chp)
-        self.previous_state_gas_heater = deepcopy(self.state_gas_heater)
-        self.previous_runtime_gas_heater = deepcopy(self.runtime_gas_heater)
+        self.previous_state_chp = self.state_chp
+        self.previous_runtime_chp = self.runtime_chp
+        self.previous_state_gas_heater = self.state_gas_heater
+        self.previous_runtime_gas_heater = self.runtime_gas_heater
 
     def i_restore_state(self) -> None:
         """Restores the state."""
         # self.extended_controller.reset_to_last_timestep(self.previous_state)
-        self.state_chp = deepcopy(self.previous_state_chp)
-        self.runtime_chp = deepcopy(self.previous_runtime_chp)
-        self.state_gas_heater = deepcopy(self.previous_state_gas_heater)
-        self.runtime_gas_heater = deepcopy(self.previous_runtime_gas_heater)
+        self.state_chp = self.previous_state_chp
+        self.runtime_chp = self.previous_runtime_chp
+        self.state_gas_heater = self.previous_state_gas_heater
+        self.runtime_gas_heater = self.previous_runtime_gas_heater
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the state."""
@@ -555,12 +585,12 @@ class ExtendedController(Component):
                 pass
             else:
                 log.error("Wrong energy balance:")
-                log.error("State CHP: " + str(self.test_state))
-                log.error("test_pv: " + str(self.test_pv))
-                log.error("power_chp_test: " + str(power_chp_test))
-                log.error("test_grid: " + str(self.test_grid))
-                log.error("test_demand: " + str(self.test_demand))
-                log.error("test_electrolyzer: " + str(self.test_electrolyzer))
+                log.error(f"State CHP: {self.test_state}")
+                log.error(f"test_pv: {self.test_pv}")
+                log.error(f"power_chp_test: {power_chp_test}")
+                log.error(f"test_grid: {self.test_grid}")
+                log.error(f"test_demand: {self.test_demand}")
+                log.error(f"test_electrolyzer: {self.test_electrolyzer}")
                 raise ValueError
 
         else:
@@ -574,10 +604,10 @@ class ExtendedController(Component):
                 pass
             else:
                 log.error("Wrong energy balance:")
-                log.error("State CHP: " + str(self.test_state))
-                log.error("test_pv: " + str(self.test_pv))
-                log.error("power_chp_test: " + str(chp.CHPConfig.p_el_max))
-                log.error("test_grid: " + str(self.test_grid))
-                log.error("test_demand: " + str(self.test_demand))
-                log.error("test_electrolyzer: " + str(self.test_electrolyzer))
+                log.error(f"State CHP: {self.test_state}")
+                log.error(f"test_pv: {self.test_pv}")
+                log.error(f"power_chp_test: {chp.CHPConfig.p_el_max}")
+                log.error(f"test_grid: {self.test_grid}")
+                log.error(f"test_demand: {self.test_demand}")
+                log.error(f"test_electrolyzer: {self.test_electrolyzer}")
                 raise ValueError

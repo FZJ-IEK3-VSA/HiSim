@@ -10,6 +10,7 @@ file is absent.
 
 # clean
 import json
+from pathlib import Path
 
 import pytest
 
@@ -77,7 +78,7 @@ def test_config_rsoc_building_name_override_and_defaults() -> None:
 
 
 @pytest.mark.base
-def test_read_config_with_explicit_path(tmp_path) -> None:
+def test_read_config_with_explicit_path(tmp_path: Path) -> None:
     """read_config reads a variant from an explicit path (no HISIMPATH coupling)."""
     variant = _make_rsoc_config_dict()
     config_file = tmp_path / "rSOC_manufacturer_config.json"
@@ -91,7 +92,7 @@ def test_read_config_with_explicit_path(tmp_path) -> None:
 
 
 @pytest.mark.base
-def test_read_config_with_explicit_path_missing_variant(tmp_path) -> None:
+def test_read_config_with_explicit_path_missing_variant(tmp_path: Path) -> None:
     """read_config returns an empty dict for an unknown variant name."""
     config_file = tmp_path / "rSOC_manufacturer_config.json"
     config_file.write_text(
@@ -150,3 +151,29 @@ def test_rsoc_controller_built_from_in_memory_config() -> None:
     assert stsv.values[my_controller.total_off_count.global_index] == 1.0
     assert stsv.values[my_controller.total_standby_count.global_index] == 0.0
     assert stsv.values[my_controller.total_switch_count.global_index] == 0.0
+
+
+@pytest.mark.base
+def test_rsoc_controller_display_config_isolation() -> None:
+    """Two controllers with default display config get independent instances."""
+    seconds_per_timestep = 60
+    my_simulation_parameters = SimulationParameters.one_day_only(
+        2021, seconds_per_timestep
+    )
+
+    config = controller_l1_rsoc.RsocControllerConfig.config_rsoc(
+        rsoc_name="RSOC_TEST", config_json=_make_rsoc_config_dict()
+    )
+    controller_a = controller_l1_rsoc.RsocController(
+        config=config, my_simulation_parameters=my_simulation_parameters
+    )
+    controller_b = controller_l1_rsoc.RsocController(
+        config=config, my_simulation_parameters=my_simulation_parameters
+    )
+
+    # Each call without an explicit display config must create a new instance.
+    assert controller_a.my_display_config is not controller_b.my_display_config
+
+    # Mutating one must not affect the other.
+    controller_a.my_display_config.pretty_name = "mutated"
+    assert controller_b.my_display_config.pretty_name is None

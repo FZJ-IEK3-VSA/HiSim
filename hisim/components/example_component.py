@@ -3,7 +3,7 @@
 # clean
 
 # Generic/Built-in
-from typing import List, Optional, Any
+from typing import List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -29,7 +29,7 @@ class ExampleComponentConfig(ConfigBase):
     """Configuration of the Example Component."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return ExampleComponent.get_full_classname()
 
@@ -48,7 +48,7 @@ class ExampleComponentConfig(ConfigBase):
     def get_default_example_component(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "ExampleComponentConfig":
         """Gets a default Example Component."""
         return ExampleComponentConfig(
             building_name=building_name,
@@ -66,41 +66,46 @@ class ExampleComponent(Component):
     """Example Component class.
 
     It supports multiple Example Component values for fictitious scenarios.
-    The values passed to the constructor are taken as constants to build the load profile
-    for the entire simulation duration.
+    The configuration values held by ``config`` (electricity, capacity, and
+    initial temperature) are taken as constants to build the load profile for
+    the entire simulation duration.
 
     Parameters
     ----------
-    electricity : float
-        Constant to define electricity output profile
-    heat : float
-        Constant to define heat output profile
-    capacity : float
-        Stored energy when starting the simulation
-    initial_temperature : float
-        Initial temperature when starting the simulation
-    sim_params: cp.SimulationParameters
-        Simulation parameters used by the setup function:
+    my_simulation_parameters : SimulationParameters
+        Passed to initialize :py:class:`~hisim.component.Component`.
+
+    config : ExampleComponentConfig
+        The :py:class:`ExampleComponentConfig` object that holds the example
+        component configuration (building name, load type, unit, electricity,
+        capacity, and initial temperature).
+
+    my_display_config : DisplayConfig, optional
+        A :py:class:`~hisim.component.DisplayConfig` object that controls
+        how the component is displayed in the simulation results.
+        Defaults to an empty :py:class:`~hisim.component.DisplayConfig`.
 
     """
 
-    ThermalEnergyDelivered = "ThermalEnergyDelivered"
+    ThermalEnergyDelivered: str = "ThermalEnergyDelivered"
 
     # Outputs
-    ElectricityOutput = "ElectricityOutput"
-    TemperatureMean = "Residence Temperature"
-    StoredEnergy = "StoredEnergy"
+    ElectricityOutput: str = "ElectricityOutput"
+    TemperatureMean: str = "Residence Temperature"
+    StoredEnergy: str = "StoredEnergy"
 
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: ExampleComponentConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: Optional[DisplayConfig] = None,
     ) -> None:
         """Constructs all the necessary attributes."""
-        self.examplecomponentconfig = config
-        self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
+        self.examplecomponentconfig: ExampleComponentConfig = config
+        self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
+        self.config: ExampleComponentConfig = config
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -168,13 +173,13 @@ class ExampleComponent(Component):
             self.electricity_output = -1e3 * electricity
 
         if capacity is None:
-            self.capacity = 45 * 121.2
+            self.capacity: float = 45 * 121.2
         else:
             self.capacity = capacity
 
         if initial_temperature is None:
             self.temperature = 25.0
-            self.initial_temperature = 25.0
+            self.initial_temperature: float = 25.0
         else:
             self.temperature = initial_temperature
             self.initial_temperature = initial_temperature
@@ -182,7 +187,7 @@ class ExampleComponent(Component):
 
     def write_to_report(self) -> List[str]:
         """Writes a report."""
-        lines: List = []
+        lines: List[str] = []
         return lines
 
     def i_save_state(self) -> None:
@@ -210,10 +215,10 @@ class ExampleComponent(Component):
         if timestep <= 60 * 12:
             thermal_delivered_energy: float = 0
             temperature: float = self.initial_temperature
-            current_stored_energy = (self.initial_temperature + 273.15) * self.capacity
+            current_stored_energy: float = (self.initial_temperature + 273.15) * self.capacity
         else:
             thermal_delivered_energy = stsv.get_input_value(self.thermal_energy_delivered_c)
-            previous_stored_energy = (self.previous_temperature + 273.15) * self.capacity
+            previous_stored_energy: float = (self.previous_temperature + 273.15) * self.capacity
             current_stored_energy = previous_stored_energy + thermal_delivered_energy
             self.temperature = current_stored_energy / self.capacity - 273.15
             temperature = self.temperature

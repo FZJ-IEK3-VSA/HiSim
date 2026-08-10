@@ -45,8 +45,8 @@ class PTXControllerConfig(ConfigBase):
         """Read config."""
         config_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json")
         with open(config_file, "r", encoding="utf-8") as json_file:
-            data = json.load(json_file)
-            return data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
+            config_data = json.load(json_file)
+            return config_data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
 
     @classmethod
     def control_electrolyzer(
@@ -84,18 +84,20 @@ class PTXController(Component):
     StateOfCharge = "StateOfCharge"
 
     # Outputs
-    PowerToThird = "PowerToThird"
+    PowerToBattery = "PowerToBattery"
     PowerToSystem = "PowerToSystem"
-    EnergyToThird = "EnergyToThird"
+    EnergyToBattery = "EnergyToBattery"
 
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: PTXControllerConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: DisplayConfig | None = None,
     ) -> None:
         """Initialize the class."""
-        self.ptxcontrollerconfig = config
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
+        self.ptx_controller_config = config
 
         self.nom_load = config.nom_load
         self.min_load = config.min_load
@@ -137,14 +139,14 @@ class PTXController(Component):
 
         self.load_to_battery: ComponentOutput = self.add_output(
             self.component_name,
-            PTXController.PowerToThird,
+            PTXController.PowerToBattery,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
             output_description="Charges or discharges the battery",
         )
         self.energy_to_battery: ComponentOutput = self.add_output(
             self.component_name,
-            PTXController.EnergyToThird,
+            PTXController.EnergyToBattery,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KWH,
             output_description="Charges or discharges the battery",
@@ -293,4 +295,4 @@ class PTXController(Component):
 
     def write_to_report(self) -> List[str]:
         """Writes a report."""
-        return self.ptxcontrollerconfig.get_string_dict()
+        return self.ptx_controller_config.get_string_dict()

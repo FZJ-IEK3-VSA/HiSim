@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass
 import math
 
-from typing import Any, List
+from typing import ClassVar, List
 import copy
 from dataclasses_json import dataclass_json
 
@@ -38,7 +38,7 @@ class CHPConfig(ConfigBase):
     """CHP Config class."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Return the full class name of the base class."""
         return CHP.get_full_classname()
 
@@ -65,7 +65,7 @@ class CHPConfig(ConfigBase):
     def get_default_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "CHPConfig":
         """Get default config."""
         config = CHPConfig(
             building_name=building_name,
@@ -113,12 +113,12 @@ class CHPConfigAdvanced:
         df_specific = dataframe.loc[str(system_name)]
 
         if str(df_specific["is_modulating"]) == "Yes":
-            self.is_modulating = True
-            self.p_el_min = df_specific["P_el_min"]
-            self.p_th_min = df_specific["P_th_min"]
-            self.p_total_min = df_specific["P_total_min"]
-            self.eff_el_min = df_specific["eff_el_min"]
-            self.eff_th_min = df_specific["eff_th_min"]
+            self.is_modulating: bool = True
+            self.p_el_min: float = df_specific["P_el_min"]
+            self.p_th_min: float = df_specific["P_th_min"]
+            self.p_total_min: float = df_specific["P_total_min"]
+            self.eff_el_min: float = df_specific["eff_el_min"]
+            self.eff_th_min: float = df_specific["eff_th_min"]
 
         elif str(df_specific["is_modulating"]) == "No":
             self.is_modulating = False
@@ -126,26 +126,35 @@ class CHPConfigAdvanced:
             log.error("Modulation is not defined. Modulation must be 'Yes' or 'No'")
             raise ValueError
 
-        self.p_el_max = df_specific["P_el_max"]
-        self.p_th_max = df_specific["P_th_max"]
-        self.p_total_max = df_specific["P_total_max"]  # maximum fuel consumption
-        self.eff_el_max = df_specific["eff_el_max"]
-        self.eff_th_max = df_specific["eff_th_max"]
-        self.mass_flow_max = df_specific["mass_flow (dT=20°C)"]
-        self.temperature_max = df_specific["temperature_max"]
-        self.delta_temperature = 10
+        self.p_el_max: float = df_specific["P_el_max"]
+        self.p_th_max: float = df_specific["P_th_max"]
+        self.p_total_max: float = df_specific["P_total_max"]  # maximum fuel consumption
+        self.eff_el_max: float = df_specific["eff_el_max"]
+        self.eff_th_max: float = df_specific["eff_th_max"]
+        self.mass_flow_max: float = df_specific["mass_flow (dT=20°C)"]
+        self.temperature_max: float = df_specific["temperature_max"]
+        self.delta_temperature: float = 10
 
 
 class CHPState:
     """CHP state class."""
 
-    def __init__(self, start_timestep=None, electricity_output=0.0, cycle_number=None):
+    def __init__(
+        self,
+        # Defaults are int (not int | None = None): start_timestep and
+        # cycle_number are used in arithmetic and assigned to int counters
+        # without null checks, so None would cause TypeError at runtime and
+        # mypy errors statically.  All callers pass explicit values.
+        start_timestep: int = 0,
+        electricity_output: float = 0.0,
+        cycle_number: int = 0,
+    ) -> None:
         """Initialize the class."""
-        self.start_timestep = start_timestep
-        self.electricity_output = electricity_output
-        self.cycle_number = cycle_number
+        self.start_timestep: int = start_timestep
+        self.electricity_output: float = electricity_output
+        self.cycle_number: int = cycle_number
         if self.electricity_output == 0.0:
-            self.activation = 0
+            self.activation: int = 0
         elif self.electricity_output > 0.0:
             self.activation = 1
         else:
@@ -160,20 +169,20 @@ class CHP(Component):
     """
 
     # Inputs
-    ControlSignal = "ControlSignal"  # at which Procentage is the CHP modulating [0..1]
-    MassflowInputTemperature = "MassflowInputTemperature"
-    ElectricityFromCHPTarget = "ElectricityFromCHPTarget"
-    HydrogenNotReleased = "HydrogenNotReleased"
+    ControlSignal: ClassVar[str] = "ControlSignal"  # at which Procentage is the CHP modulating [0..1]
+    MassflowInputTemperature: ClassVar[str] = "MassflowInputTemperature"
+    ElectricityFromCHPTarget: ClassVar[str] = "ElectricityFromCHPTarget"
+    HydrogenNotReleased: ClassVar[str] = "HydrogenNotReleased"
     # OperatingModelSignal="OperatingModelSignal" #-->Wärme oder Stromgeführt. Nötig?
 
     # Output
-    MassflowOutput = "Hot Water Energy Output"
-    MassflowOutputTemperature = "MassflowOutputTemperature"
-    ElectricityOutput = "ElectricityOutput"
-    GasDemandTarget = "GasDemandTarget"
-    NumberofCycles = "NumberofCycles"
-    ThermalOutputPower = "ThermalOutputPower"
-    GasDemandReal = "GasDemandReal"
+    MassflowOutput: ClassVar[str] = "Hot Water Energy Output"
+    MassflowOutputTemperature: ClassVar[str] = "MassflowOutputTemperature"
+    ElectricityOutput: ClassVar[str] = "ElectricityOutput"
+    GasDemandTarget: ClassVar[str] = "GasDemandTarget"
+    NumberofCycles: ClassVar[str] = "NumberofCycles"
+    ThermalOutputPower: ClassVar[str] = "ThermalOutputPower"
+    GasDemandReal: ClassVar[str] = "GasDemandReal"
 
     def __init__(
         self,
@@ -182,9 +191,9 @@ class CHP(Component):
         my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
-        self.chp_config = config
+        self.chp_config: CHPConfig = config
         self.my_simulation_parameters = my_simulation_parameters
-        self.config = config
+        self.config: CHPConfig = config
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -192,37 +201,37 @@ class CHP(Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.min_operation_time = self.chp_config.min_operation_time
-        self.min_idle_time = self.chp_config.min_idle_time
-        self.gas_type = self.chp_config.gas_type  # Gas Type can be "Hydrogen" or "Methan"
-        self.operating_mode = self.chp_config.operating_mode  # operating_mode=["both","heat","electricity"]
+        self.min_operation_time: float = self.chp_config.min_operation_time
+        self.min_idle_time: float = self.chp_config.min_idle_time
+        self.gas_type: str = self.chp_config.gas_type  # Gas Type can be "Hydrogen" or "Methan"
+        self.operating_mode: str = self.chp_config.operating_mode  # operating_mode=["both","heat","electricity"]
 
-        self.number_of_cycles = 0
-        self.number_of_cycles_previous = copy.deepcopy(self.number_of_cycles)
-        self.state = CHPState(start_timestep=int(0), cycle_number=0)
-        self.previous_state = copy.deepcopy(self.state)
+        self.number_of_cycles: int = 0
+        self.number_of_cycles_previous: int = copy.deepcopy(self.number_of_cycles)
+        self.state: CHPState = CHPState(start_timestep=int(0), cycle_number=0)
+        self.previous_state: CHPState = copy.deepcopy(self.state)
 
         # the 3600 comes from Normalised chp from p_el_max=3600. Look up chp_system_lib for more information
-        self.p_el_max = self.chp_config.p_el_max
+        self.p_el_max: float = self.chp_config.p_el_max
         usually_p_el_max = self.chp_config.p_el_max
-        self.p_th_max = self.chp_config.p_th_max * (self.p_el_max / usually_p_el_max)
-        self.p_th_min = self.chp_config.p_th_min
-        self.p_el_min = self.chp_config.p_el_min
+        self.p_th_max: float = self.chp_config.p_th_max * (self.p_el_max / usually_p_el_max)
+        self.p_th_min: float = self.chp_config.p_th_min
+        self.p_el_min: float = self.chp_config.p_el_min
 
         if self.p_el_max < self.p_el_min or self.p_th_max < self.p_th_min:
             self.p_el_max = self.p_el_min + 100
             self.p_th_max = self.p_th_max + 100
 
-        self.mass_flow_max = self.chp_config.mass_flow_max * (self.p_el_max / usually_p_el_max)
+        self.mass_flow_max: float = self.chp_config.mass_flow_max * (self.p_el_max / usually_p_el_max)
         if self.mass_flow_max < self.chp_config.mass_flow_max:
             self.mass_flow_max = self.chp_config.mass_flow_max
         self.eff_th_min: float = self.chp_config.eff_th_min
-        self.eff_th_max = self.chp_config.eff_th_max
+        self.eff_th_max: float = self.chp_config.eff_th_max
         self.eff_el_min: float = self.chp_config.eff_el_min
-        self.eff_el_max = self.chp_config.eff_el_max
-        self.temperature_max = self.chp_config.temperature_max
+        self.eff_el_max: float = self.chp_config.eff_el_max
+        self.temperature_max: float = self.chp_config.temperature_max
 
-        self.delta_t = self.chp_config.delta_temperature
+        self.delta_t: float = self.chp_config.delta_temperature
 
         # Inputs
         self.control_signal_channel: ComponentInput = self.add_input(
@@ -324,7 +333,9 @@ class CHP(Component):
         """Doubelchecks."""
         pass
 
-    def simulate_chp(self, control_signal: float, stsv: SingleTimeStepValues, timestep: int) -> Any:
+    def simulate_chp(
+        self, control_signal: float, stsv: SingleTimeStepValues, timestep: int
+    ) -> tuple[float, float, float, float]:
         """Simulates the component."""
 
         specific_heat_capacity_water = SPECIFIC_HEAT_CAPACITY_WATER
@@ -492,41 +503,30 @@ class CHP(Component):
         return el_power, th_power, eff_el_real, eff_th_real
 
     def calculate_control_signal(self, stsv: SingleTimeStepValues) -> float:  # pylint: disable=R0911
-        """Calculate control signal."""
-        if (stsv.get_input_value(self.electricity_target_channel)) < 30:
-            control_signal: float = 0
-            return control_signal
-        if (stsv.get_input_value(self.electricity_target_channel)) < self.p_el_min * self.eff_el_min:
-            control_signal = 0.4
-            return control_signal
-        if (stsv.get_input_value(self.electricity_target_channel)) > self.p_el_max * self.eff_el_max:
-            control_signal = 1
-            return control_signal
+        """Calculate control signal.
 
-        x_1 = (
-            -self.p_el_max
-            - math.sqrt(
-                (self.p_el_max * self.eff_el_min) ** 2
-                + 4
-                * (
-                    stsv.get_input_value(self.electricity_target_channel)
-                    * self.p_el_max
-                    * (self.eff_el_max - self.eff_el_min)
-                )
-            )
-        ) / (2 * self.p_el_max * (self.eff_el_max - self.eff_el_min))
-        x_2 = (
-            -self.p_el_max
-            + math.sqrt(
-                (self.p_el_max * self.eff_el_min) ** 2
-                + 4
-                * (
-                    stsv.get_input_value(self.electricity_target_channel)
-                    * self.p_el_max
-                    * (self.eff_el_max - self.eff_el_min)
-                )
-            )
-        ) / (2 * self.p_el_max * (self.eff_el_max - self.eff_el_min))
+        Hoists the per-timestep invariants (input lookup, ``p_el_max``, the
+        efficiency span, the discriminant and its square root, and the shared
+        denominator) into locals so the hot path -- called every timestep in
+        ``"electricity"`` and ``"both"`` operating modes -- evaluates each of
+        them exactly once instead of up to five times. The arithmetic is
+        unchanged; only evaluation order and caching differ.
+        """
+        target = stsv.get_input_value(self.electricity_target_channel)
+        if target < 30:
+            return 0
+        if target < self.p_el_min * self.eff_el_min:
+            return 0.4
+        if target > self.p_el_max * self.eff_el_max:
+            return 1
+
+        p_el_max = self.p_el_max
+        d_eff = self.eff_el_max - self.eff_el_min
+        discriminant = (p_el_max * self.eff_el_min) ** 2 + 4 * (target * p_el_max * d_eff)
+        sqrt_disc = math.sqrt(discriminant)
+        denom = 2 * p_el_max * d_eff
+        x_1 = (-p_el_max - sqrt_disc) / denom
+        x_2 = (-p_el_max + sqrt_disc) / denom
         if 0 < x_1 < 1:
             if 0 < x_2 < 1:
                 if x_1 < x_2:
@@ -564,9 +564,9 @@ class CHP(Component):
             control_signal=control_signal, stsv=stsv, timestep=timestep
         )
         # Check if enough hydrogen is in the tank
-        gas_demand_real_used = 0
+        gas_demand_real_used: float = 0
         if el_power == 0 and th_power == 0:
-            gas_demand_target = 0
+            gas_demand_target: float = 0
             gas_demand_real_used = 0
         else:
             if self.gas_type == "Hydrogen":
@@ -614,22 +614,22 @@ class CHP(Component):
         lines = []
         for config_string in self.chp_config.get_string_dict():
             lines.append(config_string)
-        lines.append("Component Name: " + str(self.component_name))
+        lines.append(f"Component Name: {self.component_name}")
         lines.append("Name: CHP")
-        lines.append("Min Operation Time [Sec]: " + str(self.min_operation_time))
-        lines.append("Min Idle Time [Sec]: " + str(self.min_idle_time))
-        lines.append("Gas Type: " + str(self.gas_type))
-        lines.append("Operating Mode: " + str(self.operating_mode))
-        lines.append("P_el_max [P]: " + str(self.p_el_max))
-        lines.append("P_el_min [P]: " + str(self.p_el_min))
-        lines.append("Eff_el_min: " + str(self.eff_el_min))
-        lines.append("Eff_el_max: " + str(self.eff_el_max))
-        lines.append("Mass Flow Max: " + str(self.mass_flow_max))
-        lines.append("P_th_min [P]: " + str(self.p_th_min))
-        lines.append("P_th_max [P]: " + str(self.p_th_max))
-        lines.append("Eff_th_min: " + str(self.eff_th_min))
-        lines.append("Eff_th_max: " + str(self.eff_th_max))
-        lines.append("Max Temperature [°C]: " + str(self.temperature_max))
-        lines.append("Delta T [°C]: " + str(self.delta_t))
+        lines.append(f"Min Operation Time [Sec]: {self.min_operation_time}")
+        lines.append(f"Min Idle Time [Sec]: {self.min_idle_time}")
+        lines.append(f"Gas Type: {self.gas_type}")
+        lines.append(f"Operating Mode: {self.operating_mode}")
+        lines.append(f"P_el_max [P]: {self.p_el_max}")
+        lines.append(f"P_el_min [P]: {self.p_el_min}")
+        lines.append(f"Eff_el_min: {self.eff_el_min}")
+        lines.append(f"Eff_el_max: {self.eff_el_max}")
+        lines.append(f"Mass Flow Max: {self.mass_flow_max}")
+        lines.append(f"P_th_min [P]: {self.p_th_min}")
+        lines.append(f"P_th_max [P]: {self.p_th_max}")
+        lines.append(f"Eff_th_min: {self.eff_th_min}")
+        lines.append(f"Eff_th_max: {self.eff_th_max}")
+        lines.append(f"Max Temperature [°C]: {self.temperature_max}")
+        lines.append(f"Delta T [°C]: {self.delta_t}")
 
         return lines

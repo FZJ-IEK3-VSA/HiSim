@@ -3,7 +3,7 @@
 
 # clean
 
-from typing import List
+from typing import List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -61,7 +61,7 @@ class ChargingStationConfig(cp.ConfigBase):
     subsidy_as_percentage_of_investment_costs: float
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return L1Controller.get_full_classname()
 
@@ -95,13 +95,13 @@ class ChargingStationConfig(cp.ConfigBase):
 class L1ControllerState:
     """Data class, which saves the state of the controller."""
 
-    def __init__(self, power: float) -> None:
+    def __init__(self, power_in_watt: float) -> None:
         """Initializes power for battery charge/discharge in state."""
-        self.power = power
+        self.power_in_watt = power_in_watt
 
     def clone(self) -> "L1ControllerState":
         """Copy state efficiently."""
-        return L1ControllerState(power=self.power)
+        return L1ControllerState(power_in_watt=self.power_in_watt)
 
 
 class L1Controller(cp.Component):
@@ -124,6 +124,14 @@ class L1Controller(cp.Component):
     ElectricityTargetToOrFromCarBattery = "ElectricityTargetToOrFromCarBattery"
     BatteryChargingPowerToEMS = "BatteryChargingPowerToEMS"
 
+    # Instance attributes declared for static type analysis
+    state: L1ControllerState
+    previous_state: L1ControllerState
+    processed_state: L1ControllerState
+    location: str
+    charging_location: Optional[int]
+    power_delivered_at_charging_station_in_watt: float
+
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
@@ -140,9 +148,10 @@ class L1Controller(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.state = L1ControllerState(power=0)
+        self.state = L1ControllerState(power_in_watt=0)
         self.previous_state = self.state.clone()
         self.processed_state = self.state.clone()
+        self.charging_location = None
         self.build(config=config)
 
         # add inputs
@@ -257,13 +266,13 @@ class L1Controller(cp.Component):
         """Prepares the simulation."""
         pass
 
-    def _handle_discharging(self, car_consumption: float) -> float:
+    def _handle_discharging(self, car_consumption_in_watt: float) -> float:
         """Handle discharging case when car is consuming energy.
 
         When the car is driving or has standby losses, it consumes energy from the battery.
         Returns negative power value indicating discharge.
         """
-        return car_consumption * (-1)
+        return car_consumption_in_watt * (-1)
 
     def _handle_parking(self, _car_location: int) -> float:
         """Handle parking case when car is not at charging location.
@@ -276,7 +285,7 @@ class L1Controller(cp.Component):
     def _handle_charging(
         self,
         soc: float,
-        electricity_target: float
+        electricity_target_in_watt: float
     ) -> float:
         """Handle charging case when car is at charging location.
 
@@ -290,33 +299,33 @@ class L1Controller(cp.Component):
 
         Args:
             soc: Current state of charge of the battery (0-1)
-            electricity_target: Surplus energy from EMS in watts
+            electricity_target_in_watt: Surplus energy from EMS in watts
 
         Returns:
             Power to charge the car battery in watts (positive value)
         """
-        charging_power = 0.0
+        charging_power_in_watt = 0.0
 
         # If SOC is below threshold, charge at full power
         if soc < self.config.battery_set_soc:
-            charging_power = self.power_delivered_at_charging_station_in_watt
+            charging_power_in_watt = self.power_delivered_at_charging_station_in_watt
 
         # If EMS has surplus energy above threshold, use it for charging
         # Note: This takes precedence over SOC-based charging (original behavior)
-        if electricity_target > self.config.lower_threshold_charging_power_in_watt:
-            charging_power = min(
-                electricity_target,
+        if electricity_target_in_watt > self.config.lower_threshold_charging_power_in_watt:
+            charging_power_in_watt = min(
+                electricity_target_in_watt,
                 self.power_delivered_at_charging_station_in_watt
             )
 
-        return charging_power
+        return charging_power_in_watt
 
     def control(
         self,
-        car_consumption: float,
+        car_consumption_in_watt: float,
         car_location: int,
         soc: float,
-        electricity_target: float,
+        electricity_target_in_watt: float,
     ) -> float:
         """Control the EV charging and discharging based on car state and energy availability.
 
@@ -327,32 +336,32 @@ class L1Controller(cp.Component):
         - Available surplus energy from EMS
 
         Args:
-            car_consumption: Current power consumption of the car in watts (positive when consuming)
+            car_consumption_in_watt: Current power consumption of the car in watts (positive when consuming)
             car_location: Current location of the car (1=Home, 2=Work, etc.)
             soc: Current state of charge of the battery (0-1)
-            electricity_target: Surplus energy from EMS in watts
+            electricity_target_in_watt: Surplus energy from EMS in watts
 
         Returns:
             Power to/from the car battery in watts. Positive = charging, Negative = discharging
 
         Raises:
-            ValueError: If car_consumption is negative (car cannot produce energy)
+            ValueError: If car_consumption_in_watt is negative (car cannot produce energy)
         """
         # DISCHARGING: car is consuming energy (driving or standby losses)
-        if car_consumption > 0.0:
-            return self._handle_discharging(car_consumption)
+        if car_consumption_in_watt > 0.0:
+            return self._handle_discharging(car_consumption_in_watt)
 
         # CHARGING or PARKING: car is not driving
-        if car_consumption == 0.0:
+        if car_consumption_in_watt == 0.0:
             # PARKING: car is not at charging location
             if car_location != self.charging_location:
                 return self._handle_parking(car_location)
 
             # CHARGING: car is at charging location
-            return self._handle_charging(soc, electricity_target)
+            return self._handle_charging(soc, electricity_target_in_watt)
 
         raise ValueError(
-            f"Car consumption cannot be negative, otherwise car would be producing energy: {car_consumption}"
+            f"Car consumption cannot be negative, otherwise car would be producing energy: {car_consumption_in_watt}"
         )
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
@@ -361,26 +370,26 @@ class L1Controller(cp.Component):
             self.state = self.processed_state.clone()
         else:
             car_location = int(stsv.get_input_value(self.car_location_channel))
-            car_consumption = stsv.get_input_value(self.car_consumption_channel)
+            car_consumption_in_watt = stsv.get_input_value(self.car_consumption_channel)
             soc = stsv.get_input_value(self.state_of_charge_channel)
             if self.electricity_target_from_ems_channel.source_output is not None:
                 electricity_target_from_ems_in_watt = stsv.get_input_value(self.electricity_target_from_ems_channel)
             else:
                 electricity_target_from_ems_in_watt = 0
-            self.state.power = self.control(
-                car_consumption,
+            self.state.power_in_watt = self.control(
+                car_consumption_in_watt,
                 car_location=car_location,
                 soc=soc,
-                electricity_target=electricity_target_from_ems_in_watt,
+                electricity_target_in_watt=electricity_target_from_ems_in_watt,
             )
             self.processed_state = self.state.clone()
-        stsv.set_output_value(self.electricity_to_or_from_car_battery_channel, self.state.power)
+        stsv.set_output_value(self.electricity_to_or_from_car_battery_channel, self.state.power_in_watt)
 
         # get current charging power from car battery
-        ac_battery_power = stsv.get_input_value(self.ac_battery_power_channel)
-        if ac_battery_power > 0:
+        ac_battery_power_in_watt = stsv.get_input_value(self.ac_battery_power_channel)
+        if ac_battery_power_in_watt > 0:
             # charging of EV is communicated to EMS
-            stsv.set_output_value(self.battery_charging_power_to_ems_channel, ac_battery_power)
+            stsv.set_output_value(self.battery_charging_power_to_ems_channel, ac_battery_power_in_watt)
         else:
             # no charging of EV
             stsv.set_output_value(self.battery_charging_power_to_ems_channel, 0)
@@ -405,13 +414,16 @@ class L1Controller(cp.Component):
             log.error(
                 'Charging location not known, check the input on the charging station set. It was set to "charging at home per default.'
             )
-        power = float(charging_station_string.partition("with ")[2].partition(" kW")[0]) * 1e3
-        self.power_delivered_at_charging_station_in_watt = power
+            self.location = "Home"
+            self.charging_location = 1
+            charging_station_string = "At Home with 0.37 kW"
+        power_in_watt = float(charging_station_string.partition("with ")[2].partition(" kW")[0]) * 1e3
+        self.power_delivered_at_charging_station_in_watt = power_in_watt
 
     def write_to_report(self) -> List[str]:
         """Writes EV charge controller values to report."""
         lines = []
-        lines.append(self.name + "_w" + str(self.source_weight) + "charging controller: ")
+        lines.append(f"{self.name}_w{self.source_weight}charging controller: ")
         lines.append(f"Power [kW]: {self.power_delivered_at_charging_station_in_watt * 1e-3:2.1f}")
         if self.charging_location == 1:
             lines.append("At Home")
@@ -443,7 +455,7 @@ class L1Controller(cp.Component):
 
     def get_cost_opex(
         self,
-        all_outputs: List,
+        all_outputs: List[cp.ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
@@ -467,7 +479,7 @@ class L1Controller(cp.Component):
 
     def get_component_kpi_entries(
         self,
-        all_outputs: List,
+        all_outputs: List[cp.ComponentOutput],
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""

@@ -1,66 +1,13 @@
 Postprocessing Package
 ======================
 
-postprocessing.chart\_singleday module
---------------------------------------
+All postprocessing modules are documented automatically. The pages below
+are generated at build time from the ``hisim/postprocessing`` package, so
+newly added modules show up without editing this file.
 
-.. automodule:: postprocessing.chart_singleday
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autosummary::
+   :toctree: _autosummary
+   :template: custom-module-template.rst
+   :recursive:
 
-postprocessing.chartbase module
--------------------------------
-
-.. automodule:: postprocessing.chartbase
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-postprocessing.charts module
-----------------------------
-
-.. automodule:: postprocessing.charts
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-postprocessing.compute\_kpis module
------------------------------------
-
-.. automodule:: postprocessing.compute_kpis
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-postprocessing.postprocessing\_datatransfer module
---------------------------------------------------
-
-.. automodule:: postprocessing.postprocessing_datatransfer
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-postprocessing.postprocessing\_main module
-------------------------------------------
-
-.. automodule:: postprocessing.postprocessing_main
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-postprocessing.reportgenerator module
--------------------------------------
-
-.. automodule:: postprocessing.reportgenerator
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-postprocessing.system\_chart module
------------------------------------
-
-.. automodule:: postprocessing.system_chart
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   hisim.postprocessing

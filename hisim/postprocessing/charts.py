@@ -2,10 +2,11 @@
 
 # clean
 import gc
-from typing import Any
+from typing import Callable, ClassVar
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 from hisim import log
 from hisim.postprocessing.chartbase import Chart, ChartFontsAndSize
@@ -21,14 +22,14 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 
     def __init__(
         self,
-        output: Any,
+        output: str,
         component_name: str,
-        units: Any,
+        units: str,
         directory_path: str,
-        time_correction_factor: float,
+        time_correction_factor_in_hours: float,
         output_description: str,
         figure_format: FigureFormat,
-        path_checker=None,
+        path_checker: Callable[[str], None] | None = None,
     ) -> None:
         """Initializes a carpet plot."""
         super().__init__(
@@ -37,13 +38,13 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             chart_type="Carpet",
             units=units,
             directory_path=directory_path,
-            time_correction_factor=time_correction_factor,
+            time_correction_factor_in_hours=time_correction_factor_in_hours,
             output_description=output_description,
             figure_format=figure_format,
             path_checker=path_checker,
         )
 
-    def plot(self, xdims: int, data: Any) -> "ReportImageEntry | None":
+    def plot(self, xdims: int, data: pd.Series) -> ReportImageEntry | None:
         """Makes a carpet plot.
 
         Returns:
@@ -51,8 +52,8 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         """
         log.trace("starting carpet plots")
         self.ensure_output_dir()
-        ydims = int(len(data) / xdims)  # number of calculated timesteps per day
-        y_steps_per_hour = int(ydims / 24)
+        ydims = len(data) // xdims  # number of calculated timesteps per day
+        y_steps_per_hour = ydims // 24
 
         try:
             database = data.values.reshape(xdims, ydims)
@@ -114,14 +115,14 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
     # @utils.measure_memory_leak
     def __init__(
         self,
-        output: Any,
+        output: str,
         component_name: str,
-        units: Any,
+        units: str,
         directory_path: str,
-        time_correction_factor: float,
+        time_correction_factor_in_hours: float,
         output_description: str,
         figure_format: FigureFormat,
-        path_checker=None,
+        path_checker: Callable[[str], None] | None = None,
     ) -> None:
         """Initializes a line chart."""
         if output_description is None:
@@ -133,14 +134,14 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             chart_type="Line",
             units=units,
             directory_path=directory_path,
-            time_correction_factor=time_correction_factor,
+            time_correction_factor_in_hours=time_correction_factor_in_hours,
             output_description=output_description,
             figure_format=figure_format,
             path_checker=path_checker,
         )
 
     @utils.measure_memory_leak
-    def plot(self, data: Any) -> ReportImageEntry:
+    def plot(self, data: pd.Series) -> ReportImageEntry:
         """Makes a line plot."""
 
         mpl.use("Agg")
@@ -166,6 +167,11 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         plt.cla()
         plt.clf()
         plt.close("all")
+        # Keep this explicit full GC pass in place: post-processing creates a
+        # large number of charts in rapid succession, and past experience
+        # showed memory usage ballooning without it. The per-call overhead is
+        # intentional and outweighed by avoiding unbounded growth across the
+        # hundreds-to-thousands of plots produced in a parametric study.
         del x_zero
         gc.collect(2)
         return ReportImageEntry(
@@ -182,7 +188,7 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
     """Makes Bar charts."""
 
-    original_pv_sol = [
+    original_pv_sol_in_kwh: ClassVar[list[float]] = [
         385.66,
         484.01,
         981.05,
@@ -200,14 +206,14 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 
     def __init__(
         self,
-        output: Any,
+        output: str,
         component_name: str,
-        units: Any,
+        units: str,
         directory_path: str,
-        time_correction_factor: float,
+        time_correction_factor_in_hours: float,
         output_description: str,
         figure_format: FigureFormat,
-        path_checker=None,
+        path_checker: Callable[[str], None] | None = None,
     ) -> None:
         """Initializes the classes."""
         super().__init__(
@@ -216,14 +222,14 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             chart_type="Bar",
             units=units,
             directory_path=directory_path,
-            time_correction_factor=time_correction_factor,
+            time_correction_factor_in_hours=time_correction_factor_in_hours,
             output_description=output_description,
             figure_format=figure_format,
             path_checker=path_checker,
         )
         self.filename = f"monthly_{self.output}{self.figure_format}"
 
-    def plot(self, data: Any) -> ReportImageEntry:
+    def plot(self, data: pd.Series) -> ReportImageEntry:
         """Plots the bar chart."""
         # Specify the values of blue bars (height)
         self.ensure_output_dir()

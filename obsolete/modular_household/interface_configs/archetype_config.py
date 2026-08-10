@@ -5,10 +5,11 @@ system-level configuration for a modular household (occupancy profile,
 building code, heating systems, transportation and commuting references).
 
 The module also provides backward-compatible deserialization: JSON configs
-that still use the deprecated field names ``mobility_set`` and
-``mobility_distance`` are automatically migrated to their current names
-(``transportation_device_set`` and ``commuting_travel_route_set``) with a
-``DeprecationWarning``.
+that still use the deprecated field names ``mobility_set``,
+``mobility_distance`` and ``absolute_conditioned_floor_area`` are automatically
+migrated to their current names (``transportation_device_set``,
+``commuting_travel_route_set`` and ``absolute_conditioned_floor_area_in_m2``)
+with a ``DeprecationWarning``.
 """
 
 # -*- coding: utf-8 -*-
@@ -27,13 +28,16 @@ from hisim.loadtypes import HeatingSystems
 #:
 #: ``mobility_set`` was renamed to ``transportation_device_set`` and
 #: ``mobility_distance`` was renamed to ``commuting_travel_route_set`` so that
-#: the field names match their ``JsonReference`` types.  Existing JSON config
+#: the field names match their ``JsonReference`` types.  ``absolute_conditioned_floor_area``
+#: was renamed to ``absolute_conditioned_floor_area_in_m2`` so that the physical
+#: unit (square metres) is explicit in the field name.  Existing JSON config
 #: files may still use the old keys; :func:`migrate_legacy_field_names` maps
 #: them to the new names during deserialization so the values are not silently
 #: dropped.
 _LEGACY_FIELD_NAMES: "dict[str, str]" = {
     "mobility_set": "transportation_device_set",
     "mobility_distance": "commuting_travel_route_set",
+    "absolute_conditioned_floor_area": "absolute_conditioned_floor_area_in_m2",
 }
 
 _A = TypeVar("_A")
@@ -43,11 +47,14 @@ def migrate_legacy_field_names(kvs: Any) -> Any:
     """Rename legacy JSON keys to their current field names.
 
     ``ArcheTypeConfigModular`` was previously serialized with the field names
-    ``mobility_set`` and ``mobility_distance``.  These were renamed to
-    ``transportation_device_set`` and ``commuting_travel_route_set`` to better
-    reflect their ``JsonReference`` types.  Existing JSON config files may still
-    contain the old keys; this helper maps them to the new names so that the
-    values are not silently dropped during deserialization.
+    ``mobility_set``, ``mobility_distance`` and ``absolute_conditioned_floor_area``.
+    These were renamed to ``transportation_device_set``,
+    ``commuting_travel_route_set`` and ``absolute_conditioned_floor_area_in_m2``
+    respectively — the first two to better reflect their ``JsonReference`` types
+    and the third to make the physical unit (square metres) explicit in the name.
+    Existing JSON config files may still contain the old keys; this helper maps
+    them to the new names so that the values are not silently dropped during
+    deserialization.
 
     A :class:`DeprecationWarning` is emitted when legacy keys are encountered so
     that users are alerted to update their config files.
@@ -107,8 +114,8 @@ class ArcheTypeConfigModular:
     occupancy_profile: Optional[str] = "AVG"
     #: building code of considered type of building originated from the Tabula data base (https://episcope.eu/building-typology/webtool/)
     building_code: str = "DE.N.SFH.05.Gen.ReEx.001.002"  # "DE.N.SFH.05.Gen.ReEx.001.002"
-    #: absolute area considered for heating and cooling
-    absolute_conditioned_floor_area: Optional[float] = None
+    #: absolute conditioned floor area considered for heating and cooling, in square metres (m^2)
+    absolute_conditioned_floor_area_in_m2: Optional[float] = None
     #: type of water heating system
     water_heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
     #: type of heating system
@@ -131,9 +138,10 @@ def _archetype_config_modular_from_dict(
     """Deserialize a dict into an :class:`ArcheTypeConfigModular`.
 
     Supports backward-compatible deserialization of JSON configs that still use
-    the deprecated field names ``mobility_set`` and ``mobility_distance`` by
-    mapping them to ``transportation_device_set`` and
-    ``commuting_travel_route_set`` respectively before decoding.  A
+    the deprecated field names ``mobility_set``, ``mobility_distance`` and
+    ``absolute_conditioned_floor_area`` by mapping them to
+    ``transportation_device_set``, ``commuting_travel_route_set`` and
+    ``absolute_conditioned_floor_area_in_m2`` respectively before decoding.  A
     :class:`DeprecationWarning` is emitted when legacy keys are found.
 
     ``dataclasses_json`` overrides any ``from_dict`` defined in the class body,

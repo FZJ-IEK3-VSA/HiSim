@@ -1,6 +1,7 @@
 """ Tests for the basic household system setup. """
 # clean
-import os
+from pathlib import Path
+
 import pytest
 
 from hisim import hisim_main
@@ -31,15 +32,15 @@ def test_basic_household() -> None:
     )
     hisim_main.run_simulation(my_sim, path_to_module=path)
 
-    result_directory = my_sim.get_simulation_parameters().result_directory
+    result_directory = Path(my_sim.get_simulation_parameters().result_directory)
     assert result_directory, "Simulation did not populate a result directory."
-    assert os.path.isdir(result_directory), (
+    assert result_directory.is_dir(), (
         f"Expected result directory was not created: {result_directory}"
     )
 
     # HiSim writes finished.flag as the very last action of run_all_timesteps, so its
     # presence confirms the simulation ran every timestep and finished post-processing.
-    finished_flag = os.path.join(result_directory, "finished.flag")
-    assert os.path.isfile(finished_flag), (
+    finished_flag = result_directory / "finished.flag"
+    assert finished_flag.is_file(), (
         f"finished.flag missing in result directory: {result_directory}"
     )

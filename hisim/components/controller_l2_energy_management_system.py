@@ -9,7 +9,7 @@ The component with the lowest source weight is activated first.
 # clean
 from dataclasses import dataclass
 
-from typing import Any, List, Tuple, Optional
+from typing import Any, List, Tuple, Optional, cast
 from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -174,7 +174,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     )
     ElectricityToBuildingFromDistrictEMSOutput = "ElectricityToBuildingFromDistrictEMSOutput"
 
-    CheckPeakShaving = "CheckPeakShaving"
+    PeakShavingStatus = "PeakShavingStatus"
 
     @utils.measure_execution_time
     def __init__(
@@ -209,7 +209,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.consumption_uncontrolled_inputs: List[ComponentInput] = []
         self.consumption_ems_controlled_inputs: List[ComponentInput] = []
 
-        self.mode: Any
+        self.operating_mode: Any
         self.strategy = self.ems_config.strategy
         self.limit_to_shave = self.ems_config.limit_to_shave
         self.building_indoor_temperature_offset_value = self.ems_config.building_indoor_temperature_offset_value
@@ -283,13 +283,13 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             output_description=f"here a description for {self.SpaceHeatingWaterStorageTemperatureModifier} will follow.",
         )
 
-        self.check_peak_shaving: cp.ComponentOutput = self.add_output(
+        self.peak_shaving_status: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.CheckPeakShaving,
+            field_name=self.PeakShavingStatus,
             load_type=lt.LoadTypes.ANY,
             unit=lt.Units.ANY,
             sankey_flow_direction=False,
-            output_description=f"here a description for {self.CheckPeakShaving} will follow.",
+            output_description=f"here a description for {self.PeakShavingStatus} will follow.",
         )
 
         self.electricity_to_building_from_district_output: cp.ComponentOutput = self.add_output(
@@ -410,6 +410,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
                 source_weight=3,
+                # The DHW electrical power output only exists when the heat pump
+                # has domestic hot water preparation enabled; allow this mandatory
+                # input to remain unconnected when DHW is deactivated.
+                allow_unconnected_mandatory=True,
             )
         )
         self.add_component_output(
@@ -655,7 +659,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         sortindex = sorted(range(len(source_weights)), key=lambda k: source_weights[k])
         source_weights = [source_weights[i] for i in sortindex]
 
-        component_types_sorted = [source_tags[i] for i in sortindex]
+        component_types_sorted = cast(List[lt.ComponentType], [source_tags[i] for i in sortindex])
         inputs_sorted = [getattr(self, inputs[i].source_component_class) for i in sortindex]
         outputs_sorted = []
 
@@ -672,7 +676,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 if output is not None:
                     outputs_sorted.append(output)
                 else:
-                    raise Exception("Dynamic input is not conncted to dynamic output")
+                    raise ValueError("Dynamic input is not connected to dynamic output")
         outputs_sorted = list(OrderedDict.fromkeys(outputs_sorted))
 
         production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
@@ -1155,15 +1159,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         # add all source weights to KPIs
         for index, input_sorted in enumerate(self.inputs_sorted):
-            input_source_weight_entry = dhw_st_electricity_from_grid_entry = KpiEntry(
+            list_of_kpi_entries.append(KpiEntry(
                 name=f"Priority for {input_sorted.field_name}",
                 unit="-",
                 value=index,
                 tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
                 description=self.component_name,
                 name_of_source_component=input_sorted.component_name,
-            )
-            list_of_kpi_entries.append(input_source_weight_entry)
+            ))
 
         return list_of_kpi_entries
 

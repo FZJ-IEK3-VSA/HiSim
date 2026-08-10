@@ -11,7 +11,7 @@ import pytest
 
 from hisim.renovisor.__main__ import EXIT_SUCCESS, main
 
-EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "hisim" / "renovisor" / "examples"
+EXAMPLES_DIR: Path = Path(__file__).resolve().parents[1] / "hisim" / "renovisor" / "examples"
 
 
 @pytest.mark.system_setups

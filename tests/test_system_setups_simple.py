@@ -96,8 +96,9 @@ def test_first_system_setup(isolated_result_directory: str) -> None:
     # default) into per-component subdirectories, so search recursively. At least one
     # plot file in the configured format must have been produced.
     figure_suffix = sim_params.figure_format.value
-    plot_files = list(result_dir.rglob(f"*{figure_suffix}"))
-    assert plot_files, f"No {figure_suffix} plot files were produced in {result_dir}"
+    assert any(result_dir.rglob(f"*{figure_suffix}")), (
+        f"No {figure_suffix} plot files were produced in {result_dir}"
+    )
 
 
 @pytest.mark.system_setups
@@ -143,5 +144,6 @@ def test_second_system_setup(isolated_result_directory: str) -> None:
     # default) into per-component subdirectories, so search recursively. At least one
     # plot file in the configured format must have been produced.
     figure_suffix = sim_params.figure_format.value
-    plot_files = list(result_dir.rglob(f"*{figure_suffix}"))
-    assert plot_files, f"No {figure_suffix} plot files were produced in {result_dir}"
+    assert any(result_dir.rglob(f"*{figure_suffix}")), (
+        f"No {figure_suffix} plot files were produced in {result_dir}"
+    )

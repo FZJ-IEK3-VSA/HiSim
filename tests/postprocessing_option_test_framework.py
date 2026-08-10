@@ -5,6 +5,7 @@ import datetime
 import fnmatch
 import importlib
 import os
+import stat as _stat
 import sys
 import time
 from dataclasses import dataclass, field
@@ -88,7 +89,18 @@ class PostProcessingOptionTestFramework:
     _runs_by_option: dict[PostProcessingOptions, Path] = field(default_factory=dict)
 
     def run(self, option: PostProcessingOptions, expected_files: Sequence[str] | None = None) -> None:
-        """Run postprocessing for one option plus the minimal required support options."""
+        """Run postprocessing for one option plus the minimal required support options.
+
+        Args:
+            option: The PostProcessingOptions value to exercise.
+            expected_files: Optional glob/path patterns that must each match at
+                least one file produced by postprocessing. When ``None``, no
+                file-pattern assertion is performed.
+
+        Raises:
+            AssertionError: If postprocessing creates or updates no files, or if
+                any pattern in ``expected_files`` does not match a generated file.
+        """
 
         case = self._case_for_option(option)
         options = self._options_for(option)
@@ -109,7 +121,7 @@ class PostProcessingOptionTestFramework:
         post_processor = postprocessing_main.PostProcessor()
         if option == PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER:
             post_processor.open_dir_in_file_explorer = lambda ppdt: None  # type: ignore[method-assign]
-        post_processor.run(ppdt=ppdt, my_sim=case.simulator)
+        post_processor.run(ppdt=ppdt, simulator=case.simulator)
         files_after_postprocessing = _file_signatures_below(run_directory)
         files_changed_by_postprocessing = _changed_files(
             before=files_before_postprocessing,
@@ -249,7 +261,7 @@ def _clone_ppdt(
         setup_function=case.ppdt.setup_function,
         module_filename=case.ppdt.module_filename,
         module_config=case.ppdt.module_config,
-        execution_time=case.ppdt.execution_time,
+        execution_time_in_s=case.ppdt.execution_time_in_s,
         results_monthly=case.ppdt.results_monthly,
         results_hourly=case.ppdt.results_hourly,
         results_cumulative=case.ppdt.results_cumulative,
@@ -286,11 +298,15 @@ def _file_signatures_below(directory: str) -> dict[Path, tuple[int, int]]:
     root = Path(directory)
     if not root.exists():
         return {}
-    return {
-        path.relative_to(root): (path.stat().st_size, path.stat().st_mtime_ns)
-        for path in root.rglob("*")
-        if path.is_file()
-    }
+    signatures: dict[Path, tuple[int, int]] = {}
+    for path in root.rglob("*"):
+        try:
+            st = path.stat()
+        except OSError:
+            continue
+        if _stat.S_ISREG(st.st_mode):
+            signatures[path.relative_to(root)] = (st.st_size, st.st_mtime_ns)
+    return signatures
 
 
 def _changed_files(

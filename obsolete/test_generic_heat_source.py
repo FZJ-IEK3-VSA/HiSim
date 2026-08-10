@@ -7,7 +7,6 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 
 
-@pytest.mark.base
 def test_heat_source() -> None:
     """Test heat source component with L1 heat pump controller.
 

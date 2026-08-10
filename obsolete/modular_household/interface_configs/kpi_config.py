@@ -1,4 +1,10 @@
-"""KPI config module."""
+"""Configuration dataclass for key performance indicators in modular household simulations.
+
+Defines :class:`KPIConfigModular`, a ``dataclasses_json``-serializable container
+that stores KPI values computed during a simulation run and exposes a
+``get_kpi`` method used by optimization algorithms (e.g., the evolutionary
+building sizer) to rank building configurations.
+"""
 
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -16,10 +22,10 @@ class KPIConfigModular:
     (e.g., evolutionary building sizer) to compare and rank configurations.
 
     Attributes:
-        self_consumption_rate: Ratio of the portion of PV production
+        self_consumption_rate_in_percent: Ratio of the portion of PV production
             consumed by the loads to the total PV production, given in
             percent.
-        autarky_rate: Ratio of the portion of PV production consumed by
+        autarky_rate_in_percent: Ratio of the portion of PV production consumed by
             the loads to the total load, given in percent.
         injection: Amount of electricity injected to the grid during the
             simulation period, given in kWh.
@@ -31,9 +37,9 @@ class KPIConfigModular:
     """
 
     #: ratio between the portion of the PV production consumed by the loads and the total PV production, given in %
-    self_consumption_rate: float
+    self_consumption_rate_in_percent: float
     #: ratio between the portion of the PV production consumed by the loads and the total load, given in %
-    autarky_rate: float
+    autarky_rate_in_percent: float
     #: amount of electricity injected to the grid during the simulation period, given in kWh
     injection: float
     #: annual cost for investment and operation in the considered technology, given in euros
@@ -47,11 +53,11 @@ class KPIConfigModular:
         Also referred to as "rating" or "fitness" in the evolutionary algorithm of the building sizer.
 
         Returns:
-            The sum ``self_consumption_rate + autarky_rate`` expressed in
+            The sum ``self_consumption_rate_in_percent + autarky_rate_in_percent`` expressed in
             **percent** (i.e. each input is a percentage in [0, 100], as
             documented on the fields, *not* a fraction in [0, 1]). The result
             therefore ranges up to 200 for the unweighted sum of two rates.
         """
         # TODO: find normalization for KPIs and multiply by weights given from causal model
         # first approach: sum of self consumption and autarky (both given in percent)
-        return self.self_consumption_rate + self.autarky_rate
+        return self.self_consumption_rate_in_percent + self.autarky_rate_in_percent

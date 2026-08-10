@@ -15,7 +15,6 @@ from hisim.components.fuel_meter import FuelMeter
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
 from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
-from hisim.components.generic_heat_pump_modular import ModularHeatPump
 from hisim.components.simple_heat_source import SimpleHeatSource
 
 
@@ -105,7 +104,7 @@ def opex_calculation(
                 # not on group, so they need not be re-evaluated inside the loop below.
                 is_heat_pump = isinstance(
                     component_unwrapped,
-                    (HeatPumpHplib, ModularHeatPump, MoreAdvancedHeatPumpHPLib, SimpleHeatSource),
+                    (HeatPumpHplib, MoreAdvancedHeatPumpHPLib, SimpleHeatSource),
                 )
                 is_meter = isinstance(
                     component_unwrapped,
@@ -363,7 +362,7 @@ def capex_calculation(
                 for group in ["all_components", "without_hp"]:
                     if group == "without_hp" and isinstance(
                         component_unwrapped,
-                        (HeatPumpHplib, ModularHeatPump, MoreAdvancedHeatPumpHPLib, SimpleHeatSource),
+                        (HeatPumpHplib, MoreAdvancedHeatPumpHPLib, SimpleHeatSource),
                     ):
                         continue
                     group_totals = totals_per_building[group]

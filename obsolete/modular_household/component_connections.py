@@ -10,6 +10,7 @@ from os import path
 from typing import Any, List, Optional, Tuple
 
 import pandas as pd
+from HiSim.obsolete.webtool_old import generic_heat_pump_modular
 from repositories.HiSim.obsolete import generic_heat_source, generic_hot_water_storage_modular
 from utspclient.helpers.lpgpythonbindings import JsonReference
 
@@ -29,7 +30,6 @@ from hisim.components import (
     generic_car,
     generic_chp,
     generic_electrolyzer,
-    generic_heat_pump_modular,
     generic_hydrogen_storage,
     generic_pv_system,
     generic_smart_device,

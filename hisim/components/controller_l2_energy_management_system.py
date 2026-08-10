@@ -309,6 +309,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.add_dynamic_default_connections(self.get_default_connections_from_solar_thermal_system())
         # self.add_dynamic_default_connections(self.get_default_connections_from_car_battery())
 
+        # Several of the default connections above add a dynamic output. Remember how many
+        # outputs that leaves us with, so the JSON export can tell them apart from the ones
+        # a system setup adds afterwards.
+        self.mark_end_of_construction()
+
     def get_default_connections_from_pv_system(
         self,
     ):

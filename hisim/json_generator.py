@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field
 import humps
 # 1st party imports
 from hisim import log
-from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.components.generic_car import Car, GenericCarInformation
 from hisim.component import ConfigBase
@@ -100,11 +99,11 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
                 match = re.search(r"Output(\d+)$", out.field_name)
                 number = int(match.group(1)) if match else 100
 
-                # Handle special case for EMS
-                # For both cases, exactly 15 outputs are added during construction of the component
-                if isinstance(component, L2GenericEnergyManagementSystem):
-                    if number < 16:
-                        continue
+                # Outputs the component created while constructing itself are created again
+                # upon reload, so exporting them would duplicate them. Only what a system setup
+                # added on top has to be written to the JSON.
+                if number <= component.number_of_outputs_created_during_construction:
+                    continue
 
                 # add_component_output has been used
                 dynamic_output = output_matches[0]

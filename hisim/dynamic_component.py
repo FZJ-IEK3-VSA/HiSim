@@ -106,6 +106,23 @@ class DynamicComponent(Component):
         self.my_component_inputs = my_component_inputs
         self.my_component_outputs = my_component_outputs
         self.dynamic_default_connections: Dict[str, List[DynamicComponentConnection]] = {}
+        # Number of outputs this component has once its own constructor has finished. Everything
+        # beyond that was added by a system setup. The distinction matters for the JSON export:
+        # constructor-made outputs are recreated on reload and must not be written to the JSON,
+        # while setup-added ones only exist if the JSON carries them. Subclasses that create
+        # dynamic outputs while constructing themselves call mark_end_of_construction() at the
+        # end of their __init__; for all others no output is constructor-made.
+        self.number_of_outputs_created_during_construction: int = 0
+
+    def mark_end_of_construction(self) -> None:
+        """Remember how many outputs were created while constructing this component.
+
+        Call this as the last statement of a subclass' ``__init__`` when that constructor
+        creates dynamic outputs of its own (e.g. via ``add_dynamic_default_connections``).
+        Recording the count instead of hard-coding it keeps the JSON export correct when
+        outputs are later added to or removed from the constructor.
+        """
+        self.number_of_outputs_created_during_construction = len(self.outputs)
 
     def add_component_output(
         self,

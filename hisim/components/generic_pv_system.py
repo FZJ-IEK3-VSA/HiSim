@@ -691,30 +691,30 @@ class PVSystem(cp.Component):
                 # delete weather data for PV preprocessing from dictionary
                 # to save memory
                 if self.simulation_repository.entry_exists(
-                                key=SimRepositoryKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST  # noqa: E501
-                            ):
-                                self.simulation_repository.delete_entry(
-                                    key=SimRepositoryKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST  # noqa: E501
-                                )
-                                self.simulation_repository.delete_entry(
-                                    key=SimRepositoryKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST  # noqa: E501
-                                )
-                                self.simulation_repository.delete_entry(
-                                    key=SimRepositoryKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST  # noqa: E501
-                                )
-                                self.simulation_repository.delete_entry(
-                                    key=SimRepositoryKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST  # noqa: E501
-                                )
-                                self.simulation_repository.delete_entry(
-                                    key=SimRepositoryKeyEnum.WEATHERAZIMUTHYEARLYFORECAST  # noqa: E501
-                                )
-                                self.simulation_repository.delete_entry(
-                                    key=SimRepositoryKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST  # noqa: E501
-                                )
-                                self.simulation_repository.delete_entry(
-                                    key=SimRepositoryKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST  # noqa: E501
-                                )
-                                self.simulation_repository.delete_entry(key=SimRepositoryKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST)
+                    key=SimRepositoryKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST  # noqa: E501
+                ):
+                    self.simulation_repository.delete_entry(
+                        key=SimRepositoryKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST  # noqa: E501
+                    )
+                    self.simulation_repository.delete_entry(
+                        key=SimRepositoryKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST  # noqa: E501
+                    )
+                    self.simulation_repository.delete_entry(
+                        key=SimRepositoryKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST  # noqa: E501
+                    )
+                    self.simulation_repository.delete_entry(
+                        key=SimRepositoryKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST  # noqa: E501
+                    )
+                    self.simulation_repository.delete_entry(
+                        key=SimRepositoryKeyEnum.WEATHERAZIMUTHYEARLYFORECAST  # noqa: E501
+                    )
+                    self.simulation_repository.delete_entry(
+                        key=SimRepositoryKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST  # noqa: E501
+                    )
+                    self.simulation_repository.delete_entry(
+                        key=SimRepositoryKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST  # noqa: E501
+                    )
+                    self.simulation_repository.delete_entry(key=SimRepositoryKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST)
 
     def i_save_state(self) -> None:
         """Saves the state."""
@@ -800,7 +800,9 @@ class PVSystem(cp.Component):
                 temperature = self.simulation_repository.get_entry(
                     key=SimRepositoryKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST  # noqa: E501
                 )
-                wind_speed = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST)
+                wind_speed = self.simulation_repository.get_entry(
+                    key=SimRepositoryKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST
+                )
 
                 x_simplephotovoltaic = []
                 for i in range(self.my_simulation_parameters.timesteps):

@@ -2,8 +2,9 @@
 # clean
 
 from dataclasses import dataclass
-from typing import List, Union, Dict, cast, Optional
+from typing import Any, List, Union, Dict, cast, Optional
 import dataclasses as dc
+import functools
 import hisim.loadtypes as lt
 from hisim import log
 from hisim.component import Component, ComponentInput, ComponentOutput, ConfigBase, DisplayConfig
@@ -51,6 +52,9 @@ class DynamicConnectionOutput:
     source_load_type: lt.LoadTypes
     source_unit: lt.Units  # noqa
     source_component_class: Optional[str]
+    # True when the component created this output while constructing itself, False when it was
+    # added from the outside afterwards. Set automatically, see DynamicComponent.__init_subclass__.
+    created_during_construction: bool = False
 
 
 def search_and_compare(
@@ -82,9 +86,50 @@ def tags_search_and_compare(
     return True
 
 
+def end_construction_when_init_returns(cls: type) -> None:
+    """Wrap ``cls.__init__`` so that it clears the under construction flag when it returns.
+
+    See :attr:`DynamicComponent.is_under_construction` for what the flag is good for. Wrapping
+    ``__init__`` rather than letting each component report the end of its construction itself
+    keeps the flag correct wherever in the constructor an output is created, and however deep
+    the inheritance chain is: there is nothing to call, so nothing to forget and nothing that
+    can end up in the wrong place.
+
+    Only the outermost constructor may clear the flag, which is what the depth counter is for.
+    A ``super().__init__()`` call runs nested inside its subclass' constructor, so it must not
+    end the construction while the subclass is still creating its own outputs.
+    """
+    original_init = cls.__dict__.get("__init__")
+    if original_init is None:
+        # The class inherits its constructor, which is wrapped already. Wrapping it here as
+        # well would only nest one more level, and the depth counter handles that anyway.
+        return
+    if getattr(original_init, "ends_construction", False):
+        # Wrapped before, e.g. because a class explicitly reuses its base class' constructor.
+        return
+
+    @functools.wraps(original_init)
+    def init_and_end_construction(self: "DynamicComponent", *args: Any, **kwargs: Any) -> None:
+        self.construction_depth = getattr(self, "construction_depth", 0) + 1
+        try:
+            original_init(self, *args, **kwargs)
+        finally:
+            self.construction_depth -= 1
+            if self.construction_depth == 0:
+                self.is_under_construction = False
+
+    init_and_end_construction.ends_construction = True  # type: ignore[attr-defined]
+    cls.__init__ = init_and_end_construction  # type: ignore[method-assign]
+
+
 class DynamicComponent(Component):
 
     """Class for components with a dynamic number of inputs and outputs."""
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Sets every subclass up to report when its construction is finished."""
+        super().__init_subclass__(**kwargs)
+        end_construction_when_init_returns(cls)
 
     def __init__(
         self,
@@ -96,6 +141,16 @@ class DynamicComponent(Component):
         my_display_config: DisplayConfig,
     ) -> None:
         """Initializes a dynamic component."""
+        # Whether this component is still constructing itself. Every dynamic output created while
+        # this holds gets marked as created during construction, everything after it as added from
+        # the outside. The distinction matters for the JSON export: constructor-made outputs are
+        # created again when the component is rebuilt from the JSON and must therefore not be
+        # written to it, while setup-added ones exist only if the JSON carries them.
+        # Set here, cleared by end_construction_when_init_returns(), never assigned by components.
+        self.is_under_construction: bool = True
+        # How many constructors of this component are currently running. Only bookkeeping for
+        # end_construction_when_init_returns(); the flag above is the part components care about.
+        self.construction_depth: int = getattr(self, "construction_depth", 0)
         super().__init__(
             name=name,
             my_simulation_parameters=my_simulation_parameters,
@@ -146,6 +201,7 @@ class DynamicComponent(Component):
                 source_load_type=source_load_type,
                 source_unit=source_unit,
                 source_weight=source_weight,
+                created_during_construction=self.is_under_construction,
             )
         )
         return myoutput
@@ -347,3 +403,7 @@ class DynamicComponent(Component):
                 continue
 
         return outputs
+
+
+# Subclasses are taken care of by __init_subclass__, the base class itself has to be wrapped here.
+end_construction_when_init_returns(DynamicComponent)

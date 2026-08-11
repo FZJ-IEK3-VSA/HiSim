@@ -53,10 +53,13 @@ def _simulation_parameters() -> SimulationParameters:
 
 def _make_ems() -> L2GenericEnergyManagementSystem:
     """Constructs an EMS from its default config, as a system setup would."""
-    return L2GenericEnergyManagementSystem(
+    # Its constructor carries an untyped decorator, so what it builds is Any as far as mypy
+    # is concerned. Naming the result pins the type back down.
+    ems: L2GenericEnergyManagementSystem = L2GenericEnergyManagementSystem(
         my_simulation_parameters=_simulation_parameters(),
         config=EMSConfig.get_default_config_ems(),
     )
+    return ems
 
 
 def _add_dynamic_output(component: DynamicComponent, source_output_name: str = "LoadingPowerInputForBattery_") -> str:
@@ -122,10 +125,12 @@ class SubComponentWithoutConstructorUnderTest(ComponentUnderTest):
 
 def _make_component_under_test(component_class: type) -> DynamicComponent:
     """Constructs one of the throwaway components above."""
-    return component_class(
+    # Calling a bare ``type`` gives mypy an Any, so name the result to pin the type back down.
+    component: DynamicComponent = component_class(
         my_simulation_parameters=_simulation_parameters(),
         config=ComponentUnderTestConfig(building_name="BUI1", name=component_class.__name__),
     )
+    return component
 
 
 # Every DynamicComponent in hisim/components together with the way a system setup builds it.
@@ -157,7 +162,7 @@ def test_untouched_component_exports_no_dynamic_outputs(component_class: type, c
 
     assert component.is_under_construction is False
     assert all(output.created_during_construction for output in component.my_component_outputs)
-    assert outs == []
+    assert not outs
 
 
 @pytest.mark.base

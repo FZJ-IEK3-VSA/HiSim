@@ -124,8 +124,9 @@ class Simulator:
         # ensure result directory exists before any connect_input calls log to it
         if not self._simulation_parameters.result_directory:
             self.prepare_simulation_directory()
-        # set the repository
-        component.set_sim_repo(self.simulation_repository)
+        # set the sim repo for each component and merge entries from component initialization back to the simulator's
+        # simulation repository (which is the main sim repo)
+        self.simulation_repository = component.set_sim_repo(self.simulation_repository)
 
         # set the wrapper
         wrap = ComponentWrapper(component, is_cachable, connect_automatically=connect_automatically)

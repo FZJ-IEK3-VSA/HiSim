@@ -129,6 +129,8 @@ class BuildingThermalModel5R1C:
     def from_sim_repository(cls, seconds_per_timestep: float, sim_repo: SimRepository) -> "BuildingThermalModel5R1C":
         """Reads the 5R1C thermal coefficients from the singleton simulation repository."""
         repo = sim_repo
+        if not repo.entries:
+            raise KeyError(f"The passed sim repo has no entries: {repo.entries}")
         return cls(
             h_tr_w=repo.get_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING),
             h_tr_ms=repo.get_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS),
@@ -359,18 +361,6 @@ class PIDController(cp.Component):
             my_display_config=my_display_config,
         )
 
-        # Identify the building thermal model and tune the PI controller from it.
-        self.thermal_model: BuildingThermalModel5R1C = BuildingThermalModel5R1C.from_sim_repository(
-            self.my_simulation_parameters.seconds_per_timestep, sim_repo=self.simulation_repository
-        )
-        proportional_gain, integral_gain, derivative_gain = compute_pi_gains(self.thermal_model)
-        # --------------------------------------------------
-        # control saturation
-        self.mv_min: float = 0
-        self.mv_max: float = 5000
-        self.integral_gain: float = integral_gain
-        self.proportional_gain: float = proportional_gain
-        self.derivative_gain: float = derivative_gain
         self.state: PIDState = PIDState(
             integrator=0,
             integrator_d3=0,
@@ -493,7 +483,19 @@ class PIDController(cp.Component):
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
-        pass
+        # Identify the building thermal model and tune the PI controller from it.
+        # get entries from simulation repository
+        self.thermal_model: BuildingThermalModel5R1C = BuildingThermalModel5R1C.from_sim_repository(
+            self.my_simulation_parameters.seconds_per_timestep, sim_repo=self.simulation_repository
+        )
+        proportional_gain, integral_gain, derivative_gain = compute_pi_gains(self.thermal_model)
+        # --------------------------------------------------
+        # control saturation
+        self.mv_min: float = 0
+        self.mv_max: float = 5000
+        self.integral_gain: float = integral_gain
+        self.proportional_gain: float = proportional_gain
+        self.derivative_gain: float = derivative_gain
 
     def build(self):
         """For calculating internal things and preparing the simulation."""

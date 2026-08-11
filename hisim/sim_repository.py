@@ -5,7 +5,7 @@ from typing import Any
 import enum
 
 from hisim import loadtypes as lt
-
+from hisim import log
 
 class SimRepository:
 
@@ -118,11 +118,11 @@ class SimRepository:
         if self.entries:
             self.entries.clear()
         else:
-            raise ValueError("Sim repo entries are already empty: ", self.entries)
+            log.warning("Sim repo entries were already empty. Your clear() function was unnecessary. " + str(self.entries))
         if self.dynamic_entries:
             self.dynamic_entries.clear()
         else:
-            raise ValueError("Sim repo dynamic entries are already empty: ", self.dynamic_entries)
+            log.warning("Sim repo dynamic entries were already empty. Your clear() function was unnecessary. " + str(self.dynamic_entries))
 
 
 class SimRepositoryKeyEnum(enum.Enum):

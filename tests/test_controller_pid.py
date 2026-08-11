@@ -44,27 +44,15 @@ def _build_thermal_model() -> BuildingThermalModel5R1C:
 
 @pytest.fixture(autouse=True)
 def populated_sim_repository() -> Iterator[None]:
-    """Pre-populates the singleton with 5R1C coefficients (KB-5214) and resets it afterwards.
-
-    Access goes through the public ``set_entry`` / ``reset`` accessors rather
-    than the concrete ``my_dict`` storage, so the tests do not depend on the
-    singleton's internal representation (DIP).  ``reset`` is used for both
-    setup and teardown to guarantee a clean slate and prevent stale-state
-    leakage across test runs (KB-5646).
-    """
+    """Pre-populates the sim repo with 5R1C coefficients (KB-5214) before each test and clears it afterwards."""
     repo = sim_repository
-    # if repo.entries:
-    #     repo.clear()
-    # else:
-    #     print("sim repo entries were already empty")
+
     repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING, entry=H_TR_W)
     repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS, entry=H_TR_MS)
     repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM, entry=H_TR_EM)
     repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION, entry=H_VE_ADJ)
     repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR, entry=H_TR_IS)
     repo.set_entry(key=SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE, entry=C_M)
-    yield
-    repo.clear()
 
 
 @pytest.mark.base
@@ -98,7 +86,8 @@ def test_compute_pi_gains_returns_pole_placement_gains() -> None:
 @pytest.mark.base
 def test_from_sim_repository_reads_coefficients() -> None:
     """from_sim_repository reads the 5R1C coefficients from the singleton (KB-5214)."""
-    tm = BuildingThermalModel5R1C.from_sim_repository(SECONDS_PER_TIMESTEP)
+    repo = sim_repository
+    tm = BuildingThermalModel5R1C.from_sim_repository(SECONDS_PER_TIMESTEP, sim_repo=repo)
     assert tm.h_tr_w == H_TR_W
     assert tm.h_tr_ms == H_TR_MS
     assert tm.h_tr_em == H_TR_EM
@@ -113,11 +102,11 @@ def test_from_sim_repository_raises_when_coefficients_missing() -> None:
     """Missing coefficients must raise loudly instead of degrading silently (KB-5214)."""
     repo = sim_repository
     repo.clear()
-    try:
-        with pytest.raises(KeyError):
-            BuildingThermalModel5R1C.from_sim_repository(SECONDS_PER_TIMESTEP)
-    finally:
-        repo.clear()
+
+    # test succeeds if KeyError is raised, otherwise it fails
+    with pytest.raises(KeyError):
+        BuildingThermalModel5R1C.from_sim_repository(SECONDS_PER_TIMESTEP, sim_repo=repo)
+
 
 
 @pytest.mark.base
@@ -128,6 +117,9 @@ def test_pid_controller_tunes_from_thermal_model() -> None:
         my_simulation_parameters=simulation_parameters,
         config=PIDControllerConfig.get_default_config(),
     )
+    controller.set_sim_repo(simulation_repository=sim_repository)
+    controller.i_prepare_simulation()
+    
 
     assert controller.proportional_gain == pytest.approx(22875.446701181467)
     assert controller.integral_gain == pytest.approx(227.60105749117776)
@@ -145,6 +137,8 @@ def test_pid_controller_feedforward() -> None:
         my_simulation_parameters=simulation_parameters,
         config=PIDControllerConfig.get_default_config(),
     )
+    controller.set_sim_repo(simulation_repository=sim_repository)
+    controller.i_prepare_simulation()
     feed_forward_signal = controller.feedforward(phi_st=100.0, phi_m=200.0)
     assert feed_forward_signal == pytest.approx(-1693.3333333333333)
 
@@ -157,6 +151,8 @@ def _build_controller_with_inputs(
         my_simulation_parameters=simulation_parameters,
         config=PIDControllerConfig.get_default_config(),
     )
+    controller.set_sim_repo(simulation_repository=sim_repository)
+    controller.i_prepare_simulation()
     fake_temperature = cp.ComponentOutput(
         "FakeBuilding", "TemperatureMean", LoadTypes.TEMPERATURE, Units.CELSIUS
     )

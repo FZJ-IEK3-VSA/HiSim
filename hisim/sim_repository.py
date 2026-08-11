@@ -7,6 +7,7 @@ import enum
 from hisim import loadtypes as lt
 from hisim import log
 
+
 class SimRepository:
 
     """Class for exchanging information across all components."""
@@ -113,8 +114,7 @@ class SimRepository:
         self.dynamic_entries[component_type].pop(source_weight)
 
     def clear(self) -> None:
-        """Clears all dictionaries at the end of the simulation to enable garbage collection and reduce memory consumption.
-        """
+        """Clears all dictionaries at the end of the simulation to enable garbage collection and reduce memory consumption."""
         if self.entries:
             self.entries.clear()
         else:

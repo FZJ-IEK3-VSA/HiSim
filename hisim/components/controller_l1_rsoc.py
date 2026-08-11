@@ -12,7 +12,6 @@ from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 
 
-
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, IEK-3"
 __credits__ = ["Franz Oldopp"]

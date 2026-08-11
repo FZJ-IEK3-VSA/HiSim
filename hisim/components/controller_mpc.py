@@ -436,7 +436,6 @@ class MpcController(cp.Component):
         )
         return connections
 
-
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
         if not self.mpcconfig.predictive:

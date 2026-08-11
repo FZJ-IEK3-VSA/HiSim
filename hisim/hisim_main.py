@@ -129,7 +129,6 @@ def initialize_from_python(
         # so component_connections.json is written for easy post-processing and debugging.
         force_log_connections=True,
     )
-    my_sim.set_simulation_parameters(my_simulation_parameters)
     my_sim.simulation_repository.set_entry(
         key=SimRepositoryKeyEnum.DESCRIPTION, entry=f"{get_description_from_py(path_obj)}",
     )

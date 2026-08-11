@@ -146,8 +146,6 @@ class UtspLpgConnector(cp.Component):
     ElectricalEnergyConsumption: str = "ElectricalEnergyConsumption"
     WaterConsumption: str = "WaterConsumption"
 
-    Electricity_Demand_Forecast_24h: str = "Electricity_Demand_Forecast_24h"
-
     # Similar components to connect to:
     # None
     @utils.measure_execution_time
@@ -322,7 +320,7 @@ class UtspLpgConnector(cp.Component):
             if last_forecast_timestep > len(self.electricity_consumption):
                 last_forecast_timestep = len(self.electricity_consumption)
             demandforecast = self.electricity_consumption[timestep:last_forecast_timestep]
-            self.simulation_repository.set_entry(self.Electricity_Demand_Forecast_24h, demandforecast)
+            self.simulation_repository.set_entry(SimRepositoryKeyEnum.OCCUPANCYELECTRICITYDEMAND24HFORECAST, demandforecast)
 
     def get_resolution(self) -> str:
         """Gets the temporal resolution of the simulation as a string in the format hh:mm:ss.

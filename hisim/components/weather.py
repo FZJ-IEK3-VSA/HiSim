@@ -467,16 +467,7 @@ class Weather(Component):
     ApparentZenith: str = "ApparentZenith"
     WindSpeed: str = "WindSpeed"
     Pressure: str = "Pressure"
-    Weather_Temperature_Forecast_24h: str = "Weather_Temperature_Forecast_24h"
     DailyAverageOutsideTemperatures: str = "DailyAverageOutsideTemperatures"
-
-    # Weather_TemperatureOutside_yearly_forecast = "Weather_TemperatureOutside_yearly_forecast"
-    # Weather_DiffuseHorizontalIrradiance_yearly_forecast = "Weather_DiffuseHorizontalIrradiance_yearly_forecast"
-    # Weather_DirectNormalIrradiance_yearly_forecast = "Weather_DirectNormalIrradiance_yearly_forecast"
-    # Weather_DirectNormalIrradianceExtra_yearly_forecast = "Weather_DirectNormalIrradianceExtra_yearly_forecast"
-    # Weather_GlobalHorizontalIrradiance_yearly_forecast = "Weather_GlobalHorizontalIrradiance_yearly_forecast"
-    # Weather_Azimuth_yearly_forecast = "Weather_Azimuth_yearly_forecast"
-    # Weather_ApparentZenith_yearly_forecast = "Weather_ApparentZenith_yearly_forecast"
     Weather_WindSpeed_yearly_forecast: str = "Weather_WindSpeed_yearly_forecast"
 
     @utils.measure_execution_time
@@ -662,7 +653,7 @@ class Weather(Component):
             last_forecast_timestep = min(last_forecast_timestep, len(self.temperature_list))
             # log.information( type(self.temperature))
             temperatureforecast = self.temperature_list[timestep:last_forecast_timestep]
-            self.simulation_repository.set_entry(self.Weather_Temperature_Forecast_24h, temperatureforecast)
+            self.simulation_repository.set_entry(SimRepositoryKeyEnum.WEATHERTEMPERATUREOUTSIDE24HFORECAST, temperatureforecast)
         self.last_timestep_with_update = timestep
 
     def i_prepare_simulation(self) -> None:
@@ -673,7 +664,7 @@ class Weather(Component):
             filepath=self.weather_config.source_path,
             source_enum=self.weather_config.data_source,
         )
-        self.simulation_repository.set_entry("weather_location", location_dict)
+        self.simulation_repository.set_entry(SimRepositoryKeyEnum.WEATHERLOCATIONDICT, location_dict)
         self.simulation_repository.set_entry(
             key=SimRepositoryKeyEnum.LOCATION, entry=self.weather_config.location
         )

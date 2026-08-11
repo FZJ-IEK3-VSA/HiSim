@@ -436,70 +436,66 @@ class MpcController(cp.Component):
         )
         return connections
 
+
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
-        if self.mpcconfig.predictive:
-            """Get forecasted disturbance (weather)"""
-            self.temp_forecast = self.simulation_repository.get_entry(
-                key=SimRepositoryKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST
-            )[: self.my_simulation_parameters.timesteps]
-            self.phi_m_forecast = self.simulation_repository.get_entry(
-                key=SimRepositoryKeyEnum.HEATFLUXTHERMALMASSNODEFORECAST
-            )
-            self.phi_st_forecast = self.simulation_repository.get_entry(
-                key=SimRepositoryKeyEnum.HEATFLUXSURFACENODEFORECAST
-            )
-            self.phi_ia_forecast = self.simulation_repository.get_entry(
-                key=SimRepositoryKeyEnum.HEATFLUXINDOORAIRNODEFORECAST
-            )
+        if not self.mpcconfig.predictive:
+            return
 
-            """"getting pv forecast"""
-            self.pv_forecast_yearly = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.PVFORECASTYEARLY)
+        # Weather forecasts
+        self.temp_forecast_in_celsius = self.simulation_repository.get_entry(
+            key=SimRepositoryKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST
+        )[: self.my_simulation_parameters.timesteps]
 
-            """ getting battery specifications """
-            self.maximum_storage_capacity = self.simulation_repository.get_entry(
+        self.phi_m_forecast_in_watt = self.simulation_repository.get_entry(
+            key=SimRepositoryKeyEnum.HEATFLUXTHERMALMASSNODEFORECAST
+        )
+
+        self.phi_st_forecast_in_watt = self.simulation_repository.get_entry(
+            key=SimRepositoryKeyEnum.HEATFLUXSURFACENODEFORECAST
+        )
+
+        self.phi_ia_forecast_in_watt = self.simulation_repository.get_entry(
+            key=SimRepositoryKeyEnum.HEATFLUXINDOORAIRNODEFORECAST
+        )
+
+        # PV forecast
+        self.pv_forecast_yearly_in_watt = self.simulation_repository.get_entry(
+            key=SimRepositoryKeyEnum.PVFORECASTYEARLY
+        )
+
+        # Battery specifications
+        self.maximum_storage_capacity_in_watt_hour = (
+            self.simulation_repository.get_entry(
                 key=SimRepositoryKeyEnum.MAXIMUMBATTERYCAPACITY
             )
-            self.minimum_storage_capacity = self.simulation_repository.get_entry(
+        )
+
+        self.minimum_storage_capacity_in_watt_hour = (
+            self.simulation_repository.get_entry(
                 key=SimRepositoryKeyEnum.MINIMUMBATTERYCAPACITY
             )
-            self.maximum_charging_power = self.simulation_repository.get_entry(
-                key=SimRepositoryKeyEnum.MAXIMALCHARGINGPOWER
-            )
-            self.maximum_discharging_power = self.simulation_repository.get_entry(
-                key=SimRepositoryKeyEnum.MAXIMALDISCHARGINGPOWER)
-            self.temp_forecast_in_celsius = self.simulation_repository.get_entry(
-                key=SimRepositoryKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST
-            )[: self.my_simulation_parameters.timesteps]
-            self.phi_m_forecast_in_watt = self.simulation_repository.get_entry(
-                key=SimRepositoryKeyEnum.HEATFLUXTHERMALMASSNODEFORECAST
-            )
-            self.phi_st_forecast_in_watt = self.simulation_repository.get_entry(
-                key=SimRepositoryKeyEnum.HEATFLUXSURFACENODEFORECAST
-            )
-            self.phi_ia_forecast_in_watt = self.simulation_repository.get_entry(
-                key=SimRepositoryKeyEnum.HEATFLUXINDOORAIRNODEFORECAST
-            )
+        )
 
-            """"getting pv forecast"""
-            self.pv_forecast_yearly_in_watt = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.PVFORECASTYEARLY)
+        self.maximum_charging_power_in_watt = self.simulation_repository.get_entry(
+            key=SimRepositoryKeyEnum.MAXIMALCHARGINGPOWER
+        )
 
-            """ getting battery specifications """
-            self.maximum_storage_capacity_in_watt_hour = self.simulation_repository.get_entry(
-                key=SimRepositoryKeyEnum.MAXIMUMBATTERYCAPACITY
-            )
-            self.minimum_storage_capacity_in_watt_hour = self.simulation_repository.get_entry(
-                key=SimRepositoryKeyEnum.MINIMUMBATTERYCAPACITY
-            )
-            self.maximum_charging_power_in_watt = self.simulation_repository.get_entry(
-                key=SimRepositoryKeyEnum.MAXIMALCHARGINGPOWER
-            )
-            self.maximum_discharging_power_in_watt = self.simulation_repository.get_entry(
+        self.maximum_discharging_power_in_watt = (
+            self.simulation_repository.get_entry(
                 key=SimRepositoryKeyEnum.MAXIMALDISCHARGINGPOWER
             )
-            self.battery_efficiency = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.BATTERYEFFICIENCY)
-            self.inverter_efficiency = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.INVERTEREFFICIENCY)
-            log.information(f"self.inverter_efficiency {format(self.inverter_efficiency)}")
+        )
+
+        self.battery_efficiency = self.simulation_repository.get_entry(
+            key=SimRepositoryKeyEnum.BATTERYEFFICIENCY
+        )
+
+        self.inverter_efficiency = self.simulation_repository.get_entry(
+            key=SimRepositoryKeyEnum.INVERTEREFFICIENCY
+        )
+
+        log.information(f"self.inverter_efficiency {self.inverter_efficiency}")
 
     def build(self):
         """Build function: The function sets important constants and parameters for the calculations."""
@@ -678,11 +674,6 @@ class MpcController(cp.Component):
         self.phi_st_forecast_24h_1min_in_watt = self.phi_st_forecast_in_watt[start_horizon : start_horizon + self.prediction_horizon]
         self.pv_forecast_24h_1min_in_watt = self.pv_forecast_yearly_in_watt[start_horizon : start_horizon + self.prediction_horizon]
 
-        self.price_purchase_forecast_24h_1min = self.simulation_repository.get_entry(
-            key=SimRepositoryKeyEnum.PRICEPURCHASEFORECAST24H
-        )
-        self.price_injection_forecast_24h_1min = self.simulation_repository.get_entry(
-            key=SimRepositoryKeyEnum.PRICEINJECTIONFORECAST24H)
         self.price_purchase_forecast_24h_1min_in_eur_per_kwh = self.simulation_repository.get_entry(
             key=SimRepositoryKeyEnum.PRICEPURCHASEFORECAST24H
         )

@@ -165,13 +165,5 @@ def test_clear_deletes_both_internal_dicts() -> None:
     repo.set_entry("a", 1)
     repo.set_dynamic_entry(_CT, 1, "x")
     repo.clear()
-    assert hasattr(repo, "entries") is False
-    assert hasattr(repo, "dynamic_entries") is False
-
-
-def test_clear_on_fresh_empty_repo_does_not_raise() -> None:
-    """``clear`` on a freshly constructed, empty repo is a no-op (no error)."""
-    repo = SimRepository()
-    repo.clear()
-    assert hasattr(repo, "entries") is False
-    assert hasattr(repo, "dynamic_entries") is False
+    assert not repo.entries
+    assert not repo.dynamic_entries

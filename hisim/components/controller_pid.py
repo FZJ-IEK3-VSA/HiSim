@@ -498,17 +498,17 @@ class PIDController(cp.Component):
         """Prepare the simulation."""
         # Identify the building thermal model and tune the PI controller from it.
         # get entries from simulation repository
-        self.thermal_model: BuildingThermalModel5R1C = BuildingThermalModel5R1C.from_sim_repository(
+        self.thermal_model = BuildingThermalModel5R1C.from_sim_repository(
             self.my_simulation_parameters.seconds_per_timestep, sim_repo=self.simulation_repository
         )
         proportional_gain, integral_gain, derivative_gain = compute_pi_gains(self.thermal_model)
         # --------------------------------------------------
         # control saturation
-        self.mv_min: float = 0
-        self.mv_max: float = 5000
-        self.integral_gain: float = integral_gain
-        self.proportional_gain: float = proportional_gain
-        self.derivative_gain: float = derivative_gain
+        self.mv_min = 0
+        self.mv_max = 5000
+        self.integral_gaint = integral_gain
+        self.proportional_gain = proportional_gain
+        self.derivative_gain = derivative_gain
 
     def build(self):
         """For calculating internal things and preparing the simulation."""

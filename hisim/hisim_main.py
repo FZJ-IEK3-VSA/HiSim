@@ -74,7 +74,7 @@ def initialize_from_python(
 
     Resolves *path_to_module* to an absolute ``.py`` file, adds parent
     directories to ``sys.path``, records the first-line description in the
-    singleton sim repository, imports the module, and calls its
+    sim repository, imports the module, and calls its
     ``setup_function`` to wire the component graph.
 
     Args:

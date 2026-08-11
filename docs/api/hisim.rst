@@ -38,7 +38,6 @@ Submodules
    hisim.project_code_overview_generator
    hisim.result_path_provider
    hisim.sim_repository
-   hisim.sim_repository_singleton
    hisim.simulationparameters
    hisim.simulator
    hisim.system_setup_configuration

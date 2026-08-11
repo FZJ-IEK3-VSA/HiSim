@@ -23,7 +23,6 @@ from hisim.component import (
 )
 from hisim.components.configuration import PhysicsConfig
 from hisim.components import configuration
-from hisim.sim_repository import SimRepositoryKeyEnum
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
@@ -582,7 +581,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.waterstorageconfig = config
 
         self.mean_water_temperature_in_water_storage_in_celsius: float = 35
-        self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = None
+        self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_sim_repo = None
 
         self.position_hot_water_storage_in_system = self.waterstorageconfig.position_hot_water_storage_in_system
         self.build(heat_exchanger_is_present=self.waterstorageconfig.heat_exchanger_is_present)

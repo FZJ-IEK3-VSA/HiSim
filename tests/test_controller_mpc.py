@@ -24,7 +24,7 @@ C_M = 1.5e7
 
 
 def _make_mpc_config() -> MpcControllerConfig:
-    """Builds an MpcControllerConfig with predictive=False to avoid singleton deps."""
+    """Builds an MpcControllerConfig with predictive=False to avoid sim repo deps."""
     return MpcControllerConfig(
         building_name="BUI1",
         name="MpcController",

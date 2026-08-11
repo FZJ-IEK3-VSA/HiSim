@@ -13,10 +13,10 @@ class SimRepository:
 
     def __init__(self) -> None:
         """Initializes the SimRepository."""
-        self.entries: dict[str, Any] = {}
+        self.entries: dict[SimRepositoryKeyEnum, Any] = {}
         self.dynamic_entries: dict[lt.ComponentType, dict[int, Any]] = {component_type: {} for component_type in lt.ComponentType}
 
-    def set_entry(self, key: str, entry: Any) -> None:
+    def set_entry(self, key: SimRepositoryKeyEnum, entry: Any) -> None:
         """Stores a value in the repository under the given key.
 
         Args:
@@ -25,7 +25,7 @@ class SimRepository:
         """
         self.entries[key] = entry
 
-    def get_entry(self, key: str) -> Any:
+    def get_entry(self, key: SimRepositoryKeyEnum) -> Any:
         """Retrieves the value stored under the given key.
 
         Args:
@@ -39,7 +39,7 @@ class SimRepository:
         """
         return self.entries[key]
 
-    def entry_exists(self, key: str) -> bool:
+    def entry_exists(self, key: SimRepositoryKeyEnum) -> bool:
         """Checks whether an entry exists for the given key.
 
         Args:
@@ -50,7 +50,7 @@ class SimRepository:
         """
         return key in self.entries
 
-    def delete_entry(self, key: str) -> None:
+    def delete_entry(self, key: SimRepositoryKeyEnum) -> None:
         """Removes the entry stored under the given key.
 
         Args:

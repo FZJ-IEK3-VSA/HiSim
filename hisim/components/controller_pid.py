@@ -360,6 +360,18 @@ class PIDController(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
+        self.thermal_model: BuildingThermalModel5R1C
+        self.mv_min: float
+        self.mv_max: float
+        self.integral_gain: float
+        self.proportional_gain: float
+        self.derivative_gain: float
+        self.h_tr_w: float
+        self.h_tr_ms: float
+        self.h_tr_em: float
+        self.h_ve_adj: float
+        self.h_tr_is: float
+        self.c_m: float
 
         self.state: PIDState = PIDState(
             integrator=0,
@@ -369,7 +381,7 @@ class PIDController(cp.Component):
             derivator=0,
             manipulated_variable=0,
         )
-        self.previous_state: PIDState = self.state.clone()
+        self.previous_state: PIDState
 
         self.temperature_mean_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -480,6 +492,7 @@ class PIDController(cp.Component):
         )
 
         return connections
+
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""

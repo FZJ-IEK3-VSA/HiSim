@@ -28,6 +28,13 @@ C_M = 1.5e7
 SECONDS_PER_TIMESTEP = 60
 
 sim_repository = SimRepository()
+sim_repository.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING, entry=H_TR_W)
+sim_repository.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS, entry=H_TR_MS)
+sim_repository.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM, entry=H_TR_EM)
+sim_repository.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION, entry=H_VE_ADJ)
+sim_repository.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR, entry=H_TR_IS)
+sim_repository.set_entry(key=SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE, entry=C_M)
+
 
 def _build_thermal_model() -> BuildingThermalModel5R1C:
     """Constructs a thermal model with explicit coefficients (no singleton dependency)."""
@@ -53,6 +60,7 @@ def populated_sim_repository() -> Iterator[None]:
     repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION, entry=H_VE_ADJ)
     repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR, entry=H_TR_IS)
     repo.set_entry(key=SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE, entry=C_M)
+    yield
 
 
 @pytest.mark.base
@@ -108,7 +116,6 @@ def test_from_sim_repository_raises_when_coefficients_missing() -> None:
         BuildingThermalModel5R1C.from_sim_repository(SECONDS_PER_TIMESTEP, sim_repo=repo)
 
 
-
 @pytest.mark.base
 def test_pid_controller_tunes_from_thermal_model() -> None:
     """The PIDController class delegates tuning to the thermal model and compute_pi_gains."""
@@ -119,7 +126,6 @@ def test_pid_controller_tunes_from_thermal_model() -> None:
     )
     controller.set_sim_repo(simulation_repository=sim_repository)
     controller.i_prepare_simulation()
-    
 
     assert controller.proportional_gain == pytest.approx(22875.446701181467)
     assert controller.integral_gain == pytest.approx(227.60105749117776)
@@ -153,15 +159,9 @@ def _build_controller_with_inputs(
     )
     controller.set_sim_repo(simulation_repository=sim_repository)
     controller.i_prepare_simulation()
-    fake_temperature = cp.ComponentOutput(
-        "FakeBuilding", "TemperatureMean", LoadTypes.TEMPERATURE, Units.CELSIUS
-    )
-    fake_phi_st = cp.ComponentOutput(
-        "FakeBuilding", "HeatFluxWallNode", LoadTypes.HEATING, Units.WATT
-    )
-    fake_phi_m = cp.ComponentOutput(
-        "FakeBuilding", "HeatFluxThermalMassNode", LoadTypes.HEATING, Units.WATT
-    )
+    fake_temperature = cp.ComponentOutput("FakeBuilding", "TemperatureMean", LoadTypes.TEMPERATURE, Units.CELSIUS)
+    fake_phi_st = cp.ComponentOutput("FakeBuilding", "HeatFluxWallNode", LoadTypes.HEATING, Units.WATT)
+    fake_phi_m = cp.ComponentOutput("FakeBuilding", "HeatFluxThermalMassNode", LoadTypes.HEATING, Units.WATT)
     controller.temperature_mean_channel.source_output = fake_temperature
     controller.heat_flow_rate_to_internal_surface_node_channel.source_output = fake_phi_st
     controller.heat_flow_rate_to_internal_mass_node_channel.source_output = fake_phi_m
@@ -175,9 +175,7 @@ def _build_controller_with_inputs(
 def test_pid_controller_simulate_heating_scenario() -> None:
     """i_simulate drives the PI loop and produces the expected outputs."""
     simulation_parameters = SimulationParameters.one_day_only(2017, SECONDS_PER_TIMESTEP)
-    controller, stsv, fake_temperature, fake_phi_st, fake_phi_m = _build_controller_with_inputs(
-        simulation_parameters
-    )
+    controller, stsv, fake_temperature, fake_phi_st, fake_phi_m = _build_controller_with_inputs(simulation_parameters)
     stsv.values[fake_temperature.global_index] = 20.0
     stsv.values[fake_phi_st.global_index] = 100.0
     stsv.values[fake_phi_m.global_index] = 200.0
@@ -199,9 +197,7 @@ def test_pid_controller_simulate_heating_scenario() -> None:
 def test_pid_controller_force_convergence_skips_outputs() -> None:
     """force_convergence=True returns without updating outputs (KB-5215)."""
     simulation_parameters = SimulationParameters.one_day_only(2017, SECONDS_PER_TIMESTEP)
-    controller, stsv, fake_temperature, fake_phi_st, fake_phi_m = _build_controller_with_inputs(
-        simulation_parameters
-    )
+    controller, stsv, fake_temperature, fake_phi_st, fake_phi_m = _build_controller_with_inputs(simulation_parameters)
     stsv.values[fake_temperature.global_index] = 20.0
     stsv.values[fake_phi_st.global_index] = 100.0
     stsv.values[fake_phi_m.global_index] = 200.0

@@ -5,8 +5,10 @@ divided by the conditioned floor area given by TABULA.
 The window areas are scaled via the ratio of window area to wall area.
 """
 # clean
+from typing import Any
 import numpy as np
 import pytest
+
 from hisim import component
 from hisim.components import building
 from hisim.simulationparameters import SimulationParameters
@@ -25,7 +27,7 @@ def test_building_scalability() -> None:
         seconds_per_timestep=seconds_per_timestep,
     )
 
-    def create_building(conditioned_floor_area: float) -> building.Building:
+    def create_building(conditioned_floor_area: float) -> Any:
         config = building.BuildingConfig.get_default_german_single_family_home()
         config.absolute_conditioned_floor_area_in_m2 = conditioned_floor_area
 

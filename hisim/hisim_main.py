@@ -6,7 +6,7 @@ import importlib
 from pathlib import Path
 import sys
 from datetime import datetime
-from typing import Optional, Any, cast
+from typing import Optional, Any, cast, Union
 import argparse
 from pydantic import TypeAdapter
 from dotenv import load_dotenv
@@ -67,7 +67,7 @@ def get_description_from_py(path_obj: Path) -> str:
 
 def initialize_from_python(
     path_to_module: str,
-    my_simulation_parameters: Optional[str] = None,
+    my_simulation_parameters: Optional[Union[SimulationParameters, str]] = None,
     my_module_config: Optional[str] = None,
 ) -> sim.Simulator:
     """Initialize the simulator from a Python household configuration file.
@@ -114,15 +114,22 @@ def initialize_from_python(
     # Final check and import
     if not path_obj.is_file():
         raise ValueError(f"Python script {module_filename}.py could not be found at {path_obj}")
+
     # Make SimulationParameters object
     if my_simulation_parameters is not None:
-        sim_params_data = load_json_file(my_simulation_parameters)
-        sim_params_data["start_date"] = datetime.fromisoformat(sim_params_data["start_date"])
-        sim_params_data["end_date"] = datetime.fromisoformat(sim_params_data["end_date"])
-        sim_params_data["post_processing_options"] = [
-            PostProcessingOptions[option] for option in sim_params_data.get("post_processing_options", [])
-        ]
-        sim_params = SimulationParameters(**sim_params_data)
+        if isinstance(my_simulation_parameters, str):
+            sim_params_data = load_json_file(my_simulation_parameters)
+            sim_params_data["start_date"] = datetime.fromisoformat(sim_params_data["start_date"])
+            sim_params_data["end_date"] = datetime.fromisoformat(sim_params_data["end_date"])
+            sim_params_data["post_processing_options"] = [
+                PostProcessingOptions[option] for option in sim_params_data.get("post_processing_options", [])
+            ]
+            sim_params = SimulationParameters(**sim_params_data)
+        elif isinstance(my_simulation_parameters, SimulationParameters):
+            sim_params = my_simulation_parameters
+        else:
+            raise TypeError(f"Type for simulation parameter argument {type(my_simulation_parameters)} either not recognized or not implemented yet. "
+                            "Should be string or SimulationParamters object.")
     else:
         sim_params = None
 

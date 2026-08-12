@@ -388,12 +388,25 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
         args: Parsed arguments from ``parse_args``.
 
     Returns:
-        A dict with key ``"mode"`` (``"python"`` or ``"json"``) plus
-        mode-specific keys: ``module_file``/``module_config`` for Python
-        mode, ``scenario``/``simulation``/``delta`` for JSON mode.
+        A dictionary containing the execution ``mode`` and the corresponding
+        mode-specific input files.
+
+        For ``"python"`` mode, the dictionary contains:
+            - ``module_file``: Path to the Python module.
+            - ``module_config``: Path to the module configuration JSON file,
+              or ``None``.
+            - ``my_simulation_parameters``: Path to the simulation parameters
+              JSON file, or ``None``.
+
+        For ``"json"`` mode, the dictionary contains:
+            - ``scenario``: Path to the scenario JSON file.
+            - ``simulation``: Path to the simulation parameters JSON file.
+            - ``delta``: Path to the optional delta JSON file, or ``None``.
 
     Raises:
-        ValueError: If the arguments match neither expected mode.
+        ValueError: If the arguments do not match a supported execution mode,
+            if the required number of arguments is not provided, if too many
+            arguments are provided, or if a file has an invalid extension.
         FileNotFoundError: If a required input file does not exist.
     """
 
@@ -403,11 +416,11 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
         if len(inputs) > 3:
             raise ValueError(
                 "The legancy Python mode accepts at most 3 arguments:\n"
-                "  <module_config.json> <simulation_params.json> [delta.json]"
+                "  <module.py> <module_config.json> <simulation_params.json>"
             )
 
         module_file = inputs[0]
-        module_config = inputs[1] if (len(inputs) == 2 or len(inputs) == 3) else None
+        module_config = inputs[1] if len(inputs) >= 2 else None
         my_simulation_parameters = inputs[2] if len(inputs) == 3 else None
 
         if not os.path.isfile(module_file):

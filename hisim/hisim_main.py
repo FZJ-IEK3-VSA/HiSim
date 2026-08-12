@@ -67,7 +67,7 @@ def get_description_from_py(path_obj: Path) -> str:
 
 def initialize_from_python(
     path_to_module: str,
-    my_simulation_parameters: Optional[SimulationParameters] = None,
+    my_simulation_parameters: Optional[str] = None,
     my_module_config: Optional[str] = None,
 ) -> sim.Simulator:
     """Initialize the simulator from a Python household configuration file.
@@ -436,11 +436,13 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
     if inputs[0].endswith(".json"):
         if len(inputs) < 2:
             raise ValueError(
-                "The JSON mode requires at least 2 files:\n" "  <scenario.json> <simulation_params.json> [delta.json]"
+                "The JSON mode requires at least 2 files:\n"
+                "  <scenario.json> <simulation_params.json> [delta.json]"
             )
         if len(inputs) > 3:
             raise ValueError(
-                "The JSON mode accepts at most 3 files:\n" "  <scenario.json> <simulation_params.json> [delta.json]"
+                "The JSON mode accepts at most 3 files:\n"
+                "  <scenario.json> <simulation_params.json> [delta.json]"
             )
 
         for f in inputs:

@@ -493,7 +493,6 @@ class PIDController(cp.Component):
 
         return connections
 
-
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
         # Identify the building thermal model and tune the PI controller from it.
@@ -506,7 +505,7 @@ class PIDController(cp.Component):
         # control saturation
         self.mv_min = 0
         self.mv_max = 5000
-        self.integral_gaint = integral_gain
+        self.integral_gain = integral_gain
         self.proportional_gain = proportional_gain
         self.derivative_gain = derivative_gain
 

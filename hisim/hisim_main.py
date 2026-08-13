@@ -121,22 +121,19 @@ def initialize_from_python(
             sim_params_data = load_json_file(my_simulation_parameters)
             sim_params_data["start_date"] = datetime.fromisoformat(sim_params_data["start_date"])
             sim_params_data["end_date"] = datetime.fromisoformat(sim_params_data["end_date"])
-            sim_params_data["post_processing_options"] = [
-                PostProcessingOptions[option] for option in sim_params_data.get("post_processing_options", [])
-            ]
+            sim_params_data["post_processing_options"] = [PostProcessingOptions[option] for option in sim_params_data.get("post_processing_options", [])]
             sim_params = SimulationParameters(**sim_params_data)
         elif isinstance(my_simulation_parameters, SimulationParameters):
             sim_params = my_simulation_parameters
         else:
-            raise TypeError(f"Type for simulation parameter argument {type(my_simulation_parameters)} either not recognized or not implemented yet. "
-                            "Should be string or SimulationParamters object.")
+            raise TypeError(
+                f"Type for simulation parameter argument {type(my_simulation_parameters)} either not recognized or not implemented yet. "
+                "Should be string or SimulationParamters object."
+            )
     else:
         sim_params = None
 
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.DESCRIPTION,
-        entry=f"{get_description_from_py(path_obj)}",
-    )
+    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{get_description_from_py(path_obj)}")
 
     # Make setup function executable
     targetmodule = importlib.import_module(module_filename)
@@ -220,10 +217,7 @@ def initialize_from_json(
 
     # Load JSON files
     scenario_data = load_json_file(scenario)
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.DESCRIPTION,
-        entry=f"{scenario_data.get('description', '')}",
-    )
+    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}")
     # Missing in the following data: result_directory, surplus_control, cache_dir_path, multiple_buildings
     # -> Result Directory is set in prepare_simulation_directory function, called by run_all_timesteps
     # -> Cache Dir Path is filled by default in SimulationParameters
@@ -232,9 +226,7 @@ def initialize_from_json(
     sim_params_data["multiple_buildings"] = scenario_data.get("multiple_buildings", False)
     sim_params_data["start_date"] = datetime.fromisoformat(sim_params_data["start_date"])
     sim_params_data["end_date"] = datetime.fromisoformat(sim_params_data["end_date"])
-    sim_params_data["post_processing_options"] = [
-        PostProcessingOptions[option] for option in sim_params_data.get("post_processing_options", [])
-    ]
+    sim_params_data["post_processing_options"] = [PostProcessingOptions[option] for option in sim_params_data.get("post_processing_options", [])]
     sim_params = SimulationParameters(**sim_params_data)
 
     my_sim = _build_simulator_from_scenario(scenario_data, path_to_module, sim_params)
@@ -307,10 +299,7 @@ def initialize_from_json_with_parameters(
         The initialized ``Simulator`` with its component graph wired.
     """
     scenario_data = load_json_file(scenario)
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.DESCRIPTION,
-        entry=f"{scenario_data.get('description', '')}",
-    )
+    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}")
     my_simulation_parameters.multiple_buildings = scenario_data.get("multiple_buildings", False)
     my_simulation_parameters.log_connections = True  # For easy post-processing (and debugging)
     return _build_simulator_from_scenario(scenario_data, scenario, my_simulation_parameters)
@@ -377,12 +366,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "inputs",
         nargs="+",
-        help=(
-            "JSON mode:\n"
-            "  <scenario_params.json> <simulation_params.json> [scenario_delta.json]\n\n"
-            "Legacy Python mode:\n"
-            "  <module.py> [module_config]"
-        ),
+        help=("JSON mode:\n" "  <scenario_params.json> <simulation_params.json> [scenario_delta.json]\n\n" "Legacy Python mode:\n" "  <module.py> [module_config]"),
     )
 
     return parser.parse_args()
@@ -421,10 +405,7 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
 
     if inputs[0].endswith(".py"):
         if len(inputs) > 3:
-            raise ValueError(
-                "The legancy Python mode accepts at most 3 arguments:\n"
-                "  <module.py> <module_config.json> <simulation_params.json>"
-            )
+            raise ValueError("The legancy Python mode accepts at most 3 arguments:\n" "  <module.py> <module_config.json> <simulation_params.json>")
 
         module_file = inputs[0]
         module_config = inputs[1] if len(inputs) >= 2 else None
@@ -442,15 +423,9 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
 
     if inputs[0].endswith(".json"):
         if len(inputs) < 2:
-            raise ValueError(
-                "The JSON mode requires at least 2 files:\n"
-                "  <scenario.json> <simulation_params.json> [delta.json]"
-            )
+            raise ValueError("The JSON mode requires at least 2 files:\n" "  <scenario.json> <simulation_params.json> [delta.json]")
         if len(inputs) > 3:
-            raise ValueError(
-                "The JSON mode accepts at most 3 files:\n"
-                "  <scenario.json> <simulation_params.json> [delta.json]"
-            )
+            raise ValueError("The JSON mode accepts at most 3 files:\n" "  <scenario.json> <simulation_params.json> [delta.json]")
 
         for f in inputs:
             if not f.endswith(".json"):
@@ -465,11 +440,7 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
             "delta": inputs[2] if len(inputs) == 3 else None,
         }
 
-    raise ValueError(
-        "First argument must be either:\n"
-        "  - a Python file (*.py) for legacy Python mode, or\n"
-        "  - a JSON file (*.json) for JSON mode"
-    )
+    raise ValueError("First argument must be either:\n" "  - a Python file (*.py) for legacy Python mode, or\n" "  - a JSON file (*.json) for JSON mode")
 
 
 def get_required_config_value(config: dict[str, Optional[str]], key: str) -> str:
@@ -516,10 +487,7 @@ def main_cli() -> None:
     elif config["mode"] == "json":
         scenario = get_required_config_value(config, "scenario")
         simulation = get_required_config_value(config, "simulation")
-        print(
-            f"Running simulation of scenario {scenario} with simulation parameters {simulation}"
-            + (f" and delta {config['delta']}" if config["delta"] else "")
-        )
+        print(f"Running simulation of scenario {scenario} with simulation parameters {simulation}" + (f" and delta {config['delta']}" if config["delta"] else ""))
         my_sim = initialize_from_json(
             scenario=scenario,
             simulation_parameters=simulation,

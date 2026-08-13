@@ -405,7 +405,8 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
 
     if inputs[0].endswith(".py"):
         if len(inputs) > 3:
-            raise ValueError("The legancy Python mode accepts at most 3 arguments:\n" "  <module.py> <module_config.json> <simulation_params.json>")
+            raise ValueError("The legancy Python mode accepts at most 3 arguments:\n"
+                            "  <module.py> <module_config.json> <simulation_params.json>")
 
         module_file = inputs[0]
         module_config = inputs[1] if len(inputs) >= 2 else None
@@ -423,9 +424,11 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
 
     if inputs[0].endswith(".json"):
         if len(inputs) < 2:
-            raise ValueError("The JSON mode requires at least 2 files:\n" "  <scenario.json> <simulation_params.json> [delta.json]")
+            raise ValueError("The JSON mode requires at least 2 files:\n"
+                             "  <scenario.json> <simulation_params.json> [delta.json]")
         if len(inputs) > 3:
-            raise ValueError("The JSON mode accepts at most 3 files:\n" "  <scenario.json> <simulation_params.json> [delta.json]")
+            raise ValueError("The JSON mode accepts at most 3 files:\n"
+                             "  <scenario.json> <simulation_params.json> [delta.json]")
 
         for f in inputs:
             if not f.endswith(".json"):
@@ -440,7 +443,8 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
             "delta": inputs[2] if len(inputs) == 3 else None,
         }
 
-    raise ValueError("First argument must be either:\n" "  - a Python file (*.py) for legacy Python mode, or\n" "  - a JSON file (*.json) for JSON mode")
+    raise ValueError("First argument must be either:\n"
+                     "  - a Python file (*.py) for legacy Python mode, or\n" "  - a JSON file (*.json) for JSON mode")
 
 
 def get_required_config_value(config: dict[str, Optional[str]], key: str) -> str:

@@ -101,7 +101,7 @@ def test_initialize_from_python_rejects_invalid_simulation_parameters():
     with pytest.raises(TypeError, match="not recognized"):
         hisim_main.initialize_from_python(
             PYTHON_SETUP,
-            my_simulation_parameters=123,
+            my_simulation_parameters=123,  # type: ignore[arg-type]
         )
 
 

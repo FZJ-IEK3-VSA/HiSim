@@ -111,8 +111,23 @@ class ComponentInput:  # noqa: too-few-public-methods
         load_type: lt.LoadTypes,
         unit: lt.Units,
         mandatory: bool,
+        allow_unconnected_mandatory: bool = False,
     ):
-        """Initializes a component input."""
+        """Initializes a component input.
+
+        Args:
+            object_name: Name of the component that owns this input.
+            field_name: Name of the input field.
+            load_type: Physical load type of the input.
+            unit: Unit of the input.
+            mandatory: Whether this input must be connected to a source output.
+            allow_unconnected_mandatory: When True and the input is
+                mandatory, :meth:`ComponentWrapper.connect_inputs` logs a
+                warning instead of raising if no matching output is found. Use
+                this for mandatory inputs whose source output may legitimately
+                not exist (e.g. a heat pump's DHW electrical power output when
+                domestic hot water preparation is disabled).
+        """
         self.fullname: str = object_name + " # " + field_name
         self.component_name: str = object_name
         self.field_name: str = field_name
@@ -123,6 +138,7 @@ class ComponentInput:  # noqa: too-few-public-methods
         self.src_field_name: Optional[str] = None
         self.source_output: Optional[ComponentOutput] = None
         self.is_mandatory = mandatory
+        self.allow_unconnected_mandatory: bool = allow_unconnected_mandatory
 
 
 class SingleTimeStepValues:
@@ -477,9 +493,35 @@ class Component:
         pass  # noqa
 
 
+class StatelessComponent(Component):
+    """Base class for components that hold no mutable per-timestep state.
+
+    A :class:`StatelessComponent` has no internal state that changes across the
+    save/restore cycle of the convergence loop, so the state-management hooks
+    :meth:`Component.i_save_state` and :meth:`Component.i_restore_state` are
+    no-ops.  Subclasses that introduce mutable state should inherit from
+    :class:`Component` directly and implement those hooks explicitly.
+
+    Because stateless components also typically have nothing to precompute,
+    :meth:`Component.i_prepare_simulation` is overridden with a no-op default
+    here; a subclass that needs pre-simulation setup should override it.  The
+    optional :meth:`Component.i_doublecheck` hook already has a no-op default
+    in :class:`Component` and is inherited unchanged.
+    """
+
+    def i_save_state(self) -> None:
+        """No-op: a stateless component has no internal state to cache."""
+
+    def i_restore_state(self) -> None:
+        """No-op: a stateless component has no internal state to restore."""
+
+    def i_prepare_simulation(self) -> None:
+        """No-op: a stateless component performs no pre-simulation setup by default."""
+
+
 @dataclass
 class OpexCostDataClass:
-    """Return element of type OpexCostDataClass in function get_opex_cost from Component."""
+    """Return element of type OpexCostDataClass in function get_cost_opex from Component."""
 
     opex_energy_cost_in_euro: float
     opex_maintenance_cost_in_euro: float
@@ -537,7 +579,10 @@ class CapexCostDataClass:
 
 @dataclass
 class Coordinates:
-    """Coordinates."""
+    """Geographic coordinates of a location.
 
-    latitude: float
-    longitude: float
+    Both fields are angular positions expressed in decimal degrees.
+    """
+
+    latitude_in_degrees: float
+    longitude_in_degrees: float

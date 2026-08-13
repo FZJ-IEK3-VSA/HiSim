@@ -398,3 +398,132 @@ def test_build_graph_merges_parallel_edges_with_newline() -> None:
     assert "Out1 -> In1 in W" in label
     assert "Out2 -> In2 in W" in label
     assert "\\n" in label
+
+
+# ---------------------------------------------------------------------------
+# Direct unit tests for the edge-label concerns extracted from ``_build_graph``:
+#   * ``_format_edge_label``  -- concern (3): label text + °C entity replacement
+#   * ``_compute_result_annotation`` -- concern (4): cumulative value/unit/kind
+# These complement the end-to-end ``_build_graph`` tests above by pinning the
+# contract of each extracted method in isolation.
+# ---------------------------------------------------------------------------
+
+
+def _chart_with_results(output: ComponentOutput, value: float) -> SystemChart:
+    """Build a ``SystemChart`` whose ``results_cumulative`` maps ``output`` to ``value``."""
+    ppdt = _make_ppdt(
+        wrapped_components=[],
+        results_cumulative=pd.DataFrame([{output.get_pretty_name(): value}]),
+    )
+    return SystemChart(ppdt)
+
+
+@pytest.mark.base
+def test_format_edge_label_without_results_is_base_label() -> None:
+    """``_format_edge_label`` with ``with_results=False`` returns only the base label."""
+    chart = SystemChart(_make_ppdt(wrapped_components=[]))
+    cinput = _make_input(
+        target_name="Boiler",
+        field_name="TemperatureIn",
+        unit=Units.CELSIUS,
+        src_object_name="Controller",
+        src_field_name="TemperatureOut",
+    )
+    assert chart._format_edge_label(cinput, with_results=False) == (
+        "TemperatureOut -> TemperatureIn in &#8451;"
+    )
+
+
+@pytest.mark.base
+def test_format_edge_label_with_results_appends_annotation() -> None:
+    """``_format_edge_label`` with ``with_results=True`` appends the result annotation."""
+    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.WATT)
+    chart = _chart_with_results(output, 1234.5678)
+    cinput = _make_input(
+        target_name="Controller",
+        field_name="In",
+        unit=Units.WATT,
+        src_object_name="Source",
+        src_field_name="Out",
+        source_output=output,
+    )
+    assert chart._format_edge_label(cinput, with_results=True) == (
+        "Out -> In in W: 1234.568 W (mean)"
+    )
+
+
+@pytest.mark.base
+def test_format_edge_label_with_results_but_no_source_output_omits_annotation() -> None:
+    """``with_results=True`` without a ComponentOutput source yields the base label only."""
+    chart = SystemChart(_make_ppdt(wrapped_components=[], results_cumulative=pd.DataFrame()))
+    cinput = _make_input(
+        target_name="Boiler",
+        field_name="In",
+        unit=Units.WATT,
+        src_object_name="Controller",
+        src_field_name="Out",
+        source_output=None,
+    )
+    label = chart._format_edge_label(cinput, with_results=True)
+    assert label == "Out -> In in W"
+    assert ": " not in label
+
+
+@pytest.mark.base
+def test_format_edge_label_replaces_celsius_in_annotation_too() -> None:
+    """The °C -> &#8451; replacement applies to the whole label, including the annotation."""
+    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.CELSIUS)
+    chart = _chart_with_results(output, 21.5)
+    cinput = _make_input(
+        target_name="Controller",
+        field_name="In",
+        unit=Units.CELSIUS,
+        src_object_name="Source",
+        src_field_name="Out",
+        source_output=output,
+    )
+    label = chart._format_edge_label(cinput, with_results=True)
+    assert "°C" not in label
+    assert "&#8451;" in label
+    assert ": 21.5" in label
+    assert "(mean)" in label
+
+
+@pytest.mark.base
+def test_compute_result_annotation_mean_unit() -> None:
+    """A mean-aggregated unit keeps its unit and is tagged ``(mean)``."""
+    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.WATT)
+    chart = _chart_with_results(output, 1234.5678)
+    assert chart._compute_result_annotation(output) == ": 1234.568 W (mean)"
+
+
+@pytest.mark.base
+def test_compute_result_annotation_sum_unit() -> None:
+    """A sum-aggregated unit keeps its unit and is tagged ``(sum)``."""
+    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.WATT_HOUR)
+    chart = _chart_with_results(output, 42.0)
+    assert chart._compute_result_annotation(output) == ": 42.0 Wh (sum)"
+
+
+@pytest.mark.base
+def test_compute_result_annotation_per_timestep_strips_suffix() -> None:
+    """A 'per timestep' sum unit is shown in its base unit (e.g. kWh, not 'kWh per timestep')."""
+    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.KWH_PER_TIMESTEP)
+    chart = _chart_with_results(output, 7.5)
+    assert chart._compute_result_annotation(output) == ": 7.5 kWh (sum)"
+
+
+@pytest.mark.base
+def test_compute_result_annotation_celsius_keeps_literal_degree_sign() -> None:
+    r"""``_compute_result_annotation`` returns the raw suffix; °C entity replacement is ``_format_edge_label``'s job."""
+    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.CELSIUS)
+    chart = _chart_with_results(output, 21.5)
+    # The annotation keeps the literal °C; only _format_edge_label replaces it.
+    assert chart._compute_result_annotation(output) == ": 21.5 °C (mean)"
+
+
+@pytest.mark.base
+def test_compute_result_annotation_none_source_output_returns_none() -> None:
+    """A ``None`` source output yields no annotation (``None``)."""
+    chart = SystemChart(_make_ppdt(wrapped_components=[], results_cumulative=pd.DataFrame()))
+    assert chart._compute_result_annotation(None) is None

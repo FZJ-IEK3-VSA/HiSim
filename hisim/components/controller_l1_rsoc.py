@@ -3,7 +3,7 @@
 # clean
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
@@ -31,7 +31,7 @@ class RsocControllerConfig(ConfigBase):
     """Config of the rSOC Controller."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return RsocController.get_full_classname()
 
@@ -79,7 +79,7 @@ class RsocControllerConfig(ConfigBase):
         rsoc_name: str,
         building_name: str = "BUI1",
         config_json: dict[str, Any] | None = None,
-    ) -> Any:
+    ) -> "RsocControllerConfig":
         """Initialize the config variables based on the manufacturer JSON.
 
         When ``config_json`` is ``None`` the manufacturer config is read from
@@ -115,28 +115,30 @@ class RsocController(Component):
     """rSOC Controller class."""
 
     # Inputs
-    ProvidedPower = "ProvidedPower"
-    PowerDemand = "PowerDemand"
+    ProvidedPower: ClassVar[str] = "ProvidedPower"
+    PowerDemand: ClassVar[str] = "PowerDemand"
 
     # Outputs
-    PowerToSOEC = "PowerToSOEC"
-    StateToRSOC = "StateToRSOC"
-    DemandToSOFC = "DemandToSOFC"
-    StateToSOFC = "StateToSOFC"
-    PowerVsDemand = "PowerVsDemand"
-    CurtailedLoad = "CurtailedLoad"
-    CurtailedPower = "CurtailedPower"
-    TotalOffCount = "# of times the system was switched off"
-    TotalStandbyCount = "# of times the system was to standby mode"
-    SwitchCount = "SwitchCount"
+    PowerToSOEC: ClassVar[str] = "PowerToSOEC"
+    StateToRSOC: ClassVar[str] = "StateToRSOC"
+    DemandToSOFC: ClassVar[str] = "DemandToSOFC"
+    StateToSOFC: ClassVar[str] = "StateToSOFC"
+    PowerVsDemand: ClassVar[str] = "PowerVsDemand"
+    CurtailedLoad: ClassVar[str] = "CurtailedLoad"
+    CurtailedPower: ClassVar[str] = "CurtailedPower"
+    TotalOffCount: ClassVar[str] = "# of times the system was switched off"
+    TotalStandbyCount: ClassVar[str] = "# of times the system was to standby mode"
+    SwitchCount: ClassVar[str] = "SwitchCount"
 
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: RsocControllerConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: DisplayConfig | None = None,
     ) -> None:
         """Initialize class."""
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
         self.rsoccontrollerconfig = config
 
         self.name = config.name
@@ -339,10 +341,6 @@ class RsocController(Component):
         self.cold_start_time = self.cold_start_time_soec
         self.warm_start_time = self.warm_start_time_soec
         self.standby_load = 100.0
-
-        if timestep < 5:
-            print(self.min_load_soec)
-            print(self.min_power_sofc)
 
         power = stsv.get_input_value(self.provided_power)
         # if -self.min_load_soec < power < 0.0:

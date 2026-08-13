@@ -92,7 +92,11 @@ are OS-independent; their tests run anywhere:
 
 ```bash
 pytest tests/test_hpc_harness_db.py tests/test_hpc_harness_server.py \
-       tests/test_hpc_harness_units.py
+       tests/test_hpc_harness_autoscaler.py tests/test_hpc_harness_circuit.py \
+       tests/test_hpc_harness_config.py tests/test_hpc_harness_eta.py \
+       tests/test_hpc_harness_logbuffer.py tests/test_hpc_harness_memcheck.py \
+       tests/test_hpc_harness_run_one.py tests/test_hpc_harness_runners.py \
+       tests/test_hpc_harness_warm_pool.py tests/test_hpc_harness_worker_idle.py
 pytest -m harness       # integration tests (Linux only)
 ```
 

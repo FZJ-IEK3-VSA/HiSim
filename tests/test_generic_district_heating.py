@@ -61,10 +61,10 @@ def test_controller_determine_operating_mode(
 @pytest.mark.base
 @pytest.mark.parametrize(
     [
-        "connected_load_w",
+        "connected_load_in_w",
         "water_input_temperature_deg_c",
         "delta_temperature_needed_in_celsius",
-        "expected_thermal_power_delivered_w",
+        "expected_thermal_power_delivered_in_w",
         "expected_thermal_energy_delivered_in_watt_hour",
         "expected_water_output_temperature_deg_c",
         "expected_water_mass_flow_rate_in_kg_per_s",
@@ -77,10 +77,10 @@ def test_controller_determine_operating_mode(
     ],
 )
 def test_component_get_dhw_outputs(
-    connected_load_w: float,
+    connected_load_in_w: float,
     water_input_temperature_deg_c: float,
     delta_temperature_needed_in_celsius: float,
-    expected_thermal_power_delivered_w: float,
+    expected_thermal_power_delivered_in_w: float,
     expected_thermal_energy_delivered_in_watt_hour: float,
     expected_water_output_temperature_deg_c: float,
     expected_water_mass_flow_rate_in_kg_per_s: float,
@@ -88,10 +88,10 @@ def test_component_get_dhw_outputs(
     """Test calculation of dhw outputs."""
 
     testee = given_default_component_testee()
-    testee.config.connected_load_w = connected_load_w
+    testee.config.connected_load_in_w = connected_load_in_w
 
     (
-        thermal_power_delivered_w,
+        thermal_power_delivered_in_w,
         thermal_energy_delivered_in_watt_hour,
         water_output_temperature_deg_c,
         water_mass_flow_rate_in_kg_per_s
@@ -100,7 +100,7 @@ def test_component_get_dhw_outputs(
         delta_temperature_needed_in_celsius,
     )
 
-    assert thermal_power_delivered_w == expected_thermal_power_delivered_w
+    assert thermal_power_delivered_in_w == expected_thermal_power_delivered_in_w
     assert thermal_energy_delivered_in_watt_hour == expected_thermal_energy_delivered_in_watt_hour
     assert water_output_temperature_deg_c == expected_water_output_temperature_deg_c
     assert water_mass_flow_rate_in_kg_per_s == expected_water_mass_flow_rate_in_kg_per_s
@@ -109,11 +109,11 @@ def test_component_get_dhw_outputs(
 @pytest.mark.base
 @pytest.mark.parametrize(
     [
-        "connected_load_w",
+        "connected_load_in_w",
         "water_input_temperature_deg_c",
         "delta_temperature_needed_in_celsius",
         "water_mass_flow_rate_in_kg_per_s",
-        "expected_thermal_power_delivered_w",
+        "expected_thermal_power_delivered_in_w",
         "expected_thermal_energy_delivered_in_watt_hour",
         "expected_water_output_temperature_deg_c",
     ],
@@ -124,31 +124,31 @@ def test_component_get_dhw_outputs(
     ],
 )
 def test_component_get_space_heating_outputs(
-    connected_load_w: float,
+    connected_load_in_w: float,
     water_input_temperature_deg_c: float,
     delta_temperature_needed_in_celsius: float,
     water_mass_flow_rate_in_kg_per_s: float,
-    expected_thermal_power_delivered_w: float,
+    expected_thermal_power_delivered_in_w: float,
     expected_thermal_energy_delivered_in_watt_hour: float,
     expected_water_output_temperature_deg_c: float,
 ) -> None:
     """Test calculation of space heating outputs."""
 
     testee = given_default_component_testee()
-    testee.config.connected_load_w = connected_load_w
+    testee.config.connected_load_in_w = connected_load_in_w
 
     (
-        thermal_power_delivered_w,
+        thermal_power_delivered_in_w,
         thermal_energy_delivered_in_watt_hour,
         water_output_temperature_deg_c,
     ) = testee._calculate_space_heating_outputs(  # pylint: disable=protected-access
         water_mass_flow_rate_in_kg_per_s,
         delta_temperature_needed_in_celsius,
         water_input_temperature_deg_c,
-        available_load_in_w=connected_load_w
+        available_load_in_w=connected_load_in_w
     )
 
-    assert thermal_power_delivered_w == expected_thermal_power_delivered_w
+    assert thermal_power_delivered_in_w == expected_thermal_power_delivered_in_w
     assert thermal_energy_delivered_in_watt_hour == expected_thermal_energy_delivered_in_watt_hour
     assert water_output_temperature_deg_c == expected_water_output_temperature_deg_c
 

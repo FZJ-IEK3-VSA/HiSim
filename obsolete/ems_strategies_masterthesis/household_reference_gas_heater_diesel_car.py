@@ -21,7 +21,7 @@ from hisim.components import heat_distribution_system
 from hisim.components import building
 from hisim.components import simple_water_storage
 from hisim.components import generic_car
-from hisim.components import generic_heat_pump_modular
+from HiSim.obsolete.webtool_old import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
 from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 from hisim.components import electricity_meter
@@ -100,7 +100,7 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
             building_config=building_config,
             hds_controller_config=hds_controller_config,
             hds_config=(
-                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+                heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                     heating_system=hds_controller_config.heating_system,

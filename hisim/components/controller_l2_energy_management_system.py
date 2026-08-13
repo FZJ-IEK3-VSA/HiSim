@@ -9,7 +9,7 @@ The component with the lowest source weight is activated first.
 # clean
 from dataclasses import dataclass
 
-from typing import Any, List, Tuple, Optional
+from typing import Any, List, Tuple, Optional, cast
 from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -25,7 +25,6 @@ from hisim.postprocessing.cost_and_emission_computation.capex_computation import
 from hisim.components import (
     more_advanced_heat_pump_hplib,
     advanced_heat_pump_hplib,
-    generic_heat_pump_modular,
     loadprofilegenerator_utsp_connector,
     generic_electric_heating,
     solar_thermal_system,
@@ -174,7 +173,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     )
     ElectricityToBuildingFromDistrictEMSOutput = "ElectricityToBuildingFromDistrictEMSOutput"
 
-    CheckPeakShaving = "CheckPeakShaving"
+    PeakShavingStatus = "PeakShavingStatus"
 
     @utils.measure_execution_time
     def __init__(
@@ -209,7 +208,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.consumption_uncontrolled_inputs: List[ComponentInput] = []
         self.consumption_ems_controlled_inputs: List[ComponentInput] = []
 
-        self.mode: Any
+        self.operating_mode: Any
         self.strategy = self.ems_config.strategy
         self.limit_to_shave = self.ems_config.limit_to_shave
         self.building_indoor_temperature_offset_value = self.ems_config.building_indoor_temperature_offset_value
@@ -283,13 +282,13 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             output_description=f"here a description for {self.SpaceHeatingWaterStorageTemperatureModifier} will follow.",
         )
 
-        self.check_peak_shaving: cp.ComponentOutput = self.add_output(
+        self.peak_shaving_status: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.CheckPeakShaving,
+            field_name=self.PeakShavingStatus,
             load_type=lt.LoadTypes.ANY,
             unit=lt.Units.ANY,
             sankey_flow_direction=False,
-            output_description=f"here a description for {self.CheckPeakShaving} will follow.",
+            output_description=f"here a description for {self.PeakShavingStatus} will follow.",
         )
 
         self.electricity_to_building_from_district_output: cp.ComponentOutput = self.add_output(
@@ -304,7 +303,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
-        self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
         self.add_dynamic_default_connections(self.get_default_connections_from_electric_heater())
@@ -410,6 +408,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
                 source_weight=3,
+                # The DHW electrical power output only exists when the heat pump
+                # has domestic hot water preparation enabled; allow this mandatory
+                # input to remain unconnected when DHW is deactivated.
+                allow_unconnected_mandatory=True,
             )
         )
         self.add_component_output(
@@ -472,43 +474,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Heating Heat Pump. ",
-        )
-        return dynamic_connections
-
-    def get_default_connections_from_dhw_heat_pump(
-        self,
-    ):
-        """Get dhw heat pump default connections."""
-
-        from hisim.components.generic_heat_pump_modular import (  # pylint: disable=import-outside-toplevel
-            ModularHeatPump,
-        )
-
-        dynamic_connections = []
-        dhw_heatpump_class_name = ModularHeatPump.get_classname()
-        dynamic_connections.append(
-            dynamic_component.DynamicComponentConnection(
-                source_component_class=ModularHeatPump,
-                source_class_name=dhw_heatpump_class_name,
-                source_component_field_name=ModularHeatPump.ElectricityOutput,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-                source_weight=3,
-            )
-        )
-
-        self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOf{dhw_heatpump_class_name}_",
-            source_tags=[
-                lt.ComponentType.HEAT_PUMP_DHW,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_component_class=dhw_heatpump_class_name,
-            source_weight=3,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for dhw heat pump.",
         )
         return dynamic_connections
 
@@ -655,7 +620,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         sortindex = sorted(range(len(source_weights)), key=lambda k: source_weights[k])
         source_weights = [source_weights[i] for i in sortindex]
 
-        component_types_sorted = [source_tags[i] for i in sortindex]
+        component_types_sorted = cast(List[lt.ComponentType], [source_tags[i] for i in sortindex])
         inputs_sorted = [getattr(self, inputs[i].source_component_class) for i in sortindex]
         outputs_sorted = []
 
@@ -672,7 +637,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 if output is not None:
                     outputs_sorted.append(output)
                 else:
-                    raise Exception("Dynamic input is not conncted to dynamic output")
+                    raise ValueError("Dynamic input is not connected to dynamic output")
         outputs_sorted = list(OrderedDict.fromkeys(outputs_sorted))
 
         production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
@@ -953,7 +918,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         advanced_heat_pump_class_name = advanced_heat_pump_hplib.HeatPumpHplib.get_classname()
         more_advanced_heat_pump_class_name = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib.get_classname()
-        dhw_heat_pump_class_name = generic_heat_pump_modular.ModularHeatPump.get_classname()
         occupancy_class_name = loadprofilegenerator_utsp_connector.UtspLpgConnector.get_classname()
         electric_heater_class_name = generic_electric_heating.ElectricHeating.get_classname()
         solar_thermal_system_class_name = solar_thermal_system.SolarThermalSystem.get_classname()
@@ -963,27 +927,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
 
-                if dhw_heat_pump_class_name in output.field_name and output.unit == lt.Units.WATT:
-                    dhw_hp_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
-                        postprocessing_results.iloc[:, index] < 0.0
-                    ]
-                    dhw_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
-                        KpiHelperClass.compute_total_energy_from_power_timeseries(
-                            power_timeseries_in_watt=dhw_hp_electricity_from_grid_in_watt_series,
-                            time_resolution_in_seconds=self.my_simulation_parameters.seconds_per_timestep,
-                        )
-                    )
-                    dhw_heatpump_electricity_from_grid_entry = KpiEntry(
-                        name="Domestic hot water heat pump electricity from grid",
-                        unit="kWh",
-                        value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
-                        description=self.component_name,
-                        name_of_source_component=dhw_heat_pump_class_name,
-                    )
-                    list_of_kpi_entries.append(dhw_heatpump_electricity_from_grid_entry)
-
-                elif more_advanced_heat_pump_class_name in output.field_name and output.unit == lt.Units.WATT:
+                if more_advanced_heat_pump_class_name in output.field_name and output.unit == lt.Units.WATT:
                     if "SH" in output.field_name:
                         sh_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
                             postprocessing_results.iloc[:, index] < 0.0
@@ -1155,15 +1099,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         # add all source weights to KPIs
         for index, input_sorted in enumerate(self.inputs_sorted):
-            input_source_weight_entry = dhw_st_electricity_from_grid_entry = KpiEntry(
+            list_of_kpi_entries.append(KpiEntry(
                 name=f"Priority for {input_sorted.field_name}",
                 unit="-",
                 value=index,
                 tag=KpiTagEnumClass.ENERGY_MANAGEMENT_SYSTEM,
                 description=self.component_name,
                 name_of_source_component=input_sorted.component_name,
-            )
-            list_of_kpi_entries.append(input_source_weight_entry)
+            ))
 
         return list_of_kpi_entries
 

@@ -102,7 +102,6 @@ def boiler_setup():
     )
 
 
-@pytest.mark.base
 def test_boiler_heat_loss_matches_draw_off_and_standing_losses(  # pylint: disable=redefined-outer-name
     boiler_setup,
 ) -> None:
@@ -132,7 +131,6 @@ def test_boiler_heat_loss_matches_draw_off_and_standing_losses(  # pylint: disab
     assert 59.6 <= stsv.values[1] < 59.7
 
 
-@pytest.mark.base
 def test_heater_delivers_full_power_when_boiler_cold(  # pylint: disable=redefined-outer-name
     boiler_setup,
 ) -> None:
@@ -163,7 +161,6 @@ def test_heater_delivers_full_power_when_boiler_cold(  # pylint: disable=redefin
     )
 
 
-@pytest.mark.base
 def test_heater_off_when_boiler_hot(  # pylint: disable=redefined-outer-name
     boiler_setup,
 ) -> None:

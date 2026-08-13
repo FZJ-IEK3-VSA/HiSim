@@ -17,7 +17,7 @@ from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_gas_heater
 from hisim.components import controller_l1_heat_old
-from hisim.components import generic_heat_water_storage
+from HiSim.obsolete.webtool_old import generic_heat_water_storage
 from hisim.components import building
 from hisim import log
 from obsolete.household_with_heatpump_and_pv import HouseholdPVConfig

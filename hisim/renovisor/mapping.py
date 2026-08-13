@@ -7,7 +7,7 @@ request dict into a :class:`TranslationResult` so the mapping can be unit-tested
 
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 
 from hisim.building_sizer_utils.interface_configs.archetype_config import ArcheTypeConfig
 from hisim.building_sizer_utils.interface_configs.modular_household_config import ModularHouseholdConfig
@@ -57,7 +57,7 @@ _TABULA_TYPE_BY_DWELLING: Dict[str, Tuple[str, Optional[str]]] = {
     "apartment": ("AB", None),
 }
 
-_REFURB_VARIANT_BY_ENVELOPE_STATE = {"unrenovated": 1, "usual_refurb": 2, "advanced_refurb": 3}
+_REFURB_VARIANT_BY_ENVELOPE_STATE: Dict[str, int] = {"unrenovated": 1, "usual_refurb": 2, "advanced_refurb": 3}
 
 _AZIMUTH_BY_ORIENTATION: Dict[str, Tuple[float, Optional[str]]] = {
     "south": (180.0, None),
@@ -66,16 +66,16 @@ _AZIMUTH_BY_ORIENTATION: Dict[str, Tuple[float, Optional[str]]] = {
     "east_west": (90.0, "east/west split array approximated as a single east-facing array"),
 }
 
-# occupants -> LPG predefined household (spec section 4.4); 5+ falls back to the last entry.
-_LPG_HOUSEHOLD_BY_OCCUPANTS = {
+# occupants -> LPG predefined household (spec section 4.4); 5+ falls back to _LPG_HOUSEHOLD_LARGE (defined below).
+_LPG_HOUSEHOLD_BY_OCCUPANTS: Dict[int, str] = {
     1: "CHR07_Single_with_work",
     2: "CHR01_Couple_both_at_Work",
     3: "CHR03_Family_1_child_both_at_work",
     4: "CHR27_Family_both_at_work_2_children",
 }
-_LPG_HOUSEHOLD_LARGE = "CHR41_Family_with_3_children_both_at_work"
+_LPG_HOUSEHOLD_LARGE: str = "CHR41_Family_with_3_children_both_at_work"
 
-_BUILDING_LOCATION_BY_COUNTRY = {"IE": "Ireland", "DE": "Germany", "GB": "United Kingdom"}
+_BUILDING_LOCATION_BY_COUNTRY: Dict[str, str] = {"IE": "Ireland", "DE": "Germany", "GB": "United Kingdom"}
 
 
 class MappingError(RequestValidationError):
@@ -118,7 +118,7 @@ class MappingReport:
         """Record *path* as accepted but not used."""
         self.add(path, "ignored", note)
 
-    def finalize(self, request: dict) -> None:
+    def finalize(self, request: Dict[str, Any]) -> None:
         """Add an ``ignored`` entry for every request leaf no other entry covers."""
         for leaf_path in _iter_leaf_paths(request):
             if not self._is_covered(leaf_path):
@@ -128,10 +128,10 @@ class MappingReport:
         """Return whether *leaf_path* equals or lies under an already recorded path."""
         if leaf_path in self._entries:
             return True
-        for recorded in self._entries:
-            if leaf_path.startswith(recorded) and leaf_path[len(recorded)] in ".[":
-                return True
-        return False
+        return any(
+            leaf_path.startswith(recorded) and leaf_path[len(recorded)] in ".["
+            for recorded in self._entries
+        )
 
     def to_list(self) -> List[Dict[str, str]]:
         """Return the entries as JSON-ready dicts, sorted by path."""
@@ -150,7 +150,7 @@ class TranslationResult:
     report: MappingReport
 
 
-def translate(request: dict, variant: str, job_id: str) -> TranslationResult:
+def translate(request: Dict[str, Any], *, variant: str, job_id: str) -> TranslationResult:
     """Translate a validated RenoVisor *request* into a setup selection and module config.
 
     *variant* is ``"base"`` (inventory as-is) or ``"measures"`` (all measures applied first).
@@ -166,11 +166,11 @@ def translate(request: dict, variant: str, job_id: str) -> TranslationResult:
     archetype = _build_archetype_config(request, home, envelope_measure_types, job_id, report)
 
     report.finalize(request)
-    config = ModularHouseholdConfig(energy_system_config_=energy_system, archetype_config_=archetype)
-    return TranslationResult(setup_filename=setup_filename, modular_household_config=config, report=report)
+    household_config = ModularHouseholdConfig(energy_system_config_=energy_system, archetype_config_=archetype)
+    return TranslationResult(setup_filename=setup_filename, modular_household_config=household_config, report=report)
 
 
-def build_mapping_report_dict(result: TranslationResult, job_id: str, variant: str) -> dict:
+def build_mapping_report_dict(result: TranslationResult, *, variant: str, job_id: str) -> Dict[str, Any]:
     """Build the JSON payload of ``renovisor_mapping_report.json`` (spec section 6)."""
     return {
         "jobId": job_id,
@@ -182,17 +182,17 @@ def build_mapping_report_dict(result: TranslationResult, job_id: str, variant: s
     }
 
 
-def _resolve_home_inputs(request: dict, variant: str, report: MappingReport) -> Tuple[dict, set]:
+def _resolve_home_inputs(request: Dict[str, Any], variant: str, report: MappingReport) -> Tuple[Dict[str, Any], Set[str]]:
     """Return the effective home inputs and envelope measure types for the chosen variant."""
-    home: dict = request["homeInputs"]
-    measures: List[dict] = request["measures"]
+    home: Dict[str, Any] = request["homeInputs"]
+    measures: List[Dict[str, Any]] = request["measures"]
     if variant == "measures":
-        application = apply_measures(home, measures)
-        for path, status, note in application.report_notes:
+        applied_measures = apply_measures(home, measures)
+        for path, status, note in applied_measures.report_notes:
             report.add(path, status, note)
         if not measures:
             report.used("measures", "empty measure list: identical to the baseline")
-        return application.home_inputs, application.envelope_measure_types
+        return applied_measures.home_inputs, applied_measures.envelope_measure_types
     if measures:
         report.ignored("measures", "variant=base: measures not applied")
     else:
@@ -200,7 +200,7 @@ def _resolve_home_inputs(request: dict, variant: str, report: MappingReport) -> 
     return home, set()
 
 
-def _select_setup(home: dict, report: MappingReport) -> Tuple[str, HeatingSystems]:
+def _select_setup(home: Dict[str, Any], report: MappingReport) -> Tuple[str, HeatingSystems]:
     """Pick the system setup from heating.primary and solarThermal.mode (spec section 4.1)."""
     primary = home["heating"]["primary"]
     solar_mode = (home.get("solarThermal") or {}).get("mode") or "none"
@@ -230,7 +230,7 @@ def _select_setup(home: dict, report: MappingReport) -> Tuple[str, HeatingSystem
     return setup_filename, heating_system
 
 
-def _build_energy_system_config(home: dict, heating_system: HeatingSystems, report: MappingReport) -> EnergySystemConfig:
+def _build_energy_system_config(home: Dict[str, Any], heating_system: HeatingSystems, report: MappingReport) -> EnergySystemConfig:
     """Build the :class:`EnergySystemConfig` (spec section 4.3)."""
     emitter = home["heating"].get("emitter")
     if emitter == "underfloor":
@@ -268,7 +268,7 @@ def _build_energy_system_config(home: dict, heating_system: HeatingSystems, repo
 
 
 def _build_archetype_config(
-    request: dict, home: dict, envelope_measure_types: set, job_id: str, report: MappingReport
+    request: Dict[str, Any], home: Dict[str, Any], envelope_measure_types: Set[str], job_id: str, report: MappingReport
 ) -> ArcheTypeConfig:
     """Build the :class:`ArcheTypeConfig` (spec section 4.2)."""
     location = request["location"]
@@ -326,7 +326,7 @@ def _resolve_weather_location(country: str, report: MappingReport) -> Tuple[str,
     return member_name, coordinates
 
 
-def _resolve_building_code(home: dict, envelope_measure_types: set, country: str, report: MappingReport) -> str:
+def _resolve_building_code(home: Dict[str, Any], envelope_measure_types: Set[str], country: str, report: MappingReport) -> str:
     """Select the TABULA building code (spec section 4.2)."""
     dwelling_type = home["dwellingType"]
     tabula_type, type_note = _TABULA_TYPE_BY_DWELLING[dwelling_type]
@@ -355,12 +355,12 @@ def _resolve_building_code(home: dict, envelope_measure_types: set, country: str
     refurbishment_variant = max(state_variant, measure_variant)
 
     try:
-        selection = select_building_code(country, tabula_type, int(home["constructionYear"]), refurbishment_variant)
+        building_code_selection = select_building_code(country, tabula_type, int(home["constructionYear"]), refurbishment_variant)
     except TabulaLookupError as error:
         raise MappingError(str(error)) from error
-    note = f"TABULA code {selection.building_code}"
-    if selection.notes:
-        note += "; " + "; ".join(selection.notes)
+    note = f"TABULA code {building_code_selection.building_code}"
+    if building_code_selection.notes:
+        note += "; " + "; ".join(building_code_selection.notes)
         report.approximated("homeInputs.constructionYear", note)
     else:
         report.used("homeInputs.constructionYear", note)
@@ -372,10 +372,10 @@ def _resolve_building_code(home: dict, envelope_measure_types: set, country: str
                 f"homeInputs.{element}",
                 f"envelope detail folded into TABULA refurbishment variant .00{refurbishment_variant}",
             )
-    return selection.building_code
+    return building_code_selection.building_code
 
 
-def _resolve_lpg_household(home: dict, report: MappingReport) -> str:
+def _resolve_lpg_household(home: Dict[str, Any], report: MappingReport) -> str:
     """Map the occupant count to an LPG predefined household (spec section 4.4)."""
     occupants = int(home["occupants"])
     household = _LPG_HOUSEHOLD_BY_OCCUPANTS.get(occupants, _LPG_HOUSEHOLD_LARGE)
@@ -383,9 +383,9 @@ def _resolve_lpg_household(home: dict, report: MappingReport) -> str:
     return household
 
 
-def _resolve_pv(home: dict, report: MappingReport) -> Tuple[Optional[float], float, float]:
+def _resolve_pv(home: Dict[str, Any], report: MappingReport) -> Tuple[Optional[float], float, float]:
     """Resolve PV capacity, azimuth and tilt from the inventory (spec section 4.2)."""
-    pv: dict = home.get("pv") or {}
+    pv: Dict[str, Any] = home.get("pv") or {}
     kilowatt_peak = float(pv.get("kWp") or 0.0)
     capacity: Optional[float]
     if kilowatt_peak > 0:

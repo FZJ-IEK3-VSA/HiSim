@@ -9,7 +9,6 @@ from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.result_path_provider import ResultPathProviderSingleton
 
 
 @pytest.mark.system_setups
@@ -49,15 +48,14 @@ def test_basic_household_with_all_resultfiles() -> None:
         ]
     )
 
-    hisim_main.main(path, mysimpar)
-
-    # The simulation writes its artifacts to the directory reported by
-    # ResultPathProviderSingleton. SimulationParameters.result_directory starts
-    # empty and is only populated from the singleton inside run_all_timesteps()
-    # (see simulator.prepare_simulation_directory), so reading the singleton
-    # directly is the authoritative source for the actual output location.
-    result_directory = ResultPathProviderSingleton().get_result_directory_name()
-    assert result_directory is not None, "no result directory was configured for the run"
+    # main() returns the absolute path of the directory the simulation wrote
+    # its results to -- recorded on SimulationParameters.result_directory by
+    # Simulator.prepare_simulation_directory() during the run. Depending on this
+    # return value (the contract exposed by the system under test) instead of
+    # re-querying the mutable ResultPathProviderSingleton keeps the test coupled
+    # to main's interface rather than to shared global state.
+    result_directory = hisim_main.main(path, mysimpar)
+    assert result_directory, f"main() returned an empty result directory for {path}"
     results_dir = Path(result_directory)
     assert results_dir.is_dir(), f"result directory does not exist: {results_dir}"
     assert os.listdir(result_directory), f"result directory is empty: {results_dir}"
@@ -70,24 +68,21 @@ def test_basic_household_with_all_resultfiles() -> None:
 
     # --- CSV exports --------------------------------------------------------
     # EXPORT_TO_CSV + EXPORT_RESULTS_IN_ONE_FILE produce a single all_results.csv.
-    csv_files = list(results_dir.rglob("*.csv"))
-    assert csv_files, "no CSV result files produced"
+    assert any(results_dir.rglob("*.csv")), "no CSV result files produced"
     assert (results_dir / "all_results.csv").is_file(), (
         f"all_results.csv not found in result directory: {results_dir}"
     )
 
     # --- PKL exports --------------------------------------------------------
     # EXPORT_TO_PKL + EXPORT_RESULTS_IN_ONE_FILE produce a single all_results.pkl.
-    pkl_files = list(results_dir.rglob("*.pkl"))
-    assert pkl_files, "no PKL result files produced"
+    assert any(results_dir.rglob("*.pkl")), "no PKL result files produced"
     assert (results_dir / "all_results.pkl").is_file(), (
         f"all_results.pkl not found in result directory: {results_dir}"
     )
 
     # --- PDF report ---------------------------------------------------------
     # GENERATE_PDF_REPORT produces report.pdf in the result directory.
-    pdf_files = list(results_dir.rglob("*.pdf"))
-    assert pdf_files, "no PDF report produced"
+    assert any(results_dir.rglob("*.pdf")), "no PDF report produced"
     assert (results_dir / "report.pdf").is_file(), (
         f"report.pdf not found in result directory: {results_dir}"
     )
@@ -96,8 +91,7 @@ def test_basic_household_with_all_resultfiles() -> None:
     # WRITE_COMPONENT_CONFIGS_TO_JSON    -> simulation.json, scenario.json
     # WRITE_KPIS_TO_JSON                 -> all_kpis.json
     # WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER -> <building>_kpi_config_for_building_sizer.json
-    json_files = list(results_dir.rglob("*.json"))
-    assert json_files, "no JSON result files produced"
+    assert any(results_dir.rglob("*.json")), "no JSON result files produced"
 
     assert (results_dir / "simulation.json").is_file(), (
         f"simulation.json not found in result directory: {results_dir}"
@@ -109,8 +103,7 @@ def test_basic_household_with_all_resultfiles() -> None:
         f"all_kpis.json not found in result directory: {results_dir}"
     )
     # The building-sizer KPI config filename includes the building name, so use a glob.
-    building_sizer_jsons = list(results_dir.glob("*_kpi_config_for_building_sizer.json"))
-    assert building_sizer_jsons, (
+    assert any(results_dir.glob("*_kpi_config_for_building_sizer.json")), (
         f"no *_kpi_config_for_building_sizer.json found in result directory: {results_dir}"
     )
 
@@ -123,8 +116,7 @@ def test_basic_household_with_all_resultfiles() -> None:
     assert scenario_eval_dir.is_dir(), (
         f"scenario-evaluation output directory was not created at {scenario_eval_dir}"
     )
-    scenario_eval_csvs = list(scenario_eval_dir.rglob("*.csv"))
-    assert scenario_eval_csvs, "no CSV files in scenario-evaluation output directory"
+    assert any(scenario_eval_dir.rglob("*.csv")), "no CSV files in scenario-evaluation output directory"
     assert (scenario_eval_dir / "simulation.json").is_file(), (
         f"simulation.json not found in scenario-evaluation directory: {scenario_eval_dir}"
     )

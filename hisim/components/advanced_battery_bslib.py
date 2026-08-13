@@ -60,7 +60,7 @@ class BatteryConfig(ConfigBase):
     custom_pv_inverter_power_generic_in_watt: float
     #: battery capacity in in kWh
     custom_battery_capacity_generic_in_kilowatt_hour: float
-    #: amount of energy used to charge the car battery
+    #: amount of energy used to charge the battery
     charge_in_kwh: float
     #: amount of energy discharged from the battery
     discharge_in_kwh: float
@@ -159,9 +159,11 @@ class Battery(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: BatteryConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: Optional[DisplayConfig] = None,
     ):
         """Loads the parameters of the specified battery storage."""
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
         self.battery_config = config
 
         self.my_simulation_parameters = my_simulation_parameters
@@ -272,14 +274,18 @@ class Battery(Component):
         set_point_for_ac_battery_power_in_watt = stsv.get_input_value(self.loading_power_input_channel)
         state_of_charge = self.state.state_of_charge
 
-        # Simulate on timestep
-        results = self.ac_coupled_battery_object.simulate(
-            p_load=set_point_for_ac_battery_power_in_watt, soc=state_of_charge, dt=time_increment_in_seconds,
+        # Simulate on timestep.
+        # The bslib simulation returns how much of loading power input was actually used
+        # for charging and discharging and the resulting state of charge.
+        (
+            ac_battery_power_used_for_charging_or_discharging_in_watt,
+            dc_battery_power_used_for_charging_or_discharging_in_watt,
+            state_of_charge,
+        ) = self.ac_coupled_battery_object.simulate(
+            p_load=set_point_for_ac_battery_power_in_watt,
+            soc=state_of_charge,
+            dt=time_increment_in_seconds,
         )
-        # The bslib simulation returns how much of loading power input was actually used for charging and discharging and the resulting state of charge
-        ac_battery_power_used_for_charging_or_discharging_in_watt = results[0]
-        dc_battery_power_used_for_charging_or_discharging_in_watt = results[1]
-        state_of_charge = results[2]
 
         if state_of_charge < 0 and self.negative_soa_warning:
             log.warning("SOC of Battery cannot be negative. Check your configuration.")
@@ -334,9 +340,7 @@ class Battery(Component):
         """Returns investment cost, CO2 emissions and lifetime."""
 
         component_type = ComponentType.BATTERY
-        kpi_tag = (
-            KpiTagEnumClass.BATTERY
-        )
+        kpi_tag = KpiTagEnumClass.BATTERY
         unit = Units.KWH
         size_of_energy_system = config.custom_battery_capacity_generic_in_kilowatt_hour * 1e-3
 

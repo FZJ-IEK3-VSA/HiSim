@@ -67,8 +67,7 @@ def test_windturbine() -> None:
     timestep = 55535
     my_weather.i_simulate(timestep, stsv, False)
     my_windturbine.i_simulate(timestep, stsv, False)
-    log.information("windturbine electricity output [W]: " + str(
-        stsv.values[my_windturbine.electricity_output_channel.global_index]))
+    log.information(f"windturbine electricity output [W]: {stsv.values[my_windturbine.electricity_output_channel.global_index]}")
 
     # check windturbine electricity output [W] in timestep 55535
     assert stsv.values[my_windturbine.electricity_output_channel.global_index] == pytest.approx(18816.25770544808, rel=1e-9, abs=1e-6)

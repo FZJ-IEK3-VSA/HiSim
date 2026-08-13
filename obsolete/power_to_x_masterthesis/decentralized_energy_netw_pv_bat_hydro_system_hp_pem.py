@@ -84,17 +84,17 @@ def setup_function(
         my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
-    )
+    my_simulation_parameters.post_processing_options.extend([
+        PostProcessingOptions.PLOT_LINE,
+        PostProcessingOptions.PLOT_CARPET,
+        PostProcessingOptions.MAKE_NETWORK_CHARTS,
+        PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT,
+        PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT,
+        PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT,
+        PostProcessingOptions.GENERATE_PDF_REPORT,
+        PostProcessingOptions.COMPUTE_OPEX,
+        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION,
+    ])
 
     """
     my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.get_default_config()

@@ -11,6 +11,7 @@ import datetime
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -42,7 +43,7 @@ REAL_CONFIG = REPO_ROOT / "scripts" / "golden_config.json"
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
-def _minimal_config_dict() -> dict:
+def _minimal_config_dict() -> dict[str, Any]:
     return {
         "check_subdir": "golden-ref-check",
         "setups": [
@@ -60,7 +61,7 @@ def _minimal_config_dict() -> dict:
     }
 
 
-def _write_config(tmp_path: Path, data: dict) -> Path:
+def _write_config(tmp_path: Path, data: dict[str, Any]) -> Path:
     p = tmp_path / "config.json"
     p.write_text(json.dumps(data))
     return p

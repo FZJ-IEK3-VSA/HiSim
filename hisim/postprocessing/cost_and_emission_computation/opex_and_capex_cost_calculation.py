@@ -1,7 +1,7 @@
 """Calculate Opex and Capex for each component."""
 
 import os
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Optional, Any, Mapping
 from dataclasses import asdict
 import pandas as pd
 
@@ -15,11 +15,12 @@ from hisim.components.fuel_meter import FuelMeter
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
 from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
-from hisim.components.generic_heat_pump_modular import ModularHeatPump
 from hisim.components.simple_heat_source import SimpleHeatSource
 
 
-def prepare_row_for_writing_to_table(row_name: str, dict_with_values: dict):
+def prepare_row_for_writing_to_table(
+    row_name: str, dict_with_values: Mapping[str, Union[float, str, None]]
+) -> List[Union[str, float, None]]:
     """Write row to table."""
     value_list = list(dict_with_values.values())
     return [row_name] + value_list
@@ -27,13 +28,13 @@ def prepare_row_for_writing_to_table(row_name: str, dict_with_values: dict):
 
 def opex_calculation(
     components: List[ComponentWrapper],
-    all_outputs: List,
+    all_outputs: List[Any],
     postprocessing_results: pd.DataFrame,
     simulation_parameters: SimulationParameters,
-    building_objects_in_district_list: list,
-) -> List:
+    building_objects_in_district_list: list[str],
+) -> List[List[Union[str, float, None]]]:
     """Loops over all components and calls opex cost calculation."""
-    headline = [
+    headline: List[Union[str, float, None]] = [
         "Component",
         "Total energy consumption [kWh]",
         "CO2-emissions of energy consumption [kg]",
@@ -41,9 +42,9 @@ def opex_calculation(
         "Maintenance costs per year [EUR]",
     ]
 
-    opex_rows = []
+    opex_rows: List[List[Union[str, float, None]]] = []
 
-    total_summary: Dict[Dict[float]] = {
+    total_summary: Dict[str, Dict[str, float]] = {
         "all_components": {
             "consumption": 0.0,
             "co2_emissions": 0.0,
@@ -59,7 +60,7 @@ def opex_calculation(
     }
 
     for building_object in building_objects_in_district_list:
-        totals_per_building: Dict[Dict[float]] = {
+        totals_per_building: Dict[str, Dict[str, float]] = {
             "all_components": {
                 "consumption": 0.0,
                 "co2_emissions": 0.0,
@@ -74,7 +75,7 @@ def opex_calculation(
             },
         }
 
-        meter_rows: List = []
+        meter_rows: List[List[Union[str, float, None]]] = []
         for component in components:
             component_unwrapped = component.my_component
 
@@ -99,17 +100,19 @@ def opex_calculation(
                 energy_costs = round(opex.opex_energy_cost_in_euro, 2)
                 maintenance = round(opex.opex_maintenance_cost_in_euro, 2)
 
+                # Classify component once — both checks depend only on component_unwrapped,
+                # not on group, so they need not be re-evaluated inside the loop below.
+                is_heat_pump = isinstance(
+                    component_unwrapped,
+                    (HeatPumpHplib, MoreAdvancedHeatPumpHPLib, SimpleHeatSource),
+                )
+                is_meter = isinstance(
+                    component_unwrapped,
+                    (ElectricityMeter, GasMeter, FuelMeter, L2GenericEnergyManagementSystem),
+                )
+
                 # Add to total and subtotal
                 for group in ["all_components", "without_hp"]:
-                    is_heat_pump = isinstance(
-                        component_unwrapped,
-                        (HeatPumpHplib, ModularHeatPump, MoreAdvancedHeatPumpHPLib, SimpleHeatSource),
-                    )
-                    is_meter = isinstance(
-                        component_unwrapped,
-                        (ElectricityMeter, GasMeter, FuelMeter, L2GenericEnergyManagementSystem),
-                    )
-
                     # Skip heat pumps for "without_hp"
                     if group == "without_hp" and is_heat_pump:
                         continue
@@ -125,7 +128,7 @@ def opex_calculation(
                     totals_per_building[group]["maintenance"] += maintenance
 
                 # Write component opex values to table
-                component_row = [component_unwrapped.component_name, energy_consumption, co2, energy_costs, maintenance]
+                component_row: List[Union[str, float, None]] = [component_unwrapped.component_name, energy_consumption, co2, energy_costs, maintenance]
 
                 if not is_meter:
                     opex_rows.append(component_row)
@@ -135,7 +138,7 @@ def opex_calculation(
         if simulation_parameters.multiple_buildings:
             # Insert subtotal rows per building
 
-            only_heatpump_dict: dict = {
+            only_heatpump_dict: Dict[str, Optional[float]] = {
                 k: (
                     round(totals_per_building["all_components"][k] - totals_per_building["without_hp"].get(k, 0), 2)
                     if isinstance(totals_per_building["all_components"][k], (int, float))
@@ -168,13 +171,11 @@ def opex_calculation(
                 opex_rows.extend([meter_row])
 
         # Summarize total values
+        # Opex values are strictly float (None entries are filtered out above),
+        # so no defensive isinstance checks are needed here.
         for group in total_summary:  # pylint: disable=consider-using-dict-items
             for key in total_summary[group]:
-                value = totals_per_building[group][key]
-                if isinstance(value, float):
-                    value = round(value, 2)
-                elif isinstance(value, str):
-                    continue
+                value = round(totals_per_building[group][key], 2)
                 total_summary[group][key] += value
 
     # Final total rows
@@ -218,14 +219,54 @@ def opex_calculation(
     return [headline] + opex_rows
 
 
+def _accumulate_capex(target: Dict[str, Optional[float]], key: str, amount: float) -> None:
+    """Add ``amount`` to ``target[key]``, failing loudly if the current total is ``None``.
+
+    The capex summary dictionaries mix always-float keys (investment, co2, ...)
+    with always-None keys (subsidy, lifetime) under a shared ``Optional[float]``
+    annotation. Accumulation only ever targets the float keys, so a ``None``
+    value here signals a broken invariant; raise instead of silently attempting
+    ``None + amount`` (which would raise a confusing ``TypeError``).
+    """
+    current = target[key]
+    if current is None:
+        raise ValueError(f"Cannot accumulate capex value for key '{key}': current total is None.")
+    target[key] = current + amount
+
+
+def _capex_only_heatpump(
+    all_components: Mapping[str, Optional[float]], without_hp: Mapping[str, Optional[float]]
+) -> Dict[str, Optional[float]]:
+    """Compute heat-pump-only capex totals (``all_components`` minus ``without_hp``).
+
+    Both mappings share the same keys and the same per-key None/float pattern, so
+    a mismatch (one value ``None`` and the other a number) signals a broken
+    invariant and is reported loudly instead of being silently coerced.
+    """
+    only_heatpump: Dict[str, Optional[float]] = {}
+    for key in all_components:
+        all_value = all_components[key]
+        without_value = without_hp[key]
+        if all_value is None and without_value is None:
+            only_heatpump[key] = None
+        elif isinstance(all_value, (int, float)) and isinstance(without_value, (int, float)):
+            only_heatpump[key] = round(all_value - without_value, 2)
+        else:
+            raise ValueError(
+                f"Inconsistent capex totals for '{key}': "
+                f"all_components={all_value!r}, without_hp={without_value!r}."
+            )
+    return only_heatpump
+
+
 def capex_calculation(
     components: List[ComponentWrapper],
     simulation_parameters: SimulationParameters,
-    building_objects_in_district_list: list,
-) -> List:
+    building_objects_in_district_list: list[str],
+) -> List[List[Union[str, float, None]]]:
     """Loops over all components and returns capex summary table."""
 
-    headline = [
+    headline: List[Union[str, float, None]] = [
         "Component",
         "Investment [EUR]",
         "Device CO2-footprint [kg]",
@@ -237,9 +278,9 @@ def capex_calculation(
         "Device CO2-footprint for simulated period [kg]",
     ]
 
-    capex_rows = []
+    capex_rows: List[List[Union[str, float, None]]] = []
 
-    total_summary: Dict[Dict[Union[float, str]]] = {
+    total_summary: Dict[str, Dict[str, Optional[float]]] = {
         "all_components": {
             "investment": 0.0,
             "co2": 0.0,
@@ -263,7 +304,7 @@ def capex_calculation(
     }
 
     for building_object in building_objects_in_district_list:
-        totals_per_building: Dict[Dict[Union[float, str]]] = {
+        totals_per_building: Dict[str, Dict[str, Optional[float]]] = {
             "all_components": {
                 "investment": 0.0,
                 "co2": 0.0,
@@ -321,15 +362,16 @@ def capex_calculation(
                 for group in ["all_components", "without_hp"]:
                     if group == "without_hp" and isinstance(
                         component_unwrapped,
-                        (HeatPumpHplib, ModularHeatPump, MoreAdvancedHeatPumpHPLib, SimpleHeatSource),
+                        (HeatPumpHplib, MoreAdvancedHeatPumpHPLib, SimpleHeatSource),
                     ):
                         continue
-                    totals_per_building[group]["investment"] += investment
-                    totals_per_building[group]["co2"] += co2
-                    totals_per_building[group]["rest_investment"] += rest_investment
-                    totals_per_building[group]["investment_period"] += investment_period
-                    totals_per_building[group]["rest_investment_period"] += rest_investment_period
-                    totals_per_building[group]["co2_period"] += co2_period
+                    group_totals = totals_per_building[group]
+                    _accumulate_capex(group_totals, "investment", investment)
+                    _accumulate_capex(group_totals, "co2", co2)
+                    _accumulate_capex(group_totals, "rest_investment", rest_investment)
+                    _accumulate_capex(group_totals, "investment_period", investment_period)
+                    _accumulate_capex(group_totals, "rest_investment_period", rest_investment_period)
+                    _accumulate_capex(group_totals, "co2_period", co2_period)
 
                 capex_rows.append(
                     [
@@ -348,14 +390,9 @@ def capex_calculation(
         if simulation_parameters.multiple_buildings:
             # Insert subtotal rows per building
 
-            only_heatpump_dict = {
-                k: (
-                    round(totals_per_building["all_components"][k] - totals_per_building["without_hp"].get(k, 0), 2)
-                    if isinstance(totals_per_building["all_components"][k], (int, float))
-                    else None
-                )
-                for k in totals_per_building["all_components"]
-            }
+            only_heatpump_dict: Dict[str, Optional[float]] = _capex_only_heatpump(
+                totals_per_building["all_components"], totals_per_building["without_hp"]
+            )
             capex_rows.extend(
                 [
                     [] * len(headline),
@@ -386,17 +423,12 @@ def capex_calculation(
                     value = round(value, 2)
                 else:
                     continue
-                total_summary[group][key] += value
+                _accumulate_capex(total_summary[group], key, value)
 
     # Final total rows
-    only_heatpump_dict = {
-        k: (
-            round(total_summary["all_components"][k] - total_summary["without_hp"].get(k, 0), 2)
-            if isinstance(total_summary["all_components"][k], (int, float))
-            else None
-        )
-        for k in total_summary["all_components"]
-    }
+    only_heatpump_dict = _capex_only_heatpump(
+        total_summary["all_components"], total_summary["without_hp"]
+    )
 
     capex_rows.extend(
         [

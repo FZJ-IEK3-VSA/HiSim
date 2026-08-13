@@ -7,11 +7,12 @@ Skipped on Windows; run these under WSL / Linux CI. Uses a trivial in-process ru
 import os
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 pytestmark = [
-    pytest.mark.harness,
+    pytest.mark.hpcharness,
     pytest.mark.skipif(os.name != "posix", reason="warm pool needs POSIX fork"),
 ]
 
@@ -54,7 +55,7 @@ def pool_fixture(tmp_path):
     spawner.shutdown()
 
 
-def _job(tmp_path, job_id, attempt=1, **payload):
+def _job(tmp_path: Path, job_id: int, attempt: int = 1, **payload: Any) -> dict[str, Any]:
     """Build a lease-shaped job dict with staging/result dirs under ``tmp_path``."""
     staging = tmp_path / ".staging" / f"{job_id:06d}_t.attempt-{attempt}"
     return {"id": job_id, "attempt": attempt, "payload": payload,

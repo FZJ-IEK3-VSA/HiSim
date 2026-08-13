@@ -3,6 +3,7 @@
 import copy
 import json
 from pathlib import Path
+from typing import Any, Callable
 
 import pytest
 
@@ -22,7 +23,7 @@ def _load_example(name: str) -> dict:
     return data
 
 
-@pytest.fixture(name="example_gas")
+@pytest.fixture(name="example_gas", scope="module")
 def fixture_example_gas() -> dict:
     """Example 1: gas-heated 1968 detached house getting heat pump + PV + roof insulation."""
     return _load_example("example_1_gas_to_heatpump_pv_insulation.json")
@@ -31,7 +32,7 @@ def fixture_example_gas() -> dict:
 def test_example_1_base_variant_maps_to_gas_setup(example_gas: dict) -> None:
     """The baseline of example 1 selects the gas setup and the unrenovated 1968 SFH archetype."""
     parsed = parse_translator_input(example_gas)
-    result = translate(parsed.request, "base", parsed.job_id)
+    result = translate(parsed.request, variant="base", job_id=parsed.job_id)
 
     assert result.setup_filename == "household_gas_building_sizer.py"
     energy_system = result.modular_household_config.energy_system_config_
@@ -57,7 +58,7 @@ def test_example_1_base_variant_maps_to_gas_setup(example_gas: dict) -> None:
 def test_example_1_measures_variant_maps_to_heatpump_setup(example_gas: dict) -> None:
     """With measures applied, example 1 selects the heat-pump setup, PV 8 kWp and variant .002."""
     parsed = parse_translator_input(example_gas)
-    result = translate(parsed.request, "measures", parsed.job_id)
+    result = translate(parsed.request, variant="measures", job_id=parsed.job_id)
 
     assert result.setup_filename == "household_heatpump_building_sizer.py"
     energy_system = result.modular_household_config.energy_system_config_
@@ -74,8 +75,8 @@ def test_example_1_measures_variant_maps_to_heatpump_setup(example_gas: dict) ->
 def test_mapping_report_covers_every_request_leaf(example_gas: dict) -> None:
     """Every leaf of the request appears in the report; statuses are from the allowed set."""
     parsed = parse_translator_input(example_gas)
-    result = translate(parsed.request, "measures", parsed.job_id)
-    report = build_mapping_report_dict(result, parsed.job_id, "measures")
+    result = translate(parsed.request, variant="measures", job_id=parsed.job_id)
+    report = build_mapping_report_dict(result, variant="measures", job_id=parsed.job_id)
 
     paths = {entry["path"] for entry in report["fields"]}
     assert {entry["status"] for entry in report["fields"]} <= {"used", "approximated", "defaulted", "ignored"}
@@ -103,11 +104,11 @@ def test_solar_thermal_selects_dedicated_setup_or_is_dropped(example_gas: dict) 
     parsed = parse_translator_input(example_gas)
     request = copy.deepcopy(parsed.request)
     request["homeInputs"]["solarThermal"]["mode"] = "hot_water"
-    combined = translate(request, "base", "job")
+    combined = translate(request, variant="base", job_id="job")
     assert combined.setup_filename == "household_gas_solar_thermal_building_sizer.py"
 
     request["homeInputs"]["heating"]["primary"] = "oil"
-    dropped = translate(request, "base", "job")
+    dropped = translate(request, variant="base", job_id="job")
     assert dropped.setup_filename == "household_oil_building_sizer.py"
     solar_entry = next(e for e in dropped.report.to_list() if e["path"] == "homeInputs.solarThermal.mode")
     assert solar_entry["status"] == "ignored"
@@ -128,7 +129,7 @@ def test_setup_selection_table(example_gas: dict, primary: str, expected_setup: 
     parsed = parse_translator_input(example_gas)
     request = copy.deepcopy(parsed.request)
     request["homeInputs"]["heating"]["primary"] = primary
-    assert translate(request, "base", "job").setup_filename == expected_setup
+    assert translate(request, variant="base", job_id="job").setup_filename == expected_setup
 
 
 @pytest.mark.parametrize(
@@ -146,7 +147,7 @@ def test_occupancy_lookup_table(example_gas: dict, occupants: int, expected: str
     parsed = parse_translator_input(example_gas)
     request = copy.deepcopy(parsed.request)
     request["homeInputs"]["occupants"] = occupants
-    result = translate(request, "base", "job")
+    result = translate(request, variant="base", job_id="job")
     archetype = result.modular_household_config.archetype_config_
     assert archetype is not None and archetype.lpg_households == [expected]
 
@@ -158,7 +159,7 @@ def test_east_west_orientation_and_apartment_archetype(example_gas: dict) -> Non
     request["homeInputs"]["pv"] = {"kWp": 5, "orientation": "east_west"}
     request["homeInputs"]["dwellingType"] = "apartment"
     request["homeInputs"]["constructionYear"] = 1985
-    result = translate(request, "base", "job")
+    result = translate(request, variant="base", job_id="job")
     archetype = result.modular_household_config.archetype_config_
     assert archetype is not None
     assert archetype.pv_azimuth == 90.0
@@ -198,7 +199,7 @@ def test_tabula_fallbacks_for_missing_bands_and_variants() -> None:
     ],
     ids=["job-id", "url", "measures", "primary", "contract-version", "pp-option"],
 )
-def test_validation_errors(example_gas: dict, mutate, match: str) -> None:
+def test_validation_errors(example_gas: dict, mutate: Callable[[dict[str, Any]], Any], match: str) -> None:
     """Structural problems raise RequestValidationError naming the offending field."""
     broken = copy.deepcopy(example_gas)
     mutate(broken)
@@ -212,4 +213,4 @@ def test_unknown_country_raises_mapping_error(example_gas: dict) -> None:
     request = copy.deepcopy(parsed.request)
     request["location"]["countryCode"] = "ZZ"
     with pytest.raises(RequestValidationError, match="ZZ"):
-        translate(request, "base", "job")
+        translate(request, variant="base", job_id="job")

@@ -18,6 +18,7 @@ import pytest
 
 from hisim import component as cp
 from hisim import loadtypes as lt
+from hisim.simulationparameters import SimulationParameters
 from hisim.components.fuel_meter import FuelMeter, FuelMeterConfig, FuelMeterState
 
 # Heating-oil density expressed in kg per liter. The stored field
@@ -111,3 +112,27 @@ def test_fuel_meter_state_self_copy_preserves_value_and_returns_new_instance(
     assert copy is not state
     assert isinstance(copy, FuelMeterState)
     assert copy.cumulative_consumption_in_watt_hour == consumption_in_watt_hour
+
+
+def test_fuel_meter_display_config_not_shared() -> None:
+    """Two FuelMeter instances must not share a mutable DisplayConfig default."""
+    seconds_per_timestep = 60
+    my_simulation_parameters = SimulationParameters.one_day_only(
+        2017, seconds_per_timestep
+    )
+    config = FuelMeterConfig.get_fuel_meter_default_config()
+
+    meter_a = FuelMeter(
+        my_simulation_parameters=my_simulation_parameters, config=config
+    )
+    meter_b = FuelMeter(
+        my_simulation_parameters=my_simulation_parameters, config=config
+    )
+
+    assert meter_a.my_display_config is not meter_b.my_display_config
+    assert isinstance(meter_a.my_display_config, cp.DisplayConfig)
+    assert isinstance(meter_b.my_display_config, cp.DisplayConfig)
+
+    # mutating one must not affect the other
+    meter_a.my_display_config.pretty_name = "meter_a"
+    assert meter_b.my_display_config.pretty_name is None

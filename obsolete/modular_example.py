@@ -126,7 +126,7 @@ def setup_function(
     occupancy_profile_utsp = arche_type_config_.occupancy_profile_utsp
     occupancy_profile = arche_type_config_.occupancy_profile
     building_code = arche_type_config_.building_code
-    floor_area = arche_type_config_.absolute_conditioned_floor_area
+    floor_area = arche_type_config_.absolute_conditioned_floor_area_in_m2
     water_heating_system_installed = arche_type_config_.water_heating_system_installed  # Electricity, Hydrogen or False
     heating_system_installed = arche_type_config_.heating_system_installed
     transportation_device_set = arche_type_config_.transportation_device_set

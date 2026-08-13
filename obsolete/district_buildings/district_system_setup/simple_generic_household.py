@@ -4,6 +4,7 @@
 
 from typing import Optional, Union, List
 from dataclasses import dataclass
+from HiSim.obsolete.webtool_old import generic_heat_pump_modular
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import Households
 from utspclient.helpers.lpgpythonbindings import JsonReference
@@ -18,7 +19,6 @@ from hisim.components import (
     controller_l2_energy_management_system,
     simple_water_storage,
     heat_distribution_system,
-    generic_heat_pump_modular,
     generic_hot_water_storage_modular,
     controller_l1_heatpump,
     electricity_meter,
@@ -315,7 +315,7 @@ class GenericBuilding(cp.Component):
         my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
 
         # Build Heat Distribution System
-        my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+        my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
             building_name=building_name,

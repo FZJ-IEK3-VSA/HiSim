@@ -7,4 +7,4 @@ file, runs the simulation and submits selected result files to a server via REST
 See ``spec.md`` in this package for the full specification.
 """
 
-TRANSLATOR_VERSION = "1.0.0"
+TRANSLATOR_VERSION: str = "1.0.0"

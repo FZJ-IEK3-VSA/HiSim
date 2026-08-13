@@ -1,7 +1,7 @@
 """Unit tests for the RenoVisor uploader: multipart submission, retries, file matching (spec section 7)."""
 
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
 import pytest
 import requests
@@ -18,21 +18,22 @@ from hisim.renovisor.uploader import (
 pytestmark = pytest.mark.base
 
 
-class FakeResponse:
+class FakeResponse(requests.Response):
     """Minimal stand-in for requests.Response."""
 
     def __init__(self, status_code: int) -> None:
         """Store the status code to report."""
+        super().__init__()
         self.status_code = status_code
 
 
 class FakePoster:
     """Callable that returns scripted responses/exceptions and records every call."""
 
-    def __init__(self, outcomes: List[Any]) -> None:
+    def __init__(self, outcomes: list[int | Exception]) -> None:
         """Script the outcomes; an Exception instance is raised, an int becomes a response."""
-        self.outcomes = list(outcomes)
-        self.calls: List[dict] = []
+        self.outcomes: list[int | Exception] = list(outcomes)
+        self.calls: list[dict[str, Any]] = []
 
     def __call__(self, url: str, **kwargs: Any) -> FakeResponse:
         """Record the call and produce the next scripted outcome."""
@@ -48,7 +49,7 @@ class SleepRecorder:
 
     def __init__(self) -> None:
         """Start with no recorded sleeps."""
-        self.delays: List[float] = []
+        self.delays: list[float] = []
 
     def __call__(self, seconds: float) -> None:
         """Record the requested delay."""

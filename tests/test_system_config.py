@@ -8,8 +8,12 @@ from hisim.building_sizer_utils.interface_configs.system_config import (
 from hisim.loadtypes import ComponentType, HeatingSystems
 
 
-# Mapping of factory classmethod name -> expected HeatingSystems value.
-# Pinned from the public contract consumed by modular_household_config.py.
+# Mapping of deprecated wrapper classmethod name -> expected HeatingSystems value.
+# The wrappers now delegate to get_default_config; these tests pin their
+# backward-compatible public contract as deprecated aliases of the generic factory.
+# The wrappers emit a DeprecationWarning on every call, so the tests below that
+# exercise them without pytest.warns carry ``@pytest.mark.filterwarnings("ignore::DeprecationWarning")``
+# to keep their output clean and stay robust to a future ``filterwarnings = error``.
 FACTORY_HEATING_SYSTEMS: dict[str, HeatingSystems] = {
     "get_default_config_for_energy_system_gas": HeatingSystems.GAS_HEATING,
     "get_default_config_for_energy_system_oil": HeatingSystems.OIL_HEATING,
@@ -35,6 +39,7 @@ def test_default_constructor() -> None:
 
 
 @pytest.mark.base
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.parametrize("factory_name,expected_heating_system", list(FACTORY_HEATING_SYSTEMS.items()))
 def test_factory_heating_system(factory_name: str, expected_heating_system: HeatingSystems) -> None:
     """Each factory returns the documented HeatingSystems value."""
@@ -44,6 +49,7 @@ def test_factory_heating_system(factory_name: str, expected_heating_system: Heat
 
 
 @pytest.mark.base
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.parametrize("factory_name", list(FACTORY_HEATING_SYSTEMS.keys()))
 def test_factory_shared_non_heating_defaults(factory_name: str) -> None:
     """Only heating_system varies across factories; the other three fields are invariant."""
@@ -55,6 +61,7 @@ def test_factory_shared_non_heating_defaults(factory_name: str) -> None:
 
 
 @pytest.mark.base
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.parametrize("factory_name", list(FACTORY_HEATING_SYSTEMS.keys()))
 def test_factory_instance_independence(factory_name: str) -> None:
     """Two calls to the same factory return equal but distinct objects (no shared mutable default).
@@ -102,7 +109,7 @@ def test_share_of_maximum_pv_potential_boundary_values(value: float) -> None:
 @pytest.mark.base
 def test_round_trip_via_dataclass_json() -> None:
     """to_dict / from_dict round-trip preserves the @dataclass_json contract."""
-    cfg: EnergySystemConfig = EnergySystemConfig.get_default_config_for_energy_system_gas()
+    cfg: EnergySystemConfig = EnergySystemConfig.get_default_config(HeatingSystems.GAS_HEATING)
     # to_dict/from_dict are injected by the @dataclass_json decorator, which mypy cannot see.
     restored: EnergySystemConfig = EnergySystemConfig.from_dict(cfg.to_dict())  # type: ignore[attr-defined]
     assert restored == cfg
@@ -130,6 +137,7 @@ def test_partial_override_preserves_other_defaults() -> None:
 
 
 @pytest.mark.base
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_factory_heating_systems_are_all_distinct() -> None:
     """The ten factories must produce ten distinct HeatingSystems values.
 
@@ -142,3 +150,90 @@ def test_factory_heating_systems_are_all_distinct() -> None:
     }
     assert len(produced) == len(FACTORY_HEATING_SYSTEMS) == 10
     assert produced == set(FACTORY_HEATING_SYSTEMS.values())
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("heating_system", list(HeatingSystems))
+def test_get_default_config_sets_only_heating_system(
+    heating_system: HeatingSystems,
+) -> None:
+    """``get_default_config`` sets ``heating_system`` and keeps the other three fields at their dataclass defaults.
+
+    This is the parameterized factory that lets callers select a default by
+    iterating over :class:`HeatingSystems` (the motivation for GitLab issue
+    #1033); every enum member must be accepted.
+    """
+    cfg: EnergySystemConfig = EnergySystemConfig.get_default_config(heating_system)
+    assert cfg.heating_system == heating_system
+    assert cfg.heat_distribution_system == ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING
+    assert cfg.share_of_maximum_pv_potential == 1.0
+    assert cfg.use_battery_and_ems is True
+
+
+@pytest.mark.base
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@pytest.mark.parametrize(
+    "factory_name,expected_heating_system", list(FACTORY_HEATING_SYSTEMS.items())
+)
+def test_factory_equivalent_to_get_default_config(
+    factory_name: str, expected_heating_system: HeatingSystems
+) -> None:
+    """Each deprecated wrapper delegates to ``get_default_config`` and returns the same config.
+
+    The ``get_default_config_for_energy_system_*`` methods are deprecated aliases
+    that must return exactly what ``get_default_config(<their heating system>)``
+    returns, preserving their public contract while steering callers to the open,
+    parameterised factory.
+    """
+    factory = getattr(EnergySystemConfig, factory_name)
+    assert factory() == EnergySystemConfig.get_default_config(expected_heating_system)
+
+
+@pytest.mark.base
+@pytest.mark.parametrize("factory_name", list(FACTORY_HEATING_SYSTEMS.keys()))
+def test_factory_wrapper_emits_deprecation_warning(factory_name: str) -> None:
+    """Each ``get_default_config_for_energy_system_*`` wrapper warns and still returns a valid config.
+
+    The wrappers are deprecated aliases of :meth:`get_default_config` (per GitLab
+    issue #1749): they must emit a visible ``DeprecationWarning`` steering callers to
+    the parameterised factory, while continuing to return the correct config so the
+    public contract is preserved (KB-5928: deprecate public classmethods before removal).
+    """
+    factory = getattr(EnergySystemConfig, factory_name)
+    with pytest.warns(DeprecationWarning, match="is deprecated; use") as record:
+        cfg: EnergySystemConfig = factory()
+    assert cfg.heating_system == FACTORY_HEATING_SYSTEMS[factory_name]
+    # The warning must signal the removal timeline so callers can plan migration.
+    assert "Scheduled for removal in a future release." in str(record[0].message)
+
+
+@pytest.mark.base
+def test_get_default_config_instance_independence() -> None:
+    """Each call to ``get_default_config`` returns a fresh, independent instance."""
+    a: EnergySystemConfig = EnergySystemConfig.get_default_config(HeatingSystems.GAS_HEATING)
+    b: EnergySystemConfig = EnergySystemConfig.get_default_config(HeatingSystems.GAS_HEATING)
+    assert a == b
+    assert a is not b
+    a.share_of_maximum_pv_potential = 0.5
+    a.use_battery_and_ems = False
+    assert b.share_of_maximum_pv_potential == 1.0
+    assert b.use_battery_and_ems is True
+
+
+@pytest.mark.base
+def test_constructor_rejects_positional_arguments() -> None:
+    """All EnergySystemConfig fields are keyword-only.
+
+    Positional construction is rejected so that the bool trap of passing a
+    trailing ``False`` (which silently disables both battery and EMS) cannot
+    occur: every caller must name ``use_battery_and_ems`` explicitly.
+    """
+    with pytest.raises(TypeError):
+        EnergySystemConfig(HeatingSystems.GAS_HEATING)  # type: ignore[misc]
+    with pytest.raises(TypeError):
+        EnergySystemConfig(  # type: ignore[misc]
+            HeatingSystems.GAS_HEATING,
+            ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING,
+            0.5,
+            False,
+        )

@@ -200,7 +200,7 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     results_heating = my_sim.results_data_frame["IdealizedElectricHeater - HeatingPowerDelivered [Heating - W]"]
 
     sum_heating_in_watt_timestep = sum(results_heating)
-    log.information("sum heating [W*timestep] " + str(sum_heating_in_watt_timestep))
+    log.information(f"sum heating [W*timestep] {sum_heating_in_watt_timestep}")
     timestep_factor = seconds_per_timestep / 3600
     sum_heating_in_watt_hour = sum_heating_in_watt_timestep * timestep_factor
     sum_heating_in_kilowatt_hour = sum_heating_in_watt_hour / 1000
@@ -208,7 +208,7 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     # Test annual floor related heating demand
 
     energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2 = (
-        my_building.my_building_information.buildingdata_ref["q_h_nd"].values[0]
+        my_building.my_building_information.reference_heating_demand_per_m2
     )
 
     energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2 = (
@@ -220,25 +220,22 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
         * 100
     )
     log.information(
-        "energy need for heating from tabula [kWh/(a*m2)] "
-        + str(energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2)
+        f"energy need for heating from tabula [kWh/(a*m2)] {energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2}"
     )
     log.information(
-        "energy need for heating from idealized electric heater [kWh/(a*m2)] "
-        + str(energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2)
+        f"energy need for heating from idealized electric heater [kWh/(a*m2)] {energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2}"
     )
-    log.information("Deviation of both values " + f"{deviation_of_both_values_in_percent}" + " %")
+    log.information(f"Deviation of both values {deviation_of_both_values_in_percent} %")
 
     # The comparison below currently diverges from the TABULA reference because heating by
     # devices was integrated in the internal heat gains. See issue #637: a human must confirm
     # whether the production code should be fixed or the tolerance widened. The test is marked
     # xfail so it keeps exercising this assertion without breaking CI while this is unresolved.
     log.information(
-        "This test fails now because heating by devices was integrated in internal heat gains.\n"
-        + "TODO: Find out why heating demands are so different. Compare annual solar and internal gains as well as heat transfer through transmission and ventilation "
-        + "with TABULA reference values.\n"
-        + "See TABULA calculation method here: "
-        + "https://www.iwu.de/fileadmin/publikationen/gebaeudebestand/episcope/2013_IWU_LogaEtDiefenbach_TABULA-Calculation-Method.pdf"
+        """This test fails now because heating by devices was integrated in internal heat gains.
+TODO: Find out why heating demands are so different. Compare annual solar and internal gains as well as
+heat transfer through transmission and ventilation with TABULA reference values.
+See TABULA calculation method here: https://www.iwu.de/fileadmin/publikationen/gebaeudebestand/episcope/2013_IWU_LogaEtDiefenbach_TABULA-Calculation-Method.pdf"""
     )
 
     # test whether tabula energy demand for heating is equal to energy demand for heating generated from idealized electric heater with a tolerance of 10%

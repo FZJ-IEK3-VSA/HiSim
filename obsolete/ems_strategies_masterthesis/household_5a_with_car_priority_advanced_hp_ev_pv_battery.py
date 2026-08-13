@@ -5,6 +5,7 @@
 from dataclasses import dataclass
 from typing import Any, List, Optional
 
+from HiSim.obsolete.webtool_old import generic_heat_pump_modular
 from dataclasses_json import dataclass_json
 from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 from utspclient.helpers.lpgdata import (
@@ -27,7 +28,6 @@ from hisim.components import (
     controller_l2_energy_management_system,
     electricity_meter,
     generic_car,
-    generic_heat_pump_modular,
     generic_pv_system,
     heat_distribution_system,
     loadprofilegenerator_utsp_connector,
@@ -135,7 +135,7 @@ class HouseholdAdvancedHpEvPvBatteryConfig(SystemSetupConfigBase):
             building_config=building_config,
             hds_controller_config=hds_controller_config,
             hds_config=(
-                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+                heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                     heating_system=hds_controller_config.heating_system,

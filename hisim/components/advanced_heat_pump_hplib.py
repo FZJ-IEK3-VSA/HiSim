@@ -8,7 +8,7 @@ import hashlib
 # clean
 import importlib
 from dataclasses import dataclass
-from typing import Any, List, Optional, Dict
+from typing import Any, ClassVar, Dict, List, Optional
 
 import pandas as pd
 from dataclass_wizard import JSONWizard
@@ -58,10 +58,14 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class HeatPumpHplibConfig(ConfigBase):
-    """HeatPumpHPLibConfig."""
+    """Configuration for the advanced heat-pump component (hplib).
+
+    Holds model selection, operating setpoints, cycling constraints, and
+    optional economic/emission parameters used by `HeatPumpHplib`.
+    """
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return HeatPumpHplib.get_full_classname()
 
@@ -159,48 +163,64 @@ class HeatPumpHplib(Component):
     """
 
     # Inputs
-    OnOffSwitch = "OnOffSwitch"  # 1 = on, 0 = 0ff
-    TemperatureInputPrimary = "TemperatureInputPrimary"  # °C
-    TemperatureInputSecondary = "TemperatureInputSecondary"  # °C
-    TemperatureAmbient = "TemperatureAmbient"  # °C
+    OnOffSwitch: ClassVar[str] = "OnOffSwitch"  # 1 = on, 0 = 0ff
+    TemperatureInputPrimary: ClassVar[str] = "TemperatureInputPrimary"  # °C
+    TemperatureInputSecondary: ClassVar[str] = "TemperatureInputSecondary"  # °C
+    TemperatureAmbient: ClassVar[str] = "TemperatureAmbient"  # °C
 
     # Outputs
-    ThermalOutputPower = "ThermalOutputPower"  # W
-    ThermalOutputEnergy = "ThermalOutputEnergy"  # Wh
-    ElectricalInputPower = "ElectricalInputPower"  # W
-    ElectricalInputPowerForHeating = "ElectricalInputPowerForHeating"  # W
-    ElectricalInputPowerForCooling = "ElectricalInputPowerForCooling"  # W
-    ElectricalInputEnergy = "ElectricalInputEnergy"  # Wh
-    COP = "COP"  # -
-    EER = "EER"  # -
-    TemperatureOutput = "TemperatureOutput"  # °C
-    TemperatureInputWarmWater = "TemperatureInputWarmWater"  # °C
-    MassFlowOutput = "MassFlowOutput"  # kg/s
-    TimeOnHeating = "TimeOnHeating"  # s
-    TimeOnCooling = "TimeOnCooling"  # s
-    TimeOff = "TimeOff"  # s
+    ThermalOutputPower: ClassVar[str] = "ThermalOutputPower"  # W
+    ThermalOutputEnergy: ClassVar[str] = "ThermalOutputEnergy"  # Wh
+    ElectricalInputPower: ClassVar[str] = "ElectricalInputPower"  # W
+    ElectricalInputPowerForHeating: ClassVar[str] = "ElectricalInputPowerForHeating"  # W
+    ElectricalInputPowerForCooling: ClassVar[str] = "ElectricalInputPowerForCooling"  # W
+    ElectricalInputEnergy: ClassVar[str] = "ElectricalInputEnergy"  # Wh
+    COP: ClassVar[str] = "COP"  # -
+    EER: ClassVar[str] = "EER"  # -
+    TemperatureOutput: ClassVar[str] = "TemperatureOutput"  # °C
+    TemperatureInputWarmWater: ClassVar[str] = "TemperatureInputWarmWater"  # °C
+    MassFlowOutput: ClassVar[str] = "MassFlowOutput"  # kg/s
+    TimeOnHeating: ClassVar[str] = "TimeOnHeating"  # s
+    TimeOnCooling: ClassVar[str] = "TimeOnCooling"  # s
+    TimeOff: ClassVar[str] = "TimeOff"  # s
 
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatPumpHplibConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
-    ):
-        """Loads the parameters of the specified heat pump.
+        my_display_config: Optional[DisplayConfig] = None,
+    ) -> None:
+        """Load the parameters of the specified heat pump from the hplib database.
 
-        model : str
-            Name of the heat pump model or "Generic".
-        group_id : numeric, default 0
-            only for model "Generic": Group ID for subtype of heat pump. [1-6].
-        t_in : numeric, default 0
-            only for model "Generic": Input temperature :math:`T` at primary side of the heat pump. [°C]
-        t_out_val : numeric, default 0
-            only for model "Generic": Output temperature :math:`T` at secondary side of the heat pump. [°C]
-        p_th_set : numeric, default 0
-            only for model "Generic": Thermal output power at setpoint t_in, t_out. [W]
+        Parameters
+        ----------
+        my_simulation_parameters : SimulationParameters
+            Global simulation parameters (time step, start/end, etc.).
+        config : HeatPumpHplibConfig
+            Heat-pump configuration. The model-selection and operating-setpoint
+            fields used to look up the hplib parameters live on this config:
+
+            - ``model`` (str): heat-pump model name or ``"Generic"``.
+            - ``group_id`` (int, default ``1``): only for ``"Generic"``;
+              group ID for the subtype of heat pump, range [1-6].
+            - ``heating_reference_temperature_in_celsius`` (Quantity[float, °C],
+              default ``-7.0``): only for ``"Generic"``; input temperature
+              :math:`T` at the primary side of the heat pump.
+            - ``flow_temperature_in_celsius`` (Quantity[float, °C],
+              default ``52``): only for ``"Generic"``; output temperature
+              :math:`T` at the secondary side of the heat pump.
+            - ``set_thermal_output_power_in_watt`` (Quantity[float, W],
+              default ``8000``): only for ``"Generic"``; thermal output power
+              at the setpoint defined by the primary/secondary temperatures.
+
+        my_display_config : DisplayConfig, optional
+            Display configuration for the component. Defaults to a new
+            ``DisplayConfig`` when not provided.
 
         """
 
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()
@@ -211,27 +231,27 @@ class HeatPumpHplib(Component):
             my_display_config=my_display_config,
         )
         # caching for hplib simulation
-        self.calculation_cache: Dict = {}
+        self.hplib_simulation_cache: Dict[str, Any] = {}
 
         self.model = config.model
 
         self.group_id = config.group_id
 
-        self.t_in = int(config.heating_reference_temperature_in_celsius.value)
+        self.heating_reference_temperature_in_celsius = int(config.heating_reference_temperature_in_celsius.value)
 
-        self.t_out_val = int(config.flow_temperature_in_celsius.value)
+        self.flow_temperature_in_celsius = int(config.flow_temperature_in_celsius.value)
 
-        self.p_th_set = int(config.set_thermal_output_power_in_watt.value)
+        self.set_thermal_output_power_in_watt = int(config.set_thermal_output_power_in_watt.value)
 
         self.cycling_mode = config.cycling_mode
 
-        self.minimum_running_time_in_seconds = (
+        self.minimum_running_time_in_seconds: Optional[int] = (
             config.minimum_running_time_in_seconds.value
             if config.minimum_running_time_in_seconds is not None
             else None
         )
 
-        self.minimum_idle_time_in_seconds = (
+        self.minimum_idle_time_in_seconds: Optional[int] = (
             config.minimum_idle_time_in_seconds.value
             if config.minimum_idle_time_in_seconds is not None
             else None
@@ -242,7 +262,13 @@ class HeatPumpHplib(Component):
         self.previous_state = self.state.self_copy()
 
         # Load parameters from heat pump database
-        self.parameters = hpl.get_parameters(self.model, self.group_id, self.t_in, self.t_out_val, self.p_th_set)
+        self.parameters: pd.DataFrame = hpl.get_parameters(
+            self.model,
+            self.group_id,
+            self.heating_reference_temperature_in_celsius,
+            self.flow_temperature_in_celsius,
+            self.set_thermal_output_power_in_watt,
+        )
 
         # Define component inputs
         self.on_off_switch: ComponentInput = self.add_input(
@@ -408,9 +434,9 @@ class HeatPumpHplib(Component):
         """Get default connections."""
 
         connections = []
-        hpc_classname = HeatPumpHplibController.get_classname()
+        heat_pump_controller_classname = HeatPumpHplibController.get_classname()
         connections.append(
-            ComponentConnection(HeatPumpHplib.OnOffSwitch, hpc_classname, HeatPumpHplibController.State,)
+            ComponentConnection(HeatPumpHplib.OnOffSwitch, heat_pump_controller_classname, HeatPumpHplibController.State,)
         )
         return connections
 
@@ -623,7 +649,7 @@ class HeatPumpHplib(Component):
 
         return capex_cost_data_class
 
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
+    def get_cost_opex(self, all_outputs: List[ComponentOutput], postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of maintenance costs.
 
         No electricity costs for components except for Electricity Meter,
@@ -675,20 +701,20 @@ class HeatPumpHplib(Component):
         my_data_class = CalculationRequest(
             t_in_primary=t_in_primary, t_in_secondary=t_in_secondary, t_amb=t_amb, mode=mode,
         )
-        my_json_key = my_data_class.get_key()
+        my_json_key = my_data_class.get_cache_key()
         my_hash_key = hashlib.sha256(my_json_key.encode("utf-8")).hexdigest()
 
-        if my_hash_key in self.calculation_cache:
-            results = self.calculation_cache[my_hash_key]
+        if my_hash_key in self.hplib_simulation_cache:
+            results = self.hplib_simulation_cache[my_hash_key]
 
         else:
             results = hpl.simulate(t_in_primary, t_in_secondary, parameters, t_amb, mode=mode)
 
-            self.calculation_cache[my_hash_key] = results
+            self.hplib_simulation_cache[my_hash_key] = results
 
         return results
 
-    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
+    def get_component_kpi_entries(self, all_outputs: List[ComponentOutput], postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
 
         output_heating_energy_in_kilowatt_hour: float = 0.0
@@ -879,7 +905,7 @@ class HeatPumpHplib(Component):
                     if off_time != 0 and postprocessing_results.iloc[:, index].values[time_index + 1] == 0:
                         number_of_cycles = number_of_cycles + 1
 
-                except Exception:
+                except IndexError:
                     pass
 
         return number_of_cycles
@@ -961,9 +987,11 @@ class HeatPumpHplibController(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatPumpHplibControllerL1Config,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: Optional[DisplayConfig] = None,
     ) -> None:
         """Construct all the neccessary attributes."""
+        if my_display_config is None:
+            my_display_config = DisplayConfig()
         self.heatpump_controller_config = config
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
@@ -1344,7 +1372,7 @@ class CalculationRequest(JSONWizard):
     t_amb: float
     mode: int
 
-    def get_key(self):
-        """Get key of class with important parameters."""
+    def get_cache_key(self) -> str:
+        """Build a cache key from the hplib simulation parameters."""
 
         return str(self.t_in_primary) + " " + str(self.t_in_secondary) + " " + str(self.t_amb) + " " + str(self.mode)

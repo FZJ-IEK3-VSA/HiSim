@@ -195,9 +195,25 @@ class L1HeatPumpController(cp.Component):
         config: L1HeatPumpConfig,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
-        """For initializing."""
-        if not config.__class__.__name__ == L1HeatPumpConfig.__name__:
-            raise ValueError("Wrong config class. Got a " + config.__class__.__name__)
+        """Initialize the L1 heat pump controller.
+
+        Validates the config type, pre-computes minimum run/idle times in
+        time-steps, sets up the heating-season window (when cooling is
+        considered), and registers the controller's input and output channels.
+
+        Args:
+            my_simulation_parameters: Simulation parameters for the current run.
+            config: Configuration holding set temperatures, heating-season
+                bounds, and minimum operation/idle times.
+            my_display_config: Display configuration for post-processing.
+                Defaults to a standard DisplayConfig.
+
+        Raises:
+            ValueError: If ``config`` is not an ``L1HeatPumpConfig``, or if
+                cooling is considered but a heating-season boundary day is None.
+        """
+        if not isinstance(config, L1HeatPumpConfig):
+            raise ValueError(f"Wrong config class. Got a {type(config).__name__}")
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()
@@ -261,7 +277,7 @@ class L1HeatPumpController(cp.Component):
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
 
     def get_default_connections_generic_hot_water_storage_modular(self):
-        """Sets default connections for the boiler."""
+        """Sets default connections for the hot water storage."""
 
         # use importlib for importing the other component in order to avoid circular-import errors
         component_module_name = "hisim.components.generic_hot_water_storage_modular"
@@ -313,7 +329,21 @@ class L1HeatPumpController(cp.Component):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """Core Simulation function."""
+        """Run one controller iteration for the given time step.
+
+        When ``force_convergence`` is True the controller restores its last
+        processed state so that outputs stay consistent with the saved state.
+        Otherwise it recalculates the on/off state and modulating percentage
+        from the current storage temperature and optional EMS surplus signal,
+        then writes the target percentage to the output channel.
+
+        Args:
+            timestep: Current simulation time-step index.
+            stsv: Single-time-step values container used to read inputs and
+                write outputs.
+            force_convergence: If True, skip recalculation and align outputs to
+                the last known processed state.
+        """
         if force_convergence:
             # states are saved after each timestep, outputs after each iteration
             # outputs have to be in line with states, so if convergence is forced outputs are aligned to last known state.
@@ -324,59 +354,59 @@ class L1HeatPumpController(cp.Component):
         modulating_signal = self.state.percentage * self.state.on_off
         stsv.set_output_value(self.heat_pump_target_percentage_channel, modulating_signal)
 
-    def calc_percentage(self, t_storage: float) -> None:
+    def calc_percentage(self, t_storage_in_celsius: float) -> None:
         """Calculate the heat pump target percentage."""
-        if t_storage < self.config.t_min_heating_in_celsius:
+        if t_storage_in_celsius < self.config.t_min_heating_in_celsius:
             # full power when temperature is below lower threshold
             self.state.percentage = 1
             return
-        if t_storage < self.config.t_max_heating_in_celsius:
+        if t_storage_in_celsius < self.config.t_max_heating_in_celsius:
             # 75 % power when temperature is within threshold
             self.state.percentage = 0.75
             return
-        if t_storage >= self.config.t_max_heating_in_celsius:
+        if t_storage_in_celsius >= self.config.t_max_heating_in_celsius:
             # 50 % power when temperature is already in tolerance of surplus
             self.state.percentage = 0.5
             return
 
     def calculate_state(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         """Calculate the heat pump state and activate / deactives."""
-        t_storage = stsv.get_input_value(self.storage_temperature_channel)
-        temperature_modifier = stsv.get_input_value(self.storage_temperature_modifier_channel)
+        t_storage_in_celsius = stsv.get_input_value(self.storage_temperature_channel)
+        temperature_modifier_in_celsius = stsv.get_input_value(self.storage_temperature_modifier_channel)
         # return device on if minimum operation time is not fulfilled and device was on in previous state
         if self.state.on_off == 1 and self.state.activation_time_step + self.minimum_runtime_in_timesteps >= timestep:
             # mandatory on, minimum runtime not reached
-            self.calc_percentage(t_storage)
+            self.calc_percentage(t_storage_in_celsius)
             return
         if (
             self.state.on_off == 0
             and self.state.deactivation_time_step + self.minimum_resting_time_in_timesteps >= timestep
         ):
             # mandatory off, minimum resting time not reached
-            self.calc_percentage(t_storage)
+            self.calc_percentage(t_storage_in_celsius)
             return
         if self.cooling_considered:
             if (
                 self.heating_season_begin > timestep > self.heating_season_end
-                and t_storage >= self.config.t_min_heating_in_celsius - 30
+                and t_storage_in_celsius >= self.config.t_min_heating_in_celsius - 30
             ):
                 # prevent heating in summer
                 self.state.deactivate(timestep)
                 return
-        if t_storage < self.config.t_min_heating_in_celsius:
+        if t_storage_in_celsius < self.config.t_min_heating_in_celsius:
             # activate heating when storage temperature is too low
             self.state.activate(timestep)
-            self.calc_percentage(t_storage)
+            self.calc_percentage(t_storage_in_celsius)
             return
-        if t_storage > self.config.t_max_heating_in_celsius + temperature_modifier:
+        if t_storage_in_celsius > self.config.t_max_heating_in_celsius + temperature_modifier_in_celsius:
             # deactivate heating when storage temperature is too high
             self.state.deactivate(timestep)
-            self.calc_percentage(t_storage)
+            self.calc_percentage(t_storage_in_celsius)
             return
-        if temperature_modifier > 0 and t_storage < self.config.t_max_heating_in_celsius:
+        if temperature_modifier_in_celsius > 0 and t_storage_in_celsius < self.config.t_max_heating_in_celsius:
             # activate heating when surplus electricity is available
             self.state.activate(timestep)
-            self.calc_percentage(t_storage)
+            self.calc_percentage(t_storage_in_celsius)
             return
 
     def write_to_report(self) -> List[str]:

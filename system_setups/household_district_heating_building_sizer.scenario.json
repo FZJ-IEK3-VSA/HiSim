@@ -160,7 +160,7 @@
                 "name": "DistrictHeatingController",
                 "set_heating_threshold_outside_temperature_in_celsius": 18.0,
                 "with_domestic_hot_water_preparation": true,
-                "hysteresis_water_temperature_offset": 15,
+                "hysteresis_water_temperature_offset_in_celsius": 15,
                 "parallel_space_heating_and_dhw_option": true
             },
             "config_full_classname": "hisim.components.generic_district_heating.DistrictHeatingControllerConfig",
@@ -173,7 +173,7 @@
             "configuration": {
                 "building_name": "BUI1",
                 "name": "DistrictHeating",
-                "connected_load_w": 7780.752200000001,
+                "connected_load_in_w": 7780.752200000001,
                 "device_co2_footprint_in_kg": null,
                 "investment_costs_in_euro": null,
                 "lifetime_in_years": null,

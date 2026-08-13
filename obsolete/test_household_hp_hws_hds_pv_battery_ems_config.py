@@ -19,7 +19,6 @@ from hisim import log
 from system_setups.household_hp_hws_hds_pv_battery_ems import BuildingPVWeatherConfig
 
 
-@pytest.mark.base
 def test_get_default_field_values() -> None:
     """``BuildingPVWeatherConfig.get_default()`` returns the documented defaults."""
     cfg = BuildingPVWeatherConfig.get_default()
@@ -39,14 +38,12 @@ def test_get_default_field_values() -> None:
     log.information("BuildingPVWeatherConfig default field values verified.")
 
 
-@pytest.mark.base
 def test_get_default_return_type() -> None:
     """``get_default()`` returns a ``BuildingPVWeatherConfig`` instance."""
     cfg = BuildingPVWeatherConfig.get_default()
     assert isinstance(cfg, BuildingPVWeatherConfig)
 
 
-@pytest.mark.base
 def test_get_default_determinism() -> None:
     """Calling ``get_default()`` twice yields instances with equal field values."""
     first = BuildingPVWeatherConfig.get_default()
@@ -67,7 +64,6 @@ def test_get_default_determinism() -> None:
     assert first.weather_location == second.weather_location
 
 
-@pytest.mark.base
 def test_json_round_trip_from_default() -> None:
     """Serializing and deserializing the default config preserves all fields."""
     cfg = BuildingPVWeatherConfig.get_default()
@@ -96,7 +92,6 @@ def test_json_round_trip_from_default() -> None:
     assert cfg2 == cfg
 
 
-@pytest.mark.base
 def test_json_round_trip_preserves_none_fields() -> None:
     """``None`` optional fields survive a JSON round-trip (not coerced to 0 / 'null')."""
     cfg = BuildingPVWeatherConfig(
@@ -121,7 +116,6 @@ def test_json_round_trip_preserves_none_fields() -> None:
     assert cfg2 == cfg
 
 
-@pytest.mark.base
 def test_json_round_trip_preserves_multi_element_lpg_households() -> None:
     """A multi-element ``lpg_households`` list survives a JSON round-trip intact."""
     households = ["CHR01_Couple_both_at_Work", "CHR02_Family_with_one_Child"]

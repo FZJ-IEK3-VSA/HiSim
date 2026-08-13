@@ -3,11 +3,12 @@
 Guidelines for enum classes:
     1. Write members names extensively, with no abbreviation, i.e., 'Watt' instead of 'W'.
     2. Attributes should follow the International System of Units (SI)
-    [https://en.wikipedia.org/wiki/International_System_of_Units], i.e., for power the attribute is 'W'.
+       [https://en.wikipedia.org/wiki/International_System_of_Units], i.e., for power the attribute is 'W'.
     3. Do not use multipliers such as 'Kilowatt'.
-        3.1 Exceptions to this rule are: 'Kilometer', 'Kilogram'.
-        3.2 In case of an exception, the simple form should be avoided altogether, e.g., given the 'Kilometer'
-        is an Unit, then 'Meter' should not be used.
+
+    Exceptions to this rule are: 'Kilometer', 'Kilogram'.
+    In case of an exception, the simple form should be avoided altogether, e.g., given the 'Kilometer'
+    is a Unit, then 'Meter' should not be used.
 
 """
 from __future__ import annotations

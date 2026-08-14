@@ -1,0 +1,2088 @@
+{
+  "entries": [
+    {
+      "component_type": "HEAT_PUMP",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 1400,
+          "best_estimate": 1900,
+          "max": 2600
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.01,
+        "best_estimate": 0.015,
+        "max": 0.025
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 18,
+      "embodied_co2": {
+        "value": 165.0,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.25,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "GAS_HEATER",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 500,
+          "best_estimate": 650,
+          "max": 850
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.02,
+        "best_estimate": 0.032,
+        "max": 0.045
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 18,
+      "embodied_co2": {
+        "value": 49.5,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "OIL_HEATER",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 600,
+          "best_estimate": 800,
+          "max": 1050
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.03,
+        "best_estimate": 0.05,
+        "max": 0.07
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 18,
+      "embodied_co2": {
+        "value": 55.0,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "PELLET_HEATER",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 1500,
+          "best_estimate": 1900,
+          "max": 2400
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.03,
+        "best_estimate": 0.047,
+        "max": 0.06
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 18,
+      "embodied_co2": {
+        "value": 60.0,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "WOOD_CHIP_HEATER",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 1600,
+          "best_estimate": 2000,
+          "max": 2500
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.03,
+        "best_estimate": 0.047,
+        "max": 0.06
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 65.0,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "DISTRICT_HEATING",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 900,
+          "best_estimate": 1300,
+          "max": 1800
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.015,
+        "best_estimate": 0.026,
+        "max": 0.035
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 35.0,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "ELECTRIC_HEATER",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 250,
+          "best_estimate": 330,
+          "max": 450
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.02
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 22,
+      "embodied_co2": {
+        "value": 1.2,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "HYDROGEN_HEATER",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 600,
+          "best_estimate": 800,
+          "max": 1050
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.02,
+        "best_estimate": 0.032,
+        "max": 0.045
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 18,
+      "embodied_co2": {
+        "value": 49.5,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "PV",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 750,
+          "best_estimate": 900,
+          "max": 1150
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.015
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 25,
+      "embodied_co2": {
+        "value": 300.0,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.0,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "BATTERY",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 350,
+          "best_estimate": 450,
+          "max": 600
+        },
+        "per_unit": "kWh"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.02
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 12,
+      "embodied_co2": {
+        "value": 100.0,
+        "per_unit": "kWh"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "THERMAL_ENERGY_STORAGE",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 12,
+          "best_estimate": 16,
+          "max": 22
+        },
+        "per_unit": "liter"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.015
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 0.6,
+        "per_unit": "liter"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "SOLAR_THERMAL_SYSTEM",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 700,
+          "best_estimate": 900,
+          "max": 1150
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.015
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 92.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.3,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 70,
+          "best_estimate": 100,
+          "max": 140
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.015
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 50,
+      "embodied_co2": {
+        "value": 0.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "HEAT_DISTRIBUTION_SYSTEM_RADIATOR",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 50,
+          "best_estimate": 75,
+          "max": 105
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.015
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 30,
+      "embodied_co2": {
+        "value": 0.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "ELECTRICITY_METER",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 80,
+          "best_estimate": 120,
+          "max": 180
+        },
+        "per_unit": null
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 16,
+      "embodied_co2": {
+        "value": 0.0,
+        "per_unit": null
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "GAS_METER",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 150,
+          "best_estimate": 220,
+          "max": 300
+        },
+        "per_unit": null
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 16,
+      "embodied_co2": {
+        "value": 0.0,
+        "per_unit": null
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "ENERGY_MANAGEMENT_SYSTEM",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 1800,
+          "best_estimate": 3200,
+          "max": 4800
+        },
+        "per_unit": null
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.01,
+        "best_estimate": 0.02,
+        "max": 0.03
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 15,
+      "embodied_co2": {
+        "value": 0.0,
+        "per_unit": null
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "HEAT_PUMP",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 1100,
+          "best_estimate": 1500,
+          "max": 2100
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.01,
+        "best_estimate": 0.015,
+        "max": 0.025
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 130.0,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.25,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "GAS_HEATER",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 550,
+          "best_estimate": 720,
+          "max": 950
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.02,
+        "best_estimate": 0.032,
+        "max": 0.045
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 18,
+      "embodied_co2": {
+        "value": 49.5,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "OIL_HEATER",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 700,
+          "best_estimate": 950,
+          "max": 1250
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.03,
+        "best_estimate": 0.05,
+        "max": 0.07
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 18,
+      "embodied_co2": {
+        "value": 55.0,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "PELLET_HEATER",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 1600,
+          "best_estimate": 2000,
+          "max": 2600
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.03,
+        "best_estimate": 0.047,
+        "max": 0.06
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 18,
+      "embodied_co2": {
+        "value": 60.0,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "WOOD_CHIP_HEATER",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 1700,
+          "best_estimate": 2100,
+          "max": 2700
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.03,
+        "best_estimate": 0.047,
+        "max": 0.06
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 65.0,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "DISTRICT_HEATING",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 800,
+          "best_estimate": 1150,
+          "max": 1600
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.015,
+        "best_estimate": 0.026,
+        "max": 0.035
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 35.0,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "ELECTRIC_HEATER",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 280,
+          "best_estimate": 370,
+          "max": 500
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.02
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 22,
+      "embodied_co2": {
+        "value": 1.2,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "HYDROGEN_HEATER",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 500,
+          "best_estimate": 650,
+          "max": 880
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.02,
+        "best_estimate": 0.032,
+        "max": 0.045
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 18,
+      "embodied_co2": {
+        "value": 45.0,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "PV",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 500,
+          "best_estimate": 620,
+          "max": 800
+        },
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.015
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 30,
+      "embodied_co2": {
+        "value": 200.0,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.0,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "BATTERY",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 200,
+          "best_estimate": 280,
+          "max": 400
+        },
+        "per_unit": "kWh"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.02
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 15,
+      "embodied_co2": {
+        "value": 70.0,
+        "per_unit": "kWh"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "THERMAL_ENERGY_STORAGE",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 13,
+          "best_estimate": 17,
+          "max": 24
+        },
+        "per_unit": "liter"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.015
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 0.5,
+        "per_unit": "liter"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "SOLAR_THERMAL_SYSTEM",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 750,
+          "best_estimate": 950,
+          "max": 1250
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.015
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 80.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.3,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 85,
+          "best_estimate": 120,
+          "max": 170
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.015
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 50,
+      "embodied_co2": {
+        "value": 0.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "HEAT_DISTRIBUTION_SYSTEM_RADIATOR",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 60,
+          "best_estimate": 90,
+          "max": 125
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.005,
+        "best_estimate": 0.01,
+        "max": 0.015
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 30,
+      "embodied_co2": {
+        "value": 0.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "ELECTRICITY_METER",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 90,
+          "best_estimate": 135,
+          "max": 200
+        },
+        "per_unit": null
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 16,
+      "embodied_co2": {
+        "value": 0.0,
+        "per_unit": null
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "GAS_METER",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 170,
+          "best_estimate": 250,
+          "max": 340
+        },
+        "per_unit": null
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 16,
+      "embodied_co2": {
+        "value": 0.0,
+        "per_unit": null
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "ENERGY_MANAGEMENT_SYSTEM",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 1400,
+          "best_estimate": 2500,
+          "max": 3800
+        },
+        "per_unit": null
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.01,
+        "best_estimate": 0.02,
+        "max": 0.03
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 15,
+      "embodied_co2": {
+        "value": 0.0,
+        "per_unit": null
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT."
+    },
+    {
+      "component_type": "WALL_EXTERNAL_INSULATION",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 185,
+          "best_estimate": 245,
+          "max": 325
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 14.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. External composite insulation of the facade (WDVS)."
+    },
+    {
+      "component_type": "WALL_INTERNAL_INSULATION",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 92,
+          "best_estimate": 140,
+          "max": 210
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 10.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Interior-side insulation of the external walls."
+    },
+    {
+      "component_type": "ROOF_INSULATION_BETWEEN_JOISTS",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 70,
+          "best_estimate": 105,
+          "max": 160
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 10.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Insulation between the rafters (Zwischensparren)."
+    },
+    {
+      "component_type": "ROOF_INSULATION_OVER_JOISTS",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 265,
+          "best_estimate": 345,
+          "max": 460
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 20.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Insulation above the rafters (Aufsparren); re-roofing included."
+    },
+    {
+      "component_type": "WARM_ROOF_INSULATION",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 170,
+          "best_estimate": 255,
+          "max": 370
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 16.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Warm (flat) roof insulation."
+    },
+    {
+      "component_type": "TOP_CEILING_UPPER_INSULATION",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 52,
+          "best_estimate": 70,
+          "max": 98
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 8.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Insulation on top of the top-floor ceiling."
+    },
+    {
+      "component_type": "BASEMENT_CEILING_BOTTOM_INSULATION",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 52,
+          "best_estimate": 75,
+          "max": 105
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 8.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Insulation under the basement ceiling."
+    },
+    {
+      "component_type": "BASEMENT_WALLS_INTERNAL_INSULATION",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 80,
+          "best_estimate": 125,
+          "max": 195
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 10.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Interior insulation of heated-basement walls."
+    },
+    {
+      "component_type": "GROUND_EXTERNAL_INSULATION",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 170,
+          "best_estimate": 290,
+          "max": 460
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 14.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Perimeter insulation of ground-contacting components; excavation included."
+    },
+    {
+      "component_type": "WINDOWS_TRIPLE_GLAZED",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 630,
+          "best_estimate": 860,
+          "max": 1100
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 35,
+      "embodied_co2": {
+        "value": 75.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.1,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Replacement with triple-glazed windows."
+    },
+    {
+      "component_type": "EXTERIOR_DOOR",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 2300,
+          "best_estimate": 3400,
+          "max": 5200
+        },
+        "per_unit": null
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 35,
+      "embodied_co2": {
+        "value": 120.0,
+        "per_unit": null
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.1,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a."
+    },
+    {
+      "component_type": "AIR_SEALING",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 9,
+          "best_estimate": 14,
+          "max": 20
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 25,
+      "embodied_co2": {
+        "value": 0.5,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a."
+    },
+    {
+      "component_type": "VENTILATION_SYSTEM",
+      "valid_from_year": 2026,
+      "specific_investment": {
+        "value": {
+          "min": 5800,
+          "best_estimate": 9200,
+          "max": 13800
+        },
+        "per_unit": null
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": {
+        "min": 80,
+        "best_estimate": 120,
+        "max": 180
+      },
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 350.0,
+        "per_unit": null
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a."
+    },
+    {
+      "component_type": "WALL_EXTERNAL_INSULATION",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 220,
+          "best_estimate": 295,
+          "max": 390
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 14.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. External composite insulation of the facade (WDVS)."
+    },
+    {
+      "component_type": "WALL_INTERNAL_INSULATION",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 110,
+          "best_estimate": 168,
+          "max": 250
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 10.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Interior-side insulation of the external walls."
+    },
+    {
+      "component_type": "ROOF_INSULATION_BETWEEN_JOISTS",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 84,
+          "best_estimate": 126,
+          "max": 190
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 10.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Insulation between the rafters (Zwischensparren)."
+    },
+    {
+      "component_type": "ROOF_INSULATION_OVER_JOISTS",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 320,
+          "best_estimate": 415,
+          "max": 550
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 20.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Insulation above the rafters (Aufsparren); re-roofing included."
+    },
+    {
+      "component_type": "WARM_ROOF_INSULATION",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 205,
+          "best_estimate": 305,
+          "max": 445
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 16.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Warm (flat) roof insulation."
+    },
+    {
+      "component_type": "TOP_CEILING_UPPER_INSULATION",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 62,
+          "best_estimate": 84,
+          "max": 118
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 8.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Insulation on top of the top-floor ceiling."
+    },
+    {
+      "component_type": "BASEMENT_CEILING_BOTTOM_INSULATION",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 62,
+          "best_estimate": 90,
+          "max": 125
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 8.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Insulation under the basement ceiling."
+    },
+    {
+      "component_type": "BASEMENT_WALLS_INTERNAL_INSULATION",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 96,
+          "best_estimate": 150,
+          "max": 235
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 10.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Interior insulation of heated-basement walls."
+    },
+    {
+      "component_type": "GROUND_EXTERNAL_INSULATION",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 205,
+          "best_estimate": 350,
+          "max": 550
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 40,
+      "embodied_co2": {
+        "value": 14.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Perimeter insulation of ground-contacting components; excavation included."
+    },
+    {
+      "component_type": "WINDOWS_TRIPLE_GLAZED",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 720,
+          "best_estimate": 980,
+          "max": 1250
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 35,
+      "embodied_co2": {
+        "value": 75.0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.1,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a. Replacement with triple-glazed windows."
+    },
+    {
+      "component_type": "EXTERIOR_DOOR",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 2650,
+          "best_estimate": 3900,
+          "max": 5900
+        },
+        "per_unit": null
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 35,
+      "embodied_co2": {
+        "value": 120.0,
+        "per_unit": null
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.1,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a."
+    },
+    {
+      "component_type": "AIR_SEALING",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 11,
+          "best_estimate": 16,
+          "max": 24
+        },
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 25,
+      "embodied_co2": {
+        "value": 0.5,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.0,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a."
+    },
+    {
+      "component_type": "VENTILATION_SYSTEM",
+      "valid_from_year": 2035,
+      "specific_investment": {
+        "value": {
+          "min": 6400,
+          "best_estimate": 10100,
+          "max": 15200
+        },
+        "per_unit": null
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": {
+        "min": 0.0,
+        "best_estimate": 0.002,
+        "max": 0.005
+      },
+      "fixed_operation_cost_in_euro_per_year": {
+        "min": 80,
+        "best_estimate": 120,
+        "max": 180
+      },
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 350.0,
+        "per_unit": null
+      },
+      "vat_rate": 0.135,
+      "price_basis": "AS_LEGACY",
+      "energy_related_cost_share": 1.0,
+      "anyway_threshold_years_override": 5.0,
+      "legacy_flat_subsidy_share": 0.2,
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Values are final household prices incl. VAT. Envelope measure (cost_spec.md Q7): energy_related_cost_share deliberately 1.0 for now (coupled-cost credit disabled), anyway threshold 5 a."
+    }
+  ]
+}

@@ -115,6 +115,7 @@ env.bak/
 venv.bak/
 hisimvenv_cluster/
 hisimvenv/
+local_python_env/
 
 # Spyder project settings
 .spyderproject
@@ -207,3 +208,6 @@ component_connections.json
 *.backup
 *.bak
 results/
+
+# Claude Code local settings
+.claude/settings.local.json

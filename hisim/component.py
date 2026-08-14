@@ -17,13 +17,14 @@ import os
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 import json
 import pandas as pd
 
 from hisim import config as cfg
 from hisim import loadtypes as lt
 from hisim import log
+from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
@@ -189,6 +190,12 @@ class SingleTimeStepValues:
 
 class Component:
     """Base class for all components."""
+
+    # Cost role declaration for the lifecycle cost engine (cost_spec.md §9.2). PRICED
+    # components must return facts from `get_cost_facts()`, FREE_OF_COST components must
+    # return None, METER components provide `get_energy_flow_facts()`. UNDECLARED components
+    # are flagged by the completeness check (warning during the parallel phase).
+    cost_relevance: ClassVar[CostRelevance] = CostRelevance.UNDECLARED
 
     @classmethod
     def get_classname(cls):
@@ -463,6 +470,61 @@ class Component:
         # pylint: disable=unused-argument
         """Calculates lifetime, total capital expenditure cost and total co2 footprint of production of device."""
         raise NotImplementedError(f"{config.get_main_classname()} has no capex costs implemented.")
+
+    def get_cost_facts(self) -> Optional[ComponentCostFacts]:
+        """Return cost-relevant facts for the lifecycle cost engine, or None (cost_spec.md §3.3).
+
+        Components declare, the engine computes: no prices, no discounting, no dataframe
+        access here. The default (None) means "not part of the cost model" — controllers,
+        weather and occupancy simply don't override this hook.
+
+        Called once per component after the simulation and before any legacy cost code runs, via
+        `hisim.economics.adapter.get_cost_facts` (which falls back to a compatibility table for
+        components that have not adopted this hook); the returned facts become one priced subject
+        of every perspective. An overriding component states what it *is* (asset class, size and unit,
+        technical attributes) and at most a per-field override where it genuinely knows better
+        than the cost database — never a price it computed itself. Which of the two behaviors is
+        expected is declared by the class attribute `cost_relevance` above, so a forgotten
+        override is caught by the completeness check instead of silently dropping the component
+        from the cost report.
+        """
+        return None
+
+    def get_energy_flow_facts(
+        self,
+        all_outputs: List,  # pylint: disable=unused-argument
+        postprocessing_results: pd.DataFrame,  # pylint: disable=unused-argument
+    ) -> Optional[EnergyFlowFacts]:
+        """Return the carrier flows a meter measured, or None for non-meters (cost_spec.md §3.4).
+
+        The billing counterpart of `get_cost_facts`: only components sitting at a carrier boundary
+        (the electricity/gas/fuel/heating meters) override it, and they report the energy that
+        actually crossed that boundary over the simulated period. Billing energy exclusively at
+        those boundaries is what makes double counting impossible by construction — a device's own
+        consumption is never priced a second time.
+
+        Unlike `get_cost_facts` this hook needs the results frame, because the answer is an
+        integral over the whole run rather than a property of the configuration.
+
+        It is the *first* thing `hisim.economics.bridge` asks a component about its flows, exactly
+        as `get_cost_facts` is asked before the adapter's cost table (§9.1); only a component that
+        returns None here falls back to the class-name `adapter.get_meter_spec` table. One
+        determinant of the richer `BillingDeterminants` of §8.4 cannot be expressed in this record
+        — the capacity-charge peaks — and it keeps coming from the `MeterSpec` of a component that
+        also has a table entry. The energy itself is always kWh, whatever the carrier; fuels the
+        market quotes per ton or per liter are converted on the price side (D26), so a meter never
+        has to report anything but kWh. A meter with no table entry is billed without capacity
+        charges, and it must declare `cost_relevance = METER` itself, since the relevance
+        inference cannot call a hook that needs the results frame.
+
+        Args:
+            all_outputs: All component outputs, positionally aligned with the result columns.
+            postprocessing_results: The simulation results frame.
+
+        Returns:
+            The measured flows for one carrier, or None if this component is not a meter.
+        """
+        return None
 
     def get_component_kpi_entries(
         self,

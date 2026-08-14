@@ -2,7 +2,7 @@
 # clean
 from __future__ import annotations
 import os
-from typing import List, Optional, Sequence
+from typing import Any, List, Optional, Sequence
 import enum
 
 import datetime
@@ -94,6 +94,52 @@ class SimulationParameters:
         self.multiple_buildings = multiple_buildings
         self.figure_format = FigureFormat.PNG
         self.log_connections = log_connections
+        # Parameters of the parallel lifecycle cost engine (cost_spec.md §3.2). Deliberately a
+        # plain attribute (not a dataclass field) so *.simulation.json round-trips stay
+        # byte-identical during the parallel phase; set via set_economic_parameters() or the
+        # RenoVisor request (see cost_module_issues.md #5).
+        self.economic_parameters: Optional[Any] = None
+        # Optional hisim.economics.bridge.EconomicContext: existing assets, subsidy context,
+        # envelope measures, tenancy data and scenario sets a system setup declares for the
+        # lifecycle cost engine (see system_setups/economic_example/).
+        self.economic_context: Optional[Any] = None
+
+    def set_economic_parameters(self, economic_parameters: Any) -> None:
+        """Attaches EconomicParameters for the lifecycle cost engine (cost_spec.md §3.2).
+
+        The economy-wide assumptions of a run — country, price basis year, horizon, discount and
+        escalation rates, subsidy catalog path — travel with the simulation parameters because
+        that is the one object postprocessing already receives; the setter exists so a system
+        setup does not have to know that they are carried as a plain attribute rather than a
+        dataclass field (which is what keeps `*.simulation.json` round-trips byte-identical).
+
+        Attaching nothing is valid: the engine then falls back to its documented defaults for the
+        simulation's country. Typed as `Any` on purpose, so `hisim.simulationparameters` does not
+        import the economics package.
+
+        Args:
+            economic_parameters: A `hisim.economics.EconomicParameters` instance.
+        """
+        self.economic_parameters = economic_parameters
+
+    def set_economic_context(self, economic_context: Any) -> None:
+        """Attaches an EconomicContext for the lifecycle cost engine (cost_spec.md §4-§6).
+
+        The counterpart to the parameters above: not the economy, but *this* decision situation —
+        what already stands in the building, who applies for which subsidy, which non-simulated
+        envelope measures belong to the package, how the building is tenanted, which scenarios to
+        sweep. None of it is derivable from a physics simulation, so whoever defines the variant
+        declares it once here and `hisim.economics.bridge` merges it into the simulation-derived
+        inputs after the run.
+
+        Without a context the run still produces lifecycle costs, but only greenfield ones — every
+        device charged as a new purchase into an empty building. See
+        `system_setups/economic_example/` for a fully worked attachment.
+
+        Args:
+            economic_context: A `hisim.economics.bridge.EconomicContext` instance.
+        """
+        self.economic_context = economic_context
 
     @classmethod
     def full_year(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:

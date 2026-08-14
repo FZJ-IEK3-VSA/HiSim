@@ -102,6 +102,21 @@ class Simulator:
         """
         return self._simulation_parameters
 
+    @property
+    def simulation_parameters(self) -> SimulationParameters:
+        """The parameters this simulator runs with — the public way to read them.
+
+        A system setup regularly needs a figure the parameters carry, above all the result
+        directory the simulator resolved for the run, and had no public accessor phrased as an
+        attribute: the reference setups reached into `_simulation_parameters` behind a
+        `noqa: SLF001`, which is precisely the habit reference material should not teach.
+        Read-only on purpose — `set_simulation_parameters` also adjusts the logging level and the
+        connection logging, so assigning the attribute would skip half of what setting the
+        parameters means. The object itself is not a copy, so mutating a field on it (as the HPC
+        harness does with `result_directory`) still works.
+        """
+        return self._simulation_parameters
+
     def add_component(
         self,
         component: cp.Component,

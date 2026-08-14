@@ -91,7 +91,7 @@ were resolved with a documented default to keep the implementation moving; they 
     BASEMENT_CEILING_BOTTOM_INSULATION, BASEMENT_WALLS_INTERNAL_INSULATION,
     GROUND_EXTERNAL_INSULATION, WINDOWS_TRIPLE_GLAZED) plus EXTERIOR_DOOR, AIR_SEALING and
     VENTILATION_SYSTEM — with AI-estimate entries for DE/IE 2026/2035, BEG EM envelope schemes
-    (15 % + 5 % iSFP, U-value conditions) plus the `building.has_isfp` question, and three
+    (15 % + 5 % iSFP, U-value conditions) plus the `building.has_renovation_roadmap` question (iSFP in the German catalog; renamed 2026-08-18 per PR-3 review), and three
     engine mechanics (see README §3.2b).
     Decisions taken:
     - **(a)** `energy_related_cost_share` implemented as the coupled-cost (Ohnehin-Kosten)

@@ -6,7 +6,7 @@ import importlib
 from pathlib import Path
 import sys
 from datetime import datetime
-from typing import Optional, Any, cast
+from typing import Optional, Any, cast, Union
 import argparse
 from pydantic import TypeAdapter
 from dotenv import load_dotenv
@@ -67,7 +67,7 @@ def get_description_from_py(path_obj: Path) -> str:
 
 def initialize_from_python(
     path_to_module: str,
-    my_simulation_parameters: Optional[SimulationParameters] = None,
+    my_simulation_parameters: Optional[Union[SimulationParameters, str]] = None,
     my_module_config: Optional[str] = None,
 ) -> sim.Simulator:
     """Initialize the simulator from a Python household configuration file.
@@ -115,9 +115,25 @@ def initialize_from_python(
     if not path_obj.is_file():
         raise ValueError(f"Python script {module_filename}.py could not be found at {path_obj}")
 
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{get_description_from_py(path_obj)}",
-    )
+    # Make SimulationParameters object
+    if my_simulation_parameters is not None:
+        if isinstance(my_simulation_parameters, str):
+            sim_params_data = load_json_file(my_simulation_parameters)
+            sim_params_data["start_date"] = datetime.fromisoformat(sim_params_data["start_date"])
+            sim_params_data["end_date"] = datetime.fromisoformat(sim_params_data["end_date"])
+            sim_params_data["post_processing_options"] = [PostProcessingOptions[option] for option in sim_params_data.get("post_processing_options", [])]
+            sim_params = SimulationParameters(**sim_params_data)
+        elif isinstance(my_simulation_parameters, SimulationParameters):
+            sim_params = my_simulation_parameters
+        else:
+            raise TypeError(
+                f"Type for simulation parameter argument {type(my_simulation_parameters)} either not recognized or not implemented yet. "
+                "Should be string or SimulationParamters object."
+            )
+    else:
+        sim_params = None
+
+    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{get_description_from_py(path_obj)}")
 
     # Make setup function executable
     targetmodule = importlib.import_module(module_filename)
@@ -127,7 +143,7 @@ def initialize_from_python(
         module_directory=str(module_dir),
         module_filename=module_filename,
         setup_function=function_in_module,
-        my_simulation_parameters=my_simulation_parameters,
+        my_simulation_parameters=sim_params,
         my_module_config=my_module_config,
         # Always log component connections in Python mode (mirrors the JSON path, hisim_main.py:215)
         # so component_connections.json is written for easy post-processing and debugging.
@@ -138,7 +154,7 @@ def initialize_from_python(
     model_init_method = getattr(targetmodule, function_in_module)
 
     # Pass setup function to simulator
-    model_init_method(my_sim, my_simulation_parameters)
+    model_init_method(my_sim, sim_params)
 
     return my_sim
 
@@ -201,18 +217,16 @@ def initialize_from_json(
 
     # Load JSON files
     scenario_data = load_json_file(scenario)
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}",
-    )
+    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}")
     # Missing in the following data: result_directory, surplus_control, cache_dir_path, multiple_buildings
     # -> Result Directory is set in prepare_simulation_directory function, called by run_all_timesteps
     # -> Cache Dir Path is filled by default in SimulationParameters
     # -> Surplus Control: see comment in hisim_convert_to_json.py
     sim_params_data = load_json_file(simulation_parameters)
-    sim_params_data['multiple_buildings'] = scenario_data.get('multiple_buildings', False)
-    sim_params_data['start_date'] = datetime.fromisoformat(sim_params_data['start_date'])
-    sim_params_data['end_date'] = datetime.fromisoformat(sim_params_data['end_date'])
-    sim_params_data['post_processing_options'] = [PostProcessingOptions[option] for option in sim_params_data.get('post_processing_options', [])]
+    sim_params_data["multiple_buildings"] = scenario_data.get("multiple_buildings", False)
+    sim_params_data["start_date"] = datetime.fromisoformat(sim_params_data["start_date"])
+    sim_params_data["end_date"] = datetime.fromisoformat(sim_params_data["end_date"])
+    sim_params_data["post_processing_options"] = [PostProcessingOptions[option] for option in sim_params_data.get("post_processing_options", [])]
     sim_params = SimulationParameters(**sim_params_data)
 
     my_sim = _build_simulator_from_scenario(scenario_data, path_to_module, sim_params)
@@ -285,9 +299,7 @@ def initialize_from_json_with_parameters(
         The initialized ``Simulator`` with its component graph wired.
     """
     scenario_data = load_json_file(scenario)
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}",
-    )
+    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}")
     my_simulation_parameters.multiple_buildings = scenario_data.get("multiple_buildings", False)
     my_simulation_parameters.log_connections = True  # For easy post-processing (and debugging)
     return _build_simulator_from_scenario(scenario_data, scenario, my_simulation_parameters)
@@ -304,9 +316,11 @@ def run_simulation(my_sim: sim.Simulator, path_to_module: Optional[str]) -> None
 
     # If debugging is needed, this may be used to print components and their inputs/outputs
     for comp in my_sim.wrapped_components:
-        log.debug(f"Component {comp.my_component.component_name} has inputs "
-                  f"{[input.fullname for input in comp.component_inputs]} and"
-                  f" outputs {[output.full_name for output in comp.component_outputs]}")
+        log.debug(
+            f"Component {comp.my_component.component_name} has inputs "
+            f"{[input.fullname for input in comp.component_inputs]} and"
+            f" outputs {[output.full_name for output in comp.component_outputs]}"
+        )
 
     log.information("#################################")
     log.information(f"Starting simulation of {path_to_module}")
@@ -352,12 +366,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "inputs",
         nargs="+",
-        help=(
-            "JSON mode:\n"
-            "  <scenario_params.json> <simulation_params.json> [scenario_delta.json]\n\n"
-            "Legacy Python mode:\n"
-            "  <module.py> [module_config]"
-        ),
+        help=("JSON mode:\n" "  <scenario_params.json> <simulation_params.json> [scenario_delta.json]\n\n" "Legacy Python mode:\n" "  <module.py> [module_config]"),
     )
 
     return parser.parse_args()
@@ -370,26 +379,38 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
         args: Parsed arguments from ``parse_args``.
 
     Returns:
-        A dict with key ``"mode"`` (``"python"`` or ``"json"``) plus
-        mode-specific keys: ``module_file``/``module_config`` for Python
-        mode, ``scenario``/``simulation``/``delta`` for JSON mode.
+        A dictionary containing the execution ``mode`` and the corresponding
+        mode-specific input files.
+
+        For ``"python"`` mode, the dictionary contains:
+            - ``module_file``: Path to the Python module.
+            - ``module_config``: Path to the module configuration JSON file,
+              or ``None``.
+            - ``my_simulation_parameters``: Path to the simulation parameters
+              JSON file, or ``None``.
+
+        For ``"json"`` mode, the dictionary contains:
+            - ``scenario``: Path to the scenario JSON file.
+            - ``simulation``: Path to the simulation parameters JSON file.
+            - ``delta``: Path to the optional delta JSON file, or ``None``.
 
     Raises:
-        ValueError: If the arguments match neither expected mode.
+        ValueError: If the arguments do not match a supported execution mode,
+            if the required number of arguments is not provided, if too many
+            arguments are provided, or if a file has an invalid extension.
         FileNotFoundError: If a required input file does not exist.
     """
 
     inputs = args.inputs
 
     if inputs[0].endswith(".py"):
-        if len(inputs) > 2:
-            raise ValueError(
-                "The legancy Python mode accepts at most 2 arguments:\n"
-                "  <module.py> [module_config]"
-            )
+        if len(inputs) > 3:
+            raise ValueError("The legancy Python mode accepts at most 3 arguments:\n"
+                            "  <module.py> <module_config.json> <simulation_params.json>")
 
         module_file = inputs[0]
-        module_config = inputs[1] if len(inputs) == 2 else None
+        module_config = inputs[1] if len(inputs) >= 2 else None
+        my_simulation_parameters = inputs[2] if len(inputs) == 3 else None
 
         if not os.path.isfile(module_file):
             raise FileNotFoundError(f"Python module not found: {module_file}")
@@ -398,19 +419,16 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
             "mode": "python",
             "module_file": module_file,
             "module_config": module_config,
+            "my_simulation_parameters": my_simulation_parameters,
         }
 
     if inputs[0].endswith(".json"):
         if len(inputs) < 2:
-            raise ValueError(
-                "The JSON mode requires at least 2 files:\n"
-                "  <scenario.json> <simulation_params.json> [delta.json]"
-            )
+            raise ValueError("The JSON mode requires at least 2 files:\n"
+                             "  <scenario.json> <simulation_params.json> [delta.json]")
         if len(inputs) > 3:
-            raise ValueError(
-                "The JSON mode accepts at most 3 files:\n"
-                "  <scenario.json> <simulation_params.json> [delta.json]"
-            )
+            raise ValueError("The JSON mode accepts at most 3 files:\n"
+                             "  <scenario.json> <simulation_params.json> [delta.json]")
 
         for f in inputs:
             if not f.endswith(".json"):
@@ -425,11 +443,8 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
             "delta": inputs[2] if len(inputs) == 3 else None,
         }
 
-    raise ValueError(
-        "First argument must be either:\n"
-        "  - a Python file (*.py) for legacy Python mode, or\n"
-        "  - a JSON file (*.json) for JSON mode"
-    )
+    raise ValueError("First argument must be either:\n"
+                     "  - a Python file (*.py) for legacy Python mode, or\n" "  - a JSON file (*.json) for JSON mode")
 
 
 def get_required_config_value(config: dict[str, Optional[str]], key: str) -> str:
@@ -468,6 +483,7 @@ def main_cli() -> None:
         print(f"Calling setup_function from {module_file}")
         my_sim = initialize_from_python(
             path_to_module=module_file,
+            my_simulation_parameters=config["my_simulation_parameters"],
             my_module_config=config["module_config"],
         )
         ptm = module_file
@@ -475,10 +491,7 @@ def main_cli() -> None:
     elif config["mode"] == "json":
         scenario = get_required_config_value(config, "scenario")
         simulation = get_required_config_value(config, "simulation")
-        print(
-            f"Running simulation of scenario {scenario} with simulation parameters {simulation}"
-            + (f" and delta {config['delta']}" if config["delta"] else "")
-        )
+        print(f"Running simulation of scenario {scenario} with simulation parameters {simulation}" + (f" and delta {config['delta']}" if config["delta"] else ""))
         my_sim = initialize_from_json(
             scenario=scenario,
             simulation_parameters=simulation,
@@ -490,7 +503,11 @@ def main_cli() -> None:
     run_simulation(my_sim, path_to_module=ptm)
 
 
-def main(path_to_module: str, my_simulation_parameters: Optional[SimulationParameters] = None, my_module_config: Optional[str] = None) -> str:
+def main(
+    path_to_module: str,
+    my_simulation_parameters: Optional[SimulationParameters] = None,
+    my_module_config: Optional[str] = None,
+) -> str:
     """Run a Python-based system setup and return the directory it wrote results to.
 
     This is the legacy entry point used by the system-setup tests. It initializes

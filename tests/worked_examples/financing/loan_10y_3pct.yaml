@@ -1,0 +1,152 @@
+# GENERATED from loan_10y_3pct.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "loan_10y_3pct_round_numbers"
+group: "financing"
+spec_section: "4.4"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "20,000 EUR annuity loan over 10 years at 3 % nominal interest. The annuity is the closed-form constant payment; each year's interest is the previous year's remaining debt times the rate, the repayment is the annuity minus that interest, and the remaining debt falls by the repayment. Total interest is the sum of the ten interest rows."
+inputs:
+  principal_in_euro: 20000
+  interest_rate: 0.03
+  duration_in_years: 10
+expected:
+  annuity_in_euro:
+    value: 2344.61
+    abs_tol: 0.01
+    derivation: "principal_in_euro*interest_rate*(1+interest_rate)^duration_in_years/((1+interest_rate)^duration_in_years-1)"
+    note: "closed-form annuity of the constant-payment loan"
+  annuity_via_pmt_in_euro:
+    value: 2344.61
+    abs_tol: 0.01
+    derivation: "-PMT(interest_rate,duration_in_years,principal_in_euro)"
+    note: "same figure from Excel's own finance library, as an independent second opinion"
+  interest_year_1_in_euro:
+    value: 600.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro*interest_rate"
+    note: "written with raw cell references on purpose: the converter rewrites them to names"
+  interest_year_2_in_euro:
+    value: 547.66
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_1_in_euro*interest_rate"
+  interest_year_3_in_euro:
+    value: 493.75
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_2_in_euro*interest_rate"
+  interest_year_4_in_euro:
+    value: 438.23
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_3_in_euro*interest_rate"
+  interest_year_5_in_euro:
+    value: 381.04
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_4_in_euro*interest_rate"
+  interest_year_6_in_euro:
+    value: 322.13
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_5_in_euro*interest_rate"
+  interest_year_7_in_euro:
+    value: 261.45
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_6_in_euro*interest_rate"
+  interest_year_8_in_euro:
+    value: 198.96
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_7_in_euro*interest_rate"
+  interest_year_9_in_euro:
+    value: 134.59
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_8_in_euro*interest_rate"
+  interest_year_10_in_euro:
+    value: 68.29
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_9_in_euro*interest_rate"
+  principal_repayment_year_1_in_euro:
+    value: 1744.61
+    abs_tol: 0.01
+    derivation: "annuity_in_euro-interest_year_1_in_euro"
+  principal_repayment_year_2_in_euro:
+    value: 1796.95
+    abs_tol: 0.01
+    derivation: "annuity_in_euro-interest_year_2_in_euro"
+  principal_repayment_year_3_in_euro:
+    value: 1850.86
+    abs_tol: 0.01
+    derivation: "annuity_in_euro-interest_year_3_in_euro"
+  principal_repayment_year_4_in_euro:
+    value: 1906.38
+    abs_tol: 0.01
+    derivation: "annuity_in_euro-interest_year_4_in_euro"
+  principal_repayment_year_5_in_euro:
+    value: 1963.57
+    abs_tol: 0.01
+    derivation: "annuity_in_euro-interest_year_5_in_euro"
+  principal_repayment_year_6_in_euro:
+    value: 2022.48
+    abs_tol: 0.01
+    derivation: "annuity_in_euro-interest_year_6_in_euro"
+  principal_repayment_year_7_in_euro:
+    value: 2083.16
+    abs_tol: 0.01
+    derivation: "annuity_in_euro-interest_year_7_in_euro"
+  principal_repayment_year_8_in_euro:
+    value: 2145.65
+    abs_tol: 0.01
+    derivation: "annuity_in_euro-interest_year_8_in_euro"
+  principal_repayment_year_9_in_euro:
+    value: 2210.02
+    abs_tol: 0.01
+    derivation: "annuity_in_euro-interest_year_9_in_euro"
+  principal_repayment_year_10_in_euro:
+    value: 2276.32
+    abs_tol: 0.01
+    derivation: "annuity_in_euro-interest_year_10_in_euro"
+  remaining_debt_year_1_in_euro:
+    value: 18255.39
+    abs_tol: 0.01
+    derivation: "principal_in_euro-principal_repayment_year_1_in_euro"
+  remaining_debt_year_2_in_euro:
+    value: 16458.44
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_1_in_euro-principal_repayment_year_2_in_euro"
+  remaining_debt_year_3_in_euro:
+    value: 14607.58
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_2_in_euro-principal_repayment_year_3_in_euro"
+  remaining_debt_year_4_in_euro:
+    value: 12701.20
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_3_in_euro-principal_repayment_year_4_in_euro"
+  remaining_debt_year_5_in_euro:
+    value: 10737.63
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_4_in_euro-principal_repayment_year_5_in_euro"
+  remaining_debt_year_6_in_euro:
+    value: 8715.15
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_5_in_euro-principal_repayment_year_6_in_euro"
+  remaining_debt_year_7_in_euro:
+    value: 6631.99
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_6_in_euro-principal_repayment_year_7_in_euro"
+  remaining_debt_year_8_in_euro:
+    value: 4486.34
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_7_in_euro-principal_repayment_year_8_in_euro"
+  remaining_debt_year_9_in_euro:
+    value: 2276.32
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_8_in_euro-principal_repayment_year_9_in_euro"
+  remaining_debt_year_10_in_euro:
+    value: 0.00
+    abs_tol: 0.01
+    derivation: "remaining_debt_year_9_in_euro-principal_repayment_year_10_in_euro"
+  total_interest_in_euro:
+    value: 3446.10
+    abs_tol: 0.01
+    derivation: "SUM(interest_year_1_in_euro:interest_year_10_in_euro)"
+    note: "range over ten individually labeled rows (validation rule 7)"
+  total_payments_in_euro:
+    value: 23446.10
+    abs_tol: 0.01
+    derivation: "annuity_in_euro*duration_in_years"

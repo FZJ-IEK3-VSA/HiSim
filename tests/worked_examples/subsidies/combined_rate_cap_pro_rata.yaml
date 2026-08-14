@@ -1,0 +1,37 @@
+# GENERATED from combined_rate_cap_pro_rata.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "combined_rate_cap_pro_rata"
+group: "subsidies"
+spec_section: "5.4"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "Two share-based schemes in one cumulation group ask for 30 % and 20 %, but the group's combined rate is capped at 40 %. Both rates are scaled down pro rata by the same factor 0.40/0.50, so each scheme keeps its relative weight and the sum hits the cap exactly."
+inputs:
+  measure_cost_in_euro: 20000
+  interest_rate: 0.03
+  cumulation_group: "worked_example_group"
+  combined_rate_cap: 0.4
+  scheme_a_benefit_kind: "SHARE_OF_ELIGIBLE_COST"
+  scheme_a_payout_kind: "UPFRONT_GRANT"
+  scheme_a_rate: 0.3
+  scheme_b_benefit_kind: "BONUS_SHARE"
+  scheme_b_payout_kind: "UPFRONT_GRANT"
+  scheme_b_rate: 0.2
+expected:
+  scheme_a_award_in_euro:
+    value: 4800.00
+    abs_tol: 0.01
+    derivation: "measure_cost_in_euro*scheme_a_rate*combined_rate_cap/(scheme_a_rate+scheme_b_rate)"
+    note: "the group rate is scaled down pro rata to the cap"
+  scheme_b_award_in_euro:
+    value: 3200.00
+    abs_tol: 0.01
+    derivation: "measure_cost_in_euro*scheme_b_rate*combined_rate_cap/(scheme_a_rate+scheme_b_rate)"
+  total_upfront_award_in_euro:
+    value: 8000.00
+    abs_tol: 0.01
+    derivation: "scheme_a_award_in_euro+scheme_b_award_in_euro"
+  effective_support_share:
+    value: 0.400000
+    abs_tol: 0.000001
+    derivation: "total_upfront_award_in_euro/measure_cost_in_euro"
+    note: "equals the combined rate cap"

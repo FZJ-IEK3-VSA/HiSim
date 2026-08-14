@@ -1,0 +1,33 @@
+# GENERATED from eac_annuity_factor_20y_3pct.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "eac_annuity_factor_20y_3pct"
+group: "discounting"
+spec_section: "3.2"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "Equivalent annual cost of a single 30,000 EUR outlay over a 20-year observation period at 3 %: the annuity factor converts a present value into the constant annual payment with the same present value. Excel's PMT on a present value of one reproduces the same factor."
+inputs:
+  interest_rate: 0.03
+  observation_period_in_years: 20
+  cash_flow_year_0_in_euro: 30000
+expected:
+  annuity_factor:
+    value: 0.067216
+    abs_tol: 0.000001
+    derivation: "interest_rate*(1+interest_rate)^observation_period_in_years/((1+interest_rate)^observation_period_in_years-1)"
+  annuity_factor_via_pmt:
+    value: 0.067216
+    abs_tol: 0.000001
+    derivation: "-PMT(interest_rate,observation_period_in_years,1)"
+    note: "Excel's PMT on a present value of 1 is the annuity factor by definition"
+  discount_factor_year_20:
+    value: 0.553676
+    abs_tol: 0.000001
+    derivation: "1/(1+interest_rate)^observation_period_in_years"
+  npv_in_euro:
+    value: 30000.00
+    abs_tol: 0.01
+    derivation: "cash_flow_year_0_in_euro"
+  eac_in_euro:
+    value: 2016.47
+    abs_tol: 0.01
+    derivation: "npv_in_euro*annuity_factor"

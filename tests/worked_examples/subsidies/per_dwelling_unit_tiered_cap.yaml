@@ -1,0 +1,34 @@
+# GENERATED from per_dwelling_unit_tiered_cap.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "per_dwelling_unit_tiered_cap"
+group: "subsidies"
+spec_section: "5.2"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "A tiered eligible-cost cap in an apartment building: 30,000 EUR for the first dwelling unit and 15,000 EUR for every further one. With four units the cap is 75,000 EUR, which binds against the 90,000 EUR measure, and the 30 % grant applies to the capped basis."
+inputs:
+  measure_cost_in_euro: 90000
+  interest_rate: 0.03
+  dwelling_units: 4
+  scheme_a_benefit_kind: "SHARE_OF_ELIGIBLE_COST"
+  scheme_a_payout_kind: "UPFRONT_GRANT"
+  scheme_a_rate: 0.3
+  scheme_a_cap_first_unit_in_euro: 30000
+  scheme_a_cap_further_unit_in_euro: 15000
+expected:
+  eligible_cap_in_euro:
+    value: 75000.00
+    abs_tol: 0.01
+    derivation: "scheme_a_cap_first_unit_in_euro+scheme_a_cap_further_unit_in_euro*(dwelling_units-1)"
+  scheme_a_award_in_euro:
+    value: 22500.00
+    abs_tol: 0.01
+    derivation: "MIN(measure_cost_in_euro,eligible_cap_in_euro)*scheme_a_rate"
+    note: "the tiered cap clamps the basis before the rate applies"
+  total_upfront_award_in_euro:
+    value: 22500.00
+    abs_tol: 0.01
+    derivation: "scheme_a_award_in_euro"
+  effective_support_share:
+    value: 0.250000
+    abs_tol: 0.000001
+    derivation: "total_upfront_award_in_euro/measure_cost_in_euro"

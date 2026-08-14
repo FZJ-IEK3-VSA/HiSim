@@ -1,0 +1,45 @@
+# GENERATED from grant_versus_tax_credit_choice.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "grant_versus_tax_credit_choice"
+group: "subsidies"
+spec_section: "5.4"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "A 20 % upfront grant and a 25 % tax credit paid in three equal annual instalments exclude each other. The solver values both on the average slot and picks the larger discounted support: at 5 % the tax credit is worth about 4,539 EUR against the grant's 4,000 EUR, so the grant is not awarded and no money moves at year 0."
+inputs:
+  measure_cost_in_euro: 20000
+  interest_rate: 0.05
+  scheme_a_benefit_kind: "SHARE_OF_ELIGIBLE_COST"
+  scheme_a_payout_kind: "UPFRONT_GRANT"
+  scheme_a_rate: 0.2
+  scheme_a_excludes: "SCHEME_B"
+  scheme_b_benefit_kind: "TAX_CREDIT"
+  scheme_b_payout_kind: "TAX_CREDIT_SCHEDULE"
+  scheme_b_rate: 0.25
+  scheme_b_years: 3
+  scheme_b_excludes: "SCHEME_A"
+expected:
+  tax_credit_total_in_euro:
+    value: 5000.00
+    abs_tol: 0.01
+    derivation: "measure_cost_in_euro*scheme_b_rate"
+  tax_credit_year_1_in_euro:
+    value: 1666.67
+    abs_tol: 0.01
+    derivation: "tax_credit_total_in_euro/scheme_b_years"
+  tax_credit_year_2_in_euro:
+    value: 1666.67
+    abs_tol: 0.01
+    derivation: "tax_credit_total_in_euro/scheme_b_years"
+  tax_credit_year_3_in_euro:
+    value: 1666.67
+    abs_tol: 0.01
+    derivation: "tax_credit_total_in_euro/scheme_b_years"
+  support_npv_in_euro:
+    value: 4538.75
+    abs_tol: 0.01
+    derivation: "tax_credit_year_1_in_euro/(1+interest_rate)^1+tax_credit_year_2_in_euro/(1+interest_rate)^2+tax_credit_year_3_in_euro/(1+interest_rate)^3"
+    note: "the solver objective: discounted value of the chosen combination"
+  total_upfront_award_in_euro:
+    value: 0.00
+    abs_tol: 0.01
+    note: "constant, not a formula: the grant loses the comparison, so nothing is paid at year 0"

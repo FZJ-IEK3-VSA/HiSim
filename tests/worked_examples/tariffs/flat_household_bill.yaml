@@ -1,0 +1,29 @@
+# GENERATED from flat_household_bill.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "flat_household_bill"
+group: "tariffs"
+spec_section: "8.4"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "The simplest possible bill: 3,500 kWh at an all-in flat price of 0.30 EUR/kWh plus a 120 EUR annual standing charge. Working cost is energy times price, and the total bill adds the standing charge."
+inputs:
+  supply_kind: "FLAT"
+  energy_bought_in_kwh: 3500
+  working_price_in_euro_per_kwh: 0.3
+  standing_charge_in_euro_per_year: 120
+expected:
+  energy_working_in_euro:
+    value: 1050.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*working_price_in_euro_per_kwh"
+  energy_standing_in_euro:
+    value: 120.00
+    abs_tol: 0.01
+    derivation: "standing_charge_in_euro_per_year"
+  total_bill_in_euro:
+    value: 1170.00
+    abs_tol: 0.01
+    derivation: "energy_working_in_euro+energy_standing_in_euro"
+  mean_energy_price_in_euro_per_kwh:
+    value: 0.300000
+    abs_tol: 0.000001
+    derivation: "working_price_in_euro_per_kwh"

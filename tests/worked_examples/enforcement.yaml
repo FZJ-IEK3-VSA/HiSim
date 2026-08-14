@@ -1,0 +1,7 @@
+# Review enforcement of the worked-example library (cost-spec-v2 §3.8).
+#
+# warn  - unreviewed or stale examples emit a pytest warning (the current state:
+#         every example is machine-drafted and starts unreviewed by construction).
+# error - the same examples fail tests/test_worked_examples.py. Flipping this one
+#         word after the first human review round is the whole enforcement switch.
+enforcement: warn

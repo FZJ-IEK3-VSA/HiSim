@@ -1,0 +1,42 @@
+# GENERATED from loan_partial_share_15y_5pct.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "loan_partial_share_15y_5pct"
+group: "financing"
+spec_section: "4.4"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "A 30,000 EUR investment of which 60 % is financed: the loan principal is the financed share of the net investment, and the 15-year annuity at 5 % is computed on that principal alone. The remaining 40 % is paid from equity and never enters the loan schedule."
+inputs:
+  net_investment_in_euro: 30000
+  financed_share: 0.6
+  interest_rate: 0.05
+  duration_in_years: 15
+expected:
+  principal_in_euro:
+    value: 18000.00
+    abs_tol: 0.01
+    derivation: "net_investment_in_euro*financed_share"
+  annuity_in_euro:
+    value: 1734.16
+    abs_tol: 0.01
+    derivation: "principal_in_euro*interest_rate*(1+interest_rate)^duration_in_years/((1+interest_rate)^duration_in_years-1)"
+  interest_year_1_in_euro:
+    value: 900.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro*interest_rate"
+  remaining_debt_year_5_in_euro:
+    value: 13390.73
+    abs_tol: 0.01
+    derivation: "principal_in_euro*(1+interest_rate)^5-annuity_in_euro*((1+interest_rate)^5-1)/interest_rate"
+    note: "closed-form remaining debt: compounded principal minus the future value of five annuities"
+  remaining_debt_year_10_in_euro:
+    value: 7508.01
+    abs_tol: 0.01
+    derivation: "principal_in_euro*(1+interest_rate)^10-annuity_in_euro*((1+interest_rate)^10-1)/interest_rate"
+  total_interest_in_euro:
+    value: 8012.42
+    abs_tol: 0.01
+    derivation: "annuity_in_euro*duration_in_years-principal_in_euro"
+  total_payments_in_euro:
+    value: 26012.42
+    abs_tol: 0.01
+    derivation: "annuity_in_euro*duration_in_years"

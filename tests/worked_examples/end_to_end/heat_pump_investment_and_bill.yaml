@@ -1,0 +1,71 @@
+# GENERATED from heat_pump_investment_and_bill.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "heat_pump_investment_and_bill"
+group: "end_to_end"
+spec_section: "3.6"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "A 20,000 EUR heat pump with a 10-year service life over a 10-year horizon at 3 % interest and no escalation. Maintenance is 1.5 % of the investment every year, the household buys 4,000 kWh at 0.30 EUR/kWh and pays a 120 EUR standing charge. Every annual item is discounted with the same present-value factor sum; lifetime equals the horizon, so there is neither a replacement nor a residual value."
+inputs:
+  investment_in_euro: 20000
+  lifetime_in_years: 10
+  maintenance_rate: 0.015
+  horizon_in_years: 10
+  interest_rate: 0.03
+  general_price_escalation_rate: 0
+  investment_price_escalation_rate: 0
+  energy_price_escalation_rate: 0
+  energy_bought_in_kwh: 4000
+  electricity_price_in_euro_per_kwh: 0.3
+  standing_charge_in_euro_per_year: 120
+expected:
+  present_value_factor_sum:
+    value: 8.530203
+    abs_tol: 0.000001
+    derivation: "(1-(1+interest_rate)^-horizon_in_years)/interest_rate"
+    note: "sum of the discount factors of years 1..10"
+  nominal_maintenance_year_1_in_euro:
+    value: 300.00
+    abs_tol: 0.01
+    derivation: "investment_in_euro*maintenance_rate"
+  nominal_energy_working_year_1_in_euro:
+    value: 1200.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*electricity_price_in_euro_per_kwh"
+  npv_investment_in_euro:
+    value: 20000.00
+    abs_tol: 0.01
+    derivation: "investment_in_euro"
+    note: "paid at year 0, undiscounted"
+  npv_maintenance_in_euro:
+    value: 2559.06
+    abs_tol: 0.01
+    derivation: "nominal_maintenance_year_1_in_euro*present_value_factor_sum"
+  npv_energy_working_in_euro:
+    value: 10236.24
+    abs_tol: 0.01
+    derivation: "nominal_energy_working_year_1_in_euro*present_value_factor_sum"
+  npv_energy_standing_in_euro:
+    value: 1023.62
+    abs_tol: 0.01
+    derivation: "standing_charge_in_euro_per_year*present_value_factor_sum"
+  total_npv_in_euro:
+    value: 33818.93
+    abs_tol: 0.01
+    derivation: "npv_investment_in_euro+npv_maintenance_in_euro+npv_energy_working_in_euro+npv_energy_standing_in_euro"
+  annuity_factor:
+    value: 0.117231
+    abs_tol: 0.000001
+    derivation: "interest_rate*(1+interest_rate)^horizon_in_years/((1+interest_rate)^horizon_in_years-1)"
+  eac_in_euro:
+    value: 3964.61
+    abs_tol: 0.01
+    derivation: "total_npv_in_euro*annuity_factor"
+  annual_cost_year_1_in_euro:
+    value: 1620.00
+    abs_tol: 0.01
+    derivation: "nominal_maintenance_year_1_in_euro+nominal_energy_working_year_1_in_euro+standing_charge_in_euro_per_year"
+    note: "nominal, not discounted: the liquidity view of year 1"
+  monthly_cost_year_1_in_euro:
+    value: 135.00
+    abs_tol: 0.01
+    derivation: "annual_cost_year_1_in_euro/12"

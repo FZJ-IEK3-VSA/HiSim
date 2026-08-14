@@ -1,0 +1,32 @@
+# GENERATED from capacity_charge_annual_peak.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "capacity_charge_annual_peak"
+group: "tariffs"
+spec_section: "8.4"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "A commercial contract with an annual-peak capacity charge: 20,000 kWh at 0.25 EUR/kWh plus 60 EUR per kW on the highest 15-minute mean power of the year (25 kW) plus a 200 EUR standing charge. The capacity part depends only on the peak, not on the volume."
+inputs:
+  supply_kind: "FLAT"
+  energy_bought_in_kwh: 20000
+  working_price_in_euro_per_kwh: 0.25
+  capacity_charge_kind: "ANNUAL_PEAK"
+  capacity_price_in_euro_per_kw: 60
+  annual_peak_in_kw: 25
+  standing_charge_in_euro_per_year: 200
+expected:
+  energy_working_in_euro:
+    value: 5000.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*working_price_in_euro_per_kwh"
+  energy_capacity_charge_in_euro:
+    value: 1500.00
+    abs_tol: 0.01
+    derivation: "annual_peak_in_kw*capacity_price_in_euro_per_kw"
+  energy_standing_in_euro:
+    value: 200.00
+    abs_tol: 0.01
+    derivation: "standing_charge_in_euro_per_year"
+  total_bill_in_euro:
+    value: 6700.00
+    abs_tol: 0.01
+    derivation: "energy_working_in_euro+energy_capacity_charge_in_euro+energy_standing_in_euro"

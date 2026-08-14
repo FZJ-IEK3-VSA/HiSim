@@ -509,22 +509,6 @@ class PIDController(cp.Component):
         self.proportional_gain = proportional_gain
         self.derivative_gain = derivative_gain
 
-    def build(self):
-        """For calculating internal things and preparing the simulation."""
-        """ getting building physical properties for state space model """
-        self.h_tr_w = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING)
-        self.h_tr_ms = self.simulation_repository.get_entry(
-            key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS
-        )
-        self.h_tr_em = self.simulation_repository.get_entry(
-            key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM
-        )
-        self.h_ve_adj = self.simulation_repository.get_entry(
-            key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION
-        )
-        self.h_tr_is = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR)
-        self.c_m = self.simulation_repository.get_entry(key=SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE)
-
     def i_save_state(self) -> None:
         """Saves the internal state at the beginning of each timestep."""
         self.previous_state = self.state.clone()

@@ -34,10 +34,11 @@ class EnergyCarrier(str, enum.Enum):
     feed-in remuneration as its "working price", which is what lets exported electricity be priced
     by exactly the same lookup as imported electricity while keeping the two rates independent
     (feed-in also has its own escalation rate, nominally fixed for EEG-style contracts). Every
-    member is *billed* per kWh; the price entry's ``quantity_unit`` says only how the data file
-    quotes it — per liter for oil and diesel, per ton for pellets and wood chips, as the cited
-    sources publish them — and the database divides such a quote by the carrier's heating value
-    when it resolves the entry (D26).
+    member is *billed* per kWh, and the shipped price files quote per kWh throughout (where a
+    source published per liter or per ton, the row's notes record the as-published quote and the
+    heating value it was divided by). A user-supplied file may still quote natively; the price
+    entry's ``quantity_unit`` says how the file quotes it, and the database divides such a quote
+    by the carrier's heating value when it resolves the entry (D26).
     """
 
     ELECTRICITY = "ELECTRICITY"

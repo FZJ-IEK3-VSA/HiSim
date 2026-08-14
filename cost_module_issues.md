@@ -91,7 +91,7 @@ were resolved with a documented default to keep the implementation moving; they 
     BASEMENT_CEILING_BOTTOM_INSULATION, BASEMENT_WALLS_INTERNAL_INSULATION,
     GROUND_EXTERNAL_INSULATION, WINDOWS_TRIPLE_GLAZED) plus EXTERIOR_DOOR, AIR_SEALING and
     VENTILATION_SYSTEM — with AI-estimate entries for DE/IE 2026/2035, BEG EM envelope schemes
-    (15 % + 5 % iSFP, U-value conditions) plus the `building.has_isfp` question, and three
+    (15 % + 5 % iSFP, U-value conditions) plus the `building.has_renovation_roadmap` question (iSFP in the German catalog; renamed 2026-08-18 per PR-3 review), and three
     engine mechanics (see README §3.2b).
     Decisions taken:
     - **(a)** `energy_related_cost_share` implemented as the coupled-cost (Ohnehin-Kosten)
@@ -143,11 +143,13 @@ were resolved with a documented default to keep the implementation moving; they 
     (spec §9.7: legacy bugs are documented, not silently reproduced). Decision needed at
     cutover whether the legacy KPI keeps the bug until Phase 7. (Referenced in code as issue #21.)
 
-21. **Energy-price field names vs native units**: the spec's `working_price_in_euro_per_kwh` /
-    `emission_factor_in_kg_per_kwh` field names are kept, but for HEATING_OIL/DIESEL (liter) and
-    PELLETS/WOOD_CHIPS (ton) the migrated entries carry `quantity_unit` and the "per kWh" reads
-    "per quantity_unit". A data PR converting everything to true €/kWh (with documented heating
-    values) would be cleaner but changes legacy-parity numbers.
+21. **Energy-price field names vs native units — RESOLVED** (2026-08-18, PR-2 review): all
+    shipped liter/ton quotes were converted to true €/kWh using the engine's own
+    `energy_content_of` resolution (PhysicsConfig heating values), so the `*_per_kwh` field
+    names read literally in the data. The as-published native quote and the heating value used
+    are recorded in each converted row's `notes`. Engine output is unchanged — the same
+    division previously happened at resolution. The conversion machinery (`in_euro_per_kwh`,
+    `converted_from`) stays for user-supplied files that quote natively.
 
 22. **`scenario_cube.csv` and `scenario_evaluation`**: the export is written in the long format
     the spec prescribes so the existing `scenario_evaluation` aggregation can consume it, but no

@@ -133,8 +133,6 @@ def initialize_from_python(
     else:
         sim_params = None
 
-    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{get_description_from_py(path_obj)}")
-
     # Make setup function executable
     targetmodule = importlib.import_module(module_filename)
 

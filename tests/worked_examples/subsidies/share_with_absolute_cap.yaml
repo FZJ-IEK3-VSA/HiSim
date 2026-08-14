@@ -1,0 +1,38 @@
+# GENERATED from share_with_absolute_cap.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "share_with_absolute_cap"
+group: "subsidies"
+spec_section: "5.2"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "A single 30 % grant on a 40,000 EUR measure whose eligible cost is capped at 30,000 EUR. The cap binds, so the grant is 30 % of the capped basis, not of the measure cost, and the effective support share falls below the headline rate."
+inputs:
+  measure_cost_in_euro: 40000
+  interest_rate: 0.03
+  scheme_a_benefit_kind: "SHARE_OF_ELIGIBLE_COST"
+  scheme_a_payout_kind: "UPFRONT_GRANT"
+  scheme_a_rate: 0.3
+  scheme_a_cap_first_unit_in_euro: 30000
+  dwelling_units: 1
+expected:
+  eligible_cap_in_euro:
+    value: 30000.00
+    abs_tol: 0.01
+    derivation: "scheme_a_cap_first_unit_in_euro*dwelling_units"
+  scheme_a_award_in_euro:
+    value: 9000.00
+    abs_tol: 0.01
+    derivation: "MIN(measure_cost_in_euro,eligible_cap_in_euro)*scheme_a_rate"
+    note: "the cap clamps the basis before the rate applies"
+  total_upfront_award_in_euro:
+    value: 9000.00
+    abs_tol: 0.01
+    derivation: "scheme_a_award_in_euro"
+  effective_support_share:
+    value: 0.225000
+    abs_tol: 0.000001
+    derivation: "total_upfront_award_in_euro/measure_cost_in_euro"
+  support_npv_in_euro:
+    value: 9000.00
+    abs_tol: 0.01
+    derivation: "total_upfront_award_in_euro"
+    note: "an upfront grant is paid at year 0 and is therefore not discounted"

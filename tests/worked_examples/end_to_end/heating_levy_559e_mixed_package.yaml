@@ -1,0 +1,86 @@
+# GENERATED from heating_levy_559e_mixed_package.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "heating_levy_559e_mixed_package"
+group: "end_to_end"
+spec_section: "6.4"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-14"
+description: "A mixed retrofit package in a rented flat of 100 m2 at a cold rent of 9.00 EUR/m2/month: a 30,000 EUR heat pump with a 30 % grant and a 50,000 EUR wall insulation with a 20 % grant, over a 20-year horizon at 3 % interest. The heat pump is a heating measure under 559e BGB and is levied at 10 % of its subsidy-reduced basis, but its 2,100 EUR/a run into the 559e cap of 0.50 EUR/m2/month = 600 EUR/a. The insulation is an ordinary 559 measure at 8 % of 40,000 EUR = 3,200 EUR/a, and the two together (3,800 EUR/a) exceed the general cap of 3.00 EUR/m2/month = 3,600 EUR/a, so the non-heating leg is cut first, to 3,000 EUR/a. The statutory percentages are copied here from hisim/cost_database/allocation_DE_2024.json; a change to that file must fail this example rather than re-baseline it."
+inputs:
+  heating_investment_in_euro: 30000
+  envelope_investment_in_euro: 50000
+  heating_subsidy_rate: 0.3
+  envelope_subsidy_rate: 0.2
+  living_area_in_m2: 100
+  current_cold_rent_in_euro_per_m2_month: 9
+  horizon_in_years: 20
+  interest_rate: 0.03
+  levy_rate_per_year: 0.08
+  heating_levy_rate_per_year: 0.1
+  cap_in_euro_per_m2_per_month: 3
+  heating_cap_in_euro_per_m2_per_month: 0.5
+  cap_low_rent_threshold_in_euro_per_m2: 7
+  months_per_year: 12
+expected:
+  subsidy_heatpump_in_euro:
+    value: 9000.00
+    abs_tol: 0.01
+    derivation: "heating_investment_in_euro*heating_subsidy_rate"
+    note: "grant deducted from the §559e basis (§559 Abs. 2)"
+  subsidy_wallinsulation_in_euro:
+    value: 10000.00
+    abs_tol: 0.01
+    derivation: "envelope_investment_in_euro*envelope_subsidy_rate"
+    note: "grant deducted from the §559 basis"
+  heating_levy_basis_in_euro:
+    value: 21000.00
+    abs_tol: 0.01
+    derivation: "heating_investment_in_euro-subsidy_heatpump_in_euro"
+    note: "no anyway-cost credit in a greenfield package, so no maintenance deduction"
+  general_levy_basis_in_euro:
+    value: 40000.00
+    abs_tol: 0.01
+    derivation: "envelope_investment_in_euro-subsidy_wallinsulation_in_euro"
+  heating_cap_in_euro_per_year:
+    value: 600.00
+    abs_tol: 0.01
+    derivation: "heating_cap_in_euro_per_m2_per_month*months_per_year*living_area_in_m2"
+  general_cap_in_euro_per_year:
+    value: 3600.00
+    abs_tol: 0.01
+    derivation: "cap_in_euro_per_m2_per_month*months_per_year*living_area_in_m2"
+    note: "the rent is above cap_low_rent_threshold_in_euro_per_m2, so the 3.00 EUR tier applies"
+  annual_levy_heating_in_euro:
+    value: 600.00
+    abs_tol: 0.01
+    derivation: "MIN(heating_levy_basis_in_euro*heating_levy_rate_per_year,heating_cap_in_euro_per_year)"
+    note: "10 % of 21,000 = 2,100 EUR/a, cut to the §559e cap of 600 EUR/a"
+  annual_levy_general_in_euro:
+    value: 3000.00
+    abs_tol: 0.01
+    derivation: "MIN(general_levy_basis_in_euro*levy_rate_per_year,general_cap_in_euro_per_year-annual_levy_heating_in_euro)"
+    note: "8 % of 40,000 = 3,200 EUR/a; the general cap leaves only 3,600-600, and the non-heating leg is reduced first"
+  annual_levy_total_in_euro:
+    value: 3600.00
+    abs_tol: 0.01
+    derivation: "annual_levy_heating_in_euro+annual_levy_general_in_euro"
+    note: "the whole rent increase, booked as one transfer pair per year"
+  present_value_factor_sum:
+    value: 14.877475
+    abs_tol: 0.000001
+    derivation: "(1-(1+interest_rate)^-horizon_in_years)/interest_rate"
+    note: "sum of the discount factors of years 1..20"
+  levy_npv_in_euro:
+    value: 53558.91
+    abs_tol: 0.01
+    derivation: "annual_levy_total_in_euro*present_value_factor_sum"
+    note: "the levy is a fixed nominal rent increase, never escalated"
+  tenant_npv_in_euro:
+    value: 53558.91
+    abs_tol: 0.01
+    derivation: "levy_npv_in_euro"
+    note: "the package has no energy bill and no apportionable operation, so the levy is the tenant's whole position"
+  landlord_npv_in_euro:
+    value: 7441.09
+    abs_tol: 0.01
+    derivation: "heating_investment_in_euro+envelope_investment_in_euro-subsidy_heatpump_in_euro-subsidy_wallinsulation_in_euro-levy_npv_in_euro"
+    note: "investment net of grants minus the levy received; landlord + tenant = the system NPV (§6.5)"

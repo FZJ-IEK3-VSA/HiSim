@@ -1,0 +1,45 @@
+# GENERATED from loan_zero_interest_20y.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "loan_zero_interest_20y"
+group: "financing"
+spec_section: "4.4"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "24,000 EUR interest-free loan over 20 years. With a zero rate the annuity degenerates to the principal divided by the term, no interest accrues at all, and the remaining debt falls linearly, so half the debt is left after ten years."
+inputs:
+  principal_in_euro: 24000
+  interest_rate: 0
+  duration_in_years: 20
+expected:
+  annuity_in_euro:
+    value: 1200.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro/duration_in_years"
+    note: "zero-rate branch: the annuity is pure amortization"
+  interest_year_1_in_euro:
+    value: 0.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro*interest_rate"
+  interest_year_20_in_euro:
+    value: 0.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro*interest_rate"
+  principal_repayment_year_1_in_euro:
+    value: 1200.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro/duration_in_years"
+  remaining_debt_year_10_in_euro:
+    value: 12000.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro-annuity_in_euro*10"
+  remaining_debt_year_20_in_euro:
+    value: 0.00
+    abs_tol: 0.01
+    derivation: "principal_in_euro-annuity_in_euro*duration_in_years"
+  total_interest_in_euro:
+    value: 0.00
+    abs_tol: 0.01
+    derivation: "interest_year_1_in_euro*duration_in_years"
+  total_payments_in_euro:
+    value: 24000.00
+    abs_tol: 0.01
+    derivation: "annuity_in_euro*duration_in_years"

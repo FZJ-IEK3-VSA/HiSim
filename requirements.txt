@@ -42,6 +42,9 @@ ruamel.yaml
 # and the mockups against it; HiSim itself never imports it at runtime
 jsonschema
 Pillow
+# Worked-example library: tools/convert_worked_examples.py writes the YAML fixtures,
+# tests/test_worked_examples.py reads them (cost-spec-v2 §3.3).
+pyyaml
 # Independent implementation cross-check of the closed-form financial math
 # (tests/test_economics_invariants.py, cost-spec-v2 §5.3).
 numpy_financial

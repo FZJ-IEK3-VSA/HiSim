@@ -1,0 +1,27 @@
+# GENERATED from lump_sum_clamped_to_basis.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "lump_sum_clamped_to_basis"
+group: "subsidies"
+spec_section: "5.2"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "A 2,000 EUR lump-sum grant meets a measure that only costs 1,500 EUR. A subsidy can never exceed the eligible cost it supports, so the award is clamped to the measure cost and the effective support share is exactly one."
+inputs:
+  measure_cost_in_euro: 1500
+  interest_rate: 0.03
+  scheme_a_benefit_kind: "LUMP_SUM"
+  scheme_a_payout_kind: "UPFRONT_GRANT"
+  scheme_a_amount_in_euro: 2000
+expected:
+  scheme_a_award_in_euro:
+    value: 1500.00
+    abs_tol: 0.01
+    derivation: "MIN(scheme_a_amount_in_euro,measure_cost_in_euro)"
+    note: "clamped to the eligible cost basis"
+  total_upfront_award_in_euro:
+    value: 1500.00
+    abs_tol: 0.01
+    derivation: "scheme_a_award_in_euro"
+  effective_support_share:
+    value: 1.000000
+    abs_tol: 0.000001
+    derivation: "total_upfront_award_in_euro/measure_cost_in_euro"

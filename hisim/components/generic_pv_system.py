@@ -17,7 +17,7 @@ import datetime
 import enum
 import math
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -32,6 +32,7 @@ from hisim import log
 from hisim import utils
 from hisim.component import ConfigBase, OpexCostDataClass, CapexCostDataClass
 from hisim.components.weather import Weather
+from hisim.economics.facts import ComponentCostFacts, CostRelevance
 from hisim.sim_repository_singleton import (
     SingletonSimRepository,
     SingletonDictKeyEnum,
@@ -107,7 +108,8 @@ class PVSystemConfig(ConfigBase):
     inverter_name: str
     module_database: PVLibModuleAndInverterEnum
     inverter_database: PVLibModuleAndInverterEnum
-    power_in_watt: float
+    # marked as the capacity field for the cost-facts contract test (cost_spec.md §9.4)
+    power_in_watt: float = field(metadata={"capacity": True})
     azimuth: float
     tilt: float
     # [0..1], how much pv potential is used
@@ -292,6 +294,9 @@ class PVSystem(cp.Component):
         Name of pv panel within simulation. The default is 'PVSystem'
 
     """
+
+    # Lifecycle cost engine declaration (cost_spec.md §9.2).
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     TemperatureOutside = "TemperatureOutside"
@@ -490,6 +495,38 @@ class PVSystem(cp.Component):
         )
 
         return capex_cost_data_class
+
+    def get_cost_facts(self) -> ComponentCostFacts:
+        """Cost facts for the lifecycle cost engine (cost_spec.md §3.3, §9.1).
+
+        Declares the PV array as one priced subject: a `PV` entry of the cost database, sized by
+        its **installed module power in kW**. The config holds that power in *watts*, so the
+        `1e-3` is the conversion into the kilowatts the database prices in (EUR/kW); without it a
+        10 kW array would be costed as if it were 10 MW. Note this is the module power, not an
+        area — PV is never sized in m² here, even though the sizing helper starts from roof area.
+
+        Investment, lifetime and embodied CO2 are looked up from the versioned database unless the
+        config carries explicit values (building sizer / RenoVisor request), which are then passed
+        through as per-field overrides with a mandatory `override_source`.
+
+        Returns:
+            The facts for this PV system; never None, since the class declares `PRICED`.
+        """
+        config = self.config
+        return ComponentCostFacts(
+            asset_class=lt.ComponentType.PV,
+            size=config.power_in_watt * 1e-3,
+            size_unit=lt.Units.KILOWATT,
+            kpi_tag=KpiTagEnumClass.ROOFTOP_PV,
+            investment_cost_override_in_euro=config.investment_costs_in_euro,
+            lifetime_override_in_years=config.lifetime_in_years,
+            embodied_co2_override_in_kg=config.device_co2_footprint_in_kg,
+            override_source=(
+                "component config (e.g. building_sizer / RenoVisor request)"
+                if config.investment_costs_in_euro is not None
+                else None
+            ),
+        )
 
     def get_cost_opex(
         self,

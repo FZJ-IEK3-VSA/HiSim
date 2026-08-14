@@ -1,0 +1,428 @@
+{
+  "entries": [
+    {
+      "component_type": "HEAT_PUMP",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 3000,
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.005,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 17,
+      "embodied_co2": {
+        "value": 130,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_38",
+        "src_capex_39",
+        "src_capex_40",
+        "src_capex_41"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "component_type": "GAS_HEATER",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 600,
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.03333333333333333,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 17,
+      "embodied_co2": {
+        "value": 50,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_39",
+        "src_capex_41",
+        "src_capex_42",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "component_type": "OIL_HEATER",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 750,
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.023333333333333334,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 60,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_37",
+        "src_capex_41",
+        "src_capex_42",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "component_type": "PELLET_HEATER",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 1200,
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.02,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 18,
+      "embodied_co2": {
+        "value": 110,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_37",
+        "src_capex_41",
+        "src_capex_42",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "component_type": "WOOD_CHIP_HEATER",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 2000,
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.02,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 25,
+      "embodied_co2": {
+        "value": 120,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_37",
+        "src_capex_41",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "component_type": "DISTRICT_HEATING",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 2666.6666666666665,
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.01,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 30,
+      "embodied_co2": {
+        "value": 100,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_20",
+        "src_capex_37",
+        "src_capex_41",
+        "src_capex_43"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "component_type": "PV",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 1200,
+        "per_unit": "kW"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.02,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 27,
+      "embodied_co2": {
+        "value": 110,
+        "per_unit": "kW"
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_37",
+        "src_capex_41",
+        "src_capex_44",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "component_type": "BATTERY",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 450,
+        "per_unit": "kWh"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.022222222222222223,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 15,
+      "embodied_co2": {
+        "value": 150,
+        "per_unit": "kWh"
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_41",
+        "src_capex_45",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "component_type": "THERMAL_ENERGY_STORAGE",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 16.1061,
+        "per_unit": "liter"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.01,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 0.5958,
+        "per_unit": "liter"
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_19",
+        "src_capex_20",
+        "src_capex_32",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "component_type": "SOLAR_THERMAL_SYSTEM",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 680,
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.013235294117647059,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 23,
+      "embodied_co2": {
+        "value": 100,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_46",
+        "src_capex_20",
+        "src_capex_47",
+        "src_capex_41"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "component_type": "HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 83.25,
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.01,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 50,
+      "embodied_co2": {
+        "value": 0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_34",
+        "src_capex_23"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "component_type": "HEAT_DISTRIBUTION_SYSTEM_RADIATOR",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 62.4375,
+        "per_unit": "m2"
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.01,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 30,
+      "embodied_co2": {
+        "value": 0,
+        "per_unit": "m2"
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_34",
+        "src_capex_35",
+        "src_capex_23",
+        "src_capex_36"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "component_type": "ELECTRICITY_METER",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 111.0,
+        "per_unit": null
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.2,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 0,
+        "per_unit": null
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_26",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "component_type": "GAS_METER",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 222.0,
+        "per_unit": null
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.15,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 0,
+        "per_unit": null
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_27",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "component_type": "ENERGY_MANAGEMENT_SYSTEM",
+      "valid_from_year": 2025,
+      "specific_investment": {
+        "value": 3885.0,
+        "per_unit": null
+      },
+      "scaling_exponent": null,
+      "fixed_installation_cost_in_euro": 0,
+      "planning_cost_in_euro": 0,
+      "removal_cost_in_euro": 0,
+      "maintenance_rate_per_year": 0.028,
+      "fixed_operation_cost_in_euro_per_year": 0,
+      "service_life_in_years": 20,
+      "embodied_co2": {
+        "value": 0,
+        "per_unit": null
+      },
+      "vat_rate": 0.2,
+      "price_basis": "AS_LEGACY",
+      "legacy_flat_subsidy_share": 0,
+      "source_ids": [
+        "src_capex_28"
+      ],
+      "notes": "Migrated 1:1 from configuration.py capex_techno_economic_parameters (degenerate band)."
+    }
+  ]
+}

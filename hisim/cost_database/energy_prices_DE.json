@@ -1,0 +1,1578 @@
+{
+  "entries": [
+    {
+      "carrier": "ELECTRICITY",
+      "year": 2018,
+      "working_price_in_euro_per_kwh": 0.27825,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.473,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_1",
+        "src_opex_6",
+        "src_opex_22",
+        "src_opex_5",
+        "src_opex_9"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "ELECTRICITY_FEED_IN",
+      "year": 2018,
+      "working_price_in_euro_per_kwh": 0.1205,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_2"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "NATURAL_GAS",
+      "year": 2018,
+      "working_price_in_euro_per_kwh": 0.0664,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.24,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_4",
+        "src_opex_6",
+        "src_opex_22"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HEATING_OIL",
+      "year": 2018,
+      "working_price_in_euro_per_kwh": 1.159835766,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 3.2,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_12",
+        "src_opex_22",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DIESEL",
+      "year": 2018,
+      "working_price_in_euro_per_kwh": 128.9,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_3",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "PELLETS",
+      "year": 2018,
+      "working_price_in_euro_per_kwh": 247,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.036,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_13",
+        "src_opex_22",
+        "src_opex_8",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "WOOD_CHIPS",
+      "year": 2018,
+      "working_price_in_euro_per_kwh": 96,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0313,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_15",
+        "src_opex_14"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DISTRICT_HEATING",
+      "year": 2018,
+      "working_price_in_euro_per_kwh": 0.07672,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.28,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_16",
+        "src_opex_22",
+        "src_opex_8"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HYDROGEN",
+      "year": 2018,
+      "working_price_in_euro_per_kwh": 0.25,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_17"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Legacy key 'green_hydrogen_gas'; mapped to carrier HYDROGEN (cost_module_issues.md #19)."
+    },
+    {
+      "carrier": "ELECTRICITY",
+      "year": 2019,
+      "working_price_in_euro_per_kwh": 0.295,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.411,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_1",
+        "src_opex_6",
+        "src_opex_22",
+        "src_opex_5",
+        "src_opex_9"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "ELECTRICITY_FEED_IN",
+      "year": 2019,
+      "working_price_in_euro_per_kwh": 0.1072,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_2"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "NATURAL_GAS",
+      "year": 2019,
+      "working_price_in_euro_per_kwh": 0.0728,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.24,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_4",
+        "src_opex_6",
+        "src_opex_22"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HEATING_OIL",
+      "year": 2019,
+      "working_price_in_euro_per_kwh": 1.159835766,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 3.2,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_12",
+        "src_opex_22",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DIESEL",
+      "year": 2019,
+      "working_price_in_euro_per_kwh": 1.267,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_3",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "PELLETS",
+      "year": 2019,
+      "working_price_in_euro_per_kwh": 251,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.036,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_13",
+        "src_opex_22",
+        "src_opex_8",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "WOOD_CHIPS",
+      "year": 2019,
+      "working_price_in_euro_per_kwh": 96,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0313,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_15",
+        "src_opex_14"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DISTRICT_HEATING",
+      "year": 2019,
+      "working_price_in_euro_per_kwh": 0.07904,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.28,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_16",
+        "src_opex_22",
+        "src_opex_8"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HYDROGEN",
+      "year": 2019,
+      "working_price_in_euro_per_kwh": 0.25,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_17"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Legacy key 'green_hydrogen_gas'; mapped to carrier HYDROGEN (cost_module_issues.md #19)."
+    },
+    {
+      "carrier": "ELECTRICITY",
+      "year": 2020,
+      "working_price_in_euro_per_kwh": 0.3005,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.369,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_1",
+        "src_opex_6",
+        "src_opex_22",
+        "src_opex_5",
+        "src_opex_9"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "ELECTRICITY_FEED_IN",
+      "year": 2020,
+      "working_price_in_euro_per_kwh": 0.0838,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_2"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "NATURAL_GAS",
+      "year": 2020,
+      "working_price_in_euro_per_kwh": 0.0699,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.24,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_4",
+        "src_opex_6",
+        "src_opex_22"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HEATING_OIL",
+      "year": 2020,
+      "working_price_in_euro_per_kwh": 1.159835766,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 3.2,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_12",
+        "src_opex_22",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DIESEL",
+      "year": 2020,
+      "working_price_in_euro_per_kwh": 1.124,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_3",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "PELLETS",
+      "year": 2020,
+      "working_price_in_euro_per_kwh": 237,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.036,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_13",
+        "src_opex_22",
+        "src_opex_8",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "WOOD_CHIPS",
+      "year": 2020,
+      "working_price_in_euro_per_kwh": 96,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0313,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_15",
+        "src_opex_14"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DISTRICT_HEATING",
+      "year": 2020,
+      "working_price_in_euro_per_kwh": 0.07656,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.28,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_16",
+        "src_opex_22",
+        "src_opex_8"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HYDROGEN",
+      "year": 2020,
+      "working_price_in_euro_per_kwh": 0.25,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_17"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Legacy key 'green_hydrogen_gas'; mapped to carrier HYDROGEN (cost_module_issues.md #19)."
+    },
+    {
+      "carrier": "ELECTRICITY",
+      "year": 2021,
+      "working_price_in_euro_per_kwh": 0.3005,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.41,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_1",
+        "src_opex_6",
+        "src_opex_22",
+        "src_opex_5",
+        "src_opex_9"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "ELECTRICITY_FEED_IN",
+      "year": 2021,
+      "working_price_in_euro_per_kwh": 0.0753,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_2"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "NATURAL_GAS",
+      "year": 2021,
+      "working_price_in_euro_per_kwh": 0.0745,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.24,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_4",
+        "src_opex_6",
+        "src_opex_22"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HEATING_OIL",
+      "year": 2021,
+      "working_price_in_euro_per_kwh": 1.159835766,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 3.2,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_12",
+        "src_opex_22",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DIESEL",
+      "year": 2021,
+      "working_price_in_euro_per_kwh": 1.399,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_3",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "PELLETS",
+      "year": 2021,
+      "working_price_in_euro_per_kwh": 241,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.036,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_13",
+        "src_opex_22",
+        "src_opex_8",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "WOOD_CHIPS",
+      "year": 2021,
+      "working_price_in_euro_per_kwh": 96,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0313,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_15",
+        "src_opex_14"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DISTRICT_HEATING",
+      "year": 2021,
+      "working_price_in_euro_per_kwh": 0.08277,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.28,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_16",
+        "src_opex_22",
+        "src_opex_8"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HYDROGEN",
+      "year": 2021,
+      "working_price_in_euro_per_kwh": 0.25,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_17"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Legacy key 'green_hydrogen_gas'; mapped to carrier HYDROGEN (cost_module_issues.md #19)."
+    },
+    {
+      "carrier": "ELECTRICITY",
+      "year": 2022,
+      "working_price_in_euro_per_kwh": 0.43025,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.434,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_1",
+        "src_opex_6",
+        "src_opex_22",
+        "src_opex_5",
+        "src_opex_9"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "ELECTRICITY_FEED_IN",
+      "year": 2022,
+      "working_price_in_euro_per_kwh": 0.0723,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_2"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "NATURAL_GAS",
+      "year": 2022,
+      "working_price_in_euro_per_kwh": 0.0951,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.24,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_4",
+        "src_opex_6",
+        "src_opex_22"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HEATING_OIL",
+      "year": 2022,
+      "working_price_in_euro_per_kwh": 1.159835766,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 3.2,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_12",
+        "src_opex_22",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DIESEL",
+      "year": 2022,
+      "working_price_in_euro_per_kwh": 1.96,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_3",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "PELLETS",
+      "year": 2022,
+      "working_price_in_euro_per_kwh": 519,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.036,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_13",
+        "src_opex_22",
+        "src_opex_8",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "WOOD_CHIPS",
+      "year": 2022,
+      "working_price_in_euro_per_kwh": 96,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0313,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_15",
+        "src_opex_14"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DISTRICT_HEATING",
+      "year": 2022,
+      "working_price_in_euro_per_kwh": 0.11945,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.28,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_16",
+        "src_opex_22",
+        "src_opex_8"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HYDROGEN",
+      "year": 2022,
+      "working_price_in_euro_per_kwh": 0.25,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_17"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Legacy key 'green_hydrogen_gas'; mapped to carrier HYDROGEN (cost_module_issues.md #19)."
+    },
+    {
+      "carrier": "ELECTRICITY",
+      "year": 2023,
+      "working_price_in_euro_per_kwh": 0.4175,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.38,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_1",
+        "src_opex_6",
+        "src_opex_22",
+        "src_opex_5",
+        "src_opex_9"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "ELECTRICITY_FEED_IN",
+      "year": 2023,
+      "working_price_in_euro_per_kwh": 0.0733,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_2"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "NATURAL_GAS",
+      "year": 2023,
+      "working_price_in_euro_per_kwh": 0.1141,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.247,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_4",
+        "src_opex_6",
+        "src_opex_22"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HEATING_OIL",
+      "year": 2023,
+      "working_price_in_euro_per_kwh": 1.159835766,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 3.2,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_12",
+        "src_opex_22",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DIESEL",
+      "year": 2023,
+      "working_price_in_euro_per_kwh": 1.73,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_3",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "PELLETS",
+      "year": 2023,
+      "working_price_in_euro_per_kwh": 390,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.036,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_13",
+        "src_opex_22",
+        "src_opex_8",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "WOOD_CHIPS",
+      "year": 2023,
+      "working_price_in_euro_per_kwh": 96,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0313,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_15",
+        "src_opex_14"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DISTRICT_HEATING",
+      "year": 2023,
+      "working_price_in_euro_per_kwh": 0.15034,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.28,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_16",
+        "src_opex_22",
+        "src_opex_8"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HYDROGEN",
+      "year": 2023,
+      "working_price_in_euro_per_kwh": 0.25,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_17"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Legacy key 'green_hydrogen_gas'; mapped to carrier HYDROGEN (cost_module_issues.md #19)."
+    },
+    {
+      "carrier": "ELECTRICITY",
+      "year": 2024,
+      "working_price_in_euro_per_kwh": 0.3125,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.338,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_1",
+        "src_opex_6",
+        "src_opex_22",
+        "src_opex_5",
+        "src_opex_9"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "ELECTRICITY_FEED_IN",
+      "year": 2024,
+      "working_price_in_euro_per_kwh": 0.0692,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_2"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "NATURAL_GAS",
+      "year": 2024,
+      "working_price_in_euro_per_kwh": 0.1166,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.24,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_4",
+        "src_opex_6",
+        "src_opex_22"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HEATING_OIL",
+      "year": 2024,
+      "working_price_in_euro_per_kwh": 1.13,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 3.14,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_12",
+        "src_opex_22",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DIESEL",
+      "year": 2024,
+      "working_price_in_euro_per_kwh": 1.6649,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_3",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "PELLETS",
+      "year": 2024,
+      "working_price_in_euro_per_kwh": 278.55,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.036,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_13",
+        "src_opex_22",
+        "src_opex_8",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "WOOD_CHIPS",
+      "year": 2024,
+      "working_price_in_euro_per_kwh": 96,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0313,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_15",
+        "src_opex_14"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DISTRICT_HEATING",
+      "year": 2024,
+      "working_price_in_euro_per_kwh": 0.121,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.169,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_16",
+        "src_opex_22",
+        "src_opex_8"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HYDROGEN",
+      "year": 2024,
+      "working_price_in_euro_per_kwh": 0.25,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_17"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Legacy key 'green_hydrogen_gas'; mapped to carrier HYDROGEN (cost_module_issues.md #19)."
+    },
+    {
+      "carrier": "ELECTRICITY",
+      "year": 2050,
+      "working_price_in_euro_per_kwh": 0.281,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_1",
+        "src_opex_6",
+        "src_opex_22",
+        "src_opex_5",
+        "src_opex_9"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "ELECTRICITY_FEED_IN",
+      "year": 2050,
+      "working_price_in_euro_per_kwh": 0.0692,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_2"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "NATURAL_GAS",
+      "year": 2050,
+      "working_price_in_euro_per_kwh": 0.3,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.24,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_4",
+        "src_opex_6",
+        "src_opex_22"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HEATING_OIL",
+      "year": 2050,
+      "working_price_in_euro_per_kwh": 3.34,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 3.14,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_12",
+        "src_opex_22",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DIESEL",
+      "year": 2050,
+      "working_price_in_euro_per_kwh": 3.3298,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_opex_3",
+        "src_expert_migration"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "PELLETS",
+      "year": 2050,
+      "working_price_in_euro_per_kwh": 366.3,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_13",
+        "src_opex_22",
+        "src_opex_8",
+        "src_opex_11"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "WOOD_CHIPS",
+      "year": 2050,
+      "working_price_in_euro_per_kwh": 96,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_opex_15",
+        "src_opex_14"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Native billing quantity preserved from the legacy dict (cost_module_issues.md #20)."
+    },
+    {
+      "carrier": "DISTRICT_HEATING",
+      "year": 2050,
+      "working_price_in_euro_per_kwh": 0.141,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_16",
+        "src_opex_22",
+        "src_opex_8"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band)."
+    },
+    {
+      "carrier": "HYDROGEN",
+      "year": 2050,
+      "working_price_in_euro_per_kwh": 0.179,
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_opex_17"
+      ],
+      "notes": "Migrated 1:1 from configuration.py opex_techno_economic_parameters (degenerate band). Legacy key 'green_hydrogen_gas'; mapped to carrier HYDROGEN (cost_module_issues.md #19)."
+    },
+    {
+      "carrier": "ELECTRICITY",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.28,
+        "avg": 0.32,
+        "max": 0.38
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 120,
+        "avg": 160,
+        "max": 220
+      },
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.3,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.35,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data."
+    },
+    {
+      "carrier": "ELECTRICITY_FEED_IN",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.06,
+        "avg": 0.075,
+        "max": 0.085
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data."
+    },
+    {
+      "carrier": "NATURAL_GAS",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.08,
+        "avg": 0.1,
+        "max": 0.13
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 140,
+        "avg": 180,
+        "max": 240
+      },
+      "grid_exit_fee_in_euro": 250,
+      "emission_factor_in_kg_per_kwh": 0.2,
+      "co2_price_exposure": 1.0,
+      "tax_and_levy_share": 0.25,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure)."
+    },
+    {
+      "carrier": "HEATING_OIL",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.85,
+        "avg": 1.05,
+        "max": 1.3
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.9,
+      "co2_price_exposure": 1.0,
+      "tax_and_levy_share": 0.25,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per liter, emission factor kg per liter (native billing quantity). Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure)."
+    },
+    {
+      "carrier": "DIESEL",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 1.55,
+        "avg": 1.75,
+        "max": 2.0
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.65,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.5,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per liter, emission factor kg per liter (native billing quantity)."
+    },
+    {
+      "carrier": "PELLETS",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 250,
+        "avg": 300,
+        "max": 380
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 175.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.07,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per ton, emission factor kg per ton (native billing quantity; unlike the migrated legacy entries, which carry per-kWh factors - see cost_module_issues.md #24)."
+    },
+    {
+      "carrier": "WOOD_CHIPS",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 90,
+        "avg": 120,
+        "max": 160
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 80.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.07,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per ton, emission factor kg per ton (native billing quantity; unlike the migrated legacy entries, which carry per-kWh factors - see cost_module_issues.md #24)."
+    },
+    {
+      "carrier": "DISTRICT_HEATING",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.1,
+        "avg": 0.13,
+        "max": 0.17
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 200,
+        "avg": 300,
+        "max": 420
+      },
+      "grid_exit_fee_in_euro": 500,
+      "emission_factor_in_kg_per_kwh": 0.14,
+      "co2_price_exposure": 0.3,
+      "tax_and_levy_share": 0.16,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure)."
+    },
+    {
+      "carrier": "HYDROGEN",
+      "year": 2026,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.18,
+        "avg": 0.24,
+        "max": 0.32
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 140,
+        "avg": 180,
+        "max": 240
+      },
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.19,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data."
+    },
+    {
+      "carrier": "ELECTRICITY",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.26,
+        "avg": 0.31,
+        "max": 0.4
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 140,
+        "avg": 190,
+        "max": 260
+      },
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.09,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.3,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data."
+    },
+    {
+      "carrier": "ELECTRICITY_FEED_IN",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.03,
+        "avg": 0.05,
+        "max": 0.07
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.0,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data."
+    },
+    {
+      "carrier": "NATURAL_GAS",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.09,
+        "avg": 0.115,
+        "max": 0.15
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 160,
+        "avg": 210,
+        "max": 280
+      },
+      "grid_exit_fee_in_euro": 300,
+      "emission_factor_in_kg_per_kwh": 0.2,
+      "co2_price_exposure": 1.0,
+      "tax_and_levy_share": 0.25,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure)."
+    },
+    {
+      "carrier": "HEATING_OIL",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.9,
+        "avg": 1.15,
+        "max": 1.5
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.9,
+      "co2_price_exposure": 1.0,
+      "tax_and_levy_share": 0.25,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per liter, emission factor kg per liter (native billing quantity). Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure)."
+    },
+    {
+      "carrier": "DIESEL",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 1.7,
+        "avg": 2.0,
+        "max": 2.4
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 2.65,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.5,
+      "quantity_unit": "liter",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per liter, emission factor kg per liter (native billing quantity)."
+    },
+    {
+      "carrier": "PELLETS",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 280,
+        "avg": 340,
+        "max": 430
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 175.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.07,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per ton, emission factor kg per ton (native billing quantity; unlike the migrated legacy entries, which carry per-kWh factors - see cost_module_issues.md #24)."
+    },
+    {
+      "carrier": "WOOD_CHIPS",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 100,
+        "avg": 140,
+        "max": 190
+      },
+      "standing_charge_in_euro_per_year": 0,
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 80.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.07,
+      "quantity_unit": "ton",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price per ton, emission factor kg per ton (native billing quantity; unlike the migrated legacy entries, which carry per-kWh factors - see cost_module_issues.md #24)."
+    },
+    {
+      "carrier": "DISTRICT_HEATING",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.11,
+        "avg": 0.145,
+        "max": 0.19
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 230,
+        "avg": 340,
+        "max": 480
+      },
+      "grid_exit_fee_in_euro": 500,
+      "emission_factor_in_kg_per_kwh": 0.08,
+      "co2_price_exposure": 0.3,
+      "tax_and_levy_share": 0.16,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data. Working price EXCLUDES the explicit CO2 price (priced via co2_price_paths, co2_price_exposure)."
+    },
+    {
+      "carrier": "HYDROGEN",
+      "year": 2035,
+      "working_price_in_euro_per_kwh": {
+        "min": 0.12,
+        "avg": 0.16,
+        "max": 0.22
+      },
+      "standing_charge_in_euro_per_year": {
+        "min": 160,
+        "avg": 210,
+        "max": 280
+      },
+      "grid_exit_fee_in_euro": 0,
+      "emission_factor_in_kg_per_kwh": 0.0,
+      "co2_price_exposure": 0.0,
+      "tax_and_levy_share": 0.19,
+      "quantity_unit": "kWh",
+      "source_ids": [
+        "src_ai_estimates"
+      ],
+      "notes": "AI Estimate for testing (source: AI Estimates); to be replaced by reviewed data."
+    }
+  ]
+}

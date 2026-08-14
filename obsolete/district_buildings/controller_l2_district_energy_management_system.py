@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import Any, List, Tuple, Union
 from collections import OrderedDict
+from HiSim.obsolete.webtool_old import generic_heat_pump_modular
 from dataclasses_json import dataclass_json
 import pandas as pd
 from hisim import log
@@ -24,7 +25,6 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagE
 from hisim.components import (
     more_advanced_heat_pump_hplib,
     advanced_heat_pump_hplib,
-    generic_heat_pump_modular,
     loadprofilegenerator_utsp_connector,
 )
 
@@ -560,7 +560,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
     ):
         """Get dhw heat pump default connections."""
 
-        from hisim.components.generic_heat_pump_modular import (  # pylint: disable=import-outside-toplevel
+        from HiSim.obsolete.webtool_old.generic_heat_pump_modular import (  # pylint: disable=import-outside-toplevel
             ModularHeatPump,
         )
 

@@ -12,7 +12,7 @@ from collections import defaultdict
 import pandas as pd
 from ordered_set import OrderedSet
 from hisim import log
-from hisim.postprocessing.scenario_evaluation.result_data_processing import (
+from projects.HiSim.obsolete.scenario_evaluation.result_data_processing import (
     ResultDataProcessingModeEnum,
     ResultDataTypeEnum,
     DataFormatEnum,

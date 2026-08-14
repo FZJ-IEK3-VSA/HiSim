@@ -1,5 +1,5 @@
 numpy
-pandas>=2.2
+pandas==3.0.5
 matplotlib
 seaborn
 reportlab
@@ -17,7 +17,6 @@ pydot
 graphviz
 dataclass_wizard==0.34.0
 utspclient==0.1.6
-pyam-iamc
 html2image
 control
 casadi

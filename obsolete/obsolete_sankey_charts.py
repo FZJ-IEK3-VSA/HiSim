@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from timeit import default_timer as timer
 from hisim.postprocessing.chartbase import Chart, ChartFontsAndSize
 from hisim.components import building
-from hisim.components import generic_heat_pump_modular
+from HiSim.obsolete.webtool_old import generic_heat_pump_modular
 from hisim.components import generic_heat_pump
 from hisim.components import advanced_heat_pump_hplib
 

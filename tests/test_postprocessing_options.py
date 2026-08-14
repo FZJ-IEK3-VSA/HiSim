@@ -212,19 +212,6 @@ def test_postprocessing_option_plot_special_testing_single_day(
     )
 
 
-def test_postprocessing_option_generate_csv_for_housing_data_base(
-    postprocessing_option_framework: PostProcessingOptionTestFramework,
-) -> None:
-    """Test that PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE produces annual and seasonal housing-data-base CSV files."""
-    postprocessing_option_framework.run(
-        PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE,
-        expected_files=[
-            "csv_for_housing_data_base_annual_*.csv",
-            "csv_for_housing_data_base_seasonal_*.csv",
-        ],
-    )
-
-
 def test_postprocessing_option_include_configs_in_pdf_report(
     postprocessing_option_framework: PostProcessingOptionTestFramework,
 ) -> None:

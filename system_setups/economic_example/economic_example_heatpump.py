@@ -95,13 +95,18 @@ def build_economic_context() -> EconomicContext:
         replaced_by_asset_classes=[ComponentType.HEAT_PUMP],
     )
     # Envelope elements due for renovation; each is replaced by the like-for-like measure
-    # below, which triggers the anyway-cost logic (5 a threshold for envelope, Q7).
+    # below, which triggers the anyway-cost logic (5 a threshold for envelope, Q7). The
+    # `anyway_share` is the Sowieso-Kosten question (Q22): how much of the *new* measure the
+    # world without the renovation would have paid for anyway.
     old_windows = ExistingAsset(
         asset_class=ComponentType.WINDOWS,
         size=28.0,
         size_unit=Units.SQUARE_METER,
         installation_year=1993,
         replaced_by_asset_classes=[ComponentType.WINDOWS],
+        # True like-for-like: worn-out windows are replaced by windows, so the whole price of the
+        # new ones was going to be spent regardless.
+        anyway_share=1.0,
     )
     old_wall = ExistingAsset(
         asset_class=ComponentType.WALL_INSULATION,
@@ -109,6 +114,10 @@ def build_economic_context() -> EconomicContext:
         size_unit=Units.SQUARE_METER,
         installation_year=1988,  # facade render at end of life
         replaced_by_asset_classes=[ComponentType.WALL_INSULATION],
+        # First-time insulation of a facade that was never insulated: the counterfactual would
+        # have repaired the render, not insulated. Placeholder estimate for the scaffolding /
+        # render / paint share of a WDVS package — a real study would price the repair variant.
+        anyway_share=0.3,
     )
     old_top_ceiling = ExistingAsset(
         asset_class=ComponentType.TOP_CEILING_INSULATION,
@@ -116,6 +125,9 @@ def build_economic_context() -> EconomicContext:
         size_unit=Units.SQUARE_METER,
         installation_year=1988,
         replaced_by_asset_classes=[ComponentType.TOP_CEILING_INSULATION],
+        # Same reasoning as the wall: an uninsulated top ceiling would have been tidied up, not
+        # insulated. Placeholder estimate, same source as above.
+        anyway_share=0.3,
     )
 
     # The three envelope measures (costs come banded from the cost database; the U-values

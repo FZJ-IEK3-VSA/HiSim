@@ -550,6 +550,70 @@ class TestYearZeroAndSubsidies:
             )
             assert views.award_total_amount(award).average == pytest.approx(expected.average)
 
+    def test_describe_award_values_every_payout_kind(self):
+        """Each payout kind gets a total or an explanation of why it has none (PR-9 finding).
+
+        The renderers used to read `upfront_amount`, which is zero for a tax-credit schedule, a
+        loan-terms award and an operational rate, so those awards were reported as "0.00 EUR" or
+        dropped entirely. `describe_award` is the one place that decides what an award is worth:
+        a euro band where one exists, and None plus the terms where the value is booked by the
+        financing or energy calculators instead.
+        """
+        from hisim.economics.carriers import EnergyCarrier as Carrier
+        from hisim.economics.subsidies import PayoutKind, SubsidyAward
+
+        grant = views.describe_award(
+            SubsidyAward(scheme_id="G", payout_kind=PayoutKind.UPFRONT_GRANT,
+                         upfront_amount=UncertainValue(3000.0, 2000.0, 4000.0))
+        )
+        assert grant.total_in_euro is not None
+        assert grant.total_in_euro.average == pytest.approx(3000.0)
+        assert grant.payout_note == ""
+
+        credit = views.describe_award(
+            SubsidyAward(scheme_id="T", payout_kind=PayoutKind.TAX_CREDIT_SCHEDULE,
+                         schedule_amounts=[UncertainValue.exact(721.14)] * 2
+                         + [UncertainValue.exact(618.12)])
+        )
+        assert credit.total_in_euro is not None
+        assert credit.total_in_euro.average == pytest.approx(2060.40)
+        assert credit.payout_note == "tax credit paid over 3 years"
+
+        loan = views.describe_award(
+            SubsidyAward(scheme_id="L", payout_kind=PayoutKind.LOAN_TERMS, loan_interest_rate=0.009,
+                         loan_term_in_years=20, loan_repayment_grant_share=0.25)
+        )
+        assert loan.total_in_euro is None
+        assert loan.payout_note == "loan terms: 0.90% interest, 20 years term, 25% repayment grant"
+
+        operational = views.describe_award(
+            SubsidyAward(scheme_id="O", payout_kind=PayoutKind.OPERATIONAL,
+                         operational_rate_per_kwh=0.08, operational_carrier=Carrier.ELECTRICITY,
+                         operational_duration_years=10)
+        )
+        assert operational.total_in_euro is None
+        assert operational.payout_note == "0.0800 EUR/kWh on ELECTRICITY for 10 years"
+
+        vat = views.describe_award(
+            SubsidyAward(scheme_id="V", payout_kind=PayoutKind.VAT_REDUCTION, reduced_vat_rate=0.07)
+        )
+        assert vat.total_in_euro is None
+        assert vat.payout_note == "reduced VAT rate 7.0%"
+
+    def test_describe_award_keeps_the_caps_that_bound(self):
+        """The binding slots travel with the presentation, so both renderers report them alike."""
+        from hisim.economics.subsidies import PayoutKind, SubsidyAward
+
+        presentation = views.describe_award(
+            SubsidyAward(
+                scheme_id="G",
+                payout_kind=PayoutKind.UPFRONT_GRANT,
+                upfront_amount=UncertainValue(3000.0, 2000.0, 4000.0),
+                caps_binding_per_slot={"low": False, "average": False, "high": True},
+            )
+        )
+        assert presentation.caps_binding == ("high",)
+
     def test_total_subsidies_is_none_without_support_flows(self, result):
         """A timeline without a SUBSIDY entry omits the KPI rather than publishing a zero."""
         import copy

@@ -89,6 +89,16 @@ class ResolvedInputRow:
     subsidy_scheme_ids: List[str] = field(default_factory=list)
     #: scheme id -> the slots whose cap bound, only for awards where at least one did.
     caps_binding_by_scheme: Dict[str, List[str]] = field(default_factory=dict)
+    #: The Sowieso share the subject's anyway credit was computed at (owner decision Q22), or
+    #: None when the subject earned no such credit. A credit is `share x like-for-like cost`, so
+    #: this is the factor that turns the counterfactual's price into what is actually credited;
+    #: printing the credit without it is what let a facade that was never insulated be credited
+    #: with a full insulation measure.
+    anyway_share: Optional[float] = None
+    #: The like-for-like cost that share was applied to, in euro (owner decision Q26 F7). The
+    #: share alone states a factor without its base, so the audited credit could not be
+    #: reproduced from the row; with both, `share x basis` is the credit the timeline booked.
+    anyway_basis_in_euro: Optional[float] = None
     #: Review flags, in the order they are raised. Rendered by the HTML report only.
     flags: List[str] = field(default_factory=list)
 
@@ -115,6 +125,8 @@ class ResolvedInputRow:
             "subsidies_nominal_in_euro": _band_json(self.subsidies_nominal_in_euro),
             "subsidy_scheme_ids": self.subsidy_scheme_ids,
             "caps_binding_by_scheme": self.caps_binding_by_scheme,
+            "anyway_share": self.anyway_share,
+            "anyway_basis_in_euro": self.anyway_basis_in_euro,
             "flags": self.flags,
         }
 
@@ -143,6 +155,8 @@ class ResolvedInputRow:
             caps_binding_by_scheme={
                 scheme: list(slots) for scheme, slots in raw.get("caps_binding_by_scheme", {}).items()
             },
+            anyway_share=raw.get("anyway_share"),
+            anyway_basis_in_euro=raw.get("anyway_basis_in_euro"),
             flags=list(raw.get("flags", [])),
         )
 

@@ -32,7 +32,11 @@ from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from hisim import log
 from hisim.economics.actors import AllocationContext, ModernizationLevySubjectBasis, get_ruleset
-from hisim.economics.calculators.aggregation import aggregate_timeline, annual_energy_quantities
+from hisim.economics.calculators.aggregation import (
+    aggregate_timeline,
+    annual_energy_attribution,
+    annual_energy_quantities,
+)
 from hisim.economics.calculators.context_resolution import resolve_device, resolve_replaced_asset
 from hisim.economics.calculators.co2 import (
     accumulate_embodied_co2,
@@ -47,8 +51,8 @@ from hisim.economics.calculators.financing_application import (
     resolve_loan_plan,
 )
 from hisim.economics.calculators.escalation import (
-    carrier_escalation_rate as resolve_carrier_escalation_rate,
-    investment_escalation_rate as resolve_investment_escalation_rate,
+    resolve_carrier_escalation_rate,
+    resolve_investment_escalation_rate,
 )
 from hisim.economics.calculators.investment import build_investment_schedule
 from hisim.economics.calculators.maintenance import build_maintenance_entries
@@ -74,13 +78,19 @@ from hisim.economics.perspectives import (
 )
 from hisim.economics.provenance import ProvenanceLedger, ResolvedSource
 from hisim.economics.results import (
+    EconomicAssumptions,
+    EmbodiedCo2Basis,
     EvaluationMatrix,
     LifecycleCo2Result,
     LifecycleCostResult,
+    ModernizationLevySummary,
+    RateOrigin,
     ReferenceAreas,
+    ResolvedRate,
+    TariffAssumption,
 )
 from hisim.economics.subsidies import SubsidyCatalog, SubsidyContext, SubsidyDecision
-from hisim.economics.tariffs import TariffContract
+from hisim.economics.tariffs import FeedInKind, TariffContract
 from hisim.economics.timeline import CashFlowTimeline, CostCategory
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType
@@ -206,6 +216,14 @@ class EvaluationInputs:
     # Subjects the extraction recognized but could not describe (issue #2); they block the D7
     # resolution check exactly like a subject the cost database cannot price.
     unresolved_subjects: List[UnresolvedSubject] = field(default_factory=list)
+    #: Subject -> energy-balance role (`EnergyFlowRole.value`) -> energy of the *simulated
+    #: period* in kWh, as positive magnitudes (the role says which way it flows). Additive and
+    #: optional: the extraction fills it from the component output columns the adapter's
+    #: `DeviceEnergySpecs` table names (`bridge._device_energy_flows`), and nothing prices it —
+    #: the engine only annualizes it onto the result, where the household energy balance reads it
+    #: and skips itself when it carries no device flows. A file written before the field existed
+    #: loads with an empty map.
+    energy_attribution_by_subject_in_kwh: Dict[str, Dict[str, float]] = field(default_factory=dict)
     existing_assets: Optional[ExistingAssetRegister] = None
     subsidy_context: SubsidyContext = field(default_factory=SubsidyContext)
     tariff_contracts: Dict[EnergyCarrier, TariffContract] = field(default_factory=dict)
@@ -396,6 +414,14 @@ class TimelineBuildResult:
     basis: ModernizationLevyBasis
     #: Per-carrier flexibility value before the §8.5 clamp, for the plausibility panel (#25b).
     raw_flexibility_value_by_carrier: Dict[str, float] = field(default_factory=dict)
+    #: The Sowieso share every booked anyway credit was computed at (subject -> share, Q22), for
+    #: the result the report reads it from.
+    anyway_share_by_subject: Dict[str, float] = field(default_factory=dict)
+    #: The like-for-like cost each of those credits was computed *on* (subject -> euro, Q26 F7).
+    anyway_basis_by_subject: Dict[str, float] = field(default_factory=dict)
+    #: The tariff contracts the energy calculator actually billed under, for the assumptions
+    #: record the Assumptions section publishes (Q26 F2).
+    tariffs_applied: List[TariffContract] = field(default_factory=list)
 
 
 class EconomicEvaluator:
@@ -461,7 +487,7 @@ class EconomicEvaluator:
         database. The returned nominal annual rate is what the energy calculator escalates a
         carrier's year-1 bill with over the horizon (§3.6 rule 5).
         """
-        return resolve_carrier_escalation_rate(carrier, self.parameters, self.database)
+        return resolve_carrier_escalation_rate(carrier, self.parameters, self.database).rate
 
     def investment_escalation_rate(self, asset_class: ComponentType) -> float:
         """Fallback chain for per-asset-class investment escalation (learning curves, §3.2).
@@ -471,7 +497,7 @@ class EconomicEvaluator:
         `build_timeline` resolves it once per subject and passes it to the investment calculator,
         which uses it for replacements and for the residual value (§3.6 rules 2-3).
         """
-        return resolve_investment_escalation_rate(asset_class, self.parameters, self.database)
+        return resolve_investment_escalation_rate(asset_class, self.parameters, self.database).rate
 
     def price_basis_year(self, inputs: EvaluationInputs) -> int:
         """Price basis year for database lookups (see `effective_price_basis_year`).
@@ -675,6 +701,8 @@ class EconomicEvaluator:
         sunk_cost = UncertainValue.exact(0.0)
         modernization_cost = UncertainValue.exact(0.0)
         anyway_credit_total = UncertainValue.exact(0.0)
+        anyway_share_by_subject: Dict[str, float] = {}
+        anyway_basis_by_subject: Dict[str, float] = {}
         # Per-measure levy basis for the §559/§559e split (§6.4, D27): asset class, modernization
         # cost and anyway credit per subject; the subsidy leg is read off the finished timeline.
         levy_asset_classes: Dict[str, str] = {}
@@ -711,6 +739,19 @@ class EconomicEvaluator:
                 modernization_cost = modernization_cost + addend
                 levy_cost_by_subject[subject] = levy_cost_by_subject[subject] + addend
             accumulate_embodied_co2(co2_result, subject, schedule.embodied_co2_addends)
+            if schedule.embodied_co2_addends:
+                # Q26 F3: the factor and the size behind the mass just accumulated, so the CO2
+                # section states `factor x size = kg` per installation rather than a bare total.
+                # `costing.embodied_co2_kg` is the mass of one installation with size and count
+                # already applied, so the factor is the per-unit figure it was built from.
+                size = costing.facts.size * costing.facts.count
+                co2_result.embodied_basis_by_subject[subject] = EmbodiedCo2Basis(
+                    factor_in_kg_per_unit=(costing.embodied_co2_kg / size) if size else 0.0,
+                    size=size,
+                    size_unit=costing.facts.size_unit.value,
+                    per_installation_in_kg=costing.embodied_co2_kg,
+                    installations=len(schedule.embodied_co2_addends),
+                )
             replacement_flows_for_reserve.extend(schedule.reserve_flows)
 
             # --- replaced asset: sunk cost and anyway-cost credit (§4.1)
@@ -721,10 +762,15 @@ class EconomicEvaluator:
                     database=self.database,
                     parameters=params,
                     price_basis_year=price_basis_year,
+                    ledger=ledger,
                 )
                 sunk_cost = sunk_cost + replaced_outcome.sunk_cost
                 if replaced_outcome.credit_entry is not None:
                     timeline.add(replaced_outcome.credit_entry)
+                    anyway_share_by_subject[subject] = replaced_outcome.anyway_share
+                    # Q26 F7: the like-for-like cost the share was applied to, so the credit is a
+                    # visible multiplication rather than a figure with a percentage beside it.
+                    anyway_basis_by_subject[subject] = replaced_outcome.credit_basis_in_euro
                     anyway_credit_total = anyway_credit_total + replaced_outcome.credit_amount
                     levy_credit_by_subject[subject] = (
                         levy_credit_by_subject[subject] + replaced_outcome.credit_amount
@@ -814,6 +860,9 @@ class EconomicEvaluator:
                 ),
             ),
             raw_flexibility_value_by_carrier=energy_result.raw_flexibility_value_by_carrier,
+            anyway_share_by_subject=anyway_share_by_subject,
+            anyway_basis_by_subject=anyway_basis_by_subject,
+            tariffs_applied=list(energy_result.tariffs_applied),
         )
 
     # ------------------------------------------------------------------ evaluation (§3.7)
@@ -856,12 +905,16 @@ class EconomicEvaluator:
         """
         # Same values as self.parameters, but with the resolved price basis year recorded (W1.2).
         params = self.effective_parameters(inputs)
-        ledger = ledger or ProvenanceLedger()
+        # `is None`, not `or`: `ProvenanceLedger` defines `__len__`, so a caller-supplied but
+        # still-empty ledger is falsy and used to be silently replaced by a fresh one — the
+        # caller then held an object nothing ever recorded into.
+        ledger = ledger if ledger is not None else ProvenanceLedger()
         build = self.build_timeline(inputs, perspective, ledger)
         timeline = build.timeline
         co2_result = build.co2_result
 
         # Actor allocation (§6).
+        levy_summary: Optional[ModernizationLevySummary] = None
         if perspective.actor_scope != ActorScope.SYSTEM:
             rented = perspective.actor_scope in (ActorScope.LANDLORD, ActorScope.TENANT)
             ruleset = get_ruleset(rented, params.country)
@@ -877,6 +930,20 @@ class EconomicEvaluator:
                 levy_subjects=build.basis.by_subject,
             )
             timeline = ruleset.allocate(timeline, allocation_context)
+            # Q21: the levy's ceiling verdict, asked of the ruleset that just applied it. The
+            # amount is on the timeline; whether a cap decided it is not, and the landlord
+            # statement has to say so.
+            levy_outcome = ruleset.modernization_levy_outcome(allocation_context)
+            if levy_outcome is not None and levy_outcome.total_in_euro.maximum > 0:
+                levy_summary = ModernizationLevySummary(
+                    annual_amount_in_euro=levy_outcome.total_in_euro,
+                    general_leg_in_euro=levy_outcome.general_levy_in_euro,
+                    heating_leg_in_euro=levy_outcome.heating_levy_in_euro,
+                    cap_binding=levy_outcome.cap_binding,
+                    cap_in_euro_per_m2_per_month=levy_outcome.cap_in_euro_per_m2_per_month,
+                    # Q26 F5: which mechanism set the levy in each of the three worlds.
+                    binding_mechanism_by_slot=dict(levy_outcome.binding_mechanism_by_slot),
+                )
 
         aggregation = aggregate_timeline(
             timeline=timeline,
@@ -913,6 +980,12 @@ class EconomicEvaluator:
             annual_energy_quantities_by_carrier=annual_energy_quantities(
                 inputs.billing, inputs.simulated_period_fraction
             ),
+            # The per-subject half of the same physical context, annualized with the identical
+            # divisor so the device column of the energy-to-money chart adds up to the carrier
+            # totals above it rather than to a slightly different year.
+            energy_attribution_by_subject_in_kwh=annual_energy_attribution(
+                inputs.energy_attribution_by_subject_in_kwh, inputs.simulated_period_fraction
+            ),
             reference_areas=ReferenceAreas(
                 heated_floor_area_in_m2=inputs.heated_floor_area_in_m2,
                 living_area_in_m2=inputs.living_area_in_m2,
@@ -922,6 +995,15 @@ class EconomicEvaluator:
             # Diagnostics rather than result: the pre-clamp §8.5 flexibility value, which the
             # plausibility panel warns about when it is negative (issue #25b).
             raw_flexibility_value_by_carrier=build.raw_flexibility_value_by_carrier,
+            # Q22: the Sowieso share behind each anyway credit, so the report can state it beside
+            # the credit rather than leaving a reader to guess at the basis.
+            anyway_share_by_subject=build.anyway_share_by_subject,
+            anyway_basis_by_subject=build.anyway_basis_by_subject,
+            modernization_levy=levy_summary,
+            # Q26 F2: the assumption set the Assumptions section publishes — escalation rates as
+            # the fallback chains resolved them, the tariff terms actually billed, and the heat
+            # demand every per-kWh heat figure divides by.
+            assumptions=self._resolve_assumptions(inputs, build),
         )
 
     def _source_resolver(self) -> Dict[str, ResolvedSource]:
@@ -939,6 +1021,71 @@ class EconomicEvaluator:
             {source_id: entry.to_resolved() for source_id, entry in self.database.sources.entries.items()}
         )
         return resolver
+
+    def _resolve_assumptions(
+        self, inputs: EvaluationInputs, build: TimelineBuildResult
+    ) -> EconomicAssumptions:
+        """The assumption set behind the run, resolved once per evaluation (Q26 F2, rule 2.9).
+
+        The report has to publish every economic assumption with its value *and* its source, and
+        three of those groups are only knowable inside the engine: an escalation rate is the
+        outcome of a three-step fallback chain against the country defaults file, the tariff terms
+        are whichever contract the energy calculator ended up billing under (an explicit one or
+        the flat contract generated from the price entries), and the heat demand lives in
+        `EvaluationInputs`, which presentation may not read. Resolving them here and carrying the
+        answer on the result is the same W4.2 move the reference areas made.
+
+        Only rates that actually applied to this run are recorded: one per billed carrier, one per
+        asset class among the cost subjects, plus the three general rates. A table of every rate
+        the parameter object *could* express would be longer and less true.
+
+        Args:
+            inputs: The variant's extract — billed carriers, cost subjects, heat demand.
+            build: The finished timeline build, read for the contracts the energy calculator used.
+
+        Returns:
+            The record stored on `LifecycleCostResult.assumptions`.
+        """
+        params = self.parameters
+        rates: Dict[str, ResolvedRate] = {
+            "general": ResolvedRate(
+                rate=params.general_price_escalation_rate, origin=RateOrigin.CONFIGURATION
+            ),
+            "investment": ResolvedRate(
+                rate=params.investment_price_escalation_rate, origin=RateOrigin.CONFIGURATION
+            ),
+            "feed-in": ResolvedRate(rate=params.feed_in_escalation_rate, origin=RateOrigin.CONFIGURATION),
+        }
+        for determinants in inputs.billing:
+            carrier = determinants.carrier
+            rates[f"energy:{carrier.value}"] = resolve_carrier_escalation_rate(
+                carrier, params, self.database
+            )
+        for subject_facts in inputs.cost_facts:
+            asset_class = subject_facts.facts.asset_class
+            rates[f"investment:{asset_class.name}"] = resolve_investment_escalation_rate(
+                asset_class, params, self.database
+            )
+        tariffs: Dict[str, TariffAssumption] = {}
+        for contract in build.tariffs_applied:
+            feed_in = contract.feed_in
+            tariffs[contract.carrier.value] = TariffAssumption(
+                carrier=contract.carrier.value,
+                contract_id=contract.id,
+                working_price_in_euro_per_kwh=contract.supply.working_price_in_euro_per_kwh,
+                standing_charge_in_euro_per_year=contract.standing_charge_in_euro_per_year,
+                feed_in_kind=feed_in.kind.value,
+                feed_in_rate_in_euro_per_kwh=(
+                    feed_in.rate_in_euro_per_kwh if feed_in.kind != FeedInKind.NONE else None
+                ),
+                is_default_contract=contract.is_default_contract,
+                source_ids=list(contract.source_ids),
+            )
+        return EconomicAssumptions(
+            escalation_rates=rates,
+            tariffs=tariffs,
+            annual_heat_demand_in_kwh=inputs.annual_heat_demand_in_kwh,
+        )
 
     def evaluate_matrix(
         self,

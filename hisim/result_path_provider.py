@@ -113,6 +113,11 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         self.time_resolution_in_seconds: Optional[int] = None
         self.simulation_duration_in_days: Optional[int] = None
         self.datetime_string: str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        #: True when the last configuration came from a ``Simulator`` deriving the path from its
+        #: own setup module, rather than from a caller (a test, a harness, RenoVisor) that chose
+        #: the path deliberately. Only the simulator reads it, to tell "somebody wants this exact
+        #: directory" from "the previous in-process run left its directory behind".
+        self.configured_by_simulator: bool = False
 
     @classmethod
     def reset(cls) -> None:
@@ -173,6 +178,8 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         self.set_sorting_option(sorting_option=sorting_option)
         if run_mode == RunMode.TEST:
             self.test_name = sanitize_path_component(test_name)  # type: ignore[arg-type]
+        # A deliberate configuration by a caller; the simulator must honour it as it stands.
+        self.configured_by_simulator = False
 
     @staticmethod
     def _validate_configure_arguments(run_mode: RunMode, provided_arguments: dict[str, Optional[Union[str, SortingOptionEnum]]]) -> None:
@@ -217,6 +224,25 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         self.set_sorting_option(sorting_option=sorting_option)
         self.set_scenario_hash_string(scenario_hash_string=scenario_hash_string)
         self.set_further_result_folder_description(further_result_folder_description=further_result_folder_description)
+        self.configured_by_simulator = False
+
+    def configure_for_simulator_run(self, module_directory: str, model_name: str) -> None:
+        """Derive the path from the setup module the simulator is about to run, flat layout.
+
+        The simulator's own fallback, used when nobody chose a result directory: the run lands in
+        ``<module_directory>/results/<model_name>_<timestamp>``. It differs from
+        :meth:`set_important_result_path_information` only in marking the configuration as
+        simulator-derived, which is what lets a *second* in-process run recognize the first run's
+        leftover path as stale instead of adopting it and overwriting that run's artifacts.
+        """
+        self.set_important_result_path_information(
+            module_directory=module_directory,
+            model_name=model_name,
+            variant_name=None,
+            scenario_hash_string=None,
+            sorting_option=SortingOptionEnum.FLAT,
+        )
+        self.configured_by_simulator = True
 
     def set_base_path(self, module_directory: Union[str, Path]) -> None:
         """Set base path."""

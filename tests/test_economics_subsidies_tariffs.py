@@ -871,6 +871,172 @@ class TestSubsidyProvenance:
             SubsidyCatalog.load("XX", str(tmp_path))
 
 
+class TestSchemeDisplayNames:
+    """Q20: a scheme is named for a human, and the id survives beside it.
+
+    Every shipped scheme carries a `display_name` ("BEG EM heat pump — speed bonus (20 %)"); the
+    field is optional so a catalog written before Q20 still loads, and `label` is the one place
+    the id fallback lives. The award carries the name along because a report is regularly rendered
+    from a serialized result in a process that never loaded a catalog.
+    """
+
+    def test_every_shipped_scheme_has_a_unique_display_name(self):
+        """The shipped DE and AT catalogs are complete and unambiguous."""
+        for country in ("DE", "AT"):
+            catalog = SubsidyCatalog.load(country)
+            names = [scheme.display_name for scheme in catalog.schemes]
+            assert all(names), f"{country}: a scheme ships without a display name"
+            assert len(set(names)) == len(names), f"{country}: two schemes share a display name"
+            for scheme in catalog.schemes:
+                assert scheme.label == scheme.display_name
+
+    def test_a_scheme_without_a_display_name_falls_back_to_its_id(self, tmp_path):
+        """Backward compatibility: the field is optional and the id then stands in for it."""
+        import json
+
+        source = SubsidyCatalog.load("DE")
+        raw = json.load(open(os.path.join(source.base_path, "DE.json"), encoding="utf-8"))
+        for item in raw["schemes"]:
+            item.pop("display_name", None)
+        (tmp_path / "DE.json").write_text(json.dumps(raw), encoding="utf-8")
+        for name in ("sources.json", "questions_DE.json"):
+            (tmp_path / name).write_text(
+                open(os.path.join(source.base_path, name), encoding="utf-8").read(), encoding="utf-8"
+            )
+        catalog = SubsidyCatalog.load("DE", base_path=str(tmp_path))
+        assert catalog.schemes
+        for scheme in catalog.schemes:
+            assert scheme.display_name is None
+            assert scheme.label == scheme.id
+
+    def test_validate_flags_a_blank_and_a_duplicated_display_name(self, tmp_path):
+        """`validate` is the CI gate on the new field (Q20)."""
+        import json
+
+        from hisim.economics.validation import validate_subsidy_catalog
+
+        source = SubsidyCatalog.load("DE")
+        raw = json.load(open(os.path.join(source.base_path, "DE.json"), encoding="utf-8"))
+        raw["schemes"][0]["display_name"] = "   "
+        raw["schemes"][1]["display_name"] = raw["schemes"][2]["display_name"]
+        (tmp_path / "DE.json").write_text(json.dumps(raw), encoding="utf-8")
+        for name in ("sources.json", "questions_DE.json"):
+            (tmp_path / name).write_text(
+                open(os.path.join(source.base_path, name), encoding="utf-8").read(), encoding="utf-8"
+            )
+        report = validate_subsidy_catalog("DE", base_path=str(tmp_path))
+        assert any("blank display_name" in error for error in report.errors), report.errors
+        assert any("share the display_name" in error for error in report.errors), report.errors
+
+    def test_the_shipped_catalogs_validate_clean_on_display_names(self):
+        """No warning about a missing name, no error about a duplicate, on what ships."""
+        from hisim.economics.validation import validate_subsidy_catalog
+
+        for country in ("DE", "AT"):
+            report = validate_subsidy_catalog(country)
+            assert not [item for item in report.errors if "display_name" in item], report.errors
+            assert not [item for item in report.warnings if "display_name" in item], report.warnings
+
+    def test_the_award_carries_the_name_and_survives_serialization(self):
+        """The name travels on the award, so a report built from JSON still shows it."""
+        from hisim.economics.serialization import _decision_from_json
+        from hisim.economics.subsidies import SubsidyAward, SubsidyDecision
+
+        award = SubsidyAward(
+            scheme_id="DE_BEG_EM_HP_SPEED_2024",
+            payout_kind=PayoutKind.UPFRONT_GRANT,
+            upfront_amount=UncertainValue.exact(3000.0),
+            display_name="BEG EM heat pump — speed bonus (20 %)",
+        )
+        restored = _decision_from_json(SubsidyDecision(measure_subject="HeatPump", applied=[award]).to_json())
+        assert restored.applied[0].label == "BEG EM heat pump — speed bonus (20 %)"
+        assert restored.applied[0].scheme_id == "DE_BEG_EM_HP_SPEED_2024"
+        # An award written before Q20 keeps working, with the id as its label.
+        legacy = dict(restored.to_json()["applied"][0])
+        legacy.pop("display_name")
+        older = _decision_from_json({"measure_subject": "HeatPump", "applied": [legacy]})
+        assert older.applied[0].label == "DE_BEG_EM_HP_SPEED_2024"
+
+
+class TestConfiguredCatalogPathResolution:
+    """PR-9 finding: a configured catalog path that did not resolve fell through to the shim.
+
+    A `subsidy_catalog_path` is written by a system setup or a scenario file and read back by a
+    command whose working directory is unrelated, so a relative path resolved against the cwd alone
+    silently missed — and the evaluation then priced the whole run with the §10.1 legacy flat
+    percentages from the device catalog, which no legal text backs. Naming a catalog that cannot be
+    read is now a fail-fast error (D25); naming none at all still legitimately reaches the shim.
+    """
+
+    def test_a_relative_path_resolves_against_the_installation_root(self, monkeypatch, tmp_path):
+        """`hisim/subsidy_catalog` resolves from any working directory, not just the repo root."""
+        monkeypatch.chdir(tmp_path)
+        resolved = SubsidyCatalog.resolve_base_path(os.path.join("hisim", "subsidy_catalog"))
+        assert os.path.isfile(os.path.join(resolved, "DE.json"))
+        # The package's own data directory is tried too, so the bare name works as well.
+        assert os.path.isfile(os.path.join(SubsidyCatalog.resolve_base_path("subsidy_catalog"), "DE.json"))
+
+    def test_an_unresolvable_path_raises_and_names_what_it_tried(self, monkeypatch, tmp_path):
+        """The error names the configured path and every candidate, instead of returning None."""
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(SubsidyDataError, match="does not resolve to a directory"):
+            SubsidyCatalog.resolve_base_path("catalogs/that/never/existed")
+        with pytest.raises(SubsidyDataError, match="legacy flat shim"):
+            SubsidyCatalog.load_configured("DE", "catalogs/that/never/existed")
+
+    def test_no_configured_catalog_still_reaches_the_shim(self):
+        """A parameter set that names no catalog gets None — the §10.1 shim's legitimate case."""
+        assert SubsidyCatalog.load_configured("IE", None) is None
+        assert SubsidyCatalog.load_configured("IE", "") is None
+
+    def test_an_override_path_wins_over_the_configured_one(self, tmp_path):
+        """`--subsidy-catalog` replaces the parameters' path rather than being ignored."""
+        catalog = SubsidyCatalog.load_configured(
+            "DE", str(tmp_path), os.path.join("hisim", "subsidy_catalog")
+        )
+        assert catalog is not None and catalog.schemes
+
+    def test_the_cli_exits_with_a_message_on_an_unresolvable_catalog(self, tmp_path, capsys):
+        """The CLI turns the error into exit 2 and a message, not a traceback (and not a shim run).
+
+        End-to-end over the same path the finding was observed on: a parameters file whose
+        `subsidy_catalog_path` does not exist. The observable is that nothing was priced.
+        """
+        import json
+
+        from hisim.economics.__main__ import main
+        from hisim.economics.evaluator import EvaluationInputs, SubjectCostFacts
+        from hisim.economics.facts import ComponentCostFacts
+        from hisim.economics.parameters import EconomicParameters
+        from hisim.economics.serialization import write_inputs
+        from hisim.loadtypes import ComponentType, Units
+
+        write_inputs(
+            EvaluationInputs(
+                simulation_year=2024,
+                simulated_period_fraction=1.0,
+                cost_facts=[
+                    SubjectCostFacts(
+                        "HeatPump",
+                        ComponentCostFacts(
+                            asset_class=ComponentType.HEAT_PUMP, size=10.0, size_unit=Units.KILOWATT
+                        ),
+                    )
+                ],
+            ),
+            str(tmp_path),
+        )
+        parameters_path = tmp_path / "parameters.json"
+        with open(parameters_path, "w", encoding="utf-8") as file:
+            json.dump(
+                EconomicParameters(price_basis_year=2024, subsidy_catalog_path="no/such/catalog").to_dict(),
+                file,
+            )
+        assert main(["evaluate", str(tmp_path), "--parameters", str(parameters_path)]) == 2
+        assert "does not resolve to a directory" in capsys.readouterr().err
+        assert not os.path.isfile(os.path.join(str(tmp_path), "lifecycle_costs.json"))
+
+
 def make_flat_contract(price: float = 0.30, standing: float = 0.0) -> TariffContract:
     """A flat contract for billing tests.
 

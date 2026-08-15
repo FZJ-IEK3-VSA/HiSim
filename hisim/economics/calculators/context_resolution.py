@@ -149,6 +149,15 @@ class ReplacedAssetOutcome:
     sunk_cost: UncertainValue
     credit_entry: Optional[CashFlowEntry] = None
     credit_amount: UncertainValue = UncertainValue.exact(0.0)
+    #: The Sowieso share the credit was computed at (Q22), for the audit trail and the report's
+    #: captions. 1.0 — a genuine like-for-like replacement — whenever the register declares none.
+    anyway_share: float = 1.0
+    #: The cost the share was applied to, in nominal euro of the credit year, AVERAGE slot (Q26
+    #: F7): the escalated like-for-like replacement price, or — on the Q7 coupled-cost branch —
+    #: the non-energy share of the new measure that would have been spent anyway. `share x this
+    #: = credit`, which is the multiplication the report has to show rather than assert. 0.0 when
+    #: no credit is due.
+    credit_basis_in_euro: float = 0.0
 
 
 def resolve_device(
@@ -370,6 +379,7 @@ def resolve_replaced_asset(
     database: CostDatabase,
     parameters: EconomicParameters,
     price_basis_year: int,
+    ledger: Optional[ProvenanceLedger] = None,
 ) -> ReplacedAssetOutcome:
     """Sunk cost and anyway-cost credit for the asset this measure replaces (§4.1, Q7).
 
@@ -392,14 +402,26 @@ def resolve_replaced_asset(
     `credit_year` (the old asset's remaining life, rounded) with its own asset class's investment
     escalation rate.
 
+    **The anyway share** (owner decision Q22) scales whichever of the two applies:
+    `credit = anyway_share × like-for-like cost @ credit_year`. It is the Sowieso-Kosten question
+    the previous version answered with an implicit 1.0 for everything — "how much of this measure
+    would the counterfactual really have paid?" Replacing dead windows with windows: all of it.
+    Insulating a facade that was never insulated: only the repair share, because the world without
+    the renovation would have rendered and painted, not insulated. Crediting the full insulation
+    price there was crediting money nobody would ever have spent, and it made every first-time
+    envelope improvement look tens of thousands of euros cheaper than it is.
+
     Args:
-        costing: The replacing measure's resolved costing; supplies `replaced_asset`, the
-            coupled-cost share and the anyway threshold that applies to this class.
+        costing: The replacing measure's resolved costing; supplies `replaced_asset` (with its
+            anyway share), the coupled-cost share and the anyway threshold for this class.
         gross: The measure's own gross investment (euro band), used only for the coupled-cost
             branch.
         database: Loaded cost database, for the replaced asset's price and service life.
         parameters: Economic parameters — country and the escalation-rate fallback chains.
         price_basis_year: The economic "today" the replaced asset's age is measured against.
+        ledger: Provenance ledger; the applied anyway share is recorded into it so the credit's
+            basis is traceable with `explain`. Optional only because the tests that exercise the
+            arithmetic alone do not carry one.
 
     Returns:
         A `ReplacedAssetOutcome`. `sunk_cost` is always present (possibly zero); `credit_entry` is
@@ -442,6 +464,7 @@ def resolve_replaced_asset(
         return ReplacedAssetOutcome(sunk_cost=sunk_cost)
 
     credit_year = int(round(remaining))
+    anyway_share = replaced.anyway_share
     share = costing.energy_related_cost_share
     if share.average < 1.0:
         # Coupled-cost credit (Q7): the non-energy share of the measure
@@ -460,8 +483,31 @@ def resolve_replaced_asset(
         credit = escalate(like_for_like, old_rate, credit_year)
     else:
         credit = UncertainValue.exact(0.0)
+    # Q22: the Sowieso-share. Applied to whichever branch produced the credit, last, so that the
+    # escalated like-for-like cost stays the stated basis and the share stays a visible factor on
+    # top of it rather than something folded into a price. Q26 F7: that basis is captured here,
+    # before the share scales it, because it is exactly the number the report multiplies out.
+    credit_basis = credit.average
+    credit = credit.scale(anyway_share)
     if credit.maximum <= 0:
         return ReplacedAssetOutcome(sunk_cost=sunk_cost)
+    provenance_ids = costing.provenance_ids
+    if ledger is not None:
+        provenance_ids = provenance_ids + (
+            ledger.record(
+                ParameterProvenance(
+                    parameter=f"{costing.subject}.anyway_share",
+                    value=anyway_share,
+                    origin=ParameterOrigin.CONFIG_OVERRIDE,
+                    source_ids=("inline:existing-asset register (Sowieso-Kosten share, §4.1 Q22)",),
+                    detail=(
+                        f"anyway credit = {anyway_share:.0%} x like-for-like cost of "
+                        f"{replaced.asset_class.value} @ year {credit_year} "
+                        f"({credit_basis:,.2f} EUR) = {credit.average:,.2f} EUR"
+                    ),
+                )
+            ),
+        )
     return ReplacedAssetOutcome(
         sunk_cost=sunk_cost,
         credit_entry=CashFlowEntry(
@@ -469,7 +515,9 @@ def resolve_replaced_asset(
             amount_in_euro=credit.as_revenue(),
             category=CostCategory.ANYWAY_COST_CREDIT,
             subject=costing.subject,
-            provenance_ids=costing.provenance_ids,
+            provenance_ids=provenance_ids,
         ),
         credit_amount=credit,
+        anyway_share=anyway_share,
+        credit_basis_in_euro=credit_basis,
     )

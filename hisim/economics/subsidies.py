@@ -838,6 +838,22 @@ class SubsidyScheme:
     excludes: List[str]  # scheme ids this one cannot be combined with (symmetric in effect)
     payout_kind: PayoutKind
     source_ids: Tuple[str, ...] = ()  # registry ids; mandatory for catalog-loaded schemes (W2.4)
+    #: Human-readable name for the report ("BEG EM heat pump — base grant (30 %)", owner decision
+    #: Q20). Optional in the schema so a catalog written before Q20 still loads; every renderer
+    #: reads :attr:`label`, which falls back to the id, and `validate` warns about a scheme that
+    #: ships without one.
+    display_name: Optional[str] = None
+
+    @property
+    def label(self) -> str:
+        """The name a reader sees, with the scheme id as the fallback (Q20).
+
+        The one place the fallback lives, so a catalog that predates ``display_name`` degrades to
+        exactly the old behaviour — an id on screen — instead of an empty cell. Renderers put this
+        in the visible text and keep :attr:`id` in a tooltip or a trailing parenthesis, because
+        the id is what a reviewer needs to grep the catalog and the audit trail with.
+        """
+        return self.display_name or self.id
 
     def __post_init__(self) -> None:
         """Keeps `benefit_kind` and the typed payload in sync (W2.2)."""
@@ -1042,6 +1058,7 @@ class SubsidyCatalog:
                     excludes=list(cumulation.get("excludes", [])),
                     payout_kind=PayoutKind(item.get("payout", {}).get("kind", "UPFRONT_GRANT")),
                     source_ids=source_ids,
+                    display_name=item.get("display_name") or None,
                 )
             )
         questions = {}
@@ -1068,6 +1085,75 @@ class SubsidyCatalog:
             country=country,
             sources=resolved_sources,
         )
+
+    @classmethod
+    def resolve_base_path(cls, configured_path: str) -> str:
+        """Turns a configured catalog path into a directory that exists, or says where it looked.
+
+        A `subsidy_catalog_path` is written into `EconomicParameters` by a system setup, a scenario
+        file or a RenoVisor request, and is then read back by a CLI invocation whose working
+        directory is nobody's business — so resolving a relative path against the current directory
+        alone makes the same parameter file work from the repository root and fail from anywhere
+        else. Three roots are tried, in order: the current working directory (an absolute path is
+        used as given), the repository/installation root that contains the `hisim` package, and the
+        package's own data directory, so that both `hisim/subsidy_catalog` and `subsidy_catalog`
+        resolve to the shipped catalog wherever the command runs.
+
+        Args:
+            configured_path: The non-empty path a parameter set names.
+
+        Returns:
+            An existing directory to load the catalog from.
+
+        Raises:
+            SubsidyDataError: If no candidate exists. Named catalog data that cannot be found is a
+                fail-fast condition (D25): the alternative is a full result priced by the §10.1
+                flat shim under a catalog the caller believed was active.
+        """
+        package_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        install_root = os.path.dirname(package_directory)
+        candidates = [os.path.abspath(configured_path)]
+        if not os.path.isabs(configured_path):
+            candidates.append(os.path.abspath(os.path.join(install_root, configured_path)))
+            candidates.append(os.path.abspath(os.path.join(package_directory, configured_path)))
+        for candidate in candidates:
+            if os.path.isdir(candidate):
+                return candidate
+        raise SubsidyDataError(
+            f"Configured subsidy catalog path {configured_path!r} does not resolve to a directory "
+            f"(tried: {', '.join(candidates)}). Fix the path or remove `subsidy_catalog_path` from "
+            "the parameters — a catalog that was named but cannot be read is never replaced by the "
+            "§10.1 legacy flat shim."
+        )
+
+    @classmethod
+    def load_configured(
+        cls, country: str, configured_path: Optional[str], override_path: Optional[str] = None
+    ) -> Optional["SubsidyCatalog"]:
+        """The catalog a parameter set asks for: loaded, or None when it asks for none.
+
+        The single entry point every caller that holds `EconomicParameters` uses — the CLI's four
+        subcommands and the postprocessing bridge — so the two cases stay apart everywhere. Naming
+        no catalog is a legitimate parameter set: the country may have none yet (Ireland), and the
+        §10.1 legacy flat shim then prices the support from the device entries. Naming one that
+        cannot be read is not, and raises rather than falling through to that shim.
+
+        Args:
+            country: ISO country code selecting the catalog file.
+            configured_path: `EconomicParameters.subsidy_catalog_path`, possibly None.
+            override_path: A `--subsidy-catalog` flag, which wins over the parameters when given.
+
+        Returns:
+            The loaded catalog, or None when neither a path nor an override was given.
+
+        Raises:
+            SubsidyDataError: If a path was given but does not resolve, or the catalog it names is
+                missing or malformed.
+        """
+        path = override_path or configured_path
+        if not path:
+            return None
+        return cls.load(country, cls.resolve_base_path(path))
 
     # ------------------------------------------------------------------ provenance (§3.10, W2.4)
 
@@ -1494,6 +1580,12 @@ class SubsidyAward:
 
     All amounts are in **nominal euro, positive, undiscounted, gross of any mirroring**: the sign
     flip to a revenue-type cash flow happens when the entry is booked (`as_revenue`), not here.
+
+    ``display_name`` is carried on the award rather than looked up when a report is rendered
+    (Q20): a report is regularly built from a serialized result, in a process that never loaded a
+    catalog, so the friendly name has to travel with the award or it is not available where it is
+    read. It is empty exactly when the scheme had none, and :attr:`label` then falls back to the
+    id.
     """
 
     scheme_id: str
@@ -1514,6 +1606,29 @@ class SubsidyAward:
     # For VAT_REDUCTION:
     reduced_vat_rate: Optional[float] = None
     caps_binding_per_slot: Dict[str, bool] = field(default_factory=dict)
+    #: The scheme's friendly name at the time of the award (Q20); empty when it had none.
+    display_name: str = ""
+    # --- the arithmetic behind the amount (owner decision Q26 F8, rule 2.9) ---------------
+    #: The rate this award was computed at, as a fraction, for the two percentage forms (a share
+    #: of eligible cost and a tax credit); None for lump sums, per-unit amounts, loan terms and
+    #: VAT reductions, which state their own terms instead. It is the rate **after** a cumulation
+    #: group's combined-rate cap scaled it down, i.e. the rate that actually produced the euros.
+    benefit_rate: Optional[float] = None
+    #: The same rate before that scaling, when the group's combined-rate cap bit; None otherwise.
+    #: The pair is what lets the report say "20 % capped to 17.5 %" instead of showing a rate the
+    #: catalog does not contain.
+    benefit_rate_before_group_cap: Optional[float] = None
+    #: The eligible-cost basis the rate was applied to, after proration and after the
+    #: per-dwelling-unit cap — the second factor of `rate x basis = amount`.
+    eligible_basis_in_euro: Optional[UncertainValue] = None
+    #: The per-dwelling-unit eligible-cost ceiling that applied, in euro, or None where the scheme
+    #: declares none. With `caps_binding_per_slot` this is what turns "capped" into "capped at X".
+    eligible_basis_cap_in_euro: Optional[float] = None
+
+    @property
+    def label(self) -> str:
+        """The award's name for a reader — the scheme's display name, or its id (Q20)."""
+        return self.display_name or self.scheme_id
 
 
 @dataclass
@@ -1556,6 +1671,7 @@ class SubsidyDecision:
             "applied": [
                 {
                     "scheme_id": award.scheme_id,
+                    "display_name": award.display_name,
                     "payout_kind": award.payout_kind.value,
                     "upfront_amount": award.upfront_amount.to_json(),
                     "schedule_amounts": [amount.to_json() for amount in award.schedule_amounts],
@@ -1567,6 +1683,16 @@ class SubsidyDecision:
                     "loan_repayment_grant_share": award.loan_repayment_grant_share,
                     "reduced_vat_rate": award.reduced_vat_rate,
                     "caps_binding_per_slot": award.caps_binding_per_slot,
+                    # Q26 F8: the arithmetic behind the amount, so a report rendered from a
+                    # stored result can show `rate x basis = amount` and the cap verdict.
+                    "benefit_rate": award.benefit_rate,
+                    "benefit_rate_before_group_cap": award.benefit_rate_before_group_cap,
+                    "eligible_basis_in_euro": (
+                        award.eligible_basis_in_euro.to_json()
+                        if award.eligible_basis_in_euro is not None
+                        else None
+                    ),
+                    "eligible_basis_cap_in_euro": award.eligible_basis_cap_in_euro,
                 }
                 for award in self.applied
             ],
@@ -1807,12 +1933,21 @@ def _combination_awards(
                     payout_kind=scheme.payout_kind,
                     upfront_amount=basis.scale(rate),
                     caps_binding_per_slot=binding,
+                    # Q26 F8: both factors of the multiplication, and the pre-cap rate when the
+                    # group's combined-rate cap scaled this scheme down.
+                    benefit_rate=rate,
+                    benefit_rate_before_group_cap=scheme_rate if scale_down < 1.0 else None,
+                    eligible_basis_in_euro=basis,
+                    eligible_basis_cap_in_euro=scheme.eligible_cost.cap_for_units(
+                        context.building.dwelling_units
+                    ),
                 )
             )
     for scheme in schemes:
         if scheme.benefit_kind in (BenefitKind.SHARE_OF_ELIGIBLE_COST, BenefitKind.BONUS_SHARE):
             continue
         basis, binding = _eligible_cost_basis(scheme, measure, context)
+        basis_cap = scheme.eligible_cost.cap_for_units(context.building.dwelling_units)
         benefit = scheme.benefit
         if isinstance(benefit, LumpSumBenefit):
             # A grant never exceeds the cost it funds, so the lump sum is clamped to the eligible
@@ -1826,6 +1961,8 @@ def _combination_awards(
                     payout_kind=scheme.payout_kind,
                     upfront_amount=amount.clamp_upper(basis) if scheme.eligible_cost.categories else amount,
                     caps_binding_per_slot=binding,
+                    eligible_basis_in_euro=basis if scheme.eligible_cost.categories else None,
+                    eligible_basis_cap_in_euro=basis_cap,
                 )
             )
         elif isinstance(benefit, PerUnitBenefit):
@@ -1836,6 +1973,8 @@ def _combination_awards(
                     payout_kind=scheme.payout_kind,
                     upfront_amount=amount.clamp_upper(basis),
                     caps_binding_per_slot=binding,
+                    eligible_basis_in_euro=basis,
+                    eligible_basis_cap_in_euro=basis_cap,
                 )
             )
         elif isinstance(benefit, TaxCreditBenefit):
@@ -1847,6 +1986,11 @@ def _combination_awards(
                     payout_kind=PayoutKind.TAX_CREDIT_SCHEDULE,
                     schedule_amounts=schedule,
                     caps_binding_per_slot=binding,
+                    # Q26 F8: a tax credit is a percentage form like a share award, so it states
+                    # the same multiplication; the instalment split is the payout note's job.
+                    benefit_rate=benefit.rate,
+                    eligible_basis_in_euro=basis,
+                    eligible_basis_cap_in_euro=basis_cap,
                 )
             )
         elif isinstance(benefit, ReducedVatBenefit):
@@ -1887,6 +2031,13 @@ def _combination_awards(
         if any(ratio < 1.0 for ratio in ratios):
             for award in awards:
                 award.upfront_amount = _scaled_to_cap(award.upfront_amount, ratios)
+    # Q20: the friendly name travels with the award, because the report that shows it is often
+    # built from a serialized result in a process that never loaded a catalog. Attached in one
+    # pass rather than at the seven construction sites above, so a new benefit kind cannot forget
+    # it.
+    names = {scheme.id: scheme.display_name for scheme in schemes}
+    for award in awards:
+        award.display_name = names.get(award.scheme_id) or ""
     return awards
 
 
@@ -2024,11 +2175,17 @@ def solve_cumulation(
     decision = SubsidyDecision(measure_subject=measure.subject)
     for assessment in assessments:
         if assessment.status == EligibilityStatus.INELIGIBLE:
-            decision.rejected.append({"scheme_id": assessment.scheme.id, "reason": assessment.rejected_reason})
+            decision.rejected.append({
+                "scheme_id": assessment.scheme.id,
+                "display_name": assessment.scheme.label,
+                "reason": assessment.rejected_reason,
+            })
         elif assessment.status == EligibilityStatus.UNDETERMINED:
-            decision.undetermined.append(
-                {"scheme_id": assessment.scheme.id, "missing_fields": assessment.missing_fields}
-            )
+            decision.undetermined.append({
+                "scheme_id": assessment.scheme.id,
+                "display_name": assessment.scheme.label,
+                "missing_fields": assessment.missing_fields,
+            })
 
     def admissible(combination: List[SubsidyScheme]) -> bool:
         """Whether the combination violates no `excludes` relation.

@@ -1176,6 +1176,23 @@ class TestVariantComparison:
         assert EnergyCarrier.ELECTRICITY.value in comparison.npv_delta_by_subject
 
 
+def write_parameters_file(tmp_path, **overrides) -> str:
+    """Writes an `EconomicParameters` JSON file into `tmp_path`; returns its path.
+
+    Every CLI invocation on a directory that carries no stored evaluation has to state its
+    assumptions explicitly since the parameter-resolution fix: the engine defaults are no longer a
+    silent fallback, because a re-pricing invocation that quietly substitutes them answers a
+    different question than the caller asked. The tests here work on freshly written
+    `economic_inputs.json` directories, so they take the caller's role and pass a file.
+    """
+    import json
+
+    path = os.path.join(str(tmp_path), "parameters.json")
+    with open(path, "w", encoding="utf-8") as file:
+        json.dump(EconomicParameters(**overrides).to_dict(), file)
+    return path
+
+
 class TestCliAndExports:
     """§3.10 / §4.6 CLI on a stored result directory."""
 
@@ -1192,10 +1209,13 @@ class TestCliAndExports:
             billing=[BillingDeterminants(carrier=EnergyCarrier.ELECTRICITY, energy_bought_in_kwh=4000.0)],
         )
         write_inputs(inputs, str(tmp_path))
-        assert main(["evaluate", str(tmp_path)]) == 0
+        parameters_path = write_parameters_file(tmp_path, price_basis_year=2024)
+        assert main(["evaluate", str(tmp_path), "--parameters", parameters_path]) == 0
         for file_name in ("lifecycle_costs.json", "component_costs.json", "cash_flow_timeline.csv",
                           "cost_provenance.json"):
             assert os.path.isfile(tmp_path / file_name), file_name
+        # No `--parameters` this time: `evaluate` stored them, so `explain` re-prices the run's
+        # own assumptions rather than the engine defaults.
         assert main(["explain", str(tmp_path), "--value", "greenfield_gross/total_npv_in_euro"]) == 0
         output = capsys.readouterr().out
         assert "src_capex_" in output  # the report reaches the resolved sources
@@ -1222,10 +1242,12 @@ class TestCliAndExports:
             billing=[BillingDeterminants(carrier=EnergyCarrier.ELECTRICITY, energy_bought_in_kwh=4000.0)],
         )
         write_inputs(inputs, str(tmp_path))
+        parameters_path = write_parameters_file(tmp_path, price_basis_year=2024)
         for argv in (
-            ["evaluate", str(tmp_path)],
-            ["explain", str(tmp_path), "--value", "greenfield_gross/total_npv_in_euro"],
-            ["report", str(tmp_path)],
+            ["evaluate", str(tmp_path), "--parameters", parameters_path],
+            ["explain", str(tmp_path), "--value", "greenfield_gross/total_npv_in_euro",
+             "--parameters", parameters_path],
+            ["report", str(tmp_path), "--parameters", parameters_path],
         ):
             assert main(argv) == 2, argv
             error_output = capsys.readouterr().err
@@ -1255,9 +1277,76 @@ class TestCliAndExports:
         error_output = capsys.readouterr().err
         assert "does_not_exist.json" in error_output
         assert not os.path.isfile(tmp_path / "lifecycle_costs.json")  # nothing was priced
-        # Omitting the flag keeps the documented default behaviour.
-        assert main(["evaluate", str(tmp_path)]) == 0
+        # A real file prices the run.
+        assert main(["evaluate", str(tmp_path), "--parameters", write_parameters_file(tmp_path)]) == 0
         assert os.path.isfile(tmp_path / "lifecycle_costs.json")
+
+    def test_omitting_parameters_on_a_directory_without_stored_ones_fails(self, tmp_path, capsys):
+        """No `--parameters` and no stored evaluation is an error, not a run at engine defaults.
+
+        The other half of issue #23's rule, found on the PR-9 evaluation runs: `explain` without
+        `--parameters` re-priced with `EconomicParameters()`, so a run evaluated at price basis
+        year 2026 under a subsidy catalog was explained at the default basis year under none. The
+        assumptions have to come from somewhere the caller chose — the flag, or the run's own
+        stored parameters — and a directory that offers neither is told so by name.
+        """
+        from hisim.economics.__main__ import main
+        from hisim.economics.serialization import write_inputs
+
+        inputs = EvaluationInputs(
+            simulation_year=2024,
+            simulated_period_fraction=1.0,
+            cost_facts=[
+                SubjectCostFacts(
+                    "HeatPump",
+                    ComponentCostFacts(asset_class=ComponentType.HEAT_PUMP, size=10.0, size_unit=Units.KILOWATT),
+                )
+            ],
+        )
+        write_inputs(inputs, str(tmp_path))
+        assert main(["evaluate", str(tmp_path)]) == 2
+        error_output = capsys.readouterr().err
+        assert "lifecycle_costs.json" in error_output
+        assert "--parameters" in error_output
+        assert not os.path.isfile(tmp_path / "lifecycle_costs.json")
+
+    def test_the_cli_reuses_the_stored_parameters_of_the_run(self, tmp_path, capsys):
+        """`explain` reproduces the run's own pricing without being told the parameters again.
+
+        Pins the whole chain of the fix: `evaluate --parameters` stores the parameters on every
+        result, `read_stored_parameters` reads them back, and the later invocation prices at the
+        run's basis year with the run's catalog. The basis year is the observable: the default
+        would resolve to something else entirely, and the provenance lines name the year every
+        database entry was read at.
+        """
+        import json
+
+        from hisim.economics.__main__ import main
+        from hisim.economics.serialization import read_stored_parameters, write_inputs
+
+        inputs = EvaluationInputs(
+            simulation_year=2024,
+            simulated_period_fraction=1.0,
+            cost_facts=[
+                SubjectCostFacts(
+                    "HeatPump",
+                    ComponentCostFacts(asset_class=ComponentType.HEAT_PUMP, size=10.0, size_unit=Units.KILOWATT),
+                )
+            ],
+            billing=[BillingDeterminants(carrier=EnergyCarrier.ELECTRICITY, energy_bought_in_kwh=4000.0)],
+        )
+        write_inputs(inputs, str(tmp_path))
+        parameters_path = write_parameters_file(tmp_path, price_basis_year=2026, interest_rate=0.07)
+        assert main(["evaluate", str(tmp_path), "--parameters", parameters_path]) == 0
+        capsys.readouterr()
+        stored = read_stored_parameters(str(tmp_path))
+        assert stored is not None
+        assert stored.price_basis_year == 2026
+        assert stored.interest_rate == 0.07
+        assert main(["explain", str(tmp_path), "--value", "greenfield_gross/total_npv_in_euro",
+                     "--json"]) == 0
+        report = json.loads(capsys.readouterr().out)
+        assert json.dumps(report).count("2026") > 0  # priced at the run's basis year, not the default
 
     def test_exported_figures_are_not_minted_by_the_writer(self, tmp_path):
         """W4.1: every derived number in an export equals its independent recomputation.
@@ -1405,7 +1494,10 @@ class TestCliAndExports:
                 },
                 file,
             )
-        assert main(["evaluate", str(tmp_path), "--scenarios", str(scenarios_path)]) == 0
+        assert main([
+            "evaluate", str(tmp_path), "--scenarios", str(scenarios_path),
+            "--parameters", write_parameters_file(tmp_path, price_basis_year=2024),
+        ]) == 0
         assert os.path.isfile(tmp_path / "scenario_cube.csv")
         assert os.path.isfile(tmp_path / "scenario_cube.json")
 

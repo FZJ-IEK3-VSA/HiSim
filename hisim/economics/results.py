@@ -107,6 +107,51 @@ class ComponentCostBreakdown:
         }
 
 
+@dataclass(frozen=True)
+class EmbodiedCo2Basis:
+    """The multiplication behind one subject's embodied CO2: factor x size, once per installation.
+
+    The embodied mass of a device is a data factor times the size that was installed, charged
+    again at every replacement, and a report that prints only the product asks the reader to
+    trust it (rule 2.9, Q26 F3). This record carries the three numbers the product is made of so
+    the CO2 section can state `factor x size = kg per installation` and multiply that by the
+    number of installations booked within the horizon.
+
+    `factor_in_kg_per_unit` is the database entry's embodied-CO2 figure per size unit, or the
+    absolute mass per installation when the entry states one without a `per_unit` (in which case
+    `size` is reported as 1 of the entry's own unit). `installations` counts the year-0
+    installation plus every replacement within the horizon, i.e. exactly the events the mass was
+    accumulated for.
+    """
+
+    factor_in_kg_per_unit: float
+    size: float
+    size_unit: str
+    per_installation_in_kg: float
+    installations: int = 1
+
+    def to_json(self) -> dict:
+        """Serialization for lifecycle_costs.json."""
+        return {
+            "factor_in_kg_per_unit": self.factor_in_kg_per_unit,
+            "size": self.size,
+            "size_unit": self.size_unit,
+            "per_installation_in_kg": self.per_installation_in_kg,
+            "installations": self.installations,
+        }
+
+    @staticmethod
+    def from_json(raw: dict) -> "EmbodiedCo2Basis":
+        """Inverse of `to_json`."""
+        return EmbodiedCo2Basis(
+            factor_in_kg_per_unit=float(raw["factor_in_kg_per_unit"]),
+            size=float(raw["size"]),
+            size_unit=str(raw.get("size_unit", "")),
+            per_installation_in_kg=float(raw["per_installation_in_kg"]),
+            installations=int(raw.get("installations", 1)),
+        )
+
+
 @dataclass
 class LifecycleCo2Result:
     """Parallel, undiscounted CO2 accounting (§3.8).
@@ -132,6 +177,13 @@ class LifecycleCo2Result:
     operational_co2_by_carrier_in_kg: Dict[str, float] = field(default_factory=dict)
     total_co2_in_kg: float = 0.0
     embodied_by_subject_in_kg: Dict[str, float] = field(default_factory=dict)
+    #: The conversion factors behind the two mass maps above, so the report can state every mass
+    #: as one visible multiplication instead of asserting it (Q26 F3). Keyed like the maps they
+    #: explain — carrier value for the operational factors, timeline subject for the embodied
+    #: ones. Empty for a result serialized before the fields existed, in which case the factors
+    #: table is skipped rather than reconstructed by division.
+    emission_factor_by_carrier_in_kg_per_kwh: Dict[str, float] = field(default_factory=dict)
+    embodied_basis_by_subject: Dict[str, "EmbodiedCo2Basis"] = field(default_factory=dict)
 
     def to_json(self) -> dict:
         """Serialization.
@@ -146,6 +198,10 @@ class LifecycleCo2Result:
             "operational_co2_by_carrier_in_kg": self.operational_co2_by_carrier_in_kg,
             "total_co2_in_kg": self.total_co2_in_kg,
             "embodied_by_subject_in_kg": self.embodied_by_subject_in_kg,
+            "emission_factor_by_carrier_in_kg_per_kwh": dict(self.emission_factor_by_carrier_in_kg_per_kwh),
+            "embodied_basis_by_subject": {
+                subject: basis.to_json() for subject, basis in self.embodied_basis_by_subject.items()
+            },
         }
 
 
@@ -166,6 +222,216 @@ class AnnualEnergyQuantities:
     def to_json(self) -> dict:
         """Serialization for lifecycle_costs.json."""
         return {"bought_in_kwh": self.bought_in_kwh, "sold_in_kwh": self.sold_in_kwh}
+
+
+@dataclass(frozen=True)
+class ModernizationLevySummary:
+    """The §559/§559e rent increase as the report has to state it (owner decision Q21).
+
+    The levy's euro amount is on the timeline as a transfer pair, but two facts a landlord reading
+    the statement needs are not derivable from a cash flow: whether a statutory ceiling decided the
+    figure, and which ceiling. Below the cap the levy scales with what was spent on the
+    modernization; at the cap it does not, and the same renovation costing 20 % more would produce
+    the identical rent increase — economically a completely different situation, invisible in the
+    number itself.
+
+    Carried on the result rather than recomputed in a view for the same reason the areas are: a
+    stored `lifecycle_costs.json` has to be enough to render the report, and a second
+    implementation of §559 Abs. 3a inside the presentation layer is precisely the duplication the
+    seam-4 rule forbids. It is `None` for every perspective that has no levy — an owner-occupier
+    run, a country whose ruleset knows none.
+    """
+
+    annual_amount_in_euro: UncertainValue
+    general_leg_in_euro: UncertainValue
+    heating_leg_in_euro: UncertainValue
+    #: Whether a statutory cap actually bit in the AVERAGE slot.
+    cap_binding: bool = False
+    #: The general §559 Abs. 3a ceiling in EUR per m² and month, when one was evaluated.
+    cap_in_euro_per_m2_per_month: Optional[float] = None
+    #: Which mechanism actually set the levy **in each world** (Q26 F5), keyed by slot name
+    #: (`low` / `average` / `high`). The caps are applied per slot, so the ceiling can decide the
+    #: expensive world while the cheap one is still set by the percentage of the modernization
+    #: cost — two economically different answers that a single average-slot flag hides. Empty for
+    #: a result serialized before the field existed, in which case the report falls back to the
+    #: average-slot `cap_binding` statement.
+    binding_mechanism_by_slot: Dict[str, str] = field(default_factory=dict)
+
+    def to_json(self) -> dict:
+        """Serialization for lifecycle_costs.json."""
+        return {
+            "annual_amount_in_euro": self.annual_amount_in_euro.to_json(),
+            "general_leg_in_euro": self.general_leg_in_euro.to_json(),
+            "heating_leg_in_euro": self.heating_leg_in_euro.to_json(),
+            "cap_binding": self.cap_binding,
+            "cap_in_euro_per_m2_per_month": self.cap_in_euro_per_m2_per_month,
+            "binding_mechanism_by_slot": dict(self.binding_mechanism_by_slot),
+        }
+
+    @staticmethod
+    def from_json(raw: Optional[dict]) -> Optional["ModernizationLevySummary"]:
+        """Inverse of `to_json`; `None` stays `None` (a run without a levy)."""
+        if not raw:
+            return None
+        return ModernizationLevySummary(
+            annual_amount_in_euro=UncertainValue.from_json(raw["annual_amount_in_euro"]),
+            general_leg_in_euro=UncertainValue.from_json(raw["general_leg_in_euro"]),
+            heating_leg_in_euro=UncertainValue.from_json(raw["heating_leg_in_euro"]),
+            cap_binding=bool(raw.get("cap_binding", False)),
+            cap_in_euro_per_m2_per_month=raw.get("cap_in_euro_per_m2_per_month"),
+            binding_mechanism_by_slot=dict(raw.get("binding_mechanism_by_slot", {})),
+        )
+
+
+@dataclass(frozen=True)
+class ResolvedRate:
+    """One escalation rate as the run actually resolved it, with the step of the chain that won.
+
+    An escalation rate reaches the engine through a three-step fallback — an explicit
+    `EconomicParameters` entry, the country's `escalation_defaults_<COUNTRY>.json` table, then the
+    general rate (§3.2) — and the rate alone does not say which step produced it. The assumptions
+    table has to cite a source for every value it publishes (rule 2.9, Q26 F2), so the winning
+    step travels with the number instead of being re-derived by a renderer that has no database.
+
+    `origin` is one of the `RateOrigin` constants; `source_ids` are the §3.10 registry ids of the
+    defaults file when that is what won, and empty for a configured or fallback rate, which the
+    report renders as "configuration".
+    """
+
+    rate: float
+    origin: str
+    source_ids: List[str] = field(default_factory=list)
+
+    def to_json(self) -> dict:
+        """Serialization for lifecycle_costs.json."""
+        return {"rate": self.rate, "origin": self.origin, "source_ids": list(self.source_ids)}
+
+    @staticmethod
+    def from_json(raw: dict) -> "ResolvedRate":
+        """Inverse of `to_json`."""
+        return ResolvedRate(
+            rate=float(raw["rate"]),
+            origin=str(raw.get("origin", RateOrigin.CONFIGURATION)),
+            source_ids=list(raw.get("source_ids", [])),
+        )
+
+
+class RateOrigin:
+    """The three steps of the §3.2 escalation fallback chain, as the values `ResolvedRate` carries.
+
+    Named constants rather than free strings because both the evaluator that records the origin
+    and the report that renders it have to agree on the spelling, and a third spelling would show
+    up as an uncited assumption rather than as an error.
+    """
+
+    CONFIGURATION = "configuration"
+    COUNTRY_DEFAULTS = "country defaults"
+    GENERAL_FALLBACK = "general fallback"
+
+
+@dataclass(frozen=True)
+class TariffAssumption:
+    """The commercial terms one carrier was billed under, as the assumptions table states them.
+
+    The three prices a reader needs to reproduce an energy bill by hand — the per-kilowatt-hour
+    working price, the fixed annual standing charge and the rate paid per exported kilowatt hour —
+    plus the contract they came from. Carried on the result for the same reason the reference
+    areas are (W4.2): a stored `lifecycle_costs.json` has to be enough to render the report, and
+    the tariff contracts live in `EvaluationInputs`, which presentation may not read.
+
+    `contract_id` is the tariff contract's id; for a carrier billed under the generated flat
+    contract of `calculators/energy.default_contract` it is that contract's synthetic id and
+    `is_default_contract` is True, which the report states as "database price entry" rather than
+    pretending a contract file was read.
+    """
+
+    carrier: str
+    contract_id: str
+    working_price_in_euro_per_kwh: UncertainValue
+    standing_charge_in_euro_per_year: UncertainValue
+    feed_in_kind: str = "NONE"
+    feed_in_rate_in_euro_per_kwh: Optional[UncertainValue] = None
+    is_default_contract: bool = False
+    source_ids: List[str] = field(default_factory=list)
+
+    def to_json(self) -> dict:
+        """Serialization for lifecycle_costs.json."""
+        return {
+            "carrier": self.carrier,
+            "contract_id": self.contract_id,
+            "working_price_in_euro_per_kwh": self.working_price_in_euro_per_kwh.to_json(),
+            "standing_charge_in_euro_per_year": self.standing_charge_in_euro_per_year.to_json(),
+            "feed_in_kind": self.feed_in_kind,
+            "feed_in_rate_in_euro_per_kwh": (
+                self.feed_in_rate_in_euro_per_kwh.to_json()
+                if self.feed_in_rate_in_euro_per_kwh is not None
+                else None
+            ),
+            "is_default_contract": self.is_default_contract,
+            "source_ids": list(self.source_ids),
+        }
+
+    @staticmethod
+    def from_json(raw: dict) -> "TariffAssumption":
+        """Inverse of `to_json`."""
+        feed_in = raw.get("feed_in_rate_in_euro_per_kwh")
+        return TariffAssumption(
+            carrier=raw["carrier"],
+            contract_id=raw.get("contract_id", ""),
+            working_price_in_euro_per_kwh=UncertainValue.from_json(raw["working_price_in_euro_per_kwh"]),
+            standing_charge_in_euro_per_year=UncertainValue.from_json(raw["standing_charge_in_euro_per_year"]),
+            feed_in_kind=raw.get("feed_in_kind", "NONE"),
+            feed_in_rate_in_euro_per_kwh=UncertainValue.from_json(feed_in) if feed_in is not None else None,
+            is_default_contract=bool(raw.get("is_default_contract", False)),
+            source_ids=list(raw.get("source_ids", [])),
+        )
+
+
+@dataclass(frozen=True)
+class EconomicAssumptions:
+    """Every economic assumption the evaluation ran on that is not already on the parameters.
+
+    The data half of the report's Assumptions section (owner decision Q26 F2, rule 2.9): the
+    escalation rates *as resolved* through their fallback chains, the tariff terms per carrier,
+    and the annual heat demand the levelized cost of heat divides by. What `EconomicParameters`
+    already states — interest rate, horizon, price basis year, CO2 damage cost — is not copied
+    here; the section reads both, and duplicating a parameter would let the two drift.
+
+    It exists because those three groups are resolved *inside* the engine against the cost
+    database and `EvaluationInputs`, neither of which presentation may reach (seam 4). Without
+    this record the only honest assumptions table would be the empty one.
+
+    Keys: escalation rates are keyed by a stable label — `general`, `investment`, `feed-in`,
+    `energy:<carrier value>`, `investment:<asset class name>` — and the tariffs by carrier value,
+    the same string the timeline uses as the subject of that carrier's energy entries.
+    """
+
+    escalation_rates: Dict[str, ResolvedRate] = field(default_factory=dict)
+    tariffs: Dict[str, TariffAssumption] = field(default_factory=dict)
+    annual_heat_demand_in_kwh: Optional[float] = None
+
+    def to_json(self) -> dict:
+        """Serialization for lifecycle_costs.json."""
+        return {
+            "escalation_rates": {label: rate.to_json() for label, rate in self.escalation_rates.items()},
+            "tariffs": {carrier: tariff.to_json() for carrier, tariff in self.tariffs.items()},
+            "annual_heat_demand_in_kwh": self.annual_heat_demand_in_kwh,
+        }
+
+    @staticmethod
+    def from_json(raw: Optional[dict]) -> Optional["EconomicAssumptions"]:
+        """Inverse of `to_json`; `None` stays `None` (a result written before the field existed)."""
+        if not raw:
+            return None
+        return EconomicAssumptions(
+            escalation_rates={
+                label: ResolvedRate.from_json(value) for label, value in raw.get("escalation_rates", {}).items()
+            },
+            tariffs={
+                carrier: TariffAssumption.from_json(value) for carrier, value in raw.get("tariffs", {}).items()
+            },
+            annual_heat_demand_in_kwh=raw.get("annual_heat_demand_in_kwh"),
+        )
 
 
 @dataclass(frozen=True)
@@ -195,6 +461,33 @@ class ReferenceAreas:
             "heated_floor_area_in_m2": self.heated_floor_area_in_m2,
             "living_area_in_m2": self.living_area_in_m2,
         }
+
+
+class HeatCostNaming:
+    """What the heat-cost figure is *called* wherever a reader sees it (owner decision Q27 R1).
+
+    The figure divides a perspective's whole NPV — every subject it books, the PV system and the
+    battery included — by the heat delivered, so it is not the levelized cost of heat the
+    literature publishes: an LCOH counts heating-attributable cost only, and this evaluation has
+    no heating-only attribution. Calling it one over-promised, so every user-visible occurrence
+    now reads "system cost per unit of heat": the KPI name in `lifecycle_kpis.json` and the report
+    KPI table, the perspectives-table column, the plausibility-check row and the derivation
+    caption. The names live here, next to the field they name, so a future re-wording is one edit
+    rather than a grep across three modules on both sides of seam 4.
+
+    The **field** name `LifecycleCostResult.levelized_cost_of_heat_in_euro_per_kwh` deliberately
+    stays: it is the serialization key of every stored `lifecycle_costs.json`, and renaming it
+    would either break archived results or force an alias that buys nothing — the display name is
+    what a reader reads, and no reader reads the key. Docstrings keep saying LCOH where they
+    explain *why* this figure is not one.
+    """
+
+    #: The published KPI name and the caption's lead-in.
+    FULL = "System cost per unit of heat"
+    #: Column-header form, for the perspectives table where the full name would not fit.
+    COLUMN = "System cost/kWh heat"
+    #: Lower-case form for the plausibility panel, whose check names are sentences-in-lower-case.
+    CHECK_LABEL = "system cost per unit of heat"
 
 
 @dataclass
@@ -257,11 +550,39 @@ class LifecycleCostResult:
     #: year" and the fallback price basis of the degenerate-band note. Carried here (W4.6) so
     #: presentation needs no `EvaluationInputs`.
     simulation_year: Optional[int] = None
+    #: Per-subject annual energy attribution: subject -> energy-balance role
+    #: (`EnergyFlowRole.value`) -> annualized kWh as a positive magnitude. Additive and optional:
+    #: it is filled from the component output columns `adapter.DeviceEnergySpecs` names and stays
+    #: empty everywhere else, including for results serialized before it existed. Only the
+    #: household energy balance reads it, and that chart skips itself rather than drawing a
+    #: partial picture when the map carries fewer than two device flows — no KPI, export or
+    #: invariant depends on it.
+    energy_attribution_by_subject_in_kwh: Dict[str, Dict[str, float]] = field(default_factory=dict)
     #: Per-carrier §8.5 flexibility value of the year-1 bill *before* the clamp the projection
     #: applies (key = `EnergyCarrier.value`). Diagnostics, not a published figure: a negative
     #: entry means the load was timed worse than a flat profile and is what the plausibility
     #: panel's flexibility check reads (issue #25b).
     raw_flexibility_value_by_carrier: Dict[str, float] = field(default_factory=dict)
+    #: The Sowieso share each anyway credit was computed at (subject -> share, owner decision
+    #: Q22). A credit is `share x like-for-like cost`, and a reader looking at a 9,176 EUR credit
+    #: against a 30,588 EUR insulation measure has to be told which share produced it — so the
+    #: report's timeline detail table and the captions that name the credit read this. Empty for a
+    #: run without replaced assets and for results serialized before the field existed, in which
+    #: case the renderers say nothing rather than claiming a share they do not know.
+    anyway_share_by_subject: Dict[str, float] = field(default_factory=dict)
+    #: The like-for-like cost each anyway credit was computed *on*, per subject, in nominal euro
+    #: of the credit year (Q26 F7). With `anyway_share_by_subject` this makes the credit a visible
+    #: multiplication — `share x basis = credit` — instead of a figure the reader has to trust.
+    #: Empty for a run without replaced assets and for results serialized before the field
+    #: existed, in which case the caption states the share alone as it did before.
+    anyway_basis_by_subject: Dict[str, float] = field(default_factory=dict)
+    #: The §559/§559e rent increase and whether a statutory cap decided it (Q21). Present only for
+    #: perspectives the rented-case ruleset allocated; None everywhere else.
+    modernization_levy: Optional[ModernizationLevySummary] = None
+    #: The escalation rates, tariffs and heat demand this evaluation resolved (Q26 F2). None for a
+    #: result serialized before the field existed; the Assumptions section then renders the
+    #: parameter half only and says which half is missing rather than inventing it.
+    assumptions: Optional[EconomicAssumptions] = None
 
     def scoped_timeline(self) -> CashFlowTimeline:
         """The flows this perspective actually reports on (filtered by `scope_payer`).
@@ -435,6 +756,20 @@ class LifecycleCostResult:
             },
             "reference_areas": self.reference_areas.to_json(),
             "simulated_period_fraction": self.simulated_period_fraction,
+            # Additive with the visualization extension: the per-subject energy attribution the
+            # energy-to-money chart needs. Written even when empty so the schema is stable.
+            # Additive with Q22: the Sowieso share behind every anyway credit on the timeline.
+            "anyway_share_by_subject": dict(self.anyway_share_by_subject),
+            # Additive with Q26 F7: the like-for-like cost that share was applied to.
+            "anyway_basis_by_subject": dict(self.anyway_basis_by_subject),
+            # Additive with Q21: the levy the landlord statement reports on.
+            "modernization_levy": self.modernization_levy.to_json() if self.modernization_levy else None,
+            # Additive with Q26 F2: the resolved assumptions the Assumptions section publishes.
+            "assumptions": self.assumptions.to_json() if self.assumptions else None,
+            "energy_attribution_by_subject_in_kwh": {
+                subject: dict(by_role)
+                for subject, by_role in self.energy_attribution_by_subject_in_kwh.items()
+            },
             # Additive since W4.6 — the scope and the simulation year presentation needs so it
             # can render from a stored result alone (W4.5).
             "scope_payer": self.scope_payer.value,

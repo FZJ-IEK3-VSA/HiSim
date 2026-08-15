@@ -136,9 +136,15 @@ class ComponentCostFacts:
         cost database actually has an entry for this asset class and whether its `per_unit` matches
         `size_unit` is the pre-run resolution check's job, since that needs the database.
 
+        A size of exactly zero is deliberately *not* an error: a setup that always builds a PV
+        system and then configures it at 0 kWp has said "not installed", which is a statement
+        about the modelled building rather than corrupt data, and `is_not_installed` is how the
+        extraction side recognizes it. Negative and non-finite sizes stay hard errors, because
+        neither can mean anything.
+
         Raises:
-            ValueError: If the asset class is not a `ComponentType`, the size is not finite and
-                positive, the size unit is not priceable, `count` is below 1, the maintenance-rate
+            ValueError: If the asset class is not a `ComponentType`, the size is negative or not
+                finite, the size unit is not priceable, `count` is below 1, the maintenance-rate
                 override is negative in any slot, a non-positive lifetime override was given, or the
                 technical attributes are not JSON-serializable.
         """
@@ -150,8 +156,11 @@ class ComponentCostFacts:
         )
         if not isinstance(self.asset_class, ComponentType):
             raise ValueError(f"asset_class must be a ComponentType, got {self.asset_class!r}.")
-        if not math.isfinite(self.size) or self.size <= 0:
-            raise ValueError(f"ComponentCostFacts.size must be finite and > 0, got {self.size!r}.")
+        if not math.isfinite(self.size) or self.size < 0:
+            raise ValueError(
+                f"ComponentCostFacts.size must be finite and >= 0, got {self.size!r} "
+                "(a size of exactly 0 is allowed and means 'not installed')."
+            )
         if self.size_unit not in ComponentCostFacts.SUPPORTED_SIZE_UNITS:
             raise ValueError(
                 f"size_unit {self.size_unit!r} is not supported for costing; "
@@ -169,6 +178,17 @@ class ComponentCostFacts:
             json.dumps(self.technical_attributes)
         except (TypeError, ValueError) as err:
             raise ValueError("technical_attributes must be JSON-serializable.") from err
+
+    def is_not_installed(self) -> bool:
+        """True when the component is configured at zero size, i.e. declared but not built.
+
+        System setups routinely instantiate a device unconditionally and then size it from a
+        parameter — a building sizer with `share_of_maximum_pv_potential = 0` still constructs a
+        PV system, at 0 kWp. Such a device is absent from the building, not mis-declared, so the
+        extraction side turns this into a skip with a reason rather than pricing a zero-size asset
+        or failing the whole evaluation.
+        """
+        return self.size == 0.0
 
     def has_overrides(self) -> bool:
         """True if any per-field override is set (then `override_source` is required in strict mode).
@@ -296,6 +316,11 @@ class ExistingAsset:
     declaration of which measure supersedes this asset: without it a same-class register entry means
     "kept", and only with it does a like-for-like replacement (old windows → new windows) get
     recognized as a replacement with its avoided future cost credited (§3.2b).
+
+    `anyway_share` is how honest that credit is. See its own comment below: crediting 100 % of an
+    insulation measure against a facade that was never insulated was methodologically wrong, and
+    the share is the field that says how much of the new measure the counterfactual would really
+    have bought.
     """
 
     asset_class: ComponentType
@@ -310,16 +335,35 @@ class ExistingAsset:
     # a component with one of these classes is charged full investment + this asset's removal
     # cost, and triggers the sunk-cost / anyway-cost logic of §4.1):
     replaced_by_asset_classes: List[ComponentType] = field(default_factory=list)
+    #: Sowieso-Kosten share (owner decision Q22): the fraction of the *new* measure's cost that the
+    #: counterfactual — the world in which the renovation does not happen — would truly have spent
+    #: on this asset. `1.0` is a genuine like-for-like replacement: dead windows are replaced by
+    #: windows, so the whole price of the new windows was going to be paid anyway. A **first-time
+    #: improvement** is not like-for-like and must be well below 1: a facade that was never
+    #: insulated would have been *repaired*, not insulated, so only the repair share — scaffolding,
+    #: render, paint — is a cost the building would have caused regardless, and crediting the full
+    #: insulation price against it credits money nobody would ever have spent. The default keeps
+    #: the historical behaviour, so every register written before this field existed is unchanged.
+    anyway_share: float = 1.0
 
     def __post_init__(self) -> None:
-        """Validation: normalizes the replacement-cost override and rejects a non-positive size.
+        """Validation: normalizes the replacement-cost override and rejects impossible inputs.
 
         Raises:
-            ValueError: If the size is not finite and greater than zero.
+            ValueError: If the size is not finite and greater than zero, or if `anyway_share` is
+                outside `(0, 1]` — a share of zero is spelled by not declaring the asset as
+                replaced at all, and a share above one would credit the renovation with more than
+                the measure costs.
         """
         self.replacement_cost_override_in_euro = _coerce_uncertain(self.replacement_cost_override_in_euro)
         if self.size <= 0 or not math.isfinite(self.size):
             raise ValueError("ExistingAsset.size must be finite and > 0.")
+        if not math.isfinite(self.anyway_share) or not 0.0 < self.anyway_share <= 1.0:
+            raise ValueError(
+                f"ExistingAsset.anyway_share must be in (0, 1], got {self.anyway_share!r} for "
+                f"{self.asset_class.value}: it is the share of the new measure's cost the "
+                "counterfactual would truly have spent (§4.1, Q22)."
+            )
 
     def age_in_years(self, reference_year: int) -> int:
         """Age at the reference (simulation) year, floored at 0.

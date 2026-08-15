@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from hisim.economics.database import CostDatabase
-from hisim.economics.results import EvaluationMatrix, LifecycleCostResult
+from hisim.economics.results import EvaluationMatrix, HeatCostNaming, LifecycleCostResult
 from hisim.economics.timeline import CategoryRules, CostCategory
 from hisim.economics.uncertainty import UncertainValue
 
@@ -78,6 +78,8 @@ class CheckIds:
     CHECK_SUBSIDIES_BELOW_BASIS = "subsidies_below_basis"
     CHECK_EFFECTIVE_PRICE = "effective_price"
     CHECK_EAC_PER_M2 = "equivalent_annual_cost_per_m2"
+    # The check now *reads* "system cost per unit of heat" (Q27 R1, `results.HeatCostNaming`); the
+    # id keeps its old spelling for the reason stated above — an id is a contract, a name is prose.
     CHECK_LEVELIZED_COST_OF_HEAT = "levelized_cost_of_heat"
     CHECK_MAINTENANCE_RATIO = "maintenance_to_investment_ratio"
     CHECK_BAND_WIDTH = "band_width"
@@ -463,8 +465,8 @@ def _magnitude_findings(
 
     Six magnitude questions a domain expert would ask first, in the order the panel prints
     them: is each carrier's effective price recognizable, is the equivalent annual cost per
-    square metre in the right order of magnitude for a dwelling, is the levelized cost of heat
-    plausible, is maintenance a sane fraction of investment (a huge ratio is the signature of an
+    square metre in the right order of magnitude for a dwelling, is the system cost per unit of
+    heat plausible, is maintenance a sane fraction of investment (a huge ratio is the signature of an
     absolute fee stored as a rate), is the uncertainty band suspiciously wide (which usually
     means a band typo in a data file), and did any carrier's load timing actually *cost* money
     against a flat profile (`_flexibility_value_findings`). Every one of them yields at most a
@@ -493,7 +495,7 @@ def _magnitude_findings(
         findings.append(
             _range_finding(
                 CheckIds.CHECK_LEVELIZED_COST_OF_HEAT,
-                "levelized cost of heat",
+                HeatCostNaming.CHECK_LABEL,
                 reference.levelized_cost_of_heat_in_euro_per_kwh.average,
                 config.lcoh_range,
                 "EUR/kWh",

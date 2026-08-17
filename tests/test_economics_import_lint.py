@@ -7,7 +7,8 @@ recompute an engine figure, whatever it wanted to. This module parses the import
 the presentation modules with `ast` (so a local import inside a function counts exactly like a
 top-of-file one) and checks them against the surface below.
 
-**The allowed surface for presentation** — `reporting`, `report_plots`, `presentation_style`:
+**The allowed surface for presentation** — `reporting`, `report_plots`, `presentation_style`,
+`report_prose`:
 
 | Module              | Why presentation may import it                                        |
 |---------------------|-----------------------------------------------------------------------|
@@ -16,6 +17,7 @@ top-of-file one) and checks them against the surface below.
 | `plausibility`      | the typed findings and their check ids — **types only**, see below    |
 | `input_audit`       | the typed resolved-input rows `audit.py` produces (W4.6)              |
 | `presentation_style`| the display groups and palette shared by HTML and matplotlib (W4.7)   |
+| `report_prose`      | the authored four-part explanation every section opens with           |
 | `exports`           | `build_lifecycle_kpi_entries`, so the KPI table and lifecycle_kpis.json cannot disagree |
 | `timeline`          | `CostCategory` / `Actor` — the vocabulary of the result object        |
 | `uncertainty`       | `UncertainValue` / `Slot` — the type every money figure has           |
@@ -64,11 +66,12 @@ PACKAGE_DIRECTORY = os.path.join(
 )
 PACKAGE_PREFIX = "hisim.economics"
 
-#: The presentation layer: what renders, and nothing else.
-PRESENTATION_MODULES = ("reporting", "report_plots", "presentation_style")
+#: The presentation layer: what renders, and the prose it renders — nothing else.
+PRESENTATION_MODULES = ("reporting", "report_plots", "presentation_style", "report_prose")
 
 #: Modules the presentation layer may import from `hisim.economics` (see the table above).
 ALLOWED_FOR_PRESENTATION: Set[str] = {
+    "report_prose",
     "results",
     "views",
     "plausibility",

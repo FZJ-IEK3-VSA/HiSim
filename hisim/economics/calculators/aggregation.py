@@ -110,6 +110,35 @@ def annual_energy_quantities(
     return quantities
 
 
+def annual_energy_attribution(
+    attribution: Dict[str, Dict[str, float]], simulated_period_fraction: float
+) -> Dict[str, Dict[str, float]]:
+    """Per-subject energy attribution, annualized with the carrier totals' own divisor.
+
+    The per-device counterpart of `annual_energy_quantities`, and it exists as a sibling of that
+    function precisely so the two use one annualization: the household energy balance checks its
+    grid nodes against the metered carrier quantities, and a device column annualized with a
+    different divisor would not agree with the meter it is compared to. Values are carried through
+    unchanged, because annualizing is a scaling, not an interpretation.
+
+    Args:
+        attribution: Subject -> energy-balance role -> simulated-period kWh, straight off
+            `EvaluationInputs`.
+        simulated_period_fraction: Simulated share of a year, dimensionless.
+
+    Returns:
+        The same shape in kWh per year. An empty input yields an empty map, which is the state
+        every run without per-component attribution is in and which the chart skips on.
+    """
+    return {
+        subject: {
+            role: annualize(value, simulated_period_fraction, guard_zero=True)
+            for role, value in by_role.items()
+        }
+        for subject, by_role in attribution.items()
+    }
+
+
 def build_breakdowns(
     scoped: CashFlowTimeline,
     facts_by_subject: Dict[str, ComponentCostFacts],

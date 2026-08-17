@@ -8,6 +8,20 @@ README and `cost_spec.md`). Two scripts:
 | `economic_example_heatpump.py` | **Germany**: heat-pump + envelope retrofit of a 1978 single-family house — all perspectives, BEG subsidy engine, three envelope measures, scenario tornado. |
 | `economic_example_ireland_gas_to_heatpump.py` | **Ireland**: switching an assumed 1995 bungalow from its functional gas boiler to a heat pump — two simulations (keep-gas reference vs. heat-pump variant), Irish cost data and CO2 path, full variant comparison (delta waterfall, payback band). |
 
+## What the two examples do *not* vary
+
+The Ireland example's variant simulation runs the very same `household_heatpump_building_sizer`
+setup as the German example, with the same default (German) single-family building and the same
+2021 weather — it does not simulate an Irish building or an Irish climate. Only the economic layer
+differs (Irish cost data, tariffs, CO2 path, no subsidy catalog), so a comparison of the two
+examples' euro figures is a comparison of economic assumptions, not of buildings or climates.
+
+Ireland's "keep gas" reference is not a do-nothing case: by design it buys the PV system, the
+battery and the heat distribution system at year 0 exactly like the variant, and keeps only the
+gas boiler. Those shared investments therefore cancel in the variant comparison, which is what
+makes the resulting delta a clean "gas boiler vs. heat pump" figure rather than a "retrofit vs.
+nothing" one.
+
 ## Run them
 
 ```bash

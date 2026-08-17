@@ -429,10 +429,20 @@ class TestFactValidation:
         assert isinstance(facts.investment_cost_override_in_euro, UncertainValue)
         assert facts.investment_cost_override_in_euro.is_exact()
 
-    def test_non_positive_size_is_rejected(self):
-        """A component with no size cannot be priced."""
+    def test_negative_and_non_finite_sizes_are_rejected(self):
+        """A size that cannot mean anything is still a hard error, at declaration time."""
         with pytest.raises(ValueError, match="size"):
-            self._facts(size=0.0)
+            self._facts(size=-1.0)
+        with pytest.raises(ValueError, match="size"):
+            self._facts(size=float("nan"))
+        with pytest.raises(ValueError, match="size"):
+            self._facts(size=float("inf"))
+
+    def test_zero_size_is_accepted_and_flagged_as_not_installed(self):
+        """Zero means "the setup built it but sized it away", which is data, not corruption."""
+        facts = self._facts(size=0.0)
+        assert facts.is_not_installed()
+        assert not self._facts(size=10.0).is_not_installed()
 
     def test_unsupported_size_unit_is_rejected(self):
         """Only the costing units of the database are accepted."""

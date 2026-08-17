@@ -37,7 +37,7 @@ import os
 import pytest
 
 from hisim.economics.audit import build_input_audit
-from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.carriers import EnergyCarrier, EnergyFlowRole
 from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, SubjectCostFacts
 from hisim.economics.facts import (
@@ -49,13 +49,18 @@ from hisim.economics.facts import (
 from hisim.economics.financing import FinancingPlan
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import (
+    Accounting,
     ActorScope,
     InstallationContext,
     Perspective,
     SubsidyMode,
 )
 from hisim.economics.plausibility import run_plausibility_checks
-from hisim.economics.reporting import build_cost_summary_markdown, build_lifecycle_report_html
+from hisim.economics.reporting import (
+    ReportSections,
+    build_cost_summary_markdown,
+    build_lifecycle_report_html,
+)
 from hisim.economics.results import EvaluationMatrix, compare
 from hisim.economics.scenarios import ScenarioSet, evaluate_cube
 from hisim.economics.subsidies import (
@@ -87,7 +92,9 @@ def make_inputs(energy_kwh: float = 5200.0, investment: float = 16000.0) -> Eval
     Banded heat-pump investment (whiskers), a second envelope subject (per-subject charts), an
     existing gas heater and old windows (removal, anyway credits, residual value), bought *and*
     sold electricity (feed-in in the year-1 bill), a subsidy context the DE catalog can price
-    (decision cards, awards table) and tenancy data (the §6.5 actor split).
+    (decision cards, awards table), tenancy data (the §6.5 actor split) and a per-subject energy
+    attribution (the energy-to-money chart of the visualization set, which skips itself without
+    one).
     """
     heat_pump = ComponentCostFacts(
         asset_class=ComponentType.HEAT_PUMP,
@@ -135,6 +142,22 @@ def make_inputs(energy_kwh: float = 5200.0, investment: float = 16000.0) -> Eval
                 energy_sold_in_kwh=2500.0,
             )
         ],
+        # The household energy balance: a PV/battery/heat-pump house whose flows close exactly,
+        # with the two grid roles equal to `billing` above — the view raises if they are not,
+        # so this fixture cannot drift away from the meter it is drawn beside.
+        energy_attribution_by_subject_in_kwh={
+            "PVSystem": {EnergyFlowRole.PV_GENERATION.value: 8000.0},
+            "ElectricityMeter": {
+                EnergyFlowRole.GRID_IMPORT.value: energy_kwh,
+                EnergyFlowRole.GRID_EXPORT.value: 2500.0,
+            },
+            "Battery": {
+                EnergyFlowRole.BATTERY_CHARGE.value: 1200.0,
+                EnergyFlowRole.BATTERY_DISCHARGE.value: 1050.0,
+            },
+            "HeatPump": {EnergyFlowRole.HEAT_PUMP_ELECTRICITY.value: energy_kwh},
+            "UTSPConnector": {EnergyFlowRole.HOUSEHOLD_ELECTRICITY.value: 3000.0},
+        },
         existing_assets=register,
         subsidy_context=SubsidyContext(
             applicant=ApplicantProfile(
@@ -158,7 +181,9 @@ def make_inputs(energy_kwh: float = 5200.0, investment: float = 16000.0) -> Eval
 
 
 #: Fixed perspective set — not the shipped bundle, so a bundle data PR cannot silently
-#: re-baseline the oracle. Covers gross/net, financing, and both sides of the actor split.
+#: re-baseline the oracle. Covers gross/net, financing, both sides of the actor split, and — since
+#: the Q26 F4 statements — the macroeconomic view, without which the society chapter and its
+#: statement never reach the oracle at all.
 PERSPECTIVES = [
     Perspective(
         id="brownfield_gross",
@@ -187,6 +212,12 @@ PERSPECTIVES = [
         installation_context=InstallationContext.BROWNFIELD,
         actor_scope=ActorScope.TENANT,
         subsidy_mode=SubsidyMode.full(),
+    ),
+    Perspective(
+        id="macroeconomic",
+        installation_context=InstallationContext.BROWNFIELD,
+        accounting=Accounting.MACROECONOMIC,
+        subsidy_mode=SubsidyMode.none(),
     ),
 ]
 
@@ -248,7 +279,9 @@ def fixture_rendered() -> RenderedReports:
 
     audit = build_input_audit(inputs, database, PARAMETERS, matrix.results["brownfield_gross"])
     summary = build_cost_summary_markdown(matrix, plausibility, comparison)
-    report = build_lifecycle_report_html(matrix, plausibility, audit, comparison, scenario_cube=cube)
+    report = build_lifecycle_report_html(
+        matrix, plausibility, audit, comparison, scenario_cube=cube, reference_result=reference
+    )
     return RenderedReports(summary, report, matrix, comparison, reference)
 
 
@@ -295,22 +328,44 @@ class TestFixtureIsRich:
     def test_every_report_section_is_present(self, rendered):
         """All sections the switch-over touches actually render on this fixture."""
         for marker in (
-            "0 - Plausibility panel",
-            "1 - Input audit",
+            "Plausibility",
+            "Input audit",
             "sources used",
-            "2 - Investment build-up",
-            "3 - Cash-flow timeline",
-            "4 - Year-1 energy bill",
-            "4b - Lifecycle CO2",
-            "5 - Subsidy decisions",
-            "6 - Perspectives at a glance",
-            "6b - Who pays what",
-            "7 - Per-component breakdown",
-            "8 - Variant comparison",
-            "9 - Scenario analysis",
-            "10 - Lifecycle KPIs",
+            "Investment build-up",
+            "Cash-flow timeline",
+            "Energy bill",
+            "CO2",
+            "Subsidies",
+            "Perspectives",
+            "Who pays what",
+            "Component breakdown",
+            "Comparison",
+            "Scenarios",
+            "KPIs",
         ):
-            assert marker in rendered.report, marker
+            assert f">{marker}" in rendered.report, marker
+
+    def test_every_visualization_chart_renders(self, rendered):
+        """Every section of the ratified name table reaches this fixture, and its anchor with it.
+
+        The ledger heatmap is deliberately not among them: it is written with the audit outputs
+        rather than into the report (owner decision Q9), which is why it is absent from
+        `ReportSections.ORDER`. Every other section skips itself on a degenerate input, so a
+        fixture that stopped reaching one would silently compare two identical absences — which
+        is exactly what `TestFixtureIsRich` exists to prevent. Checking the anchors rather than
+        the headings also pins the table of contents, which is generated from the same ids.
+
+        Anchors carry their chapter prefix since Q24, and a section may legitimately appear in
+        more than one chapter, so what is checked is that *some* chapter renders each of them.
+        """
+        from hisim.economics.reporting import ReportChapters
+
+        for anchor, _name in ReportSections.ORDER:
+            rendered_anywhere = any(
+                f'id="{chapter}-{anchor}"' in rendered.report
+                for chapter, _chapter_name in ReportChapters.ORDER
+            )
+            assert rendered_anywhere, anchor
 
     def test_every_computation_path_is_exercised(self, rendered):
         """Bands, a loan, subsidies, feed-in, anyway credits and an allocation are all present."""

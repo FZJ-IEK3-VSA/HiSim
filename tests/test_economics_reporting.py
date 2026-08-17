@@ -140,11 +140,13 @@ PANEL_BEFORE_W42 = [
     ("effective ELECTRICITY price (year 1)", "PASS", "0.352 EUR/kWh", "0.1 - 0.6 EUR/kWh",
      "1,760 EUR for 5,000 kWh — catches unit mix-ups"),
     ("equivalent annual cost per m2 (greenfield_gross)", "PASS", "24.032 EUR/m2a", "5 - 80 EUR/m2a", ""),
-    ("levelized cost of heat", "PASS", "0.240 EUR/kWh", "0.05 - 0.5 EUR/kWh", ""),
+    ("system cost per unit of heat", "PASS", "0.240 EUR/kWh", "0.05 - 0.5 EUR/kWh", ""),
     ("maintenance / investment NPV ratio (greenfield_gross)", "PASS", "0.145 ", "0.02 - 0.8 ",
-     "a huge ratio usually means an absolute fee stored as a rate (issues #1)"),
+     "a huge ratio usually means an absolute fee stored as a rate"),
     ("uncertainty band width max/min (greenfield_gross)", "PASS", "1.994 x", "1 - 3.5 x",
-     "over 20 years; very wide bands usually mean a band typo in the data"),
+     "over 20 years; very wide bands can be a band typo in the data, or genuinely uncertain inputs "
+     "(broad price bands, partial anyway shares) — check the uncertainty-drivers section for which "
+     "subjects carry it"),
 ]
 
 
@@ -200,10 +202,10 @@ class TestCostSummaryMarkdown:
         text = build_cost_summary_markdown(matrix, checks)
         for marker in (
             "# Lifecycle cost summary",
-            "## Plausibility checks",
+            "## Plausibility",
             "## Perspectives",
             "## Cost structure",
-            "## Per subject",
+            "## Component breakdown",
             "HeatPump",
             "ELECTRICITY",
         ):
@@ -218,9 +220,76 @@ class TestCostSummaryMarkdown:
         comparison = compare(reference, variant, "base", "measures")
         checks = run_plausibility_checks(matrix)
         text = build_cost_summary_markdown(matrix, checks, comparison)
-        assert "## Variant comparison" in text
+        assert "## Comparison" in text
         assert "Discounted payback" in text
         assert "NPV delta" in text
+
+
+class TestHeatCostKpiIsNamedForWhatItMeasures:
+    """Q27 R1: the heat KPI reads "system cost per unit of heat" everywhere a reader sees it.
+
+    The figure divides the *whole* perspective NPV by the heat delivered, which is not the
+    literature's levelized cost of heat, and the F6 disclosure made that impossible to keep
+    calling one. These pin the rename at each published surface — the KPI export, the two
+    perspectives tables, the plausibility row and the derivation caption — and, jointly, that the
+    old name is gone from rendered output. The internal field name is deliberately untouched and
+    is therefore not asserted on here; see `results.HeatCostNaming`.
+    """
+
+    def test_the_kpi_export_publishes_the_new_name(self, matrix):
+        """The name in `lifecycle_kpis.json` is the name in the report's KPI table: one list."""
+        from hisim.economics.exports import build_lifecycle_kpi_entries
+
+        names = [entry.name for entry in build_lifecycle_kpi_entries(matrix)]
+        heat = [name for name in names if "heat" in name.lower()]
+        assert heat, "the fixture declares an annual heat demand, so the KPI must exist"
+        assert all(name.startswith("System cost per unit of heat [EUR/kWh]") for name in heat)
+        assert not [name for name in names if "levelized" in name.lower()]
+
+    def test_the_summary_and_the_panel_carry_the_new_wording(self, matrix):
+        """The markdown perspectives column and the plausibility row both renamed."""
+        text = build_cost_summary_markdown(matrix, run_plausibility_checks(matrix))
+        assert "| System cost/kWh heat |" in text
+        assert "| system cost per unit of heat |" in text
+        assert "levelized" not in text.lower()
+
+    def test_the_derivation_caption_leads_with_the_annual_division(self, database, matrix):
+        """Q27 R4: EAC / annual heat first, the discounted-sum form as the stated equivalent."""
+        import re
+
+        text = build_lifecycle_report_html(matrix, run_plausibility_checks(matrix))
+        caption = re.search(
+            r"<b>System cost per unit of heat, in full\.</b>(.*?)</p>", text, re.S
+        )
+        assert caption, "the KPI section must carry the F6 derivation caption"
+        body = caption.group(1)
+        assert body.index("EUR/a &divide;") < body.index("equivalently NPV")
+        assert "&divide; discounted heat sum" in body
+        assert "against the undiscounted NPV" not in body
+        assert "No heating-only attribution is applied" in body
+
+    def test_no_rendered_string_names_an_internal_tracker_item(self, database, matrix):
+        """Q27 R5: report-visible prose may cite the data, never the issue list."""
+        checks = run_plausibility_checks(matrix)
+        html = build_lifecycle_report_html(matrix, checks, _audit(database, make_inputs(), matrix))
+        markdown = build_cost_summary_markdown(matrix, checks)
+        for text in (html, markdown):
+            assert "(issues #" not in text
+            assert "issues #" not in text
+
+    def test_the_band_width_note_names_the_innocent_causes_too(self, matrix):
+        """Q27 R3: a wide band may be a typo or an honestly uncertain input; the note says both."""
+        from hisim.economics.plausibility import CheckIds
+        from hisim.economics.reporting import _finding_detail
+
+        finding = next(
+            check for check in run_plausibility_checks(matrix).findings
+            if check.check_id == CheckIds.CHECK_BAND_WIDTH
+        )
+        note = _finding_detail(finding)
+        assert "can be a band typo" in note
+        assert "genuinely uncertain inputs" in note
+        assert "uncertainty-drivers" in note
 
 
 class TestHtmlReport:
@@ -231,19 +300,19 @@ class TestHtmlReport:
         checks = run_plausibility_checks(matrix)
         text = build_lifecycle_report_html(matrix, checks, _audit(database, make_inputs(), matrix))
         for marker in (
-            "0 - Plausibility panel",
-            "1 - Input audit",
+            ">Plausibility",
+            ">Input audit",
             "sources used",  # §3.10 registry table
-            "2 - Investment build-up",
+            ">Investment build-up",
             "investment table",
-            "3 - Cash-flow timeline",
+            ">Cash-flow timeline",
             "NPV by cost category",  # §3.7 result table
-            "4 - Year-1 energy bill",
-            "4b - Lifecycle CO2",  # §3.8
-            "6 - Perspectives at a glance",
-            "7 - Per-component breakdown",
+            ">Energy bill",
+            ">CO2",  # §3.8
+            ">Perspectives",
+            ">Component breakdown",
             "subject table",
-            "10 - Lifecycle KPIs",  # §7.3
+            ">KPIs",  # §7.3
         ):
             assert marker in text, marker
         assert text.count("<svg") >= 5
@@ -251,15 +320,214 @@ class TestHtmlReport:
         assert "prefers-color-scheme: dark" in text  # theme-aware
 
     def test_report_with_comparison_section(self, database, matrix):
-        """Section 8 renders the delta waterfall and the payback curve."""
+        """The comparison section renders the delta waterfall and the payback curve."""
         evaluator = EconomicEvaluator(database, EconomicParameters(country="DE", price_basis_year=2026))
         perspective = select_applicable(load_default_bundle(), has_register=False)[0]
         reference = evaluator.evaluate(make_inputs(energy_kwh=15000.0, investment=2000.0), perspective)
         comparison = compare(reference, matrix.results[perspective.id], "base", "measures")
         checks = run_plausibility_checks(matrix)
         text = build_lifecycle_report_html(matrix, checks, _audit(database, make_inputs(), matrix), comparison)
-        assert "8 - Variant comparison" in text
+        assert ">Comparison" in text
         assert "Discounted payback" in text
+
+
+class TestSectionExplanations:
+    """Every section explains itself the same way, in the same four parts (rule 2.6).
+
+    The report is read by people who did not build it and who arrive in the middle of it by
+    following a contents link, so "explained somewhere" is not good enough: each section carries
+    what it *shows*, what it *adds*, the terms it uses and how its numbers are calculated, in
+    that order, directly under its heading. These tests pin the structure rather than the wording
+    — the wording is owner-authored prose held in `ReportProse` and byte-compared by the golden
+    oracle — because a section that renders three of the four parts is the failure mode a
+    reviewer reading one section at a time would never notice.
+    """
+
+    #: `<p>` `<p>` `<details>` `<details>` in that order, immediately after a section's heading.
+    #: Since the Q24 chapter restructure the heading is an `<h3>` under the chapter's `<h2>` and
+    #: carries the chapter as a trailing `<span>`.
+    FOUR_PART_OPENING = (
+        r"<section id=\"[^\"]+\"><h3>[^<]*(?:<span class='chapter-tag'>[^<]*</span>)?</h3>"
+        r"<p class='sub'>.+?</p>"
+        r"<p class='sub'>.+?</p>"
+        r"<details><summary>Terms used here</summary><dl><dt>.+?</dl></details>"
+        r"<details><summary>How this is calculated</summary><p class='sub'>.+?</details>"
+    )
+
+    #: The single paragraph a *repeated* section renders instead: the same section name in a
+    #: second chapter links back to the chapter that carries the full explanation (Q24), so the
+    #: report does not print the same page of prose three times.
+    CROSS_REFERENCE_OPENING = (
+        r"<section id=\"[^\"]+\"><h3>[^<]*(?:<span class='chapter-tag'>[^<]*</span>)?</h3>"
+        r"<p class='sub'>The same chart, read the same way: see the explanation under "
+        r"<a href=\"#[^\"]+\">[^<]+</a>\.</p>"
+    )
+
+    def _rendered_sections(self, text):
+        """Every anchored section of a rendered report as `(anchor, html)`, in page order."""
+        import re
+
+        return [
+            (match.group(1), match.group(0))
+            for match in re.finditer(r"<section id=\"([^\"]+)\">.*?</section>", text, flags=re.S)
+        ]
+
+    def _report(self, database, matrix):
+        """The richest report this module's fixtures reach: comparison, bridge and benchmark."""
+        from hisim.economics.results import compare
+
+        evaluator = EconomicEvaluator(database, EconomicParameters(country="DE", price_basis_year=2026))
+        perspective = select_applicable(load_default_bundle(), has_register=False)[0]
+        reference = evaluator.evaluate(make_inputs(energy_kwh=15000.0, investment=2000.0), perspective)
+        comparison = compare(reference, matrix.results[perspective.id], "base", "measures")
+        return build_lifecycle_report_html(
+            matrix,
+            run_plausibility_checks(matrix),
+            _audit(database, make_inputs(), matrix),
+            comparison,
+            reference_result=reference,
+        )
+
+    def test_every_rendered_section_opens_with_the_four_parts(self, database, matrix):
+        """No section may render its chart without the block that explains it — or a link to it.
+
+        With the chapters (Q24) a section name can appear more than once, and only the first
+        occurrence carries the four parts; the later ones open with the one-line cross-reference
+        instead. Both are checked here, and every section must match one of the two: a section
+        that opened with neither would be a chart with no explanation anywhere.
+        """
+        import re
+
+        report = self._report(database, matrix)
+        sections = self._rendered_sections(report)
+        assert len(sections) > 20, "the fixture stopped reaching most sections"
+        explained = set()
+        for anchor, html in sections:
+            if re.match(self.FOUR_PART_OPENING, html, flags=re.S):
+                explained.add(anchor)
+                continue
+            assert re.match(self.CROSS_REFERENCE_OPENING, html, flags=re.S), anchor
+        assert len(explained) > 20, "the four-part blocks disappeared entirely"
+
+    def test_a_repeated_section_links_back_instead_of_repeating_the_prose(self, database, matrix):
+        """Q24: the second occurrence of a section name points at the first, by anchor.
+
+        The failure mode the back-link exists to prevent is a report three times as long as it
+        needs to be — the explanation is the bulk of most sections — so this pins that a repeated
+        section carries a link to an anchor that actually exists in the document.
+        """
+        import re
+
+        report = self._report(database, matrix)
+        for anchor, html in self._rendered_sections(report):
+            match = re.match(self.CROSS_REFERENCE_OPENING, html, flags=re.S)
+            if match is None:
+                continue
+            target = re.search(r"see the explanation under <a href=\"#([^\"]+)\"", html).group(1)
+            assert f'id="{target}"' in report, (anchor, target)
+            assert target != anchor
+
+    def test_the_comparison_sections_are_explained_too(self, database, matrix):
+        """The three sections that exist only in a comparison run take the same path.
+
+        They live in the fourth block since Q24, so their anchors carry its chapter prefix.
+        """
+        report = self._report(database, matrix)
+        anchors = [anchor for anchor, _html in self._rendered_sections(report)]
+        for anchor in ("vs-reference-comparison", "vs-reference-npv-bridge",
+                       "vs-reference-bank-benchmark"):
+            assert anchor in anchors, anchor
+
+    def test_the_primer_renders_once_at_the_top(self, database, matrix):
+        """The conventions every other section leans on are stated first, and only once."""
+        report = self._report(database, matrix)
+        anchors = [anchor for anchor, _html in self._rendered_sections(report)]
+        assert anchors[0] == "building-how-to-read"
+        assert anchors.count("building-how-to-read") == 1
+        assert report.index(">How to read this report") > report.index("<nav")
+
+    def test_the_chapters_carry_their_authored_intros_in_order(self, database, matrix):
+        """Q24: every rendered chapter opens with its own lead-in, verbatim from `ReportProse`."""
+        from hisim.economics.report_prose import ReportProse
+        from hisim.economics.reporting import ReportChapters
+
+        report = self._report(database, matrix)
+        positions = []
+        for anchor, name in ReportChapters.ORDER:
+            heading = f"<h2 class='chapter' id=\"{anchor}\">"
+            if heading not in report:
+                continue
+            positions.append(report.index(heading))
+            if (anchor, name) in ReportChapters.WITHOUT_INTRO:
+                continue
+            assert ReportProse.to_html(ReportProse.for_chapter(name)) in report, name
+        assert positions == sorted(positions)
+        assert len(positions) >= 2
+
+    def test_section_anchors_carry_their_chapter_prefix(self, database, matrix):
+        """The same section name in two chapters must not produce the same anchor twice."""
+        from hisim.economics.reporting import ReportChapters
+
+        report = self._report(database, matrix)
+        anchors = [anchor for anchor, _html in self._rendered_sections(report)]
+        assert len(anchors) == len(set(anchors)), "duplicate anchors"
+        chapters = {anchor for anchor, _name in ReportChapters.ORDER}
+        for anchor in anchors:
+            assert anchor.split("-")[0] in {chapter.split("-")[0] for chapter in chapters}, anchor
+
+    def test_the_rendered_prose_is_the_authored_prose(self, database, matrix):
+        """The renderer marks the text up; it never edits it."""
+        from hisim.economics.report_prose import ReportProse
+        from hisim.economics.reporting import ReportSections
+
+        report = self._report(database, matrix)
+        by_anchor = dict(self._rendered_sections(report))
+        for prefixed_anchor, name in [
+            (f"{chapter}-{anchor}", name)
+            for chapter in ("building", "owner", "rented", "society", "vs-reference")
+            for anchor, name in ReportSections.ORDER
+        ]:
+            anchor = prefixed_anchor
+            if anchor not in by_anchor or "see the explanation under" in by_anchor[anchor]:
+                continue
+            prose = ReportProse.for_section(name)
+            assert f"<p class='sub'>{ReportProse.to_html(prose.shows)}</p>" in by_anchor[anchor]
+            assert f"<p class='sub'>{ReportProse.to_html(prose.adds)}</p>" in by_anchor[anchor]
+            for term, definition in prose.terms:
+                assert f"<dt><em>{ReportProse.to_html(term)}</em></dt>" in by_anchor[anchor]
+                assert f"<dd>{ReportProse.to_html(definition)}</dd>" in by_anchor[anchor]
+
+    def test_every_section_of_the_order_has_authored_prose(self):
+        """Including the sections this fixture cannot reach (scenarios, the audit heatmap)."""
+        from hisim.economics.report_prose import ReportProse
+        from hisim.economics.reporting import ReportSections
+
+        for _anchor, name in ReportSections.ORDER:
+            prose = ReportProse.for_section(name)
+            assert prose.shows and prose.adds and prose.terms and prose.calculation
+        assert ReportProse.for_section(ReportProse.LEDGER_HEATMAP_SECTION_NAME).shows
+
+    def test_prose_markup_is_escaped_before_it_is_emphasized(self):
+        """A definition mentioning a tag must not be able to open one."""
+        from hisim.economics.report_prose import ReportProse
+
+        assert ReportProse.to_html("a *b* and **c** and `d`") == (
+            "a <em>b</em> and <strong>c</strong> and <code>d</code>"
+        )
+        assert ReportProse.to_html("<details> & <em>") == "&lt;details&gt; &amp; &lt;em&gt;"
+        assert ReportProse.to_plain_text("a *b* and **c** and `d`") == "a b and c and d"
+
+    def test_the_ledger_heatmap_caption_carries_its_authored_prose(self):
+        """The one chart outside the report still gets its explanation, in its caption."""
+        from hisim.economics.report_plots import _heatmap_caption_lines
+        from hisim.economics.report_prose import ReportProse
+
+        caption = " ".join(_heatmap_caption_lines(dropped=3))
+        shows = ReportProse.to_plain_text(
+            ReportProse.for_section(ReportProse.LEDGER_HEATMAP_SECTION_NAME).shows
+        )
+        assert shows in caption
+        assert "3 categor(ies) carried no flows" in caption
 
 
 class TestDegenerateBandBanner:
@@ -382,11 +650,192 @@ class TestEconomicContextAndNewSections:
         cube = evaluate_cube(inputs, parameters, perspectives, scenario_set, database)
         checks = run_plausibility_checks(matrix)
         text = build_lifecycle_report_html(matrix, checks, _audit(database, inputs, matrix), scenario_cube=cube)
-        assert "6b - Who pays what" in text
-        assert "9 - Scenario analysis" in text
+        assert ">Who pays what" in text
+        assert ">Scenarios" in text
         assert "interest=high" in text
         # The cumulative NPV chart carries its uncertainty band (banded data -> polygon).
         assert "<polygon" in text
+
+    def test_the_scenario_table_states_the_assumption_and_both_values(self, database):
+        """Q26 F1: a scenario row names the changed parameter with its own and the central value."""
+        from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
+        from hisim.economics.scenarios import ScenarioSet, evaluate_cube
+
+        inputs = make_inputs()
+        parameters = EconomicParameters(country="DE", price_basis_year=2026)
+        evaluator = EconomicEvaluator(database, parameters)
+        perspectives = [
+            Perspective(id="gross", installation_context=InstallationContext.GREENFIELD,
+                        subsidy_mode=SubsidyMode.none()),
+        ]
+        matrix = EvaluationMatrix()
+        matrix.results["gross"] = evaluator.evaluate(inputs, perspectives[0])
+        scenario_set = ScenarioSet.from_json(
+            {
+                "base": "central",
+                "mode": "ONE_AT_A_TIME",
+                "axes": [
+                    {"name": "interest", "field": "interest_rate", "levels": {"high": 0.05}},
+                    {"name": "electricity", "field": "energy_price_escalation_rates.ELECTRICITY",
+                     "levels": {"flat": 0.0}},
+                ],
+            }
+        )
+        cube = evaluate_cube(inputs, parameters, perspectives, scenario_set, database)
+        text = build_lifecycle_report_html(matrix, run_plausibility_checks(matrix), scenario_cube=cube)
+        assert "Assumption (scenario value, central value)" in text
+        assert "interest_rate 5.00% (central 3.00%)" in text
+        # The carrier rate is not configured on the parameters, so the central value is the one
+        # the run resolved from the country defaults file — not a blank.
+        assert "energy_price_escalation_rates.ELECTRICITY 0.00% (central 2.00%)" in text
+
+    def test_a_zero_swing_scenario_row_states_why_the_axis_was_inert(self, database):
+        """Q27 R2: a `+0` row footnotes its cause, read off the run's own timeline.
+
+        The German examples carry a CO2-price axis, and an all-electric house books no carbon
+        price at all because the electricity price entry declares no exposure to it — so the row
+        moves nothing. Without the footnote that reads either as a broken cube or as the finding
+        "carbon prices do not matter here", and it is neither.
+        """
+        from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
+        from hisim.economics.scenarios import ScenarioSet, evaluate_cube
+
+        inputs = make_inputs()
+        parameters = EconomicParameters(country="DE", price_basis_year=2026)
+        evaluator = EconomicEvaluator(database, parameters)
+        perspectives = [
+            Perspective(id="gross", installation_context=InstallationContext.GREENFIELD,
+                        subsidy_mode=SubsidyMode.none()),
+        ]
+        matrix = EvaluationMatrix()
+        matrix.results["gross"] = evaluator.evaluate(inputs, perspectives[0])
+        scenario_set = ScenarioSet.from_json(
+            {
+                "base": "central",
+                "mode": "ONE_AT_A_TIME",
+                "axes": [
+                    {"name": "co2", "field": "co2_price_scenario", "levels": {"high": "high"}},
+                    {"name": "interest", "field": "interest_rate", "levels": {"high": 0.05}},
+                ],
+            }
+        )
+        cube = evaluate_cube(inputs, parameters, perspectives, scenario_set, database)
+        text = build_lifecycle_report_html(matrix, run_plausibility_checks(matrix), scenario_cube=cube)
+        assert "<b>co2=high</b> — swing is exactly zero: no CO2-price flow is booked in this run" in text
+        assert "co2_price_exposure = 0" in text
+        assert "electricity price entry declares" in text
+        # The axis that *did* move carries no footnote; only inert rows get one.
+        assert "<b>interest=high</b> — swing is exactly zero" not in text
+
+    def test_an_undiagnosable_inert_axis_says_so_rather_than_guessing(self, database):
+        """Q27 R2: the note is derived or it is honest; it is never invented."""
+        from hisim.economics.views import ZeroSwingCauses, zero_swing_notes
+
+        class _Scenario:
+            def __init__(self, identifier, overrides):
+                self.id = identifier
+                self.parameter_overrides = overrides
+                self.data_overlays = {}
+
+        class _Cube:
+            base_id = "central"
+            scenarios = [
+                _Scenario("central", {}),
+                _Scenario("horizon=long", {"observation_period_in_years": 40}),
+            ]
+
+        inputs = make_inputs()
+        evaluator = EconomicEvaluator(database, EconomicParameters(country="DE", price_basis_year=2026))
+        from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
+
+        result = evaluator.evaluate(
+            inputs,
+            Perspective(id="gross", installation_context=InstallationContext.GREENFIELD,
+                        subsidy_mode=SubsidyMode.none()),
+        )
+        notes = zero_swing_notes(_Cube(), result, {"central": 0.0, "horizon=long": 0.0})
+        assert notes == {"horizon=long": ZeroSwingCauses.UNKNOWN}
+
+    def test_the_assumptions_section_publishes_the_run_s_own_tariff_and_rates(self, database):
+        """Q26 F2: the section carries the working price, the feed-in rate and the escalations."""
+        from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
+
+        inputs = make_inputs()
+        parameters = EconomicParameters(country="DE", price_basis_year=2026)
+        evaluator = EconomicEvaluator(database, parameters)
+        matrix = EvaluationMatrix()
+        matrix.results["gross"] = evaluator.evaluate(
+            inputs,
+            Perspective(id="gross", installation_context=InstallationContext.GREENFIELD,
+                        subsidy_mode=SubsidyMode.none()),
+        )
+        text = build_lifecycle_report_html(matrix, run_plausibility_checks(matrix))
+        assert 'id="building-assumptions"' in text
+        assert ">Assumptions" in text
+        assert "annuity factor" in text and "(computed)" in text
+        assert "ELECTRICITY: working price" in text
+        assert "ELECTRICITY: feed-in rate (FIXED_TARIFF)" in text
+        assert "0.0750 EUR/kWh" in text
+        # Sources, not blanks: the country defaults file is cited by id where it won.
+        assert "src_expert_engine_defaults" in text
+
+    def test_the_tenant_levy_mirrors_the_landlord_levy_income_in_the_report(self, database):
+        """Q26 F4: the two halves of the booked transfer pair reach the page as one figure."""
+        import re
+
+        from hisim.economics.facts import ExistingAsset, ExistingAssetRegister
+        from hisim.economics.perspectives import (
+            ActorScope,
+            InstallationContext,
+            Perspective,
+            SubsidyMode,
+        )
+        from hisim.economics.timeline import CostCategory
+        from hisim.economics.views import StatementPartitions, landlord_statement, perspective_statement
+
+        inputs = make_inputs()
+        inputs.existing_assets = ExistingAssetRegister(
+            assets=[
+                ExistingAsset(
+                    asset_class=ComponentType.GAS_HEATER,
+                    size=15.0,
+                    size_unit=Units.KILOWATT,
+                    installation_year=2011,
+                    replaced_by_asset_classes=[ComponentType.HEAT_PUMP],
+                )
+            ]
+        )
+        inputs.living_area_in_m2 = 150.0
+        inputs.current_cold_rent_in_euro_per_m2_month = 8.5
+        parameters = EconomicParameters(country="DE", price_basis_year=2026)
+        evaluator = EconomicEvaluator(database, parameters)
+        matrix = EvaluationMatrix()
+        for scope in (ActorScope.LANDLORD, ActorScope.TENANT):
+            perspective = Perspective(
+                id=scope.value,
+                installation_context=InstallationContext.BROWNFIELD,
+                actor_scope=scope,
+                subsidy_mode=SubsidyMode.full(),
+            )
+            matrix.results[perspective.id] = evaluator.evaluate(inputs, perspective)
+        landlord = landlord_statement(matrix.results[ActorScope.LANDLORD.value])
+        tenant = perspective_statement(
+            matrix.results[ActorScope.TENANT.value], StatementPartitions.TENANT
+        )
+        landlord_levy = next(
+            line.npv_in_euro for line in landlord.cash_lines
+            if line.category == CostCategory.MODERNIZATION_LEVY
+        )
+        tenant_levy = next(
+            line.npv_in_euro for line in tenant.cash_lines
+            if line.category == CostCategory.MODERNIZATION_LEVY
+        )
+        assert tenant_levy == pytest.approx(-landlord_levy, abs=0.005)
+        text = build_lifecycle_report_html(matrix, run_plausibility_checks(matrix))
+        assert 'id="rented-tenant-statement"' in text
+        assert "the levy is the exact counterpart of the landlord statement" in text
+        # The per-world verdicts of the levy (Q26 F5) are stated beside the amount.
+        assert re.search(r"Binding mechanism (in all three worlds|per world)", text)
 
     def test_timeline_detail_table_attributes_every_flow(self, database):
         """Section 3's detail table lists (year, subject, category) incl. anyway credits."""
@@ -731,18 +1180,251 @@ class TestSubsidyDecisionsAcrossPerspectives:
         assert markdown.count("**HeatPump** (") == 1
 
 
+class TestAwardsOfEveryPayoutKindAreReported:
+    """PR-9 finding: an applied award with no upfront amount vanished from the subsidy section.
+
+    Observed on the German retrofit run: the §35c tax credit awarded to the heat distribution
+    system (2,060 EUR average, paid over three years) was in `lifecycle_costs.json` and in the
+    SUBSIDY category NPV, but `cost_summary.md` said "applied none" for that subject and the HTML
+    decision card printed "0.00 EUR" — both read `SubsidyAward.upfront_amount`, which is zero for
+    three of the five payout kinds. These tests pin all five.
+    """
+
+    @staticmethod
+    def _matrix_with_awards(database):
+        """One evaluated perspective whose decision carries an award of every payout kind.
+
+        The awards are attached to the result rather than solved for, because no shipped catalog
+        offers all five kinds for one measure and the renderers are what is under test here: they
+        must describe an award by its payout kind, whatever produced it.
+        """
+        from hisim.economics.carriers import EnergyCarrier as Carrier
+        from hisim.economics.results import EvaluationMatrix
+        from hisim.economics.subsidies import PayoutKind, SubsidyAward, SubsidyDecision
+
+        evaluator = EconomicEvaluator(database, EconomicParameters(country="DE", price_basis_year=2026))
+        matrix = EvaluationMatrix()
+        perspective = next(
+            perspective for perspective in select_applicable(load_default_bundle(), has_register=False)
+            if perspective.id == "greenfield_net"
+        )
+        result = evaluator.evaluate(make_inputs(), perspective)
+        result.subsidy_decisions = [
+            SubsidyDecision(
+                measure_subject="HeatPump",
+                applied=[
+                    SubsidyAward(
+                        scheme_id="GRANT_SCHEME",
+                        payout_kind=PayoutKind.UPFRONT_GRANT,
+                        upfront_amount=UncertainValue(3000.0, 2000.0, 4000.0),
+                    ),
+                    SubsidyAward(
+                        scheme_id="TAX_CREDIT_SCHEME",
+                        payout_kind=PayoutKind.TAX_CREDIT_SCHEDULE,
+                        schedule_amounts=[UncertainValue.exact(721.14)] * 2 + [UncertainValue.exact(618.12)],
+                    ),
+                    SubsidyAward(
+                        scheme_id="LOAN_SCHEME",
+                        payout_kind=PayoutKind.LOAN_TERMS,
+                        loan_interest_rate=0.009,
+                        loan_term_in_years=20,
+                        loan_repayment_grant_share=0.25,
+                    ),
+                    SubsidyAward(
+                        scheme_id="OPERATIONAL_SCHEME",
+                        payout_kind=PayoutKind.OPERATIONAL,
+                        operational_rate_per_kwh=0.08,
+                        operational_carrier=Carrier.ELECTRICITY,
+                        operational_duration_years=10,
+                    ),
+                    SubsidyAward(
+                        scheme_id="VAT_SCHEME",
+                        payout_kind=PayoutKind.VAT_REDUCTION,
+                        reduced_vat_rate=0.07,
+                    ),
+                ],
+            )
+        ]
+        matrix.results[perspective.id] = result
+        return matrix
+
+    def _rendered(self, database):
+        """The two documents rendered from that matrix."""
+        matrix = self._matrix_with_awards(database)
+        plausibility = run_plausibility_checks(matrix)
+        return (
+            build_lifecycle_report_html(matrix, plausibility, None),
+            build_cost_summary_markdown(matrix, plausibility),
+        )
+
+    def test_the_markdown_lists_every_applied_award(self, database):
+        """No applied award is dropped, and a scheduled payout shows the sum of its instalments."""
+        _html, markdown = self._rendered(database)
+        assert "applied none" not in markdown
+        for scheme_id in ("GRANT_SCHEME", "TAX_CREDIT_SCHEME", "LOAN_SCHEME", "OPERATIONAL_SCHEME",
+                          "VAT_SCHEME"):
+            assert scheme_id in markdown, scheme_id
+        assert "TAX_CREDIT_SCHEME (2,060 EUR, tax credit paid over 3 years)" in markdown
+        assert "GRANT_SCHEME (3,000 [2,000 | 4,000] EUR)" in markdown
+
+    def test_the_html_card_shows_totals_and_terms_instead_of_zeros(self, database):
+        """The decision card of the HTML report says the same thing as the markdown summary."""
+        html, _markdown = self._rendered(database)
+        # Q20 wraps the scheme in a span carrying the raw id as its tooltip; these awards declare
+        # no display name, so the visible text is still the id.
+        assert (
+            '<span title="TAX_CREDIT_SCHEME">TAX_CREDIT_SCHEME</span>: '
+            "2,060 EUR, tax credit paid over 3 years"
+        ) in html
+        assert "0.00 EUR" not in html.split('id="building-subsidies"')[1].split("</section>")[0]
+        assert "0.90% interest, 20 years term, 25% repayment grant" in html
+        assert "0.0800 EUR/kWh on ELECTRICITY for 10 years" in html
+        assert "reduced VAT rate 7.0%" in html
+
+    def test_the_kpi_export_carries_the_scheduled_award(self, database):
+        """`lifecycle_kpis.json` publishes a tax credit at its total, and no euro KPI without one.
+
+        The KPI set filtered on a non-zero upfront amount too, so the same award was missing from
+        the machine-readable side; an award that has no euro amount at all (loan terms, an
+        operational rate) still gets none, because inventing one would be worse than omitting it.
+        """
+        from hisim.economics.exports import build_lifecycle_kpi_entries
+
+        entries = {entry.name: entry for entry in build_lifecycle_kpi_entries(self._matrix_with_awards(database))}
+        assert "Subsidy TAX_CREDIT_SCHEME [EUR] (greenfield_net)" in entries
+        assert entries["Subsidy TAX_CREDIT_SCHEME [EUR] (greenfield_net)"].value == pytest.approx(2060.40)
+        assert "Subsidy GRANT_SCHEME [EUR] (greenfield_net)" in entries
+        assert "Subsidy LOAN_SCHEME [EUR] (greenfield_net)" not in entries
+        assert "Subsidy OPERATIONAL_SCHEME [EUR] (greenfield_net)" not in entries
+
+
 class TestPngsAndCli:
     """Matplotlib companions and the `report` CLI."""
 
     def test_pngs_are_written(self, matrix, tmp_path):
-        """The PNG set exists and is non-empty."""
+        """The PNG set exists and is non-empty.
+
+        The expected file names are listed rather than counted: the set grew with the
+        visualization extension, and a bare count would have been satisfied by any eight files.
+        This fixture is a single-perspective, unfinanced, own-capital run without a reference, so
+        the four charts that need actors, financing or a comparison skip themselves — which is
+        the behaviour the assertion below pins.
+        """
         written = write_report_plots(matrix, str(tmp_path))
-        assert len(written) == 4
+        assert {os.path.basename(path) for path in written} == {
+            "lifecycle_annual_cash_flows.png",
+            "lifecycle_investment_waterfall.png",
+            "lifecycle_perspective_costs.png",
+            "lifecycle_component_costs.png",
+            "lifecycle_swimlane.png",
+            "lifecycle_liquidity_fan.png",
+            "lifecycle_cost_treemap.png",
+            "lifecycle_monthly_burden.png",
+        }
         for path in written:
             assert os.path.getsize(path) > 5000
 
+    def test_comparison_pngs_are_written_when_a_reference_is_given(self, matrix, tmp_path):
+        """The bridge and the fixed-interest benchmark need a baseline and appear only with one."""
+        reference = next(iter(matrix.results.values()))
+        written = {os.path.basename(path) for path in write_report_plots(matrix, str(tmp_path), reference)}
+        assert "lifecycle_comparison_bridge.png" in written
+        assert "lifecycle_wealth_benchmark.png" in written
+        assert "lifecycle_payback_curve.png" in written
+
+    @staticmethod
+    def _drawn(monkeypatch, draw):
+        """Runs a plot function and hands back the figure it was about to close.
+
+        The plot functions own their figure end to end — they create it, draw it, save it and
+        close it — which is right for a writer but leaves nothing to assert on beyond a file size.
+        Intercepting `plt.close` keeps the figure alive for exactly one test, so a *layout* rule
+        (a label that must clear a marker, a legend that must sit outside the axes) can be checked
+        as geometry instead of by looking at a PNG.
+        """
+        from hisim.economics import report_plots
+
+        captured = []
+        monkeypatch.setattr(report_plots.plt, "close", captured.append)
+        draw(report_plots)
+        assert captured, "the plot function did not produce a figure"
+        return captured[0]
+
+    def test_component_cost_labels_clear_the_bars_and_the_whiskers(self, matrix, tmp_path, monkeypatch):
+        """Every net-NPV label starts past everything drawn in its row (PR-9 finding).
+
+        The label used to be positioned from the end of the cost stack alone, so on every row
+        whose net band reached beyond the bars — which is most of them once residual value and
+        subsidies are in — the text was printed over the marker and its whisker cap.
+        """
+        result = next(iter(matrix.results.values()))
+        figure = self._drawn(
+            monkeypatch,
+            lambda plots: plots.plot_component_costs(
+                result, os.path.join(str(tmp_path), "component_costs.png")
+            ),
+        )
+        axis = figure.axes[0]
+        nets = [breakdown.total_npv_in_euro for breakdown in result.component_breakdowns.values()]
+        labels = sorted(axis.texts, key=lambda text: text.get_position()[1])
+        assert len(labels) == len(nets)
+        for label, band in zip(labels, nets):
+            assert label.get_position()[0] > band.maximum, label.get_text()
+
+    def test_the_component_cost_legend_sits_outside_the_axes(self, matrix, tmp_path, monkeypatch):
+        """The legend cannot cover a data row, because it is not drawn over the data at all.
+
+        In the heat-pump-only run the in-axes legend landed squarely on the ElectricityMeter row.
+        Checked in display coordinates after a draw, which is the only way to know that the two
+        boxes really do not intersect.
+        """
+        result = next(iter(matrix.results.values()))
+        figure = self._drawn(
+            monkeypatch,
+            lambda plots: plots.plot_component_costs(
+                result, os.path.join(str(tmp_path), "component_costs.png")
+            ),
+        )
+        figure.canvas.draw()
+        axis = figure.axes[0]
+        assert axis.get_legend().get_window_extent().y1 <= axis.get_window_extent().y0
+
+    def test_the_payback_chart_names_the_basis_it_is_drawn_on(self, matrix, tmp_path, monkeypatch):
+        """Title and y-label name the perspective, so V9's gross years cannot look contradictory.
+
+        The swimlane's payback milestone is drawn for the matrix's first perspective and this
+        chart for the perspective the compared directories share; the two differ legitimately, and
+        a chart that does not say which basis it uses invites the reader to call it a bug.
+        """
+        result = next(iter(matrix.results.values()))
+        figure = self._drawn(
+            monkeypatch,
+            lambda plots: plots.plot_payback_curve(
+                result, result, os.path.join(str(tmp_path), "payback.png")
+            ),
+        )
+        axis = figure.axes[0]
+        assert f"{result.perspective_id} basis" in axis.get_title(loc="left")
+        assert f"{result.perspective_id} basis" in axis.get_ylabel()
+
+    def test_audit_plots_are_written_separately(self, matrix, tmp_path):
+        """V6 lives with the audit outputs (owner decision Q9), not with the report set."""
+        from hisim.economics.report_plots import write_audit_plots
+
+        written = write_audit_plots(next(iter(matrix.results.values())), str(tmp_path))
+        assert [os.path.basename(path) for path in written] == ["cost_audit_timeline_heatmap.png"]
+        assert os.path.getsize(written[0]) > 5000
+
     def test_report_cli_with_compare(self, tmp_path):
-        """`python -m hisim.economics report <dir> --compare <ref>` writes everything."""
+        """`python -m hisim.economics report <dir> --compare <ref>` writes everything.
+
+        Both directories hold nothing but `economic_inputs.json`, so the invocation has to state
+        its assumptions: since the parameter-resolution fix the CLI reads them from the run's
+        stored results and refuses to substitute the engine defaults for a directory that has
+        none.
+        """
+        import json
+
         from hisim.economics.__main__ import main
         from hisim.economics.serialization import write_inputs
 
@@ -752,7 +1434,13 @@ class TestPngsAndCli:
         reference_dir.mkdir()
         write_inputs(make_inputs(), str(variant_dir))
         write_inputs(make_inputs(energy_kwh=15000.0, investment=2000.0), str(reference_dir))
-        assert main(["report", str(variant_dir), "--compare", str(reference_dir)]) == 0
+        parameters_path = tmp_path / "parameters.json"
+        with open(parameters_path, "w", encoding="utf-8") as file:
+            json.dump(EconomicParameters(price_basis_year=2024).to_dict(), file)
+        assert main([
+            "report", str(variant_dir), "--compare", str(reference_dir),
+            "--parameters", str(parameters_path),
+        ]) == 0
         for file_name in (
             "cost_summary.md",
             "lifecycle_report.html",
@@ -762,4 +1450,4 @@ class TestPngsAndCli:
         ):
             assert (variant_dir / file_name).is_file(), file_name
         summary = (variant_dir / "cost_summary.md").read_text(encoding="utf-8")
-        assert "## Variant comparison" in summary
+        assert "## Comparison" in summary

@@ -113,6 +113,11 @@ python -m hisim.economics validate
 python -m hisim.economics report <results_dir> [--compare <reference_results_dir>]
 ```
 
+Every subcommand prices with the parameters the run itself was priced under — they are stored on
+each result in `lifecycle_costs.json` and read back automatically, subsidy catalog included.
+`--parameters <file>` overrides them (that is what re-pricing under *new* assumptions means); a
+directory carrying neither is an error, never a run at the engine defaults.
+
 The report layer follows the money along the calculation chain — every spec feature has at
 least one visualization plus a result table: **0** automated plausibility panel (thresholds:
 `cost_database/plausibility_checks.json` — range checks WARN, structural invariants FAIL),
@@ -123,7 +128,7 @@ the NPV-by-category table, **4** year-1 energy bill with implied effective price
 fastest unit-mix-up detector) + decomposition table, **4b** lifecycle CO2 (§3.8: embodied
 vs. operational bars, cumulative curve, table), **5** subsidy composition bars + decision
 cards + awards table (flat-shim note when no catalog ships for the country), **6**
-perspective whiskers + result table (NPV/EAC/monthly/LCOH/sunk cost), **6b** actor split
+perspective whiskers + result table (NPV/EAC/monthly/system cost per kWh heat/sunk cost), **6b** actor split
 (payer whiskers + payer-by-cost-group table, zero-sum checked), **7** per-component stacks +
 subject table, **8** variant comparison (delta waterfall + delta table + payback band),
 **9** scenario tornado + all-scenarios table + robustness summary, **10** the lifecycle KPI

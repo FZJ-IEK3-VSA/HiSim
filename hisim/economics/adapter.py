@@ -49,11 +49,11 @@ agree (this is what closed issue #11 / §2.1 issue #21).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from hisim import log
 from hisim import loadtypes as lt
-from hisim.economics.carriers import EnergyCarrier
+from hisim.economics.carriers import EnergyCarrier, EnergyFlowRole
 from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.facts import ComponentCostFacts, CostRelevance, EnergyFlowFacts
 from hisim.loadtypes import ComponentType, Units
@@ -377,14 +377,97 @@ class FactsExtraction:
     path) from a class it *does* know that produced nothing anyway (`unresolved_reason` set — an
     unresolved subject under decision D7).
 
-    Exactly one of the two fields is meaningful at a time: facts present means resolved,
-    `unresolved_reason` present means the component should have had facts and does not.
+    Exactly one of the three *fact* fields is meaningful at a time: facts present means resolved,
+    `unresolved_reason` present means the component should have had facts and does not, and
+    `not_installed_reason` present means the component described itself perfectly well as absent.
+    The last field is orthogonal to all of them and may be filled either way.
+
+    The third state exists because "cannot be described" and "is not there" have opposite
+    consequences: an unresolved subject aborts the evaluation under D7, while a device configured
+    at zero size is simply left out of the cost model, exactly as if the setup had not built it.
+    Collapsing the two would let a `share_of_maximum_pv_potential = 0` run kill the whole engine.
     """
 
     facts: Optional[ComponentCostFacts] = None
     #: Why a component the adapter recognizes produced no facts; None when there is nothing to
     #: report (unknown class, or facts extracted successfully).
     unresolved_reason: Optional[str] = None
+    #: Why a component that *could* be described contributes nothing anyway: it is configured at
+    #: zero size. Reported and logged, never a failure — see the class docstring.
+    not_installed_reason: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class DeviceEnergySpec:
+    """How to read one energy-balance flow of a component out of the results frame.
+
+    The energy-balance counterpart of `MeterSpec`, and deliberately the same shape of contract: a
+    declarative "this class's output column *X* is that role", so `bridge.py` can collect the
+    household energy balance generically instead of special-casing devices. Where `MeterSpec`
+    describes the *billing* boundary, this describes the *physical* one — flows nobody is ever
+    charged for (PV generation, battery charging) belong here and never reach a price.
+
+    Units are not assumed: the summing side reads the declared unit of the output
+    (`Units.WATT`, `Units.WATT_HOUR`, `Units.KWH`) and converts to kWh accordingly, because HiSim
+    components publish power and energy channels side by side and guessing wrong is a factor of
+    3600 away from the truth.
+
+    `positive_part` handles the one channel that carries two roles: a battery's AC power is
+    signed, charging one way and discharging the other, so the charge role takes the positive
+    part of the series and the discharge role the negative part's magnitude. None means "sum the
+    whole column", which is what every single-direction channel needs.
+    """
+
+    role: EnergyFlowRole
+    field_name: str
+    positive_part: Optional[bool] = None
+
+
+class DeviceEnergySpecs:
+    """Which component classes contribute which flows to the household energy balance (V12).
+
+    The compatibility table for energy the way `FactsExtractors.BY_CLASS_NAME` is the one for
+    cost, and the honest answer to "where do the numbers on the energy-balance Sankey come from":
+    every one of them is a named output column of a named component class, summed over the
+    simulated period. A class that is not in this table contributes nothing — the balance then
+    shows an unattributed remainder rather than inventing a flow for it.
+
+    The table is keyed by class name rather than by type so this module keeps importing no
+    component, which is what the import lint pins. Adding a device to the balance is adding a row
+    here; no chart, view or renderer changes with it.
+    """
+
+    BY_CLASS_NAME: Dict[str, Tuple[DeviceEnergySpec, ...]] = {
+        "PVSystem": (DeviceEnergySpec(EnergyFlowRole.PV_GENERATION, "ElectricityEnergyOutput"),),
+        "Battery": (
+            DeviceEnergySpec(EnergyFlowRole.BATTERY_CHARGE, "AcBatteryPowerUsed", positive_part=True),
+            DeviceEnergySpec(EnergyFlowRole.BATTERY_DISCHARGE, "AcBatteryPowerUsed", positive_part=False),
+        ),
+        "MoreAdvancedHeatPumpHPLib": (
+            DeviceEnergySpec(EnergyFlowRole.HEAT_PUMP_ELECTRICITY, "ElectricalInputPowerTotalHeatpump"),
+        ),
+        "HeatPumpHplib": (
+            DeviceEnergySpec(EnergyFlowRole.HEAT_PUMP_ELECTRICITY, "ElectricalInputPower"),
+        ),
+        "UtspLpgConnector": (
+            DeviceEnergySpec(EnergyFlowRole.HOUSEHOLD_ELECTRICITY, "ElectricalEnergyConsumption"),
+        ),
+        "ElectricityMeter": (
+            DeviceEnergySpec(EnergyFlowRole.GRID_IMPORT, "ElectricityFromGrid"),
+            DeviceEnergySpec(EnergyFlowRole.GRID_EXPORT, "ElectricityToGrid"),
+        ),
+    }
+
+
+def get_device_energy_specs(component: Any) -> Tuple[DeviceEnergySpec, ...]:
+    """The energy-balance flows this component class publishes, or an empty tuple.
+
+    The lookup `bridge.py` calls for every wrapped component, whatever its cost relevance: the
+    energy balance is a physical record, so a component that is free of cost or not declared at
+    all still contributes its kilowatt hours. Returning an empty tuple for an unknown class is the
+    normal case and never a warning — most components move no electricity across a balance node.
+    """
+    return DeviceEnergySpecs.BY_CLASS_NAME.get(type(component).__name__, ())
 
 
 def extract_cost_facts(component: Any) -> FactsExtraction:
@@ -407,13 +490,22 @@ def extract_cost_facts(component: Any) -> FactsExtraction:
     saying "this configuration cannot be priced" (see `_fuel_meter_carrier`) and is reported as
     unresolved instead of swallowed.
 
+    A fourth subtlety, and the one that decides whether a run survives: facts that describe a
+    component of **zero size** are not facts about a cost at all, they are a statement that the
+    device is not installed (a building sizer that always constructs a PV system and then sets its
+    share of the roof to zero). Those come back as a `not_installed_reason` — a skip the bridge
+    logs — rather than as an unresolved subject, which would abort the whole evaluation, or as the
+    `ValueError` the facts' own validation used to raise before zero was distinguished from
+    negative and NaN.
+
     Args:
         component: The finished simulation's component object; only its class name, its
             `cost_relevance`, its `config` and the optional hook are read.
 
     Returns:
-        A `FactsExtraction` — facts when the component could be described, a reason when a
-        recognized component could not, and neither when the adapter simply does not know it.
+        A `FactsExtraction` — facts when the component could be described, an unresolved reason
+        when a recognized component could not, a not-installed reason when it described itself as
+        zero-sized, and none of the three when the adapter simply does not know the class.
     """
     getter = getattr(component, "get_cost_facts", None)
     if getter is not None:
@@ -423,7 +515,7 @@ def extract_cost_facts(component: Any) -> FactsExtraction:
         except NotImplementedError:
             facts = None
         if facts is not None:
-            return FactsExtraction(facts=facts)
+            return _resolved_or_not_installed(component, facts)
         relevance = getattr(type(component), "cost_relevance", CostRelevance.UNDECLARED)
         if relevance == CostRelevance.FREE_OF_COST:
             return FactsExtraction()
@@ -446,7 +538,33 @@ def extract_cost_facts(component: Any) -> FactsExtraction:
                 "the cost model while counting as priced"
             )
         )
-    return FactsExtraction(facts=extracted)
+    return _resolved_or_not_installed(component, extracted)
+
+
+def _resolved_or_not_installed(component: Any, facts: ComponentCostFacts) -> FactsExtraction:
+    """Resolved facts, unless the component says it is sized at zero — then a "not installed" skip.
+
+    The one place the "declared but not built" case is recognized, shared by the adopted-hook and
+    the compatibility-table branches so both behave identically. A zero-size component is dropped
+    from pricing entirely, exactly as if the setup had not built it; it needs no separate handling
+    on the energy side, because a device configured at zero size moves no energy and its output
+    columns sum to zero of their own accord.
+
+    Args:
+        component: Only its class name is read, for the reason string.
+        facts: The facts the hook or the extractor produced.
+
+    Returns:
+        A resolved `FactsExtraction`, or one carrying `not_installed_reason` and nothing else.
+    """
+    if not facts.is_not_installed():
+        return FactsExtraction(facts=facts)
+    return FactsExtraction(
+        not_installed_reason=(
+            f"{type(component).__name__} ({facts.asset_class.value}) is configured at zero size — "
+            "not installed, so it is excluded from pricing"
+        )
+    )
 
 
 def get_cost_facts(component: Any) -> Optional[ComponentCostFacts]:

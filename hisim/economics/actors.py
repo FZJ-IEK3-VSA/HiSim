@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
-from typing import FrozenSet, List, Optional, Protocol, Tuple
+from typing import Dict, FrozenSet, List, Optional, Protocol, Tuple
 
 from hisim.economics.catalog_entries import CostDataError
 from hisim.economics.timeline import Actor, CashFlowEntry, CashFlowTimeline, CostCategory
@@ -151,6 +151,17 @@ class AllocationRuleset(Protocol):
         """
         ...  # pylint: disable=unnecessary-ellipsis
 
+    def modernization_levy_outcome(self, ctx: AllocationContext) -> Optional["ModernizationLevyOutcome"]:
+        """The levy this ruleset would charge, or None where the country's law has no levy.
+
+        The read-only companion of :meth:`allocate`, added for the landlord statement (Q21). The
+        levy's *amount* is already on the timeline as a transfer pair, but the two facts a reader
+        needs beside it — whether a statutory ceiling decided it, and which ceiling — are not
+        derivable from a cash flow, and reconstructing them in a report would be exactly the
+        second implementation of a legal rule the seam exists to prevent.
+        """
+        ...  # pylint: disable=unnecessary-ellipsis
+
 
 class OwnerOccupierRuleset:
     """The trivial allocation: everything is paid by the owner-occupier.
@@ -168,6 +179,10 @@ class OwnerOccupierRuleset:
             entries=[entry.with_payer(Actor.OWNER_OCCUPIER) for entry in timeline.entries],
             validate=timeline.validate,
         )
+
+    def modernization_levy_outcome(self, ctx: AllocationContext) -> Optional["ModernizationLevyOutcome"]:
+        """None: an owner-occupier charges no rent increase to themselves."""
+        return None
 
 
 @dataclass
@@ -207,6 +222,27 @@ class ModernizationLevyParameters:
     heating_measure_component_types: FrozenSet[str] = frozenset()
 
 
+class LevyBindingMechanism:
+    """The vocabulary of the per-world levy verdicts (owner decision Q26 F5).
+
+    "The levy is 1,847 EUR a year" is two different statements depending on what produced it: at a
+    ceiling the figure is fixed by law and the same renovation costing more would yield the same
+    rent, below it the figure is a percentage and every extra euro spent raises the rent. The
+    ruleset already knew which of the two applied; the constants here are what let it *say* so, in
+    one spelling, for each of the three worlds separately.
+
+    `SLOT_NAMES` maps the band's own field names onto the slot vocabulary the rest of the package
+    uses (`low` / `average` / `high`), so the verdict map is keyed like every other per-slot map.
+    """
+
+    GENERAL_CAP = "§559 general cap"
+    HEATING_CAP = "§559e heating cap"
+    RATE_BELOW_CAP = "of eligible cost, below cap"
+    #: Euro per year below which a cap counts as not having removed anything.
+    TOLERANCE_IN_EURO = 1e-6
+    SLOT_NAMES = {"minimum": "low", "average": "average", "maximum": "high"}
+
+
 @dataclass
 class ModernizationLevyOutcome:
     """One year's rent increase, split into its §559 and §559e legs after both caps (§6.4).
@@ -226,6 +262,21 @@ class ModernizationLevyOutcome:
     general_levy_in_euro: UncertainValue
     heating_levy_in_euro: UncertainValue
     total_in_euro: UncertainValue
+    #: Whether a statutory cap actually bit in the AVERAGE slot (Q21). The landlord statement has
+    #: to say which of the two regimes produced the levy — the modernization cost or the ceiling —
+    #: because they are different economic situations: below the cap the levy scales with what was
+    #: spent, at the cap it does not, and a landlord reading a levy figure cannot tell which
+    #: without being told. False when no cap could be evaluated at all (no living area).
+    cap_binding: bool = False
+    #: The general §559 Abs. 3a ceiling that applied, in EUR per m² and month, or None when no
+    #: living area was known and therefore no cap was evaluated.
+    cap_in_euro_per_m2_per_month: Optional[float] = None
+    #: Which mechanism set the levy in each world (Q26 F5), keyed `low` / `average` / `high`. The
+    #: caps are applied per slot, so the same run can be cap-decided in the expensive world and
+    #: rate-decided in the cheap one; a single flag over the average slot states one of the three
+    #: answers and hides the other two. Empty when no living area was known and no cap could be
+    #: evaluated at all.
+    binding_mechanism_by_slot: Dict[str, str] = field(default_factory=dict)
 
 
 def _ordered_band(slots: dict) -> UncertainValue:
@@ -645,19 +696,87 @@ class DE2024Ruleset:
             )
         months_of_area = 12.0 * ctx.living_area_in_m2
         heating_cap = self.levy.heating_cap_in_euro_per_m2_per_month * months_of_area
-        total_cap = self.general_cap_rate(ctx) * months_of_area
+        cap_rate = self.general_cap_rate(ctx)
+        total_cap = cap_rate * months_of_area
         capped = {}
+        mechanisms: Dict[str, str] = {}
         for slot in ("minimum", "average", "maximum"):
             heating_slot = min(getattr(heating, slot), heating_cap, total_cap)
             general_slot = min(getattr(general, slot), total_cap - heating_slot)
             capped[slot] = (heating_slot, general_slot)
+            mechanisms[LevyBindingMechanism.SLOT_NAMES[slot]] = self._binding_mechanism(
+                heating_raw=getattr(heating, slot),
+                general_raw=getattr(general, slot),
+                heating_capped=heating_slot,
+                general_capped=general_slot,
+                cap_rate=cap_rate,
+            )
+        uncapped_average = heating.average + general.average
+        capped_average = sum(capped["average"])
         return ModernizationLevyOutcome(
             general_levy_in_euro=_ordered_band({slot: values[1] for slot, values in capped.items()}),
             heating_levy_in_euro=_ordered_band({slot: values[0] for slot, values in capped.items()}),
             total_in_euro=UncertainValue(
                 minimum=sum(capped["minimum"]), average=sum(capped["average"]), maximum=sum(capped["maximum"])
             ),
+            # Q21: "did a ceiling decide this number" is the single most important thing to know
+            # about a levy, so it is recorded rather than left to be inferred from the amount.
+            cap_binding=capped_average < uncapped_average - 1e-6,
+            cap_in_euro_per_m2_per_month=cap_rate,
+            # Q26 F5: the per-world verdict, because a cap applied per slot can decide one world
+            # and leave the next one to the percentage of the modernization cost.
+            binding_mechanism_by_slot=mechanisms,
         )
+
+    def _binding_mechanism(
+        self,
+        heating_raw: float,
+        general_raw: float,
+        heating_capped: float,
+        general_capped: float,
+        cap_rate: float,
+    ) -> str:
+        """Which of the three mechanisms actually set this world's levy (Q26 F5).
+
+        Reads the same comparison the capping did, in the order the caps are applied (D27): the
+        §559e ceiling first, on the heating leg alone, then the general §559 Abs. 3a ceiling on the
+        two legs together. Whichever ceiling removed euros is the binding one; when neither did,
+        the levy is the statutory percentage of the eligible cost and the verdict says so with the
+        rate that produced it, since that is the case in which spending more would raise the rent.
+
+        Args:
+            heating_raw: The §559e leg before any cap, in euro per year.
+            general_raw: The §559 leg before any cap, in euro per year.
+            heating_capped: The §559e leg after both caps.
+            general_capped: The §559 leg after both caps.
+            cap_rate: The general ceiling in EUR per m² and month, for the verdict's wording.
+
+        Returns:
+            A short sentence naming the binding mechanism, ready to be rendered verbatim.
+        """
+        tolerance = LevyBindingMechanism.TOLERANCE_IN_EURO
+        if general_raw - general_capped > tolerance or heating_raw - heating_capped > tolerance:
+            if heating_raw - heating_capped > tolerance and general_capped <= tolerance:
+                return (
+                    f"{LevyBindingMechanism.HEATING_CAP} "
+                    f"{self.levy.heating_cap_in_euro_per_m2_per_month:,.2f} EUR/m2*mo"
+                )
+            return f"{LevyBindingMechanism.GENERAL_CAP} {cap_rate:,.2f} EUR/m2*mo"
+        rate = (
+            self.levy.heating_levy_rate_per_year
+            if heating_capped > general_capped
+            else self.levy.levy_rate_per_year
+        )
+        return f"{rate:.0%} {LevyBindingMechanism.RATE_BELOW_CAP}"
+
+    def modernization_levy_outcome(self, ctx: AllocationContext) -> Optional[ModernizationLevyOutcome]:
+        """The §559/§559e outcome, for the landlord statement's caption (Q21).
+
+        Simply :meth:`compute_modernization_levy` under the protocol's name, so a caller with a
+        ruleset in hand can ask any country's implementation the same question without knowing
+        which one it holds.
+        """
+        return self.compute_modernization_levy(ctx)
 
     def modernization_levy_entries(self, ctx: AllocationContext) -> List[CashFlowEntry]:
         """The §559/§559e BGB levy: TENANT pays a rent increase, LANDLORD receives it (§6.4).

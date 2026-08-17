@@ -49,3 +49,31 @@ class EnergyCarrier(str, enum.Enum):
     DISTRICT_HEATING = "DISTRICT_HEATING"
     HYDROGEN = "HYDROGEN"
     DIESEL = "DIESEL"
+
+
+@enum.unique
+class EnergyFlowRole(str, enum.Enum):
+    """What a measured device flow *is* in the household's energy balance (V12).
+
+    The vocabulary of the per-subject energy record the adapter fills and the household energy
+    balance draws: not what a device is priced as, but which side of the electricity balance its
+    kilowatt hours sit on. It lives beside `EnergyCarrier` because it is the same kind of thing —
+    a small, serialization-stable vocabulary that both the extraction side and the presentation
+    side have to agree on — and because both sides can import this leaf module without dragging
+    anything along.
+
+    Roles carry **positive magnitudes**; direction is the role, not the sign, which is why the
+    battery has two of them. `GRID_IMPORT`/`GRID_EXPORT` are the meter's own two flows and are
+    the only roles that also correspond to a priced carrier boundary; the rest are internal
+    device flows that no bill is ever computed from. A flow that carries no role is simply not
+    recorded — this enum is deliberately not a total classification of everything a simulation
+    moves.
+    """
+
+    PV_GENERATION = "PV_GENERATION"
+    BATTERY_CHARGE = "BATTERY_CHARGE"
+    BATTERY_DISCHARGE = "BATTERY_DISCHARGE"
+    HEAT_PUMP_ELECTRICITY = "HEAT_PUMP_ELECTRICITY"
+    HOUSEHOLD_ELECTRICITY = "HOUSEHOLD_ELECTRICITY"
+    GRID_IMPORT = "GRID_IMPORT"
+    GRID_EXPORT = "GRID_EXPORT"

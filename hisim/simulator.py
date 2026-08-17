@@ -19,7 +19,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import postprocessingoptions
 from hisim.loadtypes import UNITS_USING_MEAN_AGGREGATION
-from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
+from hisim.result_path_provider import ResultPathProviderSingleton
 
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago, Maximillian Hillen"
@@ -247,6 +247,14 @@ class Simulator:
         If no result directory is set, uses one from ResultPathProviderSingleton or
         builds a flat result path.
 
+        The path provider is a process-wide singleton, so a second simulation run in the same
+        process would otherwise find the *first* run's directory still configured there and adopt
+        it — silently overwriting the first run's artifacts, which is what happens when one script
+        runs a reference setup and then a variant. A configuration the provider marks as
+        simulator-derived therefore belongs to a previous ``Simulator`` and is dropped here, while
+        a directory a caller chose deliberately (a test, the HPC harness, RenoVisor) is still
+        honoured as it always was.
+
         Raises:
             ValueError: If the result path provider does not return a directory.
         """
@@ -257,6 +265,15 @@ class Simulator:
             or self._simulation_parameters.result_directory == ""
         ):
 
+            if ResultPathProviderSingleton().configured_by_simulator:
+                # Left over from an earlier in-process run: it names that run's setup module and
+                # carries that run's timestamp. Dropping the instance also refreshes the timestamp.
+                log.information(
+                    "Discarding the result path of a previous in-process simulation run "
+                    f"({ResultPathProviderSingleton().get_result_directory_name()}); this run "
+                    "derives its own."
+                )
+                ResultPathProviderSingleton.reset()
             # check if result path is already set somewhere manually
             result_directory = ResultPathProviderSingleton().get_result_directory_name()
             if result_directory is not None:
@@ -266,12 +283,8 @@ class Simulator:
                 )
             else:
                 # if not, build a flat result path itself
-                ResultPathProviderSingleton().set_important_result_path_information(
-                    module_directory=self.module_directory,
-                    model_name=self.module_filename,
-                    variant_name=None,
-                    scenario_hash_string=None,
-                    sorting_option=SortingOptionEnum.FLAT,
+                ResultPathProviderSingleton().configure_for_simulator_run(
+                    module_directory=self.module_directory, model_name=self.module_filename
                 )
                 result_directory = ResultPathProviderSingleton().get_result_directory_name()
                 if result_directory is None:

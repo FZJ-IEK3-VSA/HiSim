@@ -34,6 +34,7 @@ from __future__ import annotations
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
 from hisim.economics.parameters import EconomicParameters
+from hisim.economics.results import RateOrigin, ResolvedRate
 from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import ComponentType
 
@@ -99,12 +100,42 @@ def carrier_escalation_rate(
     Returns:
         A nominal annual rate as a fraction.
     """
+    return resolve_carrier_escalation_rate(carrier, parameters, database).rate
+
+
+def resolve_carrier_escalation_rate(
+    carrier: EnergyCarrier, parameters: EconomicParameters, database: CostDatabase
+) -> ResolvedRate:
+    """The same chain as :func:`carrier_escalation_rate`, but saying which step won (Q26 F2).
+
+    The rate alone cannot be cited: 2 %/a on electricity is a configured assumption in one run and
+    the country defaults file's reviewed figure in the next, and the report's Assumptions section
+    has to name the source of every value it publishes (rule 2.9). The chain is implemented here
+    once and the plain-rate function above delegates to it, so the two can never disagree about
+    which value wins.
+
+    Args:
+        carrier: The energy carrier being priced.
+        parameters: The run's economic parameters.
+        database: Loaded cost database, consulted for `escalation_defaults_<COUNTRY>.json`.
+
+    Returns:
+        The rate with the origin that produced it and, for a defaults hit, that file's source ids.
+    """
     if carrier in parameters.energy_price_escalation_rates:
-        return parameters.energy_price_escalation_rates[carrier]
+        return ResolvedRate(
+            rate=parameters.energy_price_escalation_rates[carrier], origin=RateOrigin.CONFIGURATION
+        )
     defaults = database.get_escalation_defaults(parameters.country)
     if carrier in defaults.carrier_rates:
-        return defaults.carrier_rates[carrier]
-    return parameters.general_price_escalation_rate
+        return ResolvedRate(
+            rate=defaults.carrier_rates[carrier],
+            origin=RateOrigin.COUNTRY_DEFAULTS,
+            source_ids=list(defaults.source_ids),
+        )
+    return ResolvedRate(
+        rate=parameters.general_price_escalation_rate, origin=RateOrigin.GENERAL_FALLBACK
+    )
 
 
 def investment_escalation_rate(
@@ -128,9 +159,40 @@ def investment_escalation_rate(
     Returns:
         A nominal annual rate as a fraction; negative for a falling technology cost.
     """
+    return resolve_investment_escalation_rate(asset_class, parameters, database).rate
+
+
+def resolve_investment_escalation_rate(
+    asset_class: ComponentType, parameters: EconomicParameters, database: CostDatabase
+) -> ResolvedRate:
+    """The capital-cost twin of :func:`resolve_carrier_escalation_rate`, origin included (Q26 F2).
+
+    Same three-step chain as :func:`investment_escalation_rate`, which delegates here, with the
+    step that produced the rate recorded so the Assumptions section can cite it. Today the chain
+    normally ends at the general investment rate, because the shipped per-asset-class tables are
+    empty on purpose (spec Q2) — and a table that publishes "general fallback" beside that rate is
+    exactly how a reader learns that no technology-specific trajectory was assumed.
+
+    Args:
+        asset_class: The `ComponentType` of the subject being escalated.
+        parameters: The run's economic parameters.
+        database: Loaded cost database, consulted for `escalation_defaults_<COUNTRY>.json`.
+
+    Returns:
+        The rate with the origin that produced it and, for a defaults hit, that file's source ids.
+    """
     if asset_class in parameters.investment_price_escalation_rates:
-        return parameters.investment_price_escalation_rates[asset_class]
+        return ResolvedRate(
+            rate=parameters.investment_price_escalation_rates[asset_class],
+            origin=RateOrigin.CONFIGURATION,
+        )
     defaults = database.get_escalation_defaults(parameters.country)
     if asset_class in defaults.asset_class_rates:
-        return defaults.asset_class_rates[asset_class]
-    return parameters.investment_price_escalation_rate
+        return ResolvedRate(
+            rate=defaults.asset_class_rates[asset_class],
+            origin=RateOrigin.COUNTRY_DEFAULTS,
+            source_ids=list(defaults.source_ids),
+        )
+    return ResolvedRate(
+        rate=parameters.investment_price_escalation_rate, origin=RateOrigin.GENERAL_FALLBACK
+    )

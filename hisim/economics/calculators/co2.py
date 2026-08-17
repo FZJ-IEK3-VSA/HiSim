@@ -112,6 +112,12 @@ def accumulate_operational_emissions(
         annual = carrier_emissions.annual_emissions_in_kg
         for projection_year in range(1, horizon + 1):
             co2_result.operational_co2_by_year_in_kg[projection_year] += annual
+        # Q26 F3: the factor travels with the mass so the report can print the multiplication.
+        # Assigned rather than accumulated — it is a price-entry property, identical for every
+        # meter of the same carrier, not a quantity that adds up.
+        co2_result.emission_factor_by_carrier_in_kg_per_kwh[carrier_emissions.carrier_value] = (
+            carrier_emissions.emission_factor_in_kg_per_kwh
+        )
         # Accumulated, not assigned: a carrier can be billed by more than one meter, and the
         # per-year series above sums those records too — the two views must describe one quantity.
         co2_result.operational_co2_by_carrier_in_kg[carrier_emissions.carrier_value] = (

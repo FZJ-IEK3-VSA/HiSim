@@ -106,14 +106,27 @@ class FakeHeatPump:
 
     cost_relevance = CostRelevance.PRICED
 
-    def __init__(self, component_name: str = "FakeHeatPump", asset_class=ComponentType.HEAT_PUMP) -> None:
+    def __init__(
+        self,
+        component_name: str = "FakeHeatPump",
+        asset_class=ComponentType.HEAT_PUMP,
+        size: float = 9.0,
+    ) -> None:
         self.component_name = component_name
         self.config = _Config()
         self._asset_class = asset_class
+        self._size = size
 
     def get_cost_facts(self) -> ComponentCostFacts:
-        """9 kW of whatever asset class the test asked for."""
-        return ComponentCostFacts(asset_class=self._asset_class, size=9.0, size_unit=Units.KILOWATT)
+        """9 kW of whatever asset class the test asked for, or whatever size the test set.
+
+        The size is a constructor argument so the same stub can also play a device the setup
+        built and then sized away (0 kW) and one whose declaration is simply wrong (a negative
+        size), which are the two halves of the not-installed rule.
+        """
+        return ComponentCostFacts(
+            asset_class=self._asset_class, size=self._size, size_unit=Units.KILOWATT
+        )
 
 
 class FakeController:
@@ -251,6 +264,35 @@ class TestFactsExtraction:
         )
         assert inputs.cost_facts == []
         assert inputs.billing == []
+
+    def test_zero_size_component_is_skipped_instead_of_killing_the_evaluation(self):
+        """A device the setup built and then sized to zero is "not installed", not invalid data.
+
+        `share_of_maximum_pv_potential = 0` still constructs a PV system, at 0 kWp; the whole
+        lifecycle evaluation used to die on its facts' validation. It must now be excluded from
+        pricing and from the energy attribution, and it must not become an unresolved subject
+        either, because that aborts the evaluation just as thoroughly under D7.
+        """
+        component = FakeHeatPump(component_name="ZeroSizedPv", size=0.0)
+        inputs = build_evaluation_inputs(
+            [_Wrapper(component)], [], pd.DataFrame(), _SimulationParameters()
+        )
+        assert inputs.cost_facts == []
+        assert inputs.unresolved_subjects == []
+        assert "ZeroSizedPv" not in inputs.energy_attribution_by_subject_in_kwh
+
+    def test_zero_size_extraction_carries_a_reason(self):
+        """The skip is stated, not silent: the adapter names the class and why it contributes nothing."""
+        extraction = adapter.extract_cost_facts(FakeHeatPump(size=0.0))
+        assert extraction.facts is None
+        assert extraction.unresolved_reason is None
+        assert "zero size" in (extraction.not_installed_reason or "")
+        assert "not installed" in (extraction.not_installed_reason or "")
+
+    def test_negative_size_still_fails_fast(self):
+        """The other direction: zero is a statement, a negative size is corrupt and must raise."""
+        with pytest.raises(ValueError, match="size"):
+            adapter.extract_cost_facts(FakeHeatPump(size=-3.0))
 
     def test_simulated_period_fraction_follows_the_date_range(self):
         """One simulated day of a 365-day year -> 1/365; a full year -> 1.0."""

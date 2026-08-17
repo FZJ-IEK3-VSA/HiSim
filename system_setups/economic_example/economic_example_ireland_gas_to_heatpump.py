@@ -64,6 +64,11 @@ OLD_GAS_BOILER = dict(
     installation_year=2012,
     is_functional=True,
     energy_carrier=EnergyCarrier.NATURAL_GAS,
+    # Sowieso share (Q22): a boiler at the end of its life is replaced by *a boiler* in the world
+    # without the heat pump, so the full like-for-like replacement really would have been paid —
+    # this is the case the default 1.0 describes, stated here because the German example next
+    # door needs a lower share and the difference between the two is the point of the field.
+    anyway_share=1.0,
 )
 
 

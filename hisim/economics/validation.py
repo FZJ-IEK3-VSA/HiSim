@@ -293,6 +293,32 @@ def validate_subsidy_catalog(country: str, base_path: Optional[str] = None) -> V
         if scheme.id in seen:
             report.errors.append(f"Subsidy catalog {country}: duplicate scheme id {scheme.id!r}.")
         seen.add(scheme.id)
+    # Friendly display names (Q20). Absence is a warning, not an error, because the field is
+    # optional by design — a catalog written before Q20 still loads and falls back to the id — but
+    # a shipped scheme without one shows a reader `DE_BEG_EM_HP_SPEED_2024` where it should show
+    # "speed bonus", and two schemes sharing a name would make the report ambiguous where the ids
+    # are not.
+    display_names: Dict[str, str] = {}
+    for scheme in catalog.schemes:
+        if scheme.display_name is None:
+            report.warnings.append(
+                f"Subsidy catalog {country}: scheme {scheme.id!r} has no display_name; the report "
+                "will show its raw id (Q20)."
+            )
+            continue
+        if not scheme.display_name.strip():
+            report.errors.append(
+                f"Subsidy catalog {country}: scheme {scheme.id!r} declares a blank display_name — "
+                "omit the field to fall back to the id instead."
+            )
+        elif scheme.display_name in display_names:
+            report.errors.append(
+                f"Subsidy catalog {country}: schemes {display_names[scheme.display_name]!r} and "
+                f"{scheme.id!r} share the display_name {scheme.display_name!r}; a reader could not "
+                "tell the two apart."
+            )
+        else:
+            display_names[scheme.display_name] = scheme.id
     for scheme in catalog.schemes:
         for excluded in scheme.excludes:
             if excluded not in seen:

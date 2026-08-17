@@ -72,6 +72,11 @@ class CarrierEmissions:
 
     carrier_value: str
     annual_emissions_in_kg: float
+    #: The factor the mass above was computed with, in kg per kWh bought (Q26 F3). Carried
+    #: alongside the product so the CO2 section can state the multiplication instead of asserting
+    #: its result; it is the price entry's `emission_factor_in_kg_per_kwh`, constant over the
+    #: horizon in v1.
+    emission_factor_in_kg_per_kwh: float = 0.0
 
 
 @dataclass
@@ -94,6 +99,11 @@ class EnergyFlowResult:
     emissions: List[CarrierEmissions] = field(default_factory=list)
     #: Carrier value -> unclamped `TariffBill.flexibility_value_in_euro` of the year-1 bill.
     raw_flexibility_value_by_carrier: Dict[str, float] = field(default_factory=dict)
+    #: The contract each carrier was actually billed under, in carrier order — the explicit one
+    #: where the run supplied it and the generated flat contract otherwise (Q26 F2). The
+    #: assumptions table publishes its working price, standing charge and feed-in rate, and only
+    #: the calculator knows which of the two contracts won.
+    tariffs_applied: List[TariffContract] = field(default_factory=list)
 
 
 def contract_from_price_entry(entry: EnergyPriceEntry, country: str) -> TariffContract:
@@ -340,6 +350,11 @@ def build_energy_flows(
                         )
                     )
         result.emissions.append(
-            CarrierEmissions(carrier_value=carrier.value, annual_emissions_in_kg=annual_emissions)
+            CarrierEmissions(
+                carrier_value=carrier.value,
+                annual_emissions_in_kg=annual_emissions,
+                emission_factor_in_kg_per_kwh=emission_factor,
+            )
         )
+        result.tariffs_applied.append(contract)
     return result

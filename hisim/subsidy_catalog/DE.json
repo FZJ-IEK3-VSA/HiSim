@@ -4,6 +4,7 @@
   "schemes": [
     {
       "id": "DE_BEG_EM_HP_BASE_2024",
+      "display_name": "BEG EM heat pump \u2014 base grant (30 %)",
       "jurisdiction": {
         "country": "DE",
         "region": null
@@ -105,6 +106,7 @@
     },
     {
       "id": "DE_BEG_EM_HP_SPEED_2024",
+      "display_name": "BEG EM heat pump \u2014 speed bonus (20 %)",
       "jurisdiction": {
         "country": "DE",
         "region": null
@@ -188,6 +190,7 @@
     },
     {
       "id": "DE_BEG_EM_HP_INCOME_2024",
+      "display_name": "BEG EM heat pump \u2014 income bonus (30 %)",
       "jurisdiction": {
         "country": "DE",
         "region": null
@@ -262,6 +265,7 @@
     },
     {
       "id": "DE_BEG_EM_HP_EFFICIENCY_2024",
+      "display_name": "BEG EM heat pump \u2014 efficiency bonus (5 %)",
       "jurisdiction": {
         "country": "DE",
         "region": null
@@ -335,6 +339,7 @@
     },
     {
       "id": "DE_BEG_EM_SOLAR_2024",
+      "display_name": "BEG EM solar thermal \u2014 base grant (30 %)",
       "jurisdiction": {
         "country": "DE",
         "region": null
@@ -413,6 +418,7 @@
     },
     {
       "id": "DE_TAX_35C_2024",
+      "display_name": "\u00a735c income-tax credit (20 % over 3 years)",
       "jurisdiction": {
         "country": "DE",
         "region": null
@@ -504,6 +510,7 @@
     },
     {
       "id": "DE_KFW_358_LOAN_2024",
+      "display_name": "KfW 358 supplementary loan (2 % over 20 years)",
       "jurisdiction": {
         "country": "DE",
         "region": null
@@ -574,6 +581,7 @@
     },
     {
       "id": "DE_BEG_EM_ENVELOPE_2024",
+      "display_name": "BEG EM envelope grant (15 %)",
       "jurisdiction": {
         "country": "DE",
         "region": null
@@ -755,6 +763,7 @@
     },
     {
       "id": "DE_BEG_EM_ENVELOPE_ISFP_2024",
+      "display_name": "BEG EM envelope \u2014 iSFP bonus (5 %)",
       "jurisdiction": {
         "country": "DE",
         "region": null

@@ -42,7 +42,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from hisim.economics import views
-from hisim.economics.results import EvaluationMatrix, VariantComparison
+from hisim.economics.results import EvaluationMatrix, HeatCostNaming, VariantComparison
 from hisim.economics.timeline import Actor, discount_factor
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 
@@ -264,7 +264,7 @@ def build_lifecycle_kpi_entries(
     """The new namespaced KPI set; every monetary KPI carries its uncertainty band.
 
     Builds the §7.3 KPI list from an evaluated matrix: per perspective the equivalent annual cost,
-    the net present cost over the horizon, the year-1 monthly cost and the levelized cost of heat,
+    the net present cost over the horizon, the year-1 monthly cost and the system cost per unit of heat,
     plus one KPI per applied subsidy scheme and the perspective's total support; then the §6.5
     per-actor net present costs of `actor_kpi_entries` for whichever perspectives allocated flows
     to a payer; and, when a variant comparison is supplied, the NPV delta, the discounted payback
@@ -321,18 +321,31 @@ def build_lifecycle_kpi_entries(
         )
         add(f"Monthly cost year 1 [EUR/month] ({perspective})", "EUR/month", result.monthly_cost_year1_in_euro)
         add(
-            f"Levelized cost of heat [EUR/kWh] ({perspective})",
+            f"{HeatCostNaming.FULL} [EUR/kWh] ({perspective})",
             "EUR/kWh",
             result.levelized_cost_of_heat_in_euro_per_kwh,
         )
         for decision in result.subsidy_decisions:
             for award in decision.applied:
-                if award.upfront_amount.maximum > 0:
+                # The award's *total* (upfront + instalments), not its upfront amount: a
+                # tax-credit schedule has a zero upfront amount and would otherwise be missing
+                # from the KPI set while the SUBSIDY category NPV counts it. Awards with no euro
+                # amount at all (loan terms, an operational rate) still have none and stay out —
+                # `describe_award` is what decides which is which.
+                presentation = views.describe_award(award)
+                if presentation.total_in_euro is not None and presentation.total_in_euro.maximum > 0:
+                    # Q20: the KPI reads as the scheme's friendly name; the raw id follows in the
+                    # description, which is where a machine consumer and a grepping reviewer
+                    # both look for the catalog key.
+                    detail = f"{decision.measure_subject}; scheme {presentation.scheme_id}"
                     add(
-                        f"Subsidy {award.scheme_id} [EUR] ({perspective})",
+                        f"Subsidy {presentation.display_name} [EUR] ({perspective})",
                         "EUR",
-                        award.upfront_amount,
-                        description=decision.measure_subject,
+                        presentation.total_in_euro,
+                        description=(
+                            f"{detail}; {presentation.payout_note}"
+                            if presentation.payout_note else detail
+                        ),
                     )
         # The total is a view of the result, not a running sum kept while emitting KPIs (W4.1),
         # and since D2 it is the timeline-based nominal figure — so it is *not* the sum of the

@@ -35,12 +35,21 @@ none of them touches legacy cost outputs.
   shipped data is internally inconsistent — an unsourced datapoint, a coverage or question-coverage
   hole, a malformed tariff contract — and the run that would have used it is not to be trusted.
 
+**Where the assumptions come from.** ``--parameters`` states them; without the flag every
+subcommand reads the parameters the run itself was priced under out of its `lifecycle_costs.json`
+(`_load_parameters`). The engine defaults are never a fallback: a directory that carries neither is
+an error naming both files, because re-pricing an archived study at default assumptions answers a
+question nobody asked. The subsidy catalog those parameters name is loaded by every subcommand,
+`explain` included, through `SubsidyCatalog.load_configured` — a named catalog that cannot be
+resolved is an error (D25), never a quiet fall-through to the §10.1 legacy flat shim.
+
 Across all commands, an `UnresolvableSubjectsError` — the fail-fast of decision D7 — is caught in
 `main` and turned into exit code 2 with the same message the postprocessing bridge logs. There are
 no partial cost results and no ``--allow-drops`` escape. Every other `CostDataError` — a cost
-database that will not load, a `--parameters` file that is not there (issue #23) — is caught in
-the same place and reported the same way, so a data or invocation problem is a message and an
-exit code rather than a traceback, and never a silently substituted default.
+database that will not load, a `--parameters` file that is not there (issue #23) — and every
+`SubsidyDataError` is caught in the same place and reported the same way, so a data or invocation
+problem is a message and an exit code rather than a traceback, and never a silently substituted
+default.
 """
 
 from __future__ import annotations
@@ -68,42 +77,63 @@ from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import load_default_bundle, select_applicable
 from hisim.economics.results import EvaluationMatrix
 from hisim.economics.scenarios import ScenarioSet, evaluate_cube, export_cube_csv, export_cube_json
-from hisim.economics.serialization import read_inputs, read_results
-from hisim.economics.subsidies import SubsidyCatalog
+from hisim.economics.serialization import read_inputs, read_results, read_stored_parameters
+from hisim.economics.subsidies import SubsidyCatalog, SubsidyDataError
 from hisim.economics.validation import validate_all
 
 
-def _load_parameters(args: argparse.Namespace) -> EconomicParameters:
-    """The economic assumptions for this invocation: a `--parameters` file, or the defaults.
+def _load_parameters(args: argparse.Namespace, results_dir: Optional[str] = None) -> EconomicParameters:
+    """The economic assumptions for this invocation: `--parameters`, or the run's own.
 
-    Shared by every subcommand so they all price identically. Note that the parameters come from the
-    *caller*, never from the result directory — that is the point of re-pricing: the stored file
-    carries the physical facts, the assumptions are supplied fresh (§4.6).
+    Shared by every subcommand so they all price identically, with a two-step resolution:
 
-    Omitting `--parameters` means "use the defaults" and is a legitimate invocation. *Passing* a
-    path that does not exist is not: it used to fall back to the defaults silently, so a typo in
-    the file name produced a full, plausible-looking result priced under assumptions the caller
-    never chose (issue #23). The two cases are therefore separated here, and only the second one
-    fails.
+    1. ``--parameters <file>`` — the caller states the assumptions, which is what re-pricing an
+       archived study under *new* assumptions means (§4.6).
+    2. otherwise the assumptions the run itself was priced under, read back from its
+       `lifecycle_costs.json` (`serialization.read_stored_parameters`).
+
+    Step 2 is the fix for a defect that made `explain` unusable on a real run: without
+    ``--parameters`` every subcommand priced with `EconomicParameters()`, so a run evaluated at
+    price basis year 2026 with a subsidy catalog was re-evaluated at the default basis year with
+    none — the explained numbers were not the run's, and on data valid from 2026 the invocation
+    died on the D7 resolution check instead. The parameters travel with the artifacts; the CLI now
+    reads them.
+
+    Neither source is allowed to fall back to the engine defaults. A directory holding only
+    `economic_inputs.json` has no stored assumptions, and pricing it silently at the defaults is
+    exactly the failure this function exists to prevent — so it fails and names the two files.
+
+    Args:
+        args: The parsed CLI namespace, for `--parameters`.
+        results_dir: The invocation's result directory, or None for a subcommand that has none.
 
     Returns:
-        The parsed parameters, or the defaults when the flag was omitted.
+        The caller's parameters, or the ones stored with the run.
 
     Raises:
-        CostDataError: If `--parameters` names a path that is not a readable file. `main` turns it
-            into exit code 2 with the message on stderr.
+        CostDataError: If `--parameters` names a path that is not a readable file, or no path was
+            given and the directory carries no stored parameters. `main` turns both into exit code
+            2 with the message on stderr.
     """
-    if not args.parameters:
-        return EconomicParameters()
-    if not os.path.isfile(args.parameters):
-        raise CostDataError(
-            f"--parameters file not found: {args.parameters!r}. Omit the flag to price with the "
-            "default economic parameters; the defaults are never used as a fallback for a path "
-            "that was given explicitly."
-        )
-    with open(args.parameters, encoding="utf-8") as file:
-        parameters: EconomicParameters = EconomicParameters.from_dict(json.load(file))
-    return parameters
+    if args.parameters:
+        if not os.path.isfile(args.parameters):
+            raise CostDataError(
+                f"--parameters file not found: {args.parameters!r}. Omit the flag to price with "
+                "the parameters stored with the run; the defaults are never used as a fallback "
+                "for a path that was given explicitly."
+            )
+        with open(args.parameters, encoding="utf-8") as file:
+            parameters: EconomicParameters = EconomicParameters.from_dict(json.load(file))
+        return parameters
+    stored = read_stored_parameters(results_dir) if results_dir else None
+    if stored is not None:
+        return stored
+    raise CostDataError(
+        f"No economic parameters for {results_dir!r}: the directory has no lifecycle_costs.json "
+        "carrying the parameters the run was priced under, and pricing it with the engine "
+        "defaults would silently answer a different question. Pass --parameters <file>, or run "
+        "`evaluate --parameters <file>` on the directory first."
+    )
 
 
 def _cmd_evaluate(args: argparse.Namespace) -> int:
@@ -124,11 +154,11 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         an unreadable directory or malformed scenario file propagates.
     """
     inputs = read_inputs(args.results_dir)
-    parameters = _load_parameters(args)
+    parameters = _load_parameters(args, args.results_dir)
     database = CostDatabase(parameters.cost_database_path)
-    catalog = None
-    if parameters.subsidy_catalog_path or args.subsidy_catalog:
-        catalog = SubsidyCatalog.load(parameters.country, args.subsidy_catalog or parameters.subsidy_catalog_path)
+    catalog = SubsidyCatalog.load_configured(
+        parameters.country, parameters.subsidy_catalog_path, args.subsidy_catalog
+    )
     evaluator = EconomicEvaluator(database, parameters, catalog)
     require_resolvable_subjects(inputs, evaluator)
     perspectives = select_applicable(load_default_bundle(), has_register=inputs.existing_assets is not None)
@@ -152,10 +182,13 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         # The audit belongs to the stored evaluation: without it a later `report` could not
         # render section 1 without reopening the cost database (W4.5).
         from hisim.economics.audit import build_input_audit, write_cost_audit
+        from hisim.economics.report_plots import write_audit_plots
 
         audit = build_input_audit(inputs, database, parameters, first)
         write_cost_audit(audit, args.results_dir)
         write_input_audit(audit, args.results_dir)
+        # V6 travels with the audit tables, not with the report (owner decision Q9).
+        write_audit_plots(first, args.results_dir)
     print(f"Re-evaluated {len(matrix.results)} perspectives into {args.results_dir}.")
     return 0
 
@@ -171,16 +204,21 @@ def _cmd_explain(args: argparse.Namespace) -> int:
     "is this number defensible" for any single number.
 
     It re-evaluates rather than reading stored results because the provenance ledger is what is being
-    queried, and it is built during evaluation. No subsidy catalog is loaded here, so subsidy-derived
-    values are explained through the flat shim path.
+    queried, and it is built during evaluation. That re-evaluation is the run's, not a generic one:
+    the assumptions come from `_load_parameters` (the run's stored parameters unless the caller
+    overrides them) and the subsidy catalog they name is loaded, so the explained subsidy values are
+    the run's real BEG decisions. Before this the command loaded no catalog at all and every
+    subsidy-derived value was explained through the §10.1 flat-shim path, which is not what the run
+    did.
 
     Returns:
         0 on success; 2 with a message on stderr when ``--value`` is malformed (no ``/``) or names a
         perspective that is not applicable to this directory.
     """
     inputs = read_inputs(args.results_dir)
-    parameters = _load_parameters(args)
+    parameters = _load_parameters(args, args.results_dir)
     database = CostDatabase(parameters.cost_database_path)
+    catalog = SubsidyCatalog.load_configured(parameters.country, parameters.subsidy_catalog_path)
     if "/" not in args.value:
         print("--value must have the form '<perspective>/<field-path>'", file=sys.stderr)
         return 2
@@ -193,7 +231,7 @@ def _cmd_explain(args: argparse.Namespace) -> int:
     if not perspectives:
         print(f"Unknown perspective {perspective_id!r}.", file=sys.stderr)
         return 2
-    evaluator = EconomicEvaluator(database, parameters)
+    evaluator = EconomicEvaluator(database, parameters, catalog)
     require_resolvable_subjects(inputs, evaluator)
     result = evaluator.evaluate(inputs, perspectives[0])
     report = result.explain(value_path)
@@ -225,11 +263,9 @@ def _evaluate_directory(
     from hisim.economics.results import EvaluationMatrix
 
     inputs = read_inputs(results_dir)
-    parameters = _load_parameters(args)
+    parameters = _load_parameters(args, results_dir)
     database = CostDatabase(parameters.cost_database_path)
-    catalog = None
-    if parameters.subsidy_catalog_path:
-        catalog = SubsidyCatalog.load(parameters.country, parameters.subsidy_catalog_path)
+    catalog = SubsidyCatalog.load_configured(parameters.country, parameters.subsidy_catalog_path)
     evaluator = EconomicEvaluator(database, parameters, catalog)
     require_resolvable_subjects(inputs, evaluator)
     perspectives = select_applicable(load_default_bundle(), has_register=inputs.existing_assets is not None)
@@ -321,11 +357,9 @@ def _cmd_report(args: argparse.Namespace) -> int:
         from hisim.economics.scenarios import ScenarioSet, evaluate_cube, export_cube_csv, export_cube_json
 
         inputs = read_inputs(args.results_dir)
-        parameters = _load_parameters(args)
+        parameters = _load_parameters(args, args.results_dir)
         database = CostDatabase(parameters.cost_database_path)
-        catalog = None
-        if parameters.subsidy_catalog_path:
-            catalog = SubsidyCatalog.load(parameters.country, parameters.subsidy_catalog_path)
+        catalog = SubsidyCatalog.load_configured(parameters.country, parameters.subsidy_catalog_path)
         evaluator = EconomicEvaluator(database, parameters, catalog)
         require_resolvable_subjects(inputs, evaluator)
         perspectives = select_applicable(load_default_bundle(), has_register=inputs.existing_assets is not None)
@@ -339,8 +373,11 @@ def _cmd_report(args: argparse.Namespace) -> int:
     write_cost_summary(matrix, plausibility, args.results_dir, comparison)
     write_lifecycle_report(
         matrix, plausibility, args.results_dir, audit, comparison, scenario_cube=scenario_cube,
+        reference_result=reference_result,
     )
-    write_report_plots(matrix, args.results_dir)
+    # The reference goes to the plot set too: the comparison bridge and the fixed-interest
+    # benchmark decompose it and cannot be drawn from the comparison object alone.
+    write_report_plots(matrix, args.results_dir, reference_result)
     if comparison is not None and reference_result is not None:
         plot_payback_curve(
             reference_result,
@@ -431,8 +468,15 @@ def main(argv=None) -> int:
         return 2
     except CostDataError as err:
         # Everything else the data layer refuses to do — an unloadable database, a missing
-        # `--parameters` file (issue #23). Same channel, same exit code: the caller asked for a
-        # priced result and is told why there is none instead of getting one built on defaults.
+        # `--parameters` file (issue #23), a directory whose stored parameters are gone. Same
+        # channel, same exit code: the caller asked for a priced result and is told why there is
+        # none instead of getting one built on defaults.
+        print(str(err), file=sys.stderr)
+        return 2
+    except SubsidyDataError as err:
+        # A named subsidy catalog that does not resolve or does not parse (D25). It reaches the
+        # user as a message rather than a traceback, and never as a result priced by the §10.1
+        # flat shim under a catalog the caller believed was active.
         print(str(err), file=sys.stderr)
         return 2
 

@@ -211,6 +211,48 @@ def test_get_heatpump_cycles_counts_transitions() -> None:
     )
 
 
+def _running_streak_counter(is_active_profile: list, seconds_per_timestep: int) -> list:
+    """Build a counter like TimeOnHeating/TimeOnCooling: increments while active, resets to 0 when idle."""
+    counter = 0
+    values = []
+    for is_active in is_active_profile:
+        counter = counter + seconds_per_timestep if is_active else 0
+        values.append(counter)
+    return values
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    "is_active_profile",
+    [
+        [0] * 1440,
+        [1] * 1440,
+        [1] * 700 + [0] * 100 + [1] * 200 + [0] * 440,
+    ],
+    ids=["never_active", "always_active", "two_active_periods"],
+)
+def test_get_component_kpi_entries_heating_and_cooling_hours_match_active_time(is_active_profile: list) -> None:
+    """Heating/cooling hours must equal the actual time the heat pump was on."""
+    simpars = SimulationParameters.one_day_only(2017, 60)
+    config = MoreAdvancedHeatPumpHPLibConfig.get_default_generic_advanced_hp_lib()
+    heatpump = MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=simpars)
+
+    streak = _running_streak_counter(is_active_profile, simpars.seconds_per_timestep)
+    heating_output = cp.ComponentOutput(heatpump.component_name, heatpump.TimeOnHeating, lt.LoadTypes.TIME, lt.Units.SECONDS)
+    cooling_output = cp.ComponentOutput(heatpump.component_name, heatpump.TimeOnCooling, lt.LoadTypes.TIME, lt.Units.SECONDS)
+    postprocessing_results = pd.DataFrame({heatpump.TimeOnHeating: streak, heatpump.TimeOnCooling: streak})
+
+    kpi_entries = heatpump.get_component_kpi_entries(
+        all_outputs=[heating_output, cooling_output], postprocessing_results=postprocessing_results
+    )
+    heating_hours = next(e for e in kpi_entries if e.name == "Heating hours of SH heat pump").value
+    cooling_hours = next(e for e in kpi_entries if e.name == "Cooling hours of SH heat pump").value
+
+    expected_hours = sum(is_active_profile) * simpars.seconds_per_timestep / 3600
+    assert heating_hours == pytest.approx(expected_hours)
+    assert cooling_hours == pytest.approx(expected_hours)
+
+
 @pytest.mark.base
 def test_get_heatpump_cycles_propagates_non_index_errors() -> None:
     """get_heatpump_cycles no longer swallows non-IndexError exceptions.

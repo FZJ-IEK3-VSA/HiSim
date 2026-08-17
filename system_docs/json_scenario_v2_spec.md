@@ -46,17 +46,19 @@ have seen so far:
    in the component/config classes, not in a central translator. The executor and generator
    treat every component identically — zero `isinstance`, zero class-name comparisons.
 2. **Ports are derived, never serialized.** Static ports are created by the constructor from
-   the config; aggregator ports are created by intent resolution. The scenario JSON contains
+   the config; aggregator ports are created by dynamic-connection resolution. The scenario JSON contains
    **no `inputs`/`outputs` sections** and no provenance information of any kind.
 3. **Connections are a component-level adjacency list.** One unified `connections` list.
    Field-level expansion is always derived: from the target's declared defaults (bare pair),
-   from intent resolution (aggregators), or from explicit `fields` when wiring manually.
+   from dynamic-connection resolution (aggregators), or from explicit `fields` when wiring manually.
 4. **Default XOR manual — never mixed.** For a given (source, target) pair you either use
    the default expansion or wire fields manually. Mixing is a hard error. There is no
    per-field exclude/suppression mechanism.
-5. **Dynamic connections become intents.** An intent is one JSON entry that carries both
+5. **Dynamic connections become declarative JSON entries.** The term is kept from the
+   legacy mechanism, but a dynamic connection is now one data entry that carries both
    directions of an aggregator relationship: the monitored/consumed flow *and* the optional
-   dispatch back-channel. Pairing of weights and target ports is correct by construction.
+   dispatch back-channel. Pairing of weights and target ports is correct by construction;
+   the imperative add-API is retired.
 6. **Resolution is deterministic.** Same JSON → identical port names, identical wiring,
    identical results. Sort rules and naming templates are part of this spec.
 7. **Validation is strict.** The executor validates and hard-errors; it never repairs,
@@ -121,7 +123,7 @@ target component):
 ```
 
 If the target is an aggregator (§4.4), a bare pair instead expands using the target's
-*default intent* declaration for the source class (today's `dynamic_default_connections`
+*default dynamic connection* declaration for the source class (today's `dynamic_default_connections`
 knowledge, refactored into data). Either way: bare pair = "target, apply your defaults for
 this source class". No defaults declared → hard error.
 
@@ -143,7 +145,7 @@ this source class". No defaults declared → hard error.
 
 A `fields` entry wires exactly those fields and nothing else — no defaults are applied.
 
-**(d) Intent.** Addressed to an aggregator by component id. Carries tags and weight for the
+**(d) Dynamic connection.** Addressed to an aggregator by component id. Carries tags and weight for the
 forward (monitored) direction and optionally a `dispatch` block for the back-channel:
 
 ```json
@@ -158,12 +160,12 @@ forward (monitored) direction and optionally a `dispatch` block for the back-cha
 ```
 
 - `output` names the source port feeding the aggregator; it may be omitted when the
-  aggregator's default intent for the source class specifies it.
-- An intent **without** `dispatch` is monitored-only (occupancy consumption, meter feeds).
-- An intent **with** `dispatch` makes the aggregator create a paired dispatch output and
+  aggregator's default dynamic connection for the source class specifies it.
+- A dynamic connection **without** `dispatch` is monitored-only (occupancy consumption, meter feeds).
+- A dynamic connection **with** `dispatch` makes the aggregator create a paired dispatch output and
   wire it into the named input of the participant. One entry, both directions, weights
   matched by construction.
-- Multiple intents between the same pair are allowed (e.g. a heat pump registering space
+- Multiple dynamic connections between the same pair are allowed (e.g. a heat pump registering space
   heating and DHW channels with different weights); exact duplicates are a hard error.
 - Tags and weights are enum names / integers referencing `loadtypes.py`; unknown enum
   values are a hard error.
@@ -172,15 +174,15 @@ forward (monitored) direction and optionally a `dispatch` block for the back-cha
 
 Entries are grouped by ordered (from, to) pair. Each pair must be exclusively one of:
 
-- exactly one **bare** entry (default expansion — static defaults or default intents,
+- exactly one **bare** entry (default expansion — static defaults or default dynamic connections,
   depending on the target), or
 - one or more **manual** entries (single wires and/or one field group), or
-- one or more **explicit intents**.
+- one or more **explicit dynamic connections**.
 
-A bare entry combined with manual or explicit-intent entries for the same pair is a hard
+A bare entry combined with manual or explicit-dynamic-connection entries for the same pair is a hard
 error. Manual wires to an aggregator's *static* ports (e.g. reading the EMS total-grid
 output into a meter) are ordinary connections between a different pair or on static fields
-and are unaffected by intents.
+and are unaffected by dynamic connections.
 
 ### 3.5 Resource references
 
@@ -287,31 +289,38 @@ component declares, per source class, which field wires to make
 runtime; what changes is that the JSON references this knowledge by pair instead of
 inlining its output.
 
-### 4.4 Aggregators and intents
+### 4.4 Aggregators and dynamic connections
 
 An aggregator is a component that accepts 1..n participants. It implements:
 
 ```python
 class Component:
-    def resolve_intents(self, intents: list[ResolvedIntent]) -> None:
-        raise UnsupportedIntentError(...)   # base class: hard error
+    def resolve_dynamic_connections(self, connections: list[ResolvedDynamicConnection]) -> None:
+        raise UnsupportedDynamicConnectionError(...)   # base class: hard error
 
 class DynamicComponent(Component):
-    def resolve_intents(self, intents: list[ResolvedIntent]) -> None:
-        """Create one input per intent, one dispatch output per dispatch block,
+    def resolve_dynamic_connections(self, connections: list[ResolvedDynamicConnection]) -> None:
+        """Create one input per dynamic connection, one dispatch output per dispatch block,
         and wire both directions."""
 ```
 
-- **Default intents.** Aggregators declare per-source-class default intent parameters
-  (tags, weight, source output, dispatch spec) as *data* — replacing both
-  `dynamic_default_connections` and the EMS constructor's ~15 speculatively pre-created
+- **Default dynamic connections.** Aggregators declare per-source-class default dynamic connection parameters
+  (tags, weight, source output, dispatch spec) as *data* — replacing both the legacy
+  `dynamic_default_connections` dict and the EMS constructor's ~15 speculatively pre-created
   outputs, which are removed. A bare pair addressed to an aggregator expands from this
   declaration.
-- **Determinism.** Intents are resolved sorted by `(weight, source_id, source_output)`.
-- **Port naming.** Names derive solely from the resolved intent, never from insertion
+- **Terminology vs. legacy code.** The legacy dataclasses `DynamicConnectionInput`,
+  `DynamicConnectionOutput` and `DynamicComponentConnection` stay in the codebase until the
+  final deletion MR. The new classes never reuse those names: the parsed JSON shape is
+  `DynamicConnectionEntry`, the resolved object handed to an aggregator is
+  `ResolvedDynamicConnection`, the channel declaration is `DynamicConnectionChannel`. In a
+  diff, any bare legacy name is old code.
+- **Determinism.** Dynamic connections are resolved sorted by `(weight, source_id, source_output)`.
+- **Port naming.** Names derive solely from the resolved dynamic connection, never from insertion
   order; the exact templates are frozen in §4.6.
-- **Accepted tags.** Each aggregator declares the tag vocabulary it accepts as intent
-  channels (§4.5); intents are validated against that declaration before construction.
+- **Accepted tags.** Each aggregator declares the tag vocabulary it accepts as
+  dynamic-connection channels (§4.5); dynamic connections are validated against that
+  declaration before construction.
 - Explicit wires may not reference resolution-created ports (they do not exist at parse
   time and the dispatch block covers the back-channel): hard error.
 - The setup-facing mutators `add_component_output`, `add_component_input_and_connect` and
@@ -319,7 +328,7 @@ class DynamicComponent(Component):
   completes; `DynamicComponent`'s tag-based runtime lookups (`get_dynamic_inputs`,
   `get_all_dynamic_outputs`, ...) are untouched.
 - The runtime iteration logic of the EMS (`sort_source_weights_and_components` etc.) reads
-  from the resolved intent structure instead of `my_component_inputs` bookkeeping.
+  from the resolved dynamic connection structure instead of `my_component_inputs` bookkeeping.
 - Participant configs currently carrying `source_weight` fields stop being the source of
   weight; the weight lives in the connection entry. Config fields are deprecated and
   removed at the end of migration.
@@ -328,17 +337,17 @@ Aggregators in scope: `L2GenericEnergyManagementSystem`, `ElectricityMeter`, `Ga
 `FuelMeter`, `HeatingMeter` (monitored-only, no dispatch), `Building` (dynamic heat
 sources). EMS migrates first as proof of the mechanism (§7).
 
-### 4.5 Intent channels — the aggregator's declared tag vocabulary
+### 4.5 Dynamic-connection channels — the aggregator's declared tag vocabulary
 
 Today the tags an aggregator understands exist only implicitly, in hardcoded
 `get_dynamic_inputs(tags=[...])` calls inside its runtime methods. Nothing can validate an
-intent against them: an intent whose tags match no query wires cleanly and is silently
-never read. To close this, every aggregator declares its **intent channels** as class-level
+dynamic connection against them: a dynamic connection whose tags match no query wires cleanly and is silently
+never read. To close this, every aggregator declares its **dynamic-connection channels** as class-level
 data:
 
 ```python
 @dataclass(frozen=True)
-class IntentChannel:
+class DynamicConnectionChannel:
     key: str                        # stable identifier, e.g. "production"
     tags: frozenset[lt.InandOutputType]
     load_type: lt.LoadTypes
@@ -347,28 +356,28 @@ class IntentChannel:
     dispatch_tags: frozenset[lt.InandOutputType] = frozenset()
 
 class L2GenericEnergyManagementSystem(DynamicComponent):
-    INTENT_CHANNELS = (
-        IntentChannel("production",               {ELECTRICITY_PRODUCTION},                 ELECTRICITY, WATT, DispatchRule.FORBIDDEN),
-        IntentChannel("consumption_uncontrolled", {ELECTRICITY_CONSUMPTION_UNCONTROLLED},   ELECTRICITY, WATT, DispatchRule.FORBIDDEN),
-        IntentChannel("consumption_controlled",   {ELECTRICITY_CONSUMPTION_EMS_CONTROLLED}, ELECTRICITY, WATT, DispatchRule.REQUIRED, {ELECTRICITY_TARGET}),
-        IntentChannel("storage",                  {ELECTRICITY_REAL},                       ELECTRICITY, WATT, DispatchRule.REQUIRED, {ELECTRICITY_TARGET}),
+    CHANNELS = (
+        DynamicConnectionChannel("production",               {ELECTRICITY_PRODUCTION},                 ELECTRICITY, WATT, DispatchRule.FORBIDDEN),
+        DynamicConnectionChannel("consumption_uncontrolled", {ELECTRICITY_CONSUMPTION_UNCONTROLLED},   ELECTRICITY, WATT, DispatchRule.FORBIDDEN),
+        DynamicConnectionChannel("consumption_controlled",   {ELECTRICITY_CONSUMPTION_EMS_CONTROLLED}, ELECTRICITY, WATT, DispatchRule.REQUIRED, {ELECTRICITY_TARGET}),
+        DynamicConnectionChannel("storage",                  {ELECTRICITY_REAL},                       ELECTRICITY, WATT, DispatchRule.REQUIRED, {ELECTRICITY_TARGET}),
     )
 ```
 
 Rules:
 
-- **Matching.** An intent's `InandOutputType` tags must match **exactly one** channel of
+- **Matching.** A dynamic connection's `InandOutputType` tags must match **exactly one** channel of
   the target aggregator — zero matches and ambiguous matches are both hard errors.
   `ComponentType` tags (`BATTERY`, `BUILDINGS`, ...) are participant metadata, not channel
   selectors; they remain free-form and are used for filtering in KPI/postprocessing (e.g.
   the electricity meter's per-building district sums).
 - **Static validation.** Because the channel declares `load_type`/`unit` and the dispatch
-  rule, intents are fully validatable in the executor's step 3 — before any component port
+  rule, dynamic connections are fully validatable in the executor's step 3 — before any component port
   exists. A `dispatch` block on a `FORBIDDEN` channel, a missing one on a `REQUIRED`
   channel, or a load-type/unit mismatch all fail at parse time.
 - **No drift.** Runtime code queries by channel key (`self.get_channel_inputs("production")`),
   not by raw tag lists — the declaration is the single source of truth for both validation
-  and simulation. The contract test (§4.7) additionally asserts that every default-intent
+  and simulation. The contract test (§4.7) additionally asserts that every default-dynamic-connection
   declaration references a declared channel.
 - **Why tags, not channel keys, are the wire format.** One could imagine JSON entries
   referencing a channel directly (`"channel": "storage"`) instead of carrying tags. This is
@@ -381,7 +390,7 @@ Rules:
   vocabulary and reinterprets the same participants. Channel matching still validates every
   entry against whichever aggregator is currently the target, so a strategy whose channels
   do not cover a participant's tags fails at parse time rather than silently ignoring it.
-- **Machine-readable interface.** `INTENT_CHANNELS`, together with the config schema and
+- **Machine-readable interface.** `CHANNELS`, together with the config schema and
   default-connection declarations, gives each component a complete machine-readable
   interface description. A schema-dump command (e.g. `python -m hisim.scenario_schema`)
   can export these for tooling — this is the foundation the planned JSON-authoring GUI
@@ -390,8 +399,8 @@ Rules:
 ### 4.6 Naming templates (frozen)
 
 These names appear in result files and KPI lookups, so they are part of the spec, not an
-implementation detail. All template variables come from the *resolved* intent (i.e. after
-default-intent expansion), so a bare pair and an explicit intent with the same parameters
+implementation detail. All template variables come from the *resolved* dynamic connection (i.e. after
+default-dynamic-connection expansion), so a bare pair and an explicit dynamic connection with the same parameters
 produce identical names. No template contains an index counter; any collision is a hard
 error (§5).
 
@@ -399,13 +408,13 @@ error (§5).
 |---|---|---|
 | Component instance id | author-chosen, `[A-Za-z0-9_]+`, unique per scenario; district convention `{building_id}_{role}` | `Battery`, `BUI1_EMS` |
 | Static port | class-declared constant, unchanged by this spec | `ElectricityOutput` |
-| Aggregator input (one per intent) | `{source_output}From{source_id}` | `AcBatteryPowerOutputFromBattery` |
+| Aggregator input (one per dynamic connection) | `{source_output}From{source_id}` | `AcBatteryPowerOutputFromBattery` |
 | Dispatch output (one per `dispatch` block) | `DispatchTo{source_id}_{target_input}` | `DispatchToBattery_LoadingPowerInput` |
 
 Uniqueness follows structurally from the duplicate rules: `(source_id, source_output)` is
-unique per aggregator (duplicate intents are rejected), so input names are unique;
+unique per aggregator (duplicate dynamic connections are rejected), so input names are unique;
 `(source_id, target_input)` is unique (a duplicate wire into the same input is rejected),
-so dispatch names are unique. Multiple intents from one source (e.g. a heat pump's space
+so dispatch names are unique. Multiple dynamic connections from one source (e.g. a heat pump's space
 heating and DHW channels) differ in `source_output` and/or `target_input` and therefore
 get distinct names — e.g. `DispatchToHeatPump_ElectricityTargetSH` vs
 `DispatchToHeatPump_ElectricityTargetDHW`.
@@ -420,10 +429,10 @@ One parametrized test over every component in `hisim/components`:
 1. Build from default config → `to_scenario_dict` → `from_scenario_dict` →
    `build_from_scenario` → `to_scenario_dict` again.
 2. Assert: both dicts identical; port sets (names, load types, units) identical.
-3. For aggregators additionally: default-intent resolution of a fixed participant set is
+3. For aggregators additionally: default-dynamic-connection resolution of a fixed participant set is
    idempotent and order-independent (shuffled input, identical result).
-4. For aggregators additionally: every default-intent declaration matches exactly one
-   declared intent channel (§4.5), and every channel is reachable (no dead channel that
+4. For aggregators additionally: every default-dynamic-connection declaration matches exactly one
+   declared dynamic-connection channel (§4.5), and every channel is reachable (no dead channel that
    no default or known participant can address — a warning-level check at first).
 
 A new component that breaks the "ports = f(class, config)" invariant or writes a lossy
@@ -437,7 +446,7 @@ save hook fails this test by name.
 3. **Static validation** of the connection list: ids resolve, shapes well-formed,
    don't-mix rule (§3.4), duplicate detection.
 4. **Apply** bare-pair defaults and explicit wires.
-5. **Resolve intents**, grouped by target, deterministic order (§4.4).
+5. **Resolve dynamic connections**, grouped by target, deterministic order (§4.4).
 6. **Final validation**, then register everything with the `Simulator`.
 
 **Hard-error catalog** (executor never warns-and-continues):
@@ -445,18 +454,18 @@ save hook fails this test by name.
 - unknown `schema_version` / malformed entry shape
 - unknown component id in any entry; unknown port name in an explicit wire
 - config class not resolvable and no `build_from_scenario` override
-- bare pair whose target declares no defaults (static or intent) for the source class
-- intent addressed to a component that does not resolve intents
-- intent whose tags match zero or more than one declared channel of the target (§4.5)
+- bare pair whose target declares no defaults (static or dynamic) for the source class
+- dynamic connection addressed to a component that does not resolve dynamic connections
+- dynamic connection whose tags match zero or more than one declared channel of the target (§4.5)
 - `dispatch` block present on a `FORBIDDEN` channel, or absent on a `REQUIRED` channel
-- default XOR manual violated for a pair; exact duplicate intent; duplicate wire
+- default XOR manual violated for a pair; exact duplicate dynamic connection; duplicate wire
   (same source port → same target input, across all entries and expansions)
 - explicit wire referencing a resolution-created port
 - unresolvable `${var}` reference; unknown tag/unit/load-type enum value
 - load-type or unit mismatch on any wire
 - mandatory input still unconnected after step 5 (unless the port was declared with
   `allow_unconnected_mandatory`)
-- port-name collision during intent resolution
+- port-name collision during dynamic-connection resolution
 
 The current `log.warning` + `continue` in `json_executor.py` is deleted.
 
@@ -475,8 +484,8 @@ moment intent is executed — nothing is reverse-engineered from the object grap
 - Applying default connections (`connect_automatically` today, an explicit
   `sim.connect_default(source, target)` after migration) → one bare pair entry.
 - `connect_input(...)` → explicit wire entry.
-- New call `sim.connect_intent(source, aggregator, tags=..., weight=..., output=...,
-  dispatch=...)` (or the no-arg default variant) → intent entry. This single call replaces
+- New call `sim.connect_dynamic(source, aggregator, tags=..., weight=..., output=...,
+  dispatch=...)` (or the no-arg default variant) → dynamic-connection entry. This single call replaces
   today's triple of `add_component_inputs_and_connect` + `add_component_output` +
   back-channel `connect_input` in every setup.
 
@@ -499,8 +508,8 @@ reviewable and testable MRs with dependency graph) is maintained in
 2. **Special-case components.** Weather, UTSP connector, Car, EV charge controller get
    their overrides; the corresponding central blocks and all `humps` usage die.
 3. **Aggregators, one per PR, EMS first.** Remove constructor-created dynamic outputs,
-   implement `resolve_intents` + default-intent declarations, update every setup touching
-   that component to `connect_intent`, regenerate affected goldens. Then the four meters,
+   implement `resolve_dynamic_connections` + default-dynamic-connection declarations, update every setup touching
+   that component to `connect_dynamic`, regenerate affected goldens. Then the four meters,
    then Building. Dynamic output field names change (`OutputN` → semantic names), so
    result-file goldens regenerate here.
 4. **Setup conversion.** Remaining setups moved to the recording API; all 23 scenario
@@ -538,5 +547,5 @@ reviewable and testable MRs with dependency graph) is maintained in
    not throwaway — it is what keeps generation lossless until the GUI cutover.
 3. **Naming templates: frozen** as specified in §4.6.
 4. **`Building` as aggregator: confirmed.** Its dynamic heat-source inputs map onto
-   monitored-only intents (no `dispatch` block); it needs no special treatment beyond the
+   monitored-only dynamic connections (no `dispatch` block); it needs no special treatment beyond the
    standard aggregator protocol.

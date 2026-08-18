@@ -132,7 +132,8 @@ class DynamicComponent(Component):
             unit=source_unit,
             sankey_flow_direction=True,
             output_description=output_description,
-            source_component_class=source_component_class
+            source_component_class=source_component_class,
+            component_id=self.config.component_id,
         )
         self.outputs.append(myoutput)
         setattr(self, label, myoutput)

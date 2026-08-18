@@ -16,6 +16,7 @@ from __future__ import annotations
 # clean
 
 import enum
+import typing
 
 
 @enum.unique
@@ -378,3 +379,18 @@ class DistrictNames(str, enum.Enum):
     DISTRICT = "District"
     AREA = "Area"
     NEIGHBORHOOD = "Neighborhood"
+
+    @classmethod
+    def is_district(cls, building: typing.Optional[str]) -> bool:
+        """Tells whether a building object denotes a district rather than a single building.
+
+        District system setups give their aggregating components a building whose value is one
+        of the members of this enum, while ordinary buildings use names such as ``"BUI1"``.
+        Postprocessing used to decide this by searching every enum value as a substring of the
+        component name; now that a component carries its building as a structured field, the
+        same question is answered by comparing that field against the enum members. A missing
+        building (``None``) is never a district.
+        """
+        if building is None:
+            return False
+        return building in {member.value for member in cls}

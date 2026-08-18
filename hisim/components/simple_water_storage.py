@@ -14,6 +14,7 @@ import hisim.component as cp
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import (
+    ComponentID,
     SingleTimeStepValues,
     ComponentInput,
     ComponentOutput,
@@ -78,8 +79,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return SimpleHotWaterStorage.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     volume_heating_water_storage_in_liter: float
     heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float
     heat_exchanger_is_present: bool
@@ -100,16 +100,17 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     @classmethod
     def get_default_simplehotwaterstorage_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "SimpleHotWaterStorageConfig":
         """Get a default simplehotwaterstorage config."""
+        if component_id is None:
+            component_id = ComponentID(name="SimpleHotWaterStorage")
         volume_heating_water_storage_in_liter: float = 500
         position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = (
             PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE
         )
         config = SimpleHotWaterStorageConfig(
-            building_name=building_name,
-            name="SimpleHotWaterStorage",
+            component_id=component_id,
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
@@ -128,10 +129,10 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         cls,
         max_thermal_power_in_watt_of_heating_system: float,
         name: str = "SimpleHotWaterStorage",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         sizing_option: HotWaterStorageSizingEnum = HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM,
     ) -> "SimpleHotWaterStorageConfig":
-        """Gets a default storage with scaling according to heating load of the building_name.
+        """Gets a default storage with scaling according to the heating load of the building.
 
         The information for scaling the buffer storage is taken from the heating system guidelines from Buderus:
         https://www.baunetzwissen.de/heizung/fachwissen/speicher/dimensionierung-von-pufferspeichern-161296
@@ -141,6 +142,8 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         """
 
         # if the used heating system is a heat pump use formular
+        if component_id is None:
+            component_id = ComponentID(name=name)
         if sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP:
 
             volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 50
@@ -170,8 +173,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         )
 
         config = SimpleHotWaterStorageConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             volume_heating_water_storage_in_liter=round(volume_heating_water_storage_in_liter, 2),
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
@@ -196,8 +198,7 @@ class SimpleHotWaterStorageControllerConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return SimpleHotWaterStorageController.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
 
     @classmethod
     def get_default_simplehotwaterstoragecontroller_config(
@@ -205,8 +206,7 @@ class SimpleHotWaterStorageControllerConfig(cp.ConfigBase):
     ) -> Any:
         """Get a default simplehotwaterstorage controller config."""
         config = SimpleHotWaterStorageControllerConfig(
-            building_name="BUI1",
-            name="SimpleHotWaterStorageController",
+            component_id=ComponentID(name="SimpleHotWaterStorageController"),
         )
         return config
 
@@ -221,8 +221,7 @@ class SimpleDHWStorageConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return SimpleDHWStorage.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     volume_heating_water_storage_in_liter: float
     heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float
     #: CO2 footprint of investment in kg
@@ -239,14 +238,15 @@ class SimpleDHWStorageConfig(cp.ConfigBase):
     @classmethod
     def get_default_simpledhwstorage_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "SimpleDHWStorageConfig":
         """Get a default simplehotwaterstorage config."""
+        if component_id is None:
+            component_id = ComponentID(name="DHWStorage")
         volume_heating_water_storage_in_liter: float = 250
 
         config = SimpleDHWStorageConfig(
-            building_name=building_name,
-            name="DHWStorage",
+            component_id=component_id,
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=0.36,
             # capex and device emissions are calculated in get_cost_capex function by default
@@ -264,16 +264,17 @@ class SimpleDHWStorageConfig(cp.ConfigBase):
         number_of_apartments: int = 1,
         default_volume_in_liter: float = 250.0,
         name: str = "DHWStorage",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "SimpleDHWStorageConfig":
         """Gets a default storage with scaling according to number of apartments."""
 
         # if the used heating system is a heat pump use formular
 
+        if component_id is None:
+            component_id = ComponentID(name=name)
         volume = default_volume_in_liter * max(number_of_apartments, 1)
         config = SimpleDHWStorageConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             volume_heating_water_storage_in_liter=volume,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=0.36,
             # capex and device emissions are calculated in get_cost_capex function by default

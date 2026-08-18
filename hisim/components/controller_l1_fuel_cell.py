@@ -2,10 +2,11 @@
 
 # clean
 from pathlib import Path
-from typing import List, Any
+from typing import Optional, List, Any
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+from hisim.component import ComponentID
 from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
 
 from hisim import loadtypes as lt
@@ -32,8 +33,7 @@ class FuelCellControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return FuelCellController.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     nom_output: float
     min_output: float
     max_output: float
@@ -46,12 +46,13 @@ class FuelCellControllerConfig(ConfigBase):
     @classmethod
     def get_default_fuel_cell_controller_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Get a default electrolyzer controller config."""
+        if component_id is None:
+            component_id = ComponentID(name="Default fuel cell controller")
         config = FuelCellControllerConfig(
-            building_name=building_name,
-            name="Default fuel cell controller",
+            component_id=component_id,
             nom_output=100.0,
             min_output=10.0,
             max_output=110.0,
@@ -74,15 +75,16 @@ class FuelCellControllerConfig(ConfigBase):
     def control_fuel_cell(
         cls,
         fuel_cell_name: str,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Initializes the config variables based on the JSON-file."""
 
+        if component_id is None:
+            component_id = ComponentID(name="Fuel Cell Controller")
         config_json = cls.read_config(fuel_cell_name)
 
         config = FuelCellControllerConfig(
-            building_name=building_name,
-            name="Fuel Cell Controller",  # config_json.get("name", "")
+            component_id=component_id,  # config_json.get("name", "")
             nom_output=config_json.get("nom_output", 0.0),
             min_output=config_json.get("min_output", 0.0),
             max_output=config_json.get("max_output", 0.0),

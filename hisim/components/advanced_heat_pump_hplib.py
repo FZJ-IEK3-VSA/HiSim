@@ -17,6 +17,7 @@ from hplib import hplib as hpl
 
 # Import modules from HiSim
 from hisim.component import (
+    ComponentID,
     Component,
     ComponentInput,
     ComponentOutput,
@@ -69,8 +70,7 @@ class HeatPumpHplibConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return HeatPumpHplib.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     model: str
     group_id: int
     heating_reference_temperature_in_celsius: Quantity[float, Celsius]  # before t_in
@@ -95,16 +95,17 @@ class HeatPumpHplibConfig(ConfigBase):
         cls,
         set_thermal_output_power_in_watt: Quantity[float, Watt] = Quantity(8000, Watt),
         heating_reference_temperature_in_celsius: Quantity[float, Celsius] = Quantity(-7.0, Celsius),
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "HeatPumpHplibConfig":
         """Gets a default HPLib Heat Pump.
 
         see default values for air/water hp on:
         https://github.com/FZJ-IEK3-VSA/hplib/blob/main/hplib/hplib.py l.135 "fit_p_th_ref.
         """
+        if component_id is None:
+            component_id = ComponentID(name="AdvancedHeatPumpHPLib")
         return HeatPumpHplibConfig(
-            building_name=building_name,
-            name="AdvancedHeatPumpHPLib",
+            component_id=component_id,
             model="Generic",
             group_id=1,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
@@ -127,15 +128,16 @@ class HeatPumpHplibConfig(ConfigBase):
         heating_load_of_building_in_watt: Quantity[float, Watt],
         heating_reference_temperature_in_celsius: Quantity[float, Celsius] = Quantity(-7.0, Celsius),
         name: str = "AdvancedHeatPumpHPLib",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "HeatPumpHplibConfig":
-        """Gets a default heat pump with scaling according to heating load of the building_name."""
+        """Gets a default heat pump with scaling according to the heating load of the building."""
 
+        if component_id is None:
+            component_id = ComponentID(name=name)
         set_thermal_output_power_in_watt: Quantity[float, Watt] = heating_load_of_building_in_watt
 
         return HeatPumpHplibConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             model="Generic",
             group_id=1,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
@@ -930,8 +932,7 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
         """Returns the full class name of the base class."""
         return HeatPumpHplibController.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     mode: int
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
     set_cooling_threshold_outside_temperature_in_celsius: Optional[float]
@@ -942,13 +943,14 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
         cls,
         heat_distribution_system_type: Any,
         mode: int = 2,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         name: str = "HeatPumpController",
     ) -> "HeatPumpHplibControllerL1Config":
         """Gets a default Generic Heat Pump Controller."""
+        if component_id is None:
+            component_id = ComponentID(name=name)
         return HeatPumpHplibControllerL1Config(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             mode=mode,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             set_cooling_threshold_outside_temperature_in_celsius=20.0,

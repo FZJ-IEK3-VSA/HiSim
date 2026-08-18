@@ -12,6 +12,7 @@ import pandas as pd
 
 # Import modules from HiSim
 from hisim.component import (
+    ComponentID,
     Component,
     ComponentInput,
     ComponentOutput,
@@ -48,10 +49,8 @@ class BatteryConfig(ConfigBase):
         """Return the full class name of the base class."""
         return Battery.get_full_classname()
 
-    #: building_name in which component is
-    building_name: str
-    #: name of the device
-    name: str
+    #: structured identity (name, building, unit) of the component
+    component_id: ComponentID
     #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int
     #: name of battery to search in database (bslib)
@@ -78,14 +77,15 @@ class BatteryConfig(ConfigBase):
     lifetime_in_cycles: float
 
     @classmethod
-    def get_default_config(cls, building_name: str = "BUI1", name: str = "Battery") -> "BatteryConfig":
+    def get_default_config(cls, component_id: Optional[ComponentID] = None, name: str = "Battery") -> "BatteryConfig":
         """Returns default configuration of battery."""
+        if component_id is None:
+            component_id = ComponentID(name=name)
         custom_battery_capacity_generic_in_kilowatt_hour = (
             10  # size/capacity of battery should be approx. the same as default pv power
         )
         config = BatteryConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
             custom_battery_capacity_generic_in_kilowatt_hour=round(custom_battery_capacity_generic_in_kilowatt_hour, 2),
             custom_pv_inverter_power_generic_in_watt=round(10 * 0.5 * 1e3, 2),  # c-rate is 0.5C (0.5/h) here
@@ -105,16 +105,17 @@ class BatteryConfig(ConfigBase):
 
     @classmethod
     def get_scaled_battery(
-        cls, total_pv_power_in_watt_peak: float, building_name: str = "BUI1", name: str = "Battery"
+        cls, total_pv_power_in_watt_peak: float, component_id: Optional[ComponentID] = None, name: str = "Battery"
     ) -> "BatteryConfig":
         """Returns scaled configuration of battery according to pv power."""
+        if component_id is None:
+            component_id = ComponentID(name=name)
         custom_battery_capacity_generic_in_kilowatt_hour = (
             total_pv_power_in_watt_peak * 1e-3
         )  # size/capacity of battery should be approx. the same as default pv power
         c_rate = 0.5  # 0.5C corresponds to 0.5/h for fully charging or discharging
         config = BatteryConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
             custom_battery_capacity_generic_in_kilowatt_hour=round(custom_battery_capacity_generic_in_kilowatt_hour, 2),
             custom_pv_inverter_power_generic_in_watt=round(custom_battery_capacity_generic_in_kilowatt_hour * c_rate * 1e3, 2),

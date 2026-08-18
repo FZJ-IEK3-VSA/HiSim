@@ -15,6 +15,7 @@ from hisim.components.example_transformer import (
     ExampleTransformerConfig,
 )
 from hisim.components.sumbuilder import SumBuilderForTwoInputs, SumBuilderConfig
+from hisim.component import ComponentID
 
 
 def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
@@ -40,8 +41,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # Create first RandomNumbers object and adds to simulator
     my_rn1 = RandomNumbers(
         config=RandomNumbersConfig(
-            building_name="BUI1",
-            name="Random numbers 100-200",
+            component_id=ComponentID(name="Random numbers 100-200"),
             timesteps=my_simulation_parameters.timesteps,
             minimum=100,
             maximum=200,
@@ -53,8 +53,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # Create second RandomNumbers object and adds to simulator
     my_rn2 = RandomNumbers(
         config=RandomNumbersConfig(
-            building_name="BUI1",
-            name="Random numbers 10-20",
+            component_id=ComponentID(name="Random numbers 10-20"),
             timesteps=my_simulation_parameters.timesteps,
             minimum=10,
             maximum=20,

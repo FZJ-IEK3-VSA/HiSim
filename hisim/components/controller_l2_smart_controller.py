@@ -6,7 +6,7 @@
 from typing import List, Union, Dict, Optional, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from hisim.component import Component, SingleTimeStepValues, ConfigBase, DisplayConfig
+from hisim.component import ComponentID, Component, SingleTimeStepValues, ConfigBase, DisplayConfig
 from hisim.components.generic_heat_pump import (
     GenericHeatPumpController,
     GenericHeatPumpControllerConfig,
@@ -24,8 +24,7 @@ from hisim.simulationparameters import SimulationParameters
 class SmartControllerConfig(ConfigBase):
     """Smart Controller Config."""
 
-    building_name: str
-    name: str
+    component_id: ComponentID
 
     @classmethod
     def get_main_classname(cls) -> str:
@@ -35,12 +34,13 @@ class SmartControllerConfig(ConfigBase):
     @classmethod
     def get_default_config_ems(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "SmartControllerConfig":
         """Default Config for Energy Management System."""
+        if component_id is None:
+            component_id = ComponentID(name="SmartController")
         config = SmartControllerConfig(
-            building_name=building_name,
-            name="SmartController",
+            component_id=component_id,
         )
         return config
 
@@ -111,8 +111,9 @@ class SmartController(Component):
         for controller_name in controller_type_to_field_names:
             if "HeatPump" in controller_name:
                 heat_pump_config = GenericHeatPumpControllerConfig(
-                    building_name=self.config.building_name,
-                    name="generic heat pump controller",
+                    component_id=ComponentID(
+                        name="generic heat pump controller", building=self.config.component_id.building
+                    ),
                     temperature_air_heating_in_celsius=15,
                     temperature_air_cooling_in_celsius=25,
                     offset_in_celsius=0,

@@ -15,14 +15,14 @@ or temperature is between upper target and increased upper target from ESM
 # Owned
 import importlib
 from dataclasses import dataclass
-from typing import List
+from typing import Optional, List
 from dataclasses_json import dataclass_json
 import pandas as pd
 
 # Generic/Built-in
 from hisim import component as cp
 from hisim import utils
-from hisim.component import ConfigBase
+from hisim.component import ComponentID, ConfigBase
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
@@ -42,9 +42,7 @@ __status__ = "development"
 class L1HeatPumpConfig(ConfigBase):
     """L1 Controller Config."""
 
-    building_name: str
-    #: name of the device
-    name: str
+    component_id: ComponentID
     #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int
     #: lower set temperature of building, given in °C
@@ -70,12 +68,13 @@ class L1HeatPumpConfig(ConfigBase):
     @staticmethod
     def get_default_config_heat_source_controller(
         name: str = "Controller",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "L1HeatPumpConfig":
         """Returns default configuration for the controller of building heating."""
+        if component_id is None:
+            component_id = ComponentID(name=name)
         config = L1HeatPumpConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             source_weight=1,
             t_min_heating_in_celsius=19.5,
             t_max_heating_in_celsius=20.5,
@@ -90,13 +89,14 @@ class L1HeatPumpConfig(ConfigBase):
     @staticmethod
     def get_default_config_heat_source_controller_buffer(
         name: str = "Controller",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "L1HeatPumpConfig":
         """Returns default configuration for the controller of buffer heating."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
+        if component_id is None:
+            component_id = ComponentID(name=name)
         config = L1HeatPumpConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             source_weight=1,
             t_min_heating_in_celsius=30.0,
             t_max_heating_in_celsius=40.0,
@@ -111,12 +111,13 @@ class L1HeatPumpConfig(ConfigBase):
     @staticmethod
     def get_default_config_heat_source_controller_dhw(
         name: str = "Controller",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "L1HeatPumpConfig":
         """Returns default configuration for the controller of a drain hot water storage."""
+        if component_id is None:
+            component_id = ComponentID(name=name)
         config = L1HeatPumpConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             source_weight=1,
             t_min_heating_in_celsius=40.0,
             t_max_heating_in_celsius=60.0,

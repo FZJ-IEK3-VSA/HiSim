@@ -229,9 +229,9 @@ def test_get_default_config_chp_basic() -> None:
     assert config.p_el == pytest.approx(660)
     assert config.p_fuel == pytest.approx(2000)
     assert config.fuel_type == lt.LoadTypes.GAS
-    assert config.name == "CHP"
+    assert config.component_id.name == "CHP"
     assert config.source_weight == 1
-    assert config.building_name == "BUI1"
+    assert config.component_id.building is None
 
 
 @pytest.mark.base
@@ -244,19 +244,19 @@ def test_get_default_config_chp_zero() -> None:
 
 
 @pytest.mark.base
-def test_get_default_config_chp_default_building_name() -> None:
-    """Omitting building_name uses the default 'BUI1'."""
+def test_get_default_config_chp_default_building() -> None:
+    """Omitting the component_id leaves the identity without a building."""
     config = generic_chp.CHPConfig.get_default_config_chp(thermal_power=1000)
-    assert config.building_name == "BUI1"
+    assert config.component_id.building is None
 
 
 @pytest.mark.base
 def test_get_default_config_chp_custom_building_and_powers() -> None:
     """Test CHPConfig.get_default_config_chp with a custom building name and thermal_power=500."""
     config = generic_chp.CHPConfig.get_default_config_chp(
-        thermal_power=500, building_name="Custom"
+        thermal_power=500, component_id=cp.ComponentID(name="CHP", building="Custom")
     )
-    assert config.building_name == "Custom"
+    assert config.component_id.building == "Custom"
     assert config.p_th == 500
     assert config.p_el == pytest.approx(330)
     assert config.p_fuel == pytest.approx(1000)

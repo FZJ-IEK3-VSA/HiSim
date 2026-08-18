@@ -12,6 +12,7 @@ from dataclasses_json import dataclass_json
 from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.component import (
+    ComponentID,
     Component,
     ComponentConnection,
     SingleTimeStepValues,
@@ -57,8 +58,7 @@ class ElectricHeatingConfig(ConfigBase):
         """Return the full class name of the base class."""
         return ElectricHeating.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     # # Maximum electric power that can be delivered
     maximum_electric_power_w: float
     # Efficiency for electric to thermal power conversion
@@ -78,14 +78,15 @@ class ElectricHeatingConfig(ConfigBase):
     @classmethod
     def get_default_electric_heating_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         with_domestic_hot_water_preparation: bool = False,
         maximum_electric_power_w: float = 40000,
     ) -> "ElectricHeatingConfig":
         """Get a default Electric heating."""
+        if component_id is None:
+            component_id = ComponentID(name="ElectricHeating")
         config = ElectricHeatingConfig(
-            building_name=building_name,
-            name="ElectricHeating",
+            component_id=component_id,
             maximum_electric_power_w=maximum_electric_power_w,
             efficiency=1.0,  # 100% efficiency
             # capex and device emissions are calculated in get_cost_capex function by default
@@ -736,8 +737,7 @@ class ElectricHeatingControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return ElectricHeatingController.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     set_heating_threshold_outside_temperature_in_celsius: float
     with_domestic_hot_water_preparation: bool
     hysteresis_water_temperature_offset: float
@@ -747,15 +747,16 @@ class ElectricHeatingControllerConfig(ConfigBase):
     @classmethod
     def get_default_electric_heating_controller_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         with_domestic_hot_water_preparation: bool = False,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         parallel_space_heating_and_dhw_option: bool = False,
     ) -> "ElectricHeatingControllerConfig":
         """Gets a default electric heating controller."""
+        if component_id is None:
+            component_id = ComponentID(name="ElectricHeatingController")
         return ElectricHeatingControllerConfig(
-            building_name=building_name,
-            name="ElectricHeatingController",
+            component_id=component_id,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
             hysteresis_water_temperature_offset=15,
@@ -767,19 +768,20 @@ class ElectricHeatingControllerConfig(ConfigBase):
     def get_electric_heating_config_based_on_building_efficiency(
         cls,
         specific_heating_load_of_building_in_watt_per_m2: float,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         with_domestic_hot_water_preparation: bool = False,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         parallel_space_heating_and_dhw_option: bool = False,
     ) -> "ElectricHeatingControllerConfig":
         """Gets a default electric heating controller."""
+        if component_id is None:
+            component_id = ComponentID(name="ElectricHeatingController")
         set_heating_threshold_outside_temperature_in_celsius = HeatDistributionControllerConfig.set_heating_threshold_temperature_based_on_building_efficiency(
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             specific_heating_load_of_building_in_watt_per_m2=specific_heating_load_of_building_in_watt_per_m2,
         )
         return ElectricHeatingControllerConfig(
-            building_name=building_name,
-            name="ElectricHeatingController",
+            component_id=component_id,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
             hysteresis_water_temperature_offset=15,

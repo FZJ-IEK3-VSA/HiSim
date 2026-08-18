@@ -9,13 +9,14 @@ and needs a constant input of hydrogen or natural gas.
 # clean
 
 from dataclasses import dataclass
-from typing import ClassVar, List
+from typing import Optional, ClassVar, List
 
 from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components import controller_l1_chp
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -32,9 +33,7 @@ __status__ = "development"
 class CHPConfig(cp.ConfigBase):
     """Defininition of configuration of combined heat and power plant (CHP)."""
 
-    building_name: str
-    #: name of the CHP
-    name: str
+    component_id: ComponentID
     #: priority of the component in hierachy: the higher the number the lower the priority
     source_weight: int
     #: type of CHP (fuel cell or gas driven)
@@ -49,7 +48,7 @@ class CHPConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config_chp(
         thermal_power: float,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "CHPConfig":
         """Build a default gas-driven CHP configuration from a rated thermal power.
 
@@ -59,15 +58,16 @@ class CHPConfig(cp.ConfigBase):
 
         Args:
             thermal_power: Rated thermal output of the CHP in Watt when running.
-            building_name: Identifier of the building the CHP belongs to.
+            component_id: Structured identity (name, building, unit) of the CHP.
 
         Returns:
             A `CHPConfig` configured for a natural-gas CHP with the given thermal
             power.
         """
+        if component_id is None:
+            component_id = ComponentID(name="CHP")
         config = CHPConfig(
-            building_name=building_name,
-            name="CHP",
+            component_id=component_id,
             source_weight=1,
             fuel_type=lt.LoadTypes.GAS,
             p_el=(0.33 / 0.5) * thermal_power,
@@ -79,7 +79,7 @@ class CHPConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config_fuelcell(
         thermal_power: float,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "CHPConfig":
         """Build a default green-hydrogen fuel-cell configuration from a rated thermal power.
 
@@ -90,15 +90,16 @@ class CHPConfig(cp.ConfigBase):
         Args:
             thermal_power: Rated thermal output of the fuel cell in Watt when
                 running.
-            building_name: Identifier of the building the fuel cell belongs to.
+            component_id: Structured identity (name, building, unit) of the fuel cell.
 
         Returns:
             A `CHPConfig` configured for a green-hydrogen fuel cell with the given
             thermal power.
         """
+        if component_id is None:
+            component_id = ComponentID(name="CHP")
         config = CHPConfig(
-            building_name=building_name,
-            name="CHP",
+            component_id=component_id,
             source_weight=1,
             fuel_type=lt.LoadTypes.GREEN_HYDROGEN,
             p_el=(0.48 / 0.43) * thermal_power,

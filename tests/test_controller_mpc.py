@@ -13,6 +13,7 @@ import pytest
 from hisim.components.controller_mpc import MpcController, MpcControllerConfig
 from hisim.loadtypes import Units
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 
 # Non-zero thermal coefficients so statespace() does not divide by zero.
 H_TR_W = 50.0
@@ -26,8 +27,7 @@ C_M = 1.5e7
 def _make_mpc_config() -> MpcControllerConfig:
     """Builds an MpcControllerConfig with predictive=False to avoid singleton deps."""
     return MpcControllerConfig(
-        building_name="BUI1",
-        name="MpcController",
+        component_id=ComponentID(name="MpcController"),
         mpc_scheme="optimization_once_aday_only",
         min_comfort_temp_in_celsius=21.0,
         max_comfort_temp_in_celsius=23.0,

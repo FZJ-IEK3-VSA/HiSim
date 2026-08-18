@@ -17,6 +17,7 @@ from hisim.components import building
 from hisim.components import idealized_electric_heater
 from hisim import log
 from hisim import utils
+from hisim.component import ComponentID
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -119,8 +120,7 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Build Fake Heater Config
     my_idealized_electric_heater_config = idealized_electric_heater.IdealizedHeaterConfig(
-        building_name="BUI1",
-        name="IdealizedElectricHeater",
+        component_id=ComponentID(name="IdealizedElectricHeater"),
         set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
         set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
     )

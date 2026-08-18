@@ -20,7 +20,7 @@ import casadi as ca
 # Owned
 from hisim import utils
 from hisim import component as cp
-from hisim.component import ConfigBase
+from hisim.component import ComponentID, ConfigBase
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
@@ -53,10 +53,7 @@ class MpcControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return MpcController.get_full_classname()
 
-    building_name: str
-    # parameter_string: str
-    # my_simulation_parameters: SimulationParameters
-    name: str
+    component_id: ComponentID
     mpc_scheme: str
     min_comfort_temp_in_celsius: float
     max_comfort_temp_in_celsius: float
@@ -115,12 +112,13 @@ class MpcControllerConfig(ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "MpcControllerConfig":
         """Gets a default MPC controller."""
+        if component_id is None:
+            component_id = ComponentID(name="MpcController")
         return MpcControllerConfig(
-            building_name=building_name,
-            name="MpcController",
+            component_id=component_id,
             mpc_scheme="optimization_once_aday_only",
             min_comfort_temp_in_celsius=21.0,
             max_comfort_temp_in_celsius=23.0,

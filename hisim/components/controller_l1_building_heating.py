@@ -19,7 +19,7 @@ import importlib
 from dataclasses import dataclass
 
 # Owned
-from typing import List
+from typing import Optional, List
 
 from dataclasses_json import dataclass_json
 
@@ -29,6 +29,7 @@ from hisim.components.building import Building
 from hisim.components import controller_l2_energy_management_system
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 
 __authors__ = "edited Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -45,9 +46,7 @@ __status__ = "development"
 class L1BuildingHeatingConfig(cp.ConfigBase):
     """Configuration of Building Controller."""
 
-    building_name: str
-    #: name of the device
-    name: str
+    component_id: ComponentID
     #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int
     #: lower set temperature of building, given in °C
@@ -64,12 +63,13 @@ class L1BuildingHeatingConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config_heating(
         name: str,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> L1BuildingHeatingConfig:
         """Default config for the heating controller."""
+        if component_id is None:
+            component_id = ComponentID(name="L1BuildingTemperatureController" + name)
         config = L1BuildingHeatingConfig(
-            building_name=building_name,
-            name="L1BuildingTemperatureController" + name,
+            component_id=component_id,
             source_weight=1,
             t_min_heating_in_celsius=19.5,
             t_max_heating_in_celsius=20.5,

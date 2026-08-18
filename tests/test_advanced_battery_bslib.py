@@ -6,6 +6,7 @@ from hisim.components import advanced_battery_bslib
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.component import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -34,11 +35,10 @@ def test_advanced_battery_bslib() -> None:
     subsidy_as_percentage_of_investment_costs = 0.0
 
     my_advanced_battery_config = advanced_battery_bslib.BatteryConfig(
-        building_name="BUI1",
         system_id=system_id,
         custom_pv_inverter_power_generic_in_watt=p_inv_custom,
         custom_battery_capacity_generic_in_kilowatt_hour=e_bat_custom,
-        name=name,
+        component_id=ComponentID(name=name),
         source_weight=source_weight,
         charge_in_kwh=charge_in_kwh,
         discharge_in_kwh=discharge_in_kwh,
@@ -131,11 +131,10 @@ def test_advanced_battery_bslib_get_cost_capex_zero_lifetime_in_cycles() -> None
     subsidy_as_percentage_of_investment_costs = 0.0
 
     my_advanced_battery_config = advanced_battery_bslib.BatteryConfig(
-        building_name="BUI1",
         system_id=system_id,
         custom_pv_inverter_power_generic_in_watt=p_inv_custom,
         custom_battery_capacity_generic_in_kilowatt_hour=e_bat_custom,
-        name=name,
+        component_id=ComponentID(name=name),
         source_weight=source_weight,
         charge_in_kwh=charge_in_kwh,
         discharge_in_kwh=discharge_in_kwh,

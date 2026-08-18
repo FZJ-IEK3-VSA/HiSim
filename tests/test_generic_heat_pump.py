@@ -5,6 +5,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components import generic_heat_pump
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 
 
 @pytest.mark.base
@@ -42,9 +43,8 @@ def test_generic_heat_pump() -> None:
     # Set Heat Pump
     my_heat_pump = generic_heat_pump.GenericHeatPump(
         config=generic_heat_pump.GenericHeatPumpConfig(
-            building_name="BUI1",
             manufacturer=manufacturer,
-            name="GenericHeatPump",
+            component_id=ComponentID(name="GenericHeatPump"),
             heat_pump_name=heat_pump_name,
             min_operation_time=minimum_idle_time,
             min_idle_time=minimum_operation_time,
@@ -55,8 +55,7 @@ def test_generic_heat_pump() -> None:
     # Set Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
         config=generic_heat_pump.GenericHeatPumpControllerConfig(
-            building_name="BUI1",
-            name="GenericHeatPumpController",
+            component_id=ComponentID(name="GenericHeatPumpController"),
             temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
             temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
             offset_in_celsius=offset_in_celsius,
@@ -121,9 +120,8 @@ def test_set_time_correction_raises_runtime_error_when_called_twice() -> None:
 
     my_heat_pump = generic_heat_pump.GenericHeatPump(
         config=generic_heat_pump.GenericHeatPumpConfig(
-            building_name="BUI1",
             manufacturer="Viessmann Werke GmbH & Co KG",
-            name="GenericHeatPump",
+            component_id=ComponentID(name="GenericHeatPump"),
             heat_pump_name="Vitocal 300-A AWO-AC 301.B07",
             min_operation_time=30,
             min_idle_time=15,

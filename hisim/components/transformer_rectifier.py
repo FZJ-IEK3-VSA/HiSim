@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
+from hisim.component import ComponentID
 from hisim.component import StatelessComponent, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -36,14 +37,15 @@ class TransformerConfig(ConfigBase):
 
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
-    building_name: str
-    name: str
+    component_id: ComponentID
     efficiency: float  # conversion efficiency as a fraction in [0, 1] (not a percentage)
 
     @classmethod
     def get_default_transformer_config(cls) -> TransformerConfig:
         """Gets a default ``TransformerConfig`` instance."""
-        return TransformerConfig(building_name="BUI1", name="Generic Transformer and rectifier Unit", efficiency=0.95)
+        return TransformerConfig(
+            component_id=ComponentID(name="Generic Transformer and rectifier Unit"), efficiency=0.95
+        )
 
 
 class Transformer(StatelessComponent):

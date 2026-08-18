@@ -17,7 +17,7 @@ from windpowerlib import ModelChain, WindTurbine
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import ConfigBase, OpexCostDataClass, CapexCostDataClass
+from hisim.component import ComponentID, ConfigBase, OpexCostDataClass, CapexCostDataClass
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
@@ -49,8 +49,7 @@ class WindturbineConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return Windturbine.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     # Typename of the wind turbine.
     turbine_type: str
     # Hub height of the wind turbine in m.
@@ -95,12 +94,13 @@ class WindturbineConfig(ConfigBase):
     @classmethod
     def get_default_windturbine_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "WindturbineConfig":
         """Gets a default windturbine."""
+        if component_id is None:
+            component_id = ComponentID(name="Windturbine")
         return WindturbineConfig(
-            building_name=building_name,
-            name="Windturbine",
+            component_id=component_id,
             turbine_type="V126/3300",
             hub_height=137,
             nominal_power=None,

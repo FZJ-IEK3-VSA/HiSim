@@ -102,9 +102,7 @@ def test_config_from_dict_accepts_legacy_field_names() -> None:
     ``temperature_out_in_celsius``. Loading it must still work and emit a
     DeprecationWarning guiding users to the new names.
     """
-    config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_temperature(
-        building_name="BUI1"
-    )
+    config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_temperature()
 
     # from_dict path: to_dict() returns enum members, which from_dict accepts.
     legacy_dict = config.to_dict()
@@ -156,7 +154,7 @@ def test_get_default_config_near_surface_brine_temperature() -> None:
     """The renamed factory sets the near-surface brine temperature mode."""
     config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_near_surface_brine_temperature()
     assert config.heat_source_type is simple_heat_source.SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE
-    assert config.name == "HeatSourceVarBrineTemperature"
+    assert config.component_id.name == "HeatSourceVarBrineTemperature"
 
 
 @pytest.mark.base
@@ -165,4 +163,4 @@ def test_deprecated_get_default_config_var_brinetemperature_alias() -> None:
     with pytest.warns(DeprecationWarning, match="get_default_config_var_brinetemperature"):
         config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_var_brinetemperature()
     assert config.heat_source_type is simple_heat_source.SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE
-    assert config.name == "HeatSourceVarBrineTemperature"
+    assert config.component_id.name == "HeatSourceVarBrineTemperature"

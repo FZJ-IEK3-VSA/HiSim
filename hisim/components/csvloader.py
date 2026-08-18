@@ -23,6 +23,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 
 
 @dataclass_json
@@ -31,7 +32,7 @@ class CSVLoaderConfig(cp.ConfigBase):
     """Configuration for the :class:`CSVLoader` component.
 
     Args:
-        building_name: Name of the building this loader belongs to.
+        component_id: Structured identity (name, building, unit) of this loader.
         name: Display name of the load profile.
         csv_filename: Filename of the CSV file containing the profile data.
         column: Zero-based index of the column holding the profile values.
@@ -44,8 +45,7 @@ class CSVLoaderConfig(cp.ConfigBase):
         output_description: Description text for the output channel.
     """
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     csv_filename: str
     column: int
     loadtype: lt.LoadTypes

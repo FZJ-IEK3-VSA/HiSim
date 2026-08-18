@@ -18,7 +18,7 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import CapexCostDataClass, OpexCostDataClass
+from hisim.component import ComponentID, CapexCostDataClass, OpexCostDataClass
 from hisim.components.building import Building
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
 from hisim.simulationparameters import SimulationParameters
@@ -49,20 +49,20 @@ class NightSetbackConfig(cp.ConfigBase):
         """Return the full class name of the controller."""
         return NightSetbackController.get_full_classname()  # type: ignore[no-any-return]
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     setback_delta_in_kelvin: float
     night_start_hour: int
     night_end_hour: int
 
     @staticmethod
     def get_default_config(
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "NightSetbackConfig":
         """Return a default configuration with a 22:00 to 06:00 setback window."""
+        if component_id is None:
+            component_id = ComponentID(name="NightSetbackController")
         return NightSetbackConfig(
-            building_name=building_name,
-            name="NightSetbackController",
+            component_id=component_id,
             setback_delta_in_kelvin=-4.0,
             night_start_hour=22,
             night_end_hour=6,

@@ -9,7 +9,7 @@ from dataclasses_json import dataclass_json
 
 # Owned
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
+from hisim.component import ComponentID, Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.component import ConfigBase
 
@@ -33,10 +33,7 @@ class ExampleComponentConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return ExampleComponent.get_full_classname()
 
-    building_name: str
-    # parameter_string: str
-    # my_simulation_parameters: SimulationParameters
-    name: str
+    component_id: ComponentID
     loadtype: lt.LoadTypes
     unit: lt.Units
     electricity: Optional[float]
@@ -47,12 +44,13 @@ class ExampleComponentConfig(ConfigBase):
     @classmethod
     def get_default_example_component(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "ExampleComponentConfig":
         """Gets a default Example Component."""
+        if component_id is None:
+            component_id = ComponentID(name="Example Component")
         return ExampleComponentConfig(
-            building_name=building_name,
-            name="Example Component",
+            component_id=component_id,
             electricity=-1e3,
             loadtype=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
@@ -126,7 +124,7 @@ class ExampleComponent(Component):
         )
 
         self.thermal_energy_delivered_c: ComponentInput = self.add_input(
-            self.examplecomponentconfig.name,
+            self.examplecomponentconfig.component_id.name,
             self.ThermalEnergyDelivered,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,

@@ -9,7 +9,7 @@ from typing import List, Optional
 from dataclasses_json import dataclass_json
 
 from hisim import utils
-from hisim.component import ConfigBase, DisplayConfig
+from hisim.component import ComponentID, ConfigBase, DisplayConfig
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
@@ -29,8 +29,7 @@ __status__ = "development"
 class L1Config(ConfigBase):
     """L1 Runtime Config."""
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     source_weight: int
     min_operation_time_in_seconds: int
     min_idle_time_in_seconds: int
@@ -38,12 +37,13 @@ class L1Config(ConfigBase):
     @staticmethod
     def get_default_config(
         name: str,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "L1Config":
         """Default config."""
+        if component_id is None:
+            component_id = ComponentID(name=f"RuntimeController_{name}")
         config = L1Config(
-            building_name=building_name,
-            name=f"RuntimeController_{name}",
+            component_id=component_id,
             source_weight=1,
             min_operation_time_in_seconds=3600,
             min_idle_time_in_seconds=900,
@@ -53,12 +53,13 @@ class L1Config(ConfigBase):
     @staticmethod
     def get_default_config_heatpump(
         name: str,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "L1Config":
         """Gets a default config for heat pumps."""
+        if component_id is None:
+            component_id = ComponentID(name=f"L1RuntimeController{name}")
         config = L1Config(
-            building_name=building_name,
-            name=f"L1RuntimeController{name}",
+            component_id=component_id,
             source_weight=1,
             min_operation_time_in_seconds=3600 * 3,
             min_idle_time_in_seconds=3600,
@@ -130,7 +131,7 @@ class L1GenericRuntimeController(cp.Component):
     L1RunTimeSignal: str = "L1RunTimeSignal"
 
     # Similar components to connect to:
-    # 1. building_name
+    # 1. component_id
     @utils.measure_execution_time
     def __init__(
         self,
@@ -151,7 +152,7 @@ class L1GenericRuntimeController(cp.Component):
             my_display_config=my_display_config,
         )
         self.config = config
-        self.name: str = config.name
+        self.name: str = config.component_id.name
         self.source_weight: int = config.source_weight
         self.minimum_runtime_in_timesteps: int = int(
             config.min_operation_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep

@@ -7,6 +7,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import generic_fuel_cell
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -39,8 +40,7 @@ def test_electrolyzer() -> None:
     # ===================================================================================================================
     # Setup Electrolyzer
     my_fuelcell_config = generic_fuel_cell.FuelCellConfig(
-        building_name="BUI1",
-        name=name,
+        component_id=ComponentID(name=name),
         type=type_electrolyzer,
         nom_output=nom_output,
         max_output=max_output,

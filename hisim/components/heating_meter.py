@@ -10,7 +10,7 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
-from hisim.component import ComponentInput, OpexCostDataClass
+from hisim.component import ComponentID, ComponentInput, OpexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -44,18 +44,18 @@ class HeatingMeterConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return HeatingMeter.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
 
     @classmethod
     def get_heating_meter_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "HeatingMeterConfig":
         """Gets a default HeatingMeter config."""
+        if component_id is None:
+            component_id = ComponentID(name="HeatingMeter")
         return HeatingMeterConfig(
-            building_name=building_name,
-            name="HeatingMeter",
+            component_id=component_id,
         )
 
 
@@ -86,7 +86,7 @@ class HeatingMeter(DynamicComponent):
     ) -> None:
         """Initialize the component."""
         self.config: HeatingMeterConfig = config
-        self.name: str = self.config.name
+        self.name: str = self.config.component_id.name
         self.my_component_inputs: List[DynamicConnectionInput] = []
         self.my_component_outputs: List[DynamicConnectionOutput] = []
         self.my_simulation_parameters: SimulationParameters = my_simulation_parameters

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 # clean
-from typing import Any
+from typing import Optional, Any
 from pathlib import Path
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+from hisim.component import ComponentID
 from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
 
 from hisim import loadtypes as lt
@@ -35,8 +36,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return ElectrolyzerController.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     nom_load: float
     min_load: float
     max_load: float
@@ -47,12 +47,13 @@ class ElectrolyzerControllerConfig(ConfigBase):
     @classmethod
     def get_default_electrolyzer_controller_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "ElectrolyzerControllerConfig":
         """Get a default electrolyzer controller config."""
+        if component_id is None:
+            component_id = ComponentID(name="DefaultElectrolyzerController")
         config = ElectrolyzerControllerConfig(
-            building_name=building_name,
-            name="DefaultElectrolyzerController",
+            component_id=component_id,
             nom_load=100.0,
             min_load=10.0,
             max_load=110.0,
@@ -78,16 +79,17 @@ class ElectrolyzerControllerConfig(ConfigBase):
     def control_electrolyzer(
         cls,
         electrolyzer_name: str,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "ElectrolyzerControllerConfig":
         """Initializes the config variables based on the JSON-file."""
 
+        if component_id is None:
+            component_id = ComponentID(name="L1ElectrolyzerController")
         config_json = cls.read_config(electrolyzer_name)
         log.information(f"Electrolyzer config: {config_json}")
 
         config = ElectrolyzerControllerConfig(
-            building_name=building_name,
-            name="L1ElectrolyzerController",  # config_json.get("name", "")
+            component_id=component_id,  # config_json.get("name", "")
             nom_load=config_json.get("nom_load", 0.0),
             min_load=config_json.get("min_load", 0.0),
             max_load=config_json.get("max_load", 0.0),

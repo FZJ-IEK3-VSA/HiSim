@@ -13,6 +13,7 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim.units import Quantity, Watt, Celsius, Seconds, Kilogram, Euro, Years, Unitless
+from hisim.component import ComponentID
 
 
 def _make_heatpump_instance() -> HeatPumpHplib:
@@ -66,8 +67,7 @@ def test_heat_pump_hplib() -> None:
 
     # Initialize component
     heatpump_config: HeatPumpHplibConfig = HeatPumpHplibConfig(
-        building_name="BUI1",
-        name="Heat Pump",
+        component_id=ComponentID(name="Heat Pump"),
         model=model,
         group_id=group_id,
         heating_reference_temperature_in_celsius=t_in,

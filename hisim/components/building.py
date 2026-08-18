@@ -61,6 +61,7 @@ from hisim.loadtypes import OutputPostprocessingRules
 from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
+from hisim.component import ComponentID
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -82,8 +83,7 @@ class BuildingConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return Building.get_full_classname()  # type: ignore[no-any-return]
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     heating_reference_temperature_in_celsius: float
     building_code: str
     building_heat_capacity_class: str
@@ -134,7 +134,7 @@ class BuildingConfig(cp.ConfigBase):
         window_area_in_m2: Optional[float] = None,
         door_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None,
         door_area_in_m2: Optional[float] = None,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "BuildingConfig":
         """Create a BuildingConfig for a default German single-family home.
 
@@ -166,15 +166,16 @@ class BuildingConfig(cp.ConfigBase):
             door_u_value_in_watt_per_m2_per_kelvin: Optional door U-value
                 override in W/(m²·K).
             door_area_in_m2: Optional door area override in m².
-            building_name: Identifier for the building instance.
+            component_id: Structured identity (name, building, unit) of the building component.
 
         Returns:
             A BuildingConfig configured for a German single-family home with
             the specified or default TABULA parameters.
         """
+        if component_id is None:
+            component_id = ComponentID(name="Building")
         config = BuildingConfig(
-            building_name=building_name,
-            name="Building",
+            component_id=component_id,
             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             building_heat_capacity_class="medium",
             initial_internal_temperature_in_celsius=22.0,
@@ -333,7 +334,7 @@ class Building(cp.Component):
             self.is_in_cache,
             self.cache_file_path,
         ) = utils.get_cache_file(
-            self.config.name,
+            self.config.component_id.name,
             self.buildingconfig,
             self.my_simulation_parameters,
         )

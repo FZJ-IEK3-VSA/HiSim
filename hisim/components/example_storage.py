@@ -4,11 +4,12 @@
 
 # Generic/Built-in
 import copy
+from typing import Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Owned
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
+from hisim.component import ComponentID, Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim.component import ConfigBase
@@ -69,10 +70,7 @@ class SimpleStorageConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return SimpleStorage.get_full_classname()
 
-    building_name: str
-    # parameter_string: str
-    # my_simulation_parameters: SimulationParameters
-    name: str
+    component_id: ComponentID
     loadtype: lt.LoadTypes
     unit: lt.Units
     capacity: float
@@ -80,12 +78,13 @@ class SimpleStorageConfig(ConfigBase):
     @classmethod
     def get_default_thermal_storage(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "SimpleStorageConfig":
         """Gets a default Simple Storage."""
+        if component_id is None:
+            component_id = ComponentID(name="Simple Thermal Storage")
         return SimpleStorageConfig(
-            building_name=building_name,
-            name="Simple Thermal Storage",
+            component_id=component_id,
             loadtype=lt.LoadTypes.WARM_WATER,
             unit=lt.Units.KWH,
             capacity=50,
@@ -126,35 +125,35 @@ class SimpleStorage(Component):
         self.previous_state: ExampleStorageState = copy.copy(self.state)
 
         self.charging_input: ComponentInput = self.add_input(
-            self.simplestorageconfig.name,
+            self.simplestorageconfig.component_id.name,
             SimpleStorage.ChargingAmount,
             self.simplestorageconfig.loadtype,
             self.simplestorageconfig.unit,
             True,
         )
         self.discharging_input: ComponentInput = self.add_input(
-            self.simplestorageconfig.name,
+            self.simplestorageconfig.component_id.name,
             SimpleStorage.DischargingAmount,
             self.simplestorageconfig.loadtype,
             self.simplestorageconfig.unit,
             True,
         )
         self.actual_delta: ComponentOutput = self.add_output(
-            self.simplestorageconfig.name,
+            self.simplestorageconfig.component_id.name,
             SimpleStorage.ActualStorageDelta,
             self.simplestorageconfig.loadtype,
             self.simplestorageconfig.unit,
             output_description="Actual Storage Delta",
         )
         self.current_fill: ComponentOutput = self.add_output(
-            self.simplestorageconfig.name,
+            self.simplestorageconfig.component_id.name,
             SimpleStorage.CurrentFillLevel,
             self.simplestorageconfig.loadtype,
             self.simplestorageconfig.unit,
             output_description="Current Fill Level",
         )
         self.current_fill_percent: ComponentOutput = self.add_output(
-            self.simplestorageconfig.name,
+            self.simplestorageconfig.component_id.name,
             SimpleStorage.CurrentFillLevelPercent,
             self.simplestorageconfig.loadtype,
             lt.Units.PERCENT,

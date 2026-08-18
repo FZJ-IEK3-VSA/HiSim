@@ -11,6 +11,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import generic_electrolyzer_h2
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -44,8 +45,7 @@ def test_electrolyzer() -> None:
     # ===================================================================================================================
     # Setup Electrolyzer
     my_electrolyzer_config = generic_electrolyzer_h2.ElectrolyzerConfig(
-        building_name="BUI1",
-        name=name,
+        component_id=ComponentID(name=name),
         electrolyzer_type=electrolyzer_type,
         nom_load=nom_load,
         max_load=max_load,

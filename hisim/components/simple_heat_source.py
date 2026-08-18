@@ -17,7 +17,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.loadtypes import Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentInput, ComponentConnection, OpexCostDataClass, CapexCostDataClass
+from hisim.component import ComponentID, ComponentInput, ComponentConnection, OpexCostDataClass, CapexCostDataClass
 from hisim.components import weather
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 
@@ -73,8 +73,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
     always emit the current names.
     """
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     power_th_in_watt: Optional[float]
     temperature_output_in_celsius: Optional[float]
     heat_source_type: Optional[SimpleHeatSourceType]
@@ -99,12 +98,13 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
     @classmethod
     def get_default_config_const_power(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "SimpleHeatSourceConfig":
         """Returns default configuration of a Heat Source used for heating."""
+        if component_id is None:
+            component_id = ComponentID(name="HeatSourceConstPower")
         config = SimpleHeatSourceConfig(
-            building_name=building_name,
-            name="HeatSourceConstPower",
+            component_id=component_id,
             heat_source_type=SimpleHeatSourceType.CONSTANT_THERMAL_POWER,  # type: ignore
             power_th_in_watt=5000.0,
             temperature_output_in_celsius=None,
@@ -122,12 +122,13 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
     @classmethod
     def get_default_config_const_temperature(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "SimpleHeatSourceConfig":
         """Returns default configuration of a Heat Source used for heating."""
+        if component_id is None:
+            component_id = ComponentID(name="HeatSourceConstTemperature")
         config = SimpleHeatSourceConfig(
-            building_name=building_name,
-            name="HeatSourceConstTemperature",
+            component_id=component_id,
             heat_source_type=SimpleHeatSourceType.CONSTANT_TEMPERATURE,  # type: ignore
             power_th_in_watt=None,
             temperature_output_in_celsius=5,
@@ -147,7 +148,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
     @classmethod
     def get_default_config_near_surface_brine_temperature(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "SimpleHeatSourceConfig":
         """Return the default config for a near-surface brine heat source.
 
@@ -156,9 +157,10 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         models a variable brine temperature derived from the daily average
         outside temperature.
         """
+        if component_id is None:
+            component_id = ComponentID(name="HeatSourceVarBrineTemperature")
         config = SimpleHeatSourceConfig(
-            building_name=building_name,
-            name="HeatSourceVarBrineTemperature",
+            component_id=component_id,
             heat_source_type=SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE,  # type: ignore
             power_th_in_watt=None,
             temperature_output_in_celsius=None,
@@ -178,7 +180,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
     @classmethod
     def get_default_config_var_brinetemperature(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "SimpleHeatSourceConfig":
         """Deprecated alias for :meth:`get_default_config_near_surface_brine_temperature`.
 
@@ -193,7 +195,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             DeprecationWarning,
             stacklevel=2,
         )
-        return cls.get_default_config_near_surface_brine_temperature(building_name)
+        return cls.get_default_config_near_surface_brine_temperature(component_id)
 
 
 # Backward-compatible deserialization for config fields renamed in issue #1603.
@@ -407,7 +409,7 @@ class SimpleHeatSource(cp.Component):
     def write_to_report(self) -> List[str]:
         """Writes relevant data to report."""
         lines = []
-        lines.append(f"Name: {self.config.name}")
+        lines.append(f"Name: {self.config.component_id.name}")
         lines.append(f"Source: {self.config.heat_source_type}")
         if self.config.heat_source_type == SimpleHeatSourceType.CONSTANT_THERMAL_POWER:
             assert self.config.power_th_in_watt is not None

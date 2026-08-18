@@ -7,6 +7,7 @@ from hisim.components import example_template
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import log
+from hisim.component import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -107,32 +108,32 @@ def test_example_template() -> None:
 def test_get_default_template_component_no_args() -> None:
     """``get_default_template_component`` returns hardcoded defaults when called with no arguments."""
     config = example_template.ComponentNameConfig.get_default_template_component()
-    assert config.building_name == "BUI1"
-    assert config.name == "ComponentName default"
+    assert config.component_id.building is None
+    assert config.component_id.name == "ComponentName default"
     assert config.loadtype == lt.LoadTypes.ELECTRICITY
     assert config.unit == lt.Units.WATT
 
 
 @pytest.mark.base
-def test_get_default_template_component_custom_building_name() -> None:
-    """Passing ``building_name`` only changes that field; all other fields keep their defaults."""
+def test_get_default_template_component_custom_building() -> None:
+    """Passing a component_id with a building only changes that; all other fields keep defaults."""
     config = example_template.ComponentNameConfig.get_default_template_component(
-        building_name="MyHouse"
+        component_id=ComponentID(name="ComponentName default", building="MyHouse")
     )
-    assert config.building_name == "MyHouse"
-    assert config.name == "ComponentName default"
+    assert config.component_id.building == "MyHouse"
+    assert config.component_id.name == "ComponentName default"
     assert config.loadtype == lt.LoadTypes.ELECTRICITY
     assert config.unit == lt.Units.WATT
 
 
 @pytest.mark.base
-def test_get_default_template_component_empty_building_name() -> None:
-    """An empty ``building_name`` is passed through without validation."""
+def test_get_default_template_component_empty_building() -> None:
+    """An empty building is passed through without validation."""
     config = example_template.ComponentNameConfig.get_default_template_component(
-        building_name=""
+        component_id=ComponentID(name="ComponentName default", building="")
     )
-    assert config.building_name == ""
-    assert config.name == "ComponentName default"
+    assert config.component_id.building == ""
+    assert config.component_id.name == "ComponentName default"
     assert config.loadtype == lt.LoadTypes.ELECTRICITY
     assert config.unit == lt.Units.WATT
 

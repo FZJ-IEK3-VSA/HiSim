@@ -5,6 +5,7 @@
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import control
+from typing import Optional
 import numpy as np
 
 # Owned
@@ -15,6 +16,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.building import Building
 from hisim import log
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.component import ComponentID
 
 __authors__ = "Marwa Alfouly"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -36,18 +38,18 @@ class PIDControllerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return PIDController.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
 
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "PIDControllerConfig":
         """Gets a default pid controller."""
+        if component_id is None:
+            component_id = ComponentID(name="PIDController")
         return PIDControllerConfig(
-            building_name=building_name,
-            name="PIDController",
+            component_id=component_id,
         )
 
 

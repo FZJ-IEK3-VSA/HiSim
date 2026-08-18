@@ -14,6 +14,7 @@ from hisim.components import generic_electrolyzer_and_h2_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.component import ComponentID
 
 
 @pytest.mark.base
@@ -62,8 +63,7 @@ def test_hydrogen_generator() -> None:
     # Set Hydrogen Generator
     my_electrolyzer_config = (
         generic_electrolyzer_and_h2_storage.ElectrolyzerWithStorageConfig(
-            building_name="BUI1",
-            name="ElectrolyzerWithStorage",
+            component_id=ComponentID(name="ElectrolyzerWithStorage"),
             waste_energy=waste_energy,
             min_power=min_power,
             max_power=max_power,
@@ -79,8 +79,7 @@ def test_hydrogen_generator() -> None:
     )
     my_hydrogen_storage_config = (
         generic_electrolyzer_and_h2_storage.ElectrolyzerWithHydrogenStorageConfig(
-            building_name="BUI1",
-            name="ElectrolyzerWithHydrogenStorage",
+            component_id=ComponentID(name="ElectrolyzerWithHydrogenStorage"),
             min_capacity=min_capacity,
             max_capacity=max_capacity,
             starting_fill=starting_fill,
@@ -183,8 +182,7 @@ def test_display_config_instance_isolation() -> None:
     )
 
     electrolyzer_config = generic_electrolyzer_and_h2_storage.ElectrolyzerWithStorageConfig(
-        building_name="BUI1",
-        name="ElectrolyzerWithStorage",
+        component_id=ComponentID(name="ElectrolyzerWithStorage"),
         waste_energy=400,
         min_power=1_200,
         max_power=2_400,
@@ -196,8 +194,7 @@ def test_display_config_instance_isolation() -> None:
     )
 
     storage_config = generic_electrolyzer_and_h2_storage.ElectrolyzerWithHydrogenStorageConfig(
-        building_name="BUI1",
-        name="HydrogenStorage",
+        component_id=ComponentID(name="HydrogenStorage"),
         min_capacity=0,
         max_capacity=500,
         starting_fill=0,

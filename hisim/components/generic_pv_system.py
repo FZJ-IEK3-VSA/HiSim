@@ -30,7 +30,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
 from hisim import utils
-from hisim.component import ConfigBase, OpexCostDataClass, CapexCostDataClass
+from hisim.component import ComponentID, ConfigBase, OpexCostDataClass, CapexCostDataClass
 from hisim.components.weather import Weather
 from hisim.sim_repository_singleton import (
     SingletonSimRepository,
@@ -103,8 +103,7 @@ class PVSystemConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return PVSystem.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     time: int
     location: str
     module_name: str
@@ -141,16 +140,17 @@ class PVSystemConfig(ConfigBase):
         source_weight: int = 0,
         share_of_maximum_pv_potential: float = 1.0,
         location: str = "Aachen",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         module_name: str = "Trina Solar TSM-435NE09RC.05",
         module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE,  # noqa: E501
         inverter_name: str = "Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]",
         inverter_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE,  # noqa: E501
     ) -> "PVSystemConfig":
         """Gets a default PV system."""
+        if component_id is None:
+            component_id = ComponentID(name=name)
         power_in_watt = power_in_watt * share_of_maximum_pv_potential
         return PVSystemConfig(
-            building_name=building_name,
             time=2019,
             power_in_watt=power_in_watt,
             load_module_data=False,
@@ -159,7 +159,7 @@ class PVSystemConfig(ConfigBase):
             inverter_database=inverter_database,
             module_name=module_name,
             inverter_name=inverter_name,
-            name=name,
+            component_id=component_id,
             azimuth=180,
             tilt=30,
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
@@ -187,10 +187,12 @@ class PVSystemConfig(ConfigBase):
         inverter_name: str = "Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]",
         inverter_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE,
         location: str = "Aachen",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         load_module_data: bool = False,
     ) -> "PVSystemConfig":
         """Gets a default PV system with scaling according to rooftop area."""
+        if component_id is None:
+            component_id = ComponentID(name=name)
         total_pv_power_in_watt = cls.size_pv_system(
             rooftop_area_in_m2=rooftop_area_in_m2,
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
@@ -198,10 +200,9 @@ class PVSystemConfig(ConfigBase):
             module_database=module_database,
         )
         config = PVSystemConfig.get_default_pv_system(
-            name=name,
+            component_id=component_id,
             location=location,
             power_in_watt=total_pv_power_in_watt,
-            building_name=building_name,
             module_name=module_name,
             module_database=module_database,
             inverter_name=inverter_name,
@@ -444,12 +445,13 @@ class PVSystem(cp.Component):
         power_in_watt: float = 10e3,
         source_weight: int = 1,
         share_of_maximum_pv_potential: float = 1.0,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Get default config."""
+        if component_id is None:
+            component_id = ComponentID(name="PVSystem")
         config = PVSystemConfig(
-            building_name=building_name,
-            name="PVSystem",
+            component_id=component_id,
             time=2019,
             location="Aachen",
             module_name="Hanwha HSL60P6-PA-4-250T [2013]",
@@ -506,7 +508,7 @@ class PVSystem(cp.Component):
         production_in_kwh: float = 0.0
         for index, output in enumerate(all_outputs):
             if (
-                output.component_name == self.config.name
+                output.component_name == self.config.component_id.name
                 and output.load_type == lt.LoadTypes.ELECTRICITY
                 and output.field_name == self.ElectricityEnergyOutput
                 and output.unit == lt.Units.WATT_HOUR
@@ -743,7 +745,7 @@ class PVSystem(cp.Component):
     def i_prepare_simulation(self) -> None:
         """Prepares the component for the simulation."""
         file_exists, self.cache_filepath = utils.get_cache_file(
-            self.config.name, self.pvconfig, self.my_simulation_parameters
+            self.config.component_id.name, self.pvconfig, self.my_simulation_parameters
         )
 
         if file_exists:

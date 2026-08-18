@@ -16,6 +16,7 @@ from hisim.components.more_advanced_heat_pump_hplib import (
 )
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 
 
 @pytest.mark.base
@@ -51,8 +52,7 @@ def test_heat_pump_hplib_new() -> None:
 
     # Initialize component
     heatpump_config = MoreAdvancedHeatPumpHPLibConfig(
-        building_name="BUI1",
-        name="Heat Pump",
+        component_id=ComponentID(name="Heat Pump"),
         model=model,
         fluid_primary_side="air",
         group_id=group_id,

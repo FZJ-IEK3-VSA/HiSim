@@ -42,8 +42,8 @@ def test_config_rsoc_from_in_memory_dict() -> None:
         operation_mode="StandbyLoad",
         config_data=_make_rsoc_config_dict(),
     )
-    assert config.building_name == "BUI1"
-    assert config.name == "rSOC and Battery Controller"
+    assert config.component_id.building is None
+    assert config.component_id.name == "rSOC and Battery Controller"
     assert config.nom_load_soec_in_kw == 40.0
     assert config.min_load_soec_in_kw == 2.315
     assert config.max_load_soec_in_kw == 49.64
@@ -55,15 +55,15 @@ def test_config_rsoc_from_in_memory_dict() -> None:
 
 
 @pytest.mark.base
-def test_config_rsoc_building_name_override_and_defaults() -> None:
-    """config_rsoc forwards building_name and applies defaults for missing keys."""
+def test_config_rsoc_building_override_and_defaults() -> None:
+    """config_rsoc forwards the component identity and applies defaults for missing keys."""
     config = l2.RsocBatteryControllerConfig.config_rsoc(
         rsoc_name="RSOC_TEST",
         operation_mode="MinimumLoad",
-        building_name="BUI2",
+        component_id=cp.ComponentID(name="rSOC and Battery Controller", building="BUI2"),
         config_data={"nom_load_soec": 40.0},
     )
-    assert config.building_name == "BUI2"
+    assert config.component_id.building == "BUI2"
     assert config.operation_mode == "MinimumLoad"
     assert config.nom_load_soec_in_kw == 40.0
     # Keys absent from the in-memory dict fall back to the documented defaults.
@@ -167,8 +167,7 @@ def _make_legacy_serialized_payload() -> dict[str, object]:
     ``field_name`` aliases on the renamed dataclass must keep loading them.
     """
     return {
-        "building_name": "BUI1",
-        "name": "rSOC and Battery Controller",
+        "component_id": {"name": "rSOC and Battery Controller", "building": None, "unit": None},
         "nom_load_soec_in_kW": 40.0,
         "min_load_soec_in_kW": 2.315,
         "max_load_soec_in_kW": 49.64,

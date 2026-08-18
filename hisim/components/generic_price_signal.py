@@ -17,6 +17,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import loadtypes as lt
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.component import ComponentID
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -51,9 +52,7 @@ class PriceSignalConfig(cp.ConfigBase):
         """
         return cast(str, PriceSignal.get_full_classname())
 
-    building_name: str
-    #: name of the price signal
-    name: str
+    component_id: ComponentID
     country: str
     pricing_scheme: str
     installed_capacity: float
@@ -67,20 +66,21 @@ class PriceSignalConfig(cp.ConfigBase):
     @classmethod
     def get_default_price_signal_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> PriceSignalConfig:
         """Return a default PriceSignalConfig for the given building.
 
         Args:
-            building_name: Identifier of the building the price signal applies to.
+            component_id: Structured identity (name, building, unit) of the price signal.
 
         Returns:
             A PriceSignalConfig with German fixed pricing defaults, 10 kW installed
             capacity, dummy price-signal type, and predictive control disabled.
         """
+        if component_id is None:
+            component_id = ComponentID(name="PriceSignal")
         config = PriceSignalConfig(
-            building_name=building_name,
-            name="PriceSignal",
+            component_id=component_id,
             country="Germany",
             pricing_scheme="fixed",
             installed_capacity=10e3,

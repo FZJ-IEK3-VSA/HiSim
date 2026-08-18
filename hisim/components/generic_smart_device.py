@@ -12,7 +12,7 @@ import json
 import math as ma
 from os import path
 from enum import Enum
-from typing import Any, ClassVar, List
+from typing import Optional, Any, ClassVar, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -23,7 +23,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import OpexCostDataClass
+from hisim.component import ComponentID, OpexCostDataClass
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 
 __authors__ = "Johanna Ganglbauer"
@@ -46,8 +46,7 @@ class SmartDeviceConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return SmartDevice.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     identifier: str
     source_weight: int
     smart_devices_included: bool
@@ -55,12 +54,13 @@ class SmartDeviceConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "SmartDeviceConfig":
         """Gets a default config."""
+        if component_id is None:
+            component_id = ComponentID(name="Smart Device")
         return SmartDeviceConfig(
-            building_name=building_name,
-            name="Smart Device",
+            component_id=component_id,
             identifier="Identifier",
             source_weight=1,
             smart_devices_included=True,

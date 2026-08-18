@@ -9,18 +9,20 @@ simulation, no I/O.
 # clean
 
 import pytest
+from typing import Optional
 
 from hisim.components.generic_price_signal import PriceSignal, PriceSignalConfig
+from hisim.component import ComponentID
 
 
-def _assert_defaults(config: PriceSignalConfig, building_name: str) -> None:
+def _assert_defaults(config: PriceSignalConfig, expected_building: Optional[str]) -> None:
     """Assert ``config`` carries the documented default values.
 
-    Only ``building_name`` is allowed to vary; everything else must match
+    Only the component identity is allowed to vary; everything else must match
     the hardcoded defaults in ``get_default_price_signal_config``.
     """
-    assert config.building_name == building_name
-    assert config.name == "PriceSignal"
+    assert config.component_id.building == expected_building
+    assert config.component_id.name == "PriceSignal"
     assert config.country == "Germany"
     assert config.pricing_scheme == "fixed"
     assert config.installed_capacity == 10e3
@@ -37,21 +39,25 @@ def test_get_default_price_signal_config_defaults() -> None:
     """``get_default_price_signal_config()`` returns the documented defaults."""
     config = PriceSignalConfig.get_default_price_signal_config()
     assert isinstance(config, PriceSignalConfig)
-    _assert_defaults(config, "BUI1")
+    _assert_defaults(config, None)
 
 
 @pytest.mark.base
-def test_get_default_price_signal_config_custom_building_name() -> None:
-    """Only ``building_name`` changes when it is passed explicitly."""
-    config = PriceSignalConfig.get_default_price_signal_config(building_name="BUI2")
+def test_get_default_price_signal_config_custom_building() -> None:
+    """Only the building changes when a component_id is passed explicitly."""
+    config = PriceSignalConfig.get_default_price_signal_config(
+        component_id=ComponentID(name="PriceSignal", building="BUI2")
+    )
     assert isinstance(config, PriceSignalConfig)
     _assert_defaults(config, "BUI2")
 
 
 @pytest.mark.base
-def test_get_default_price_signal_config_empty_building_name() -> None:
-    """An empty ``building_name`` is accepted unchanged (no coercion/rejection)."""
-    config = PriceSignalConfig.get_default_price_signal_config(building_name="")
+def test_get_default_price_signal_config_empty_building() -> None:
+    """An empty building is accepted unchanged (no coercion/rejection)."""
+    config = PriceSignalConfig.get_default_price_signal_config(
+        component_id=ComponentID(name="PriceSignal", building="")
+    )
     assert isinstance(config, PriceSignalConfig)
     _assert_defaults(config, "")
 
@@ -67,11 +73,13 @@ def test_get_main_classname() -> None:
 
 @pytest.mark.base
 def test_config_is_pure_and_does_not_mutate() -> None:
-    """Two calls with different ``building_name`` produce independent configs."""
-    first = PriceSignalConfig.get_default_price_signal_config(building_name="BUI1")
-    second = PriceSignalConfig.get_default_price_signal_config(building_name="BUI2")
-    assert first.building_name == "BUI1"
-    assert second.building_name == "BUI2"
+    """Two calls with different buildings produce independent configs."""
+    first = PriceSignalConfig.get_default_price_signal_config()
+    second = PriceSignalConfig.get_default_price_signal_config(
+        component_id=ComponentID(name="PriceSignal", building="BUI2")
+    )
+    assert first.component_id.building is None
+    assert second.component_id.building == "BUI2"
     # The list defaults are fresh instances, not shared mutable state.
     first.fixed_price.append(1.0)
     assert not second.fixed_price

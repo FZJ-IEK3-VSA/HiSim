@@ -10,9 +10,11 @@ fill-level threshold.
 # Generic/Built-in
 
 from dataclasses import dataclass
+from typing import Optional
 from dataclasses_json import dataclass_json
 
 # Owned
+from hisim.component import ComponentID
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, ConfigBase, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -33,12 +35,11 @@ class SimpleControllerConfig(ConfigBase):
     """Configuration dataclass for the SimpleController example controller.
 
     Attributes:
-        building_name: Identifier for the building this controller belongs to.
+        component_id: Structured identity (name, building, unit) of this controller.
         name: Human-readable name of the controller instance.
     """
 
-    building_name: str
-    name: str
+    component_id: ComponentID
 
     @classmethod
     def get_main_classname(cls) -> str:
@@ -48,10 +49,12 @@ class SimpleControllerConfig(ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "SimpleControllerConfig":
         """Returns default config."""
-        config = SimpleControllerConfig(name="SimpleController", building_name=building_name)
+        if component_id is None:
+            component_id = ComponentID(name="SimpleController")
+        config = SimpleControllerConfig(component_id=component_id)
         return config
 
 

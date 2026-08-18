@@ -11,6 +11,7 @@ from hisim import component as cp
 from hisim.components import controller_l2_xtp_fuel_cell_ems
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -30,8 +31,7 @@ def _build_controller(operation_mode: str = "StandbyLoad") -> "controller_l2_xtp
         2021, seconds_per_timestep
     )
     config = controller_l2_xtp_fuel_cell_ems.XTPControllerConfig(
-        building_name="BUI1",
-        name="L2XTPController",
+        component_id=ComponentID(name="L2XTPController"),
         nom_output=10.0,  # kW
         min_output=2.0,  # kW
         max_output=10.0,  # kW

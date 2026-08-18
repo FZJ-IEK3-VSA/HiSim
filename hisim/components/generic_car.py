@@ -9,7 +9,7 @@ import datetime as dt
 from dataclasses import dataclass
 
 # -*- coding: utf-8 -*-
-from typing import List, Any, Tuple, Dict
+from typing import Optional, List, Any, Tuple, Dict
 import numpy as np
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -17,7 +17,7 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils, log
-from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.component import ComponentID, OpexCostDataClass, CapexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.loadtypes import Units, ComponentType
 
@@ -146,9 +146,7 @@ class GenericCarInformation:
 class CarConfig(cp.ConfigBase):
     """Definition of configuration of Car."""
 
-    building_name: str
-    #: name of the car
-    name: str
+    component_id: ComponentID
     #: priority of the component in hierachy: the higher the number the lower the priority
     source_weight: int
     #: type of fuel, either Electricity or Diesel
@@ -175,12 +173,13 @@ class CarConfig(cp.ConfigBase):
     def get_default_diesel_config(
         cls,
         name: str = "Car",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Defines default configuration for diesel vehicle."""
+        if component_id is None:
+            component_id = ComponentID(name=name)
         config = CarConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             source_weight=1,
             fuel=lt.LoadTypes.DIESEL,
             consumption_per_km=0.06,
@@ -195,12 +194,13 @@ class CarConfig(cp.ConfigBase):
     @classmethod
     def get_default_ev_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Defines default configuration for electric vehicle."""
+        if component_id is None:
+            component_id = ComponentID(name="Car")
         config = CarConfig(
-            building_name=building_name,
-            name="Car",
+            component_id=component_id,
             source_weight=1,
             fuel=lt.LoadTypes.ELECTRICITY,
             consumption_per_km=0.15,
@@ -501,7 +501,7 @@ class Car(cp.Component):
 
         # check if caching is possible
         file_exists, cache_filepath = utils.get_cache_file(
-            component_key=self.config.name,
+            component_key=self.config.component_id.name,
             parameter_class=config,
             my_simulation_parameters=self.my_simulation_parameters,
         )

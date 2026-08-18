@@ -7,6 +7,7 @@ from hisim.components import controller_l1_electrolyzer_h2
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.component import ComponentID
 
 
 @pytest.mark.base
@@ -31,8 +32,7 @@ def test_electrolyzer_controller() -> None:
     # Setup Electrolyzer
 
     my_controller_config = controller_l1_electrolyzer_h2.ElectrolyzerControllerConfig(
-        building_name="BUI1",
-        name=name,
+        component_id=ComponentID(name=name),
         nom_load=nom_load,
         min_load=min_load,
         max_load=max_load,

@@ -3,13 +3,13 @@
 # clean
 import json
 from pathlib import Path
-from typing import Any
+from typing import Optional, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import numpy as np
 
 # Import modules from HiSim
-from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
+from hisim.component import ComponentID, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
@@ -35,8 +35,7 @@ class RsocConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return Rsoc.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     # SOEC
     nom_load_soec: float  # [kW]
     min_load_soec: float  # [kW]
@@ -65,14 +64,15 @@ class RsocConfig(cp.ConfigBase):
     def from_rsoc_name(
         cls,
         rsoc_name: str,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "RsocConfig":
         """Initializes the config variables based on the JSON-file."""
 
+        if component_id is None:
+            component_id = ComponentID(name=rsoc_name)
         config_json = cls.read_config(rsoc_name)
         config = RsocConfig(
-            building_name=building_name,
-            name=rsoc_name,  # config_json.get("name", "")
+            component_id=component_id,  # config_json.get("name", "")
             nom_load_soec=config_json.get("nom_load_soec", 0.0),
             min_load_soec=config_json.get("min_load_soec", 0.0),
             max_load_soec=config_json.get("max_load_soec", 0.0),
@@ -149,7 +149,7 @@ class Rsoc(cp.Component):
         """Constructs all the neccessary attributes."""
         self.rsoc_config: RsocConfig = config
 
-        self.name = config.name
+        self.name = config.component_id.name
         self.nom_load_soec = config.nom_load_soec
         self.min_load_soec = config.min_load_soec
         self.max_load_soec = config.max_load_soec
@@ -201,7 +201,7 @@ class Rsoc(cp.Component):
         # =================================================================================================================================
         # Input channels
         self.power_input: ComponentInput = self.add_input(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.PowerInput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
@@ -210,7 +210,7 @@ class Rsoc(cp.Component):
 
         # get the state from the controller
         self.input_state_rsoc: ComponentInput = self.add_input(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.RSOCInputState,
             lt.LoadTypes.ACTIVATION,
             lt.Units.ANY,
@@ -221,7 +221,7 @@ class Rsoc(cp.Component):
         # Output channels
 
         self.soec_current_efficiency_state: ComponentOutput = self.add_output(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.SOECCurrentEfficiency,
             lt.LoadTypes.ANY,
             lt.Units.PERCENT,
@@ -230,7 +230,7 @@ class Rsoc(cp.Component):
 
         # current hydrogen output
         self.soec_hydrogen_flow_rate: ComponentOutput = self.add_output(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.SOECCurrentHydrogenFlowRate,
             lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG_PER_SEC,
@@ -239,7 +239,7 @@ class Rsoc(cp.Component):
 
         # current hydrogen consumption
         self.sofc_hydrogen_flow_rate: ComponentOutput = self.add_output(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.SOFCCurrentHydrogenFlowRate,
             lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG_PER_SEC,
@@ -247,7 +247,7 @@ class Rsoc(cp.Component):
         )
 
         self.sofc_current_efficiency_state: ComponentOutput = self.add_output(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.SOFCCurrentEfficiency,
             lt.LoadTypes.ANY,
             lt.Units.PERCENT,
@@ -256,7 +256,7 @@ class Rsoc(cp.Component):
 
         # Total hydrogen production
         self.total_h2_produced: ComponentOutput = self.add_output(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.SOECTotalHydrogenProduced,
             lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG,
@@ -264,7 +264,7 @@ class Rsoc(cp.Component):
         )
         # Total oxygen production
         self.total_o2_produced: ComponentOutput = self.add_output(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.SOECTotalOxygenProduced,
             lt.LoadTypes.OXYGEN,
             lt.Units.KG,
@@ -272,7 +272,7 @@ class Rsoc(cp.Component):
         )
         # Total water consumed
         self.total_h2o_consumed: ComponentOutput = self.add_output(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.SOECTotalWaterDemand,
             lt.LoadTypes.WATER,
             lt.Units.KG,
@@ -280,7 +280,7 @@ class Rsoc(cp.Component):
         )
         # Total hydrogen consumed
         self.total_h2_consumed: ComponentOutput = self.add_output(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.SOFCTotalHydrogenConsumed,
             lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG,
@@ -288,7 +288,7 @@ class Rsoc(cp.Component):
         )
         # Total oxygen consumed
         self.total_o2_consumed: ComponentOutput = self.add_output(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.SOFCTotalOxygenConsumed,
             lt.LoadTypes.OXYGEN,
             lt.Units.KG,
@@ -296,7 +296,7 @@ class Rsoc(cp.Component):
         )
         # Total water produced
         self.total_h2o_produced: ComponentOutput = self.add_output(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.SOFCTotalWaterProduced,
             lt.LoadTypes.WATER,
             lt.Units.KG,
@@ -304,28 +304,28 @@ class Rsoc(cp.Component):
         )
         # Total operating time
         self.total_operating_time_rsoc: ComponentOutput = self.add_output(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.RSOCOperatingTime,
             lt.LoadTypes.TIME,
             lt.Units.HOURS,
             output_description="Total operating time",
         )
         self.current_load_soec: ComponentOutput = self.add_output(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.SOECCurrentLoad,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             output_description="Current load consumed by SOEC",
         )
         self.total_energy_consumed: ComponentOutput = self.add_output(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.TotalEnergyConsumed,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KWH,
             output_description="Total load used for hydrogen production",
         )
         self.current_output_sofc: ComponentOutput = self.add_output(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.SOFCCurrentOutput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
@@ -337,7 +337,7 @@ class Rsoc(cp.Component):
         )
 
         self.total_energy_produced: ComponentOutput = self.add_output(
-            self.rsoc_config.name,
+            self.rsoc_config.component_id.name,
             Rsoc.TotalEnergyProduced,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KWH,

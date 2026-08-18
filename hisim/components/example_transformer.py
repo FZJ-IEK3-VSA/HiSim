@@ -12,10 +12,11 @@ from __future__ import annotations
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
+from typing import Optional
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
+from hisim.component import ComponentID, Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ConfigBase
@@ -31,29 +32,29 @@ class ExampleTransformerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return str(ExampleTransformer.get_full_classname())
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     loadtype: lt.LoadTypes
     unit: lt.Units
 
     @classmethod
     def get_default_transformer(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> ExampleTransformerConfig:
         """Returns a default :class:`ExampleTransformerConfig`.
 
         Args:
-            building_name: Identifier for the building the transformer belongs to.
-                Defaults to ``"BUI1"``.
+            component_id: Structured identity (name, building, unit) of the transformer.
+                Defaults to a building-less identity named ``"Example Transformer default"``.
 
         Returns:
             A config with ``LoadTypes.ANY`` / ``Units.ANY`` and the name
             ``"Example Transformer default"``.
         """
+        if component_id is None:
+            component_id = ComponentID(name="Example Transformer default")
         return ExampleTransformerConfig(
-            building_name=building_name,
-            name="Example Transformer default",
+            component_id=component_id,
             loadtype=lt.LoadTypes.ANY,
             unit=lt.Units.ANY,
         )
@@ -130,28 +131,28 @@ class ExampleTransformer(Component):
             my_display_config=my_display_config,
         )
         self.input1: ComponentInput = self.add_input(
-            self.transformerconfig.name,
+            self.transformerconfig.component_id.name,
             ExampleTransformer.TransformerInput1,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             True,
         )
         self.input2: ComponentInput = self.add_input(
-            self.transformerconfig.name,
+            self.transformerconfig.component_id.name,
             ExampleTransformer.TransformerInput2,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             False,
         )
         self.output1: ComponentOutput = self.add_output(
-            self.transformerconfig.name,
+            self.transformerconfig.component_id.name,
             ExampleTransformer.TransformerOutput1,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description="Output 1",
         )
         self.output2: ComponentOutput = self.add_output(
-            self.transformerconfig.name,
+            self.transformerconfig.component_id.name,
             ExampleTransformer.TransformerOutput2,
             lt.LoadTypes.ANY,
             lt.Units.ANY,

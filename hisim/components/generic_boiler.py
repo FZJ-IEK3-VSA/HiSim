@@ -24,6 +24,7 @@ from hisim.components.configuration import (
     PhysicsConfig,
 )
 from hisim.component import (
+    ComponentID,
     Component,
     ComponentConnection,
     SingleTimeStepValues,
@@ -92,8 +93,7 @@ class GenericBoilerConfig(ConfigBase):
         """Return the full class name of the base class."""
         return GenericBoiler.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     energy_carrier: lt.LoadTypes
     boiler_type: BoilerType
     minimal_thermal_power_in_watt: float
@@ -117,13 +117,14 @@ class GenericBoilerConfig(ConfigBase):
     @classmethod
     def get_default_condensing_gas_boiler_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Get a default condensing gas boiler."""
+        if component_id is None:
+            component_id = ComponentID(name="CondensingGasBoiler")
         maximal_thermal_power_in_watt = 12000
         config = GenericBoilerConfig(
-            building_name=building_name,
-            name="CondensingGasBoiler",
+            component_id=component_id,
             boiler_type=BoilerType.CONDENSING,
             energy_carrier=lt.LoadTypes.GAS,
             temperature_delta_in_celsius=20,
@@ -163,15 +164,16 @@ class GenericBoilerConfig(ConfigBase):
         cls,
         heating_load_of_building_in_watt: float,
         number_of_apartments_in_building: Optional[int] = None,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Get a scaled condensing gas boiler scaled to heating load."""
+        if component_id is None:
+            component_id = ComponentID(name="CondensingGasBoiler")
         maximal_thermal_power_in_watt = cls.scale_thermal_power(
             heating_load_of_building_in_watt, number_of_apartments_in_building
         )
         config = GenericBoilerConfig(
-            building_name=building_name,
-            name="CondensingGasBoiler",
+            component_id=component_id,
             boiler_type=BoilerType.CONDENSING,
             energy_carrier=lt.LoadTypes.GAS,
             temperature_delta_in_celsius=20,
@@ -192,13 +194,14 @@ class GenericBoilerConfig(ConfigBase):
     @classmethod
     def get_default_conventional_oil_boiler_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Get a default conventional oil boiler."""
+        if component_id is None:
+            component_id = ComponentID(name="ConventionalOilBoiler")
         maximal_thermal_power_in_watt = 12000
         config = GenericBoilerConfig(
-            building_name=building_name,
-            name="ConventionalOilBoiler",
+            component_id=component_id,
             boiler_type=BoilerType.CONVENTIONAL,
             energy_carrier=lt.LoadTypes.OIL,
             temperature_delta_in_celsius=20,
@@ -221,15 +224,16 @@ class GenericBoilerConfig(ConfigBase):
         cls,
         heating_load_of_building_in_watt: float,
         number_of_apartments_in_building: Optional[int] = None,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Get a default conventional oil boiler scaled to heating load."""
+        if component_id is None:
+            component_id = ComponentID(name="ConventionalOilBoiler")
         maximal_thermal_power_in_watt = cls.scale_thermal_power(
             heating_load_of_building_in_watt, number_of_apartments_in_building
         )
         config = GenericBoilerConfig(
-            building_name=building_name,
-            name="ConventionalOilBoiler",
+            component_id=component_id,
             boiler_type=BoilerType.CONVENTIONAL,
             energy_carrier=lt.LoadTypes.OIL,
             temperature_delta_in_celsius=20,
@@ -252,19 +256,20 @@ class GenericBoilerConfig(ConfigBase):
         cls,
         heating_load_of_building_in_watt: float,
         number_of_apartments_in_building: Optional[int] = None,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Get a default conventional pellet boiler scaled to heating load.
 
         So far we only have the lower heating value of pellets (see PhysicsConfig),
         so only conventional pellet boilers are used.
         """
+        if component_id is None:
+            component_id = ComponentID(name="ConventionalPelletBoiler")
         maximal_thermal_power_in_watt = cls.scale_thermal_power(
             heating_load_of_building_in_watt, number_of_apartments_in_building
         )
         config = GenericBoilerConfig(
-            building_name=building_name,
-            name="ConventionalPelletBoiler",
+            component_id=component_id,
             boiler_type=BoilerType.CONVENTIONAL,
             energy_carrier=lt.LoadTypes.PELLETS,
             temperature_delta_in_celsius=20,
@@ -287,19 +292,20 @@ class GenericBoilerConfig(ConfigBase):
         cls,
         heating_load_of_building_in_watt: float,
         number_of_apartments_in_building: Optional[int] = None,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Get a default conventional wood chip boiler scaled to heating load.
 
         So far we only have the lower heating value of wood chips (see PhysicsConfig),
         so only conventional wood chip boilers are used.
         """
+        if component_id is None:
+            component_id = ComponentID(name="ConventionalWoodChipBoiler")
         maximal_thermal_power_in_watt = cls.scale_thermal_power(
             heating_load_of_building_in_watt, number_of_apartments_in_building
         )
         config = GenericBoilerConfig(
-            building_name=building_name,
-            name="ConventionalWoodChipBoiler",
+            component_id=component_id,
             boiler_type=BoilerType.CONVENTIONAL,
             energy_carrier=lt.LoadTypes.WOOD_CHIPS,
             temperature_delta_in_celsius=20,
@@ -322,15 +328,16 @@ class GenericBoilerConfig(ConfigBase):
         cls,
         heating_load_of_building_in_watt: float,
         number_of_apartments_in_building: Optional[int] = None,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Get a scaled condensing hydrogen boiler scaled to heating load."""
+        if component_id is None:
+            component_id = ComponentID(name="CondensingHydrogenBoiler")
         maximal_thermal_power_in_watt = cls.scale_thermal_power(
             heating_load_of_building_in_watt, number_of_apartments_in_building
         )
         config = GenericBoilerConfig(
-            building_name=building_name,
-            name="CondensingHydrogenBoiler",
+            component_id=component_id,
             boiler_type=BoilerType.CONDENSING,
             energy_carrier=lt.LoadTypes.GREEN_HYDROGEN,
             temperature_delta_in_celsius=20,
@@ -1112,8 +1119,7 @@ class GenericBoilerControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return GenericBoilerController.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     is_modulating: bool
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
     minimal_thermal_power_in_watt: float
@@ -1130,15 +1136,16 @@ class GenericBoilerControllerConfig(ConfigBase):
         cls,
         maximal_thermal_power_in_watt: float,
         minimal_thermal_power_in_watt: float,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         secondary_mode: bool = False,
         with_domestic_hot_water_preparation: bool = False,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
     ) -> Any:
         """Gets a default Generic Boiler Controller, for example for gas and oil boilers."""
+        if component_id is None:
+            component_id = ComponentID(name="ModulatingBoilerController")
         return GenericBoilerControllerConfig(
-            building_name=building_name,
-            name="ModulatingBoilerController",
+            component_id=component_id,
             is_modulating=True,
             # get min and max thermal power from Generic Boiler config
             minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
@@ -1159,12 +1166,13 @@ class GenericBoilerControllerConfig(ConfigBase):
         minimal_thermal_power_in_watt: float,
         with_domestic_hot_water_preparation: bool = False,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Gets a default Generic Boiler Controller."""
+        if component_id is None:
+            component_id = ComponentID(name="OnOffBoilerController")
         return GenericBoilerControllerConfig(
-            building_name=building_name,
-            name="OnOffBoilerController",
+            component_id=component_id,
             is_modulating=False,
             # get min and max thermal power from Generic Boiler config
             minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
@@ -1185,12 +1193,13 @@ class GenericBoilerControllerConfig(ConfigBase):
         minimal_thermal_power_in_watt: float,
         with_domestic_hot_water_preparation: bool = False,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Gets a default controller for pellet boiler."""
+        if component_id is None:
+            component_id = ComponentID(name="PelletBoilerController")
         return GenericBoilerControllerConfig(
-            building_name=building_name,
-            name="PelletBoilerController",
+            component_id=component_id,
             is_modulating=False,
             # get min and max thermal power from Generic Boiler config
             minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
@@ -1211,12 +1220,13 @@ class GenericBoilerControllerConfig(ConfigBase):
         minimal_thermal_power_in_watt: float,
         with_domestic_hot_water_preparation: bool = False,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Gets a default controller for wood chip boiler."""
+        if component_id is None:
+            component_id = ComponentID(name="WoodChipBoilerController")
         return GenericBoilerControllerConfig(
-            building_name=building_name,
-            name="WoodChipBoilerController",
+            component_id=component_id,
             is_modulating=False,
             # get min and max thermal power from Generic Boiler config
             minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,

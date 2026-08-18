@@ -17,6 +17,7 @@ from hisim import component
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.component import ComponentID
 
 
 load_dotenv()
@@ -119,8 +120,7 @@ def initialize_lpg_utsp_connector_and_return_results(
 
     # Build occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-        building_name="BUI1",
-        name="UTSPConnector",
+        component_id=ComponentID(name="UTSPConnector"),
         data_acquisition_mode=data_acquisition_mode,
         household=households,
         result_dir_path=result_path,

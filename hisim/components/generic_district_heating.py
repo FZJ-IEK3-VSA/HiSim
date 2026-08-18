@@ -18,6 +18,7 @@ from dataclasses_json import dataclass_json
 from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
 from hisim.loadtypes import LoadTypes, Units, ComponentType
 from hisim.component import (
+    ComponentID,
     Component,
     ComponentConnection,
     SingleTimeStepValues,
@@ -66,8 +67,7 @@ class DistrictHeatingConfig(ConfigBase):
         """Return the full class name of the base class."""
         return DistrictHeating.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     # Maximum thermal power that can be delivered
     connected_load_in_w: float
     #: CO2 footprint of investment in kg
@@ -84,12 +84,15 @@ class DistrictHeatingConfig(ConfigBase):
 
     @classmethod
     def get_default_district_heating_config(
-        cls, building_name: str = "BUI1", with_domestic_hot_water_preparation=False, connected_load_in_w: float = 20000
+        cls,
+        component_id: Optional[ComponentID] = None,
+        with_domestic_hot_water_preparation=False,
+        connected_load_in_w: float = 20000,
     ) -> Any:
         """Return a default DistrictHeatingConfig with sensible preset values.
 
         Args:
-            building_name: Identifier for the building this district heating serves.
+            component_id: Structured identity (name, building, unit) of the district heating.
             with_domestic_hot_water_preparation: Whether the system also prepares
                 domestic hot water (adds DHW inputs/outputs).
             connected_load_in_w: Maximum thermal power the district heating connection
@@ -99,9 +102,10 @@ class DistrictHeatingConfig(ConfigBase):
             A DistrictHeatingConfig with capex/emissions left as None (calculated
             later in get_cost_capex).
         """
+        if component_id is None:
+            component_id = ComponentID(name="DistrictHeating")
         config = DistrictHeatingConfig(
-            building_name=building_name,
-            name="DistrictHeating",
+            component_id=component_id,
             connected_load_in_w=connected_load_in_w,
             # capex and device emissions are calculated in get_cost_capex function by default
             device_co2_footprint_in_kg=None,
@@ -861,8 +865,7 @@ class DistrictHeatingControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return DistrictHeatingController.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     set_heating_threshold_outside_temperature_in_celsius: float
     with_domestic_hot_water_preparation: bool
     hysteresis_water_temperature_offset_in_celsius: float
@@ -871,15 +874,16 @@ class DistrictHeatingControllerConfig(ConfigBase):
     @classmethod
     def get_default_district_heating_controller_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         with_domestic_hot_water_preparation=False,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         parallel_space_heating_and_dhw_option: bool = False,
     ) -> Any:
         """Gets a default district heating controller."""
+        if component_id is None:
+            component_id = ComponentID(name="DistrictHeatingController")
         return DistrictHeatingControllerConfig(
-            building_name=building_name,
-            name="DistrictHeatingController",
+            component_id=component_id,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
             hysteresis_water_temperature_offset_in_celsius=15,

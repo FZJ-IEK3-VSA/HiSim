@@ -20,6 +20,7 @@ from hisim.components.generic_ev_charger import (
     EVChargerControllerConfig,
     EVChargerMode,
 )
+from hisim.component import ComponentID
 
 
 @pytest.mark.base
@@ -66,8 +67,7 @@ def test_config_with_enum_member_keeps_member() -> None:
     handed to the constructor is the member the component later reads.
     """
     config = EVChargerControllerConfig(
-        building_name="BUI1",
-        name="Controller",
+        component_id=ComponentID(name="Controller"),
         mode=EVChargerMode.STRAIGHT_CHARGING,
     )
     assert config.mode is EVChargerMode.STRAIGHT_CHARGING
@@ -83,8 +83,7 @@ def test_config_round_trips_through_json_as_member_name() -> None:
     string, and ``from_dict`` must return an equal config.
     """
     config = EVChargerControllerConfig(
-        building_name="BUI1",
-        name="Controller",
+        component_id=ComponentID(name="Controller"),
         mode=EVChargerMode.TIGHT_STEPPED_PRIORITIZED_CHARGING,
     )
     encoded = json.loads(json.dumps(config.to_dict()))

@@ -6,6 +6,7 @@ import pytest
 from hisim import component as cp
 from hisim.components import night_setback_controller
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -60,8 +61,7 @@ def test_night_setback_controller_all_window_modes() -> None:
 
     # "wrap": window crosses midnight (22:00 -> 06:00), the default config.
     wrap = night_setback_controller.NightSetbackConfig(
-        building_name="BUI1",
-        name="NightSetbackController",
+        component_id=ComponentID(name="NightSetbackController"),
         setback_delta_in_kelvin=delta,
         night_start_hour=22,
         night_end_hour=6,
@@ -72,8 +72,7 @@ def test_night_setback_controller_all_window_modes() -> None:
 
     # "within": window lies inside a single day (06:00 -> 22:00).
     within = night_setback_controller.NightSetbackConfig(
-        building_name="BUI1",
-        name="NightSetbackController",
+        component_id=ComponentID(name="NightSetbackController"),
         setback_delta_in_kelvin=delta,
         night_start_hour=6,
         night_end_hour=22,
@@ -84,8 +83,7 @@ def test_night_setback_controller_all_window_modes() -> None:
 
     # "none": start == end means no night window at all.
     none = night_setback_controller.NightSetbackConfig(
-        building_name="BUI1",
-        name="NightSetbackController",
+        component_id=ComponentID(name="NightSetbackController"),
         setback_delta_in_kelvin=delta,
         night_start_hour=12,
         night_end_hour=12,

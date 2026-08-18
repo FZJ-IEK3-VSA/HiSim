@@ -3,7 +3,7 @@
 # clean
 # -*- coding: utf-8 -*-
 # Owned
-from typing import List, Tuple
+from typing import Optional, List, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -12,6 +12,7 @@ from hisim import loadtypes as lt
 from hisim.components import generic_chp
 from hisim.components import generic_electrolyzer
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -28,9 +29,7 @@ __status__ = ""
 class GenericHydrogenStorageConfig(cp.ConfigBase):
     """Generic hydrogen storage config class."""
 
-    building_name: str
-    #: name of the device
-    name: str
+    component_id: ComponentID
     #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int
     #: minimal fill state of the hydrogen storage in kg of hydrogen
@@ -54,7 +53,7 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
         max_charging_rate: float = 2 / 3600,
         max_discharging_rate: float = 2 / 3600,
         source_weight: int = 1,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "GenericHydrogenStorageConfig":
         """Returns default configuration for hydrogen storage.
 
@@ -64,15 +63,16 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
             max_discharging_rate: maximum discharging rate in kg/s.
             source_weight: priority of the device in hierarchy (lower number = higher
                 priority).
-            building_name: name of the building the storage belongs to.
+            component_id: Structured identity (name, building, unit) of the storage.
 
         Returns:
             A GenericHydrogenStorageConfig with zero losses, zero charge/discharge
             energy demand, and the given capacity and rates.
         """
+        if component_id is None:
+            component_id = ComponentID(name="HydrogenStorage")
         config = GenericHydrogenStorageConfig(
-            building_name=building_name,
-            name="HydrogenStorage",
+            component_id=component_id,
             source_weight=source_weight,
             min_capacity=0,
             max_capacity_in_kg=capacity,

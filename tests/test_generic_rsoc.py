@@ -22,6 +22,7 @@ from hisim.components import generic_rsoc
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 
 
 @pytest.mark.base
@@ -58,8 +59,7 @@ def test_rsoc() -> None:
     # ===================================================================================================================
     # Setup Electrolyzer
     my_rsoc_config = generic_rsoc.RsocConfig(
-        building_name="BUI1",
-        name=name,
+        component_id=ComponentID(name=name),
         nom_load_soec=nom_load_soec,
         min_load_soec=min_load_soec,
         max_load_soec=max_load_soec,
@@ -130,8 +130,7 @@ def test_rsoc_efficiency_cache_matches_file() -> None:
 
     for name in ("rSOC515kW", "rSOC1040kW"):
         config = generic_rsoc.RsocConfig(
-            building_name="BUI1",
-            name=name,
+            component_id=ComponentID(name=name),
             nom_load_soec=40.0,
             min_load_soec=2.315,
             max_load_soec=49.64,
@@ -177,8 +176,7 @@ def test_rsoc_efficiency_interpolation_matches_direct_np_interp() -> None:
     my_simulation_parameters = SimulationParameters.one_day_only(2021, 60)
     name = "rSOC1040kW"
     config = generic_rsoc.RsocConfig(
-        building_name="BUI1",
-        name=name,
+        component_id=ComponentID(name=name),
         nom_load_soec=40.0,
         min_load_soec=2.315,
         max_load_soec=49.64,
@@ -233,8 +231,7 @@ def test_rsoc_invalid_name_raises_at_construction() -> None:
     """
     my_simulation_parameters = SimulationParameters.one_day_only(2021, 60)
     config = generic_rsoc.RsocConfig(
-        building_name="BUI1",
-        name="nonexistent_rSOC",
+        component_id=ComponentID(name="nonexistent_rSOC"),
         nom_load_soec=40.0,
         min_load_soec=2.315,
         max_load_soec=49.64,

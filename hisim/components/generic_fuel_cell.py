@@ -5,13 +5,14 @@
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from pathlib import Path
 import json
+from typing import Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from scipy.interpolate import interp1d
 import numpy as np
 
 # Import modules from HiSim
-from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
+from hisim.component import ComponentID, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
@@ -46,10 +47,7 @@ class FuelCellConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return FuelCell.get_full_classname()
 
-    building_name: str
-    # parameter_string: str
-    # my_simulation_parameters: SimulationParameters
-    name: str
+    component_id: ComponentID
     type: str
     nom_output: float  # [kW]
     max_output: float  # [kW]
@@ -64,12 +62,13 @@ class FuelCellConfig(cp.ConfigBase):
     @classmethod
     def get_default_pem_fuel_cell_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "FuelCellConfig":
         """Returns a default `FuelCellConfig` for a PEM fuel cell."""
+        if component_id is None:
+            component_id = ComponentID(name="PEM_Fuel_Cell")
         return FuelCellConfig(
-            building_name=building_name,
-            name="PEM_Fuel_Cell",
+            component_id=component_id,
             type="PEM",
             nom_output=100.0,  # [kW]
             max_output=110.0,  # [kW]
@@ -94,13 +93,14 @@ class FuelCellConfig(cp.ConfigBase):
     def config_fuel_cell(
         cls,
         fuel_cell_name: str,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "FuelCellConfig":
         """Get config of fuel cell."""
+        if component_id is None:
+            component_id = ComponentID(name="FuelCell")
         config_json = cls.read_config(fuel_cell_name)
         config = FuelCellConfig(
-            building_name=building_name,
-            name="FuelCell",  # config_json.get("name", "")
+            component_id=component_id,  # config_json.get("name", "")
             type=config_json.get("type", ""),
             nom_output=config_json.get("nom_output", 0.0),
             max_output=config_json.get("max_output", 0.0),
@@ -182,7 +182,7 @@ class FuelCell(cp.Component):
         # =================================================================================================================================
         # Input channels
         self.demand_profile_target: ComponentInput = self.add_input(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.DemandProfile,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
@@ -190,7 +190,7 @@ class FuelCell(cp.Component):
         )
 
         self.control_signal: ComponentInput = self.add_input(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.ControlSignal,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
@@ -200,7 +200,7 @@ class FuelCell(cp.Component):
         # Output channels
         # Set state output
         self.fuel_cell_state: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.FuelCellState,
             lt.LoadTypes.ACTIVATION,
             lt.Units.ANY,
@@ -208,7 +208,7 @@ class FuelCell(cp.Component):
         )
 
         self.total_energy_produced: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.TotalEnergyProduced,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KWH,
@@ -216,7 +216,7 @@ class FuelCell(cp.Component):
         )
 
         self.produced_water: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.WaterflowOutput,
             lt.LoadTypes.WATER,
             lt.Units.KG_PER_SEC,
@@ -224,7 +224,7 @@ class FuelCell(cp.Component):
         )
 
         self.current_power_output: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.PowerOutput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,  # for hosuehold use case
@@ -236,7 +236,7 @@ class FuelCell(cp.Component):
         )
 
         self.current_hydrogen_demand: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.HydrogenDemand,
             lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG_PER_SEC,
@@ -244,7 +244,7 @@ class FuelCell(cp.Component):
         )
 
         self.number_cycles: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.NumberofCycles,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
@@ -253,7 +253,7 @@ class FuelCell(cp.Component):
 
         # Set total ramp-up time output
         self.total_ramp_up_time: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.TotalRampUpTime,
             lt.LoadTypes.TIME,
             lt.Units.SECONDS,
@@ -262,7 +262,7 @@ class FuelCell(cp.Component):
 
         # Set total ramp-down time output
         self.total_ramp_down_time: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.TotalRampDownTime,
             lt.LoadTypes.TIME,
             lt.Units.SECONDS,
@@ -271,7 +271,7 @@ class FuelCell(cp.Component):
 
         # current hydrogen output
         self.hydrogen_flow_rate: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.CurrentHydrogenFlowRate,
             lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG_PER_SEC,
@@ -279,7 +279,7 @@ class FuelCell(cp.Component):
         )
         # Total hydrogen produced
         self.total_hydrogen: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.TotalHydrogenConsumed,
             lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG,
@@ -287,7 +287,7 @@ class FuelCell(cp.Component):
         )
         # current oxygen output
         self.oxygen_flow_rate: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.CurrentOxygenFlowRate,
             lt.LoadTypes.OXYGEN,
             lt.Units.KG_PER_SEC,
@@ -295,7 +295,7 @@ class FuelCell(cp.Component):
         )
         # Total oxygen produced
         self.total_oxygen: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.TotalOxygenConsumed,
             lt.LoadTypes.OXYGEN,
             lt.Units.KG,
@@ -303,7 +303,7 @@ class FuelCell(cp.Component):
         )
         # current water demand
         self.water_flow_rate: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.CurrentWaterFlowRate,
             lt.LoadTypes.WATER,
             lt.Units.KG_PER_SEC,
@@ -311,7 +311,7 @@ class FuelCell(cp.Component):
         )
         # Total water demand
         self.total_water: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.TotalWaterProduced,
             lt.LoadTypes.WATER,
             lt.Units.KG,
@@ -319,7 +319,7 @@ class FuelCell(cp.Component):
         )
         # Current efficiency
         self.current_efficiency_state: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.CurrentEfficiency,
             lt.LoadTypes.ANY,
             lt.Units.PERCENT,
@@ -328,7 +328,7 @@ class FuelCell(cp.Component):
 
         # Total operating time
         self.operating_time: ComponentOutput = self.add_output(
-            self.fuelcellconfig.name,
+            self.fuelcellconfig.component_id.name,
             FuelCell.OperatingTime,
             lt.LoadTypes.TIME,
             lt.Units.HOURS,

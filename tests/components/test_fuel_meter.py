@@ -20,6 +20,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.fuel_meter import FuelMeter, FuelMeterConfig, FuelMeterState
+from hisim.component import ComponentID
 
 # Heating-oil density expressed in kg per liter. The stored field
 # ``fuel_density_in_kg_per_m3`` uses kg/m^3, and since 1 L == 1e-3 m^3 the
@@ -45,20 +46,20 @@ def test_get_fuel_meter_default_config_with_no_arguments() -> None:
     """Default factory produces the documented hardcoded defaults."""
     config = FuelMeterConfig.get_fuel_meter_default_config()
 
-    assert config.name == "FuelMeter"
+    assert config.component_id.name == "FuelMeter"
     assert config.fuel_loadtype == lt.LoadTypes.OIL
     assert config.heating_value_of_fuel_in_kwh_per_liter == 9.82
     assert config.fuel_density_in_kg_per_m3 == OIL_DENSITY_IN_KG_PER_LITER * 1e3  # kg/L -> kg/m^3
-    assert config.building_name == "BUI1"
+    assert config.component_id.building is None
 
 
-def test_get_fuel_meter_default_config_with_custom_building_name() -> None:
-    """Passing ``building_name`` only changes that field, keeping the rest."""
-    config = FuelMeterConfig.get_fuel_meter_default_config(building_name="BUI2")
+def test_get_fuel_meter_default_config_with_custom_building() -> None:
+    """Passing a component_id with a building only changes that, keeping the rest."""
+    config = FuelMeterConfig.get_fuel_meter_default_config(component_id=ComponentID(name="FuelMeter", building="BUI2"))
 
-    assert config.building_name == "BUI2"
+    assert config.component_id.building == "BUI2"
     # All other defaults are preserved.
-    assert config.name == "FuelMeter"
+    assert config.component_id.name == "FuelMeter"
     assert config.fuel_loadtype == lt.LoadTypes.OIL
     assert config.heating_value_of_fuel_in_kwh_per_liter == 9.82
     assert config.fuel_density_in_kg_per_m3 == OIL_DENSITY_IN_KG_PER_LITER * 1e3  # kg/L -> kg/m^3
@@ -75,8 +76,8 @@ def test_get_fuel_meter_default_config_with_custom_fuel_loadtype() -> None:
     assert config.heating_value_of_fuel_in_kwh_per_liter == 9.82
     assert config.fuel_density_in_kg_per_m3 == OIL_DENSITY_IN_KG_PER_LITER * 1e3  # kg/L -> kg/m^3
     # And the other defaults are preserved too.
-    assert config.name == "FuelMeter"
-    assert config.building_name == "BUI1"
+    assert config.component_id.name == "FuelMeter"
+    assert config.component_id.building is None
 
 
 def test_get_cost_capex_returns_default_capex_and_ignores_none_inputs() -> None:

@@ -45,8 +45,8 @@ def test_config_rsoc_from_in_memory_dict() -> None:
     config = controller_l1_rsoc.RsocControllerConfig.config_rsoc(
         rsoc_name="RSOC_TEST", config_json=_make_rsoc_config_dict()
     )
-    assert config.building_name == "BUI1"
-    assert config.name == "rSCO l1 Controller"
+    assert config.component_id.building is None
+    assert config.component_id.name == "rSCO l1 Controller"
     assert config.nom_load_soec == 40.0
     assert config.min_load_soec == 2.315
     assert config.max_load_soec == 49.64
@@ -62,14 +62,14 @@ def test_config_rsoc_from_in_memory_dict() -> None:
 
 
 @pytest.mark.base
-def test_config_rsoc_building_name_override_and_defaults() -> None:
-    """config_rsoc forwards building_name and applies defaults for missing keys."""
+def test_config_rsoc_building_override_and_defaults() -> None:
+    """config_rsoc forwards the component identity and applies defaults for missing keys."""
     config = controller_l1_rsoc.RsocControllerConfig.config_rsoc(
         rsoc_name="RSOC_TEST",
-        building_name="BUI2",
+        component_id=cp.ComponentID(name="rSCO l1 Controller", building="BUI2"),
         config_json={"nom_load_soec": 40.0},
     )
-    assert config.building_name == "BUI2"
+    assert config.component_id.building == "BUI2"
     assert config.nom_load_soec == 40.0
     # Keys absent from the in-memory dict fall back to the documented defaults.
     assert config.min_load_soec == 0.0

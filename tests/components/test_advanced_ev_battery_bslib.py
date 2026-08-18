@@ -18,6 +18,7 @@ from hisim.components.advanced_ev_battery_bslib import (
     CarBatteryConfig,
     EVBatteryState,
 )
+from hisim.component import ComponentID
 
 
 @pytest.mark.base
@@ -25,8 +26,8 @@ def test_get_default_config_returns_expected_defaults() -> None:
     """``get_default_config`` returns a deterministic config with hardcoded defaults."""
     cfg = CarBatteryConfig.get_default_config()
 
-    assert cfg.building_name == "BUI1"
-    assert cfg.name == "CarBattery"
+    assert cfg.component_id.building is None
+    assert cfg.component_id.name == "CarBattery"
     assert cfg.system_id == "SG1"
     assert cfg.p_inv_custom == 1e4
     assert cfg.e_bat_custom == 30
@@ -37,11 +38,11 @@ def test_get_default_config_returns_expected_defaults() -> None:
 
 @pytest.mark.base
 def test_get_default_config_overrides_building_and_name() -> None:
-    """Explicit ``building_name``/``name`` arguments override the defaults, the rest stay."""
-    cfg = CarBatteryConfig.get_default_config(building_name="X", name="Y")
+    """An explicit ``component_id`` overrides the default identity, the rest stay."""
+    cfg = CarBatteryConfig.get_default_config(component_id=ComponentID(name="Y", building="X"))
 
-    assert cfg.building_name == "X"
-    assert cfg.name == "Y"
+    assert cfg.component_id.building == "X"
+    assert cfg.component_id.name == "Y"
     # All other fields keep their defaults.
     assert cfg.system_id == "SG1"
     assert cfg.p_inv_custom == 1e4

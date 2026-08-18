@@ -6,7 +6,7 @@ from typing import Any, Optional
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 from hisim.loadtypes import LoadTypes, ComponentType
-from hisim.component import ConfigBase
+from hisim.component import ComponentID, ConfigBase
 from hisim import log
 
 """
@@ -625,8 +625,7 @@ class EmissionFactorsAndCostsForDevicesConfig:
 class WarmWaterStorageConfig(ConfigBase):
     """Warm water storage config class."""
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     tank_diameter: float  # [m]
     tank_height: float  # [m]
     tank_start_temperature: float  # [°C]
@@ -637,12 +636,13 @@ class WarmWaterStorageConfig(ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Gets a default config."""
+        if component_id is None:
+            component_id = ComponentID(name="WarmWaterStorage")
         return WarmWaterStorageConfig(
-            building_name=building_name,
-            name="WarmWaterStorage",
+            component_id=component_id,
             tank_diameter=1,  # 0.9534        # [m]
             tank_height=2,  # 3.15              # [m]
             tank_start_temperature=65,  # [°C]
@@ -809,8 +809,7 @@ class PVConfig:
 class ExtendedControllerConfig(ConfigBase):
     """Extended controller config class."""
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     # Active Components
     chp: bool
     gas_heater: bool
@@ -826,12 +825,13 @@ class ExtendedControllerConfig(ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Gets a default ExtendedControllerConfig."""
+        if component_id is None:
+            component_id = ComponentID(name="Example Component")
         return ExtendedControllerConfig(
-            building_name=building_name,
-            name="Example Component",
+            component_id=component_id,
             chp=True,
             gas_heater=True,
             electrolyzer=True,

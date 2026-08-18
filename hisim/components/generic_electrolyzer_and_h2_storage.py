@@ -3,10 +3,11 @@
 # clean
 
 # Owned
-from typing import List, Any
+from typing import Optional, List, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
+from hisim.component import ComponentID
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, ConfigBase, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -30,8 +31,7 @@ __status__ = ""
 class ElectrolyzerWithStorageConfig(ConfigBase):
     """Electrolyzer wit storage config class."""
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     waste_energy: float  # [W]
     min_power: float  # [W]
     max_power: float  # [W]
@@ -49,12 +49,13 @@ class ElectrolyzerWithStorageConfig(ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Get default config."""
+        if component_id is None:
+            component_id = ComponentID(name="ElectrolyzerWithStorage")
         config = ElectrolyzerWithStorageConfig(
-            building_name=building_name,
-            name="ElectrolyzerWithStorage",
+            component_id=component_id,
             waste_energy=400,  # [W]
             min_power=1_200,  # [W]
             max_power=2_400,  # [W]
@@ -72,8 +73,7 @@ class ElectrolyzerWithStorageConfig(ConfigBase):
 class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
     """Electrolyzer with hydrogen storage config class."""
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     min_capacity: float  # [kg_H2]
     max_capacity: float  # [kg_H2]
     starting_fill: float  # [kg_H2]
@@ -91,12 +91,13 @@ class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Get default config."""
+        if component_id is None:
+            component_id = ComponentID(name="ElectrolyzerWithHydrogenStorage")
         config = ElectrolyzerWithHydrogenStorageConfig(
-            building_name=building_name,
-            name="ElectrolyzerWithHydrogenStorage",
+            component_id=component_id,
             min_capacity=0,
             max_capacity=500,
             starting_fill=400,

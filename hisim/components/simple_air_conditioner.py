@@ -15,10 +15,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import pandas as pd
+from typing import Optional
 from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim.component import (
+    ComponentID,
     CapexCostDataClass,
     ConfigBase,
     DisplayConfig,
@@ -55,8 +57,7 @@ __status__ = "development"
 class SimpleAirConditionerConfig(ConfigBase):
     """Configuration for the :class:`SimpleAirConditioner` component."""
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     nominal_cooling_power_w: float = 2000.0
     eta_carnot: float = 0.3
     temperature_epsilon_k: float = 0.01
@@ -68,12 +69,13 @@ class SimpleAirConditionerConfig(ConfigBase):
 
     @classmethod
     def get_default_simple_air_conditioner_config(
-        cls, building_name: str = "BUI1"
+        cls, component_id: Optional[ComponentID] = None
     ) -> SimpleAirConditionerConfig:
         """Return a default configuration for the simple air conditioner."""
+        if component_id is None:
+            component_id = ComponentID(name="SimpleAirConditioner")
         return cls(
-            building_name=building_name,
-            name="SimpleAirConditioner",
+            component_id=component_id,
             nominal_cooling_power_w=2000.0,
             eta_carnot=0.3,
             temperature_epsilon_k=0.01,
@@ -512,8 +514,7 @@ class SimpleAirConditioner(cp.Component):
 class SimpleAirConditionerControllerConfig(ConfigBase):
     """Configuration for the :class:`SimpleAirConditionerController`."""
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     setpoint_temperature_c: float = 24.0
     deadband_k: float = 0.5
 
@@ -524,12 +525,13 @@ class SimpleAirConditionerControllerConfig(ConfigBase):
 
     @classmethod
     def get_default_simple_air_conditioner_controller_config(
-        cls, building_name: str = "BUI1"
+        cls, component_id: Optional[ComponentID] = None
     ) -> SimpleAirConditionerControllerConfig:
         """Return a default configuration for the simple air conditioner controller."""
+        if component_id is None:
+            component_id = ComponentID(name="SimpleAirConditionerController")
         return cls(
-            building_name=building_name,
-            name="SimpleAirConditionerController",
+            component_id=component_id,
             setpoint_temperature_c=24.0,
             deadband_k=0.5,
         )

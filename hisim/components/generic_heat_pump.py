@@ -22,7 +22,7 @@ from hisim import log
 
 # Owned
 from hisim import utils
-from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.component import ComponentID, OpexCostDataClass, CapexCostDataClass
 from hisim.components.building import Building
 from hisim.components.weather import Weather
 import hisim.loadtypes as lt
@@ -49,8 +49,7 @@ class GenericHeatPumpConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return GenericHeatPump.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     manufacturer: str
     heat_pump_name: str
     min_operation_time: float
@@ -59,12 +58,13 @@ class GenericHeatPumpConfig(cp.ConfigBase):
     @classmethod
     def get_default_generic_heat_pump_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Gets a default Generic Heat Pump."""
+        if component_id is None:
+            component_id = ComponentID(name="HeatPump")
         return GenericHeatPumpConfig(
-            building_name=building_name,
-            name="HeatPump",
+            component_id=component_id,
             heat_pump_name="Vitocal 300-A AWO-AC 301.B07",
             manufacturer="Viessmann Werke GmbH & Co KG",
             min_operation_time=60 * 60,
@@ -82,19 +82,19 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return GenericHeatPumpController.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     temperature_air_heating_in_celsius: float
     temperature_air_cooling_in_celsius: float
     offset_in_celsius: float
     mode: int
 
     @classmethod
-    def get_default_generic_heat_pump_controller_config(cls, building_name: str = "BUI1",) -> Any:
+    def get_default_generic_heat_pump_controller_config(cls, component_id: Optional[ComponentID] = None,) -> Any:
         """Gets a default Generic Heat Pump Controller."""
+        if component_id is None:
+            component_id = ComponentID(name="HeatPumpController")
         return GenericHeatPumpControllerConfig(
-            building_name=building_name,
-            name="HeatPumpController",
+            component_id=component_id,
             temperature_air_heating_in_celsius=18.0,
             temperature_air_cooling_in_celsius=26.0,
             offset_in_celsius=0.5,

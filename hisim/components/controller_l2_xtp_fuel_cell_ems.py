@@ -4,11 +4,12 @@ from __future__ import annotations
 
 # clean
 from pathlib import Path
-from typing import Any, cast
+from typing import Optional, Any, cast
 import json
 import math
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+from hisim.component import ComponentID
 from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
 
 from hisim import loadtypes as lt
@@ -35,8 +36,7 @@ class XTPControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return str(XTPController.get_full_classname())
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     nom_output: float
     min_output: float
     max_output: float
@@ -56,14 +56,15 @@ class XTPControllerConfig(ConfigBase):
         cls,
         fuel_cell_name: str,
         operation_mode: str,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> XTPControllerConfig:
         """Sets the according parameters for the chosen fuel cell."""
+        if component_id is None:
+            component_id = ComponentID(name="L2XTPController")
         config_json = cls.read_config(fuel_cell_name)
 
         config = XTPControllerConfig(
-            building_name=building_name,
-            name="L2XTPController",  # config_json.get("name", "")
+            component_id=component_id,  # config_json.get("name", "")
             nom_output=config_json.get("nom_output", 0.0),
             min_output=config_json.get("min_output", 0.0),
             max_output=config_json.get("max_output", 0.0),

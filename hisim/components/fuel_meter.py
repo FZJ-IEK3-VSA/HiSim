@@ -9,7 +9,7 @@ from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.component import ComponentInput, OpexCostDataClass
+from hisim.component import ComponentID, ComponentInput, OpexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -39,8 +39,7 @@ class FuelMeterConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return FuelMeter.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     fuel_loadtype: lt.LoadTypes
     heating_value_of_fuel_in_kwh_per_liter: Optional[float]
     fuel_density_in_kg_per_m3: Optional[float]
@@ -48,15 +47,16 @@ class FuelMeterConfig(cp.ConfigBase):
     @classmethod
     def get_fuel_meter_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         fuel_loadtype: lt.LoadTypes = lt.LoadTypes.OIL,
         heating_value_of_fuel_in_kwh_per_liter: Optional[float] = 9.82,  # configuration.py
         fuel_density_in_kg_per_m3: Optional[float] = 0.83 * 1e3,  # configuration.py
     ) -> "FuelMeterConfig":
         """Gets a default FuelMeter."""
+        if component_id is None:
+            component_id = ComponentID(name="FuelMeter")
         return FuelMeterConfig(
-            building_name=building_name,
-            name="FuelMeter",
+            component_id=component_id,
             fuel_loadtype=fuel_loadtype,
             heating_value_of_fuel_in_kwh_per_liter=heating_value_of_fuel_in_kwh_per_liter,
             fuel_density_in_kg_per_m3=fuel_density_in_kg_per_m3
@@ -80,7 +80,7 @@ class FuelMeter(DynamicComponent):
         if my_display_config is None:
             my_display_config = cp.DisplayConfig(display_in_webtool=True)
         self.config: FuelMeterConfig = config
-        self.name: str = self.config.name
+        self.name: str = self.config.component_id.name
         self.my_component_inputs: List[DynamicConnectionInput] = []
         self.my_component_outputs: List[DynamicConnectionOutput] = []
         self.my_simulation_parameters: SimulationParameters = my_simulation_parameters

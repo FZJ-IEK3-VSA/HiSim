@@ -7,6 +7,7 @@ from hisim.components import heat_distribution_system, building
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.component import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -158,8 +159,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     )
 
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
-        building_name="BUI1",
-        name=hds_name,
+        component_id=ComponentID(name=hds_name),
         device_co2_footprint_in_kg=0,
         investment_costs_in_euro=8000,
         lifetime_in_years=50,

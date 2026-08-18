@@ -2,11 +2,12 @@
 
 # clean
 from pathlib import Path
-from typing import Any
+from typing import Optional, Any
 import json
 from dataclasses import dataclass, field
 from dataclasses_json import config as dc_json_config
 from dataclasses_json import dataclass_json
+from hisim.component import ComponentID
 from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
 
 from hisim import loadtypes as lt
@@ -33,8 +34,7 @@ class RsocBatteryControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return RsocBatteryController.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     # Python attributes use snake_case ("_in_kw") to satisfy the prospector
     # naming gate (pycodestyle N815 / pylint invalid-name). The dataclasses_json
     # ``field_name`` aliases keep the legacy mixedCase ("_in_kW") serialization
@@ -79,7 +79,7 @@ class RsocBatteryControllerConfig(ConfigBase):
         cls,
         rsoc_name: str,
         operation_mode: str,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         config_data: dict[str, Any] | None = None,
     ) -> Any:
         """Configure rsoc.
@@ -91,12 +91,13 @@ class RsocBatteryControllerConfig(ConfigBase):
         the config can be built in tests without the inputs directory or JSON
         file being present.
         """
+        if component_id is None:
+            component_id = ComponentID(name="rSOC and Battery Controller")
         if config_data is None:
             config_data = cls.read_config(rsoc_name)
 
         config = RsocBatteryControllerConfig(
-            building_name=building_name,
-            name="rSOC and Battery Controller",  # config_data.get("name", "")
+            component_id=component_id,  # config_data.get("name", "")
             nom_load_soec_in_kw=config_data.get("nom_load_soec", 0.0),
             min_load_soec_in_kw=config_data.get("min_load_soec", 0.0),
             max_load_soec_in_kw=config_data.get("max_load_soec", 0.0),

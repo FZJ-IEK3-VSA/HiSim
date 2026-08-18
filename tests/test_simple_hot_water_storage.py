@@ -6,6 +6,7 @@ from hisim import component as cp
 from hisim.components import simple_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -68,8 +69,7 @@ def simulate_simple_water_storage(
     # ===================================================================================================================
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig(
-        building_name="BUI1",
-        name=hws_name,
+        component_id=ComponentID(name=hws_name),
         volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
         heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
         heat_exchanger_is_present=False,

@@ -146,7 +146,7 @@ def _build_weather_with_cache(
     my_weather.set_sim_repo(sim_repository.SimRepository())
 
     _, cache_filepath = utils.get_cache_file(
-        my_weather.config.name, my_config, mysim
+        my_weather.config.component_id.name, my_config, mysim
     )
     columns = list(_CACHE_COLUMNS)
     if include_pressure:

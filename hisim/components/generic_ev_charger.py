@@ -23,13 +23,13 @@ Each component is paired with its configuration dataclass
 
 # Generic/Built-in
 import os
-from typing import Any, List, NamedTuple, Optional, Union, cast
+from typing import Any, List, NamedTuple, Optional
 import json
 import copy
 import sqlite3
 import datetime
 from dataclasses import dataclass
-from enum import IntEnum
+from enum import Enum, unique
 from dataclasses_json import dataclass_json
 import pandas as pd
 
@@ -83,20 +83,22 @@ class VehiclePureConfig(cp.ConfigBase):
         )
 
 
-class EVChargerMode(IntEnum):
+@unique
+class EVChargerMode(str, Enum):
     """Charging strategies selectable by :class:`EVChargerControllerConfig`.
 
-    Replaces the bare integer codes (1-6) that used to be passed to
-    ``EVChargerControllerConfig.mode``. The integer values are preserved so
-    that existing callers (and serialized configs) keep working.
+    Replaces the bare integer codes that used to be passed to
+    ``EVChargerControllerConfig.mode``. Every member carries its own name as
+    its value, so a serialized controller configuration names the strategy
+    explicitly and the integer codes are gone for good.
     """
 
-    STRAIGHT_CHARGING = 1
-    CHARGE_ON_ELECTRICITY_SURPLUS = 2
-    VEHICLE_TO_GRID = 3
-    STEPPED_PRIORITIZED_CHARGING = 4
-    TIGHT_STEPPED_PRIORITIZED_CHARGING = 5
-    SUPER_TIGHT_STEPPED_PRIORITIZED_CHARGING = 6
+    STRAIGHT_CHARGING = "STRAIGHT_CHARGING"
+    CHARGE_ON_ELECTRICITY_SURPLUS = "CHARGE_ON_ELECTRICITY_SURPLUS"
+    VEHICLE_TO_GRID = "VEHICLE_TO_GRID"
+    STEPPED_PRIORITIZED_CHARGING = "STEPPED_PRIORITIZED_CHARGING"
+    TIGHT_STEPPED_PRIORITIZED_CHARGING = "TIGHT_STEPPED_PRIORITIZED_CHARGING"
+    SUPER_TIGHT_STEPPED_PRIORITIZED_CHARGING = "SUPER_TIGHT_STEPPED_PRIORITIZED_CHARGING"
 
 
 @dataclass_json
@@ -105,32 +107,13 @@ class EVChargerControllerConfig(cp.ConfigBase):
     """Electrical vehicle charger controller config class.
 
     ``mode`` selects the charging strategy and is typed as
-    :class:`EVChargerMode`. For backward compatibility a bare integer code
-    (1-6) is still accepted and coerced to the matching enum member in
-    :meth:`__post_init__`.
+    :class:`EVChargerMode`. Only enum members are accepted; the historic bare
+    integer codes have been dropped without replacement.
     """
 
     building_name: str
     name: str
-    mode: Union[EVChargerMode, int]
-
-    def __post_init__(self) -> None:
-        """Coerce a bare integer ``mode`` to :class:`EVChargerMode`.
-
-        Existing callers may still pass the historic integer codes (1-6);
-        this keeps them working while documenting the contract via the enum.
-        """
-        if isinstance(self.mode, EVChargerMode):
-            return
-        try:
-            self.mode = EVChargerMode(int(self.mode))
-        except (ValueError, TypeError) as exc:
-            raise ValueError(
-                f"Invalid EVChargerControllerConfig.mode={self.mode!r}. "
-                "Expected an EVChargerMode member or an int in 1-6 ("
-                + ", ".join(f"{m.name}={m.value}" for m in EVChargerMode)
-                + ")."
-            ) from exc
+    mode: EVChargerMode
 
     @classmethod
     def get_main_classname(cls) -> str:
@@ -947,7 +930,7 @@ class EVChargerController(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.mode = cast(EVChargerMode, config.mode)
+        self.mode = config.mode
 
         if self.mode == EVChargerMode.STRAIGHT_CHARGING:
             self.mode_description = "Straight Charging"
@@ -985,8 +968,8 @@ class EVChargerController(cp.Component):
                 "Operate on Vehicle-to-Grid for SoC from 60% up to 100%"
             )
         else:
-            # Defensive safety net; unreachable because __post_init__ validates mode
-            # and every EVChargerMode member is handled above.
+            # Defensive safety net; unreachable because ``mode`` is typed as
+            # EVChargerMode and every member is handled above.
             self.mode_description = "WRITE MODE DESCRIPTION HERE!"  # type: ignore[unreachable]
             self.mode_extended_description = "WRITE MODE EXTENDED DESCRIPTION HERE!"
 
@@ -1087,10 +1070,9 @@ class EVChargerController(cp.Component):
                 minimum_state_of_charge = 0.6
                 state = 3
         else:
-            # Defensive: __post_init__ already validates that mode is a valid
-            # EVChargerMode member at construction time, so this branch is
-            # unreachable for a properly constructed EVChargerControllerConfig.
-            # Kept as a safety net in case the validation contract is bypassed.
+            # Defensive: ``mode`` is typed as EVChargerMode and every member is
+            # handled above, so this branch is unreachable for a properly
+            # constructed EVChargerControllerConfig.
             raise Exception(f"Mode {self.mode!r} is invalid or has not been implemented yet.")
 
         stsv.set_output_value(self.state_channel, state)

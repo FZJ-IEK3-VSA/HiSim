@@ -31,16 +31,26 @@ __email__ = ""
 __status__ = ""
 
 
-class SimpleHeatSourceType(Enum):
-    """Set Heat Source Types."""
+class SimpleHeatSourceType(str, Enum):
+    """Set Heat Source Types.
+
+    A ``str`` mixin so members survive ``json.dumps(config.to_dict())`` — the exact
+    path the scenario generator uses — without a custom encoder. The values already
+    equal the member names and stay unchanged.
+    """
 
     CONSTANT_THERMAL_POWER = "CONSTANT_THERMAL_POWER"
     CONSTANT_TEMPERATURE = "CONSTANT_TEMPERATURE"
     NEAR_SURFACE_BRINE_TEMPERATURE = "NEAR_SURFACE_BRINE_TEMPERATURE"
 
 
-class FluidMediaType(Enum):
-    """ Sort of Media."""
+class FluidMediaType(str, Enum):
+    """ Sort of Media.
+
+    A ``str`` mixin so members survive ``json.dumps(config.to_dict())``. The values
+    are pygfunction fluid identifiers consumed via ``.value`` in ``Fluid(...)`` and
+    must not be renamed to the member names.
+    """
 
     WATER = "Water"
     ETHYLENE_GLYCOL = "EthyleneGlycol"

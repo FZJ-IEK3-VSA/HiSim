@@ -14,9 +14,9 @@ import hashlib
 
 # clean
 import importlib
-from enum import IntEnum
+from enum import Enum, unique
 from dataclasses import dataclass
-from typing import Any, List, Optional, Dict, Union
+from typing import Any, List, Optional, Dict
 
 import pandas as pd
 import numpy as np
@@ -57,23 +57,28 @@ __maintainer__ = ""
 __status__ = ""
 
 
-class PositionHotWaterStorageInSystemSetup(IntEnum):
+@unique
+class PositionHotWaterStorageInSystemSetup(str, Enum):
     """Set Postion of Hot Water Storage in system setup.
+
+    Every member carries its own name as its value so that a serialized
+    configuration spells the storage position out instead of encoding it as an
+    integer. Only member identity is meaningful; no ordinal is used anywhere.
 
     PARALLEL:
     Hot Water Storage is parallel to heatpump and hds, massflow of heatpump and heat distribution system are independent of each other.
     Heatpump massflow is calculated in hp model, hds massflow is calculated in hds model.
 
-    SERIE:
+    SERIES:
     Hot Water Storage in series to hp/hds, massflow of hds is an input and connected to hp, hot water storage is between output of hds and input of hp
 
     NO_STORAGE:
     No Hot Water Storage in system setup for space heating
     """
 
-    PARALLEL = 1
-    SERIE = 2
-    NO_STORAGE = 3
+    PARALLEL = "PARALLEL"
+    SERIES = "SERIES"
+    NO_STORAGE = "NO_STORAGE"
 
 
 @dataclass_json
@@ -98,7 +103,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     minimum_running_time_in_seconds: Optional[int]
     minimum_idle_time_in_seconds: Optional[int]
     minimum_thermal_output_power_in_watt: float
-    position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
+    position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup
     with_domestic_hot_water_preparation: bool
     passive_cooling_with_brine: bool
     electrical_input_power_brine_pump_in_watt: Optional[float]
@@ -313,7 +318,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         self.m_dot_ref = config.massflow_nominal_secondary_side_in_kg_per_s
 
         if self.position_hot_water_storage_in_system in [
-            PositionHotWaterStorageInSystemSetup.SERIE,
+            PositionHotWaterStorageInSystemSetup.SERIES,
             PositionHotWaterStorageInSystemSetup.NO_STORAGE,
         ]:
             if self.m_dot_ref is None or self.m_dot_ref == 0:
@@ -472,7 +477,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         if (
             self.position_hot_water_storage_in_system
             in [
-                PositionHotWaterStorageInSystemSetup.SERIE,
+                PositionHotWaterStorageInSystemSetup.SERIES,
                 PositionHotWaterStorageInSystemSetup.NO_STORAGE,
             ]
             or self.passive_cooling_with_brine
@@ -957,7 +962,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         if (
             self.position_hot_water_storage_in_system
             in [
-                PositionHotWaterStorageInSystemSetup.SERIE,
+                PositionHotWaterStorageInSystemSetup.SERIES,
                 PositionHotWaterStorageInSystemSetup.NO_STORAGE,
             ]
             or self.passive_cooling_with_brine

@@ -72,20 +72,25 @@ https://github.com/NREL/SAM/tree/patch/deploy/libraries
 """
 
 
-class PVLibModuleAndInverterEnum(enum.Enum):
+@enum.unique
+class PVLibModuleAndInverterEnum(str, enum.Enum):
     """Module and inverter database options.
 
     Class to determine what pvlib database for phtotovoltaic modules
-    and inverters should be used.
+    and inverters should be used. Every member carries its own name as its
+    value so that a serialized PV configuration names the database explicitly;
+    the pvlib database keys themselves are hard-coded at the call sites in
+    :meth:`PVSystem.get_modules_from_database` and
+    :meth:`PVSystem.get_inverters_from_database`, so no ordinal is needed.
 
     https://pvlib-python.readthedocs.io/en/v0.9.0/generated/pvlib.pvsystem.retrieve_sam.html.
     """
 
-    SANDIA_MODULE_DATABASE = 1
-    SANDIA_INVERTER_DATABASE = 2
-    CEC_MODULE_DATABASE = 3
-    CEC_INVERTER_DATABASE = 4
-    ANTON_DRIESSE_INVERTER_DATABASE = 5
+    SANDIA_MODULE_DATABASE = "SANDIA_MODULE_DATABASE"
+    SANDIA_INVERTER_DATABASE = "SANDIA_INVERTER_DATABASE"
+    CEC_MODULE_DATABASE = "CEC_MODULE_DATABASE"
+    CEC_INVERTER_DATABASE = "CEC_INVERTER_DATABASE"
+    ANTON_DRIESSE_INVERTER_DATABASE = "ANTON_DRIESSE_INVERTER_DATABASE"
 
 
 @dataclass_json

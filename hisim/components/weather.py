@@ -7,7 +7,7 @@ import math
 import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from enum import Enum, IntEnum
+from enum import Enum, unique
 from typing import Any, List, Optional, Union
 
 import numpy as np
@@ -40,15 +40,22 @@ https://github.com/FZJ-IEK3-VSA/tsib
 """
 
 
-class WeatherDataSourceEnum(IntEnum):
-    """Describes where the weather data is from. Used to choose the correct reading function."""
+@unique
+class WeatherDataSourceEnum(str, Enum):
+    """Describes where the weather data is from. Used to choose the correct reading function.
 
-    DWD_TRY = 1
-    NSRDB = 2
-    NSRDB_15MIN = 3
-    DWD_10MIN = 4
-    ERA5 = 5
-    DWD_15MIN = 6
+    Every member carries its own name as its value so that a serialized config
+    reads ``"DWD_TRY"`` instead of an opaque integer code. Only the member
+    identity matters at runtime; nothing in the weather module depends on an
+    ordinal.
+    """
+
+    DWD_TRY = "DWD_TRY"
+    NSRDB = "NSRDB"
+    NSRDB_15MIN = "NSRDB_15MIN"
+    DWD_10MIN = "DWD_10MIN"
+    ERA5 = "ERA5"
+    DWD_15MIN = "DWD_15MIN"
 
 
 class LocationEnum(Enum):
@@ -378,9 +385,7 @@ class WeatherConfig(ConfigBase):
 
     Decorated with dataclass_json like every other config class, so that
     serialization uses the dataclass field names verbatim (snake_case) instead of
-    the camelCase dialect of the otherwise-shadowed JSONWizard base. The
-    data_source enum is an IntEnum so that values parsed from JSON as plain ints
-    keep comparing equal to the enum members.
+    the camelCase dialect of the otherwise-shadowed JSONWizard base.
     """
 
     building_name: str

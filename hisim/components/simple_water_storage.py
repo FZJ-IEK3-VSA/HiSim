@@ -4,8 +4,8 @@
 # Owned
 import importlib
 from dataclasses import dataclass
-from typing import List, Any, Tuple, Union, Optional
-from enum import IntEnum
+from typing import List, Any, Tuple, Optional
+from enum import Enum, unique
 import numpy as np
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -38,21 +38,34 @@ __email__ = ""
 __status__ = ""
 
 
-class HotWaterStorageSizingEnum(IntEnum):
-    """Set Simple Hot Water Storage sizing options."""
+@unique
+class HotWaterStorageSizingEnum(str, Enum):
+    """Set Simple Hot Water Storage sizing options.
 
-    SIZE_ACCORDING_TO_HEAT_PUMP = 1
-    SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM = 2
-    SIZE_ACCORDING_TO_GAS_HEATER = 3
-    SIZE_ACCORDING_TO_PELLET_HEATING = 4
-    SIZE_ACCORDING_TO_WOOD_CHIP_HEATING = 5
+    Selects which heat generator the storage volume is scaled against. Every
+    member carries its own name as its value so that the choice reads as text
+    wherever it is written out; only member identity matters at runtime.
+    """
+
+    SIZE_ACCORDING_TO_HEAT_PUMP = "SIZE_ACCORDING_TO_HEAT_PUMP"
+    SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM = "SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM"
+    SIZE_ACCORDING_TO_GAS_HEATER = "SIZE_ACCORDING_TO_GAS_HEATER"
+    SIZE_ACCORDING_TO_PELLET_HEATING = "SIZE_ACCORDING_TO_PELLET_HEATING"
+    SIZE_ACCORDING_TO_WOOD_CHIP_HEATING = "SIZE_ACCORDING_TO_WOOD_CHIP_HEATING"
 
 
-class PositionHotWaterStorageInSystemSetup(IntEnum):
-    """Set Simple Hot Water Storage Position options."""
+@unique
+class PositionHotWaterStorageInSystemSetup(str, Enum):
+    """Set Simple Hot Water Storage Position options.
 
-    PARALLEL_TO_HEAT_SOURCE = 1
-    SERIE_TO_HEAT_SOURCE = 2
+    Decides whether the storage sits parallel to or in series with the heat
+    source, which changes the component's input wiring. Every member carries its
+    own name as its value so that a serialized configuration spells the position
+    out instead of encoding it as an integer.
+    """
+
+    PARALLEL_TO_HEAT_SOURCE = "PARALLEL_TO_HEAT_SOURCE"
+    SERIE_TO_HEAT_SOURCE = "SERIE_TO_HEAT_SOURCE"
 
 
 @dataclass_json
@@ -70,7 +83,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     volume_heating_water_storage_in_liter: float
     heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float
     heat_exchanger_is_present: bool
-    position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
+    position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup
     # it should be checked how much energy the storage lost during the simulated period (see guidelines below, p.2, accepted loss in kWh/days)
     # https://www.bdh-industrie.de/fileadmin/user_upload/ISH2019/Infoblaetter/Infoblatt_Nr_74_Energetische_Bewertung_Warmwasserspeicher.pdf
     #: CO2 footprint of investment in kg
@@ -91,7 +104,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     ) -> "SimpleHotWaterStorageConfig":
         """Get a default simplehotwaterstorage config."""
         volume_heating_water_storage_in_liter: float = 500
-        position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = (
+        position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = (
             PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE
         )
         config = SimpleHotWaterStorageConfig(
@@ -152,7 +165,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         else:
             raise ValueError(f"Sizing option for Simple Hot Water Storage {sizing_option} is unvalid.")
 
-        position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = (
+        position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = (
             PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE
         )
 
@@ -617,7 +630,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             False,
         )
 
-        if self.position_hot_water_storage_in_system in [PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE]:
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE:
             self.water_temperature_heat_generator_input_channel: ComponentInput = self.add_input(
                 self.component_name,
                 self.WaterTemperatureFromHeatGenerator,

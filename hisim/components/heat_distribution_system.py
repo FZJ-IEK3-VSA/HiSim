@@ -2,8 +2,8 @@
 
 # clean
 import importlib
-from enum import IntEnum
-from typing import List, Any, Optional, Union
+from enum import Enum, unique
+from typing import List, Any, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -31,16 +31,27 @@ __email__ = "k.rieck@fz-juelich.de"
 __status__ = ""
 
 
-class HeatDistributionSystemType(IntEnum):
-    """Set Heating System Types."""
+@unique
+class HeatDistributionSystemType(str, Enum):
+    """Set Heating System Types.
 
-    RADIATOR = 1
-    FLOORHEATING = 2
-    LOW_TEMPERATURE_RADIATOR = 3
+    Every member carries its own name as its value so that a serialized
+    configuration names the heating system explicitly instead of encoding it as
+    an integer. Only member identity is meaningful; no ordinal is used anywhere.
+    """
+
+    RADIATOR = "RADIATOR"
+    FLOORHEATING = "FLOORHEATING"
+    LOW_TEMPERATURE_RADIATOR = "LOW_TEMPERATURE_RADIATOR"
 
 
-class PositionHotWaterStorageInSystemSetup(IntEnum):
+@unique
+class PositionHotWaterStorageInSystemSetup(str, Enum):
     """Set Postion of Hot Water Storage in system setup.
+
+    Every member carries its own name as its value so that a serialized
+    configuration spells the storage position out instead of encoding it as an
+    integer. Only member identity is meaningful; no ordinal is used anywhere.
 
     PARALLEL:
     Hot Water Storage is parallel to heatpump and hds, mass flow of heatpump and heat distribution system are independent of each other.
@@ -53,10 +64,10 @@ class PositionHotWaterStorageInSystemSetup(IntEnum):
     No Hot Water Storage in system setup for space heating
     """
 
-    PARALLEL = 1
-    SERIE = 2
-    NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR = 3
-    NO_STORAGE_MASS_FLOW_FIX = 4
+    PARALLEL = "PARALLEL"
+    SERIE = "SERIE"
+    NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR = "NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR"
+    NO_STORAGE_MASS_FLOW_FIX = "NO_STORAGE_MASS_FLOW_FIX"
 
 
 @dataclass_json
@@ -71,10 +82,10 @@ class HeatDistributionConfig(cp.ConfigBase):
 
     building_name: str
     name: str
-    heating_system: Union[HeatDistributionSystemType, int]
+    heating_system: HeatDistributionSystemType
     water_mass_flow_rate_in_kg_per_second: float
     absolute_conditioned_floor_area_in_m2: float
-    position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
+    position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup
     #: CO2 footprint of investment in kg
     device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
@@ -91,12 +102,10 @@ class HeatDistributionConfig(cp.ConfigBase):
         cls,
         water_mass_flow_rate_in_kg_per_second: float,
         absolute_conditioned_floor_area_in_m2: float,
-        heating_system: Union[HeatDistributionSystemType, int],
+        heating_system: HeatDistributionSystemType,
         name: str = "HeatDistributionSystem",
         building_name: str = "BUI1",
-        position_hot_water_storage_in_system: Union[
-            PositionHotWaterStorageInSystemSetup, int
-        ] = PositionHotWaterStorageInSystemSetup.PARALLEL,
+        position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = PositionHotWaterStorageInSystemSetup.PARALLEL,  # noqa: E501
     ) -> "HeatDistributionConfig":
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
@@ -186,7 +195,7 @@ class HeatDistribution(cp.Component):
             self.heat_distribution_system_config.absolute_conditioned_floor_area_in_m2
         )
 
-        self.position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = (
+        self.position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = (
             self.heat_distribution_system_config.position_hot_water_storage_in_system
         )
 
@@ -623,11 +632,11 @@ class HeatDistribution(cp.Component):
     ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         # consider costs of changing heat distribution system to floor heating
-        if config.heating_system in [HeatDistributionSystemType.FLOORHEATING, 2]:
+        if config.heating_system == HeatDistributionSystemType.FLOORHEATING:
             component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM_FLOORHEATING
-        elif config.heating_system in [HeatDistributionSystemType.RADIATOR, 1]:
+        elif config.heating_system == HeatDistributionSystemType.RADIATOR:
             component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM_RADIATOR
-        elif config.heating_system in [HeatDistributionSystemType.LOW_TEMPERATURE_RADIATOR, 3]:
+        elif config.heating_system == HeatDistributionSystemType.LOW_TEMPERATURE_RADIATOR:
             component_type = lt.ComponentType.HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR
         else:
             raise ValueError(
@@ -841,7 +850,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
 
     building_name: str
     name: str
-    heating_system: Union[HeatDistributionSystemType, int]
+    heating_system: HeatDistributionSystemType
     set_heating_threshold_outside_temperature_in_celsius: float
     heating_reference_temperature_in_celsius: float
     set_heating_temperature_for_building_in_celsius: float
@@ -857,7 +866,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         set_cooling_temperature_for_building_in_celsius: float,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         heating_reference_temperature_in_celsius: float = -7.0,
-        heating_system: Union[HeatDistributionSystemType, int] = HeatDistributionSystemType.FLOORHEATING,
+        heating_system: HeatDistributionSystemType = HeatDistributionSystemType.FLOORHEATING,
         building_name: str = "BUI1",
     ) -> "HeatDistributionControllerConfig":
         """Gets a default HeatDistribution Controller."""
@@ -898,7 +907,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         specific_heating_load_of_building_in_watt_per_m2: float,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         heating_reference_temperature_in_celsius: float = -7.0,
-        heating_system: Union[HeatDistributionSystemType, int] = HeatDistributionSystemType.FLOORHEATING,
+        heating_system: HeatDistributionSystemType = HeatDistributionSystemType.FLOORHEATING,
         building_name: str = "BUI1",
     ) -> "HeatDistributionControllerConfig":
         """Gets a default HeatDistribution Controller."""
@@ -1094,7 +1103,7 @@ class HeatDistributionController(cp.Component):
         self,
         set_heating_threshold_temperature_in_celsius: float,
         heating_reference_temperature_in_celsius: float,
-        heat_distribution_system_type: Union[HeatDistributionSystemType, int],
+        heat_distribution_system_type: HeatDistributionSystemType,
         max_flow_temperature_in_celsius: float,
         min_flow_temperature_in_celsius: float,
         max_return_temperature_in_celsius: float,
@@ -1381,7 +1390,7 @@ class HeatDistributionControllerInformation:
         self,
         set_heating_threshold_temperature_in_celsius: float,
         heating_reference_temperature_in_celsius: float,
-        heat_distribution_system_type: Union[HeatDistributionSystemType, int],
+        heat_distribution_system_type: HeatDistributionSystemType,
         set_heating_temperature_for_building_in_celsius: float,
         set_cooling_temperature_for_building_in_celsius: float,
     ) -> None:
@@ -1392,7 +1401,7 @@ class HeatDistributionControllerInformation:
         # Configuration
         self.set_heating_threshold_temperature_in_celsius: float = set_heating_threshold_temperature_in_celsius
         self.heating_reference_temperature_in_celsius: float = heating_reference_temperature_in_celsius
-        self.heat_distribution_system_type: Union[HeatDistributionSystemType, int] = heat_distribution_system_type
+        self.heat_distribution_system_type: HeatDistributionSystemType = heat_distribution_system_type
 
         self.set_heating_temperature_for_building_in_celsius: float = set_heating_temperature_for_building_in_celsius
         self.set_cooling_temperature_for_building_in_celsius: float = set_cooling_temperature_for_building_in_celsius

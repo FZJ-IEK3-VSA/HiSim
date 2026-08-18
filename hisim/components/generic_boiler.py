@@ -15,7 +15,7 @@ and as non-modulating on_off controller (which is used especially for pellet and
 import importlib
 from dataclasses import dataclass
 from typing import List, Any, Optional, Tuple
-from enum import Enum
+from enum import Enum, unique
 import pandas as pd
 from dataclasses_json import dataclass_json
 
@@ -67,11 +67,19 @@ __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = ""
 
 
-class BoilerType(Enum):
-    """Set Boiler Types."""
+@unique
+class BoilerType(str, Enum):
+    """Set Boiler Types.
 
-    CONVENTIONAL = 1  # use only heat of combustion -> lower heating value of fuel is used
-    CONDENSING = 2  # use also heat from waste gases (from water vapour) -> higher heating value of fuel is used
+    CONVENTIONAL uses only the heat of combustion, i.e. the lower heating value
+    of the fuel; CONDENSING additionally recovers the heat of the water vapour
+    in the waste gases, i.e. the higher heating value. Every member carries its
+    own name as its value so that a serialized boiler configuration names the
+    type explicitly instead of encoding it as an integer.
+    """
+
+    CONVENTIONAL = "CONVENTIONAL"
+    CONDENSING = "CONDENSING"
 
 
 @dataclass_json

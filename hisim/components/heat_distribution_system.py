@@ -57,7 +57,7 @@ class PositionHotWaterStorageInSystemSetup(str, Enum):
     Hot Water Storage is parallel to heatpump and hds, mass flow of heatpump and heat distribution system are independent of each other.
     Heatpump mass flow is calculated in hp model, hds mass flow is calculated in hds model.
 
-    SERIE:
+    SERIES:
     Hot Water Storage in series to hp/hds, mass flow of hds is an input and connected to hp, hot water storage is between output of hds and input of hp
 
     NO_STORAGE:
@@ -65,7 +65,7 @@ class PositionHotWaterStorageInSystemSetup(str, Enum):
     """
 
     PARALLEL = "PARALLEL"
-    SERIE = "SERIE"
+    SERIES = "SERIES"
     NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR = "NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR"
     NO_STORAGE_MASS_FLOW_FIX = "NO_STORAGE_MASS_FLOW_FIX"
 
@@ -239,7 +239,7 @@ class HeatDistribution(cp.Component):
 
         self.water_mass_flow_rate_hp_in_kg_per_second_channel: Optional[cp.ComponentInput] = None
         if self.position_hot_water_storage_in_system in (
-            PositionHotWaterStorageInSystemSetup.SERIE,
+            PositionHotWaterStorageInSystemSetup.SERIES,
             PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR,
         ):
             # just important for heating system without parallel bufferstorage

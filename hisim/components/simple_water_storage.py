@@ -65,7 +65,7 @@ class PositionHotWaterStorageInSystemSetup(str, Enum):
     """
 
     PARALLEL_TO_HEAT_SOURCE = "PARALLEL_TO_HEAT_SOURCE"
-    SERIE_TO_HEAT_SOURCE = "SERIE_TO_HEAT_SOURCE"
+    SERIES_TO_HEAT_SOURCE = "SERIES_TO_HEAT_SOURCE"
 
 
 @dataclass_json

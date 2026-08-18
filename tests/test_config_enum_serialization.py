@@ -60,6 +60,7 @@ class ConfigEnumSerializationCases:
         more_advanced_heat_pump_hplib.PositionHotWaterStorageInSystemSetup,
         simple_water_storage.PositionHotWaterStorageInSystemSetup,
         simple_water_storage.HotWaterStorageSizingEnum,
+        simple_heat_source.SimpleHeatSourceType,
         generic_pv_system.PVLibModuleAndInverterEnum,
         generic_boiler.BoilerType,
         generic_ev_charger.EVChargerMode,
@@ -96,11 +97,13 @@ class ConfigEnumSerializationCases:
         ),
     }
 
-    #: The subset of CONFIG_FACTORIES whose enum fields were part of the string cutover.
-    #: ``SimpleHeatSourceConfig`` is excluded because its enums are plain (non-``str``)
-    #: Enums that were deliberately left alone; they are not JSON-encodable through
-    #: ``json.dumps(config.to_dict())``, which is a pre-existing limitation of those
-    #: enums rather than a property of the cutover.
+    #: The subset of CONFIG_FACTORIES whose enum fields all survive the plain
+    #: ``json.dumps(config.to_dict())`` path (every enum member is a ``str``
+    #: subclass). ``SimpleHeatSourceConfig`` joined once ``SimpleHeatSourceType``
+    #: and ``FluidMediaType`` gained the ``str`` mixin. ``FluidMediaType`` values
+    #: are pygfunction fluid identifiers and deliberately differ from the member
+    #: names, so that enum stays out of ``STRING_NAMED_ENUMS`` — the encodability
+    #: guarantee applies to it, the name-equality guarantee does not.
     CONVERTED_CONFIG_CASES: Tuple[str, ...] = (
         "EVChargerControllerConfig",
         "GenericBoilerConfig",
@@ -109,6 +112,7 @@ class ConfigEnumSerializationCases:
         "HeatDistributionControllerConfig",
         "MoreAdvancedHeatPumpHPLibConfig",
         "PVSystemConfig",
+        "SimpleHeatSourceConfig",
         "SimpleHotWaterStorageConfig",
         "WeatherConfig",
     )

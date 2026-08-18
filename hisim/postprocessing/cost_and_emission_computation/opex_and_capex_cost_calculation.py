@@ -79,10 +79,9 @@ def opex_calculation(
         for component in components:
             component_unwrapped = component.my_component
 
-            if (
-                building_object in str(component_unwrapped.component_name)
-                or not simulation_parameters.multiple_buildings
-            ):
+            # The building a component belongs to is read from its structured identity instead of
+            # being guessed from a substring of its runtime name.
+            if building_object == component_unwrapped.component_id.building_label:
                 opex: OpexCostDataClass = component_unwrapped.get_cost_opex(
                     all_outputs=all_outputs,
                     postprocessing_results=postprocessing_results,
@@ -330,10 +329,9 @@ def capex_calculation(
         for component in components:
             component_unwrapped = component.my_component
 
-            if (
-                building_object in str(component_unwrapped.component_name)
-                or not simulation_parameters.multiple_buildings
-            ):
+            # The building a component belongs to is read from its structured identity instead of
+            # being guessed from a substring of its runtime name.
+            if building_object == component_unwrapped.component_id.building_label:
                 capex: CapexCostDataClass = component_unwrapped.get_cost_capex(
                     config=component_unwrapped.config, simulation_parameters=simulation_parameters
                 )

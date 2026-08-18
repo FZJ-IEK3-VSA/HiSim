@@ -1338,12 +1338,19 @@ class PostProcessor:
             )
 
     def get_building_objects_in_district(self, ppdt: PostProcessingDataTransfer) -> list[str]:
-        """Get building names in district."""
+        """Collects the building objects that results are aggregated per.
+
+        Every component carries its building in its structured identity, and postprocessing
+        groups KPIs, OPEX and CAPEX per building object. Components that carry no building of
+        their own (the normal case in a single-building simulation) are grouped under
+        ``ComponentID.DEFAULT_BUILDING_LABEL``, which keeps the group key identical to the
+        decorative default building name that every configuration used to carry.
+        """
 
         building_objects_in_district = set()
 
         for wrapped_component in ppdt.wrapped_components:
-            building_objects_in_district.add(wrapped_component.my_component.config.building_name)
+            building_objects_in_district.add(wrapped_component.my_component.component_id.building_label)
 
         building_objects_in_district_list = list(building_objects_in_district)
 

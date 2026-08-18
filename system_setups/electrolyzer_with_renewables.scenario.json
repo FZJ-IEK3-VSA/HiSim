@@ -6,8 +6,11 @@
         {
             "component_full_classname": "hisim.components.transformer_rectifier.Transformer",
             "configuration": {
-                "building_name": "CSV Loader",
-                "name": "Standard transformer and rectifier unit",
+                "component_id": {
+                    "name": "Standard transformer and rectifier unit",
+                    "building": null,
+                    "unit": null
+                },
                 "efficiency": 0.95
             },
             "config_full_classname": "hisim.components.transformer_rectifier.TransformerConfig",
@@ -18,8 +21,11 @@
         {
             "component_full_classname": "hisim.components.csvloader.CSVLoader",
             "configuration": {
-                "building_name": "CSV Loader",
-                "name": "CSV",
+                "component_id": {
+                    "name": "CSV",
+                    "building": null,
+                    "unit": null
+                },
                 "csv_filename": "wind_generated_power_1_min.csv",
                 "column": 1,
                 "loadtype": "Electricity",
@@ -38,8 +44,11 @@
         {
             "component_full_classname": "hisim.components.controller_l1_electrolyzer_h2.ElectrolyzerController",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "L1ElectrolyzerController",
+                "component_id": {
+                    "name": "L1ElectrolyzerController",
+                    "building": null,
+                    "unit": null
+                },
                 "nom_load": 987.0,
                 "min_load": 205.462,
                 "max_load": 1028.225,
@@ -55,8 +64,11 @@
         {
             "component_full_classname": "hisim.components.generic_electrolyzer_h2.Electrolyzer",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Electrolyzer",
+                "component_id": {
+                    "name": "Electrolyzer",
+                    "building": null,
+                    "unit": null
+                },
                 "electrolyzer_type": "PEM",
                 "nom_load": 987.0,
                 "max_load": 1028.225,

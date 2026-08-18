@@ -6,8 +6,11 @@
         {
             "component_full_classname": "hisim.components.building.Building",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Building",
+                "component_id": {
+                    "name": "Building",
+                    "building": null,
+                    "unit": null
+                },
                 "heating_reference_temperature_in_celsius": -7.0,
                 "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
                 "building_heat_capacity_class": "medium",
@@ -44,8 +47,11 @@
         {
             "component_full_classname": "hisim.components.weather.Weather",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Weather",
+                "component_id": {
+                    "name": "Weather",
+                    "building": null,
+                    "unit": null
+                },
                 "location": "Aachen",
                 "source_path": "<<utils.get_input_directory()>>\\weather\\test-reference-years_1995-2012_1-location\\data_processed\\aachen_center",
                 "data_source": "DWD_TRY",
@@ -59,8 +65,11 @@
         {
             "component_full_classname": "hisim.components.simple_air_conditioner.SimpleAirConditioner",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "SimpleAirConditioner",
+                "component_id": {
+                    "name": "SimpleAirConditioner",
+                    "building": null,
+                    "unit": null
+                },
                 "nominal_cooling_power_w": 2000.0,
                 "eta_carnot": 0.3,
                 "temperature_epsilon_k": 0.01
@@ -73,8 +82,11 @@
         {
             "component_full_classname": "hisim.components.simple_air_conditioner.SimpleAirConditionerController",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "SimpleAirConditionerController",
+                "component_id": {
+                    "name": "SimpleAirConditionerController",
+                    "building": null,
+                    "unit": null
+                },
                 "setpoint_temperature_c": 24.0,
                 "deadband_k": 0.5
             },

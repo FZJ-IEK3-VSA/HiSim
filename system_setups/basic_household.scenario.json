@@ -6,8 +6,11 @@
         {
             "component_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "UTSPConnector",
+                "component_id": {
+                    "name": "UTSPConnector",
+                    "building": null,
+                    "unit": null
+                },
                 "data_acquisition_mode": "use_predefined_profile",
                 "household": {
                     "name": "CHR01 Couple both at Work",
@@ -53,8 +56,11 @@
         {
             "component_full_classname": "hisim.components.weather.Weather",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Weather",
+                "component_id": {
+                    "name": "Weather",
+                    "building": null,
+                    "unit": null
+                },
                 "location": "Aachen",
                 "source_path": "<<utils.get_input_directory()>>/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center",
                 "data_source": "DWD_TRY",
@@ -68,8 +74,11 @@
         {
             "component_full_classname": "hisim.components.generic_pv_system.PVSystem",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "PVSystem",
+                "component_id": {
+                    "name": "PVSystem",
+                    "building": null,
+                    "unit": null
+                },
                 "time": 2019,
                 "location": "Aachen",
                 "module_name": "Trina Solar TSM-435NE09RC.05",
@@ -100,8 +109,11 @@
         {
             "component_full_classname": "hisim.components.electricity_meter.ElectricityMeter",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "ElectricityMeter",
+                "component_id": {
+                    "name": "ElectricityMeter",
+                    "building": null,
+                    "unit": null
+                },
                 "device_co2_footprint_in_kg": null,
                 "investment_costs_in_euro": null,
                 "lifetime_in_years": null,
@@ -152,8 +164,11 @@
         {
             "component_full_classname": "hisim.components.building.Building",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Building",
+                "component_id": {
+                    "name": "Building",
+                    "building": null,
+                    "unit": null
+                },
                 "heating_reference_temperature_in_celsius": -7.0,
                 "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
                 "building_heat_capacity_class": "medium",
@@ -190,8 +205,11 @@
         {
             "component_full_classname": "hisim.components.generic_heat_pump.GenericHeatPumpController",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "GenericHeatPumpController",
+                "component_id": {
+                    "name": "GenericHeatPumpController",
+                    "building": null,
+                    "unit": null
+                },
                 "temperature_air_heating_in_celsius": 19.0,
                 "temperature_air_cooling_in_celsius": 24.0,
                 "offset_in_celsius": 0.5,
@@ -205,8 +223,11 @@
         {
             "component_full_classname": "hisim.components.generic_heat_pump.GenericHeatPump",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "HeatPump",
+                "component_id": {
+                    "name": "HeatPump",
+                    "building": null,
+                    "unit": null
+                },
                 "manufacturer": "Viessmann Werke GmbH & Co KG",
                 "heat_pump_name": "Vitocal 300-A AWO-AC 301.B07",
                 "min_operation_time": 3600,

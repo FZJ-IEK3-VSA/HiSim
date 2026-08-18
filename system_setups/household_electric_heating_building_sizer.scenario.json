@@ -6,8 +6,11 @@
         {
             "component_full_classname": "hisim.components.building.Building",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Building",
+                "component_id": {
+                    "name": "Building",
+                    "building": null,
+                    "unit": null
+                },
                 "heating_reference_temperature_in_celsius": -7.0,
                 "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
                 "building_heat_capacity_class": "medium",
@@ -44,8 +47,11 @@
         {
             "component_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "UTSPConnector",
+                "component_id": {
+                    "name": "UTSPConnector",
+                    "building": null,
+                    "unit": null
+                },
                 "data_acquisition_mode": "use_local_lpg",
                 "household": {
                     "name": "CHR01 Couple both at Work",
@@ -91,8 +97,11 @@
         {
             "component_full_classname": "hisim.components.weather.Weather",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Weather",
+                "component_id": {
+                    "name": "Weather",
+                    "building": null,
+                    "unit": null
+                },
                 "location": "Aachen",
                 "source_path": "<<utils.get_input_directory()>>/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center",
                 "data_source": "DWD_TRY",
@@ -106,8 +115,11 @@
         {
             "component_full_classname": "hisim.components.generic_pv_system.PVSystem",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "PVSystem",
+                "component_id": {
+                    "name": "PVSystem",
+                    "building": null,
+                    "unit": null
+                },
                 "time": 2019,
                 "location": "AACHEN",
                 "module_name": "Trina Solar TSM-435NE09RC.05",
@@ -138,8 +150,11 @@
         {
             "component_full_classname": "hisim.components.generic_electric_heating.ElectricHeatingController",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "ElectricHeatingController",
+                "component_id": {
+                    "name": "ElectricHeatingController",
+                    "building": null,
+                    "unit": null
+                },
                 "set_heating_threshold_outside_temperature_in_celsius": 18.0,
                 "with_domestic_hot_water_preparation": true,
                 "hysteresis_water_temperature_offset": 15,
@@ -154,8 +169,11 @@
         {
             "component_full_classname": "hisim.components.generic_electric_heating.ElectricHeating",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "ElectricHeating",
+                "component_id": {
+                    "name": "ElectricHeating",
+                    "building": null,
+                    "unit": null
+                },
                 "maximum_electric_power_w": 7780.752200000001,
                 "efficiency": 1.0,
                 "device_co2_footprint_in_kg": null,
@@ -173,8 +191,11 @@
         {
             "component_full_classname": "hisim.components.simple_water_storage.SimpleDHWStorage",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "DHWStorage",
+                "component_id": {
+                    "name": "DHWStorage",
+                    "building": null,
+                    "unit": null
+                },
                 "volume_heating_water_storage_in_liter": 250.0,
                 "heat_transfer_coefficient_in_watt_per_m2_per_kelvin": 0.36,
                 "device_co2_footprint_in_kg": null,
@@ -191,8 +212,11 @@
         {
             "component_full_classname": "hisim.components.electricity_meter.ElectricityMeter",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "ElectricityMeter",
+                "component_id": {
+                    "name": "ElectricityMeter",
+                    "building": null,
+                    "unit": null
+                },
                 "device_co2_footprint_in_kg": null,
                 "investment_costs_in_euro": null,
                 "lifetime_in_years": null,
@@ -219,8 +243,11 @@
         {
             "component_full_classname": "hisim.components.advanced_battery_bslib.Battery",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Battery",
+                "component_id": {
+                    "name": "Battery",
+                    "building": null,
+                    "unit": null
+                },
                 "source_weight": 1,
                 "system_id": "SG1",
                 "custom_pv_inverter_power_generic_in_watt": 11136.14,
@@ -242,8 +269,11 @@
         {
             "component_full_classname": "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "L2EMSElectricityController",
+                "component_id": {
+                    "name": "L2EMSElectricityController",
+                    "building": null,
+                    "unit": null
+                },
                 "strategy": "optimize_own_consumption",
                 "limit_to_shave": 0,
                 "building_indoor_temperature_offset_value": 2,

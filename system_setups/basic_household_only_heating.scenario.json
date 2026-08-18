@@ -6,8 +6,11 @@
         {
             "component_full_classname": "hisim.components.generic_boiler.GenericBoilerController",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "ModulatingBoilerController",
+                "component_id": {
+                    "name": "ModulatingBoilerController",
+                    "building": null,
+                    "unit": null
+                },
                 "is_modulating": true,
                 "set_heating_threshold_outside_temperature_in_celsius": 16.0,
                 "minimal_thermal_power_in_watt": 1000,
@@ -27,8 +30,11 @@
         {
             "component_full_classname": "hisim.components.heat_distribution_system.HeatDistributionController",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "HeatDistributionController",
+                "component_id": {
+                    "name": "HeatDistributionController",
+                    "building": null,
+                    "unit": null
+                },
                 "heating_system": "RADIATOR",
                 "set_heating_threshold_outside_temperature_in_celsius": 16.0,
                 "heating_reference_temperature_in_celsius": -12.2,
@@ -45,8 +51,11 @@
         {
             "component_full_classname": "hisim.components.heat_distribution_system.HeatDistribution",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "HeatDistributionSystem",
+                "component_id": {
+                    "name": "HeatDistributionSystem",
+                    "building": null,
+                    "unit": null
+                },
                 "heating_system": "RADIATOR",
                 "water_mass_flow_rate_in_kg_per_second": 0.12,
                 "absolute_conditioned_floor_area_in_m2": 121.2,
@@ -65,8 +74,11 @@
         {
             "component_full_classname": "hisim.components.simple_water_storage.SimpleHotWaterStorage",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "SimpleHotWaterStorage",
+                "component_id": {
+                    "name": "SimpleHotWaterStorage",
+                    "building": null,
+                    "unit": null
+                },
                 "volume_heating_water_storage_in_liter": 155.62,
                 "heat_transfer_coefficient_in_watt_per_m2_per_kelvin": 2.0,
                 "heat_exchanger_is_present": true,
@@ -85,8 +97,11 @@
         {
             "component_full_classname": "hisim.components.generic_boiler.GenericBoiler",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "CondensingGasBoiler",
+                "component_id": {
+                    "name": "CondensingGasBoiler",
+                    "building": null,
+                    "unit": null
+                },
                 "energy_carrier": "Gas",
                 "boiler_type": "CONDENSING",
                 "minimal_thermal_power_in_watt": 1000,
@@ -109,8 +124,11 @@
         {
             "component_full_classname": "hisim.components.building.Building",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Building",
+                "component_id": {
+                    "name": "Building",
+                    "building": null,
+                    "unit": null
+                },
                 "heating_reference_temperature_in_celsius": -7.0,
                 "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
                 "building_heat_capacity_class": "medium",
@@ -147,8 +165,11 @@
         {
             "component_full_classname": "hisim.components.weather.Weather",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Weather",
+                "component_id": {
+                    "name": "Weather",
+                    "building": null,
+                    "unit": null
+                },
                 "location": "Aachen",
                 "source_path": "<<utils.get_input_directory()>>/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center",
                 "data_source": "DWD_TRY",
@@ -162,8 +183,11 @@
         {
             "component_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "UTSPConnector",
+                "component_id": {
+                    "name": "UTSPConnector",
+                    "building": null,
+                    "unit": null
+                },
                 "data_acquisition_mode": "use_predefined_profile",
                 "household": {
                     "name": "CHR01 Couple both at Work",

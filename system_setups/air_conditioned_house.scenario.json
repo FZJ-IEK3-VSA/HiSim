@@ -6,8 +6,11 @@
         {
             "component_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "UTSPConnector",
+                "component_id": {
+                    "name": "UTSPConnector",
+                    "building": null,
+                    "unit": null
+                },
                 "data_acquisition_mode": "use_predefined_profile",
                 "household": {
                     "name": "CHR01 Couple both at Work",
@@ -53,8 +56,11 @@
         {
             "component_full_classname": "hisim.components.weather.Weather",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Weather",
+                "component_id": {
+                    "name": "Weather",
+                    "building": null,
+                    "unit": null
+                },
                 "location": "Seville",
                 "source_path": "<<utils.get_input_directory()>>/weather/NSRDB/Seville/Seville",
                 "data_source": "NSRDB",
@@ -68,8 +74,11 @@
         {
             "component_full_classname": "hisim.components.generic_pv_system.PVSystem",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "PVSystem",
+                "component_id": {
+                    "name": "PVSystem",
+                    "building": null,
+                    "unit": null
+                },
                 "time": 2021,
                 "location": "Seville",
                 "module_name": "Hanwha HSL60P6-PA-4-250T [2013]",
@@ -100,8 +109,11 @@
         {
             "component_full_classname": "hisim.components.air_conditioner.AirConditioner",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "AirConditioner",
+                "component_id": {
+                    "name": "AirConditioner",
+                    "building": null,
+                    "unit": null
+                },
                 "manufacturer": "Panasonic",
                 "model_name": "CS-TZ71WKEW + CU-TZ71WKE",
                 "scale_factor": 0.5364243908677532,
@@ -148,8 +160,11 @@
         {
             "component_full_classname": "hisim.components.building.Building",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Building",
+                "component_id": {
+                    "name": "Building",
+                    "building": null,
+                    "unit": null
+                },
                 "heating_reference_temperature_in_celsius": 5.7,
                 "building_code": "ES.ME.SFH.04.Gen.ReEx.001.003",
                 "building_heat_capacity_class": "medium",
@@ -186,8 +201,11 @@
         {
             "component_full_classname": "hisim.components.air_conditioner.AirConditionerController",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "AirConditionerControllerConfig",
+                "component_id": {
+                    "name": "AirConditionerControllerConfig",
+                    "building": null,
+                    "unit": null
+                },
                 "heating_set_temperature_deg_c": 20.0,
                 "cooling_set_temperature_deg_c": 24.0,
                 "minimum_runtime_s": 1800,

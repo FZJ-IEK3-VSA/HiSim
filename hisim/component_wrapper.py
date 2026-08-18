@@ -169,15 +169,17 @@ class ComponentWrapper:
     def connect_inputs(self, all_outputs: List[cp.ComponentOutput]) -> None:
         """Connect each of the component's inputs to a matching global output.
 
-        Matches by source component name and field name, verifying unit
-        compatibility (a warning is logged for ANY-unit matches).
+        Matches by source component name and field name, verifying load-type and unit
+        compatibility. Two concretely differing load types or units are a hard error.
+        ``LoadTypes.ANY`` on either side is a legitimate wildcard (control and state
+        signals) and connects silently; ``Units.ANY`` mismatches log a warning.
 
         Args:
             all_outputs: Global list of all ComponentOutput objects to match against.
 
         Raises:
-            ValueError: If a matched input and output have incompatible units, or
-                if a mandatory input has no matching output.
+            ValueError: If a matched input and output have incompatible load types or
+                units, or if a mandatory input has no matching output.
         """
 
         # Returns a List of ComponentInputs
@@ -198,6 +200,19 @@ class ComponentWrapper:
                     global_output.component_name == component_input.src_object_name
                     and global_output.field_name == component_input.src_field_name
                 ):
+                    # Check if ComponentOutput and ComponentInput have the same load type.
+                    # LoadTypes.ANY on either side is a legitimate wildcard (control and
+                    # state signals) and connects without any diagnostics.
+                    if component_input.loadtype != global_output.load_type:
+                        if lt.LoadTypes.ANY not in (component_input.loadtype, global_output.load_type):
+                            raise ValueError(
+                                f"The input {component_input.field_name} (cp: {component_input.component_name}, "
+                                f"load type: {component_input.loadtype}) and output {global_output.field_name} "
+                                f"(cp: {global_output.component_name}, load type: {global_output.load_type}) "
+                                f"do not have the same load type! Align the two port declarations (see the "
+                                f"LoadTypes canonicalization convention: temperature signals are TEMPERATURE, "
+                                f"water mass flows are WARM_WATER)."
+                            )
                     # Check if ComponentOutput and ComponentInput have the same units
                     if component_input.unit != global_output.unit:
                         # Check the use of "Units.Any"

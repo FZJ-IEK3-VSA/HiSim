@@ -1,0 +1,23 @@
+{
+  "comment": "Thresholds for the automated plausibility panel of the lifecycle cost report (LIFECYCLE_COST_REPORT). Range checks yield WARN when outside; structural checks yield FAIL. Bounds are deliberately generous - they catch unit mix-ups and wiring mistakes, not modelling disagreements. Reviewable data, not code.",
+  "effective_price_ranges": {
+    "comment": "Implied effective year-1 price = (working + standing + capacity + co2) / bought quantity, in EUR/kWh for every carrier (decision D26). The four fuels the market quotes per ton or per liter were converted from their former native-unit bands with the same lower heating values the pricing path divides by, so a band that passed before passes now; each derivation is spelled out in the comment_<CARRIER> key next to it.",
+    "ELECTRICITY": [0.10, 0.60],
+    "NATURAL_GAS": [0.03, 0.30],
+    "comment_HEATING_OIL": "was 0.40 - 2.50 EUR/l; / 9.8217 kWh/l (PhysicsConfig OIL: 35.358 GJ/m3) = 0.0407 - 0.2546 EUR/kWh",
+    "HEATING_OIL": [0.0407, 0.2546],
+    "comment_DIESEL": "was 0.80 - 3.00 EUR/l; / 9.8 kWh/l (HiSim generic_car diesel heating value; PhysicsConfig has no diesel row) = 0.0816 - 0.3062 EUR/kWh",
+    "DIESEL": [0.0816, 0.3062],
+    "comment_PELLETS": "was 150 - 700 EUR/t; / 5000 kWh/t (PhysicsConfig PELLETS: 11.7 GJ/m3 at 650 kg/m3) = 0.030 - 0.140 EUR/kWh",
+    "PELLETS": [0.030, 0.140],
+    "comment_WOOD_CHIPS": "was 50 - 400 EUR/t; / 17333 kWh/t (PhysicsConfig WOOD_CHIPS: 15.6 GJ/m3 at 250 kg/m3) = 0.00288 - 0.02308 EUR/kWh. Note the heating value itself looks high for wood chips; it is the one HiSim's boilers and meters run on, and this band tracks it deliberately so the check stays consistent with the physics that produced the kWh.",
+    "WOOD_CHIPS": [0.00288, 0.02308],
+    "DISTRICT_HEATING": [0.04, 0.35],
+    "HYDROGEN": [0.05, 0.60]
+  },
+  "equivalent_annual_cost_per_m2_range": [5.0, 80.0],
+  "levelized_cost_of_heat_range": [0.05, 0.50],
+  "maintenance_to_investment_npv_ratio_range": [0.02, 0.80],
+  "band_width_max_over_min_warn": 3.5,
+  "reconciliation_tolerance": 1e-6
+}

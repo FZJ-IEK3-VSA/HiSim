@@ -107,7 +107,6 @@ class LoadTypes(str, enum.Enum):
     HEATING = "Heating"
     COOLING = "Cooling"
 
-    VOLUME = "Volume"
     TEMPERATURE = "Temperature"
     PRESSURE = "Pressure"
     TIME = "Time"

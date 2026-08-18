@@ -162,7 +162,10 @@ class FuelMeter(DynamicComponent):
                 source_component_class=DistrictHeating,
                 source_class_name=heat_source_class_name,
                 source_component_field_name=DistrictHeating.ThermalOutputDhwEnergy,
-                source_load_type=lt.LoadTypes.HEATING,
+                # DHW heat carries the WARM_WATER energy domain (LoadTypes rule 3),
+                # matching the DistrictHeating output declaration; the SH twin above
+                # correctly uses HEATING.
+                source_load_type=lt.LoadTypes.WARM_WATER,
                 source_unit=lt.Units.WATT_HOUR,
                 source_tags=[
                     lt.InandOutputType.HEAT_CONSUMPTION,

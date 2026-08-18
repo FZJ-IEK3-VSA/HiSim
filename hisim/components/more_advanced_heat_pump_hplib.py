@@ -786,7 +786,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             self.m_dot_water_primary: ComponentOutput = self.add_output(
                 object_name=self.component_name,
                 field_name=self.MassflowPrimarySide,
-                load_type=LoadTypes.VOLUME,
+                load_type=LoadTypes.WATER,
                 unit=Units.KG_PER_SEC,
                 output_description="Massflow of primary Side",
             )

@@ -335,7 +335,7 @@ class SimpleHeatSource(cp.Component):
         self.massflow_input_channel: ComponentInput = self.add_input(
             object_name=self.component_name,
             field_name=self.MassFlow,
-            load_type=lt.LoadTypes.VOLUME,
+            load_type=lt.LoadTypes.WARM_WATER,
             unit=Units.KG_PER_SEC,
             mandatory=False,
         )

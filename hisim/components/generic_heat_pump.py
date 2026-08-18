@@ -240,7 +240,7 @@ class GenericHeatPump(cp.Component):
         self.water_load_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.WaterConsumption,
-            lt.LoadTypes.VOLUME,
+            lt.LoadTypes.WARM_WATER,
             lt.Units.LITER,
             False,
         )

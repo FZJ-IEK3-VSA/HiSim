@@ -377,7 +377,7 @@ class HeatPumpHplib(Component):
         self.t_out: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.TemperatureOutput,
-            load_type=LoadTypes.HEATING,
+            load_type=LoadTypes.TEMPERATURE,
             unit=Units.CELSIUS,
             output_description="Temperature Output in °C",
             postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
@@ -385,7 +385,7 @@ class HeatPumpHplib(Component):
         self.t_in_warm_water: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.TemperatureInputWarmWater,
-            load_type=LoadTypes.HEATING,
+            load_type=LoadTypes.TEMPERATURE,
             unit=Units.CELSIUS,
             output_description="Temperature Input in °C",
             postprocessing_flag=[
@@ -396,7 +396,7 @@ class HeatPumpHplib(Component):
         self.m_dot: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.MassFlowOutput,
-            load_type=LoadTypes.VOLUME,
+            load_type=LoadTypes.WARM_WATER,
             unit=Units.KG_PER_SEC,
             output_description="Mass flow output",
         )

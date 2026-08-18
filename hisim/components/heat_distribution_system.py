@@ -215,7 +215,7 @@ class HeatDistribution(cp.Component):
         self.water_temperature_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.WaterTemperatureInput,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
         )
@@ -237,7 +237,7 @@ class HeatDistribution(cp.Component):
             self.water_mass_flow_rate_hp_in_kg_per_second_channel = self.add_input(
                 self.component_name,
                 self.WaterMassFlowInput,
-                lt.LoadTypes.WATER,
+                lt.LoadTypes.WARM_WATER,
                 lt.Units.KG_PER_SEC,
                 True,
             )
@@ -246,7 +246,7 @@ class HeatDistribution(cp.Component):
         self.water_temperature_inlet_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.WaterTemperatureInlet,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureInlet} will follow.",
         )
@@ -260,7 +260,7 @@ class HeatDistribution(cp.Component):
         self.water_temperature_difference_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.WaterTemperatureDifference,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.KELVIN,
             output_description=f"here a description for {self.WaterTemperatureDifference} will follow.",
         )

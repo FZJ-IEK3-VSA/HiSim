@@ -192,14 +192,14 @@ class DistrictHeating(Component):
         self.water_input_temperature_sh_channel: ComponentInput = self.add_input(
             self.component_name,
             DistrictHeating.WaterInputTemperatureSh,
-            LoadTypes.WATER,
+            LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             True,
         )
         self.water_input_mass_flow_rate_sh_channel: ComponentInput = self.add_input(
             self.component_name,
             DistrictHeating.WaterInputMassFlowRateFromHeatDistributionSystem,
-            LoadTypes.WATER,
+            LoadTypes.WARM_WATER,
             Units.KG_PER_SEC,
             True,
         )
@@ -207,14 +207,14 @@ class DistrictHeating(Component):
             self.water_input_temperature_dhw_channel: ComponentInput = self.add_input(
                 self.component_name,
                 DistrictHeating.WaterInputTemperatureDhw,
-                LoadTypes.WATER,
+                LoadTypes.TEMPERATURE,
                 Units.CELSIUS,
                 True,
             )
             self.water_input_mass_flow_rate_dhw_channel: ComponentInput = self.add_input(
                 self.component_name,
                 DistrictHeating.WaterInputMassFlowRateFromWarmWaterStorage,
-                LoadTypes.WATER,
+                LoadTypes.WARM_WATER,
                 Units.KG_PER_SEC,
                 True,
             )
@@ -223,14 +223,14 @@ class DistrictHeating(Component):
         self.water_mass_flow_sh_output_channel: ComponentOutput = self.add_output(
             self.component_name,
             DistrictHeating.WaterOutputShMassFlowRate,
-            LoadTypes.WATER,
+            LoadTypes.WARM_WATER,
             Units.KG_PER_SEC,
             output_description="Water mass flow rate for space heating.",
         )
         self.water_output_temperature_sh_channel: ComponentOutput = self.add_output(
             self.component_name,
             DistrictHeating.WaterOutputShTemperature,
-            LoadTypes.WATER,
+            LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             output_description="Water output temperature for space heating.",
         )
@@ -253,14 +253,14 @@ class DistrictHeating(Component):
         self.water_mass_flow_dhw_output_channel: ComponentOutput = self.add_output(
             self.component_name,
             DistrictHeating.WaterOutputDhwMassFlowRate,
-            LoadTypes.WATER,
+            LoadTypes.WARM_WATER,
             Units.KG_PER_SEC,
             output_description="Water mass flow rate for domestic hot water.",
         )
         self.water_output_temperature_dhw_channel: ComponentOutput = self.add_output(
             self.component_name,
             DistrictHeating.WaterOutputDhwTemperature,
-            LoadTypes.WATER,
+            LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             output_description="Water output temperature for domestic hot water.",
         )

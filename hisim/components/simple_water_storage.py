@@ -665,7 +665,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.water_temperature_heat_generator_output_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.WaterTemperatureToHeatGenerator,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureToHeatGenerator} will follow.",
         )
@@ -1523,7 +1523,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.water_temperature_to_heat_generator_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.WaterTemperatureToHeatGenerator,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureToHeatGenerator} will follow.",
         )

@@ -253,7 +253,7 @@ class HeatDistribution(cp.Component):
         self.water_temperature_outlet_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.WaterTemperatureOutput,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureOutput} will follow.",
         )
@@ -274,7 +274,7 @@ class HeatDistribution(cp.Component):
         self.water_mass_flow_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.WaterMassFlowHDS,
-            lt.LoadTypes.VOLUME,
+            lt.LoadTypes.WARM_WATER,
             lt.Units.KG_PER_SEC,
             output_description=f"here a description for {self.WaterMassFlowHDS} will follow.",
         )

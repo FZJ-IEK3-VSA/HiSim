@@ -193,7 +193,7 @@ class UtspLpgConnector(cp.Component):
         self.ww_temperature_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.WW_TemperatureInput,
-            lt.LoadTypes.WARM_WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             False,
         )

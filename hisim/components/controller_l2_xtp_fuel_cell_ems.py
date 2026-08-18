@@ -123,7 +123,7 @@ class XTPController(Component):
         self.soc: ComponentInput = self.add_input(
             self.component_name,
             XTPController.StateOfCharge,
-            lt.LoadTypes.DISTRICTHEATING,
+            lt.LoadTypes.ANY,
             lt.Units.PERCENT,
             False,
         )

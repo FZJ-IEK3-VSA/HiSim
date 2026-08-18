@@ -679,7 +679,7 @@ class HydrogenStorage(Component):
         self.current_fill_percent: ComponentOutput = self.add_output(
             self.component_name,
             HydrogenStorage.CurrentHydrogenFillLevelPercent,
-            lt.LoadTypes.GREEN_HYDROGEN,
+            lt.LoadTypes.ANY,
             lt.Units.PERCENT,
             output_description="Current Hydrogen Fill Level Percent",
         )

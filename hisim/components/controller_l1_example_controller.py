@@ -107,7 +107,7 @@ class SimpleController(Component):
         self.gas_heater_power_channel: ComponentOutput = self.add_output(
             self.component_name,
             SimpleController.GasHeaterPowerPercent,
-            lt.LoadTypes.GAS,
+            lt.LoadTypes.ANY,
             lt.Units.PERCENT,
         )
         self.heater_state: int = 0

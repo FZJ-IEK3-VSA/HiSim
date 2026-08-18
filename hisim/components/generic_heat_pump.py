@@ -232,7 +232,7 @@ class GenericHeatPump(cp.Component):
         self.temperature_outside_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.TemperatureOutside,
-            lt.LoadTypes.ANY,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
         )
@@ -254,7 +254,7 @@ class GenericHeatPump(cp.Component):
         self.water_input_temperature_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.WaterInput_temperature,
-            lt.LoadTypes.WARM_WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             False,
         )

@@ -89,14 +89,22 @@ class LoadTypes(str, enum.Enum):
        ``WARM_WATER`` for heating and DHW water loops, ``WATER`` for cold, feed or brine
        water, ``GAS``/``OIL``/``GREEN_HYDROGEN``/``OXYGEN``/``AIR`` for the respective
        fluids. There is deliberately no generic mass-flow quantity type; the dimension is
-       already expressed by the unit.
+       already expressed by the unit. Every loop that attaches to one of the water storages
+       or to the heat distribution system - including the solar-thermal collector loop - is
+       ``WARM_WATER``, while ``WATER`` is reserved for heat-pump source-side circuits
+       (brine, ground, air) and for cold or feed water.
     3. **Power and energy** (WATT, WATT_HOUR, ...): the **energy domain** - ``ELECTRICITY``,
        ``HEATING`` for space heat, ``WARM_WATER`` for DHW heat - or the **fuel carrier**
        when the value represents fuel consumption (the generic boiler's energy-demand
        outputs carry ``config.energy_carrier``, so a gas boiler reports GAS and an oil
        boiler OIL).
-    4. **Control and state signals** without a physical flow: ``ANY``, which connects to
-       any counterpart without triggering the load-type check.
+    4. **Control and state signals** without a physical flow: ``ANY`` for counters,
+       accumulators and continuous internal states (cycle counts, states of charge,
+       modulation degrees), which connects to any counterpart without triggering the
+       load-type check; ``ON_OFF`` where the signal genuinely is a binary on/off flag and
+       ``ACTIVATION`` where it is an activation or mode command. For the latter two the
+       resulting constraint on the wiring is intended: only another on/off respectively
+       activation port may be connected.
     """
 
     ANY = "Any"

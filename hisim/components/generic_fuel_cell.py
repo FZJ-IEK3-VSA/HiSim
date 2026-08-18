@@ -219,7 +219,7 @@ class FuelCell(cp.Component):
             self.fuelcellconfig.name,
             FuelCell.WaterflowOutput,
             lt.LoadTypes.WATER,
-            lt.Units.ANY,
+            lt.Units.KG_PER_SEC,
             output_description="Current water flow rate",
         )
 
@@ -239,7 +239,7 @@ class FuelCell(cp.Component):
             self.fuelcellconfig.name,
             FuelCell.HydrogenDemand,
             lt.LoadTypes.GREEN_HYDROGEN,
-            lt.Units.ANY,
+            lt.Units.KG_PER_SEC,
             output_description="Current hydrogen demand",
         )
 

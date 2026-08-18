@@ -245,7 +245,7 @@ class CHP(Component):
         self.mass_inp_temp_channel: ComponentInput = self.add_input(
             self.component_name,
             CHP.MassflowInputTemperature,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             False,
         )
@@ -259,7 +259,7 @@ class CHP(Component):
         self.hydrogen_not_released_channel: ComponentInput = self.add_input(
             self.component_name,
             CHP.HydrogenNotReleased,
-            lt.LoadTypes.GAS,
+            lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG,
             False,
         )
@@ -275,14 +275,19 @@ class CHP(Component):
         self.mass_out_temp_channel: ComponentOutput = self.add_output(
             self.component_name,
             CHP.MassflowOutputTemperature,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.MassflowOutputTemperature} will follow.",
         )
+        # The two gas-demand channels report the fuel the CHP asks for and the fuel it
+        # actually gets, both as a mass flow in kg/s.  Which fuel that is depends on the
+        # configured gas type, so the load type follows the carrier (see the LoadTypes
+        # convention, rule 3): a hydrogen CHP reports GREEN_HYDROGEN, a methane CHP GAS.
+        fuel_load_type = self.get_fuel_load_type()
         self.gas_demand_target_channel: ComponentOutput = self.add_output(
             self.component_name,
             CHP.GasDemandTarget,
-            lt.LoadTypes.GAS,
+            fuel_load_type,
             lt.Units.KG_PER_SEC,
             output_description=f"here a description for {self.GasDemandTarget} will follow.",
         )
@@ -310,9 +315,34 @@ class CHP(Component):
         self.gas_demand_real_used_channel: ComponentOutput = self.add_output(
             self.component_name,
             CHP.GasDemandReal,
-            lt.LoadTypes.GAS,
+            fuel_load_type,
             lt.Units.KG_PER_SEC,
             output_description=f"here a description for {self.GasDemandReal} will follow.",
+        )
+
+    def get_fuel_load_type(self) -> lt.LoadTypes:
+        """Translate the configured gas type into the load type of the fuel ports.
+
+        The CHP can be fed either with hydrogen or with methane, and its two gas-demand
+        outputs transport whichever of the two was configured.  Following rule 3 of the
+        LoadTypes convention, a fuel flow carries the load type of the fuel itself, so
+        this helper maps the free-text ``gas_type`` config entry onto the matching
+        LoadTypes member, which is then used for the port declarations.
+
+        Returns:
+            ``LoadTypes.GREEN_HYDROGEN`` for a hydrogen CHP, ``LoadTypes.GAS`` for a
+            methane CHP.
+
+        Raises:
+            ValueError: If the configured gas type is neither "Hydrogen" nor "Methan".
+        """
+        if self.gas_type == "Hydrogen":
+            return lt.LoadTypes.GREEN_HYDROGEN
+        if self.gas_type == "Methan":
+            return lt.LoadTypes.GAS
+        raise ValueError(
+            f"The gas type '{self.gas_type}' is not integrated in the CHP system. "
+            f"Use either 'Hydrogen' or 'Methan'."
         )
 
     def i_prepare_simulation(self) -> None:

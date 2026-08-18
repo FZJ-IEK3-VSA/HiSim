@@ -160,7 +160,7 @@ class FuelCellController(Component):
         self.current_mode_fuel_cell: ComponentOutput = self.add_output(
             self.component_name,
             FuelCellController.CurrentMode,
-            lt.LoadTypes.ANY,
+            lt.LoadTypes.ACTIVATION,
             lt.Units.ANY,
             output_description="current mode of fuel cell",
         )
@@ -168,16 +168,16 @@ class FuelCellController(Component):
         self.shut_down_count: ComponentOutput = self.add_output(
             self.component_name,
             FuelCellController.ShutdownCount,
-            lt.LoadTypes.ON_OFF,
-            lt.Units.BINARY,
+            lt.LoadTypes.ANY,
+            lt.Units.ANY,
             output_description="Counts the shut down cycles",
         )
 
         self.standby: ComponentOutput = self.add_output(
             self.component_name,
             FuelCellController.StandbyCount,
-            lt.LoadTypes.ON_OFF,
-            lt.Units.BINARY,
+            lt.LoadTypes.ANY,
+            lt.Units.ANY,
             output_description="Counts the standby cycles",
         )
 
@@ -192,7 +192,7 @@ class FuelCellController(Component):
         self.total_off_count: ComponentOutput = self.add_output(
             self.component_name,
             FuelCellController.OffCount,
-            lt.LoadTypes.ON_OFF,
+            lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description="Total count of switching off",
         )

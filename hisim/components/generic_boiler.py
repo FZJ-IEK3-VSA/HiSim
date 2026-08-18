@@ -401,14 +401,14 @@ class GenericBoiler(Component):
             self.component_name,
             GenericBoiler.TemperatureDelta,
             lt.LoadTypes.TEMPERATURE,
-            lt.Units.ANY,
+            lt.Units.KELVIN,
             True,
         )
 
         self.total_fuel_input_power_channel: ComponentOutput = self.add_output(
             self.component_name,
             GenericBoiler.TotalFuelConsumption,
-            lt.LoadTypes.ANY,
+            self.config.energy_carrier,
             lt.Units.WATT,
             output_description=f"here a description for {self.TotalFuelConsumption} will follow.",
         )
@@ -1375,7 +1375,7 @@ class GenericBoilerController(Component):
             self.component_name,
             self.TemperatureDelta,
             lt.LoadTypes.TEMPERATURE,
-            lt.Units.ANY,
+            lt.Units.KELVIN,
             output_description="Temperature difference between actual and set water temperature.",
         )
 

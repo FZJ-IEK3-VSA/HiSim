@@ -564,7 +564,7 @@ class Building(cp.Component):
         self.open_window_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.OpenWindow,
-            lt.LoadTypes.ON_OFF,
+            lt.LoadTypes.ANY,
             lt.Units.TIMESTEPS,
             output_description=f"here a description for {self.OpenWindow} will follow.",
         )

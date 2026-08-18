@@ -538,7 +538,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         self.t_in_sh: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.TemperatureInputSH,
-            load_type=LoadTypes.HEATING,
+            load_type=LoadTypes.TEMPERATURE,
             unit=Units.CELSIUS,
             output_description="Temperature Input SH in °C",
         )
@@ -713,7 +713,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             self.t_in_dhw: ComponentOutput = self.add_output(
                 object_name=self.component_name,
                 field_name=self.TemperatureInputDHW,
-                load_type=LoadTypes.HEATING,
+                load_type=LoadTypes.TEMPERATURE,
                 unit=Units.CELSIUS,
                 output_description="Temperature Input DHW in °C",
             )

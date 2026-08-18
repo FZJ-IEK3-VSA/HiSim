@@ -449,10 +449,10 @@ class Vehicle(cp.Component):
         )
 
         self.after_capacity_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.AfterCapacity, lt.LoadTypes.ANY, lt.Units.WATT
+            self.component_name, self.AfterCapacity, lt.LoadTypes.ELECTRICITY, lt.Units.WATT
         )
         self.max_capacity_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.MaxCapacity, lt.LoadTypes.ANY, lt.Units.WATT
+            self.component_name, self.MaxCapacity, lt.LoadTypes.ELECTRICITY, lt.Units.WATT
         )
         self.discharge_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.Discharge, lt.LoadTypes.ELECTRICITY, lt.Units.WATT

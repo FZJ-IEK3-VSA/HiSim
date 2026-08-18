@@ -538,7 +538,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         self.t_in_sh: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.TemperatureInputSH,
-            load_type=LoadTypes.HEATING,
+            load_type=LoadTypes.TEMPERATURE,
             unit=Units.CELSIUS,
             output_description="Temperature Input SH in °C",
         )
@@ -546,7 +546,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         self.t_out_sh: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.TemperatureOutputSH,
-            load_type=LoadTypes.HEATING,
+            load_type=LoadTypes.TEMPERATURE,
             unit=Units.CELSIUS,
             output_description="Temperature Output SH in °C",
         )
@@ -554,7 +554,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         self.m_dot_sh: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.MassFlowOutputSH,
-            load_type=LoadTypes.VOLUME,
+            load_type=LoadTypes.WARM_WATER,
             unit=Units.KG_PER_SEC,
             output_description="Mass flow output",
         )
@@ -713,7 +713,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             self.t_in_dhw: ComponentOutput = self.add_output(
                 object_name=self.component_name,
                 field_name=self.TemperatureInputDHW,
-                load_type=LoadTypes.HEATING,
+                load_type=LoadTypes.TEMPERATURE,
                 unit=Units.CELSIUS,
                 output_description="Temperature Input DHW in °C",
             )
@@ -721,7 +721,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             self.t_out_dhw: ComponentOutput = self.add_output(
                 object_name=self.component_name,
                 field_name=self.TemperatureOutputDHW,
-                load_type=LoadTypes.HEATING,
+                load_type=LoadTypes.TEMPERATURE,
                 unit=Units.CELSIUS,
                 output_description="Temperature Output DHW Water in °C",
             )
@@ -729,7 +729,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             self.m_dot_dhw: ComponentOutput = self.add_output(
                 object_name=self.component_name,
                 field_name=self.MassFlowOutputDHW,
-                load_type=LoadTypes.VOLUME,
+                load_type=LoadTypes.WARM_WATER,
                 unit=Units.KG_PER_SEC,
                 output_description="Mass flow output",
             )
@@ -786,7 +786,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             self.m_dot_water_primary: ComponentOutput = self.add_output(
                 object_name=self.component_name,
                 field_name=self.MassflowPrimarySide,
-                load_type=LoadTypes.VOLUME,
+                load_type=LoadTypes.WATER,
                 unit=Units.KG_PER_SEC,
                 output_description="Massflow of primary Side",
             )

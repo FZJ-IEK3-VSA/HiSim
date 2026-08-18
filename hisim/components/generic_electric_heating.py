@@ -183,14 +183,14 @@ class ElectricHeating(Component):
             self.water_input_temperature_dhw_channel: ComponentInput = self.add_input(
                 self.component_name,
                 ElectricHeating.WaterInputTemperatureDhw,
-                LoadTypes.WATER,
+                LoadTypes.TEMPERATURE,
                 Units.CELSIUS,
                 True,
             )
             self.water_input_mass_flow_rate_dhw_channel: ComponentInput = self.add_input(
                 self.component_name,
                 ElectricHeating.WaterInputMassFlowRateFromWarmWaterStorage,
-                LoadTypes.WATER,
+                LoadTypes.WARM_WATER,
                 Units.KG_PER_SEC,
                 True,
             )
@@ -230,14 +230,14 @@ class ElectricHeating(Component):
         self.water_mass_flow_dhw_output_channel: ComponentOutput = self.add_output(
             self.component_name,
             ElectricHeating.WaterOutputDhwMassFlowRate,
-            LoadTypes.WATER,
+            LoadTypes.WARM_WATER,
             Units.KG_PER_SEC,
             output_description="Water mass flow rate for domestic hot water.",
         )
         self.water_output_temperature_dhw_channel: ComponentOutput = self.add_output(
             self.component_name,
             ElectricHeating.WaterOutputDhwTemperature,
-            LoadTypes.WATER,
+            LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             output_description="Water output temperature for domestic hot water.",
         )

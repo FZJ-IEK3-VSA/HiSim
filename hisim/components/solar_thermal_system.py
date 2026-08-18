@@ -310,14 +310,14 @@ class SolarThermalSystem(Component):
         self.water_mass_flow_kg_s_output_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.WaterMassFlowOutput,
-            load_type=loadtypes.LoadTypes.WATER,
+            load_type=loadtypes.LoadTypes.WARM_WATER,
             unit=loadtypes.Units.KG_PER_SEC,
             output_description="Mass flow of heat transfer liquid [kg/s]",
         )
         self.required_water_mass_flow_kg_s_output_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.RequiredWaterMassFlowOutput,
-            load_type=loadtypes.LoadTypes.WATER,
+            load_type=loadtypes.LoadTypes.WARM_WATER,
             unit=loadtypes.Units.KG_PER_SEC,
             output_description="The required mass flow of heat transfer liquid [kg/s] for achieving target temperature rise",
         )
@@ -325,7 +325,7 @@ class SolarThermalSystem(Component):
         self.water_temperature_deg_c_output_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.WaterTemperatureOutput,
-            load_type=loadtypes.LoadTypes.WATER,
+            load_type=loadtypes.LoadTypes.TEMPERATURE,
             unit=loadtypes.Units.CELSIUS,
             output_description="Output temperature of heat transfer liquid [°C]",
         )
@@ -850,7 +850,7 @@ class SolarThermalSystemController(Component):
         self.required_mass_flow_input_channel: ComponentInput = self.add_input(
             self.component_name,
             self.MassFlow,
-            loadtypes.LoadTypes.WATER,
+            loadtypes.LoadTypes.WARM_WATER,
             loadtypes.Units.KG_PER_SEC,
             True,
         )

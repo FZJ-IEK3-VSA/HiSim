@@ -165,7 +165,7 @@ class GenericHydrogenStorage(cp.Component):
         self.hydrogen_soc: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.HydrogenSOC,
-            load_type=lt.LoadTypes.GREEN_HYDROGEN,
+            load_type=lt.LoadTypes.ANY,
             unit=lt.Units.PERCENT,
             postprocessing_flag=[lt.InandOutputType.STORAGE_CONTENT],
             output_description="Hydrogen state of charge in %",

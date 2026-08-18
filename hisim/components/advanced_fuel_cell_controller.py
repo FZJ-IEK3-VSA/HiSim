@@ -346,42 +346,42 @@ class ExtendedController(Component):
         self.temperature_0_percent_channel: ComponentInput = self.add_input(
             self.component_name,
             ExtendedController.Temperature0Percent,
-            lt.LoadTypes.WARM_WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
         )
         self.temperature_20_percent_channel: ComponentInput = self.add_input(
             self.component_name,
             ExtendedController.Temperature20Percent,
-            lt.LoadTypes.WARM_WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
         )
         self.temperature_40_percent_channel: ComponentInput = self.add_input(
             self.component_name,
             ExtendedController.Temperature40Percent,
-            lt.LoadTypes.WARM_WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
         )
         self.temperature_60_percent_channel: ComponentInput = self.add_input(
             self.component_name,
             ExtendedController.Temperature60Percent,
-            lt.LoadTypes.WARM_WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
         )
         self.temperature_80_percent_channel: ComponentInput = self.add_input(
             self.component_name,
             ExtendedController.Temperature80Percent,
-            lt.LoadTypes.WARM_WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
         )
         self.temperature_100_percent_channel: ComponentInput = self.add_input(
             self.component_name,
             ExtendedController.Temperature100Percent,
-            lt.LoadTypes.WARM_WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
         )

@@ -50,7 +50,7 @@ def test_gas_heater() -> None:
         "FakeOperatingMode", "OperatingMode", lt.LoadTypes.ANY, lt.Units.ANY
     )
     temperature_delta_channel = cp.ComponentOutput(
-        "FakeTemperatureDelta", "TemperatureDelta", lt.LoadTypes.TEMPERATURE, lt.Units.ANY
+        "FakeTemperatureDelta", "TemperatureDelta", lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN
     )
 
     mass_flow_input_temperature_channel = cp.ComponentOutput(

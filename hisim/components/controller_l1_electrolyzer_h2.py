@@ -158,7 +158,7 @@ class ElectrolyzerController(Component):
         self.standby_count_total: ComponentOutput = self.add_output(
             self.component_name,
             ElectrolyzerController.StandbyCount,
-            lt.LoadTypes.ON_OFF,
+            lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description="standby count",
         )
@@ -190,7 +190,7 @@ class ElectrolyzerController(Component):
         self.total_off_count: ComponentOutput = self.add_output(
             self.component_name,
             ElectrolyzerController.OffCount,
-            lt.LoadTypes.ON_OFF,
+            lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description="Total count of switching off",
         )

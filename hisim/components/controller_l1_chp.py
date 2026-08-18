@@ -319,7 +319,7 @@ class L1CHPController(cp.Component):
         self.hydrogen_soc_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.HydrogenSOC,
-            LoadTypes.GREEN_HYDROGEN,
+            LoadTypes.ANY,
             Units.PERCENT,
             mandatory=False,
         )

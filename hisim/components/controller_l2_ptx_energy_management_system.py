@@ -129,7 +129,7 @@ class PTXController(Component):
         self.soc: ComponentInput = self.add_input(
             self.component_name,
             PTXController.StateOfCharge,
-            lt.LoadTypes.DISTRICTHEATING,
+            lt.LoadTypes.ANY,
             lt.Units.PERCENT,
             False,
         )

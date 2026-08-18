@@ -657,7 +657,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.water_temperature_heat_distribution_system_output_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.WaterTemperatureToHeatDistribution,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureToHeatDistribution} will follow.",
         )
@@ -665,7 +665,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.water_temperature_heat_generator_output_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.WaterTemperatureToHeatGenerator,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureToHeatGenerator} will follow.",
         )
@@ -673,7 +673,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.water_temperature_secondary_heat_generator_output_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.WaterTemperatureToSecondaryHeatGenerator,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureToSecondaryHeatGenerator} will follow.",
         )
@@ -681,7 +681,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.water_temperature_mean_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.WaterMeanTemperatureInStorage,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterMeanTemperatureInStorage} will follow.",
         )
@@ -1523,7 +1523,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.water_temperature_to_heat_generator_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.WaterTemperatureToHeatGenerator,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureToHeatGenerator} will follow.",
         )
@@ -1531,7 +1531,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.water_temperature_secondary_heat_generator_output_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.WaterTemperatureToSecondaryHeatGenerator,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureToSecondaryHeatGenerator} will follow.",
         )
@@ -1539,7 +1539,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.water_temperature_from_heat_generator_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.WaterTemperatureFromHeatGeneratorOutput,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureFromHeatGeneratorOutput} will follow.",
         )
@@ -1547,7 +1547,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.water_temperature_from_secondary_heat_generator_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.WaterTemperatureFromSecondaryHeatGeneratorOutput,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description="Water temperature [°C] from secondary DHW heat generator",
         )
@@ -1555,7 +1555,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.water_temperature_mean_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.WaterMeanTemperatureInStorage,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterMeanTemperatureInStorage} will follow.",
         )
@@ -1563,7 +1563,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.temperature_loss_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.StandbyTemperatureLoss,
-            lt.LoadTypes.WATER,
+            lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.StandbyTemperatureLoss} will follow.",
         )

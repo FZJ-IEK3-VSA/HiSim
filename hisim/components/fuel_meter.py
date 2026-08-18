@@ -186,7 +186,9 @@ class FuelMeter(DynamicComponent):
                 source_component_class=GenericBoiler,
                 source_class_name=heat_source_class_name,
                 source_component_field_name=GenericBoiler.EnergyDemandSh,
-                source_load_type=lt.LoadTypes.HEATING,
+                # The boiler types its energy-demand outputs by fuel carrier (oil,
+                # pellets, wood chips, ...); the fuel meter accepts any of them.
+                source_load_type=lt.LoadTypes.ANY,
                 source_unit=lt.Units.WATT_HOUR,
                 source_tags=[
                     lt.InandOutputType.HEAT_CONSUMPTION,
@@ -199,7 +201,7 @@ class FuelMeter(DynamicComponent):
                 source_component_class=GenericBoiler,
                 source_class_name=heat_source_class_name,
                 source_component_field_name=GenericBoiler.EnergyDemandDhw,
-                source_load_type=lt.LoadTypes.HEATING,
+                source_load_type=lt.LoadTypes.ANY,
                 source_unit=lt.Units.WATT_HOUR,
                 source_tags=[
                     lt.InandOutputType.HEAT_CONSUMPTION,

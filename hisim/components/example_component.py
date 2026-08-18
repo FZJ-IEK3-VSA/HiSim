@@ -152,7 +152,7 @@ class ExampleComponent(Component):
             self.component_name,
             self.StoredEnergy,
             lt.LoadTypes.HEATING,
-            lt.Units.WATT,
+            lt.Units.WATT_HOUR,
             output_description="Stored Energy",
         )
 

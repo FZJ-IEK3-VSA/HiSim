@@ -437,21 +437,21 @@ class PIDController(cp.Component):
             self.component_name,
             self.error,
             LoadTypes.ANY,
-            Units.CELSIUS,
+            Units.ANY,
             output_description=f"here a description for PV {self.error} will follow.",
         )
         self.derivator_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.derivator,
             LoadTypes.ANY,
-            Units.CELSIUS,
+            Units.ANY,
             output_description=f"here a description for PV {self.derivator} will follow.",
         )
         self.integrator_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.integrator,
             LoadTypes.ANY,
-            Units.CELSIUS,
+            Units.ANY,
             output_description=f"here a description for PV {self.integrator} will follow.",
         )
         self.feed_forward_signal_channel: cp.ComponentOutput = self.add_output(

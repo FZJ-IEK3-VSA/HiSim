@@ -286,6 +286,26 @@ class ComponentType(str, enum.Enum):
     HEAT_DISTRIBUTION_SYSTEM_LOW_TEMPERATURE_RADIATOR = "Low Temperature Radiator"
     NO_HDS = "No HDS"
 
+    # Building envelope measures (lifecycle cost engine, cost_spec.md Q7). These are cost
+    # subjects sized in m2 of the respective envelope element (EXTERIOR_DOOR and
+    # VENTILATION_SYSTEM per unit); the building physics sees them only as changed U-values.
+    # The taxonomy follows the renovation measure database, element by element: external wall,
+    # roof, top floor ceiling, basement ceiling, basement walls, ground-contacting components,
+    # windows (review round 3, PR 556).
+    WALL_EXTERNAL_INSULATION = "WallExternalInsulation"
+    WALL_INTERNAL_INSULATION = "WallInternalInsulation"
+    ROOF_INSULATION_BETWEEN_JOISTS = "RoofInsulationBetweenJoists"
+    ROOF_INSULATION_OVER_JOISTS = "RoofInsulationOverJoists"
+    WARM_ROOF_INSULATION = "WarmRoofInsulation"
+    TOP_CEILING_UPPER_INSULATION = "TopCeilingUpperInsulation"
+    BASEMENT_CEILING_BOTTOM_INSULATION = "BasementCeilingBottomInsulation"
+    BASEMENT_WALLS_INTERNAL_INSULATION = "BasementWallsInternalInsulation"
+    GROUND_EXTERNAL_INSULATION = "GroundExternalInsulation"
+    WINDOWS_TRIPLE_GLAZED = "WindowsTripleGlazed"
+    EXTERIOR_DOOR = "ExteriorDoor"
+    AIR_SEALING = "AirSealing"
+    VENTILATION_SYSTEM = "VentilationSystem"
+
     # different heat_pump types
     HEAT_PUMP_BUILDING = "HeatPumpBuilding"  # Heatpump for heating the house
     HEAT_PUMP_DHW = "HeatPumpDHW"  # heatpump for heating domnestic hot water

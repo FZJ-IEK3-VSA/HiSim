@@ -3,9 +3,10 @@
 # clean
 
 from dataclasses import dataclass
+from typing import Optional
+
 from dataclasses_json import dataclass_json
 import control
-from typing import Optional
 import numpy as np
 
 # Owned

@@ -14,8 +14,9 @@ Sign convention (matching the existing ``AirConditioner``):
 from __future__ import annotations
 
 from dataclasses import dataclass
-import pandas as pd
 from typing import Optional
+
+import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim import component as cp

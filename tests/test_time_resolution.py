@@ -182,7 +182,7 @@ def test_cluster_house_for_several_time_resolutions():
     # the configured name instead. PVSystem's and Weather's configured names equal
     # their class names, so their get_classname() matches their yearly-result keys.
     utsp_connector_name = (
-        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config().name
+        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config().component_id.name
     )
     # Predefined-input components whose aggregated yearly results must be stable
     # across the three time resolutions (15/30/60 min).

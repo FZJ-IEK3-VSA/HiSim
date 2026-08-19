@@ -12,6 +12,7 @@ from utspclient.helpers.lpgdata import (
     Households,
 )
 from hisim.simulator import SimulationParameters
+from hisim.component import ComponentID
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
@@ -392,13 +393,13 @@ def setup_function(
     # get all available cars from occupancy
     my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
     my_car_config = generic_car.CarConfig.get_default_ev_config()
-    my_car_config.name = "ElectricCar"
+    my_car_config.component_id = ComponentID("ElectricCar")
     charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
 
     # create all cars
     my_cars: List[generic_car.Car] = []
     for idx, car_information_dict in enumerate(my_car_information.data_dict_for_car_component.values()):
-        my_car_config.name = car_information_dict["car_name"] + f"_{idx}"
+        my_car_config.component_id = ComponentID(car_information_dict["car_name"] + f"_{idx}")
         my_cars.append(
             generic_car.Car(
                 my_simulation_parameters=my_simulation_parameters,
@@ -415,7 +416,7 @@ def setup_function(
     for car in my_cars:
         my_car_battery_config = advanced_ev_battery_bslib.CarBatteryConfig.get_default_config()
         my_car_battery_config.source_weight = car.config.source_weight
-        my_car_battery_config.name = f"CarBattery_{car_number}"
+        my_car_battery_config.component_id = ComponentID(f"CarBattery_{car_number}")
         my_car_battery = advanced_ev_battery_bslib.CarBattery(
             my_simulation_parameters=my_simulation_parameters,
             config=my_car_battery_config,
@@ -426,7 +427,7 @@ def setup_function(
             charging_station_set=charging_station_set
         )
         my_car_battery_controller_config.source_weight = car.config.source_weight
-        my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
+        my_car_battery_controller_config.component_id = ComponentID(f"L1EVChargeControl_{car_number}")
         if car_surplus_charging:
             # lower threshold for soc of car battery in clever case. This enables more surplus charging
             my_car_battery_controller_config.battery_set_soc = 0.4

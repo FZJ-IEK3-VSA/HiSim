@@ -8,8 +8,9 @@ simulation, no I/O.
 
 # clean
 
-import pytest
 from typing import Optional
+
+import pytest
 
 from hisim.components.generic_price_signal import PriceSignal, PriceSignalConfig
 from hisim.component import ComponentID

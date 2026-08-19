@@ -35,7 +35,7 @@ def test_gas_heater() -> None:
     # Set Gas Heater
     my_gas_heater_config = generic_boiler.GenericBoilerConfig.get_default_condensing_gas_boiler_config()
     my_gas_heater_config.temperature_delta_in_celsius = temperature_delta_in_celsius
-    my_gas_heater_config.maximal_power_in_watt = maximal_power_in_watt
+    my_gas_heater_config.maximal_thermal_power_in_watt = maximal_power_in_watt
 
     my_gas_heater = generic_boiler.GenericBoiler(
         config=my_gas_heater_config, my_simulation_parameters=my_simulation_parameters

@@ -9,8 +9,9 @@ a constructed ``SimpleController`` with ``SimulationParameters`` and channel
 wiring, so they are out of scope here.
 """
 
-import pytest
 from typing import Optional
+
+import pytest
 
 from hisim.components.controller_l1_example_controller import (
     SimpleController,

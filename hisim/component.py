@@ -179,7 +179,8 @@ class ComponentOutput:  # noqa: too-few-public-methods
         sankey_flow_direction: Optional[bool] = None,
         output_description: Optional[str] = None,
         source_component_class: Optional[str] = None,
-        component_id: Optional[ComponentID] = None,
+        *,
+        component_id: ComponentID,
     ):
         """Defines a component output.
 
@@ -187,6 +188,9 @@ class ComponentOutput:  # noqa: too-few-public-methods
         of the component that produced it. Postprocessing needs to know which building object
         an output belongs to, and it must not obtain that by taking the runtime name apart, so
         the owning :py:class:`ComponentID` is stored alongside the derived ``component_name``.
+        The identity is deliberately REQUIRED (keyword-only): an output without an owner would
+        silently fall into the default building group and corrupt per-building KPIs, so a
+        missing identity must fail at construction rather than at aggregation.
         """
         self.full_name: str = object_name + " # " + field_name
         self.component_name: str = object_name
@@ -199,19 +203,16 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.sankey_flow_direction: Optional[bool] = sankey_flow_direction
         self.output_description: Optional[str] = output_description
         self.source_component_class: Optional[str] = source_component_class
-        self.component_id: Optional[ComponentID] = component_id
+        self.component_id: ComponentID = component_id
 
     @property
     def building_label(self) -> str:
         """Returns the building object this output is grouped under in postprocessing.
 
-        Outputs that were created with a known owning component report that component's
-        building (or the default label when the component carries none). Outputs constructed
-        without an identity fall back to the same default label, so they land in the single
-        group of a plain single-building simulation instead of being dropped.
+        Delegates to the owning component's identity: the component's building when one is
+        set, and the default single-building label otherwise. Identity is mandatory on every
+        output, so there is no fallback path for ownerless outputs.
         """
-        if self.component_id is None:
-            return ComponentID.DEFAULT_BUILDING_LABEL
         return self.component_id.building_label
 
     def get_pretty_name(self) -> str:

@@ -21,13 +21,9 @@ def test_example_template() -> None:
     (51.0 at both timesteps) based on its internal logic.
     """
 
-    mysim: SimulationParameters = SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=60
-    )
+    mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
-    my_example_template_config = (
-        example_template.ComponentNameConfig.get_default_template_component()
-    )
+    my_example_template_config = example_template.ComponentNameConfig.get_default_template_component()
     print("\n")
     log.information(f"default componentname config {my_example_template_config}\n")
     my_example_template = example_template.ComponentName(
@@ -40,40 +36,28 @@ def test_example_template() -> None:
         field_name="input_from_another_component",
         load_type=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.WATT,
+        component_id=cp.ComponentID("source"),
     )
-    my_example_template.input_from_other_component.source_output = (
-        input_from_another_component_output
-    )
+    my_example_template.input_from_other_component.source_output = input_from_another_component_output
 
-    number_of_outputs: int = fft.get_number_of_outputs(
-        [my_example_template, input_from_another_component_output]
-    )
+    number_of_outputs: int = fft.get_number_of_outputs([my_example_template, input_from_another_component_output])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     # Add Global Index and set values for fake Inputs
-    fft.add_global_index_of_components(
-        [my_example_template, input_from_another_component_output]
-    )
+    fft.add_global_index_of_components([my_example_template, input_from_another_component_output])
     stsv.values[input_from_another_component_output.global_index] = 50  # fake input
 
     # Test Simulation
     timestep: int = 10 * 60
     log.information(f"timestep = {timestep}")
     log.information(
-        "input_from_another_component_output = "
-        f"{stsv.values[input_from_another_component_output.global_index]}\n"
+        "input_from_another_component_output = " f"{stsv.values[input_from_another_component_output.global_index]}\n"
     )
 
     my_example_template.i_simulate(timestep, stsv, False)
     log.information("Output values after simulation: ")
-    log.information(
-        "output with state = "
-        f"{stsv.values[my_example_template.output_with_state.global_index]}"
-    )
-    log.information(
-        "output without state = "
-        f"{stsv.values[my_example_template.output_without_state.global_index]}"
-    )
+    log.information("output with state = " f"{stsv.values[my_example_template.output_with_state.global_index]}")
+    log.information("output without state = " f"{stsv.values[my_example_template.output_without_state.global_index]}")
     log.information(f"output values = {stsv.values}\n")
 
     assert 50 == stsv.values[input_from_another_component_output.global_index]
@@ -83,20 +67,13 @@ def test_example_template() -> None:
     timestep = 10 * 60 + 1
     log.information(f"timestep = {timestep}")
     log.information(
-        "input_from_another_component_output = "
-        f"{stsv.values[input_from_another_component_output.global_index]}\n"
+        "input_from_another_component_output = " f"{stsv.values[input_from_another_component_output.global_index]}\n"
     )
 
     my_example_template.i_simulate(timestep, stsv, False)
     log.information("Output values after simulation: ")
-    log.information(
-        "output with state = "
-        f"{stsv.values[my_example_template.output_with_state.global_index]}"
-    )
-    log.information(
-        "output without state = "
-        f"{stsv.values[my_example_template.output_without_state.global_index]}"
-    )
+    log.information("output with state = " f"{stsv.values[my_example_template.output_with_state.global_index]}")
+    log.information("output without state = " f"{stsv.values[my_example_template.output_without_state.global_index]}")
     log.information(f"output values = {stsv.values}")
 
     assert 50 == stsv.values[input_from_another_component_output.global_index]

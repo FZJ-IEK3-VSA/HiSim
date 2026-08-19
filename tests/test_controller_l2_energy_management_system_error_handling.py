@@ -26,9 +26,7 @@ def _make_ems() -> L2GenericEnergyManagementSystem:
     ``my_component_outputs``, and label attributes set on the instance, so
     bypassing ``__init__`` keeps the test fast and isolated.
     """
-    ems: L2GenericEnergyManagementSystem = L2GenericEnergyManagementSystem.__new__(
-        L2GenericEnergyManagementSystem
-    )
+    ems: L2GenericEnergyManagementSystem = L2GenericEnergyManagementSystem.__new__(L2GenericEnergyManagementSystem)
     return ems
 
 
@@ -80,9 +78,7 @@ def test_sort_source_weights_raises_value_error_when_output_is_none() -> None:
     _add_electrolyzer_input(ems, weight=5, label="Input_Test_Electrolyzer")
     _add_electrolyzer_output(ems, weight=5, label="Output_Test_Electrolyzer", value=None)
 
-    with pytest.raises(
-        ValueError, match="Dynamic input is not connected to dynamic output"
-    ):
+    with pytest.raises(ValueError, match="Dynamic input is not connected to dynamic output"):
         ems.sort_source_weights_and_components()
 
 
@@ -96,6 +92,7 @@ def test_sort_source_weights_returns_outputs_when_connected() -> None:
         "ElectricityTarget",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.WATT,
+        component_id=cp.ComponentID("Electrolyzer"),
     )
     _add_electrolyzer_output(ems, weight=5, label="Output_Test_Electrolyzer", value=output)
 

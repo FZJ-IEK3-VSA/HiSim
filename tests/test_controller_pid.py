@@ -154,13 +154,21 @@ def _build_controller_with_inputs(
         config=PIDControllerConfig.get_default_config(),
     )
     fake_temperature = cp.ComponentOutput(
-        "FakeBuilding", "TemperatureMean", LoadTypes.TEMPERATURE, Units.CELSIUS
+        "FakeBuilding",
+        "TemperatureMean",
+        LoadTypes.TEMPERATURE,
+        Units.CELSIUS,
+        component_id=cp.ComponentID("FakeBuilding"),
     )
     fake_phi_st = cp.ComponentOutput(
-        "FakeBuilding", "HeatFluxWallNode", LoadTypes.HEATING, Units.WATT
+        "FakeBuilding", "HeatFluxWallNode", LoadTypes.HEATING, Units.WATT, component_id=cp.ComponentID("FakeBuilding")
     )
     fake_phi_m = cp.ComponentOutput(
-        "FakeBuilding", "HeatFluxThermalMassNode", LoadTypes.HEATING, Units.WATT
+        "FakeBuilding",
+        "HeatFluxThermalMassNode",
+        LoadTypes.HEATING,
+        Units.WATT,
+        component_id=cp.ComponentID("FakeBuilding"),
     )
     controller.temperature_mean_channel.source_output = fake_temperature
     controller.heat_flow_rate_to_internal_surface_node_channel.source_output = fake_phi_st
@@ -175,9 +183,7 @@ def _build_controller_with_inputs(
 def test_pid_controller_simulate_heating_scenario() -> None:
     """i_simulate drives the PI loop and produces the expected outputs."""
     simulation_parameters = SimulationParameters.one_day_only(2017, SECONDS_PER_TIMESTEP)
-    controller, stsv, fake_temperature, fake_phi_st, fake_phi_m = _build_controller_with_inputs(
-        simulation_parameters
-    )
+    controller, stsv, fake_temperature, fake_phi_st, fake_phi_m = _build_controller_with_inputs(simulation_parameters)
     stsv.values[fake_temperature.global_index] = 20.0
     stsv.values[fake_phi_st.global_index] = 100.0
     stsv.values[fake_phi_m.global_index] = 200.0
@@ -199,9 +205,7 @@ def test_pid_controller_simulate_heating_scenario() -> None:
 def test_pid_controller_force_convergence_skips_outputs() -> None:
     """force_convergence=True returns without updating outputs (KB-5215)."""
     simulation_parameters = SimulationParameters.one_day_only(2017, SECONDS_PER_TIMESTEP)
-    controller, stsv, fake_temperature, fake_phi_st, fake_phi_m = _build_controller_with_inputs(
-        simulation_parameters
-    )
+    controller, stsv, fake_temperature, fake_phi_st, fake_phi_m = _build_controller_with_inputs(simulation_parameters)
     stsv.values[fake_temperature.global_index] = 20.0
     stsv.values[fake_phi_st.global_index] = 100.0
     stsv.values[fake_phi_m.global_index] = 200.0

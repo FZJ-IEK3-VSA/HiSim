@@ -1,4 +1,5 @@
 """Test for generic fuel cell."""
+
 # clean
 import pytest
 
@@ -20,9 +21,7 @@ def test_electrolyzer() -> None:
     hydrogen demand matches the expected reference value of 0.3650165 kg/h.
     """
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2021, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
 
     name: str = "NedstackFCS10XXL"
     type_electrolyzer: str = "PEM"
@@ -62,15 +61,18 @@ def test_electrolyzer() -> None:
         "DemandProfile",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.KILOWATT,
+        component_id=cp.ComponentID("FakeDemandProfile"),
     )
 
     control_signal = cp.ComponentOutput(
-        "FakeControlSignal", "ControlSignal", lt.LoadTypes.ANY, lt.Units.ANY
+        "FakeControlSignal",
+        "ControlSignal",
+        lt.LoadTypes.ANY,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("FakeControlSignal"),
     )
 
-    number_of_outputs = fft.get_number_of_outputs(
-        [demand_profile_target, control_signal]
-    )
+    number_of_outputs = fft.get_number_of_outputs([demand_profile_target, control_signal])
 
     my_fuelcell.demand_profile_target.source_output = demand_profile_target
     my_fuelcell.control_signal.source_output = control_signal

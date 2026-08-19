@@ -27,9 +27,7 @@ def _build_controller(operation_mode: str = "StandbyLoad") -> "controller_l2_xtp
         min output 2 kW, max output 10 kW, and standby load 1 kW.
     """
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2021, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
     config = controller_l2_xtp_fuel_cell_ems.XTPControllerConfig(
         component_id=ComponentID(name="L2XTPController"),
         nom_output=10.0,  # kW
@@ -50,7 +48,11 @@ def _set_demand(
 ) -> cp.SingleTimeStepValues:
     """Build a SingleTimeStepValues wired to a fake demand source set to raw_value."""
     load_input = cp.ComponentOutput(
-        "FakeDemandLoad", "DemandLoad", lt.LoadTypes.ELECTRICITY, lt.Units.WATT
+        "FakeDemandLoad",
+        "DemandLoad",
+        lt.LoadTypes.ELECTRICITY,
+        lt.Units.WATT,
+        component_id=cp.ComponentID("FakeDemandLoad"),
     )
     number_of_outputs = fft.get_number_of_outputs([controller, load_input])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)

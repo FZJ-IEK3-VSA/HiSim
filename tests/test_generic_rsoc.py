@@ -34,9 +34,7 @@ def test_rsoc() -> None:
     initial timestep due to the system's slow ramp-up rate.
     """
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2021, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
 
     name: str = "rSOC1040kW"
     # SOEC
@@ -73,18 +71,24 @@ def test_rsoc() -> None:
         ramp_up_rate_sofc=ramp_up_rate_sofc,
         ramp_down_rate_sofc=ramp_down_rate_sofc,
     )
-    my_rsoc = generic_rsoc.Rsoc(
-        config=my_rsoc_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_rsoc = generic_rsoc.Rsoc(config=my_rsoc_config, my_simulation_parameters=my_simulation_parameters)
 
     # ===================================================================================================================
     # Set Fake Inputs
     power_input = cp.ComponentOutput(
-        "FakePowerInput", "PowerInput", lt.LoadTypes.ELECTRICITY, lt.Units.KILOWATT
+        "FakePowerInput",
+        "PowerInput",
+        lt.LoadTypes.ELECTRICITY,
+        lt.Units.KILOWATT,
+        component_id=cp.ComponentID("FakePowerInput"),
     )
 
     input_state_rsoc = cp.ComponentOutput(
-        "FakeRSOCInputState", "RSOCInputState", lt.LoadTypes.ACTIVATION, lt.Units.ANY
+        "FakeRSOCInputState",
+        "RSOCInputState",
+        lt.LoadTypes.ACTIVATION,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("FakeRSOCInputState"),
     )
 
     number_of_outputs = fft.get_number_of_outputs([power_input, input_state_rsoc])
@@ -144,9 +148,7 @@ def test_rsoc_efficiency_cache_matches_file() -> None:
             ramp_up_rate_sofc=0.001538,
             ramp_down_rate_sofc=0.001538,
         )
-        rsoc = generic_rsoc.Rsoc(
-            config=config, my_simulation_parameters=my_simulation_parameters
-        )
+        rsoc = generic_rsoc.Rsoc(config=config, my_simulation_parameters=my_simulation_parameters)
 
         data_file = Path(utils.HISIMPATH["inputs"]) / "rSOC_efficiency_curve_data.json"
         with open(data_file, "r", encoding="utf-8") as file:
@@ -155,15 +157,11 @@ def test_rsoc_efficiency_cache_matches_file() -> None:
         np.testing.assert_array_equal(
             rsoc._soec_load_percentage, np.array(data[name]["load_percentage_soec"], dtype=float)
         )
-        np.testing.assert_array_equal(
-            rsoc._soec_sys_eff, np.array(data[name]["sys_eff_soec"], dtype=float)
-        )
+        np.testing.assert_array_equal(rsoc._soec_sys_eff, np.array(data[name]["sys_eff_soec"], dtype=float))
         np.testing.assert_array_equal(
             rsoc._sofc_load_percentage, np.array(data[name]["load_percentage_sofc"], dtype=float)
         )
-        np.testing.assert_array_equal(
-            rsoc._sofc_sys_eff, np.array(data[name]["sys_eff_sofc"], dtype=float)
-        )
+        np.testing.assert_array_equal(rsoc._sofc_sys_eff, np.array(data[name]["sys_eff_sofc"], dtype=float))
 
 
 @pytest.mark.base
@@ -190,9 +188,7 @@ def test_rsoc_efficiency_interpolation_matches_direct_np_interp() -> None:
         ramp_up_rate_sofc=0.001538,
         ramp_down_rate_sofc=0.001538,
     )
-    rsoc = generic_rsoc.Rsoc(
-        config=config, my_simulation_parameters=my_simulation_parameters
-    )
+    rsoc = generic_rsoc.Rsoc(config=config, my_simulation_parameters=my_simulation_parameters)
 
     data_file = Path(utils.HISIMPATH["inputs"]) / "rSOC_efficiency_curve_data.json"
     with open(data_file, "r", encoding="utf-8") as file:
@@ -246,6 +242,4 @@ def test_rsoc_invalid_name_raises_at_construction() -> None:
         ramp_down_rate_sofc=0.001538,
     )
     with pytest.raises(ValueError, match="nonexistent_rSOC"):
-        generic_rsoc.Rsoc(
-            config=config, my_simulation_parameters=my_simulation_parameters
-        )
+        generic_rsoc.Rsoc(config=config, my_simulation_parameters=my_simulation_parameters)

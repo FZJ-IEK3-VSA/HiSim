@@ -163,6 +163,7 @@ def test_transformer_simulate_scales_input_by_efficiency() -> None:
         load_type=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.KILOWATT,
         output_description="Source power",
+        component_id=ComponentID("Source"),
     )
     transformer.electricity_input.source_output = source_output
 
@@ -192,6 +193,7 @@ def test_transformer_simulate_zero_efficiency_produces_zero_output() -> None:
         load_type=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.KILOWATT,
         output_description="Source power",
+        component_id=ComponentID("Source"),
     )
     transformer.electricity_input.source_output = source_output
 

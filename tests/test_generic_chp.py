@@ -33,22 +33,14 @@ def test_chp_system() -> None:
     """
     seconds_per_timestep = 60
     thermal_power = 500  # thermal power in Watt
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
     # configure and add chp
-    chp_config = generic_chp.CHPConfig.get_default_config_fuelcell(
-        thermal_power=thermal_power
-    )
-    my_chp = generic_chp.SimpleCHP(
-        my_simulation_parameters=my_simulation_parameters, config=chp_config
-    )
+    chp_config = generic_chp.CHPConfig.get_default_config_fuelcell(thermal_power=thermal_power)
+    my_chp = generic_chp.SimpleCHP(my_simulation_parameters=my_simulation_parameters, config=chp_config)
 
     # configure chp controller
-    chp_controller_config = (
-        controller_l1_chp.L1CHPControllerConfig.get_default_config_fuel_cell_with_buffer()
-    )
+    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_fuel_cell_with_buffer()
     chp_controller_config.electricity_threshold = chp_config.p_el / 2
     my_chp_controller = controller_l1_chp.L1CHPController(
         my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
@@ -56,22 +48,32 @@ def test_chp_system() -> None:
 
     # Set Fake Inputs
     buffer_temperature = cp.ComponentOutput(
-        "FakeBuffer", "BufferTemperature", lt.LoadTypes.TEMPERATURE, lt.Units.WATT
+        "FakeBuffer",
+        "BufferTemperature",
+        lt.LoadTypes.TEMPERATURE,
+        lt.Units.WATT,
+        component_id=cp.ComponentID("FakeBuffer"),
     )
     boiler_temperature = cp.ComponentOutput(
         "FakeBoilerTemperature",
         "HotWaterStorageTemperature",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.WATT,
+        component_id=cp.ComponentID("FakeBoilerTemperature"),
     )
     electricity_target = cp.ComponentOutput(
         "FakeElectricityTarget",
         "ElectricityTarget",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.WATT,
+        component_id=cp.ComponentID("FakeElectricityTarget"),
     )
     hydrogensoc = cp.ComponentOutput(
-        "FakeH2SOC", "HydrogenSOC", lt.LoadTypes.GREEN_HYDROGEN, lt.Units.PERCENT
+        "FakeH2SOC",
+        "HydrogenSOC",
+        lt.LoadTypes.GREEN_HYDROGEN,
+        lt.Units.PERCENT,
+        component_id=cp.ComponentID("FakeH2SOC"),
     )
 
     number_of_outputs = fft.get_number_of_outputs(
@@ -91,12 +93,8 @@ def test_chp_system() -> None:
     my_chp_controller.building_temperature_channel.source_output = buffer_temperature
     my_chp_controller.dhw_temperature_channel.source_output = boiler_temperature
 
-    my_chp.chp_onoff_signal_channel.source_output = (
-        my_chp_controller.chp_heatingmode_signal_channel
-    )
-    my_chp.chp_heatingmode_signal_channel.source_output = (
-        my_chp_controller.chp_heatingmode_signal_channel
-    )
+    my_chp.chp_onoff_signal_channel.source_output = my_chp_controller.chp_heatingmode_signal_channel
+    my_chp.chp_heatingmode_signal_channel.source_output = my_chp_controller.chp_heatingmode_signal_channel
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components(
@@ -116,18 +114,14 @@ def test_chp_system() -> None:
     single_timestep_values.values[buffer_temperature.global_index] = 30
     single_timestep_values.values[boiler_temperature.global_index] = 55
 
-    for timestep in range(
-        int((chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2)
-    ):
+    for timestep in range(int((chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2)):
         my_chp_controller.i_simulate(timestep, single_timestep_values, False)
         my_chp.i_simulate(timestep, single_timestep_values, False)
 
     assert single_timestep_values.values[my_chp.thermal_power_output_building_channel.global_index] == 500
     assert single_timestep_values.values[my_chp.thermal_power_output_dhw_channel.global_index] == 0
     assert single_timestep_values.values[my_chp.electricity_output_channel.global_index] > 500
-    assert single_timestep_values.values[my_chp.fuel_consumption_channel.global_index] > 500 / (
-        3.6e3 * 3.939e4
-    )
+    assert single_timestep_values.values[my_chp.fuel_consumption_channel.global_index] > 500 / (3.6e3 * 3.939e4)
 
     # test if chp shuts down when too little hydrogen in storage and electricty as well as heat needed
     single_timestep_values.values[electricity_target.global_index] = -2.5e3
@@ -137,10 +131,7 @@ def test_chp_system() -> None:
 
     for timestep_t in range(
         timestep,
-        timestep
-        + int(
-            (chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2
-        ),
+        timestep + int((chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2),
     ):
         my_chp_controller.i_simulate(timestep_t, single_timestep_values, False)
         my_chp.i_simulate(timestep_t, single_timestep_values, False)
@@ -156,12 +147,7 @@ def test_chp_system() -> None:
     single_timestep_values.values[buffer_temperature.global_index] = 40.5
     single_timestep_values.values[boiler_temperature.global_index] = 40
 
-    for timestep in range(
-        int(
-            (chp_controller_config.min_operation_time_in_seconds / seconds_per_timestep)
-            + 2
-        )
-    ):
+    for timestep in range(int((chp_controller_config.min_operation_time_in_seconds / seconds_per_timestep) + 2)):
         my_chp_controller.i_simulate(timestep, single_timestep_values, False)
         my_chp.i_simulate(timestep, single_timestep_values, False)
 
@@ -172,10 +158,7 @@ def test_chp_system() -> None:
 
     for ttt in range(
         timestep_t,
-        timestep_t
-        + int(
-            (chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2
-        ),
+        timestep_t + int((chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2),
     ):
         my_chp_controller.i_simulate(ttt, single_timestep_values, False)
         my_chp.i_simulate(ttt, single_timestep_values, False)
@@ -191,12 +174,7 @@ def test_chp_system() -> None:
     single_timestep_values.values[buffer_temperature.global_index] = 40.5
     single_timestep_values.values[boiler_temperature.global_index] = 40
 
-    for timestep in range(
-        int(
-            (chp_controller_config.min_operation_time_in_seconds / seconds_per_timestep)
-            + 2
-        )
-    ):
+    for timestep in range(int((chp_controller_config.min_operation_time_in_seconds / seconds_per_timestep) + 2)):
         my_chp_controller.i_simulate(timestep, single_timestep_values, False)
         my_chp.i_simulate(timestep, single_timestep_values, False)
 
@@ -207,10 +185,7 @@ def test_chp_system() -> None:
 
     for ttt in range(
         timestep_t,
-        timestep_t
-        + int(
-            (chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2
-        ),
+        timestep_t + int((chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2),
     ):
         my_chp_controller.i_simulate(ttt, single_timestep_values, False)
         my_chp.i_simulate(ttt, single_timestep_values, False)

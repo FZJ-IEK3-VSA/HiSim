@@ -22,11 +22,11 @@ def test_example_storage() -> None:
     300, 40 kWh at timestep 301).
     """
 
-    simulation_parameters: SimulationParameters = SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=60
-    )
+    simulation_parameters: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
-    my_example_storage_config: example_storage.SimpleStorageConfig = example_storage.SimpleStorageConfig.get_default_thermal_storage()
+    my_example_storage_config: example_storage.SimpleStorageConfig = (
+        example_storage.SimpleStorageConfig.get_default_thermal_storage()
+    )
     my_example_storage: example_storage.SimpleStorage = example_storage.SimpleStorage(
         config=my_example_storage_config, my_simulation_parameters=simulation_parameters
     )
@@ -37,26 +37,24 @@ def test_example_storage() -> None:
         field_name="charging",
         load_type=lt.LoadTypes.WARM_WATER,
         unit=lt.Units.KWH,
+        component_id=cp.ComponentID("source"),
     )
     discharging_output: cp.ComponentOutput = cp.ComponentOutput(
         object_name="source",
         field_name="discharging",
         load_type=lt.LoadTypes.WARM_WATER,
         unit=lt.Units.KWH,
+        component_id=cp.ComponentID("source"),
     )
 
     my_example_storage.charging_input.source_output = charging_output
     my_example_storage.discharging_input.source_output = discharging_output
 
-    number_of_outputs: int = fft.get_number_of_outputs(
-        [my_example_storage, charging_output, discharging_output]
-    )
+    number_of_outputs: int = fft.get_number_of_outputs([my_example_storage, charging_output, discharging_output])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     # Add Global Index and set values for fake Inputs
-    fft.add_global_index_of_components(
-        [my_example_storage, charging_output, discharging_output]
-    )
+    fft.add_global_index_of_components([my_example_storage, charging_output, discharging_output])
     stsv.values[charging_output.global_index] = 30  # fake charg input
     stsv.values[discharging_output.global_index] = -10  # fake discharg input
 

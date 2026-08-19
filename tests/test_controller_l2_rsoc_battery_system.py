@@ -80,12 +80,8 @@ def test_read_config_with_explicit_path(tmp_path: pathlib.Path) -> None:
     """read_config reads a variant from an explicit path (no HISIMPATH coupling)."""
     variant = _make_rsoc_config_dict()
     config_file = tmp_path / "rSOC_manufacturer_config.json"
-    config_file.write_text(
-        json.dumps({"rSOC variants": {"RSOC_TEST": variant}}), encoding="utf-8"
-    )
-    loaded = l2.RsocBatteryControllerConfig.read_config(
-        "RSOC_TEST", config_path=config_file
-    )
+    config_file.write_text(json.dumps({"rSOC variants": {"RSOC_TEST": variant}}), encoding="utf-8")
+    loaded = l2.RsocBatteryControllerConfig.read_config("RSOC_TEST", config_path=config_file)
     assert loaded == variant
 
 
@@ -97,9 +93,7 @@ def test_read_config_with_explicit_path_missing_variant(tmp_path: pathlib.Path) 
         json.dumps({"rSOC variants": {"RSOC_TEST": {"nom_load_soec": 1.0}}}),
         encoding="utf-8",
     )
-    loaded = l2.RsocBatteryControllerConfig.read_config(
-        "DOES_NOT_EXIST", config_path=config_file
-    )
+    loaded = l2.RsocBatteryControllerConfig.read_config("DOES_NOT_EXIST", config_path=config_file)
     assert loaded == {}
 
 
@@ -112,9 +106,7 @@ def test_rsoc_battery_controller_built_from_in_memory_config() -> None:
     single SOFC-mode timestep is simulated.
     """
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2021, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
 
     config = l2.RsocBatteryControllerConfig.config_rsoc(
         rsoc_name="RSOC_TEST",
@@ -131,12 +123,14 @@ def test_rsoc_battery_controller_built_from_in_memory_config() -> None:
         l2.RsocBatteryController.RESLoad,
         lt.LoadTypes.ELECTRICITY,
         lt.Units.WATT,
+        component_id=cp.ComponentID("FakeRESLoad"),
     )
     demand = cp.ComponentOutput(
         "FakeDemand",
         l2.RsocBatteryController.Demand,
         lt.LoadTypes.ELECTRICITY,
         lt.Units.WATT,
+        component_id=cp.ComponentID("FakeDemand"),
     )
 
     number_of_outputs = fft.get_number_of_outputs([my_controller, res_load, demand])

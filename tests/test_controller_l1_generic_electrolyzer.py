@@ -14,9 +14,7 @@ from hisim.component import ComponentID
 def test_electrolyzer_controller() -> None:
     """Test electrolyzer controller."""
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2021, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
 
     name: str = "Test-Controller"
     nom_load: float = 800.0  # [kW]
@@ -47,7 +45,11 @@ def test_electrolyzer_controller() -> None:
     # ===================================================================================================================
     # Set Fake Inputs
     load_input = cp.ComponentOutput(
-        "FakeProvidedLoad", "Provided Load", lt.LoadTypes.ELECTRICITY, lt.Units.KILOWATT
+        "FakeProvidedLoad",
+        "Provided Load",
+        lt.LoadTypes.ELECTRICITY,
+        lt.Units.KILOWATT,
+        component_id=cp.ComponentID("FakeProvidedLoad"),
     )
 
     number_of_outputs = fft.get_number_of_outputs([my_controller, load_input])

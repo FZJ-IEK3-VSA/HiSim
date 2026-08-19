@@ -39,9 +39,7 @@ def build_chp_system(
     fake outputs' ``global_index`` attributes can be used to inject input
     values before calling ``chp.i_simulate``.
     """
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
     my_chp_system_config = advanced_fuel_cell.CHPConfig.get_default_config()
     my_chp_system_config.operating_mode = operating_mode
@@ -53,19 +51,25 @@ def build_chp_system(
 
     # Set Fake Outputs for CHP System
     control_signal = cp.ComponentOutput(
-        "FakeControlSignal", "ControlSignal", lt.LoadTypes.ANY, lt.Units.PERCENT
+        "FakeControlSignal",
+        "ControlSignal",
+        lt.LoadTypes.ANY,
+        lt.Units.PERCENT,
+        component_id=cp.ComponentID("FakeControlSignal"),
     )
     massflow_input_temperature = cp.ComponentOutput(
         "FakeMassflowInputTemperature",
         "MassflowInputTemperature",
         lt.LoadTypes.WATER,
         lt.Units.CELSIUS,
+        component_id=cp.ComponentID("FakeMassflowInputTemperature"),
     )
     electricity_from_chp_target = cp.ComponentOutput(
         "FakeElectricityFromCHPTarget",
         "ElectricityFromCHPTarget",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.WATT,
+        component_id=cp.ComponentID("FakeElectricityFromCHPTarget"),
     )
 
     my_chp_system.control_signal_channel.source_output = control_signal
@@ -119,21 +123,12 @@ def test_chp_system() -> None:
     # Check if the delivered electricity demand got produced by chp
     #
     assert setup.stsv.values[setup.chp.mass_out_channel.global_index] == 0.011
-    assert (
-        setup.stsv.values[setup.chp.mass_out_temp_channel.global_index]
-        == 82.6072779444372
-    )
-    assert (
-        setup.stsv.values[setup.chp.gas_demand_target_channel.global_index]
-        == 9.994428193341691e-05
-    )
+    assert setup.stsv.values[setup.chp.mass_out_temp_channel.global_index] == 82.6072779444372
+    assert setup.stsv.values[setup.chp.gas_demand_target_channel.global_index] == 9.994428193341691e-05
     assert setup.stsv.values[setup.chp.el_power_channel.global_index] == 400.0
     assert setup.stsv.values[setup.chp.number_of_cycles_channel.global_index] == 1
     assert setup.stsv.values[setup.chp.th_power_channel.global_index] == 1500.0
-    assert (
-        setup.stsv.values[setup.chp.gas_demand_real_used_channel.global_index]
-        == 9.994428193341691e-05
-    )
+    assert setup.stsv.values[setup.chp.gas_demand_real_used_channel.global_index] == 9.994428193341691e-05
 
 
 @pytest.mark.base
@@ -238,9 +233,7 @@ def test_chp_state_defaults() -> None:
     assert state.activation == 0
 
     # Positive electricity output activates the CHP.
-    active = advanced_fuel_cell.CHPState(
-        start_timestep=5, electricity_output=400.0, cycle_number=2
-    )
+    active = advanced_fuel_cell.CHPState(start_timestep=5, electricity_output=400.0, cycle_number=2)
     assert active.start_timestep == 5
     assert active.electricity_output == 400.0
     assert active.cycle_number == 2

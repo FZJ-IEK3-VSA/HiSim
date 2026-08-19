@@ -34,6 +34,7 @@ def _make_outputs(units: list[lt.Units]) -> list[cp.ComponentOutput]:
                 field_name=f"Output{i}",
                 load_type=lt.LoadTypes.ANY,
                 unit=unit,
+                component_id=cp.ComponentID(f"Comp{i}"),
             )
         )
     return outputs
@@ -103,9 +104,9 @@ def test_get_std_results_matches_per_column_reference(seconds_per_timestep: int)
     """Bulk-resample output must be byte-for-byte identical to per-column reference."""
     units = [
         lt.Units.CELSIUS,  # mean
-        lt.Units.KWH,      # sum
-        lt.Units.WATT,     # mean
-        lt.Units.KWH,      # sum
+        lt.Units.KWH,  # sum
+        lt.Units.WATT,  # mean
+        lt.Units.KWH,  # sum
         lt.Units.PERCENT,  # mean
     ]
     df = _make_frame(units, seconds_per_timestep)
@@ -171,9 +172,9 @@ def test_get_std_results_mean_vs_sum_aggregation() -> None:
     "units",
     [
         [lt.Units.CELSIUS, lt.Units.KELVIN, lt.Units.WATT],  # all mean
-        [lt.Units.KWH, lt.Units.KWH, lt.Units.KWH],          # all sum
-        [lt.Units.CELSIUS],                                   # single mean
-        [lt.Units.KWH],                                       # single sum
+        [lt.Units.KWH, lt.Units.KWH, lt.Units.KWH],  # all sum
+        [lt.Units.CELSIUS],  # single mean
+        [lt.Units.KWH],  # single sum
     ],
     ids=["all-mean", "all-sum", "single-mean", "single-sum"],
 )

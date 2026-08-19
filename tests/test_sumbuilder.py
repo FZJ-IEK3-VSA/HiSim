@@ -18,14 +18,10 @@ def test_sum_builder_for_three_inputs() -> None:
     with different value sets (including a negative input), and asserts the
     component's output equals the arithmetic sum of the inputs each step.
     """
-    mysim: SimulationParameters = SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=60
-    )
+    mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
     sum_builder_config = sumbuilder.SumBuilderConfig.get_sumbuilder_default_config()
-    my_sum = sumbuilder.SumBuilderForThreeInputs(
-        config=sum_builder_config, my_simulation_parameters=mysim
-    )
+    my_sum = sumbuilder.SumBuilderForThreeInputs(config=sum_builder_config, my_simulation_parameters=mysim)
 
     # Define fake inputs
     fake_input1 = cp.ComponentOutput(
@@ -33,18 +29,21 @@ def test_sum_builder_for_three_inputs() -> None:
         field_name="input1",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
+        component_id=cp.ComponentID("fake1"),
     )
     fake_input2 = cp.ComponentOutput(
         object_name="fake2",
         field_name="input2",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
+        component_id=cp.ComponentID("fake2"),
     )
     fake_input3 = cp.ComponentOutput(
         object_name="fake3",
         field_name="input3",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
+        component_id=cp.ComponentID("fake3"),
     )
 
     # Connect fake inputs using source_output
@@ -53,9 +52,7 @@ def test_sum_builder_for_three_inputs() -> None:
     my_sum.input3.source_output = fake_input3
 
     # Count outputs for all components including fake inputs
-    number_of_outputs = fft.get_number_of_outputs(
-        [my_sum, fake_input1, fake_input2, fake_input3]
-    )
+    number_of_outputs = fft.get_number_of_outputs([my_sum, fake_input1, fake_input2, fake_input3])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     # Add Global Index
@@ -93,14 +90,10 @@ def test_sum_builder_for_two_inputs() -> None:
     with different value sets (including a negative input), and asserts the
     component's output equals the arithmetic sum of the inputs each step.
     """
-    mysim: SimulationParameters = SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=60
-    )
+    mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
     sum_builder_config = sumbuilder.SumBuilderConfig.get_sumbuilder_default_config()
-    my_sum = sumbuilder.SumBuilderForTwoInputs(
-        config=sum_builder_config, my_simulation_parameters=mysim
-    )
+    my_sum = sumbuilder.SumBuilderForTwoInputs(config=sum_builder_config, my_simulation_parameters=mysim)
 
     # Define fake inputs
     fake_input1 = cp.ComponentOutput(
@@ -108,12 +101,14 @@ def test_sum_builder_for_two_inputs() -> None:
         field_name="input1",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
+        component_id=cp.ComponentID("fake1"),
     )
     fake_input2 = cp.ComponentOutput(
         object_name="fake2",
         field_name="input2",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
+        component_id=cp.ComponentID("fake2"),
     )
 
     # Connect fake inputs using source_output
@@ -155,13 +150,9 @@ def _make_calculate_operation() -> sumbuilder.CalculateOperation:
     Returns a component with no inputs and no operations yet, ready for
     ``add_numbered_input`` / ``add_operation`` calls.
     """
-    mysim: SimulationParameters = SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=60
-    )
+    mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
     config = sumbuilder.SumBuilderConfig.get_sumbuilder_default_config()
-    return sumbuilder.CalculateOperation(
-        config=config, my_simulation_parameters=mysim
-    )
+    return sumbuilder.CalculateOperation(config=config, my_simulation_parameters=mysim)
 
 
 @pytest.mark.base
@@ -184,12 +175,14 @@ def test_calculate_operation_subtract() -> None:
         field_name="out1",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
+        component_id=cp.ComponentID("fake1"),
     )
     fake_output2 = cp.ComponentOutput(
         object_name="fake2",
         field_name="out2",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
+        component_id=cp.ComponentID("fake2"),
     )
     input1.source_output = fake_output1
     input2.source_output = fake_output2
@@ -254,12 +247,14 @@ def test_calculate_operation_simulate_invalid_operation_raises_value_error() -> 
         field_name="out1",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
+        component_id=cp.ComponentID("fake1"),
     )
     fake_output2 = cp.ComponentOutput(
         object_name="fake2",
         field_name="out2",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
+        component_id=cp.ComponentID("fake2"),
     )
     input1.source_output = fake_output1
     input2.source_output = fake_output2

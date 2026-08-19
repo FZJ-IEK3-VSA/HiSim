@@ -1,4 +1,5 @@
 """Test for heat distribution system."""
+
 #  clean
 from typing import Tuple
 import pytest
@@ -49,10 +50,7 @@ def test_hds() -> None:
             if theoretical_building_demand_in_watt > 0:
 
                 # if water input temp is high enough, heat exchange is possible but water output temp can not get lower than residence temp
-                if (
-                    input_water_temperature_in_celsius
-                    > residence_temperature_in_celsius
-                ):
+                if input_water_temperature_in_celsius > residence_temperature_in_celsius:
 
                     assert water_output_temperature_after_heat_exchange == max(
                         calculated_water_output_temperature_in_celsius,
@@ -60,24 +58,15 @@ def test_hds() -> None:
                     )
 
                 # if water input temp is too low no heat exchange
-                elif (
-                    input_water_temperature_in_celsius
-                    < residence_temperature_in_celsius
-                ):
+                elif input_water_temperature_in_celsius < residence_temperature_in_celsius:
 
-                    assert (
-                        water_output_temperature_after_heat_exchange
-                        == input_water_temperature_in_celsius
-                    )
+                    assert water_output_temperature_after_heat_exchange == input_water_temperature_in_celsius
                     assert effective_thermal_power_delivered_in_watt == 0
 
             # test the case where the building needs cooling
             elif theoretical_building_demand_in_watt < 0:
                 # if water input temp is low enough, heat exchange is possible but water output temp can not get higher than residence temp
-                if (
-                    input_water_temperature_in_celsius
-                    < residence_temperature_in_celsius
-                ):
+                if input_water_temperature_in_celsius < residence_temperature_in_celsius:
 
                     assert water_output_temperature_after_heat_exchange == min(
                         calculated_water_output_temperature_in_celsius,
@@ -85,22 +74,13 @@ def test_hds() -> None:
                     )
 
                 # if water input temp is too high no heat exchange
-                elif (
-                    input_water_temperature_in_celsius
-                    > residence_temperature_in_celsius
-                ):
+                elif input_water_temperature_in_celsius > residence_temperature_in_celsius:
 
-                    assert (
-                        water_output_temperature_after_heat_exchange
-                        == input_water_temperature_in_celsius
-                    )
+                    assert water_output_temperature_after_heat_exchange == input_water_temperature_in_celsius
                     assert effective_thermal_power_delivered_in_watt == 0
 
             elif theoretical_building_demand_in_watt == 0:
-                assert (
-                    water_output_temperature_after_heat_exchange
-                    == input_water_temperature_in_celsius
-                )
+                assert water_output_temperature_after_heat_exchange == input_water_temperature_in_celsius
                 assert effective_thermal_power_delivered_in_watt == 0
 
 
@@ -135,9 +115,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     """
 
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
@@ -152,10 +130,8 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
     )
-    my_hds_controller_information = (
-        heat_distribution_system.HeatDistributionControllerInformation(
-            config=my_hds_controller_config
-        )
+    my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
+        config=my_hds_controller_config
     )
 
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
@@ -181,31 +157,36 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         "WaterTemperatureInput",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
+        component_id=cp.ComponentID("FakeWaterTemperatureInput"),
     )
     residence_temperature_indoor_air = cp.ComponentOutput(
         "FakeResidenceTemperatureInput",
         "ResidenceTemperatureInput",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
+        component_id=cp.ComponentID("FakeResidenceTemperatureInput"),
     )
     theoretical_thermal_building_demand = cp.ComponentOutput(
         "FakeTheoreticalThermalDemand",
         "TheoreticalThermalDemand",
         lt.LoadTypes.HEATING,
         lt.Units.WATT,
+        component_id=cp.ComponentID("FakeTheoreticalThermalDemand"),
     )
 
     state_from_hds_controller = cp.ComponentOutput(
-        "FakeStateController", "StateController", lt.LoadTypes.ANY, lt.Units.ANY
+        "FakeStateController",
+        "StateController",
+        lt.LoadTypes.ANY,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("FakeStateController"),
     )
 
     # connect hds inputs to fake outputs
     my_heat_distribution_system.water_temperature_input_channel.source_output = (
         water_temperature_input_from_water_storage
     )
-    my_heat_distribution_system.residence_temperature_input_channel.source_output = (
-        residence_temperature_indoor_air
-    )
+    my_heat_distribution_system.residence_temperature_input_channel.source_output = residence_temperature_indoor_air
     my_heat_distribution_system.theoretical_thermal_building_demand_channel.source_output = (
         theoretical_thermal_building_demand
     )
@@ -234,21 +215,15 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         ]
     )
 
-    stsv.values[
-        water_temperature_input_from_water_storage.global_index
-    ] = water_input_temperature_in_celsius
+    stsv.values[water_temperature_input_from_water_storage.global_index] = water_input_temperature_in_celsius
 
     stsv.values[state_from_hds_controller.global_index] = 1
     stsv.values[residence_temperature_indoor_air.global_index] = 19
     timestep = 300
-    water_mass_flow_of_hds_in_kg_per_second = (
-        my_hds_controller_information.water_mass_flow_rate_in_kg_per_second
-    )
+    water_mass_flow_of_hds_in_kg_per_second = my_hds_controller_information.water_mass_flow_rate_in_kg_per_second
     # Simulate
 
-    stsv.values[
-        theoretical_thermal_building_demand.global_index
-    ] = theoretical_building_demand_in_watt
+    stsv.values[theoretical_thermal_building_demand.global_index] = theoretical_building_demand_in_watt
 
     my_heat_distribution_system.i_restore_state()
     my_heat_distribution_system.i_simulate(timestep, stsv, False)
@@ -275,12 +250,8 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     log.information(
         f"water input temperature in celsius {stsv.values[water_temperature_input_from_water_storage.global_index]}"
     )
-    log.information(
-        f"residence temperature in celsius {stsv.values[residence_temperature_indoor_air.global_index]}"
-    )
-    log.information(
-        f"theoretical thermal building demand in watt {theoretical_building_demand_in_watt}"
-    )
+    log.information(f"residence temperature in celsius {stsv.values[residence_temperature_indoor_air.global_index]}")
+    log.information(f"theoretical thermal building demand in watt {theoretical_building_demand_in_watt}")
     log.information(
         f"theoretical water output temperature after heat exchange with building "
         f"{calculated_water_output_temperature_in_celsius}"
@@ -289,9 +260,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         f"real water output temperature after heat exchange with building "
         f"{water_output_temperature_in_celsius_from_simulation}"
     )
-    log.information(
-        f"real thermal output delivered from hds {effective_thermal_power_delivered_in_watt}\n"
-    )
+    log.information(f"real thermal output delivered from hds {effective_thermal_power_delivered_in_watt}\n")
     return (
         stsv.values[water_temperature_input_from_water_storage.global_index],
         stsv.values[residence_temperature_indoor_air.global_index],

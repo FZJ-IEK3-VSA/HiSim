@@ -1,4 +1,5 @@
 """Tests for the SimpleHeatSource component with constant-power configuration."""
+
 import json
 import warnings
 
@@ -37,8 +38,12 @@ def test_heat_source() -> None:
         config=my_heat_source_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    massflow = cp.ComponentOutput("Fake_massflow", "Fake_massflow", lt.LoadTypes.ANY, lt.Units.ANY)
-    temperature_input = cp.ComponentOutput("Fake_t_in", "Fake_t_in", lt.LoadTypes.ANY, lt.Units.ANY)
+    massflow = cp.ComponentOutput(
+        "Fake_massflow", "Fake_massflow", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("Fake_massflow")
+    )
+    temperature_input = cp.ComponentOutput(
+        "Fake_t_in", "Fake_t_in", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("Fake_t_in")
+    )
 
     number_of_outputs = fft.get_number_of_outputs(
         [
@@ -68,7 +73,9 @@ def test_heat_source() -> None:
     # Simulate
     my_heat_source.i_simulate(timestep, time_step_values, False)
 
-    assert time_step_values.values[my_heat_source.thermal_power_delivered_channel.global_index] == pytest.approx(5000.0, rel=1e-6)
+    assert time_step_values.values[my_heat_source.thermal_power_delivered_channel.global_index] == pytest.approx(
+        5000.0, rel=1e-6
+    )
 
 
 @pytest.mark.base

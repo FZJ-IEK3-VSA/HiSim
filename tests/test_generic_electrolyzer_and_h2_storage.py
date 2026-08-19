@@ -30,9 +30,7 @@ def test_hydrogen_generator() -> None:
     """
 
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
     # HydrogenStorageConfig
     min_capacity = 0  # [kg_H2]
@@ -61,34 +59,30 @@ def test_hydrogen_generator() -> None:
 
     # ===================================================================================================================
     # Set Hydrogen Generator
-    my_electrolyzer_config = (
-        generic_electrolyzer_and_h2_storage.ElectrolyzerWithStorageConfig(
-            component_id=ComponentID(name="ElectrolyzerWithStorage"),
-            waste_energy=waste_energy,
-            min_power=min_power,
-            max_power=max_power,
-            min_power_percent=min_power_percent,
-            max_power_percent=max_power_percent,
-            min_hydrogen_production_rate_hour=min_hydrogen_production_rate_hour,
-            max_hydrogen_production_rate_hour=max_hydrogen_production_rate_hour,
-            pressure_hydrogen_output=pressure_hydrogen_output,
-        )
+    my_electrolyzer_config = generic_electrolyzer_and_h2_storage.ElectrolyzerWithStorageConfig(
+        component_id=ComponentID(name="ElectrolyzerWithStorage"),
+        waste_energy=waste_energy,
+        min_power=min_power,
+        max_power=max_power,
+        min_power_percent=min_power_percent,
+        max_power_percent=max_power_percent,
+        min_hydrogen_production_rate_hour=min_hydrogen_production_rate_hour,
+        max_hydrogen_production_rate_hour=max_hydrogen_production_rate_hour,
+        pressure_hydrogen_output=pressure_hydrogen_output,
     )
     my_electrolyzer = generic_electrolyzer_and_h2_storage.AdvancedElectrolyzer(
         my_simulation_parameters=my_simulation_parameters, config=my_electrolyzer_config
     )
-    my_hydrogen_storage_config = (
-        generic_electrolyzer_and_h2_storage.ElectrolyzerWithHydrogenStorageConfig(
-            component_id=ComponentID(name="ElectrolyzerWithHydrogenStorage"),
-            min_capacity=min_capacity,
-            max_capacity=max_capacity,
-            starting_fill=starting_fill,
-            max_charging_rate_hour=max_charging_rate_hour,
-            max_discharging_rate_hour=max_discharging_rate_hour,
-            energy_for_charge=energy_for_charge,
-            energy_for_discharge=energy_for_discharge,
-            loss_factor_per_day=loss_factor_per_day,
-        )
+    my_hydrogen_storage_config = generic_electrolyzer_and_h2_storage.ElectrolyzerWithHydrogenStorageConfig(
+        component_id=ComponentID(name="ElectrolyzerWithHydrogenStorage"),
+        min_capacity=min_capacity,
+        max_capacity=max_capacity,
+        starting_fill=starting_fill,
+        max_charging_rate_hour=max_charging_rate_hour,
+        max_discharging_rate_hour=max_discharging_rate_hour,
+        energy_for_charge=energy_for_charge,
+        energy_for_discharge=energy_for_discharge,
+        loss_factor_per_day=loss_factor_per_day,
     )
 
     my_hydrogen_storage = generic_electrolyzer_and_h2_storage.HydrogenStorage(
@@ -102,15 +96,21 @@ def test_hydrogen_generator() -> None:
         "ElectricityInput",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.WATT,
+        component_id=cp.ComponentID("FakeElectricityInput"),
     )
     hydrogen_not_stored = cp.ComponentOutput(
-        "FakeHydrogenNotStored", "HydrogenNotStored", lt.LoadTypes.GREEN_HYDROGEN, lt.Units.KG
+        "FakeHydrogenNotStored",
+        "HydrogenNotStored",
+        lt.LoadTypes.GREEN_HYDROGEN,
+        lt.Units.KG,
+        component_id=cp.ComponentID("FakeHydrogenNotStored"),
     )
     discharging_hydrogen_amount_target = cp.ComponentOutput(
         "DischargingHydrogenAmountTarget",
         "DischargingHydrogenAmountTarget",
         lt.LoadTypes.GREEN_HYDROGEN,
         lt.Units.KG_PER_SEC,
+        component_id=cp.ComponentID("DischargingHydrogenAmountTarget"),
     )
 
     number_of_outputs = fft.get_number_of_outputs(
@@ -127,12 +127,8 @@ def test_hydrogen_generator() -> None:
     # Link inputs and outputs
     my_electrolyzer.electricity_input_channel.source_output = electricity_input
     my_electrolyzer.hydrogen_not_stored_channel.source_output = hydrogen_not_stored
-    my_hydrogen_storage.discharging_hydrogen.source_output = (
-        discharging_hydrogen_amount_target
-    )
-    my_hydrogen_storage.charging_hydrogen.source_output = (
-        my_electrolyzer.hydrogen_output_channel
-    )
+    my_hydrogen_storage.discharging_hydrogen.source_output = discharging_hydrogen_amount_target
+    my_hydrogen_storage.charging_hydrogen.source_output = my_electrolyzer.hydrogen_output_channel
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components(
@@ -158,15 +154,11 @@ def test_hydrogen_generator() -> None:
     log.information(str(stsv.values))
 
     # Water Demand to produce Hydrogen
-    assert stsv.values[
-        my_electrolyzer.water_demand_channel.global_index
-    ] == pytest.approx(0.001114707341269841)
+    assert stsv.values[my_electrolyzer.water_demand_channel.global_index] == pytest.approx(0.001114707341269841)
     # Unused Power of Electrolyzer
     assert stsv.values[my_electrolyzer.unused_power_channel.global_index] == 1600
     # Amount of Hydrogen that is stored in Hydrogen-Storage
-    assert stsv.values[
-        my_hydrogen_storage.storage_delta.global_index
-    ] == pytest.approx(0.0001248472222222222)
+    assert stsv.values[my_hydrogen_storage.storage_delta.global_index] == pytest.approx(0.0001248472222222222)
 
 
 @pytest.mark.base
@@ -177,9 +169,7 @@ def test_display_config_instance_isolation() -> None:
     DisplayConfig instance across all component instances.
     """
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
     electrolyzer_config = generic_electrolyzer_and_h2_storage.ElectrolyzerWithStorageConfig(
         component_id=ComponentID(name="ElectrolyzerWithStorage"),

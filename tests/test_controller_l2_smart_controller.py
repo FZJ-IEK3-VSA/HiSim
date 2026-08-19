@@ -18,14 +18,14 @@ def test_smart_controller_default_config_name() -> None:
     default_config = controller_l2_smart_controller.SmartControllerConfig.get_default_config_ems()
 
     # Verify the name does not have a leading space
-    assert not default_config.component_id.name.startswith(" "), (
-        f"SmartController default name has a leading space: '{default_config.component_id.name}'"
-    )
+    assert not default_config.component_id.name.startswith(
+        " "
+    ), f"SmartController default name has a leading space: '{default_config.component_id.name}'"
 
     # Verify the expected name
-    assert default_config.component_id.name == "SmartController", (
-        f"SmartController default name should be 'SmartController', got '{default_config.component_id.name}'"
-    )
+    assert (
+        default_config.component_id.name == "SmartController"
+    ), f"SmartController default name should be 'SmartController', got '{default_config.component_id.name}'"
 
 
 @pytest.mark.base
@@ -76,6 +76,7 @@ class _FakeWrappedController:
                 None,
                 None,
                 "fake state output",
+                component_id=ComponentID(name),
             )
         ]
         self.saved = False
@@ -120,10 +121,7 @@ def test_smart_controller_accepts_injected_wrapped_controllers() -> None:
 
     # The injected controllers are used verbatim, no internal construction happened.
     assert controller.wrapped_controllers == [fake_hp, fake_ev]
-    assert all(
-        not isinstance(c, (GenericHeatPumpController,))
-        for c in controller.wrapped_controllers
-    )
+    assert all(not isinstance(c, (GenericHeatPumpController,)) for c in controller.wrapped_controllers)
 
 
 @pytest.mark.base

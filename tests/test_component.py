@@ -38,6 +38,7 @@ def test_component_output_and_input() -> None:
         sankey_flow_direction=True,
         output_description="Test output description",
         source_component_class="TestComponentClass",
+        component_id=cp.ComponentID("TestComponent"),
     )
 
     # Verify output attributes
@@ -106,10 +107,14 @@ def test_single_time_step_values() -> None:
     assert stsv.values == [0.0, 0.0, 0.0, 0.0, 0.0]
 
     # Create outputs for testing
-    output1 = cp.ComponentOutput("Component1", "Output1", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+    output1 = cp.ComponentOutput(
+        "Component1", "Output1", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, component_id=cp.ComponentID("Component1")
+    )
     output1.global_index = 0
 
-    output2 = cp.ComponentOutput("Component2", "Output2", lt.LoadTypes.HEATING, lt.Units.WATT)
+    output2 = cp.ComponentOutput(
+        "Component2", "Output2", lt.LoadTypes.HEATING, lt.Units.WATT, component_id=cp.ComponentID("Component2")
+    )
     output2.global_index = 1
 
     input1 = cp.ComponentInput("Component3", "Input1", lt.LoadTypes.ANY, lt.Units.ANY, True)
@@ -157,7 +162,13 @@ def test_single_time_step_values() -> None:
     stsv_prev = cp.SingleTimeStepValues(3)
     stsv_prev.values = [10.0, 25.0, 30.0]  # Only middle value differs
 
-    outputs = [output1, output2, cp.ComponentOutput("Component3", "Output3", lt.LoadTypes.ANY, lt.Units.ANY)]
+    outputs = [
+        output1,
+        output2,
+        cp.ComponentOutput(
+            "Component3", "Output3", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("Component3")
+        ),
+    ]
     outputs[2].global_index = 2
 
     diff_msg = stsv_orig.get_differences_for_error_msg(stsv_prev, outputs)
@@ -234,9 +245,7 @@ def test_example_component_with_config() -> None:
     )
 
     # Create component
-    component = example_component.ExampleComponent(
-        config=config, my_simulation_parameters=sim_params
-    )
+    component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
 
     # Verify component name
     # The identity carries no building, so the runtime name is just the plain name.
@@ -288,9 +297,7 @@ def test_component_connections() -> None:
         initial_temperature=25.0,
     )
 
-    target_component = example_component.ExampleComponent(
-        config=config2, my_simulation_parameters=sim_params
-    )
+    target_component = example_component.ExampleComponent(config=config2, my_simulation_parameters=sim_params)
 
     # Create an output from source
     source_output = cp.ComponentOutput(
@@ -298,6 +305,7 @@ def test_component_connections() -> None:
         field_name="ElectricityOutput",
         load_type=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.WATT,
+        component_id=cp.ComponentID("SourceComponent"),
     )
     source_output.global_index = 0
 
@@ -368,9 +376,7 @@ def test_add_default_connections_empty_raises() -> None:
         capacity=45 * 121.2,
         initial_temperature=25.0,
     )
-    component = example_component.ExampleComponent(
-        config=config, my_simulation_parameters=sim_params
-    )
+    component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
 
     # An empty connections list must raise a clear ValueError, not an IndexError.
     with pytest.raises(ValueError, match="connections list is empty"):
@@ -486,9 +492,7 @@ def test_example_component_simulation() -> None:
 
     # Create component with default config
     config = example_component.ExampleComponentConfig.get_default_example_component()
-    component = example_component.ExampleComponent(
-        config=config, my_simulation_parameters=sim_params
-    )
+    component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
 
     # Create outputs
     thermal_energy_delivered_output = cp.ComponentOutput(
@@ -497,6 +501,7 @@ def test_example_component_simulation() -> None:
         load_type=lt.LoadTypes.HEATING,
         unit=lt.Units.WATT,
         output_description="Thermal energy delivered",
+        component_id=cp.ComponentID("Source"),
     )
 
     # Set source output
@@ -837,17 +842,13 @@ def test_electricity_meter_dhw_connection_allow_unconnected() -> None:
     connections = meter.get_default_connections_from_more_advanced_heat_pump()
 
     dhw_connections = [
-        c
-        for c in connections
-        if c.source_component_field_name == MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW
+        c for c in connections if c.source_component_field_name == MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW
     ]
     assert len(dhw_connections) == 1
     assert dhw_connections[0].allow_unconnected_mandatory is True
 
     sh_connections = [
-        c
-        for c in connections
-        if c.source_component_field_name == MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH
+        c for c in connections if c.source_component_field_name == MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH
     ]
     assert len(sh_connections) == 1
     assert sh_connections[0].allow_unconnected_mandatory is False

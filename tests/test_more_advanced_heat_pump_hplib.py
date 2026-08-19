@@ -15,7 +15,6 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ComponentID
 
-
 # Heat pump configuration constants
 CO2_FOOTPRINT_COEFFICIENT: float = 165.84  # kg CO2 per kW thermal power over lifetime
 INVESTMENT_COST_COEFFICIENT: float = 1513.74  # EUR per kW thermal power
@@ -45,19 +44,51 @@ def test_heat_pump_hplib_new() -> None:
     force_convergence = False
 
     # Create fake component outputs as inputs for simulation
-    on_off_switch_sh = cp.ComponentOutput("Fake_on_off_switch", "Fake_on_off_switch", lt.LoadTypes.ANY, lt.Units.ANY)
-    on_off_switch_dhw = cp.ComponentOutput("Fake_on_off_switch", "Fake_on_off_switch", lt.LoadTypes.ANY, lt.Units.ANY)
-    const_thermal_power_value_dhw = cp.ComponentOutput(
-        "Fake_const_thermal_power_value_dhw", "Fake_const_thermal_power_value_dhw", lt.LoadTypes.ANY, lt.Units.ANY
+    on_off_switch_sh = cp.ComponentOutput(
+        "Fake_on_off_switch",
+        "Fake_on_off_switch",
+        lt.LoadTypes.ANY,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("Fake_on_off_switch"),
     )
-    t_in_primary = cp.ComponentOutput("Fake_t_in_primary", "Fake_t_in_primary", lt.LoadTypes.ANY, lt.Units.ANY)
+    on_off_switch_dhw = cp.ComponentOutput(
+        "Fake_on_off_switch",
+        "Fake_on_off_switch",
+        lt.LoadTypes.ANY,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("Fake_on_off_switch"),
+    )
+    const_thermal_power_value_dhw = cp.ComponentOutput(
+        "Fake_const_thermal_power_value_dhw",
+        "Fake_const_thermal_power_value_dhw",
+        lt.LoadTypes.ANY,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("Fake_const_thermal_power_value_dhw"),
+    )
+    t_in_primary = cp.ComponentOutput(
+        "Fake_t_in_primary",
+        "Fake_t_in_primary",
+        lt.LoadTypes.ANY,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("Fake_t_in_primary"),
+    )
     t_in_secondary_sh = cp.ComponentOutput(
-        "Fake_t_in_secondary_hot_water", "Fake_t_in_secondary_hot_water", lt.LoadTypes.ANY, lt.Units.ANY
+        "Fake_t_in_secondary_hot_water",
+        "Fake_t_in_secondary_hot_water",
+        lt.LoadTypes.ANY,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("Fake_t_in_secondary_hot_water"),
     )
     t_in_secondary_dhw = cp.ComponentOutput(
-        "Fake_t_in_secondary_dhw", "Fake_t_in_secondary_dhw", lt.LoadTypes.ANY, lt.Units.ANY
+        "Fake_t_in_secondary_dhw",
+        "Fake_t_in_secondary_dhw",
+        lt.LoadTypes.ANY,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("Fake_t_in_secondary_dhw"),
     )
-    t_amb = cp.ComponentOutput("Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY)
+    t_amb = cp.ComponentOutput(
+        "Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("Fake_t_amb")
+    )
 
     # Initialize component
     heatpump_config = MoreAdvancedHeatPumpHPLibConfig(
@@ -82,7 +113,7 @@ def test_heat_pump_hplib_new() -> None:
         investment_costs_in_euro=p_th_set * 1e-3 * INVESTMENT_COST_COEFFICIENT,
         lifetime_in_years=10,
         maintenance_costs_in_euro_per_year=MAINTENANCE_COST_FRACTION * p_th_set * 1e-3 * INVESTMENT_COST_COEFFICIENT,
-        subsidy_as_percentage_of_investment_costs=0.3
+        subsidy_as_percentage_of_investment_costs=0.3,
     )
     heatpump = MoreAdvancedHeatPumpHPLib(config=heatpump_config, my_simulation_parameters=simpars)
     heatpump.state = MoreAdvancedHeatPumpHPLibState(
@@ -100,7 +131,7 @@ def test_heat_pump_hplib_new() -> None:
         counter_switch_dhw=0,
         counter_onoff=0,
         delta_t_secondary_side=5,
-        delta_t_primary_side=5
+        delta_t_primary_side=5,
     )
 
     number_of_outputs = fft.get_number_of_outputs(
@@ -171,10 +202,14 @@ def test_get_heatpump_cycles_counts_transitions() -> None:
     heatpump = MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=simpars)
 
     time_off_output = cp.ComponentOutput(
-        "HeatPump", heatpump.TimeOff, lt.LoadTypes.ANY, lt.Units.ANY
+        "HeatPump", heatpump.TimeOff, lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("HeatPump")
     )
     other_output = cp.ComponentOutput(
-        "HeatPump", heatpump.ThermalOutputPowerSH, lt.LoadTypes.HEATING, lt.Units.WATT
+        "HeatPump",
+        heatpump.ThermalOutputPowerSH,
+        lt.LoadTypes.HEATING,
+        lt.Units.WATT,
+        component_id=cp.ComponentID("HeatPump"),
     )
 
     # Column 0 holds the TimeOff series; an unrelated column sits at index 1.
@@ -192,22 +227,15 @@ def test_get_heatpump_cycles_counts_transitions() -> None:
 
     # Single-element series: the only element has no successor; must not raise.
     single = pd.DataFrame({heatpump.TimeOff: [60]})
-    assert heatpump.get_heatpump_cycles(
-        output=time_off_output, index=0, postprocessing_results=single
-    ) == 0
+    assert heatpump.get_heatpump_cycles(output=time_off_output, index=0, postprocessing_results=single) == 0
 
     # No transitions when the series never returns to zero after a non-zero value.
     always_on_then_off = pd.DataFrame({heatpump.TimeOff: [0, 60, 60, 60]})
-    assert heatpump.get_heatpump_cycles(
-        output=time_off_output, index=0, postprocessing_results=always_on_then_off
-    ) == 0
+    assert heatpump.get_heatpump_cycles(output=time_off_output, index=0, postprocessing_results=always_on_then_off) == 0
 
     # When the output field is not TimeOff, the method short-circuits to 0.
     assert (
-        heatpump.get_heatpump_cycles(
-            output=other_output, index=0, postprocessing_results=postprocessing_results
-        )
-        == 0
+        heatpump.get_heatpump_cycles(output=other_output, index=0, postprocessing_results=postprocessing_results) == 0
     )
 
 
@@ -225,7 +253,7 @@ def test_get_heatpump_cycles_propagates_non_index_errors() -> None:
     heatpump = MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=simpars)
 
     time_off_output = cp.ComponentOutput(
-        "HeatPump", heatpump.TimeOff, lt.LoadTypes.ANY, lt.Units.ANY
+        "HeatPump", heatpump.TimeOff, lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("HeatPump")
     )
     # A numpy array as an element makes ``off_time != 0`` return an array whose
     # truth value is ambiguous, raising ValueError — a non-IndexError that the
@@ -234,6 +262,4 @@ def test_get_heatpump_cycles_propagates_non_index_errors() -> None:
     postprocessing_results = pd.DataFrame({heatpump.TimeOff: bad_series})
 
     with pytest.raises(ValueError):
-        heatpump.get_heatpump_cycles(
-            output=time_off_output, index=0, postprocessing_results=postprocessing_results
-        )
+        heatpump.get_heatpump_cycles(output=time_off_output, index=0, postprocessing_results=postprocessing_results)

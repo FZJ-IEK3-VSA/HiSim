@@ -82,12 +82,8 @@ def test_read_config_with_explicit_path(tmp_path: Path) -> None:
     """read_config reads a variant from an explicit path (no HISIMPATH coupling)."""
     variant = _make_rsoc_config_dict()
     config_file = tmp_path / "rSOC_manufacturer_config.json"
-    config_file.write_text(
-        json.dumps({"rSOC variants": {"RSOC_TEST": variant}}), encoding="utf-8"
-    )
-    loaded = controller_l1_rsoc.RsocControllerConfig.read_config(
-        "RSOC_TEST", path=config_file
-    )
+    config_file.write_text(json.dumps({"rSOC variants": {"RSOC_TEST": variant}}), encoding="utf-8")
+    loaded = controller_l1_rsoc.RsocControllerConfig.read_config("RSOC_TEST", path=config_file)
     assert loaded == variant
 
 
@@ -99,9 +95,7 @@ def test_read_config_with_explicit_path_missing_variant(tmp_path: Path) -> None:
         json.dumps({"rSOC variants": {"RSOC_TEST": {"nom_load_soec": 1.0}}}),
         encoding="utf-8",
     )
-    loaded = controller_l1_rsoc.RsocControllerConfig.read_config(
-        "DOES_NOT_EXIST", path=config_file
-    )
+    loaded = controller_l1_rsoc.RsocControllerConfig.read_config("DOES_NOT_EXIST", path=config_file)
     assert loaded == {}
 
 
@@ -114,22 +108,19 @@ def test_rsoc_controller_built_from_in_memory_config() -> None:
     single SOEC-mode timestep is simulated.
     """
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2021, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
 
     config = controller_l1_rsoc.RsocControllerConfig.config_rsoc(
         rsoc_name="RSOC_TEST", config_json=_make_rsoc_config_dict()
     )
-    my_controller = controller_l1_rsoc.RsocController(
-        config=config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_controller = controller_l1_rsoc.RsocController(config=config, my_simulation_parameters=my_simulation_parameters)
 
     provided_power = cp.ComponentOutput(
         "FakeProvidedPower",
         controller_l1_rsoc.RsocController.ProvidedPower,
         lt.LoadTypes.ELECTRICITY,
         lt.Units.KILOWATT,
+        component_id=cp.ComponentID("FakeProvidedPower"),
     )
 
     number_of_outputs = fft.get_number_of_outputs([my_controller, provided_power])
@@ -157,19 +148,13 @@ def test_rsoc_controller_built_from_in_memory_config() -> None:
 def test_rsoc_controller_display_config_isolation() -> None:
     """Two controllers with default display config get independent instances."""
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2021, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
 
     config = controller_l1_rsoc.RsocControllerConfig.config_rsoc(
         rsoc_name="RSOC_TEST", config_json=_make_rsoc_config_dict()
     )
-    controller_a = controller_l1_rsoc.RsocController(
-        config=config, my_simulation_parameters=my_simulation_parameters
-    )
-    controller_b = controller_l1_rsoc.RsocController(
-        config=config, my_simulation_parameters=my_simulation_parameters
-    )
+    controller_a = controller_l1_rsoc.RsocController(config=config, my_simulation_parameters=my_simulation_parameters)
+    controller_b = controller_l1_rsoc.RsocController(config=config, my_simulation_parameters=my_simulation_parameters)
 
     # Each call without an explicit display config must create a new instance.
     assert controller_a.my_display_config is not controller_b.my_display_config

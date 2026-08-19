@@ -15,7 +15,7 @@ import json
 
 import pytest
 
-from hisim.components.generic_ev_charger import (
+from projects.HiSim.obsolete.generic_ev_charger import (
     EVChargerController,
     EVChargerControllerConfig,
     EVChargerMode,

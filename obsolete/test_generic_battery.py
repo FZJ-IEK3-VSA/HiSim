@@ -19,7 +19,7 @@ from typing import Any
 
 import pytest
 
-from hisim.components.generic_battery import (
+from projects.HiSim.obsolete.generic_battery import (
     GenericBattery,
     GenericBatteryConfig,
     select_battery_spec,

@@ -469,7 +469,7 @@ class CostDatabase:
     CONVERTED_PRICE_FIELDS = ("working_price_in_euro_per_kwh", "emission_factor_in_kg_per_kwh")
 
     def energy_content_of(self, entry: EnergyPriceEntry) -> Optional[EnergyContent]:
-        """kWh per native billing unit of a fuel-quoted row; None for a row already quoted per kWh.
+        """Give the kWh per native billing unit of a fuel-quoted row, or None if already per kWh.
 
         The lookup behind decision D26. Heating values come from exactly one place —
         `components.configuration.PhysicsConfig`, the same lower heating values the boilers and
@@ -508,8 +508,8 @@ class CostDatabase:
             )
         # Deferred, both of them: see the docstring — §10.0 rule 1 keeps `hisim.economics`
         # importable without `hisim.components`.
-        from hisim import loadtypes as lt
-        from hisim.components.configuration import PhysicsConfig
+        from hisim import loadtypes as lt  # pylint: disable=import-outside-toplevel
+        from hisim.components.configuration import PhysicsConfig  # pylint: disable=import-outside-toplevel
 
         load_types_by_carrier = {
             EnergyCarrier.HEATING_OIL: lt.LoadTypes.OIL,
@@ -667,11 +667,11 @@ class CostDatabase:
         ledger: ProvenanceLedger,
         fields: Sequence[str],
     ) -> ResolvedPriceEntry:
-        """The §3.5 energy price entry and its provenance in one step — see
-        :meth:`resolve_device_entry`.
+        """Return the §3.5 energy price entry and its provenance in one step.
 
-        The energy half of the W2.1 resolved-entry contract. `calculators/energy.py` calls it once
-        per carrier, naming the fields it is about to bill from (working price, standing charge,
+        The counterpart of :meth:`resolve_device_entry`, and the energy half of the W2.1
+        resolved-entry contract. `calculators/energy.py` calls it once per carrier,
+        naming the fields it is about to bill from (working price, standing charge,
         emission factor, …), so every component of an energy bill can later be traced back to the
         row and the citation it came from (§3.10).
 
@@ -832,7 +832,9 @@ class CostDatabase:
         for path, value in overlays.items():
             if value is None:
                 continue
-            clone._apply_overlay(path, value, scenario_id)
+            # `clone` is a copy of `self`, i.e. the very class this method belongs to, so the
+            # protected call is internal; pylint only sees an access on a foreign name.
+            clone._apply_overlay(path, value, scenario_id)  # pylint: disable=protected-access
         return clone
 
     def _apply_overlay(self, path: str, value: Any, scenario_id: str) -> None:

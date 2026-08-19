@@ -41,7 +41,7 @@ class TestUncertainValue:
     """§3.9 semantics."""
 
     def test_band_order_enforced(self):
-        """min <= best_estimate <= max is an invariant."""
+        """Ordering min <= best_estimate <= max is an invariant."""
         with pytest.raises(ValueError):
             UncertainValue(best_estimate=1.0, minimum=2.0, maximum=3.0)
 

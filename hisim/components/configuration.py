@@ -829,7 +829,7 @@ class ExtendedControllerConfig(ConfigBase):
     ) -> Any:
         """Gets a default ExtendedControllerConfig."""
         if component_id is None:
-            component_id = ComponentID(name="Example Component")
+            component_id = ComponentID(name="ExtendedController")
         return ExtendedControllerConfig(
             component_id=component_id,
             chp=True,

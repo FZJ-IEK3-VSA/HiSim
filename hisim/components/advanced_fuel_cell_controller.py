@@ -312,12 +312,11 @@ class ExtendedController(Component):
 
     def __init__(
         self,
-        component_name: str,
         config: ExtendedControllerConfig,
         my_simulation_parameters: SimulationParameters,
         my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
-        """Initialize the class."""
+        """Initialize the class. The component name is derived from the config's identity."""
         self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
         self.config: ExtendedControllerConfig = config
         component_name = self.get_component_name()
@@ -392,24 +391,28 @@ class ExtendedController(Component):
             ExtendedController.ControllerCHP,
             lt.LoadTypes.ANY,
             lt.Units.PERCENT,
+            output_description="CHP modulation signal in percent (0 = off, 100 = full power).",
         )
         self.controller_gas_heater_channel: ComponentOutput = self.add_output(
             self.component_name,
             ExtendedController.ControllerGasHeater,
             lt.LoadTypes.ANY,
             lt.Units.PERCENT,
+            output_description="Gas heater modulation signal in percent (0 = off, 100 = full power).",
         )
         self.power_to_electrolyzer_channel: ComponentOutput = self.add_output(
             self.component_name,
             ExtendedController.PowerToElectrolyzer,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
+            output_description="Electric power routed to the electrolyzer in watt.",
         )
         self.power_from_or_to_grid_channel: ComponentOutput = self.add_output(
             self.component_name,
             ExtendedController.PowerFromOrToGrid,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
+            output_description="Electric power exchanged with the grid in watt (sign follows the household balance).",
         )
 
         self.runtime_counter_chp_channel: ComponentOutput = self.add_output(
@@ -417,12 +420,14 @@ class ExtendedController(Component):
             ExtendedController.RuntimeCounterCHP,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
+            output_description="Consecutive-timestep runtime counter of the CHP.",
         )
         self.runtime_counter_gas_heater_channel: ComponentOutput = self.add_output(
             self.component_name,
             ExtendedController.RuntimeCounterGasHeater,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
+            output_description="Consecutive-timestep runtime counter of the gas heater.",
         )
 
         self.extended_controller: ExtendedControllerSimulation = ExtendedControllerSimulation()

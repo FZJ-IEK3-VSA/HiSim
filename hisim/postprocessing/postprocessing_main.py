@@ -60,7 +60,7 @@ from hisim import utils
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.sim_repository import SimRepositoryKeyEnum
 
 if TYPE_CHECKING:
     from hisim.postprocessing import reportgenerator
@@ -913,13 +913,13 @@ class PostProcessor:
         # Set meta info
         self.model = f"HiSim_{ppdt.module_filename}"
         self.scenario = (
-            SingletonSimRepository().get_entry(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
-            if SingletonSimRepository().entry_exists(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
+            my_sim.simulation_repository.get_entry(SimRepositoryKeyEnum.RESULT_SCENARIO_NAME)
+            if my_sim.simulation_repository.entry_exists(SimRepositoryKeyEnum.RESULT_SCENARIO_NAME)
             else ""
         )
         self.region = (
-            SingletonSimRepository().get_entry(SingletonDictKeyEnum.LOCATION)
-            if SingletonSimRepository().entry_exists(SingletonDictKeyEnum.LOCATION)
+            my_sim.simulation_repository.get_entry(SimRepositoryKeyEnum.LOCATION)
+            if my_sim.simulation_repository.entry_exists(SimRepositoryKeyEnum.LOCATION)
             else ""
         )
         self.year = ppdt.simulation_parameters.year
@@ -994,20 +994,20 @@ class PostProcessor:
         self.model = "".join(["HiSim_", ppdt.module_filename])
 
         # set pyam scenario name
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME):
-            self.scenario = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
+        if my_sim.simulation_repository.entry_exists(key=SimRepositoryKeyEnum.RESULT_SCENARIO_NAME):
+            self.scenario = my_sim.simulation_repository.get_entry(key=SimRepositoryKeyEnum.RESULT_SCENARIO_NAME)
         else:
             self.scenario = ""
 
         # set region
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.LOCATION):
-            self.region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
+        if my_sim.simulation_repository.entry_exists(key=SimRepositoryKeyEnum.LOCATION):
+            self.region = my_sim.simulation_repository.get_entry(key=SimRepositoryKeyEnum.LOCATION)
         else:
             self.region = ""
 
         # set description
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.DESCRIPTION):
-            self.description = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.DESCRIPTION)
+        if my_sim.simulation_repository.entry_exists(key=SimRepositoryKeyEnum.DESCRIPTION):
+            self.description = my_sim.simulation_repository.get_entry(key=SimRepositoryKeyEnum.DESCRIPTION)
         else:
             self.description = ""
 

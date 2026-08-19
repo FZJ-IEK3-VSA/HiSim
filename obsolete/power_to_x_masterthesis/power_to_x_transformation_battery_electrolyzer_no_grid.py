@@ -12,7 +12,6 @@ from hisim.simulationparameters import SimulationParameters
 
 from hisim import loadtypes as lt
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 # CSV lib
 from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
@@ -228,8 +227,8 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         sorting_option=SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION,
     )
 
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
+    my_sim.simulation_repository.set_entry(
+        key=SimRepositoryKeyEnum.RESULT_SCENARIO_NAME,
         entry=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{electrolyzer_name}",
     )
 

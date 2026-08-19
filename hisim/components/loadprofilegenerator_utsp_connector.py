@@ -46,7 +46,7 @@ from hisim import log, utils
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.sim_repository import SimRepositoryKeyEnum
 
 # Constants for warm water fallback values used in i_simulate
 DEFAULT_WW_TEMPERATURE_INPUT: float = 40.45  # °C - default warm water temperature fallback
@@ -145,8 +145,6 @@ class UtspLpgConnector(cp.Component):
     ElectricalPowerConsumption: str = "ElectricalPowerConsumption"
     ElectricalEnergyConsumption: str = "ElectricalEnergyConsumption"
     WaterConsumption: str = "WaterConsumption"
-
-    Electricity_Demand_Forecast_24h: str = "Electricity_Demand_Forecast_24h"
 
     # Similar components to connect to:
     # None
@@ -322,7 +320,7 @@ class UtspLpgConnector(cp.Component):
             if last_forecast_timestep > len(self.electricity_consumption):
                 last_forecast_timestep = len(self.electricity_consumption)
             demandforecast = self.electricity_consumption[timestep:last_forecast_timestep]
-            self.simulation_repository.set_entry(self.Electricity_Demand_Forecast_24h, demandforecast)
+            self.simulation_repository.set_entry(SimRepositoryKeyEnum.OCCUPANCYELECTRICITYDEMAND24HFORECAST, demandforecast)
 
     def get_resolution(self) -> str:
         """Gets the temporal resolution of the simulation as a string in the format hh:mm:ss.
@@ -991,8 +989,8 @@ class UtspLpgConnector(cp.Component):
                     # no caching if predefined profile is used
 
                     if self.utsp_config.predictive:
-                        SingletonSimRepository().set_entry(
-                            key=SingletonDictKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST,
+                        self.simulation_repository.set_entry(
+                            key=SimRepositoryKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST,
                             entry=self.heating_by_residents,
                         )
 

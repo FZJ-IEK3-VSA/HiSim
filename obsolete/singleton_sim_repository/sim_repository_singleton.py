@@ -15,7 +15,7 @@ from hisim import loadtypes as lt
 # https://refactoring.guru/design-patterns/singleton/python/example#example-1
 
 
-class SingletonMeta(type):
+class SingletonMetaOld(type):
 
     """A class for a thread-safe implementation of Singleton."""
 
@@ -61,7 +61,7 @@ class SingletonMeta(type):
                 return cls._instances[cls]
 
 
-class SingletonSimRepository(metaclass=SingletonMeta):
+class SingletonSimRepository(metaclass=SingletonMetaOld):
 
     """Class for exchanging information across all components."""
 
@@ -133,7 +133,7 @@ class SingletonSimRepository(metaclass=SingletonMeta):
         self.my_dynamic_dict = {component_type: {} for component_type in lt.ComponentType}
 
 
-class SingletonDictKeyEnum(enum.Enum):
+class SimRepositoryKeyEnum(enum.Enum):
 
     """Class for setting dictionary keys in the singleton sim repository."""
 

@@ -17,7 +17,7 @@ try:
     import hisim.simulator as sim
     from hisim import log
     from hisim.simulationparameters import SimulationParameters
-    from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+    from hisim.sim_repository import SimRepositoryKeyEnum
 except ModuleNotFoundError:
     raise ModuleNotFoundError(
         "Could not import HiSim modules. "
@@ -74,7 +74,7 @@ def initialize_from_python(
 
     Resolves *path_to_module* to an absolute ``.py`` file, adds parent
     directories to ``sys.path``, records the first-line description in the
-    singleton sim repository, imports the module, and calls its
+    sim repository, imports the module, and calls its
     ``setup_function`` to wire the component graph.
 
     Args:
@@ -133,12 +133,10 @@ def initialize_from_python(
     else:
         sim_params = None
 
-    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{get_description_from_py(path_obj)}")
-
     # Make setup function executable
     targetmodule = importlib.import_module(module_filename)
 
-    # Initialize simulator based on setup function
+    # Initialize simulator via the Python setup function
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=str(module_dir),
         module_filename=module_filename,
@@ -148,6 +146,9 @@ def initialize_from_python(
         # Always log component connections in Python mode (mirrors the JSON path, hisim_main.py:215)
         # so component_connections.json is written for easy post-processing and debugging.
         force_log_connections=True,
+    )
+    my_sim.simulation_repository.set_entry(
+        key=SimRepositoryKeyEnum.DESCRIPTION, entry=f"{get_description_from_py(path_obj)}",
     )
 
     # Build method
@@ -217,7 +218,6 @@ def initialize_from_json(
 
     # Load JSON files
     scenario_data = load_json_file(scenario)
-    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}")
     # Missing in the following data: result_directory, surplus_control, cache_dir_path, multiple_buildings
     # -> Result Directory is set in prepare_simulation_directory function, called by run_all_timesteps
     # -> Cache Dir Path is filled by default in SimulationParameters
@@ -230,6 +230,9 @@ def initialize_from_json(
     sim_params = SimulationParameters(**sim_params_data)
 
     my_sim = _build_simulator_from_scenario(scenario_data, path_to_module, sim_params)
+    my_sim.simulation_repository.set_entry(
+        key=SimRepositoryKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}",
+    )
 
     if delta:
         log.warning("====================================================================")
@@ -299,7 +302,15 @@ def initialize_from_json_with_parameters(
         The initialized ``Simulator`` with its component graph wired.
     """
     scenario_data = load_json_file(scenario)
-    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}")
+    my_sim = sim.Simulator(
+        module_directory=str(Path(scenario).resolve().parent),
+        my_simulation_parameters=my_simulation_parameters,
+        module_filename=str(Path(scenario).stem),
+    )
+    my_sim.set_simulation_parameters(my_simulation_parameters)
+    my_sim.simulation_repository.set_entry(
+        key=SimRepositoryKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}",
+    )
     my_simulation_parameters.multiple_buildings = scenario_data.get("multiple_buildings", False)
     my_simulation_parameters.log_connections = True  # For easy post-processing (and debugging)
     return _build_simulator_from_scenario(scenario_data, scenario, my_simulation_parameters)

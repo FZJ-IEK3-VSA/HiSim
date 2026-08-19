@@ -14,7 +14,7 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.building import Building
 from hisim import log
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.sim_repository import SimRepositoryKeyEnum, SimRepository
 
 __authors__ = "Marwa Alfouly"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -126,16 +126,18 @@ class BuildingThermalModel5R1C:
         self.identify()
 
     @classmethod
-    def from_sim_repository(cls, seconds_per_timestep: float) -> "BuildingThermalModel5R1C":
+    def from_sim_repository(cls, seconds_per_timestep: float, sim_repo: SimRepository) -> "BuildingThermalModel5R1C":
         """Reads the 5R1C thermal coefficients from the singleton simulation repository."""
-        repo = SingletonSimRepository()
+        repo = sim_repo
+        if not repo.entries:
+            raise KeyError(f"The passed sim repo has no entries: {repo.entries}")
         return cls(
-            h_tr_w=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING),
-            h_tr_ms=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS),
-            h_tr_em=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM),
-            h_ve_adj=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION),
-            h_tr_is=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR),
-            c_m=repo.get_entry(key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE),
+            h_tr_w=repo.get_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING),
+            h_tr_ms=repo.get_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS),
+            h_tr_em=repo.get_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM),
+            h_ve_adj=repo.get_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION),
+            h_tr_is=repo.get_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR),
+            c_m=repo.get_entry(key=SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE),
             seconds_per_timestep=seconds_per_timestep,
         )
 
@@ -358,19 +360,19 @@ class PIDController(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
+        self.thermal_model: BuildingThermalModel5R1C
+        self.mv_min: float
+        self.mv_max: float
+        self.integral_gain: float
+        self.proportional_gain: float
+        self.derivative_gain: float
+        self.h_tr_w: float
+        self.h_tr_ms: float
+        self.h_tr_em: float
+        self.h_ve_adj: float
+        self.h_tr_is: float
+        self.c_m: float
 
-        # Identify the building thermal model and tune the PI controller from it.
-        self.thermal_model: BuildingThermalModel5R1C = BuildingThermalModel5R1C.from_sim_repository(
-            self.my_simulation_parameters.seconds_per_timestep
-        )
-        proportional_gain, integral_gain, derivative_gain = compute_pi_gains(self.thermal_model)
-        # --------------------------------------------------
-        # control saturation
-        self.mv_min: float = 0
-        self.mv_max: float = 5000
-        self.integral_gain: float = integral_gain
-        self.proportional_gain: float = proportional_gain
-        self.derivative_gain: float = derivative_gain
         self.state: PIDState = PIDState(
             integrator=0,
             integrator_d3=0,
@@ -379,7 +381,7 @@ class PIDController(cp.Component):
             derivator=0,
             manipulated_variable=0,
         )
-        self.previous_state: PIDState = self.state.clone()
+        self.previous_state: PIDState
 
         self.temperature_mean_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -493,7 +495,19 @@ class PIDController(cp.Component):
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
-        pass
+        # Identify the building thermal model and tune the PI controller from it.
+        # get entries from simulation repository
+        self.thermal_model = BuildingThermalModel5R1C.from_sim_repository(
+            self.my_simulation_parameters.seconds_per_timestep, sim_repo=self.simulation_repository
+        )
+        proportional_gain, integral_gain, derivative_gain = compute_pi_gains(self.thermal_model)
+        # --------------------------------------------------
+        # control saturation
+        self.mv_min = 0
+        self.mv_max = 5000
+        self.integral_gain = integral_gain
+        self.proportional_gain = proportional_gain
+        self.derivative_gain = derivative_gain
 
     def i_save_state(self) -> None:
         """Saves the internal state at the beginning of each timestep."""

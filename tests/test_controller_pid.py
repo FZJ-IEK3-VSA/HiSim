@@ -14,7 +14,7 @@ from hisim.components.controller_pid import (
     compute_pi_gains,
 )
 from hisim.loadtypes import LoadTypes, Units
-from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
+from hisim.sim_repository import SimRepositoryKeyEnum, SimRepository
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 
@@ -26,6 +26,14 @@ H_VE_ADJ = 40.0
 H_TR_IS = 10.0
 C_M = 1.5e7
 SECONDS_PER_TIMESTEP = 60
+
+sim_repository = SimRepository()
+sim_repository.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING, entry=H_TR_W)
+sim_repository.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS, entry=H_TR_MS)
+sim_repository.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM, entry=H_TR_EM)
+sim_repository.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION, entry=H_VE_ADJ)
+sim_repository.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR, entry=H_TR_IS)
+sim_repository.set_entry(key=SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE, entry=C_M)
 
 
 def _build_thermal_model() -> BuildingThermalModel5R1C:
@@ -43,24 +51,16 @@ def _build_thermal_model() -> BuildingThermalModel5R1C:
 
 @pytest.fixture(autouse=True)
 def populated_sim_repository() -> Iterator[None]:
-    """Pre-populates the singleton with 5R1C coefficients (KB-5214) and resets it afterwards.
+    """Pre-populates the sim repo with 5R1C coefficients (KB-5214) before each test and clears it afterwards."""
+    repo = sim_repository
 
-    Access goes through the public ``set_entry`` / ``reset`` accessors rather
-    than the concrete ``my_dict`` storage, so the tests do not depend on the
-    singleton's internal representation (DIP).  ``reset`` is used for both
-    setup and teardown to guarantee a clean slate and prevent stale-state
-    leakage across test runs (KB-5646).
-    """
-    repo = SingletonSimRepository()
-    repo.reset()
-    repo.set_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING, entry=H_TR_W)
-    repo.set_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS, entry=H_TR_MS)
-    repo.set_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM, entry=H_TR_EM)
-    repo.set_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION, entry=H_VE_ADJ)
-    repo.set_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR, entry=H_TR_IS)
-    repo.set_entry(key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE, entry=C_M)
+    repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING, entry=H_TR_W)
+    repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS, entry=H_TR_MS)
+    repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM, entry=H_TR_EM)
+    repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION, entry=H_VE_ADJ)
+    repo.set_entry(key=SimRepositoryKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR, entry=H_TR_IS)
+    repo.set_entry(key=SimRepositoryKeyEnum.THERMALCAPACITYENVELOPE, entry=C_M)
     yield
-    repo.reset()
 
 
 @pytest.mark.base
@@ -94,7 +94,8 @@ def test_compute_pi_gains_returns_pole_placement_gains() -> None:
 @pytest.mark.base
 def test_from_sim_repository_reads_coefficients() -> None:
     """from_sim_repository reads the 5R1C coefficients from the singleton (KB-5214)."""
-    tm = BuildingThermalModel5R1C.from_sim_repository(SECONDS_PER_TIMESTEP)
+    repo = sim_repository
+    tm = BuildingThermalModel5R1C.from_sim_repository(SECONDS_PER_TIMESTEP, sim_repo=repo)
     assert tm.h_tr_w == H_TR_W
     assert tm.h_tr_ms == H_TR_MS
     assert tm.h_tr_em == H_TR_EM
@@ -107,13 +108,12 @@ def test_from_sim_repository_reads_coefficients() -> None:
 @pytest.mark.base
 def test_from_sim_repository_raises_when_coefficients_missing() -> None:
     """Missing coefficients must raise loudly instead of degrading silently (KB-5214)."""
-    repo = SingletonSimRepository()
-    repo.reset()
-    try:
-        with pytest.raises(KeyError):
-            BuildingThermalModel5R1C.from_sim_repository(SECONDS_PER_TIMESTEP)
-    finally:
-        repo.reset()
+    repo = sim_repository
+    repo.clear()
+
+    # test succeeds if KeyError is raised, otherwise it fails
+    with pytest.raises(KeyError):
+        BuildingThermalModel5R1C.from_sim_repository(SECONDS_PER_TIMESTEP, sim_repo=repo)
 
 
 @pytest.mark.base
@@ -124,6 +124,8 @@ def test_pid_controller_tunes_from_thermal_model() -> None:
         my_simulation_parameters=simulation_parameters,
         config=PIDControllerConfig.get_default_config(),
     )
+    controller.set_sim_repo(simulation_repository=sim_repository)
+    controller.i_prepare_simulation()
 
     assert controller.proportional_gain == pytest.approx(22875.446701181467)
     assert controller.integral_gain == pytest.approx(227.60105749117776)
@@ -141,6 +143,8 @@ def test_pid_controller_feedforward() -> None:
         my_simulation_parameters=simulation_parameters,
         config=PIDControllerConfig.get_default_config(),
     )
+    controller.set_sim_repo(simulation_repository=sim_repository)
+    controller.i_prepare_simulation()
     feed_forward_signal = controller.feedforward(phi_st=100.0, phi_m=200.0)
     assert feed_forward_signal == pytest.approx(-1693.3333333333333)
 
@@ -153,15 +157,11 @@ def _build_controller_with_inputs(
         my_simulation_parameters=simulation_parameters,
         config=PIDControllerConfig.get_default_config(),
     )
-    fake_temperature = cp.ComponentOutput(
-        "FakeBuilding", "TemperatureMean", LoadTypes.TEMPERATURE, Units.CELSIUS
-    )
-    fake_phi_st = cp.ComponentOutput(
-        "FakeBuilding", "HeatFluxWallNode", LoadTypes.HEATING, Units.WATT
-    )
-    fake_phi_m = cp.ComponentOutput(
-        "FakeBuilding", "HeatFluxThermalMassNode", LoadTypes.HEATING, Units.WATT
-    )
+    controller.set_sim_repo(simulation_repository=sim_repository)
+    controller.i_prepare_simulation()
+    fake_temperature = cp.ComponentOutput("FakeBuilding", "TemperatureMean", LoadTypes.TEMPERATURE, Units.CELSIUS)
+    fake_phi_st = cp.ComponentOutput("FakeBuilding", "HeatFluxWallNode", LoadTypes.HEATING, Units.WATT)
+    fake_phi_m = cp.ComponentOutput("FakeBuilding", "HeatFluxThermalMassNode", LoadTypes.HEATING, Units.WATT)
     controller.temperature_mean_channel.source_output = fake_temperature
     controller.heat_flow_rate_to_internal_surface_node_channel.source_output = fake_phi_st
     controller.heat_flow_rate_to_internal_mass_node_channel.source_output = fake_phi_m
@@ -175,9 +175,7 @@ def _build_controller_with_inputs(
 def test_pid_controller_simulate_heating_scenario() -> None:
     """i_simulate drives the PI loop and produces the expected outputs."""
     simulation_parameters = SimulationParameters.one_day_only(2017, SECONDS_PER_TIMESTEP)
-    controller, stsv, fake_temperature, fake_phi_st, fake_phi_m = _build_controller_with_inputs(
-        simulation_parameters
-    )
+    controller, stsv, fake_temperature, fake_phi_st, fake_phi_m = _build_controller_with_inputs(simulation_parameters)
     stsv.values[fake_temperature.global_index] = 20.0
     stsv.values[fake_phi_st.global_index] = 100.0
     stsv.values[fake_phi_m.global_index] = 200.0
@@ -199,9 +197,7 @@ def test_pid_controller_simulate_heating_scenario() -> None:
 def test_pid_controller_force_convergence_skips_outputs() -> None:
     """force_convergence=True returns without updating outputs (KB-5215)."""
     simulation_parameters = SimulationParameters.one_day_only(2017, SECONDS_PER_TIMESTEP)
-    controller, stsv, fake_temperature, fake_phi_st, fake_phi_m = _build_controller_with_inputs(
-        simulation_parameters
-    )
+    controller, stsv, fake_temperature, fake_phi_st, fake_phi_m = _build_controller_with_inputs(simulation_parameters)
     stsv.values[fake_temperature.global_index] = 20.0
     stsv.values[fake_phi_st.global_index] = 100.0
     stsv.values[fake_phi_m.global_index] = 200.0

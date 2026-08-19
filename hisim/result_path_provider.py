@@ -18,7 +18,18 @@ import enum
 from pathlib import Path
 from typing import Optional, Union
 
-from hisim.sim_repository_singleton import SingletonMeta
+
+class SingletonMeta(type):
+
+    """A class for a thread-safe implementation of Singleton."""
+
+    _instances: dict[type, object] = {}
+
+    def __call__(cls, *args, **kwargs):
+        """Call method for singleton meta class."""
+        if cls not in cls._instances:
+            cls._instances[cls] = super().__call__(*args, **kwargs)
+        return cls._instances[cls]
 
 
 class RunMode(enum.Enum):

@@ -235,8 +235,7 @@ class Component:
         self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
         if my_simulation_parameters is None:
             raise ValueError("My Simulation parameters was None.")
-        self.simulation_repository: SimRepository
-        # self.singleton_simulation_repository: SingletonSimRepository
+        self.simulation_repository: SimRepository = SimRepository()
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
         if isinstance(my_config, ConfigBase):
             self.config = my_config
@@ -282,11 +281,35 @@ class Component:
             "Simulation preparation is missing for " + self.component_name + " (" + self.get_full_classname() + ")"
         )
 
-    def set_sim_repo(self, simulation_repository: SimRepository) -> None:
+    def set_sim_repo(self, simulation_repository: SimRepository) -> SimRepository:
         """Sets the SimRepository."""
         if simulation_repository is None:
-            raise ValueError("simulation repository was none")
+            raise ValueError("simulation repository was None")
+
+        # Merge entries created during component initialization into the
+        # simulator's repository.
+        for key, value in self.simulation_repository.entries.items():
+            if key in simulation_repository.entries:
+                raise ValueError(
+                    f"Duplicate SimRepository entry key '{key}' encountered "
+                    f"while attaching component {self.component_name}."
+                )
+            simulation_repository.entries[key] = value
+
+        for component_type, weights in self.simulation_repository.dynamic_entries.items():
+            for source_weight, entry in weights.items():
+                if source_weight in simulation_repository.dynamic_entries[component_type]:
+                    raise ValueError(
+                        f"Duplicate SimRepository dynamic entry for "
+                        f"component type '{component_type}' and source weight "
+                        f"'{source_weight}' encountered while attaching "
+                        f"component {self.component_name}."
+                    )
+                simulation_repository.dynamic_entries[component_type][source_weight] = entry
+
         self.simulation_repository = simulation_repository
+
+        return simulation_repository
 
     def add_input(
         self,

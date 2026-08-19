@@ -12,9 +12,6 @@ from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 
 
-# from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
-
-
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, IEK-3"
 __credits__ = ["Franz Oldopp"]

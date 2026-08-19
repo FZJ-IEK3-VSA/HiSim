@@ -23,7 +23,7 @@ from hisim.components.controller_l2_rsoc_battery_system import (
 from hisim.components.generic_rsoc import Rsoc, RsocConfig
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
-from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
+from HiSim.obsolete.singleton_sim_repository.sim_repository_singleton import SimRepositoryKeyEnum, SingletonSimRepository
 from hisim.simulator import SimulationParameters
 
 
@@ -123,7 +123,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
     # choose 1 to be the default for the number of apartments
-    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments)
+    SingletonSimRepository().set_entry(key=SimRepositoryKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments)
 
     my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
@@ -367,7 +367,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
+        key=SimRepositoryKeyEnum.RESULT_SCENARIO_NAME,
         entry=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_rSOC",
     )
 

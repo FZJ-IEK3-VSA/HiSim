@@ -16,7 +16,7 @@ from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import loadtypes as lt
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.sim_repository import SimRepositoryKeyEnum
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -227,12 +227,12 @@ class PriceSignal(cp.Component):
             priceinjectionforecast = [0.1]
             pricepurchaseforecast = [0.5]
 
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.PRICEINJECTIONFORECAST24H,
+        self.simulation_repository.set_entry(
+            key=SimRepositoryKeyEnum.PRICEINJECTIONFORECAST24H,
             entry=priceinjectionforecast,
         )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.PRICEPURCHASEFORECAST24H,
+        self.simulation_repository.set_entry(
+            key=SimRepositoryKeyEnum.PRICEPURCHASEFORECAST24H,
             entry=pricepurchaseforecast,
         )
         stsv.set_output_value(self.price_purchase_channel, pricepurchaseforecast[0])

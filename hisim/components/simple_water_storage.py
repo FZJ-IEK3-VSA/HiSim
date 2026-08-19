@@ -23,7 +23,6 @@ from hisim.component import (
 )
 from hisim.components.configuration import PhysicsConfig
 from hisim.components import configuration
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
@@ -595,13 +594,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.waterstorageconfig = config
 
         self.mean_water_temperature_in_water_storage_in_celsius: float = 35
-
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR):
-            self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = (
-                SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR)
-            )
-        else:
-            self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = None
+        self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_sim_repo = None
 
         self.position_hot_water_storage_in_system = self.waterstorageconfig.position_hot_water_storage_in_system
         self.build(heat_exchanger_is_present=self.waterstorageconfig.heat_exchanger_is_present)
@@ -922,18 +915,13 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
                 self.water_temperature_secondary_heat_generator_input_channel
             )
 
-            # get water mass flow rate of heat generator either from singleton sim repo or from input value
-            if self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo is not None:
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
-                    self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo
-                )
-            else:
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
-                    self.water_mass_flow_rate_heat_generator_input_channel
-                )
-                water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second = stsv.get_input_value(
-                    self.water_mass_flow_rate_secondary_heat_generator_input_channel
-                )
+            # get water mass flow rate of heat generator from input value
+            water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
+                self.water_mass_flow_rate_heat_generator_input_channel
+            )
+            water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second = stsv.get_input_value(
+                self.water_mass_flow_rate_secondary_heat_generator_input_channel
+            )
         else:
             water_temperature_from_heat_generator_in_celsius = 0
             water_mass_flow_rate_from_heat_generator_in_kg_per_second = 0
@@ -1323,12 +1311,6 @@ class SimpleHotWaterStorageController(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        if SingletonSimRepository().entry_exists(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR):
-            self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = (
-                SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR)
-            )
-        else:
-            self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = None
 
         self.controller_mode: str = "off"
         # Inputs
@@ -1383,15 +1365,10 @@ class SimpleHotWaterStorageController(cp.Component):
         else:
             # Retrieves inputs
 
-            # get water mass flow rate of heat generator either from singleton sim repo or from input value
-            if self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo is not None:
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
-                    self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo
-                )
-            else:
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
-                    self.water_mass_flow_rate_heat_generator_input_channel
-                )
+            # get water mass flow rate of heat generator from input value
+            water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
+                self.water_mass_flow_rate_heat_generator_input_channel
+            )
 
             self.conditions_on_off(
                 water_mass_flow_rate_from_heat_generator_in_kg_per_second=water_mass_flow_rate_from_heat_generator_in_kg_per_second

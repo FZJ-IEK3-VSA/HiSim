@@ -124,8 +124,9 @@ class Simulator:
         # ensure result directory exists before any connect_input calls log to it
         if not self._simulation_parameters.result_directory:
             self.prepare_simulation_directory()
-        # set the repository
-        component.set_sim_repo(self.simulation_repository)
+        # set the sim repo for each component and merge entries from component initialization back to the simulator's
+        # simulation repository (which is the main sim repo)
+        self.simulation_repository = component.set_sim_repo(self.simulation_repository)
 
         # set the wrapper
         wrap = ComponentWrapper(component, is_cachable, connect_automatically=connect_automatically)
@@ -364,7 +365,9 @@ class Simulator:
         del all_result_lines
         del postprocessing_datatransfer
         del my_post_processor
-        self.simulation_repository.clear()
+        # Preserve the repository contents after simulation execution so callers
+        # can inspect metadata and exchanged values.
+        # self.simulation_repository.clear()
         log.information("Finished postprocessing")
         with open(flagfile, "a", encoding="utf-8") as filestream:
             filestream.write("finished")

@@ -2,8 +2,10 @@
 # clean
 from __future__ import annotations
 from typing import Any
+import enum
 
 from hisim import loadtypes as lt
+from hisim import log
 
 
 class SimRepository:
@@ -12,10 +14,10 @@ class SimRepository:
 
     def __init__(self) -> None:
         """Initializes the SimRepository."""
-        self.entries: dict[str, Any] = {}
+        self.entries: dict[SimRepositoryKeyEnum, Any] = {}
         self.dynamic_entries: dict[lt.ComponentType, dict[int, Any]] = {component_type: {} for component_type in lt.ComponentType}
 
-    def set_entry(self, key: str, entry: Any) -> None:
+    def set_entry(self, key: SimRepositoryKeyEnum, entry: Any) -> None:
         """Stores a value in the repository under the given key.
 
         Args:
@@ -24,7 +26,7 @@ class SimRepository:
         """
         self.entries[key] = entry
 
-    def get_entry(self, key: str) -> Any:
+    def get_entry(self, key: SimRepositoryKeyEnum) -> Any:
         """Retrieves the value stored under the given key.
 
         Args:
@@ -38,7 +40,7 @@ class SimRepository:
         """
         return self.entries[key]
 
-    def entry_exists(self, key: str) -> bool:
+    def entry_exists(self, key: SimRepositoryKeyEnum) -> bool:
         """Checks whether an entry exists for the given key.
 
         Args:
@@ -49,7 +51,7 @@ class SimRepository:
         """
         return key in self.entries
 
-    def delete_entry(self, key: str) -> None:
+    def delete_entry(self, key: SimRepositoryKeyEnum) -> None:
         """Removes the entry stored under the given key.
 
         Args:
@@ -112,14 +114,67 @@ class SimRepository:
         self.dynamic_entries[component_type].pop(source_weight)
 
     def clear(self) -> None:
-        """Clears all dictionaries at the end of the simulation to enable garbage collection and reduce memory consumption.
+        """Clears all dictionaries at the end of the simulation to enable garbage collection and reduce memory consumption."""
+        if self.entries:
+            self.entries.clear()
+        else:
+            log.warning("Sim repo entries were already empty. Your clear() function was unnecessary. " + str(self.entries))
+        if self.dynamic_entries:
+            self.dynamic_entries.clear()
+        else:
+            log.warning("Sim repo dynamic entries were already empty. Your clear() function was unnecessary. " + str(self.dynamic_entries))
 
-        Using `del` (instead of in-place `.clear()` or reassignment to `{}`) is
-        intentional: it removes the attribute reference so Python can reclaim the
-        memory for the old dict objects as quickly as possible, which is important
-        after a large simulation run.
-        """
-        self.entries.clear()
-        del self.entries
-        self.dynamic_entries.clear()
-        del self.dynamic_entries
+
+class SimRepositoryKeyEnum(enum.Enum):
+    """Class for setting dictionary keys in the simulation repository."""
+
+    NUMBEROFAPARTMENTS = 1
+    WATERMASSFLOWRATEOFHEATGENERATOR = 2
+    MAXTHERMALBUILDINGDEMAND = 3
+    SETHEATINGTEMPERATUREFORWATERSTORAGE = 4
+    SETCOOLINGTEMPERATUREFORWATERSTORAGE = 5
+    LOCATION = 6
+    RESULT_SCENARIO_NAME = 7
+    THERMALTRANSMISSIONCOEFFICIENTGLAZING = 8
+    THERMALTRANSMISSIONSURFACEINDOORAIR = 9
+    THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM = 10
+    THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS = 11
+    THERMALTRANSMISSIONCOEFFICIENTVENTILLATION = 12
+    THERMALCAPACITYENVELOPE = 13
+    PREDICTIVE = 14
+    PREDICTIONHORIZON = 15
+    PVINCLUDED = 16
+    PVPEAKPOWER = 17
+    SMARTDEVICESINCLUDED = 18
+    BATTERYINCLUDED = 19
+    MPCBATTERYCAPACITY = 20
+    COEFFICIENT_OF_PERFORMANCE_HEATING = 21
+    ENERGY_EFFICIENY_RATIO_COOLING = 22
+    WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST = 23
+    HEATFLUXTHERMALMASSNODEFORECAST = 24
+    HEATFLUXSURFACENODEFORECAST = 25
+    HEATFLUXINDOORAIRNODEFORECAST = 26
+    PVFORECASTYEARLY = 28
+    MAXIMUMBATTERYCAPACITY = 29
+    MINIMUMBATTERYCAPACITY = 30
+    MAXIMALCHARGINGPOWER = 31
+    MAXIMALDISCHARGINGPOWER = 32
+    BATTERYEFFICIENCY = 33
+    INVERTEREFFICIENCY = 34
+    PRICEPURCHASEFORECAST24H = 35
+    PRICEINJECTIONFORECAST24H = 36
+    WEATHERALTITUDEYEARLYFORECAST = 37
+    WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST = 38
+    WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST = 39
+    WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST = 40
+    WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST = 41
+    WEATHERAZIMUTHYEARLYFORECAST = 42
+    WEATHERAPPARENTZENITHYEARLYFORECAST = 43
+    HEATINGBYRESIDENTSYEARLYFORECAST = 44
+    WEATHERWINDSPEEDYEARLYFORECAST = 45
+    WEATHERPRESSUREYEARLYFORECAST = 46
+    WEATHERTEMPERATUREOUTSIDE24HFORECAST = 47
+    WEATHERLOCATIONDICT = 48
+    DESCRIPTION = 49
+    OCCUPANCYELECTRICITYDEMAND24HFORECAST = 50
+    TESTENTRY = 51

@@ -19,7 +19,7 @@ import pytest
 from pytest import MarkDecorator
 
 from hisim import loadtypes as lt
-from hisim.sim_repository import SimRepository
+from hisim.sim_repository import SimRepository, SimRepositoryKeyEnum
 
 pytestmark: MarkDecorator = pytest.mark.base
 
@@ -34,48 +34,48 @@ _CT: lt.ComponentType = lt.ComponentType.PV
 def test_set_then_get_entry_roundtrips_value() -> None:
     """``set_entry`` stores a value that ``get_entry`` returns unchanged."""
     repo = SimRepository()
-    repo.set_entry("foo", 42)
-    assert repo.get_entry("foo") == 42
+    repo.set_entry(SimRepositoryKeyEnum.TESTENTRY, 42)
+    assert repo.get_entry(SimRepositoryKeyEnum.TESTENTRY) == 42
 
 
 def test_entry_exists_reflects_set_and_delete() -> None:
     """``entry_exists`` is False on a fresh repo, True after set, False after delete."""
     repo = SimRepository()
-    assert repo.entry_exists("foo") is False
-    repo.set_entry("foo", 1)
-    assert repo.entry_exists("foo") is True
-    repo.delete_entry("foo")
-    assert repo.entry_exists("foo") is False
+    assert repo.entry_exists(SimRepositoryKeyEnum.TESTENTRY) is False
+    repo.set_entry(SimRepositoryKeyEnum.TESTENTRY, 1)
+    assert repo.entry_exists(SimRepositoryKeyEnum.TESTENTRY) is True
+    repo.delete_entry(SimRepositoryKeyEnum.TESTENTRY)
+    assert repo.entry_exists(SimRepositoryKeyEnum.TESTENTRY) is False
 
 
 def test_get_entry_missing_key_raises_keyerror() -> None:
     """``get_entry`` on an absent key raises ``KeyError`` (matches ``dict[key]``)."""
     repo = SimRepository()
     with pytest.raises(KeyError):
-        repo.get_entry("missing")
+        repo.get_entry(SimRepositoryKeyEnum.TESTENTRY)
 
 
 def test_delete_entry_missing_key_raises_keyerror() -> None:
     """``delete_entry`` uses ``dict.pop`` without a default, so a missing key raises."""
     repo = SimRepository()
     with pytest.raises(KeyError):
-        repo.delete_entry("missing")
+        repo.delete_entry(SimRepositoryKeyEnum.TESTENTRY)
 
 
 def test_stored_none_is_distinct_from_absent() -> None:
     """Storing ``None`` is a present entry, distinguishable from a missing key."""
     repo = SimRepository()
-    repo.set_entry("k", None)
-    assert repo.entry_exists("k") is True
-    assert repo.get_entry("k") is None
+    repo.set_entry(SimRepositoryKeyEnum.TESTENTRY, None)
+    assert repo.entry_exists(SimRepositoryKeyEnum.TESTENTRY) is True
+    assert repo.get_entry(SimRepositoryKeyEnum.TESTENTRY) is None
 
 
 def test_set_entry_overwrites_existing_value() -> None:
     """A second ``set_entry`` for the same key replaces the previous value."""
     repo = SimRepository()
-    repo.set_entry("k", 1)
-    repo.set_entry("k", 2)
-    assert repo.get_entry("k") == 2
+    repo.set_entry(SimRepositoryKeyEnum.TESTENTRY, 1)
+    repo.set_entry(SimRepositoryKeyEnum.TESTENTRY, 2)
+    assert repo.get_entry(SimRepositoryKeyEnum.TESTENTRY) == 2
 
 
 # --------------------------------------------------------------------------- #
@@ -162,16 +162,8 @@ def test_dynamic_entries_are_independent_per_component_type() -> None:
 def test_clear_deletes_both_internal_dicts() -> None:
     """``clear`` deletes the ``entries`` and ``dynamic_entries`` attributes."""
     repo = SimRepository()
-    repo.set_entry("a", 1)
+    repo.set_entry(SimRepositoryKeyEnum.TESTENTRY, 1)
     repo.set_dynamic_entry(_CT, 1, "x")
     repo.clear()
-    assert hasattr(repo, "entries") is False
-    assert hasattr(repo, "dynamic_entries") is False
-
-
-def test_clear_on_fresh_empty_repo_does_not_raise() -> None:
-    """``clear`` on a freshly constructed, empty repo is a no-op (no error)."""
-    repo = SimRepository()
-    repo.clear()
-    assert hasattr(repo, "entries") is False
-    assert hasattr(repo, "dynamic_entries") is False
+    assert not repo.entries
+    assert not repo.dynamic_entries

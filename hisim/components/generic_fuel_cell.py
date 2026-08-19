@@ -16,7 +16,6 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 
-# from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 from hisim import (
     component as cp,

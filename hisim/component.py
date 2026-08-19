@@ -14,7 +14,6 @@ from typing import Any, ClassVar, Dict, List, Optional
 import json
 import pandas as pd
 from dataclasses_json import dataclass_json
-from dataclass_wizard import JSONWizard
 
 from hisim import loadtypes as lt
 from hisim import log
@@ -113,16 +112,52 @@ class ComponentID:
 
 
 @dataclass
-class ConfigBase(JSONWizard):
+class ConfigBase:
     """Base class for all configurations.
 
     Every component configuration derives from this class and therefore carries exactly one
     identity field, :py:attr:`component_id`, which replaces the former ``name`` plus
     ``building_name`` string pair. In serialized form the identity is a nested object, i.e.
     ``{"component_id": {"name": ..., "building": ..., "unit": ...}}``.
+
+    Serialization comes from the ``@dataclass_json`` decorator that every concrete config
+    class carries, which dumps and parses the dataclass field names verbatim (snake_case).
+    The :py:meth:`to_dict` defined here is only the fallback for the base class itself; a
+    decorated subclass shadows it with the dataclasses_json implementation.
     """
 
     component_id: ComponentID
+
+    if typing.TYPE_CHECKING:
+        # Historically ConfigBase inherited dataclass_wizard.JSONWizard, whose missing type
+        # stubs made the whole class hierarchy Any-based: mypy accepted any attribute on a
+        # ConfigBase-typed value. A lot of code depends on that leniency (components store
+        # their config in ConfigBase-typed slots and read/write subclass fields off it), so
+        # these type-checker-only escape hatches preserve it deliberately. Field-name
+        # correctness is enforced by scripts/check_config_attrs.py instead; making configs
+        # fully mypy-visible (a generic Component[TConfig]) is a planned sweep, see
+        # roadmap/json_cleanup.md. The classmethod stubs mirror the serialization API that
+        # the @dataclass_json decorator injects at runtime on every concrete config class.
+        def __getattr__(self, name: str) -> Any:
+            """Checking-only escape hatch: reads of undeclared fields resolve to Any."""
+            raise NotImplementedError
+
+        def __setattr__(self, name: str, value: Any) -> None:
+            """Checking-only escape hatch: writes to undeclared fields are accepted."""
+
+        def to_json(self, *args: Any, **kwargs: Any) -> str:  # pylint: disable=unused-argument
+            """Stub for the JSON dump that @dataclass_json injects at runtime."""
+            raise NotImplementedError
+
+        @classmethod
+        def from_dict(cls, kvs: Any, *args: Any, **kwargs: Any) -> Any:  # pylint: disable=unused-argument
+            """Stub for the dict decoder that @dataclass_json injects at runtime."""
+            raise NotImplementedError
+
+        @classmethod
+        def from_json(cls, data: Any, *args: Any, **kwargs: Any) -> Any:  # pylint: disable=unused-argument
+            """Stub for the JSON decoder that @dataclass_json injects at runtime."""
+            raise NotImplementedError
 
     def __init__(self, component_id: ComponentID):
         """Initializes a bare configuration from its structured identity.
@@ -143,16 +178,24 @@ class ConfigBase(JSONWizard):
         """Gets the class name. Helper function for default connections."""
         return cls.__module__ + "." + cls.__name__
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Dumps this configuration as a plain dict of its dataclass fields.
+
+        Every concrete config class shadows this method through its ``@dataclass_json``
+        decorator, so this fallback only serves the bare base class (and would serve an
+        accidentally undecorated subclass with a plain, non-JSON-normalized dataclass dump
+        rather than an AttributeError).
+        """
+        return dc.asdict(self)
+
     def get_string_dict(self) -> List[str]:
         """Turns the config into a str list for the report."""
         my_dict = self.to_dict()
         my_list = []
         if len(my_dict) > 0:
             for entry in my_dict.items():
-                first_entry = entry[0].rsplit("_")
-                first_entry = " ".join(first_entry)
-                first_entry = first_entry.capitalize()
-                my_list.append(first_entry + ": " + str(entry[1]))
+                label = " ".join(entry[0].rsplit("_")).capitalize()
+                my_list.append(label + ": " + str(entry[1]))
         return my_list
 
 
@@ -358,7 +401,10 @@ class Component:
         # self.singleton_simulation_repository: SingletonSimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
         if isinstance(my_config, ConfigBase):
-            self.config = my_config
+            # Subclasses read their concrete config's fields off this base-typed slot; that
+            # works for the type checker because ConfigBase carries a checking-only
+            # __getattr__/__setattr__ escape hatch (see there).
+            self.config: ConfigBase = my_config
         else:
             raise ValueError(
                 "The argument my_config is not a ConfigBase object.",

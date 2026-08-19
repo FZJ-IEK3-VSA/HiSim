@@ -187,7 +187,7 @@ def test_config_base() -> None:
     This test verifies:
     - ConfigBase initialization
     - ConfigBase.get_string_dict() method
-    - ConfigBase.to_dict() method (uses camelCase keys due to JSONWizard)
+    - ConfigBase.to_dict() method (plain dataclass dump with snake_case keys)
     - ConfigBase.get_config_classname() method
     - ConfigBase.get_main_classname() method
     """
@@ -204,11 +204,11 @@ def test_config_base() -> None:
     # Should have some entries
     assert isinstance(string_dict, list)
 
-    # Test to_dict() - uses camelCase keys due to JSONWizard
+    # Test to_dict() - the base-class fallback is a plain dataclass dump: keys are the
+    # dataclass field names verbatim (snake_case), and the identity is nested
     config_dict = config.to_dict()
-    # JSONWizard converts snake_case to camelCase, and the identity is nested
-    assert "componentId" in config_dict
-    assert config_dict["componentId"]["name"] == "TestConfig"
+    assert "component_id" in config_dict
+    assert config_dict["component_id"]["name"] == "TestConfig"
 
     # Test get_config_classname()
     config_classname = config.get_config_classname()

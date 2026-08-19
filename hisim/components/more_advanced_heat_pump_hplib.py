@@ -20,7 +20,6 @@ from typing import Any, List, Optional, Dict
 
 import pandas as pd
 import numpy as np
-from dataclass_wizard import JSONWizard
 from dataclasses_json import dataclass_json
 from hplib import hplib as hpl
 
@@ -1943,7 +1942,7 @@ class MoreAdvancedHeatPumpHPLibState:
 
 
 @dataclass
-class CalculationRequest(JSONWizard):
+class CalculationRequest:
     """Class for caching HPLib parameters so that HPLib.simulate does not need to run so often."""
 
     t_in_primary: float

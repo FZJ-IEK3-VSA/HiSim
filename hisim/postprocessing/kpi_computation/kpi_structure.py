@@ -1,10 +1,10 @@
 # clean
 
 """Classes to provide the structure for the KPI generation."""
-from typing import Optional, Union, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union, List, Tuple
 from enum import Enum
-from dataclasses import dataclass
-from dataclass_wizard import JSONWizard
+from dataclasses import dataclass, field
+from dataclasses_json import dataclass_json, LetterCase, config as dataclasses_json_config
 import pandas as pd
 import numpy as np
 
@@ -54,9 +54,14 @@ class KpiTagEnumClass(Enum):
     DISTRICT_ENERGY_MANAGEMENT_SYSTEM = " District Energy Management System"
 
 
+@dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass
-class KpiEntry(JSONWizard):
+class KpiEntry:
     """Class for storing one KPI entry.
+
+    Serialized with camelCase keys (``nameOfSourceComponent``): the dicts produced by
+    ``to_dict`` are the wire format of the webtool KPI JSON, which predates the repo-wide
+    dataclasses_json convention, so the historical spelling is pinned here explicitly.
 
     Attributes:
         name: Human-readable name of the KPI.
@@ -74,12 +79,33 @@ class KpiEntry(JSONWizard):
     unit: str
     value: Optional[Union[float, str]]
     description: Optional[str] = None
-    tag: Optional[KpiTagEnumClass] = None
+    # The tag is written as its enum *value* ("Battery", "General", ...) directly in
+    # to_dict(), because the resulting dicts are json.dump'ed as-is by the webtool export.
+    tag: Optional[KpiTagEnumClass] = field(
+        default=None,
+        metadata=dataclasses_json_config(
+            encoder=lambda tag: tag.value if tag is not None else None,
+            decoder=lambda raw: KpiTagEnumClass(raw) if raw is not None else None,
+        ),
+    )
     name_of_source_component: Optional[str] = None
     # Optional uncertainty band (cost_spec.md §7.3): `value` is the AVERAGE slot. Additive —
     # legacy KPIs leave these unset during the parallel phase of the lifecycle cost engine.
     value_min: Optional[float] = None
     value_max: Optional[float] = None
+
+    if TYPE_CHECKING:
+        # The serialization API is injected at runtime by the @dataclass_json decorator,
+        # which mypy deliberately does not resolve (see the mypy.ini note on
+        # dataclasses_json); these stubs mirror it for the type checker.
+        def to_dict(self) -> Dict[str, Any]:
+            """Stub for the dict dump that @dataclass_json injects at runtime."""
+            raise NotImplementedError
+
+        @classmethod
+        def from_dict(cls, kvs: Any, *args: Any, **kwargs: Any) -> Any:  # pylint: disable=unused-argument
+            """Stub for the dict decoder that @dataclass_json injects at runtime."""
+            raise NotImplementedError
 
 
 class KpiHelperClass:

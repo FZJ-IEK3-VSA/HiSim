@@ -19,15 +19,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
-from dataclass_wizard import JSONWizard
-
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.timeline import discount_factor
 from hisim.loadtypes import ComponentType
 
 
 @dataclass
-class EconomicParameters(JSONWizard):
+class EconomicParameters:
     """Parameters of the lifecycle cost evaluation (annuity method, VDI 2067 / DIN EN 15459).
 
     All rates are nominal; results are in nominal euros discounted to year 0. Real-term

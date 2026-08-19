@@ -15,7 +15,6 @@ bslib==0.6
 psutil
 pydot
 graphviz
-dataclass_wizard==0.34.0
 utspclient==0.1.6
 html2image
 control

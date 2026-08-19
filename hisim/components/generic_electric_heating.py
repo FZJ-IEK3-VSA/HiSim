@@ -631,6 +631,7 @@ class ElectricHeating(Component):
             all_outputs=all_outputs,
             postprocessing_results=postprocessing_results,
         )
+        assert isinstance(self.config, ElectricHeatingConfig)
         capex_dataclass = self.get_cost_capex(self.config, self.my_simulation_parameters)
 
         # Energy related KPIs

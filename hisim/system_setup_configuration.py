@@ -6,11 +6,10 @@ supporting JSON loading and default/scaled configuration generation.
 
 # clean
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, Dict
 import json
 from pathlib import Path
 from dataclasses import dataclass
-from dataclass_wizard import JSONWizard
 from typing_extensions import Self
 
 from hisim import log, utils
@@ -18,14 +17,31 @@ from hisim.components import building
 
 
 @dataclass
-class SystemSetupConfigBase(JSONWizard):
+class SystemSetupConfigBase:
 
     """Base class for system-setup configurations.
 
-    A JSONWizard dataclass that provides JSON loading and default-value
+    A dataclass that provides JSON loading and default-value
     generation for household system setups. Subclasses must implement
     `get_default_options`, `get_default`, and `get_scaled_default`.
     """
+
+    if TYPE_CHECKING:
+        # The serialization API is injected at runtime by the @dataclass_json decorator on
+        # each concrete subclass; these type-checker-only stubs mirror it (see the identical
+        # arrangement on hisim.component.ConfigBase).
+        def to_dict(self) -> Dict[str, Any]:
+            """Stub for the dict dump that @dataclass_json injects at runtime."""
+            raise NotImplementedError
+
+        def to_json(self, *args: Any, **kwargs: Any) -> str:  # pylint: disable=unused-argument
+            """Stub for the JSON dump that @dataclass_json injects at runtime."""
+            raise NotImplementedError
+
+        @classmethod
+        def from_dict(cls, kvs: Any, *args: Any, **kwargs: Any) -> Any:  # pylint: disable=unused-argument
+            """Stub for the dict decoder that @dataclass_json injects at runtime."""
+            raise NotImplementedError
 
     @classmethod
     def load_from_json(cls, module_config_path: str) -> Self:

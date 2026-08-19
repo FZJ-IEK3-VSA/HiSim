@@ -65,7 +65,7 @@ class _ConvergingFeedbackComponent(cp.StatelessComponent):
         super().__init__(
             name=name,
             my_simulation_parameters=my_simulation_parameters,
-            my_config=cp.ConfigBase(name=name),
+            my_config=cp.ConfigBase(component_id=cp.ComponentID(name=name)),
             my_display_config=cp.DisplayConfig(),
         )
         self._offset: float = offset

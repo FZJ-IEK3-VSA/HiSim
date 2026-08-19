@@ -4,17 +4,9 @@
 
 import datetime
 from typing import List, Optional
-
-# from typing import Any
 from dataclasses import dataclass
-
-# from statistics import mean
 import numpy as np
-
-# from numpy.linalg import inv
 from dataclasses_json import dataclass_json
-
-# from scipy.ndimage import interpolation
 import casadi as ca
 
 # Owned
@@ -25,11 +17,6 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
 
-# from hisim.components.generic_battery import GenericBattery
-# from hisim.components.loadprofilegenerator_connector import Occupancy
-# from hisim.components.generic_price_signal import PriceSignal
-# from hisim.components.air_conditioner import AirConditioner
-# from hisim.components.generic_pv_system import PVSystem
 from hisim import log
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 

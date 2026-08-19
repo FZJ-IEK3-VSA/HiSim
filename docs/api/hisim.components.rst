@@ -26,14 +26,12 @@ Submodules
    hisim.components.controller_l1_electrolyzer_h2
    hisim.components.controller_l1_example_controller
    hisim.components.controller_l1_fuel_cell
-   hisim.components.controller_l1_generic_ev_charge
    hisim.components.controller_l1_generic_runtime
    hisim.components.controller_l1_heatpump
    hisim.components.controller_l1_rsoc
    hisim.components.controller_l2_energy_management_system
    hisim.components.controller_l2_ptx_energy_management_system
    hisim.components.controller_l2_rsoc_battery_system
-   hisim.components.controller_l2_smart_controller
    hisim.components.controller_l2_xtp_fuel_cell_ems
    hisim.components.controller_mpc
    hisim.components.controller_pid
@@ -46,7 +44,6 @@ Submodules
    hisim.components.example_transformer
    hisim.components.fuel_meter
    hisim.components.gas_meter
-   hisim.components.generic_battery
    hisim.components.generic_boiler
    hisim.components.generic_car
    hisim.components.generic_chp

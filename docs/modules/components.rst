@@ -81,8 +81,7 @@ is documented via autodoc.
   hydrogen storage (:py:mod:`~hisim.components.generic_hydrogen_storage`)
 
 * **Storage** —
-  batteries (:py:mod:`~hisim.components.generic_battery`,
-  :py:mod:`~hisim.components.advanced_battery_bslib`),
+  batteries (:py:mod:`~hisim.components.advanced_battery_bslib`),
   thermal stores (:py:mod:`~hisim.components.generic_heat_water_storage`,
   :py:mod:`~hisim.components.simple_water_storage`,
   :py:mod:`~hisim.components.dual_circuit_system`)

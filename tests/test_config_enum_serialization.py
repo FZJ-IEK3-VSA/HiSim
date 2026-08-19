@@ -275,9 +275,11 @@ def test_no_config_field_is_annotated_with_an_int_valued_enum() -> None:
             return [annotation]
         return []
 
+    # No ``is_dataclass`` guard here: ``ConfigBase`` is itself a dataclass, so every
+    # subclass inherits ``__dataclass_fields__`` and passes such a check whether or not
+    # it carries its own ``@dataclass`` decorator. The guard would never fire, and mypy
+    # (which knows the same thing) rejects its dead fall-through as unreachable.
     for config_class in seen:
-        if not dataclasses.is_dataclass(config_class):
-            continue
         try:
             hints = typing.get_type_hints(config_class)
         except Exception:  # noqa: BLE001  # unresolvable forward refs are not this test's concern

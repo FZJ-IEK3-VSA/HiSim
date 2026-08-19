@@ -32,7 +32,6 @@ import pytest
 import hisim.components
 from hisim.component import ConfigBase
 from hisim.components import generic_boiler
-from hisim.components import generic_ev_charger
 from hisim.components import generic_pv_system
 from hisim.components import heat_distribution_system
 from hisim.components import more_advanced_heat_pump_hplib
@@ -63,7 +62,6 @@ class ConfigEnumSerializationCases:
         simple_heat_source.SimpleHeatSourceType,
         generic_pv_system.PVLibModuleAndInverterEnum,
         generic_boiler.BoilerType,
-        generic_ev_charger.EVChargerMode,
     )
 
     #: Config classes owning at least one enum-typed field, with a default factory.
@@ -72,7 +70,6 @@ class ConfigEnumSerializationCases:
         "PVSystemConfig": generic_pv_system.PVSystemConfig.get_default_pv_system,
         "GenericBoilerConfig": generic_boiler.GenericBoilerConfig.get_default_condensing_gas_boiler_config,
         "GenericOilBoilerConfig": generic_boiler.GenericBoilerConfig.get_default_conventional_oil_boiler_config,
-        "EVChargerControllerConfig": generic_ev_charger.EVChargerControllerConfig.get_default_config,
         "SimpleHotWaterStorageConfig": (
             simple_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config
         ),
@@ -105,7 +102,6 @@ class ConfigEnumSerializationCases:
     #: names, so that enum stays out of ``STRING_NAMED_ENUMS`` — the encodability
     #: guarantee applies to it, the name-equality guarantee does not.
     CONVERTED_CONFIG_CASES: Tuple[str, ...] = (
-        "EVChargerControllerConfig",
         "GenericBoilerConfig",
         "GenericOilBoilerConfig",
         "HeatDistributionConfig",

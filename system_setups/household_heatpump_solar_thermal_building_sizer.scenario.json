@@ -453,7 +453,7 @@
                 "set_cooling_threshold_outside_temperature_in_celsius": 20.0,
                 "upper_temperature_offset_for_state_conditions_in_celsius": 5.0,
                 "lower_temperature_offset_for_state_conditions_in_celsius": 5.0,
-                "heat_distribution_system_type": 2
+                "heat_distribution_system_type": "FLOORHEATING"
             },
             "config_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig",
             "inputs": [],
@@ -550,7 +550,7 @@
         {
             "source": {
                 "component_name": "L2EMSElectricityController",
-                "field_name": "LoadingPowerInputForBattery_Output16"
+                "field_name": "LoadingPowerInputForBattery_Output15"
             },
             "target": {
                 "component_name": "Battery",

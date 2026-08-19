@@ -75,12 +75,6 @@ Convergence and Iteration
 Storage Models
 ---------------
 
-- **Generic battery model.** The
-  :py:class:`hisim.components.generic_battery.GenericBattery` component
-  uses a first-order energy-balance model with constant charge/discharge
-  efficiency. Temperature-dependent degradation, calendar ageing, and state-of-health
-  effects are not modeled.
-
 - **Thermal energy storage.** Water-based thermal storage components
   (e.g., :py:class:`hisim.components.generic_heat_water_storage.HeatStorage`)
   use simplified well-mixed tank assumptions. Thermal stratification and

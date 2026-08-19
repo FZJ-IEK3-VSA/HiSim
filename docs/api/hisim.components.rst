@@ -46,7 +46,6 @@ Submodules
    hisim.components.example_transformer
    hisim.components.fuel_meter
    hisim.components.gas_meter
-   hisim.components.generic_battery
    hisim.components.generic_boiler
    hisim.components.generic_car
    hisim.components.generic_chp

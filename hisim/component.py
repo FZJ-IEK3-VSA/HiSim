@@ -140,20 +140,24 @@ class ConfigBase:
         # the @dataclass_json decorator injects at runtime on every concrete config class.
         def __getattr__(self, name: str) -> Any:
             """Checking-only escape hatch: reads of undeclared fields resolve to Any."""
+            raise NotImplementedError
 
         def __setattr__(self, name: str, value: Any) -> None:
             """Checking-only escape hatch: writes to undeclared fields are accepted."""
 
         def to_json(self, *args: Any, **kwargs: Any) -> str:  # pylint: disable=unused-argument
             """Stub for the JSON dump that @dataclass_json injects at runtime."""
+            raise NotImplementedError
 
         @classmethod
         def from_dict(cls, kvs: Any, *args: Any, **kwargs: Any) -> Any:  # pylint: disable=unused-argument
             """Stub for the dict decoder that @dataclass_json injects at runtime."""
+            raise NotImplementedError
 
         @classmethod
         def from_json(cls, data: Any, *args: Any, **kwargs: Any) -> Any:  # pylint: disable=unused-argument
             """Stub for the JSON decoder that @dataclass_json injects at runtime."""
+            raise NotImplementedError
 
     def __init__(self, component_id: ComponentID):
         """Initializes a bare configuration from its structured identity.

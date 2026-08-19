@@ -100,10 +100,12 @@ class KpiEntry:
         # dataclasses_json); these stubs mirror it for the type checker.
         def to_dict(self) -> Dict[str, Any]:
             """Stub for the dict dump that @dataclass_json injects at runtime."""
+            raise NotImplementedError
 
         @classmethod
         def from_dict(cls, kvs: Any, *args: Any, **kwargs: Any) -> Any:  # pylint: disable=unused-argument
             """Stub for the dict decoder that @dataclass_json injects at runtime."""
+            raise NotImplementedError
 
 
 class KpiHelperClass:

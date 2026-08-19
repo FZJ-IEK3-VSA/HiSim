@@ -32,13 +32,16 @@ class SystemSetupConfigBase:
         # arrangement on hisim.component.ConfigBase).
         def to_dict(self) -> Dict[str, Any]:
             """Stub for the dict dump that @dataclass_json injects at runtime."""
+            raise NotImplementedError
 
         def to_json(self, *args: Any, **kwargs: Any) -> str:  # pylint: disable=unused-argument
             """Stub for the JSON dump that @dataclass_json injects at runtime."""
+            raise NotImplementedError
 
         @classmethod
         def from_dict(cls, kvs: Any, *args: Any, **kwargs: Any) -> Any:  # pylint: disable=unused-argument
             """Stub for the dict decoder that @dataclass_json injects at runtime."""
+            raise NotImplementedError
 
     @classmethod
     def load_from_json(cls, module_config_path: str) -> Self:

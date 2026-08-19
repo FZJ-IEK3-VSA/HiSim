@@ -8,6 +8,7 @@ from dataclasses_json import dataclass_json
 import pandas as pd
 from oemof.thermal.solar_thermal_collector import flat_plate_precalc
 from hisim.component import (
+    ComponentID,
     CapexCostDataClass,
     Component,
     ComponentConnection,
@@ -48,8 +49,7 @@ class SolarThermalSystemConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return SolarThermalSystem.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     coordinates: Coordinates
 
     # Module configuration
@@ -102,7 +102,7 @@ class SolarThermalSystemConfig(ConfigBase):
     @classmethod
     def get_default_solar_thermal_system(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         coordinates: Coordinates = Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08),
         azimuth: float = 180.0,
         tilt: float = 30.0,
@@ -114,10 +114,11 @@ class SolarThermalSystemConfig(ConfigBase):
         source_weight: int = 1,
     ) -> "SolarThermalSystemConfig":
         """Gets a default SolarThermalSystem."""
+        if component_id is None:
+            component_id = ComponentID(name="SolarThermalSystem")
         return SolarThermalSystemConfig(
-            building_name=building_name,
             coordinates=coordinates,
-            name="SolarThermalSystem",
+            component_id=component_id,
             azimuth=azimuth,
             tilt=tilt,
             area_m2=area_m2,  # m2
@@ -141,7 +142,7 @@ class SolarThermalSystemConfig(ConfigBase):
     @classmethod
     def get_default_solar_thermal_system_manually_calculated_capex(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         coordinates: Coordinates = Coordinates(latitude_in_degrees=50.78, longitude_in_degrees=6.08),
         azimuth: float = 180.0,
         tilt: float = 30.0,
@@ -153,10 +154,11 @@ class SolarThermalSystemConfig(ConfigBase):
         source_weight: int = 1,
     ) -> "SolarThermalSystemConfig":
         """Gets a default SolarThermalSystem."""
+        if component_id is None:
+            component_id = ComponentID(name="SolarThermalSystem")
         return SolarThermalSystemConfig(
-            building_name=building_name,
             coordinates=coordinates,
-            name="SolarThermalSystem",
+            component_id=component_id,
             azimuth=azimuth,
             tilt=tilt,
             area_m2=area_m2,  # m2
@@ -613,7 +615,7 @@ class SolarThermalSystem(Component):
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
         file_exists, self.cache_filepath = utils.get_cache_file(
-            self.config.name, self.config, self.my_simulation_parameters
+            self.config.component_id.name, self.config, self.my_simulation_parameters
         )
 
         if file_exists:
@@ -768,21 +770,21 @@ class SolarThermalSystemControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return SolarThermalSystemController.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     set_temperature_difference_for_on: float
 
     @classmethod
     def get_solar_thermal_system_controller_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         name: str = "SolarThermalSystemController",
         set_temperature_difference_for_on: float = 10,
     ) -> "SolarThermalSystemControllerConfig":
         """Gets a default SolarThermalSystemController for DHW."""
+        if component_id is None:
+            component_id = ComponentID(name=name)
         return SolarThermalSystemControllerConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             set_temperature_difference_for_on=set_temperature_difference_for_on,
         )
 

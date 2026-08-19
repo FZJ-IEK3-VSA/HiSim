@@ -45,7 +45,7 @@ from hisim import loadtypes as lt
 from hisim import log, utils
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import OpexCostDataClass
+from hisim.component import ComponentID, OpexCostDataClass
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 # Constants for warm water fallback values used in i_simulate
@@ -66,8 +66,7 @@ class LpgDataAcquisitionMode(enum.Enum):
 class UtspLpgConnectorConfig(cp.ConfigBase):
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     data_acquisition_mode: LpgDataAcquisitionMode
     household: Union[JsonReference, List[JsonReference]]
     energy_intensity: EnergyIntensityType
@@ -93,13 +92,14 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     @classmethod
     def get_default_utsp_connector_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "UtspLpgConnectorConfig":
         """Creates a default configuration. Chooses default values for the LPG parameters."""
 
+        if component_id is None:
+            component_id = ComponentID(name="UTSPConnector")
         config = UtspLpgConnectorConfig(
-            building_name=building_name,
-            name="UTSPConnector",
+            component_id=component_id,
             data_acquisition_mode=LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE,
             name_of_predefined_loadprofile="CHR01 Couple both at Work",
             predefined_loadprofile_filepaths=None,
@@ -1045,7 +1045,7 @@ class UtspLpgConnector(cp.Component):
 
                 # check if cache for utsp config exists and get or make cache filepath
                 file_exists, cache_filepath = utils.get_cache_file(
-                    component_key=self.config.name,
+                    component_key=self.config.component_id.name,
                     parameter_class=new_config_object,
                     my_simulation_parameters=self.my_simulation_parameters,
                     cache_dir_path=cache_dir_path,
@@ -1056,7 +1056,7 @@ class UtspLpgConnector(cp.Component):
         # config household is one jsonreference
         else:
             file_exists, cache_filepath = utils.get_cache_file(
-                component_key=self.config.name,
+                component_key=self.config.component_id.name,
                 parameter_class=self.utsp_config,
                 my_simulation_parameters=self.my_simulation_parameters,
                 cache_dir_path=cache_dir_path,
@@ -1990,7 +1990,7 @@ class UtspLpgConnector(cp.Component):
         consumption_in_kwh: float = 0.0
         for index, output in enumerate(all_outputs):
             if (
-                output.component_name == self.config.name
+                output.component_name == self.config.component_id.name
                 and output.load_type == lt.LoadTypes.ELECTRICITY
                 and output.field_name == self.ElectricalPowerConsumption
                 and output.unit == lt.Units.WATT

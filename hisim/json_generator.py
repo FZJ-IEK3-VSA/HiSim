@@ -260,12 +260,17 @@ def add_component_to_scenario(scenario: Scenario, config: ConfigBase, component:
                 if new_car_info["time_resolution"] == car_info["time_resolution"] and \
                 new_car_info["car_location"] == car_info["car_location"] and new_car_info["driven_meters"] == car_info["driven_meters"]:
                     # Cannot include car inside LPG connector, then not found for connections/inputs/outputs etc.
-                    comp.configuration["cars"] = (comp.configuration.get("cars") or []) + [component_entry.configuration["name"]]
+                    comp.configuration["cars"] = (
+                        (comp.configuration.get("cars") or []) + [component_entry.configuration["component_id"]["name"]]
+                    )
                     log.information(f"Added car information to LPG connector config for car {component.component_name}")
 
     # Always do:
     scenario.components.append(component_entry)
-    log.debug("Added component " + config.name + " with " + str(len(ins)) + " inputs and " + str(len(outs)) + " outputs")
+    log.debug(
+        "Added component " + config.component_id.name + " with " + str(len(ins))
+        + " inputs and " + str(len(outs)) + " outputs"
+    )
 
 
 def get_unique_connections(all_connections: List[Connection]) -> Tuple[List[Connection], set]:
@@ -413,6 +418,23 @@ def delete_connections(target_component, source_component, unique_connections) -
     return removed
 
 
+def get_component_key_from_configuration(configuration: dict[str, Any]) -> str:
+    """Derives the runtime component name from a serialized configuration block.
+
+    A scenario JSON stores the component identity as a nested ``component_id`` object holding
+    ``name``, ``building`` and ``unit``. This helper rebuilds the same runtime key that
+    :py:attr:`hisim.component.ComponentID.key` produces for the live configuration, so that a
+    scenario entry can be matched against an already-instantiated component without anyone
+    having to take an existing key apart.
+    """
+    identity = configuration.get("component_id") or {}
+    return cp.ComponentID(
+        name=identity.get("name", ""),
+        building=identity.get("building"),
+        unit=identity.get("unit"),
+    ).key
+
+
 def remove_automatic_connections(my_sim: "Simulator", scenario: Scenario, unique_connections: List[Connection], seen_keys: set):
     """Remove all eligible automatic connections from unique_connections."""
 
@@ -420,15 +442,9 @@ def remove_automatic_connections(my_sim: "Simulator", scenario: Scenario, unique
     removed = 0
     for target_component in source_component_list:
         target_scenario_components = [
-            c for c in scenario.components if (c.configuration.get("name") == target_component.component_name or
-            f'{c.configuration.get("building_name")}_{c.configuration.get("name")}' == target_component.component_name)  # Needed for district configuration
+            c for c in scenario.components
+            if get_component_key_from_configuration(c.configuration) == target_component.component_name
         ]
-        # This special case is not needed: "District" is simply the building_name
-        # if len(target_scenario_components) == 0 and target_component.component_name == "District_Weather":
-        #     # Special case for district weather
-        #     target_scenario_components = [
-        #         c for c in scenario.components if c.configuration.get("name") == "Weather"
-        #     ]
         if len(target_scenario_components) != 1:
             raise ValueError(f"Expected to find exactly one component in scenario for component name {target_component.component_name}, "
                              f"but found {len(target_scenario_components)}. Available configs: {[c.configuration for c in scenario.components]}")

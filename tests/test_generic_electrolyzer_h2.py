@@ -4,6 +4,7 @@ This module contains tests for the generic_electrolyzer_h2 component, which simu
 green hydrogen production via electrolysis. Tests verify hydrogen flow rate calculations
 based on electrical load input and activation state.
 """
+
 import pytest
 
 from hisim import component as cp
@@ -11,6 +12,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import generic_electrolyzer_h2
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -25,9 +27,7 @@ def test_electrolyzer() -> None:
     activation state indicates off or standby.
     """
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2021, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
 
     name: str = "HTecME450"
     electrolyzer_type: str = "PEM"
@@ -44,8 +44,7 @@ def test_electrolyzer() -> None:
     # ===================================================================================================================
     # Setup Electrolyzer
     my_electrolyzer_config = generic_electrolyzer_h2.ElectrolyzerConfig(
-        building_name="BUI1",
-        name=name,
+        component_id=ComponentID(name=name),
         electrolyzer_type=electrolyzer_type,
         nom_load=nom_load,
         max_load=max_load,
@@ -62,11 +61,19 @@ def test_electrolyzer() -> None:
     # ===================================================================================================================
     # Set Fake Inputs
     load_input = cp.ComponentOutput(
-        "FakeLoadInput", "LoadInput", lt.LoadTypes.ELECTRICITY, lt.Units.KILOWATT
+        "FakeLoadInput",
+        "LoadInput",
+        lt.LoadTypes.ELECTRICITY,
+        lt.Units.KILOWATT,
+        component_id=cp.ComponentID("FakeLoadInput"),
     )
 
     input_state = cp.ComponentOutput(
-        "FakeInputState", "InputState", lt.LoadTypes.ACTIVATION, lt.Units.ANY
+        "FakeInputState",
+        "InputState",
+        lt.LoadTypes.ACTIVATION,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("FakeInputState"),
     )
 
     number_of_outputs = fft.get_number_of_outputs([load_input, input_state])
@@ -96,8 +103,6 @@ def test_electrolyzer() -> None:
         assert stsv.values[my_electrolyzer.hydrogen_flow_rate.global_index] == 0
 
     else:
-        assert (
-            stsv.values[my_electrolyzer.hydrogen_flow_rate.global_index] == pytest.approx(0.621840650119573)
-        )
+        assert stsv.values[my_electrolyzer.hydrogen_flow_rate.global_index] == pytest.approx(0.621840650119573)
 
     # python -m pytest ../tests/test_generic_electrolyzer_h2.py

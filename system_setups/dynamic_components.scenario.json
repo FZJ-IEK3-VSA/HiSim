@@ -6,8 +6,11 @@
         {
             "component_full_classname": "hisim.components.advanced_battery_bslib.Battery",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Battery1",
+                "component_id": {
+                    "name": "Battery1",
+                    "building": null,
+                    "unit": null
+                },
                 "source_weight": 1,
                 "system_id": "SG1",
                 "custom_pv_inverter_power_generic_in_watt": 5.0,
@@ -29,8 +32,11 @@
         {
             "component_full_classname": "hisim.components.advanced_battery_bslib.Battery",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Battery2",
+                "component_id": {
+                    "name": "Battery2",
+                    "building": null,
+                    "unit": null
+                },
                 "source_weight": 2,
                 "system_id": "SG1",
                 "custom_pv_inverter_power_generic_in_watt": 2.5,
@@ -52,8 +58,11 @@
         {
             "component_full_classname": "hisim.components.advanced_fuel_cell.CHP",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "CHP1",
+                "component_id": {
+                    "name": "CHP1",
+                    "building": null,
+                    "unit": null
+                },
                 "min_operation_time": 60,
                 "min_idle_time": 15,
                 "gas_type": "Hydrogen",
@@ -79,8 +88,11 @@
         {
             "component_full_classname": "hisim.components.advanced_fuel_cell.CHP",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "CHP2",
+                "component_id": {
+                    "name": "CHP2",
+                    "building": null,
+                    "unit": null
+                },
                 "min_operation_time": 60,
                 "min_idle_time": 15,
                 "gas_type": "Hydrogen",
@@ -106,8 +118,11 @@
         {
             "component_full_classname": "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "L2EMSElectricityController",
+                "component_id": {
+                    "name": "L2EMSElectricityController",
+                    "building": null,
+                    "unit": null
+                },
                 "strategy": "optimize_own_consumption",
                 "limit_to_shave": 0,
                 "building_indoor_temperature_offset_value": 2,
@@ -240,8 +255,11 @@
         {
             "component_full_classname": "hisim.components.weather.Weather",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Weather",
+                "component_id": {
+                    "name": "Weather",
+                    "building": null,
+                    "unit": null
+                },
                 "location": "Aachen",
                 "source_path": "<<utils.get_input_directory()>>/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center",
                 "data_source": "DWD_TRY",
@@ -255,8 +273,11 @@
         {
             "component_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "UTSPConnector",
+                "component_id": {
+                    "name": "UTSPConnector",
+                    "building": null,
+                    "unit": null
+                },
                 "data_acquisition_mode": "use_predefined_profile",
                 "household": {
                     "name": "CHR01 Couple both at Work",
@@ -302,8 +323,11 @@
         {
             "component_full_classname": "hisim.components.generic_pv_system.PVSystem",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "PVSystem",
+                "component_id": {
+                    "name": "PVSystem",
+                    "building": null,
+                    "unit": null
+                },
                 "time": 2019,
                 "location": "Aachen",
                 "module_name": "Trina Solar TSM-435NE09RC.05",

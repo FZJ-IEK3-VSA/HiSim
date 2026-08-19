@@ -13,6 +13,7 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim.units import Quantity, Watt, Celsius, Seconds, Kilogram, Euro, Years, Unitless
+from hisim.component import ComponentID
 
 
 def _make_heatpump_instance() -> HeatPumpHplib:
@@ -59,15 +60,34 @@ def test_heat_pump_hplib() -> None:
     force_convergence: bool = False
 
     # Create fake component outputs as inputs for simulation
-    on_off_switch: cp.ComponentOutput = cp.ComponentOutput("Fake_on_off_switch", "Fake_on_off_switch", lt.LoadTypes.ANY, lt.Units.ANY)
-    t_in_primary: cp.ComponentOutput = cp.ComponentOutput("Fake_t_in_primary", "Fake_t_in_primary", lt.LoadTypes.ANY, lt.Units.ANY)
-    t_in_secondary: cp.ComponentOutput = cp.ComponentOutput("Fake_t_in_secondary", "Fake_t_in_secondary", lt.LoadTypes.ANY, lt.Units.ANY)
-    t_amb: cp.ComponentOutput = cp.ComponentOutput("Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY)
+    on_off_switch: cp.ComponentOutput = cp.ComponentOutput(
+        "Fake_on_off_switch",
+        "Fake_on_off_switch",
+        lt.LoadTypes.ANY,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("Fake_on_off_switch"),
+    )
+    t_in_primary: cp.ComponentOutput = cp.ComponentOutput(
+        "Fake_t_in_primary",
+        "Fake_t_in_primary",
+        lt.LoadTypes.ANY,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("Fake_t_in_primary"),
+    )
+    t_in_secondary: cp.ComponentOutput = cp.ComponentOutput(
+        "Fake_t_in_secondary",
+        "Fake_t_in_secondary",
+        lt.LoadTypes.ANY,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("Fake_t_in_secondary"),
+    )
+    t_amb: cp.ComponentOutput = cp.ComponentOutput(
+        "Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("Fake_t_amb")
+    )
 
     # Initialize component
     heatpump_config: HeatPumpHplibConfig = HeatPumpHplibConfig(
-        building_name="BUI1",
-        name="Heat Pump",
+        component_id=ComponentID(name="Heat Pump"),
         model=model,
         group_id=group_id,
         heating_reference_temperature_in_celsius=t_in,
@@ -80,7 +100,7 @@ def test_heat_pump_hplib() -> None:
         investment_costs_in_euro=Quantity(p_th_set.value * 1e-3 * 1513.74, Euro),
         lifetime_in_years=Quantity(10, Years),
         maintenance_costs_in_euro_per_year=Quantity(0.025 * p_th_set.value * 1e-3 * 1513.74, Euro),
-        subsidy_as_percentage_of_investment_costs=Quantity(0.3, Unitless)
+        subsidy_as_percentage_of_investment_costs=Quantity(0.3, Unitless),
     )
     heatpump: HeatPumpHplib = HeatPumpHplib(config=heatpump_config, my_simulation_parameters=simpars)
     heatpump.state = HeatPumpState(time_on_heating=0, time_off=0, time_on_cooling=0, on_off_previous=1)
@@ -125,9 +145,7 @@ def test_heat_pump_hplib() -> None:
     ],
     ids=["two_transitions", "trailing_nonzero", "single_nonzero", "single_zero", "empty"],
 )
-def test_get_heatpump_cycles_counts_off_to_on_transitions(
-    time_off_series: list[int], expected_cycles: int
-) -> None:
+def test_get_heatpump_cycles_counts_off_to_on_transitions(time_off_series: list[int], expected_cycles: int) -> None:
     """Cycle count equals the number of off (!= 0) -> on (== 0) transitions.
 
     A cycle is counted when an off period (TimeOff != 0) is immediately followed
@@ -135,13 +153,18 @@ def test_get_heatpump_cycles_counts_off_to_on_transitions(
     IndexError, which must be caught so the loop terminates cleanly.
     """
     instance = _make_heatpump_instance()
-    postprocessing_results = pd.DataFrame(
-        {"other": [0] * len(time_off_series), "TimeOff": time_off_series}
+    postprocessing_results = pd.DataFrame({"other": [0] * len(time_off_series), "TimeOff": time_off_series})
+    output = cp.ComponentOutput(
+        "Heat Pump",
+        HeatPumpHplib.TimeOff,
+        lt.LoadTypes.TIME,
+        lt.Units.SECONDS,
+        component_id=cp.ComponentID("Heat Pump"),
     )
-    output = cp.ComponentOutput("Heat Pump", HeatPumpHplib.TimeOff, lt.LoadTypes.TIME, lt.Units.SECONDS)
-    assert instance.get_heatpump_cycles(
-        output=output, index=1, postprocessing_results=postprocessing_results
-    ) == expected_cycles
+    assert (
+        instance.get_heatpump_cycles(output=output, index=1, postprocessing_results=postprocessing_results)
+        == expected_cycles
+    )
 
 
 @pytest.mark.base
@@ -151,11 +174,13 @@ def test_get_heatpump_cycles_ignores_non_timeoff_output() -> None:
     # [5, 0, 5, 0] would yield 2 cycles for a TimeOff output; a non-TimeOff output must return 0.
     postprocessing_results = pd.DataFrame({"ThermalOutputPower": [5, 0, 5, 0]})
     output = cp.ComponentOutput(
-        "Heat Pump", HeatPumpHplib.ThermalOutputPower, lt.LoadTypes.HEATING, lt.Units.WATT
+        "Heat Pump",
+        HeatPumpHplib.ThermalOutputPower,
+        lt.LoadTypes.HEATING,
+        lt.Units.WATT,
+        component_id=cp.ComponentID("Heat Pump"),
     )
-    assert instance.get_heatpump_cycles(
-        output=output, index=0, postprocessing_results=postprocessing_results
-    ) == 0
+    assert instance.get_heatpump_cycles(output=output, index=0, postprocessing_results=postprocessing_results) == 0
 
 
 @pytest.mark.base
@@ -170,14 +195,16 @@ def test_get_heatpump_cycles_propagates_non_index_errors() -> None:
     instance = _make_heatpump_instance()
     # index 0 is non-zero so the look-ahead to values[1] is evaluated; values[1] is
     # _RaisingValue, whose == raises TypeError (not IndexError).
-    postprocessing_results = pd.DataFrame(
-        {"other": [0, 0, 0], "TimeOff": [5, _RaisingValue(), 0]}
+    postprocessing_results = pd.DataFrame({"other": [0, 0, 0], "TimeOff": [5, _RaisingValue(), 0]})
+    output = cp.ComponentOutput(
+        "Heat Pump",
+        HeatPumpHplib.TimeOff,
+        lt.LoadTypes.TIME,
+        lt.Units.SECONDS,
+        component_id=cp.ComponentID("Heat Pump"),
     )
-    output = cp.ComponentOutput("Heat Pump", HeatPumpHplib.TimeOff, lt.LoadTypes.TIME, lt.Units.SECONDS)
     with pytest.raises(TypeError, match="comparison failure should propagate"):
-        instance.get_heatpump_cycles(
-            output=output, index=1, postprocessing_results=postprocessing_results
-        )
+        instance.get_heatpump_cycles(output=output, index=1, postprocessing_results=postprocessing_results)
 
 
 @pytest.mark.base

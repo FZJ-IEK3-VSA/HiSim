@@ -22,13 +22,9 @@ def test_example_transformer() -> None:
     Expected outputs: output1 = 250, output2 = 10000
     """
 
-    mysim: SimulationParameters = SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=60
-    )
+    mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
-    my_example_transformer_config = (
-        example_transformer.ExampleTransformerConfig.get_default_transformer()
-    )
+    my_example_transformer_config = example_transformer.ExampleTransformerConfig.get_default_transformer()
     print("\n")
     log.information(f"default transformer config {my_example_transformer_config}\n")
     my_example_transformer = example_transformer.ExampleTransformer(
@@ -42,6 +38,7 @@ def test_example_transformer() -> None:
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
         output_description="Source 2",
+        component_id=cp.ComponentID("source"),
     )
     transformerinput2_output = cp.ComponentOutput(
         object_name="source",
@@ -49,6 +46,7 @@ def test_example_transformer() -> None:
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
         output_description="Source 2",
+        component_id=cp.ComponentID("source"),
     )
     my_example_transformer.input1.source_output = transformerinput1_output
     my_example_transformer.input2.source_output = transformerinput2_output
@@ -59,30 +57,20 @@ def test_example_transformer() -> None:
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     # Add Global Index and set values for fake Inputs
-    fft.add_global_index_of_components(
-        [my_example_transformer, transformerinput1_output, transformerinput2_output]
-    )
+    fft.add_global_index_of_components([my_example_transformer, transformerinput1_output, transformerinput2_output])
     stsv.values[transformerinput1_output.global_index] = 50  # fake input
     stsv.values[transformerinput2_output.global_index] = 10  # fake input
 
     # Test Simulation
     timestep = 10 * 60
     log.information(f"timestep = {timestep}")
-    log.information(
-        f"transformer input1 = {stsv.values[transformerinput1_output.global_index]}"
-    )
-    log.information(
-        f"transformer input2= {stsv.values[transformerinput2_output.global_index]}\n"
-    )
+    log.information(f"transformer input1 = {stsv.values[transformerinput1_output.global_index]}")
+    log.information(f"transformer input2= {stsv.values[transformerinput2_output.global_index]}\n")
 
     my_example_transformer.i_simulate(timestep, stsv, False)
     log.information("Output values after simulation: ")
-    log.information(
-        f"output1 = {stsv.values[my_example_transformer.output1.global_index]}"
-    )
-    log.information(
-        f"output2 = {stsv.values[my_example_transformer.output2.global_index]}"
-    )
+    log.information(f"output1 = {stsv.values[my_example_transformer.output1.global_index]}")
+    log.information(f"output2 = {stsv.values[my_example_transformer.output2.global_index]}")
     log.information(f"output values = {stsv.values}\n")
 
     assert 50 == stsv.values[transformerinput1_output.global_index]

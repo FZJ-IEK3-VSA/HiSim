@@ -18,7 +18,7 @@ from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import ComponentInput, ComponentOutput
+from hisim.component import ComponentID, ComponentInput, ComponentOutput
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
@@ -51,9 +51,7 @@ class EMSConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return L2GenericEnergyManagementSystem.get_full_classname()
 
-    building_name: str
-    #: name of the device
-    name: str
+    component_id: ComponentID
     # control strategy, more or less obsolete because only "optimize_own_consumption" is used at the moment.
     strategy: str
     # limit for peak shaving option, more or less obsolete because only "optimize_own_consumption" is used at the moment.
@@ -80,12 +78,13 @@ class EMSConfig(cp.ConfigBase):
     def get_default_config_ems(
         cls,
         name: str = "L2EMSElectricityController",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "EMSConfig":
         """Default Config for Energy Management System."""
+        if component_id is None:
+            component_id = ComponentID(name=name)
         config = EMSConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             strategy="optimize_own_consumption",
             limit_to_shave=0,
             building_indoor_temperature_offset_value=2,

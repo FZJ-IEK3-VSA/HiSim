@@ -8,7 +8,7 @@ from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.component import Component
+from hisim.component import ComponentID, Component
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -32,15 +32,14 @@ class SumBuilderConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return SumBuilderForTwoInputs.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     loadtype: lt.LoadTypes
     unit: lt.Units
 
     @classmethod
     def get_sumbuilder_default_config(cls) -> "SumBuilderConfig":
         """Gets a default Sumbuilder."""
-        return SumBuilderConfig(building_name="BUI1", name="Sum", loadtype=lt.LoadTypes.ANY, unit=lt.Units.ANY)
+        return SumBuilderConfig(component_id=ComponentID(name="Sum"), loadtype=lt.LoadTypes.ANY, unit=lt.Units.ANY)
 
 
 class CalculateOperation(cp.Component):

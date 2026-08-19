@@ -14,6 +14,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components import controller_l1_electrolyzer
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -30,9 +31,7 @@ __status__ = ""
 class GenericElectrolyzerConfig(cp.ConfigBase):
     """Generic electrolyzer config."""
 
-    building_name: str
-    #: name of the electrolyer
-    name: str
+    component_id: ComponentID
     #: priority of the component in hierachy: the higher the number the lower the priority
     source_weight: int
     #: minimal operating power in Watt (electrical power)
@@ -47,7 +46,7 @@ class GenericElectrolyzerConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config(
         p_el: float,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "GenericElectrolyzerConfig":
         """Return a default electrolyzer configuration.
 
@@ -55,15 +54,16 @@ class GenericElectrolyzerConfig(cp.ConfigBase):
             p_el: Nominal electrical power in Watt; sets `max_power` and derives
                 `min_power` (50% of `p_el`) and the min/max hydrogen production
                 rates.
-            building_name: Identifier of the building the electrolyzer belongs to.
+            component_id: Structured identity (name, building, unit) of the electrolyzer.
 
         Returns:
             A `GenericElectrolyzerConfig` with default name, source weight, and
                 power/production values derived from `p_el`.
         """
+        if component_id is None:
+            component_id = ComponentID(name="Electrolyzer")
         config = GenericElectrolyzerConfig(
-            building_name=building_name,
-            name="Electrolyzer",
+            component_id=component_id,
             source_weight=1,
             min_power=p_el * 0.5,
             max_power=p_el,

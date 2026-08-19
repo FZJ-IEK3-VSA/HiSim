@@ -5,11 +5,12 @@ import os
 from dataclasses import dataclass
 import math
 
-from typing import ClassVar, List
+from typing import Optional, ClassVar, List
 import copy
 from dataclasses_json import dataclass_json
 
 import pandas as pd
+from hisim.component import ComponentID
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, ConfigBase, DisplayConfig
 from hisim import loadtypes as lt
 
@@ -42,8 +43,7 @@ class CHPConfig(ConfigBase):
         """Return the full class name of the base class."""
         return CHP.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     min_operation_time: float
     min_idle_time: float
     gas_type: str
@@ -64,12 +64,13 @@ class CHPConfig(ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "CHPConfig":
         """Get default config."""
+        if component_id is None:
+            component_id = ComponentID(name="CHP")
         config = CHPConfig(
-            building_name=building_name,
-            name="CHP",
+            component_id=component_id,
             min_operation_time=60,
             min_idle_time=15,
             gas_type="Hydrogen",

@@ -6,8 +6,11 @@
         {
             "component_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "UTSPConnector",
+                "component_id": {
+                    "name": "UTSPConnector",
+                    "building": null,
+                    "unit": null
+                },
                 "data_acquisition_mode": "use_predefined_profile",
                 "household": {
                     "name": "CHR01 Couple both at Work",
@@ -53,8 +56,11 @@
         {
             "component_full_classname": "hisim.components.weather.Weather",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Weather",
+                "component_id": {
+                    "name": "Weather",
+                    "building": null,
+                    "unit": null
+                },
                 "location": "Aachen",
                 "source_path": "<<utils.get_input_directory()>>/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center",
                 "data_source": "DWD_TRY",
@@ -68,8 +74,11 @@
         {
             "component_full_classname": "hisim.components.generic_pv_system.PVSystem",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "PVSystem",
+                "component_id": {
+                    "name": "PVSystem",
+                    "building": null,
+                    "unit": null
+                },
                 "time": 2019,
                 "location": "Aachen",
                 "module_name": "Trina Solar TSM-435NE09RC.05",
@@ -100,8 +109,11 @@
         {
             "component_full_classname": "hisim.components.building.Building",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "Building",
+                "component_id": {
+                    "name": "Building",
+                    "building": null,
+                    "unit": null
+                },
                 "heating_reference_temperature_in_celsius": -7,
                 "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
                 "building_heat_capacity_class": "medium",
@@ -138,8 +150,11 @@
         {
             "component_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "MoreAdvancedHeatPumpHPLib",
+                "component_id": {
+                    "name": "MoreAdvancedHeatPumpHPLib",
+                    "building": null,
+                    "unit": null
+                },
                 "model": "Generic",
                 "fluid_primary_side": "air",
                 "group_id": 1,
@@ -170,8 +185,11 @@
         {
             "component_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "HeatPumpControllerDHW",
+                "component_id": {
+                    "name": "HeatPumpControllerDHW",
+                    "building": null,
+                    "unit": null
+                },
                 "t_min_dhw_storage_in_celsius": 40.0,
                 "t_max_dhw_storage_in_celsius": 60.0,
                 "thermalpower_dhw_is_constant": false,
@@ -185,8 +203,11 @@
         {
             "component_full_classname": "hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "MoreAdvancedHeatPumpHPLibControllerSH",
+                "component_id": {
+                    "name": "MoreAdvancedHeatPumpHPLibControllerSH",
+                    "building": null,
+                    "unit": null
+                },
                 "mode": 1,
                 "set_heating_threshold_outside_temperature_in_celsius": 16.0,
                 "set_cooling_threshold_outside_temperature_in_celsius": 20.0,
@@ -202,8 +223,11 @@
         {
             "component_full_classname": "hisim.components.heat_distribution_system.HeatDistribution",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "HeatDistributionSystem",
+                "component_id": {
+                    "name": "HeatDistributionSystem",
+                    "building": null,
+                    "unit": null
+                },
                 "heating_system": "FLOORHEATING",
                 "water_mass_flow_rate_in_kg_per_second": 0.27,
                 "absolute_conditioned_floor_area_in_m2": 121.2,
@@ -222,8 +246,11 @@
         {
             "component_full_classname": "hisim.components.heat_distribution_system.HeatDistributionController",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "HeatDistributionController",
+                "component_id": {
+                    "name": "HeatDistributionController",
+                    "building": null,
+                    "unit": null
+                },
                 "heating_system": "FLOORHEATING",
                 "set_heating_threshold_outside_temperature_in_celsius": 16.0,
                 "heating_reference_temperature_in_celsius": -7,
@@ -240,8 +267,11 @@
         {
             "component_full_classname": "hisim.components.simple_water_storage.SimpleHotWaterStorage",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "SimpleHotWaterStorage",
+                "component_id": {
+                    "name": "SimpleHotWaterStorage",
+                    "building": null,
+                    "unit": null
+                },
                 "volume_heating_water_storage_in_liter": 389.04,
                 "heat_transfer_coefficient_in_watt_per_m2_per_kelvin": 2.0,
                 "heat_exchanger_is_present": true,
@@ -260,8 +290,11 @@
         {
             "component_full_classname": "hisim.components.simple_water_storage.SimpleDHWStorage",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "DHWStorage",
+                "component_id": {
+                    "name": "DHWStorage",
+                    "building": null,
+                    "unit": null
+                },
                 "volume_heating_water_storage_in_liter": 250.0,
                 "heat_transfer_coefficient_in_watt_per_m2_per_kelvin": 0.36,
                 "device_co2_footprint_in_kg": null,
@@ -278,8 +311,11 @@
         {
             "component_full_classname": "hisim.components.electricity_meter.ElectricityMeter",
             "configuration": {
-                "building_name": "BUI1",
-                "name": "ElectricityMeter",
+                "component_id": {
+                    "name": "ElectricityMeter",
+                    "building": null,
+                    "unit": null
+                },
                 "device_co2_footprint_in_kg": null,
                 "investment_costs_in_euro": null,
                 "lifetime_in_years": null,

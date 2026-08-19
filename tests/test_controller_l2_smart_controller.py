@@ -3,7 +3,7 @@
 from typing import List
 
 import pytest
-from hisim.component import ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.component import ComponentID, ComponentInput, ComponentOutput, SingleTimeStepValues
 from hisim.components import controller_l2_smart_controller
 from hisim.components.controller_l2_smart_controller import SmartController, SmartControllerConfig
 from hisim.components.generic_heat_pump import GenericHeatPumpController
@@ -18,21 +18,21 @@ def test_smart_controller_default_config_name() -> None:
     default_config = controller_l2_smart_controller.SmartControllerConfig.get_default_config_ems()
 
     # Verify the name does not have a leading space
-    assert not default_config.name.startswith(" "), (
-        f"SmartController default name has a leading space: '{default_config.name}'"
-    )
+    assert not default_config.component_id.name.startswith(
+        " "
+    ), f"SmartController default name has a leading space: '{default_config.component_id.name}'"
 
     # Verify the expected name
-    assert default_config.name == "SmartController", (
-        f"SmartController default name should be 'SmartController', got '{default_config.name}'"
-    )
+    assert (
+        default_config.component_id.name == "SmartController"
+    ), f"SmartController default name should be 'SmartController', got '{default_config.component_id.name}'"
 
 
 @pytest.mark.base
-def test_smart_controller_default_config_building_name() -> None:
-    """Test that the default SmartController config building_name is correct."""
+def test_smart_controller_default_config_building() -> None:
+    """Test that the default SmartController config carries no building."""
     default_config = controller_l2_smart_controller.SmartControllerConfig.get_default_config_ems()
-    assert default_config.building_name == "BUI1"
+    assert default_config.component_id.building is None
 
 
 @pytest.mark.base
@@ -42,12 +42,11 @@ def test_smart_controller_custom_config() -> None:
     custom_building = "MyBuilding"
 
     config = controller_l2_smart_controller.SmartControllerConfig(
-        building_name=custom_building,
-        name=custom_name,
+        component_id=ComponentID(name=custom_name, building=custom_building),
     )
 
-    assert config.name == custom_name
-    assert config.building_name == custom_building
+    assert config.component_id.name == custom_name
+    assert config.component_id.building == custom_building
 
 
 class _FakeWrappedController:
@@ -77,6 +76,7 @@ class _FakeWrappedController:
                 None,
                 None,
                 "fake state output",
+                component_id=ComponentID(name),
             )
         ]
         self.saved = False
@@ -121,10 +121,7 @@ def test_smart_controller_accepts_injected_wrapped_controllers() -> None:
 
     # The injected controllers are used verbatim, no internal construction happened.
     assert controller.wrapped_controllers == [fake_hp, fake_ev]
-    assert all(
-        not isinstance(c, (GenericHeatPumpController,))
-        for c in controller.wrapped_controllers
-    )
+    assert all(not isinstance(c, (GenericHeatPumpController,)) for c in controller.wrapped_controllers)
 
 
 @pytest.mark.base

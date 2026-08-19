@@ -21,7 +21,7 @@ from hisim.components import advanced_ev_battery_bslib
 from hisim.loadtypes import Units, ComponentType, InandOutputType
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
-from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.component import ComponentID, OpexCostDataClass, CapexCostDataClass
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -38,9 +38,7 @@ __status__ = "development"
 class ChargingStationConfig(cp.ConfigBase):
     """Definition of the configuration of Charging Station and the set point for the control."""
 
-    building_name: str
-    #: name of the device
-    name: str
+    component_id: ComponentID
     #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int
     #: definition of the charging station, in line with definitions from LoadProfileGenerator
@@ -68,16 +66,17 @@ class ChargingStationConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config(
         charging_station_set: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "ChargingStationConfig":
         """Returns default configuration of charging station and desired SOC Level."""
+        if component_id is None:
+            component_id = ComponentID(name="L1EVChargeControl")
         charging_power_in_kilowatt = float((charging_station_set.Name or "").split("with ")[1].split(" kW")[0])
         lower_threshold_charging_power_in_watt = (
             charging_power_in_kilowatt * 1e3 * 0.1
         )  # 10 % of charging power for acceptable efficiencies
         config = ChargingStationConfig(
-            building_name=building_name,
-            name="L1EVChargeControl",
+            component_id=component_id,
             source_weight=1,
             charging_station_set=charging_station_set,
             battery_set_soc=0.8,
@@ -399,7 +398,7 @@ class L1Controller(cp.Component):
         config: ChargingStationConfig,
     ) -> None:
         """Translates and assigns config parameters to controller class and completes initialization."""
-        self.name = config.name
+        self.name = config.component_id.name
         self.source_weight = config.source_weight
         self.config = config
         # get charging station location and charging station power out of ChargingStationSet

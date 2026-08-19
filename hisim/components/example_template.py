@@ -15,7 +15,7 @@ from typing import Optional
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
+from hisim.component import ComponentID, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
 from hisim import loadtypes
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ConfigBase
@@ -40,22 +40,20 @@ class ComponentNameConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return ComponentName.get_full_classname()
 
-    building_name: str
-    # parameter_string: str
-    # my_simulation_parameters: SimulationParameters
-    name: str
+    component_id: ComponentID
     loadtype: loadtypes.LoadTypes
     unit: loadtypes.Units
 
     @classmethod
     def get_default_template_component(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "ComponentNameConfig":
         """Gets a default ComponentName."""
+        if component_id is None:
+            component_id = ComponentID(name="ComponentName default")
         return ComponentNameConfig(
-            building_name=building_name,
-            name="ComponentName default",
+            component_id=component_id,
             loadtype=loadtypes.LoadTypes.ELECTRICITY,
             unit=loadtypes.Units.WATT,
         )
@@ -115,7 +113,7 @@ class ComponentName(Component):
         self.factor: float = 1.0
 
         self.input_from_other_component: ComponentInput = self.add_input(
-            object_name=self.componentnameconfig.name,
+            object_name=self.componentnameconfig.component_id.name,
             field_name=self.InputFromOtherComponent,
             load_type=loadtypes.LoadTypes.ELECTRICITY,
             unit=loadtypes.Units.WATT,
@@ -123,7 +121,7 @@ class ComponentName(Component):
         )
 
         self.output_with_state: ComponentOutput = self.add_output(
-            object_name=self.componentnameconfig.name,
+            object_name=self.componentnameconfig.component_id.name,
             field_name=self.OutputWithState,
             load_type=loadtypes.LoadTypes.ELECTRICITY,
             unit=loadtypes.Units.WATT_HOUR,
@@ -131,7 +129,7 @@ class ComponentName(Component):
         )
 
         self.output_without_state: ComponentOutput = self.add_output(
-            object_name=self.componentnameconfig.name,
+            object_name=self.componentnameconfig.component_id.name,
             field_name=self.OutputWithoutState,
             load_type=loadtypes.LoadTypes.ELECTRICITY,
             unit=loadtypes.Units.WATT_HOUR,

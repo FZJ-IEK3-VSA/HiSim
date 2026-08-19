@@ -10,9 +10,10 @@ import os
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 import json
 import pandas as pd
+from dataclasses_json import dataclass_json
 from dataclass_wizard import JSONWizard
 
 from hisim import loadtypes as lt
@@ -24,17 +25,113 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagE
 # Package
 
 
+@dataclass_json
+@dataclass(frozen=True)
+class ComponentID:
+    """Structured, first-class identity of one component instance in a simulation.
+
+    A component used to be identified by a loose pair of strings on its configuration
+    (``name`` plus ``building_name``) that was collapsed into a runtime name by
+    ``Component.get_component_name()`` depending on the ``multiple_buildings`` simulation
+    parameter. ``ComponentID`` replaces that arrangement with a single immutable value
+    object: ``name`` says what the component is, ``building`` says which building object it
+    belongs to (``None`` for a plain single-building simulation), and ``unit`` says which
+    sub-unit of that building (for example an apartment) owns it. Only ``name`` is required;
+    the optional fields are simply absent when the surrounding simulation has no need for
+    them.
+
+    The unique runtime identifier is derived by the :py:attr:`key` property, which joins the
+    fields that are actually present with underscores in the order *building*, *unit*,
+    *name*. Absent fields contribute nothing at all, so ``ComponentID("Weather").key`` is
+    ``"Weather"``, ``ComponentID("Weather", building="BUI1").key`` is ``"BUI1_Weather"`` and
+    ``ComponentID("HeatPump", building="BUI1", unit="APT2").key`` is
+    ``"BUI1_APT2_HeatPump"``. The key is derived-only: it is written into component names,
+    output names and result columns, but it is never parsed back into its parts anywhere in
+    HiSim. Code that needs to know the building or the unit of a component reads the
+    structured fields instead.
+
+    Because the key merely concatenates the present fields, two different tuples can in
+    principle produce the same key (for example ``ComponentID("Pump", building="BUI1_APT2")``
+    and ``ComponentID("Pump", building="BUI1", unit="APT2")``). No new mechanism is needed to
+    catch that: such a collision shows up as two components claiming the same runtime name,
+    and the existing duplicate-component-name check performed when outputs are registered
+    with the simulator (see ``Simulator.add_component``) raises on it just as it does for any
+    other accidental name clash.
+
+    The class is frozen, so instances are hashable and safe to share between a configuration
+    and everything derived from it; use :py:func:`dataclasses.replace` to obtain a variant.
+    """
+
+    name: str
+    building: Optional[str] = None
+    unit: Optional[str] = None
+
+    #: Building label used for grouping when a component carries no explicit building.
+    #: Historically every configuration defaulted to the decorative string ``"BUI1"``, and
+    #: postprocessing (KPI collection, OPEX/CAPEX tables, the webtool result JSON) keys its
+    #: per-building groups by that string. Keeping the same label for building-less
+    #: components means the grouping output of a single-building simulation is byte-for-byte
+    #: what it was before ``ComponentID`` existed.
+    DEFAULT_BUILDING_LABEL: ClassVar[str] = "BUI1"
+
+    def __post_init__(self) -> None:
+        """Validates the identity right after construction.
+
+        The name is the only mandatory part of a component identity, and an empty or
+        whitespace-only name would silently produce an empty or malformed key later on.
+        Rejecting it here turns a confusing downstream naming problem into an immediate,
+        clearly attributable error.
+        """
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError(f"A ComponentID needs a non-empty name, but got {self.name!r}.")
+
+    @property
+    def key(self) -> str:
+        """Derives the unique runtime identifier of this component.
+
+        The key is the string that HiSim uses as the component name, as the prefix of every
+        output's full name and therefore as the prefix of every result column. It is built by
+        joining the present fields with ``"_"`` in the order building, unit, name; fields that
+        are ``None`` simply do not appear. The key is derived-only and is never parsed back
+        into building/unit/name anywhere in the code base.
+        """
+        parts = [part for part in (self.building, self.unit, self.name) if part is not None]
+        return "_".join(parts)
+
+    @property
+    def building_label(self) -> str:
+        """Returns the building this component is grouped under in postprocessing.
+
+        Postprocessing aggregates results per building object (KPI collections, OPEX and
+        CAPEX tables, the building-sizer and webtool JSON exports), and those groups need a
+        string key even for components that carry no building of their own. This property
+        returns :py:attr:`building` when it is set and :py:attr:`DEFAULT_BUILDING_LABEL`
+        otherwise, which reproduces the historical behaviour where every configuration
+        carried the decorative default building name.
+        """
+        return self.building if self.building is not None else self.DEFAULT_BUILDING_LABEL
+
+
 @dataclass
 class ConfigBase(JSONWizard):
-    """Base class for all configurations."""
+    """Base class for all configurations.
 
-    building_name: str
-    name: str
+    Every component configuration derives from this class and therefore carries exactly one
+    identity field, :py:attr:`component_id`, which replaces the former ``name`` plus
+    ``building_name`` string pair. In serialized form the identity is a nested object, i.e.
+    ``{"component_id": {"name": ..., "building": ..., "unit": ...}}``.
+    """
 
-    def __init__(self, name: str, building_name: str = "BUI1"):
-        """Initializes."""
-        self.building_name = building_name
-        self.name = name
+    component_id: ComponentID
+
+    def __init__(self, component_id: ComponentID):
+        """Initializes a bare configuration from its structured identity.
+
+        Only :py:class:`ConfigBase` itself uses this constructor; every concrete subclass is a
+        dataclass and generates its own ``__init__`` that takes ``component_id`` as its first
+        field followed by the component-specific parameters.
+        """
+        self.component_id = component_id
 
     @classmethod
     def get_main_classname(cls):
@@ -82,8 +179,19 @@ class ComponentOutput:  # noqa: too-few-public-methods
         sankey_flow_direction: Optional[bool] = None,
         output_description: Optional[str] = None,
         source_component_class: Optional[str] = None,
+        *,
+        component_id: ComponentID,
     ):
-        """Defines a component output."""
+        """Defines a component output.
+
+        Besides the display and load-type metadata, an output carries the structured identity
+        of the component that produced it. Postprocessing needs to know which building object
+        an output belongs to, and it must not obtain that by taking the runtime name apart, so
+        the owning :py:class:`ComponentID` is stored alongside the derived ``component_name``.
+        The identity is deliberately REQUIRED (keyword-only): an output without an owner would
+        silently fall into the default building group and corrupt per-building KPIs, so a
+        missing identity must fail at construction rather than at aggregation.
+        """
         self.full_name: str = object_name + " # " + field_name
         self.component_name: str = object_name
         self.field_name: str = field_name
@@ -95,6 +203,17 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.sankey_flow_direction: Optional[bool] = sankey_flow_direction
         self.output_description: Optional[str] = output_description
         self.source_component_class: Optional[str] = source_component_class
+        self.component_id: ComponentID = component_id
+
+    @property
+    def building_label(self) -> str:
+        """Returns the building object this output is grouped under in postprocessing.
+
+        Delegates to the owning component's identity: the component's building when one is
+        set, and the default single-building label otherwise. Identity is mandatory on every
+        output, so there is no fallback path for ownerless outputs.
+        """
+        return self.component_id.building_label
 
     def get_pretty_name(self) -> str:
         """Gets a pretty name for a component output."""
@@ -249,15 +368,27 @@ class Component:
         self.log_connections: List[Any] = []
         self.enable_logging = my_simulation_parameters.log_connections
 
-    def get_component_name(
-        self,
-    ):
-        """Create component name."""
-        if self.my_simulation_parameters.multiple_buildings:
-            name = str(self.config.building_name) + "_" + str(self.config.name)
-        else:
-            name = str(self.config.name)
-        return name
+    @property
+    def component_id(self) -> ComponentID:
+        """Returns the structured identity of this component.
+
+        This is a convenience shortcut for ``self.config.component_id`` so that component code
+        and postprocessing can reach the building, the unit and the plain name of a component
+        without going through the configuration object every time. The identity is owned by
+        the configuration, which stays the single source of truth.
+        """
+        return self.config.component_id
+
+    def get_component_name(self) -> str:
+        """Creates the unique runtime name of this component.
+
+        The name is derived purely from the structured identity on the configuration, i.e. it
+        is :py:attr:`ComponentID.key`. Unlike the previous implementation this no longer
+        consults the ``multiple_buildings`` simulation parameter: whether a building appears in
+        the name is decided by whether the configuration carries a building at all, which makes
+        the runtime name a property of the component itself rather than of a global flag.
+        """
+        return self.config.component_id.key
 
     def add_default_connections(self, connections: List[ComponentConnection]) -> None:
         """Adds a default connection list definition."""
@@ -323,6 +454,7 @@ class Component:
             postprocessing_flag,
             sankey_flow_direction,
             output_description,
+            component_id=self.config.component_id,
         )
         self.outputs.append(outp)
         return outp

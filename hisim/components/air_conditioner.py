@@ -10,6 +10,7 @@ from hisim import log
 
 from hisim import component as cp
 from hisim.component import (
+    ComponentID,
     CapexCostDataClass,
     ConfigBase,
     DisplayConfig,
@@ -92,8 +93,7 @@ def get_installation_cost_in_euro(air_conditioner: Dict[str, Any]) -> float:
 class AirConditionerConfig(ConfigBase):
     """Configuration dataclass for the air conditioner component."""
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     manufacturer: str
     model_name: str
     scale_factor: float
@@ -119,11 +119,13 @@ class AirConditionerConfig(ConfigBase):
         manufacturer: str,
         model_name: str,
         scale_factor: float = 1.0,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         name: str = "AirConditioner",
     ) -> "AirConditionerConfig":
         """Build a configuration from the smart-devices database entry of the given model."""
 
+        if component_id is None:
+            component_id = ComponentID(name=name)
         air_conditioners = utils.load_smart_appliance("Air Conditioner")
         air_conditioner = next(
             (
@@ -141,8 +143,7 @@ class AirConditionerConfig(ConfigBase):
         investment_costs_in_euro = get_price_in_euro(air_conditioner) + get_installation_cost_in_euro(air_conditioner)
 
         return cls(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             manufacturer=manufacturer,
             model_name=model_name,
             scale_factor=scale_factor,
@@ -168,12 +169,12 @@ class AirConditionerConfig(ConfigBase):
     @classmethod
     def get_default_air_conditioner_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "AirConditionerConfig":
         """Return default air-conditioner configuration."""
 
         return cls.get_air_conditioner_config_from_database(
-            building_name=building_name,
+            component_id=component_id,
             manufacturer="Samsung",  # Further options are available in the smart_devices file
             model_name="AC120HBHFKH/SA - AC120HCAFKH/SA",  # Other option: "CS-TZ71WKEW + CU-TZ71WKE"
         )
@@ -183,7 +184,7 @@ class AirConditionerConfig(ConfigBase):
         cls,
         heating_load: float,
         heating_reference_temperature: float,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "AirConditionerConfig":
         """Return an air-conditioner configuration scaled to the building heating load.
 
@@ -237,7 +238,7 @@ class AirConditionerConfig(ConfigBase):
         scaling_factor = relevant_capacity_for_scaling * 0.6 / heating_load
 
         return cls.get_air_conditioner_config_from_database(
-            building_name=building_name,
+            component_id=component_id,
             manufacturer=selected_air_conditioner["Manufacturer"],
             model_name=selected_air_conditioner["Model"],
             scale_factor=scaling_factor,
@@ -730,8 +731,7 @@ class AirConditioner(cp.Component):
 class AirConditionerControllerConfig(ConfigBase):
     """Configuration class for the air conditioner controller."""
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     heating_set_temperature_deg_c: float
     cooling_set_temperature_deg_c: float
     minimum_runtime_s: float
@@ -747,12 +747,13 @@ class AirConditionerControllerConfig(ConfigBase):
     @classmethod
     def get_default_air_conditioner_controller_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Returns a default configuration object."""
+        if component_id is None:
+            component_id = ComponentID(name="AirConditionerControllerConfig")
         return cls(
-            building_name=building_name,
-            name="AirConditionerControllerConfig",
+            component_id=component_id,
             heating_set_temperature_deg_c=20.0,
             cooling_set_temperature_deg_c=24.0,
             minimum_runtime_s=30 * 60,

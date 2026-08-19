@@ -26,6 +26,7 @@ from hplib import hplib as hpl
 
 # Import modules from HiSim
 from hisim.component import (
+    ComponentID,
     Component,
     ComponentInput,
     ComponentOutput,
@@ -91,8 +92,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return MoreAdvancedHeatPumpHPLib.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     model: str
     fluid_primary_side: str
     group_id: int
@@ -123,7 +123,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     @classmethod
     def get_default_generic_advanced_hp_lib(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         name: str = "MoreAdvancedHeatPumpHPLib",
         set_thermal_output_power_in_watt: float = 8000,
         heating_reference_temperature_in_celsius: float = -7.0,
@@ -134,9 +134,10 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         see default values for air/water hp on:
         https://github.com/FZJ-IEK3-VSA/HPLib/blob/main/HPLib/HPLib.py l.135 "fit_p_th_ref.
         """
+        if component_id is None:
+            component_id = ComponentID(name=name)
         return MoreAdvancedHeatPumpHPLibConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             model="Generic",
             fluid_primary_side="air",
             group_id=1,
@@ -166,17 +167,18 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         cls,
         heating_load_of_building_in_watt: float,
         name: str = "MoreAdvancedHeatPumpHPLib",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         heating_reference_temperature_in_celsius: float = -7.0,
         massflow_nominal_secondary_side_in_kg_per_s: float = 0.333,
     ) -> "MoreAdvancedHeatPumpHPLibConfig":
         """Gets a default heat pump with scaling according to heating load of the building."""
 
+        if component_id is None:
+            component_id = ComponentID(name=name)
         set_thermal_output_power_in_watt: float = heating_load_of_building_in_watt
 
         return MoreAdvancedHeatPumpHPLibConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             model="Generic",
             fluid_primary_side="air",
             group_id=1,
@@ -1976,8 +1978,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return MoreAdvancedHeatPumpHPLibControllerSpaceHeating.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     mode: int
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
     set_cooling_threshold_outside_temperature_in_celsius: Optional[float]
@@ -1990,16 +1991,17 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
         cls,
         heat_distribution_system_type: Any,
         name: str = "MoreAdvancedHeatPumpHPLibControllerSH",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         upper_temperature_offset_for_state_conditions_in_celsius: float = 5.0,
         lower_temperature_offset_for_state_conditions_in_celsius: float = 5.0,
         set_heating_threshold_outside_temperature_in_celsius=16.0,
         set_cooling_threshold_outside_temperature_in_celsius=20.0,
     ) -> "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig":
         """Gets a default Generic Heat Pump Controller."""
+        if component_id is None:
+            component_id = ComponentID(name=name)
         return MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             mode=1,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_in_celsius,
@@ -2485,8 +2487,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return MoreAdvancedHeatPumpHPLibControllerDHW.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     #: lower set temperature of DHW Storage, given in °C
     t_min_dhw_storage_in_celsius: float
     #: upper set temperature of DHW Storage, given in °C
@@ -2500,12 +2501,13 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
     def get_default_dhw_controller_config(
         cls,
         name: str = "HeatPumpControllerDHW",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "MoreAdvancedHeatPumpHPLibControllerDHWConfig":
         """Gets a default Generic Heat Pump Controller."""
+        if component_id is None:
+            component_id = ComponentID(name=name)
         return MoreAdvancedHeatPumpHPLibControllerDHWConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             t_min_dhw_storage_in_celsius=40.0,
             t_max_dhw_storage_in_celsius=60.0,
             thermalpower_dhw_is_constant=False,  # false: modulation, true: constant power for dhw

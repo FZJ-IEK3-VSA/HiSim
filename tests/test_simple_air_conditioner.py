@@ -31,9 +31,7 @@ def _make_simulation_parameters() -> SimulationParameters:
 # ==============================================================================
 
 
-def _wire_controller_inputs(
-    controller: SimpleAirConditionerController, t_indoor_c: float
-) -> cp.SingleTimeStepValues:
+def _wire_controller_inputs(controller: SimpleAirConditionerController, t_indoor_c: float) -> cp.SingleTimeStepValues:
     """Wire a fake indoor-temperature output into the controller and return a stsv.
 
     Creates a one-slot ``SingleTimeStepValues``, wires a fake
@@ -48,6 +46,7 @@ def _wire_controller_inputs(
         "TemperatureIndoorAir",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
+        component_id=cp.ComponentID("FakeBuilding"),
     )
     t_indoor_output.global_index = 0
     controller.indoor_air_temperature_channel.source_output = t_indoor_output
@@ -198,13 +197,25 @@ def _wire_component_inputs(component: SimpleAirConditioner, t_out_c: float, t_in
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_values)
 
     t_out_output = cp.ComponentOutput(
-        "FakeWeather", "TemperatureOutside", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS
+        "FakeWeather",
+        "TemperatureOutside",
+        lt.LoadTypes.TEMPERATURE,
+        lt.Units.CELSIUS,
+        component_id=cp.ComponentID("FakeWeather"),
     )
     t_in_output = cp.ComponentOutput(
-        "FakeBuilding", "TemperatureIndoorAir", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS
+        "FakeBuilding",
+        "TemperatureIndoorAir",
+        lt.LoadTypes.TEMPERATURE,
+        lt.Units.CELSIUS,
+        component_id=cp.ComponentID("FakeBuilding"),
     )
     modulation_output = cp.ComponentOutput(
-        "FakeController", "ModulatingPowerSignal", lt.LoadTypes.ANY, lt.Units.PERCENT
+        "FakeController",
+        "ModulatingPowerSignal",
+        lt.LoadTypes.ANY,
+        lt.Units.PERCENT,
+        component_id=cp.ComponentID("FakeController"),
     )
 
     # Assign indices: 0=t_out, 1=t_in, 2=modulation, 3..8=outputs
@@ -265,9 +276,7 @@ def test_component_electrical_power() -> None:
     t_out_k = 35.0 + 273.15
     expected_cop = 0.3 * t_in_k / (t_out_k - t_in_k)
     expected_electric = 2000.0 / expected_cop
-    assert expected_electric == pytest.approx(
-        stsv.values[idx["electric_power"]], rel=1e-6, abs=1e-3
-    )
+    assert expected_electric == pytest.approx(stsv.values[idx["electric_power"]], rel=1e-6, abs=1e-3)
 
 
 @pytest.mark.base
@@ -347,9 +356,7 @@ def test_component_energy_accumulation() -> None:
     component.i_simulate(0, stsv, False)
 
     expected_energy = stsv.values[idx["thermal_power"]] * spt / 3.6e3
-    assert expected_energy == pytest.approx(
-        stsv.values[idx["thermal_energy"]], rel=1e-6, abs=1e-9
-    )
+    assert expected_energy == pytest.approx(stsv.values[idx["thermal_energy"]], rel=1e-6, abs=1e-9)
 
 
 @pytest.mark.base
@@ -433,10 +440,18 @@ def test_integration_controller_and_component_end_to_end() -> None:
 
     # Fake temperature outputs
     t_out_output = cp.ComponentOutput(
-        "FakeWeather", "TemperatureOutside", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS
+        "FakeWeather",
+        "TemperatureOutside",
+        lt.LoadTypes.TEMPERATURE,
+        lt.Units.CELSIUS,
+        component_id=cp.ComponentID("FakeWeather"),
     )
     t_in_output = cp.ComponentOutput(
-        "FakeBuilding", "TemperatureIndoorAir", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS
+        "FakeBuilding",
+        "TemperatureIndoorAir",
+        lt.LoadTypes.TEMPERATURE,
+        lt.Units.CELSIUS,
+        component_id=cp.ComponentID("FakeBuilding"),
     )
 
     # Assign indices
@@ -452,9 +467,7 @@ def test_integration_controller_and_component_end_to_end() -> None:
     # Wire component inputs
     ac.t_out_channel.source_output = t_out_output
     ac.t_indoor_channel.source_output = t_in_output
-    ac.modulating_power_signal_channel.source_output = (
-        controller.operation_modulating_signal_channel
-    )
+    ac.modulating_power_signal_channel.source_output = controller.operation_modulating_signal_channel
 
     # Component outputs
     ac.thermal_power_generation_channel.global_index = 3
@@ -512,10 +525,18 @@ def test_integration_controller_off_and_component_idle() -> None:
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_values)
 
     t_out_output = cp.ComponentOutput(
-        "FakeWeather", "TemperatureOutside", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS
+        "FakeWeather",
+        "TemperatureOutside",
+        lt.LoadTypes.TEMPERATURE,
+        lt.Units.CELSIUS,
+        component_id=cp.ComponentID("FakeWeather"),
     )
     t_in_output = cp.ComponentOutput(
-        "FakeBuilding", "TemperatureIndoorAir", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS
+        "FakeBuilding",
+        "TemperatureIndoorAir",
+        lt.LoadTypes.TEMPERATURE,
+        lt.Units.CELSIUS,
+        component_id=cp.ComponentID("FakeBuilding"),
     )
 
     t_out_output.global_index = 1
@@ -526,9 +547,7 @@ def test_integration_controller_off_and_component_idle() -> None:
 
     ac.t_out_channel.source_output = t_out_output
     ac.t_indoor_channel.source_output = t_in_output
-    ac.modulating_power_signal_channel.source_output = (
-        controller.operation_modulating_signal_channel
-    )
+    ac.modulating_power_signal_channel.source_output = controller.operation_modulating_signal_channel
 
     ac.thermal_power_generation_channel.global_index = 3
     ac.thermal_energy_generation_channel.global_index = 4
@@ -606,12 +625,8 @@ def test_get_cost_capex_returns_expected_values() -> None:
     # Per-period values scale by duration ratio (1 day / 365 days)
     seconds_per_year = 365 * 24 * 60 * 60
     duration_ratio = my_simulation_parameters.duration.total_seconds() / seconds_per_year
-    assert capex.capex_investment_cost_for_simulated_period_in_euro == pytest.approx(
-        (1500.0 / 15) * duration_ratio
-    )
-    assert capex.device_co2_footprint_for_simulated_period_in_kg == pytest.approx(
-        (100.0 / 15) * duration_ratio
-    )
+    assert capex.capex_investment_cost_for_simulated_period_in_euro == pytest.approx((1500.0 / 15) * duration_ratio)
+    assert capex.device_co2_footprint_for_simulated_period_in_kg == pytest.approx((100.0 / 15) * duration_ratio)
 
 
 @pytest.mark.base
@@ -626,9 +641,7 @@ def test_get_cost_opex_computes_electricity_consumption() -> None:
         component, electric_energy_wh, thermal_energy_wh
     )
 
-    opex = component.get_cost_opex(
-        all_outputs=all_outputs, postprocessing_results=postprocessing_results
-    )
+    opex = component.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
 
     # Electricity consumption: round(sum(500 + 500) * 1e-3, 1) = 1.0 kWh
     assert opex.total_consumption_in_kwh == pytest.approx(1.0)
@@ -648,9 +661,7 @@ def test_get_cost_opex_zero_consumption_when_no_energy() -> None:
         component, electric_energy_wh=[0.0, 0.0], thermal_energy_wh=[0.0, 0.0]
     )
 
-    opex = component.get_cost_opex(
-        all_outputs=all_outputs, postprocessing_results=postprocessing_results
-    )
+    opex = component.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
 
     assert opex.total_consumption_in_kwh == pytest.approx(0.0)
     assert opex.opex_energy_cost_in_euro == pytest.approx(0.0)
@@ -739,9 +750,7 @@ def test_controller_get_component_kpi_entries_returns_empty() -> None:
         my_simulation_parameters=_make_simulation_parameters(),
         config=SimpleAirConditionerControllerConfig.get_default_simple_air_conditioner_controller_config(),
     )
-    kpi_entries = controller.get_component_kpi_entries(
-        all_outputs=[], postprocessing_results=None
-    )
+    kpi_entries = controller.get_component_kpi_entries(all_outputs=[], postprocessing_results=None)
     assert not kpi_entries
 
 

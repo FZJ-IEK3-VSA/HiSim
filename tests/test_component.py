@@ -14,6 +14,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import example_component
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -37,6 +38,7 @@ def test_component_output_and_input() -> None:
         sankey_flow_direction=True,
         output_description="Test output description",
         source_component_class="TestComponentClass",
+        component_id=cp.ComponentID("TestComponent"),
     )
 
     # Verify output attributes
@@ -105,10 +107,14 @@ def test_single_time_step_values() -> None:
     assert stsv.values == [0.0, 0.0, 0.0, 0.0, 0.0]
 
     # Create outputs for testing
-    output1 = cp.ComponentOutput("Component1", "Output1", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+    output1 = cp.ComponentOutput(
+        "Component1", "Output1", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, component_id=cp.ComponentID("Component1")
+    )
     output1.global_index = 0
 
-    output2 = cp.ComponentOutput("Component2", "Output2", lt.LoadTypes.HEATING, lt.Units.WATT)
+    output2 = cp.ComponentOutput(
+        "Component2", "Output2", lt.LoadTypes.HEATING, lt.Units.WATT, component_id=cp.ComponentID("Component2")
+    )
     output2.global_index = 1
 
     input1 = cp.ComponentInput("Component3", "Input1", lt.LoadTypes.ANY, lt.Units.ANY, True)
@@ -156,7 +162,13 @@ def test_single_time_step_values() -> None:
     stsv_prev = cp.SingleTimeStepValues(3)
     stsv_prev.values = [10.0, 25.0, 30.0]  # Only middle value differs
 
-    outputs = [output1, output2, cp.ComponentOutput("Component3", "Output3", lt.LoadTypes.ANY, lt.Units.ANY)]
+    outputs = [
+        output1,
+        output2,
+        cp.ComponentOutput(
+            "Component3", "Output3", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("Component3")
+        ),
+    ]
     outputs[2].global_index = 2
 
     diff_msg = stsv_orig.get_differences_for_error_msg(stsv_prev, outputs)
@@ -180,11 +192,12 @@ def test_config_base() -> None:
     - ConfigBase.get_main_classname() method
     """
     # Create a minimal config
-    config = cp.ConfigBase(name="TestConfig", building_name="BUI1")
+    config = cp.ConfigBase(component_id=ComponentID(name="TestConfig"))
 
     # Verify config attributes
-    assert config.name == "TestConfig"
-    assert config.building_name == "BUI1"
+    assert config.component_id.name == "TestConfig"
+    assert config.component_id.building is None
+    assert config.component_id.unit is None
 
     # Test get_string_dict()
     string_dict = config.get_string_dict()
@@ -193,9 +206,9 @@ def test_config_base() -> None:
 
     # Test to_dict() - uses camelCase keys due to JSONWizard
     config_dict = config.to_dict()
-    assert "name" in config_dict
-    # JSONWizard converts snake_case to camelCase
-    assert "buildingName" in config_dict
+    # JSONWizard converts snake_case to camelCase, and the identity is nested
+    assert "componentId" in config_dict
+    assert config_dict["componentId"]["name"] == "TestConfig"
 
     # Test get_config_classname()
     config_classname = config.get_config_classname()
@@ -223,8 +236,7 @@ def test_example_component_with_config() -> None:
 
     # Create custom config
     config = example_component.ExampleComponentConfig(
-        building_name="TestBuilding",
-        name="CustomExampleComponent",
+        component_id=ComponentID(name="CustomExampleComponent"),
         loadtype=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.WATT,
         electricity=-1e3,
@@ -233,15 +245,12 @@ def test_example_component_with_config() -> None:
     )
 
     # Create component
-    component = example_component.ExampleComponent(
-        config=config, my_simulation_parameters=sim_params
-    )
+    component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
 
     # Verify component name
-    # Note: building_name is only included when multiple_buildings is True
+    # The identity carries no building, so the runtime name is just the plain name.
     comp_name = component.get_component_name()
     assert "CustomExampleComponent" in comp_name
-    # When multiple_buildings is False (default), only the component name is used
     assert comp_name == "CustomExampleComponent"
 
     # Verify inputs
@@ -280,8 +289,7 @@ def test_component_connections() -> None:
 
     # Create target component
     config2 = example_component.ExampleComponentConfig(
-        building_name="Building2",
-        name="TargetComponent",
+        component_id=ComponentID(name="TargetComponent", building="Building2"),
         loadtype=lt.LoadTypes.HEATING,
         unit=lt.Units.WATT,
         electricity=-1e3,
@@ -289,9 +297,7 @@ def test_component_connections() -> None:
         initial_temperature=25.0,
     )
 
-    target_component = example_component.ExampleComponent(
-        config=config2, my_simulation_parameters=sim_params
-    )
+    target_component = example_component.ExampleComponent(config=config2, my_simulation_parameters=sim_params)
 
     # Create an output from source
     source_output = cp.ComponentOutput(
@@ -299,6 +305,7 @@ def test_component_connections() -> None:
         field_name="ElectricityOutput",
         load_type=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.WATT,
+        component_id=cp.ComponentID("SourceComponent"),
     )
     source_output.global_index = 0
 
@@ -362,17 +369,14 @@ def test_add_default_connections_empty_raises() -> None:
 
     # Create a component instance
     config = example_component.ExampleComponentConfig(
-        building_name="Building1",
-        name="TargetComponent",
+        component_id=ComponentID(name="TargetComponent", building="Building1"),
         loadtype=lt.LoadTypes.HEATING,
         unit=lt.Units.WATT,
         electricity=-1e3,
         capacity=45 * 121.2,
         initial_temperature=25.0,
     )
-    component = example_component.ExampleComponent(
-        config=config, my_simulation_parameters=sim_params
-    )
+    component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
 
     # An empty connections list must raise a clear ValueError, not an IndexError.
     with pytest.raises(ValueError, match="connections list is empty"):
@@ -488,9 +492,7 @@ def test_example_component_simulation() -> None:
 
     # Create component with default config
     config = example_component.ExampleComponentConfig.get_default_example_component()
-    component = example_component.ExampleComponent(
-        config=config, my_simulation_parameters=sim_params
-    )
+    component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
 
     # Create outputs
     thermal_energy_delivered_output = cp.ComponentOutput(
@@ -499,6 +501,7 @@ def test_example_component_simulation() -> None:
         load_type=lt.LoadTypes.HEATING,
         unit=lt.Units.WATT,
         output_description="Thermal energy delivered",
+        component_id=cp.ComponentID("Source"),
     )
 
     # Set source output
@@ -534,18 +537,18 @@ def test_example_component_simulation() -> None:
 
 @pytest.mark.base
 def test_component_name_with_multiple_buildings() -> None:
-    """Test Component name generation with multiple buildings.
+    """Test Component name generation for a component that carries a building.
 
     This test verifies:
-    - Component name generation when multiple_buildings is True
-    - Component name includes building name when appropriate
+    - Component name generation when the structured identity carries a building
+    - The generated name is independent of the ``multiple_buildings`` simulation parameter
     """
-    # Create simulation parameters with multiple_buildings=True
+    # The multiple_buildings flag must no longer influence naming at all.
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     sim_params.multiple_buildings = True
 
     # Create a minimal component with ConfigBase
-    config = cp.ConfigBase(name="TestComponent", building_name="Building1")
+    config = cp.ConfigBase(component_id=ComponentID(name="TestComponent", building="Building1"))
 
     # Create a simple component subclass for testing
     class TestComponent(cp.Component):
@@ -579,12 +582,16 @@ def test_component_name_with_multiple_buildings() -> None:
     assert "TestComponent" in comp_name
     assert comp_name == "Building1_TestComponent"
 
-    # Test with multiple_buildings=False
+    # Flipping multiple_buildings must not change the name any more: the building is part of
+    # the component's own identity, not of a global simulation flag.
     sim_params.multiple_buildings = False
     component2 = TestComponent(config, sim_params)
     comp_name2 = component2.get_component_name()
-    assert comp_name2 == "TestComponent"
-    assert "Building1" not in comp_name2
+    assert comp_name2 == "Building1_TestComponent"
+
+    # A component whose identity carries no building keeps the bare name in both cases.
+    building_less = TestComponent(cp.ConfigBase(component_id=ComponentID(name="TestComponent")), sim_params)
+    assert building_less.get_component_name() == "TestComponent"
 
     log.information(f"Component name with multiple_buildings=True: {comp_name}")
     log.information(f"Component name with multiple_buildings=False: {comp_name2}")
@@ -620,7 +627,7 @@ def test_component_base_still_raises_not_implemented_for_state_hooks() -> None:
     StatelessComponent (opt-in) provides the no-op defaults.
     """
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    config = cp.ConfigBase(name="TestComponent", building_name="BUI1")
+    config = cp.ConfigBase(component_id=ComponentID(name="TestComponent"))
 
     class _StatefulComponent(cp.Component):
         """A minimal Component that does NOT override the state hooks."""
@@ -657,7 +664,7 @@ def test_stateless_component_noop_hooks_are_callable() -> None:
     inherited as no-ops.
     """
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    config = cp.ConfigBase(name="TestComponent", building_name="BUI1")
+    config = cp.ConfigBase(component_id=ComponentID(name="TestComponent"))
 
     class _MinimalStateless(cp.StatelessComponent):
         """Minimal stateless component for testing inherited no-op hooks."""
@@ -795,7 +802,7 @@ def test_add_component_input_and_connect_propagates_allow_unconnected() -> None:
     from hisim.dynamic_component import DynamicComponent
 
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    config = cp.ConfigBase(name="TestDynamic", building_name="BUI1")
+    config = cp.ConfigBase(component_id=ComponentID(name="TestDynamic"))
     dyn_component = DynamicComponent(
         my_component_inputs=[],
         my_component_outputs=[],
@@ -835,17 +842,13 @@ def test_electricity_meter_dhw_connection_allow_unconnected() -> None:
     connections = meter.get_default_connections_from_more_advanced_heat_pump()
 
     dhw_connections = [
-        c
-        for c in connections
-        if c.source_component_field_name == MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW
+        c for c in connections if c.source_component_field_name == MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW
     ]
     assert len(dhw_connections) == 1
     assert dhw_connections[0].allow_unconnected_mandatory is True
 
     sh_connections = [
-        c
-        for c in connections
-        if c.source_component_field_name == MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH
+        c for c in connections if c.source_component_field_name == MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH
     ]
     assert len(sh_connections) == 1
     assert sh_connections[0].allow_unconnected_mandatory is False

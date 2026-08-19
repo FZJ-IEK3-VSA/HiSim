@@ -1,4 +1,5 @@
 """Tests for the SimpleHeatSource component with constant-power configuration."""
+
 import json
 import warnings
 
@@ -37,8 +38,12 @@ def test_heat_source() -> None:
         config=my_heat_source_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    massflow = cp.ComponentOutput("Fake_massflow", "Fake_massflow", lt.LoadTypes.ANY, lt.Units.ANY)
-    temperature_input = cp.ComponentOutput("Fake_t_in", "Fake_t_in", lt.LoadTypes.ANY, lt.Units.ANY)
+    massflow = cp.ComponentOutput(
+        "Fake_massflow", "Fake_massflow", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("Fake_massflow")
+    )
+    temperature_input = cp.ComponentOutput(
+        "Fake_t_in", "Fake_t_in", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("Fake_t_in")
+    )
 
     number_of_outputs = fft.get_number_of_outputs(
         [
@@ -68,7 +73,9 @@ def test_heat_source() -> None:
     # Simulate
     my_heat_source.i_simulate(timestep, time_step_values, False)
 
-    assert time_step_values.values[my_heat_source.thermal_power_delivered_channel.global_index] == pytest.approx(5000.0, rel=1e-6)
+    assert time_step_values.values[my_heat_source.thermal_power_delivered_channel.global_index] == pytest.approx(
+        5000.0, rel=1e-6
+    )
 
 
 @pytest.mark.base
@@ -102,9 +109,7 @@ def test_config_from_dict_accepts_legacy_field_names() -> None:
     ``temperature_out_in_celsius``. Loading it must still work and emit a
     DeprecationWarning guiding users to the new names.
     """
-    config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_temperature(
-        building_name="BUI1"
-    )
+    config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_temperature()
 
     # from_dict path: to_dict() returns enum members, which from_dict accepts.
     legacy_dict = config.to_dict()
@@ -156,7 +161,7 @@ def test_get_default_config_near_surface_brine_temperature() -> None:
     """The renamed factory sets the near-surface brine temperature mode."""
     config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_near_surface_brine_temperature()
     assert config.heat_source_type is simple_heat_source.SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE
-    assert config.name == "HeatSourceVarBrineTemperature"
+    assert config.component_id.name == "HeatSourceVarBrineTemperature"
 
 
 @pytest.mark.base
@@ -165,4 +170,4 @@ def test_deprecated_get_default_config_var_brinetemperature_alias() -> None:
     with pytest.warns(DeprecationWarning, match="get_default_config_var_brinetemperature"):
         config = simple_heat_source.SimpleHeatSourceConfig.get_default_config_var_brinetemperature()
     assert config.heat_source_type is simple_heat_source.SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE
-    assert config.name == "HeatSourceVarBrineTemperature"
+    assert config.component_id.name == "HeatSourceVarBrineTemperature"

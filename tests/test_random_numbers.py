@@ -22,7 +22,7 @@ import random
 
 import pytest
 
-from hisim.component import DisplayConfig
+from hisim.component import ComponentID, DisplayConfig
 from hisim.components.random_numbers import RandomNumbers, RandomNumbersConfig
 from hisim.simulationparameters import SimulationParameters
 
@@ -30,8 +30,7 @@ from hisim.simulationparameters import SimulationParameters
 def _make_config(timesteps: int = 10, minimum: float = 1.0, maximum: float = 20.0) -> RandomNumbersConfig:
     """Build a small ``RandomNumbersConfig`` for testing."""
     return RandomNumbersConfig(
-        building_name="BUI1",
-        name="RandomNumbers",
+        component_id=ComponentID(name="RandomNumbers"),
         timesteps=timesteps,
         minimum=minimum,
         maximum=maximum,

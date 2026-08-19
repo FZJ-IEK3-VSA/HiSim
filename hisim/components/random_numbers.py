@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Owned
-from hisim.component import Component, SingleTimeStepValues, ConfigBase, DisplayConfig
+from hisim.component import ComponentID, Component, SingleTimeStepValues, ConfigBase, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 
@@ -24,8 +24,7 @@ class RandomNumbersConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return RandomNumbers.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     timesteps: int
     minimum: float
     maximum: float
@@ -34,8 +33,7 @@ class RandomNumbersConfig(ConfigBase):
     def get_default_config(cls) -> "RandomNumbersConfig":
         """Gets a default config."""
         return RandomNumbersConfig(
-            building_name="BUI1",
-            name="RandomNumbers",
+            component_id=ComponentID(name="RandomNumbers"),
             timesteps=100,
             minimum=1,
             maximum=20,

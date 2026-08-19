@@ -17,7 +17,7 @@ the misleading ``PowerToThird``/``EnergyToThird``) and the instance attribute
 
 import pytest
 
-from hisim.component import DisplayConfig
+from hisim.component import ComponentID, DisplayConfig
 from hisim.components.controller_l2_ptx_energy_management_system import (
     PTXController,
     PTXControllerConfig,
@@ -28,8 +28,7 @@ from hisim.simulationparameters import SimulationParameters
 def _make_config() -> PTXControllerConfig:
     """Return a minimal, valid ``PTXControllerConfig`` for instantiation."""
     return PTXControllerConfig(
-        building_name="BUI1",
-        name="L2PtXController",
+        component_id=ComponentID(name="L2PtXController"),
         nom_load=100.0,
         min_load=20.0,
         max_load=100.0,

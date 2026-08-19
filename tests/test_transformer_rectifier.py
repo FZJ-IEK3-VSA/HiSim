@@ -12,6 +12,7 @@ import pytest
 
 from hisim.components.transformer_rectifier import Transformer, TransformerConfig
 from hisim.component import (
+    ComponentID,
     Component,
     ComponentOutput,
     DisplayConfig,
@@ -28,8 +29,8 @@ def test_get_default_transformer_config_returns_config_with_documented_defaults(
     """``get_default_transformer_config()`` returns a ``TransformerConfig`` with the hardcoded fields."""
     config = TransformerConfig.get_default_transformer_config()
     assert isinstance(config, TransformerConfig)
-    assert config.building_name == "BUI1"
-    assert config.name == "Generic Transformer and rectifier Unit"
+    assert config.component_id.building is None
+    assert config.component_id.name == "Generic Transformer and rectifier Unit"
     assert config.efficiency == pytest.approx(0.95)
 
 
@@ -152,7 +153,7 @@ def test_transformer_simulate_scales_input_by_efficiency() -> None:
     and i_simulate is called without an external orchestrator.
     """
     mysim = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = TransformerConfig(building_name="BUI1", name="Transformer", efficiency=0.9)
+    config = TransformerConfig(component_id=ComponentID(name="Transformer"), efficiency=0.9)
     transformer = Transformer(my_simulation_parameters=mysim, config=config)
 
     # Create a source output that feeds the transformer's single input.
@@ -162,6 +163,7 @@ def test_transformer_simulate_scales_input_by_efficiency() -> None:
         load_type=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.KILOWATT,
         output_description="Source power",
+        component_id=ComponentID("Source"),
     )
     transformer.electricity_input.source_output = source_output
 
@@ -182,7 +184,7 @@ def test_transformer_simulate_scales_input_by_efficiency() -> None:
 def test_transformer_simulate_zero_efficiency_produces_zero_output() -> None:
     """An efficiency of 0 produces a zero output regardless of the input power."""
     mysim = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = TransformerConfig(building_name="BUI1", name="Transformer", efficiency=0.0)
+    config = TransformerConfig(component_id=ComponentID(name="Transformer"), efficiency=0.0)
     transformer = Transformer(my_simulation_parameters=mysim, config=config)
 
     source_output = ComponentOutput(
@@ -191,6 +193,7 @@ def test_transformer_simulate_zero_efficiency_produces_zero_output() -> None:
         load_type=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.KILOWATT,
         output_description="Source power",
+        component_id=ComponentID("Source"),
     )
     transformer.electricity_input.source_output = source_output
 

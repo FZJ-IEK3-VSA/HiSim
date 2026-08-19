@@ -8,6 +8,7 @@ They need no ``SimulationParameters`` and no I/O.
 
 import pytest
 
+from hisim.component import ComponentID
 from hisim.components.controller_l1_generic_runtime import (
     L1Config,
     L1GenericRuntimeControllerState,
@@ -21,19 +22,19 @@ from hisim.components.controller_l1_generic_runtime import (
 def test_get_default_config_returns_expected_fields() -> None:
     """get_default_config builds an L1Config with the documented default values."""
     config = L1Config.get_default_config("HP")
-    assert config.building_name == "BUI1"
-    assert config.name == "RuntimeController_HP"
+    assert config.component_id.building is None
+    assert config.component_id.name == "RuntimeController_HP"
     assert config.source_weight == 1
     assert config.min_operation_time_in_seconds == 3600
     assert config.min_idle_time_in_seconds == 900
 
 
 @pytest.mark.base
-def test_get_default_config_accepts_custom_building_name() -> None:
-    """Passing building_name overrides the default while leaving other fields unchanged."""
-    config = L1Config.get_default_config("HP", building_name="BUI2")
-    assert config.building_name == "BUI2"
-    assert config.name == "RuntimeController_HP"
+def test_get_default_config_accepts_custom_building() -> None:
+    """Passing a component_id with a building overrides the default identity, leaving the rest."""
+    config = L1Config.get_default_config("HP", component_id=ComponentID(name="RuntimeController_HP", building="BUI2"))
+    assert config.component_id.building == "BUI2"
+    assert config.component_id.name == "RuntimeController_HP"
     assert config.source_weight == 1
     assert config.min_operation_time_in_seconds == 3600
     assert config.min_idle_time_in_seconds == 900
@@ -43,19 +44,21 @@ def test_get_default_config_accepts_custom_building_name() -> None:
 def test_get_default_config_heatpump_returns_expected_fields() -> None:
     """get_default_config_heatpump builds an L1Config with the heat-pump defaults."""
     config = L1Config.get_default_config_heatpump("HP")
-    assert config.name == "L1RuntimeControllerHP"
-    assert config.building_name == "BUI1"
+    assert config.component_id.name == "L1RuntimeControllerHP"
+    assert config.component_id.building is None
     assert config.source_weight == 1
     assert config.min_operation_time_in_seconds == 3600 * 3
     assert config.min_idle_time_in_seconds == 3600
 
 
 @pytest.mark.base
-def test_get_default_config_heatpump_accepts_custom_building_name() -> None:
-    """get_default_config_heatpump honors a custom building_name."""
-    config = L1Config.get_default_config_heatpump("HP", building_name="BUI2")
-    assert config.building_name == "BUI2"
-    assert config.name == "L1RuntimeControllerHP"
+def test_get_default_config_heatpump_accepts_custom_building() -> None:
+    """get_default_config_heatpump honors a custom component_id."""
+    config = L1Config.get_default_config_heatpump(
+        "HP", component_id=ComponentID(name="L1RuntimeControllerHP", building="BUI2")
+    )
+    assert config.component_id.building == "BUI2"
+    assert config.component_id.name == "L1RuntimeControllerHP"
     assert config.source_weight == 1
     assert config.min_operation_time_in_seconds == 10800
     assert config.min_idle_time_in_seconds == 3600
@@ -65,8 +68,8 @@ def test_get_default_config_heatpump_accepts_custom_building_name() -> None:
 def test_get_default_config_empty_name_concatenation() -> None:
     """An empty name still produces a valid (if degenerate) controller name."""
     config = L1Config.get_default_config("")
-    assert config.name == "RuntimeController_"
-    assert config.building_name == "BUI1"
+    assert config.component_id.name == "RuntimeController_"
+    assert config.component_id.building is None
     assert config.source_weight == 1
 
 

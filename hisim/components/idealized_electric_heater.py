@@ -3,12 +3,12 @@ from __future__ import annotations
 
 # clean
 # Owned
-from typing import List
+from typing import Optional, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
 import hisim.component as cp
-from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.component import ComponentID, OpexCostDataClass, CapexCostDataClass
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import utils
@@ -34,20 +34,20 @@ class IdealizedHeaterConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return IdealizedElectricHeater.get_full_classname()  # type: ignore[no-any-return]
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     set_heating_temperature_for_building_in_celsius: float
     set_cooling_temperature_for_building_in_celsius: float
 
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> IdealizedHeaterConfig:
         """Gets a default Idealized Heater."""
+        if component_id is None:
+            component_id = ComponentID(name="IdealizedHeater")
         return IdealizedHeaterConfig(
-            building_name=building_name,
-            name="IdealizedHeater",
+            component_id=component_id,
             set_heating_temperature_for_building_in_celsius=19.5,
             set_cooling_temperature_for_building_in_celsius=23.5,
         )

@@ -194,13 +194,15 @@ def setup_components_and_connections(scenario_data: dict[str, Any], sim: simulat
                 utsp_connector_found = False
                 for wrapped_component in sim.wrapped_components:
                     if wrapped_component.my_component.get_full_classname() == "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector":
-                        if config_dict["name"] in wrapped_component.my_component.config.cars:
+                        if config_dict["component_id"]["name"] in wrapped_component.my_component.config.cars:
                             utsp_connector_found = True
                             car_info = GenericCarInformation(
                                 cast(UtspLpgConnector, wrapped_component.my_component),
                             ).data_dict_for_car_component[config_dict["household_name"]]
                 if not utsp_connector_found:
-                    raise ValueError(f"The car '{config_dict['name']}' was not associated with any UTSP connector.")
+                    raise ValueError(
+                        f"The car '{config_dict['component_id']['name']}' was not associated with any UTSP connector."
+                    )
                 component = component_class(
                     config=config,
                     my_simulation_parameters=sim_params,
@@ -258,7 +260,7 @@ def setup_components_and_connections(scenario_data: dict[str, Any], sim: simulat
                 )
 
         sim.add_component(component, connect_automatically=component_def["connect_automatically"])
-        component_dict[component.config.name] = component
+        component_dict[component.config.component_id.name] = component
 
     # Connect components
     for conn in scenario_data.get("connections", []):

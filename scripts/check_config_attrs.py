@@ -72,7 +72,7 @@ DYNAMIC_BASES = {"JSONWizard", "ConfigBase", "object", "ABC", "Generic"}
 # Annotation wrappers to unwrap when looking for the underlying class name.
 TYPING_WRAPPERS = {"Optional", "List", "Sequence", "Iterable", "Union"}
 
-SKIP_DIRS = {".git", ".mypy_cache", "__pycache__", "build", "dist", "node_modules", ".venv"}
+SKIP_DIRS = {".git", ".mypy_cache", "__pycache__", "build", "dist", "node_modules", ".venv", ".claude"}
 
 DEFAULT_PATHS = ("hisim", "system_setups", "tests")
 
@@ -267,6 +267,31 @@ def self_config_attrs(cls: ast.ClassDef, configs: Dict[str, Set[str]]) -> Dict[s
     return stored
 
 
+def factory_config_class(call: ast.Call, configs: Dict[str, Set[str]]) -> Optional[str]:
+    """Returns the config class a factory-style call produces, or None.
+
+    Recognizes ``SomeConfig.get_default_config()`` and module-qualified spellings like
+    ``advanced_battery_bslib.BatteryConfig.get_scaled_battery(...)`` by taking the name
+    immediately left of the called method and checking it against the config registry.
+    A small denylist excludes the classmethods that return strings rather than config
+    instances, so that e.g. ``SomeConfig.get_main_classname().split(...)`` is not
+    misread as an attribute access on a config.
+    """
+    non_instance_methods = {"get_main_classname", "get_full_classname", "get_classname", "get_string_dict"}
+    func = call.func
+    if not isinstance(func, ast.Attribute) or func.attr in non_instance_methods:
+        return None
+    base = func.value
+    base_name = None
+    if isinstance(base, ast.Name):
+        base_name = base.id
+    elif isinstance(base, ast.Attribute):
+        base_name = base.attr
+    if base_name in configs:
+        return base_name
+    return None
+
+
 def check_function(
     fn: ast.AST,
     path: Path,
@@ -287,6 +312,17 @@ def check_function(
             source = local.get(sub.value.id)
             if source:
                 local.update({t.id: source for t in sub.targets if isinstance(t, ast.Name)})
+        # A local bound from a config-class factory call:
+        #   my_config = BatteryConfig.get_default_config()
+        # This is how virtually every system setup obtains its configs, and it is the
+        # binding form under which the ComponentID migration's dead-field writes
+        # (``my_config.name = "Battery1"`` after the field was removed) went unnoticed:
+        # assignments to undeclared fields of a non-frozen dataclass create a new
+        # attribute silently instead of raising.
+        elif isinstance(sub, ast.Assign) and isinstance(sub.value, ast.Call):
+            factory_class = factory_config_class(sub.value, configs)
+            if factory_class:
+                local.update({t.id: factory_class for t in sub.targets if isinstance(t, ast.Name)})
 
     for sub in ast.walk(fn):
         if not isinstance(sub, ast.Attribute):
@@ -302,6 +338,12 @@ def check_function(
             and value.attr in self_attrs
         ):
             config_class, variable = self_attrs[value.attr], f"self.{value.attr}"
+        elif isinstance(value, ast.Call):
+            # An attribute read directly off a factory call, without an intermediate
+            # variable:  SomeConfig.get_default_config().name
+            factory_class = factory_config_class(value, configs)
+            if factory_class:
+                config_class, variable = factory_class, f"{factory_class}.<factory>()"
         if config_class and sub.attr not in configs[config_class]:
             findings.append(
                 Finding(path, sub.lineno, str(variable), sub.attr, config_class, configs[config_class])

@@ -7,15 +7,14 @@ from hisim.components import controller_l1_electrolyzer_h2
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.component import ComponentID
 
 
 @pytest.mark.base
 def test_electrolyzer_controller() -> None:
     """Test electrolyzer controller."""
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2021, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
 
     name: str = "Test-Controller"
     nom_load: float = 800.0  # [kW]
@@ -31,8 +30,7 @@ def test_electrolyzer_controller() -> None:
     # Setup Electrolyzer
 
     my_controller_config = controller_l1_electrolyzer_h2.ElectrolyzerControllerConfig(
-        building_name="BUI1",
-        name=name,
+        component_id=ComponentID(name=name),
         nom_load=nom_load,
         min_load=min_load,
         max_load=max_load,
@@ -47,7 +45,11 @@ def test_electrolyzer_controller() -> None:
     # ===================================================================================================================
     # Set Fake Inputs
     load_input = cp.ComponentOutput(
-        "FakeProvidedLoad", "Provided Load", lt.LoadTypes.ELECTRICITY, lt.Units.KILOWATT
+        "FakeProvidedLoad",
+        "Provided Load",
+        lt.LoadTypes.ELECTRICITY,
+        lt.Units.KILOWATT,
+        component_id=cp.ComponentID("FakeProvidedLoad"),
     )
 
     number_of_outputs = fft.get_number_of_outputs([my_controller, load_input])

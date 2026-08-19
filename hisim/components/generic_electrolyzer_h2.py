@@ -2,7 +2,7 @@
 
 # clean
 from pathlib import Path
-from typing import List, Any
+from typing import Optional, List, Any
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -10,7 +10,7 @@ from scipy.interpolate import interp1d
 import numpy as np
 
 # Import modules from HiSim
-from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
+from hisim.component import ComponentID, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
@@ -36,8 +36,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return Electrolyzer.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     electrolyzer_type: str
     nom_load: float  # [kW]
     max_load: float  # [kW]
@@ -51,12 +50,13 @@ class ElectrolyzerConfig(cp.ConfigBase):
     @classmethod
     def get_default_alkaline_electrolyzer_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Gets a default Alkaline Eletrolyzer."""
+        if component_id is None:
+            component_id = ComponentID(name="Alkaline_electrolyzer")
         config = ElectrolyzerConfig(
-            building_name=building_name,
-            name="Alkaline_electrolyzer",
+            component_id=component_id,
             electrolyzer_type="Alkaline",
             nom_load=100.0,  # [kW]
             max_load=110.0,  # [kW]
@@ -92,15 +92,16 @@ class ElectrolyzerConfig(cp.ConfigBase):
     def config_electrolyzer(
         cls,
         electrolyzer_name: str,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Initializes the config variables based on the JSON-file."""
 
+        if component_id is None:
+            component_id = ComponentID(name="Electrolyzer")
         config_json = cls.read_config(electrolyzer_name)
 
         config = ElectrolyzerConfig(
-            building_name=building_name,
-            name="Electrolyzer",  # config_json.get("name", "")
+            component_id=component_id,  # config_json.get("name", "")
             electrolyzer_type=config_json.get("electrolyzer_type"),
             nom_load=config_json.get("nom_load", 0.0),
             max_load=config_json.get("max_load", 0.0),
@@ -206,7 +207,7 @@ class Electrolyzer(cp.Component):
         # =================================================================================================================================
         # Input channels
         self.load_input: ComponentInput = self.add_input(
-            self.electrolyzerconfig.name,
+            self.electrolyzerconfig.component_id.name,
             Electrolyzer.LoadInput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
@@ -215,7 +216,7 @@ class Electrolyzer(cp.Component):
 
         # get the state from the controller
         self.input_state: ComponentInput = self.add_input(
-            self.electrolyzerconfig.name,
+            self.electrolyzerconfig.component_id.name,
             Electrolyzer.InputState,
             lt.LoadTypes.ACTIVATION,
             lt.Units.ANY,
@@ -225,7 +226,7 @@ class Electrolyzer(cp.Component):
         # Output channels
 
         self.current_load: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.name,
+            self.electrolyzerconfig.component_id.name,
             Electrolyzer.CurrentLoad,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,  # for EMS
@@ -233,7 +234,7 @@ class Electrolyzer(cp.Component):
         )
 
         self.total_energy_consumed: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.name,
+            self.electrolyzerconfig.component_id.name,
             Electrolyzer.TotalEnergyConsumed,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KWH,
@@ -242,7 +243,7 @@ class Electrolyzer(cp.Component):
 
         # Set total ramp-up time output
         self.total_ramp_up_time: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.name,
+            self.electrolyzerconfig.component_id.name,
             Electrolyzer.TotalRampUpTime,
             lt.LoadTypes.TIME,
             lt.Units.SECONDS,
@@ -251,7 +252,7 @@ class Electrolyzer(cp.Component):
 
         # Set total ramp-down time output
         self.total_ramp_down_time: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.name,
+            self.electrolyzerconfig.component_id.name,
             Electrolyzer.TotalRampDownTime,
             lt.LoadTypes.TIME,
             lt.Units.SECONDS,
@@ -260,7 +261,7 @@ class Electrolyzer(cp.Component):
 
         # Set state output
         self.electrolyzer_state: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.name,
+            self.electrolyzerconfig.component_id.name,
             Electrolyzer.ElectrolyzerState,
             lt.LoadTypes.ACTIVATION,
             lt.Units.ANY,
@@ -269,7 +270,7 @@ class Electrolyzer(cp.Component):
 
         # current hydrogen output
         self.hydrogen_flow_rate: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.name,
+            self.electrolyzerconfig.component_id.name,
             Electrolyzer.CurrentHydrogenFlowRate,
             lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG_PER_SEC,
@@ -277,7 +278,7 @@ class Electrolyzer(cp.Component):
         )
         # Total hydrogen produced
         self.total_hydrogen: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.name,
+            self.electrolyzerconfig.component_id.name,
             Electrolyzer.TotalHydrogenProduced,
             lt.LoadTypes.GREEN_HYDROGEN,
             lt.Units.KG,
@@ -285,7 +286,7 @@ class Electrolyzer(cp.Component):
         )
         # current oxygen output
         self.oxygen_flow_rate: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.name,
+            self.electrolyzerconfig.component_id.name,
             Electrolyzer.CurrentOxygenFlowRate,
             lt.LoadTypes.OXYGEN,
             lt.Units.KG_PER_SEC,
@@ -293,7 +294,7 @@ class Electrolyzer(cp.Component):
         )
         # Total oxygen produced
         self.total_oxygen: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.name,
+            self.electrolyzerconfig.component_id.name,
             Electrolyzer.TotalOxygenProduced,
             lt.LoadTypes.OXYGEN,
             lt.Units.KG,
@@ -301,7 +302,7 @@ class Electrolyzer(cp.Component):
         )
         # current water demand
         self.water_flow_rate: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.name,
+            self.electrolyzerconfig.component_id.name,
             Electrolyzer.CurrentWaterFlowRate,
             lt.LoadTypes.WATER,
             lt.Units.KG_PER_SEC,
@@ -309,7 +310,7 @@ class Electrolyzer(cp.Component):
         )
         # Total water demand
         self.total_water: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.name,
+            self.electrolyzerconfig.component_id.name,
             Electrolyzer.TotalWaterDemand,
             lt.LoadTypes.WATER,
             lt.Units.KG,
@@ -317,7 +318,7 @@ class Electrolyzer(cp.Component):
         )
         # Current efficiency
         self.current_efficiency_state: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.name,
+            self.electrolyzerconfig.component_id.name,
             Electrolyzer.CurrentEfficiency,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
@@ -326,7 +327,7 @@ class Electrolyzer(cp.Component):
 
         # Total operating time
         self.operating_time: ComponentOutput = self.add_output(
-            self.electrolyzerconfig.name,
+            self.electrolyzerconfig.component_id.name,
             Electrolyzer.OperatingTime,
             lt.LoadTypes.TIME,
             lt.Units.HOURS,

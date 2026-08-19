@@ -27,25 +27,21 @@ def test_solar_thermal_system() -> None:
     )
 
     # Configure weather
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=mysim
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=mysim)
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
 
     # Configure solar thermal
-    my_sts_config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(
-        area_m2=4
-    )
-    my_sts = solar_thermal_system.SolarThermalSystem(
-        config=my_sts_config, my_simulation_parameters=mysim
-    )
+    my_sts_config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(area_m2=4)
+    my_sts = solar_thermal_system.SolarThermalSystem(config=my_sts_config, my_simulation_parameters=mysim)
 
     state_controller = component.ComponentOutput(
-        "FakeControlState", "ControlSignal", LoadTypes.ANY, Units.BINARY
+        "FakeControlState",
+        "ControlSignal",
+        LoadTypes.ANY,
+        Units.BINARY,
+        component_id=component.ComponentID("FakeControlState"),
     )
     my_sts.control_signal_channel.source_output = state_controller
 
@@ -53,12 +49,8 @@ def test_solar_thermal_system() -> None:
     my_sts.i_prepare_simulation()
 
     # Outputs
-    number_of_outputs = fft.get_number_of_outputs(
-        [my_weather, my_sts, state_controller]
-    )
-    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
-        number_of_outputs
-    )
+    number_of_outputs = fft.get_number_of_outputs([my_weather, my_sts, state_controller])
+    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(number_of_outputs)
 
     my_sts.t_out_channel.source_output = my_weather.air_temperature_output
     my_sts.dhi_channel.source_output = my_weather.dhi_output
@@ -70,17 +62,10 @@ def test_solar_thermal_system() -> None:
     timestep = 12 * 60 + 60 * 24 * 183  # 3rd July at noon
     my_weather.i_simulate(timestep, stsv, False)
     my_sts.i_simulate(timestep, stsv, False)
-    log.information(
-        f"heat power output [W]: {stsv.values[my_sts.thermal_power_w_output_channel.global_index]}"
-    )
+    log.information(f"heat power output [W]: {stsv.values[my_sts.thermal_power_w_output_channel.global_index]}")
     print(stsv.values)
 
-    assert (
-        pytest.approx(
-            stsv.values[my_sts.thermal_power_w_output_channel.global_index]
-        )
-        == 3260.3754293283737
-    )
+    assert pytest.approx(stsv.values[my_sts.thermal_power_w_output_channel.global_index]) == 3260.3754293283737
 
 
 @pytest.mark.base
@@ -105,9 +90,7 @@ def test_precalc() -> None:
     diffuse_horizontal_irradiance_w_m2 = 0
     ambient_air_temperature_deg_c = 0
     timestep = 0
-    time_ind = datetime.datetime(2021, 1, 1) + datetime.timedelta(
-        0, 60 * timestep
-    )
+    time_ind = datetime.datetime(2021, 1, 1) + datetime.timedelta(0, 60 * timestep)
 
     precalc_data = flat_plate_precalc(
         lat=coordinates.latitude_in_degrees,
@@ -119,12 +102,8 @@ def test_precalc() -> None:
         a_2=a_2_w_m2_k,  # thermal loss parameter 2
         temp_collector_inlet=temperature_collector_inlet_deg_c,  # collectors inlet temperature
         delta_temp_n=delta_temperature_n_k,  # temperature difference between collector inlet and mean temperature
-        irradiance_global=pd.Series(
-            global_horizontal_irradiance_w_m2, index=[time_ind]
-        ),
-        irradiance_diffuse=pd.Series(
-            diffuse_horizontal_irradiance_w_m2, index=[time_ind]
-        ),
+        irradiance_global=pd.Series(global_horizontal_irradiance_w_m2, index=[time_ind]),
+        irradiance_diffuse=pd.Series(diffuse_horizontal_irradiance_w_m2, index=[time_ind]),
         temp_amb=pd.Series(ambient_air_temperature_deg_c, index=[time_ind]),
     )
 

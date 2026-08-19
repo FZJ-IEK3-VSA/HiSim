@@ -7,13 +7,14 @@ In addition the controller takes care of minimum operation and indle times and t
 # clean
 import importlib
 from dataclasses import dataclass
-from typing import List
+from typing import Optional, List
 from dataclasses_json import dataclass_json
 
 from hisim import utils
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 
 
 @dataclass_json
@@ -21,9 +22,7 @@ from hisim.simulationparameters import SimulationParameters
 class L1ElectrolyzerControllerConfig(cp.ConfigBase):
     """Electrolyzer Controller Config."""
 
-    building_name: str
-    #: name of the device
-    name: str
+    component_id: ComponentID
     #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int
     # minimal operation time of heat source
@@ -37,12 +36,13 @@ class L1ElectrolyzerControllerConfig(cp.ConfigBase):
 
     @staticmethod
     def get_default_config(
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "L1ElectrolyzerControllerConfig":
         """Returns the default configuration of an electrolyzer controller."""
+        if component_id is None:
+            component_id = ComponentID(name="L1 Electrolyzer Controller")
         config = L1ElectrolyzerControllerConfig(
-            building_name=building_name,
-            name="L1 Electrolyzer Controller",
+            component_id=component_id,
             source_weight=1,
             min_operation_time_in_seconds=14400,
             min_idle_time_in_seconds=7200,
@@ -115,7 +115,7 @@ class L1GenericElectrolyzerController(cp.Component):
     AvailableElectricity = "AvailableElectricity"
 
     # Similar components to connect to:
-    # 1. building_name
+    # 1. component_id
     @utils.measure_execution_time
     def __init__(
         self,

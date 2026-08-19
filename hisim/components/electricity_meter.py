@@ -10,7 +10,7 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
-from hisim.component import ComponentInput, OpexCostDataClass, CapexCostDataClass
+from hisim.component import ComponentID, ComponentInput, OpexCostDataClass, CapexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -33,8 +33,7 @@ class ElectricityMeterConfig(cp.ConfigBase):
         """Return the fully qualified class name of the main component class."""
         return ElectricityMeter.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     #: CO2 footprint of investment in kg
     device_co2_footprint_in_kg: Optional[float]
     #: cost for investment in Euro
@@ -50,12 +49,13 @@ class ElectricityMeterConfig(cp.ConfigBase):
     def get_electricity_meter_default_config(
         cls,
         name: str = "ElectricityMeter",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "ElectricityMeterConfig":
         """Gets a default ElectricityMeter."""
+        if component_id is None:
+            component_id = ComponentID(name=name)
         return ElectricityMeterConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             # capex and device emissions are calculated in get_cost_capex function by default
             device_co2_footprint_in_kg=None,
             investment_costs_in_euro=None,
@@ -95,7 +95,7 @@ class ElectricityMeter(DynamicComponent):
     ):
         """Initialize the component."""
         self.grid_energy_balancer_config = config
-        self.name = self.grid_energy_balancer_config.name
+        self.name = self.grid_energy_balancer_config.component_id.name
         self.my_component_inputs: List[DynamicConnectionInput] = []
         self.my_component_outputs: List[DynamicConnectionOutput] = []
         self.my_simulation_parameters = my_simulation_parameters
@@ -143,7 +143,7 @@ class ElectricityMeter(DynamicComponent):
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityProductionInWatt} will follow.",
         )
-        if any(word in config.building_name for word in lt.DistrictNames):
+        if lt.DistrictNames.is_district(config.component_id.building):
             self.surplus_electricity_unused_to_district_ems_from_building_ems_output: cp.ComponentOutput = self.add_output(
                 object_name=self.component_name,
                 field_name=self.SurplusUnusedFromBuildingEMSOutput,
@@ -157,7 +157,7 @@ class ElectricityMeter(DynamicComponent):
                         lt.ComponentType.BUILDINGS,
                         lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
                     ]
-                    if any(word in config.building_name for word in lt.DistrictNames)
+                    if lt.DistrictNames.is_district(config.component_id.building)
                     else []
                 ),
             )
@@ -174,7 +174,7 @@ class ElectricityMeter(DynamicComponent):
                         lt.ComponentType.BUILDINGS,
                         lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
                     ]
-                    if any(word in config.building_name for word in lt.DistrictNames)
+                    if lt.DistrictNames.is_district(config.component_id.building)
                     else []
                 ),
             )
@@ -190,7 +190,7 @@ class ElectricityMeter(DynamicComponent):
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                     lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
                 ]
-                if any(word in config.building_name for word in lt.DistrictNames)
+                if lt.DistrictNames.is_district(config.component_id.building)
                 else []
             ),
         )
@@ -510,7 +510,7 @@ class ElectricityMeter(DynamicComponent):
             [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
         )
 
-        if any(word in self.config.building_name for word in lt.DistrictNames):
+        if lt.DistrictNames.is_district(self.config.component_id.building):
             production_inputs_building = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION, lt.ComponentType.BUILDINGS])
 
             building_electricity_surplus_unused = (

@@ -4,7 +4,7 @@
 
 # Generic/Built-in
 import copy
-from typing import Any
+from typing import Optional, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -15,6 +15,7 @@ from hisim import utils
 from hisim.components.generic_ev_charger import SimpleStorageState
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.component import ComponentID
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -88,8 +89,7 @@ class GenericBatteryConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return GenericBattery.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     manufacturer: str
     model: str
     soc: float
@@ -99,12 +99,13 @@ class GenericBatteryConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "GenericBatteryConfig":
         """Gets a default config."""
+        if component_id is None:
+            component_id = ComponentID(name="Generic Battery")
         return GenericBatteryConfig(
-            building_name=building_name,
-            name="Generic Battery",
+            component_id=component_id,
             manufacturer="sonnen",
             model="sonnenBatterie 10 - 11,5 kWh",
             soc=10 / 15,
@@ -123,18 +124,18 @@ class BatteryControllerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return BatteryController.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
 
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "BatteryControllerConfig":
         """Gets a default config."""
+        if component_id is None:
+            component_id = ComponentID(name="Battery Controller")
         return BatteryControllerConfig(
-            building_name=building_name,
-            name="Battery Controller",
+            component_id=component_id,
         )
 
 

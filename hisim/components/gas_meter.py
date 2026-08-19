@@ -15,7 +15,7 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
-from hisim.component import ComponentInput, ComponentOutput, OpexCostDataClass, CapexCostDataClass
+from hisim.component import ComponentID, ComponentInput, ComponentOutput, OpexCostDataClass, CapexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -41,8 +41,7 @@ class GasMeterConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return str(GasMeter.get_full_classname())
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     total_energy_from_grid_in_kwh: float
     gas_loadtype: lt.LoadTypes
     #: CO2 footprint of investment in kg
@@ -59,13 +58,14 @@ class GasMeterConfig(cp.ConfigBase):
     @classmethod
     def get_gas_meter_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         gas_loadtype: lt.LoadTypes = lt.LoadTypes.GAS
     ) -> "GasMeterConfig":
         """Gets a default GasMeter."""
+        if component_id is None:
+            component_id = ComponentID(name="GasMeter")
         return GasMeterConfig(
-            building_name=building_name,
-            name="GasMeter",
+            component_id=component_id,
             total_energy_from_grid_in_kwh=0.0,
             gas_loadtype=gas_loadtype,
             # capex and device emissions are calculated in get_cost_capex function by default
@@ -100,7 +100,7 @@ class GasMeter(DynamicComponent):
     ) -> None:
         """Initialize the component."""
         self.grid_energy_balancer_config = config
-        self.name = self.grid_energy_balancer_config.name
+        self.name = self.grid_energy_balancer_config.component_id.name
         self.my_component_inputs: List[DynamicConnectionInput] = []
         self.my_component_outputs: List[DynamicConnectionOutput] = []
         self.my_simulation_parameters = my_simulation_parameters

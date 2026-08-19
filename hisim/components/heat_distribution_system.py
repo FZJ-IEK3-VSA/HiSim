@@ -17,7 +17,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.component import ComponentID, OpexCostDataClass, CapexCostDataClass
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
@@ -80,8 +80,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return HeatDistribution.get_full_classname()  # type: ignore[no-any-return]
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     heating_system: HeatDistributionSystemType
     water_mass_flow_rate_in_kg_per_second: float
     absolute_conditioned_floor_area_in_m2: float
@@ -104,13 +103,14 @@ class HeatDistributionConfig(cp.ConfigBase):
         absolute_conditioned_floor_area_in_m2: float,
         heating_system: HeatDistributionSystemType,
         name: str = "HeatDistributionSystem",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = PositionHotWaterStorageInSystemSetup.PARALLEL,  # noqa: E501
     ) -> "HeatDistributionConfig":
         """Get a default heat distribution system config."""
+        if component_id is None:
+            component_id = ComponentID(name=name)
         config = HeatDistributionConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             heating_system=heating_system,
             water_mass_flow_rate_in_kg_per_second=round(water_mass_flow_rate_in_kg_per_second, 2),
             absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
@@ -848,8 +848,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return HeatDistributionController.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     heating_system: HeatDistributionSystemType
     set_heating_threshold_outside_temperature_in_celsius: float
     heating_reference_temperature_in_celsius: float
@@ -867,13 +866,14 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         heating_reference_temperature_in_celsius: float = -7.0,
         heating_system: HeatDistributionSystemType = HeatDistributionSystemType.FLOORHEATING,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "HeatDistributionControllerConfig":
         """Gets a default HeatDistribution Controller."""
 
+        if component_id is None:
+            component_id = ComponentID(name="HeatDistributionController")
         return HeatDistributionControllerConfig(
-            building_name=building_name,
-            name="HeatDistributionController",
+            component_id=component_id,
             heating_system=heating_system,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
@@ -908,18 +908,19 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         heating_reference_temperature_in_celsius: float = -7.0,
         heating_system: HeatDistributionSystemType = HeatDistributionSystemType.FLOORHEATING,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "HeatDistributionControllerConfig":
         """Gets a default HeatDistribution Controller."""
         # avoid that inefficient building cool out in summer time (in the mornings and evenings)
+        if component_id is None:
+            component_id = ComponentID(name="HeatDistributionController")
         set_heating_threshold_outside_temperature_in_celsius = HeatDistributionControllerConfig.set_heating_threshold_temperature_based_on_building_efficiency(
             specific_heating_load_of_building_in_watt_per_m2=specific_heating_load_of_building_in_watt_per_m2,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
         )
 
         return HeatDistributionControllerConfig(
-            building_name=building_name,
-            name="HeatDistributionController",
+            component_id=component_id,
             heating_system=heating_system,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_in_celsius,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,

@@ -15,6 +15,7 @@ from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import air_conditioner
+from hisim.component import ComponentID
 
 
 __authors__ = "Marwa Alfouly, Sebastian Dickler, Kristina Dabrock"
@@ -100,8 +101,7 @@ def setup_function(
         "ES", "HeatingReferenceTemperature"
     ]
     my_building_config = building.BuildingConfig(
-        building_name="BUI1",
-        name="Building",
+        component_id=ComponentID(name="Building"),
         building_code="ES.ME.SFH.04.Gen.ReEx.001.003",
         building_heat_capacity_class="medium",
         initial_internal_temperature_in_celsius=22,
@@ -159,7 +159,6 @@ def setup_function(
     pv_co2_footprint = pv_system_power_in_watt * 1e-3 * 130.7
     pv_cost = pv_system_power_in_watt * 1e-3 * 535.81
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
-        building_name="BUI1",
         time=year,
         location=location,
         power_in_watt=pv_system_power_in_watt,
@@ -172,7 +171,7 @@ def setup_function(
         azimuth=180,
         inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
         source_weight=-1,
-        name="PVSystem",
+        component_id=ComponentID(name="PVSystem"),
         device_co2_footprint_in_kg=pv_co2_footprint,
         investment_costs_in_euro=pv_cost,
         maintenance_costs_in_euro_per_year=0.01 * pv_cost,

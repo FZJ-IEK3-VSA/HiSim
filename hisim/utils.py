@@ -8,6 +8,7 @@ import inspect
 import itertools
 import json
 import os
+import dataclasses
 from dataclasses import dataclass
 from functools import lru_cache
 from functools import reduce as freduce
@@ -351,7 +352,8 @@ def get_cache_file(
 
     Args:
         component_key: filename prefix for the component type.
-        parameter_class: dataclass with a ``to_json`` method; ``building_name`` is nulled before hashing.
+        parameter_class: dataclass with a ``to_json`` method; the building of its
+            ``component_id`` is nulled before hashing.
         my_simulation_parameters: provides the cache directory and a unique key appended before hashing.
         cache_dir_path: optional override; defaults to ``my_simulation_parameters.cache_dir_path``.
 
@@ -362,8 +364,12 @@ def get_cache_file(
         ValueError: if ``my_simulation_parameters`` is None or the JSON string is too short.
     """
     parameter_class_copy = copy.deepcopy(parameter_class)
-    if hasattr(parameter_class_copy, "building_name"):
-        setattr(parameter_class_copy, "building_name", None)
+    component_id = getattr(parameter_class_copy, "component_id", None)
+    if component_id is not None:
+        # The cached data depends on what the component is and how it is parameterized, not on
+        # which building it happens to sit in, so the building is removed from the identity
+        # before the configuration is hashed. The identity is frozen, hence the replacement.
+        setattr(parameter_class_copy, "component_id", dataclasses.replace(component_id, building=None))
     json_str = parameter_class_copy.to_json()
     if my_simulation_parameters is None:
         raise ValueError("Simulation parameters was none.")

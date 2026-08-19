@@ -171,7 +171,7 @@ def test_cluster_house_for_several_time_resolutions():
     print("Yearly results including KPIs")
     # The yearly-results CSV (yearly_<days>_days.csv in
     # result_data_for_scenario_evaluation) keys its "variable" column by the
-    # configured component name (Component.component_name == config.name for this
+    # configured component name (Component.component_name == config.component_id.name for this
     # single-building simulation), not by the Python class name -- see
     # PostProcessingChartController.get_variable_name_and_unit_from_ppdt_results_column,
     # which builds the variable name from the component output's pretty name
@@ -182,7 +182,7 @@ def test_cluster_house_for_several_time_resolutions():
     # the configured name instead. PVSystem's and Weather's configured names equal
     # their class names, so their get_classname() matches their yearly-result keys.
     utsp_connector_name = (
-        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config().name
+        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config().component_id.name
     )
     # Predefined-input components whose aggregated yearly results must be stable
     # across the three time resolutions (15/30/60 min).
@@ -229,7 +229,7 @@ def test_cluster_house_for_several_time_resolutions():
     print("\n")
     print("Opex consumptions in kWh")
     # The opex CSV (operational_costs_co2_footprint.csv) indexes components by their
-    # configured component name (Component.component_name == config.name for this
+    # configured component name (Component.component_name == config.component_id.name for this
     # single-building simulation), not by the Python class name. The load-profile
     # generator is configured with the name "UTSPConnector"
     # (see UtspLpgConnectorConfig.get_default_utsp_connector_config), so its class

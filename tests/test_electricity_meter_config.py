@@ -16,6 +16,7 @@ from hisim.components.electricity_meter import (
     ElectricityMeterConfig,
     ElectricityMeterState,
 )
+from hisim.component import ComponentID
 
 
 _OPTIONAL_FIELDS: tuple[str, ...] = (
@@ -44,30 +45,30 @@ def test_get_electricity_meter_default_config_defaults() -> None:
     """``get_electricity_meter_default_config()`` returns the documented defaults."""
     config: ElectricityMeterConfig = ElectricityMeterConfig.get_electricity_meter_default_config()
     assert isinstance(config, ElectricityMeterConfig)
-    assert config.name == "ElectricityMeter"
-    assert config.building_name == "BUI1"
+    assert config.component_id.name == "ElectricityMeter"
+    assert config.component_id.building is None
     _assert_all_optional_fields_are_none(config)
 
 
 @pytest.mark.base
 def test_get_electricity_meter_default_config_custom_name_and_building() -> None:
-    """Passing ``name`` and ``building_name`` sets both while keeping Optional fields ``None``."""
+    """Passing a full component_id sets name and building while keeping Optional fields ``None``."""
     config: ElectricityMeterConfig = ElectricityMeterConfig.get_electricity_meter_default_config(
-        name="MyMeter", building_name="HouseA"
+        component_id=ComponentID(name="MyMeter", building="HouseA")
     )
     assert isinstance(config, ElectricityMeterConfig)
-    assert config.name == "MyMeter"
-    assert config.building_name == "HouseA"
+    assert config.component_id.name == "MyMeter"
+    assert config.component_id.building == "HouseA"
     _assert_all_optional_fields_are_none(config)
 
 
 @pytest.mark.base
 def test_get_electricity_meter_default_config_name_only_defaults_building() -> None:
-    """Passing only ``name`` leaves ``building_name`` at its ``BUI1`` default."""
+    """Passing only ``name`` leaves the identity without a building."""
     config: ElectricityMeterConfig = ElectricityMeterConfig.get_electricity_meter_default_config(name="X")
     assert isinstance(config, ElectricityMeterConfig)
-    assert config.name == "X"
-    assert config.building_name == "BUI1"
+    assert config.component_id.name == "X"
+    assert config.component_id.building is None
     _assert_all_optional_fields_are_none(config)
 
 

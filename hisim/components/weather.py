@@ -16,6 +16,7 @@ import pvlib
 
 from hisim import loadtypes as lt
 from hisim import log, utils
+from hisim.component import ComponentID
 from hisim.component import Component, ComponentOutput, ConfigBase, SingleTimeStepValues, DisplayConfig, OpexCostDataClass, CapexCostDataClass
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
@@ -388,8 +389,7 @@ class WeatherConfig(ConfigBase):
     the camelCase dialect of the otherwise-shadowed JSONWizard base.
     """
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     location: str
     source_path: str
     data_source: WeatherDataSourceEnum
@@ -405,12 +405,14 @@ class WeatherConfig(ConfigBase):
         cls,
         location_entry: Union[LocationEnum, str],
         name: str = "Weather",
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         weather_direct_filepath: Optional[str] = None,
         weather_direct_data_source: Optional[WeatherDataSourceEnum] = None,
     ) -> "WeatherConfig":
         """Gets the default configuration for a given location."""
 
+        if component_id is None:
+            component_id = ComponentID(name=name)
         enum_entry = None
         # If location_entry is enum entry, use it directly
         if isinstance(location_entry, LocationEnum):
@@ -454,8 +456,7 @@ class WeatherConfig(ConfigBase):
             data_source = weather_direct_data_source
 
         config = WeatherConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             location=location,
             source_path=path,
             data_source=data_source,
@@ -689,7 +690,9 @@ class Weather(Component):
             source_enum=self.weather_config.data_source,
         )
         self.simulation_repository.set_entry("weather_location", location_dict)
-        cachefound, cache_filepath = utils.get_cache_file(self.config.name, self.weather_config, self.my_simulation_parameters)
+        cachefound, cache_filepath = utils.get_cache_file(
+            self.config.component_id.name, self.weather_config, self.my_simulation_parameters
+        )
         if cachefound:
             # read cached files
             my_weather = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding="cp1252")

@@ -25,6 +25,7 @@ from hisim.components.generic_battery import (
     select_battery_spec,
 )
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 
 
 # Mark every test in this module as a fast ``base`` test (see pytest.ini).
@@ -108,8 +109,7 @@ def test_generic_battery_builds_from_injected_database() -> None:
     """
     sp = SimulationParameters.one_day_only(2017, 60)
     config = GenericBatteryConfig(
-        building_name="BUI1",
-        name="Generic Battery",
+        component_id=ComponentID(name="Generic Battery"),
         manufacturer="acme",
         model="PowerBox 5",
         soc=0.5,
@@ -140,8 +140,7 @@ def test_generic_battery_uses_discharging_power_when_present() -> None:
     """When ``Maximal Discharging Power`` is present it drives ``min_var``."""
     sp = SimulationParameters.one_day_only(2017, 60)
     config = GenericBatteryConfig(
-        building_name="BUI1",
-        name="Generic Battery",
+        component_id=ComponentID(name="Generic Battery"),
         manufacturer="acme",
         model="PowerBox 5",
         soc=0.5,
@@ -162,8 +161,7 @@ def test_generic_battery_falls_back_when_discharging_power_absent() -> None:
     """When ``Maximal Discharging Power`` is absent ``min_var`` falls back to ``-max_var``."""
     sp = SimulationParameters.one_day_only(2017, 60)
     config = GenericBatteryConfig(
-        building_name="BUI1",
-        name="Generic Battery",
+        component_id=ComponentID(name="Generic Battery"),
         manufacturer="acme",
         model="PowerBox 10",
         soc=0.5,
@@ -186,8 +184,7 @@ def test_generic_battery_raises_for_unknown_model_with_injected_db() -> None:
     """An unknown model surfaces as a ``ValueError`` even with an injected database."""
     sp = SimulationParameters.one_day_only(2017, 60)
     config = GenericBatteryConfig(
-        building_name="BUI1",
-        name="Generic Battery",
+        component_id=ComponentID(name="Generic Battery"),
         manufacturer="acme",
         model="Does Not Exist",
         soc=0.5,

@@ -3,6 +3,7 @@
 Created on Thu Jul 21 10:08:01 2022.
 @author: Johanna
 """
+
 # -*- coding: utf-8 -*-
 import pytest
 from tests import functions_for_testing as fft
@@ -24,9 +25,7 @@ def test_h2_storage() -> None:
     """
 
     seconds_per_timestep: int = 60
-    my_simulation_parameters: SimulationParameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters: SimulationParameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
     my_h2_storage_config: generic_hydrogen_storage.GenericHydrogenStorageConfig = (
         generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config()
@@ -37,13 +36,18 @@ def test_h2_storage() -> None:
 
     # Set Fake Inputs
     h2_input: cp.ComponentOutput = cp.ComponentOutput(
-        "FakeHydrogenInput", "HydrogenInput", lt.LoadTypes.GREEN_HYDROGEN, lt.Units.KG_PER_SEC
+        "FakeHydrogenInput",
+        "HydrogenInput",
+        lt.LoadTypes.GREEN_HYDROGEN,
+        lt.Units.KG_PER_SEC,
+        component_id=cp.ComponentID("FakeHydrogenInput"),
     )
     h2_output: cp.ComponentOutput = cp.ComponentOutput(
         "FakeHydrogenOutput",
         "HydrogenOutput",
         lt.LoadTypes.GREEN_HYDROGEN,
         lt.Units.KG_PER_SEC,
+        component_id=cp.ComponentID("FakeHydrogenOutput"),
     )
 
     number_of_outputs: int = fft.get_number_of_outputs([my_h2_storage, h2_input, h2_output])
@@ -84,9 +88,7 @@ def test_h2_storage_simultaneous_charge_dominates() -> None:
     the storage is charged by the net amount and nothing is discharged.
     """
     seconds_per_timestep: int = 60
-    my_simulation_parameters: SimulationParameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters: SimulationParameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
     my_h2_storage_config: generic_hydrogen_storage.GenericHydrogenStorageConfig = (
         generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config()
@@ -96,10 +98,18 @@ def test_h2_storage_simultaneous_charge_dominates() -> None:
     )
 
     h2_input: cp.ComponentOutput = cp.ComponentOutput(
-        "FakeHydrogenInput", "HydrogenInput", lt.LoadTypes.GREEN_HYDROGEN, lt.Units.KG_PER_SEC
+        "FakeHydrogenInput",
+        "HydrogenInput",
+        lt.LoadTypes.GREEN_HYDROGEN,
+        lt.Units.KG_PER_SEC,
+        component_id=cp.ComponentID("FakeHydrogenInput"),
     )
     h2_output: cp.ComponentOutput = cp.ComponentOutput(
-        "FakeHydrogenOutput", "HydrogenOutput", lt.LoadTypes.GREEN_HYDROGEN, lt.Units.KG_PER_SEC,
+        "FakeHydrogenOutput",
+        "HydrogenOutput",
+        lt.LoadTypes.GREEN_HYDROGEN,
+        lt.Units.KG_PER_SEC,
+        component_id=cp.ComponentID("FakeHydrogenOutput"),
     )
 
     number_of_outputs: int = fft.get_number_of_outputs([my_h2_storage, h2_input, h2_output])
@@ -129,9 +139,7 @@ def test_h2_storage_simultaneous_discharge_dominates() -> None:
     magnitude of the net flow and nothing is charged.
     """
     seconds_per_timestep: int = 60
-    my_simulation_parameters: SimulationParameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters: SimulationParameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
     my_h2_storage_config: generic_hydrogen_storage.GenericHydrogenStorageConfig = (
         generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config()
@@ -141,10 +149,18 @@ def test_h2_storage_simultaneous_discharge_dominates() -> None:
     )
 
     h2_input: cp.ComponentOutput = cp.ComponentOutput(
-        "FakeHydrogenInput", "HydrogenInput", lt.LoadTypes.GREEN_HYDROGEN, lt.Units.KG_PER_SEC
+        "FakeHydrogenInput",
+        "HydrogenInput",
+        lt.LoadTypes.GREEN_HYDROGEN,
+        lt.Units.KG_PER_SEC,
+        component_id=cp.ComponentID("FakeHydrogenInput"),
     )
     h2_output: cp.ComponentOutput = cp.ComponentOutput(
-        "FakeHydrogenOutput", "HydrogenOutput", lt.LoadTypes.GREEN_HYDROGEN, lt.Units.KG_PER_SEC,
+        "FakeHydrogenOutput",
+        "HydrogenOutput",
+        lt.LoadTypes.GREEN_HYDROGEN,
+        lt.Units.KG_PER_SEC,
+        component_id=cp.ComponentID("FakeHydrogenOutput"),
     )
 
     number_of_outputs: int = fft.get_number_of_outputs([my_h2_storage, h2_input, h2_output])

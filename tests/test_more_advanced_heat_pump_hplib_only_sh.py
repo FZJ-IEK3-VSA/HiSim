@@ -16,6 +16,7 @@ from hisim.components.more_advanced_heat_pump_hplib import (
 )
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import ComponentID
 
 
 @pytest.mark.base
@@ -42,17 +43,34 @@ def test_heat_pump_hplib_new() -> None:
     force_convergence = False
 
     # Create fake component outputs as inputs for simulation
-    on_off_switch_sh = cp.ComponentOutput("Fake_on_off_switch", "Fake_on_off_switch", lt.LoadTypes.ANY, lt.Units.ANY)
-    t_in_primary = cp.ComponentOutput("Fake_t_in_primary", "Fake_t_in_primary", lt.LoadTypes.ANY, lt.Units.ANY)
-    t_in_secondary_sh = cp.ComponentOutput(
-        "Fake_t_in_secondary_hot_water", "Fake_t_in_secondary_hot_water", lt.LoadTypes.ANY, lt.Units.ANY
+    on_off_switch_sh = cp.ComponentOutput(
+        "Fake_on_off_switch",
+        "Fake_on_off_switch",
+        lt.LoadTypes.ANY,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("Fake_on_off_switch"),
     )
-    t_amb = cp.ComponentOutput("Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY)
+    t_in_primary = cp.ComponentOutput(
+        "Fake_t_in_primary",
+        "Fake_t_in_primary",
+        lt.LoadTypes.ANY,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("Fake_t_in_primary"),
+    )
+    t_in_secondary_sh = cp.ComponentOutput(
+        "Fake_t_in_secondary_hot_water",
+        "Fake_t_in_secondary_hot_water",
+        lt.LoadTypes.ANY,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("Fake_t_in_secondary_hot_water"),
+    )
+    t_amb = cp.ComponentOutput(
+        "Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("Fake_t_amb")
+    )
 
     # Initialize component
     heatpump_config = MoreAdvancedHeatPumpHPLibConfig(
-        building_name="BUI1",
-        name="Heat Pump",
+        component_id=ComponentID(name="Heat Pump"),
         model=model,
         fluid_primary_side="air",
         group_id=group_id,
@@ -73,7 +91,7 @@ def test_heat_pump_hplib_new() -> None:
         investment_costs_in_euro=p_th_set * 1e-3 * 1513.74,
         lifetime_in_years=10,
         maintenance_costs_in_euro_per_year=0.025 * p_th_set * 1e-3 * 1513.74,
-        subsidy_as_percentage_of_investment_costs=0.3
+        subsidy_as_percentage_of_investment_costs=0.3,
     )
 
     heatpump = MoreAdvancedHeatPumpHPLib(config=heatpump_config, my_simulation_parameters=my_simulation_parameters)
@@ -92,7 +110,7 @@ def test_heat_pump_hplib_new() -> None:
         counter_switch_dhw=0,
         counter_onoff=0,
         delta_t_secondary_side=5,
-        delta_t_primary_side=5
+        delta_t_primary_side=5,
     )
 
     number_of_outputs = fft.get_number_of_outputs(

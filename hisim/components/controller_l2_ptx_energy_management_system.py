@@ -2,10 +2,11 @@
 
 # clean
 import os
-from typing import List, Any
+from typing import Optional, List, Any
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+from hisim.component import ComponentID
 from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
 
 from hisim import loadtypes as lt
@@ -32,8 +33,7 @@ class PTXControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return PTXController.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     nom_load: float
     min_load: float
     max_load: float
@@ -53,7 +53,7 @@ class PTXControllerConfig(ConfigBase):
         cls,
         electrolyzer_name: str,
         operation_mode: str,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> Any:
         """Sets the according parameters for the chosen electrolyzer.
 
@@ -62,11 +62,12 @@ class PTXControllerConfig(ConfigBase):
         Minimum Load: Operated within the part load range.
         Standby Load: Operated so that the system is not switched off.
         """
+        if component_id is None:
+            component_id = ComponentID(name="L2PtXController")
         config_json = cls.read_config(electrolyzer_name)
 
         config = PTXControllerConfig(
-            building_name=building_name,
-            name="L2PtXController",  # config_json.get("name", "")
+            component_id=component_id,  # config_json.get("name", "")
             nom_load=config_json.get("nom_load", 0.0),
             min_load=config_json.get("min_load", 0.0),
             max_load=config_json.get("max_load", 0.0),

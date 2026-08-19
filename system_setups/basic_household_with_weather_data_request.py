@@ -14,6 +14,7 @@ from hisim.components import electricity_meter
 from hisim.components.weather_data_import import WeatherDataImport
 from hisim import utils
 from hisim import loadtypes
+from hisim.component import ComponentID
 
 
 __authors__ = "Jonas Hoppe"
@@ -105,8 +106,7 @@ def setup_function(
 
     # Build Weather
     my_weather_config = weather.WeatherConfig(
-        building_name="BUI1",
-        name="Weather",
+        component_id=ComponentID(name="Weather"),
         location=location,
         source_path=weather_data_import.csv_path,
         data_source=weather_data_import.weather_data_source,
@@ -132,8 +132,7 @@ def setup_function(
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
         config=generic_heat_pump.GenericHeatPumpControllerConfig(
-            building_name="BUI1",
-            name="GenericHeatPumpController",
+            component_id=ComponentID(name="GenericHeatPumpController"),
             temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
             temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
             offset_in_celsius=offset_in_celsius,

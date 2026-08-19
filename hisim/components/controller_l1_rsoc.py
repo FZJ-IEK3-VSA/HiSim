@@ -3,9 +3,10 @@
 # clean
 import json
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Optional, Any, ClassVar
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+from hisim.component import ComponentID
 from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
 from hisim import loadtypes as lt
 from hisim import utils
@@ -35,8 +36,7 @@ class RsocControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return RsocController.get_full_classname()
 
-    building_name: str
-    name: str
+    component_id: ComponentID
 
     nom_load_soec: float
     min_load_soec: float
@@ -77,7 +77,7 @@ class RsocControllerConfig(ConfigBase):
     def config_rsoc(
         cls,
         rsoc_name: str,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
         config_json: dict[str, Any] | None = None,
     ) -> "RsocControllerConfig":
         """Initialize the config variables based on the manufacturer JSON.
@@ -90,11 +90,12 @@ class RsocControllerConfig(ConfigBase):
         file being present.
         """
 
+        if component_id is None:
+            component_id = ComponentID(name="rSCO l1 Controller")
         if config_json is None:
             config_json = cls.read_config(rsoc_name)
         config = RsocControllerConfig(
-            building_name=building_name,
-            name="rSCO l1 Controller",
+            component_id=component_id,
             nom_load_soec=config_json.get("nom_load_soec", 0.0),
             min_load_soec=config_json.get("min_load_soec", 0.0),
             max_load_soec=config_json.get("max_load_soec", 0.0),
@@ -141,7 +142,7 @@ class RsocController(Component):
             my_display_config = DisplayConfig()
         self.rsoccontrollerconfig = config
 
-        self.name = config.name
+        self.name = config.component_id.name
 
         self.nom_load_soec = config.nom_load_soec
         self.min_load_soec = config.min_load_soec

@@ -21,7 +21,7 @@ import pandas as pd
 import pydot
 import pytest
 
-from hisim.component import ComponentInput, ComponentOutput
+from hisim.component import ComponentID, ComponentInput, ComponentOutput
 from hisim.loadtypes import LoadTypes, Units
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.system_chart import SystemChart
@@ -84,7 +84,7 @@ def _two_component_setup() -> PostProcessingDataTransfer:
     """A Source -> Controller wiring used by several tests."""
     source = _FakeComponent("Source")
     controller = _FakeComponent("Controller Thing")
-    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.WATT)
+    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.WATT, component_id=ComponentID("Source"))
     controller_input = _make_input(
         target_name="Controller Thing",
         field_name="In",
@@ -105,9 +105,7 @@ def _two_component_setup() -> PostProcessingDataTransfer:
 def test_build_graph_returns_pydot_digraph() -> None:
     """``_build_graph`` returns a ``pydot.Dot`` of graph_type digraph."""
     chart = SystemChart(_two_component_setup())
-    graph = chart._build_graph(
-        with_labels=False, with_class_names=False, with_results=False
-    )
+    graph = chart._build_graph(with_labels=False, with_class_names=False, with_results=False)
     assert isinstance(graph, pydot.Dot)
     assert graph.get_graph_type() == "digraph"
 
@@ -116,9 +114,7 @@ def test_build_graph_returns_pydot_digraph() -> None:
 def test_build_graph_creates_one_node_per_component() -> None:
     """Each wrapped component becomes exactly one node, named by component_name."""
     chart = SystemChart(_two_component_setup())
-    graph = chart._build_graph(
-        with_labels=False, with_class_names=False, with_results=False
-    )
+    graph = chart._build_graph(with_labels=False, with_class_names=False, with_results=False)
     names = sorted(n.get_name() for n in _real_nodes(graph))
     assert names == ["Controller Thing", "Source"]
 
@@ -127,9 +123,7 @@ def test_build_graph_creates_one_node_per_component() -> None:
 def test_build_graph_controller_fillcolor_selection() -> None:
     """Nodes whose name contains 'Controller' are lightgray, others darkgray."""
     chart = SystemChart(_two_component_setup())
-    graph = chart._build_graph(
-        with_labels=False, with_class_names=False, with_results=False
-    )
+    graph = chart._build_graph(with_labels=False, with_class_names=False, with_results=False)
     fillcolors = {n.get_name(): n.get("fillcolor") for n in _real_nodes(graph)}
     assert fillcolors["Source"] == "darkgray"
     assert fillcolors["Controller Thing"] == "lightgray"
@@ -139,9 +133,7 @@ def test_build_graph_controller_fillcolor_selection() -> None:
 def test_build_graph_with_class_names_appends_class() -> None:
     """``with_class_names`` appends the Python class name to each node name."""
     chart = SystemChart(_two_component_setup())
-    graph = chart._build_graph(
-        with_labels=False, with_class_names=True, with_results=False
-    )
+    graph = chart._build_graph(with_labels=False, with_class_names=True, with_results=False)
     names = {n.get_name() for n in _real_nodes(graph)}
     # The class name of the fake component is appended after a newline.
     assert "Source\n_FakeComponent" in names
@@ -152,9 +144,7 @@ def test_build_graph_with_class_names_appends_class() -> None:
 def test_build_graph_edge_without_label() -> None:
     """With ``with_labels=False`` an edge is added but carries no label."""
     chart = SystemChart(_two_component_setup())
-    graph = chart._build_graph(
-        with_labels=False, with_class_names=False, with_results=False
-    )
+    graph = chart._build_graph(with_labels=False, with_class_names=False, with_results=False)
     edges = graph.get_edges()
     assert len(edges) == 1
     assert edges[0].get_source() == "Source"
@@ -181,9 +171,7 @@ def test_build_graph_edge_label_format_and_celsius_replacement() -> None:
         ]
     )
     chart = SystemChart(ppdt)
-    graph = chart._build_graph(
-        with_labels=True, with_class_names=False, with_results=False
-    )
+    graph = chart._build_graph(with_labels=True, with_class_names=False, with_results=False)
     edges = graph.get_edges()
     assert len(edges) == 1
     label = edges[0].get("label")
@@ -207,13 +195,9 @@ def test_build_graph_input_without_source_is_skipped() -> None:
     )
     # src_object_name defaults to None on ComponentInput
     assert dangling_input.src_object_name is None
-    ppdt = _make_ppdt(
-        wrapped_components=[_FakeWrapper(controller, [dangling_input])]
-    )
+    ppdt = _make_ppdt(wrapped_components=[_FakeWrapper(controller, [dangling_input])])
     chart = SystemChart(ppdt)
-    graph = chart._build_graph(
-        with_labels=True, with_class_names=False, with_results=False
-    )
+    graph = chart._build_graph(with_labels=True, with_class_names=False, with_results=False)
     assert not graph.get_edges()
     # but the node itself is still present
     assert [n.get_name() for n in _real_nodes(graph)] == ["Controller"]
@@ -234,9 +218,7 @@ def test_build_graph_with_results_appends_cumulative_value() -> None:
     ppdt.results_cumulative = pd.DataFrame([{pretty_name: 1234.5678}])
 
     chart = SystemChart(ppdt)
-    graph = chart._build_graph(
-        with_labels=True, with_class_names=False, with_results=True
-    )
+    graph = chart._build_graph(with_labels=True, with_class_names=False, with_results=True)
     label = graph.get_edges()[0].get("label")
     assert label is not None
     # value is rounded to 3 decimals
@@ -250,7 +232,7 @@ def _make_two_component_ppdt(output_unit: Units) -> PostProcessingDataTransfer:
     """Build a Source -> Controller wiring whose output uses ``output_unit``."""
     source = _FakeComponent("Source")
     controller = _FakeComponent("Controller Thing")
-    output = ComponentOutput("Source", "Out", LoadTypes.ANY, output_unit)
+    output = ComponentOutput("Source", "Out", LoadTypes.ANY, output_unit, component_id=ComponentID("Source"))
     controller_input = _make_input(
         target_name="Controller Thing",
         field_name="In",
@@ -277,9 +259,7 @@ def test_build_graph_with_results_sum_unit_annotates_sum() -> None:
     ppdt.results_cumulative = pd.DataFrame([{pretty_name: 42.0}])
 
     chart = SystemChart(ppdt)
-    graph = chart._build_graph(
-        with_labels=True, with_class_names=False, with_results=True
-    )
+    graph = chart._build_graph(with_labels=True, with_class_names=False, with_results=True)
     label = graph.get_edges()[0].get("label")
     assert label is not None
     # WATT_HOUR is summed, not averaged: the value must carry the unit and a
@@ -298,9 +278,7 @@ def test_build_graph_with_results_per_timestep_unit_strips_suffix() -> None:
     ppdt.results_cumulative = pd.DataFrame([{pretty_name: 7.5}])
 
     chart = SystemChart(ppdt)
-    graph = chart._build_graph(
-        with_labels=True, with_class_names=False, with_results=True
-    )
+    graph = chart._build_graph(with_labels=True, with_class_names=False, with_results=True)
     label = graph.get_edges()[0].get("label")
     assert label is not None
     # "kWh per timestep" summed over timesteps yields a total in "kWh".
@@ -318,9 +296,7 @@ def test_build_graph_with_results_celsius_mean_annotation() -> None:
     ppdt.results_cumulative = pd.DataFrame([{pretty_name: 21.5}])
 
     chart = SystemChart(ppdt)
-    graph = chart._build_graph(
-        with_labels=True, with_class_names=False, with_results=True
-    )
+    graph = chart._build_graph(with_labels=True, with_class_names=False, with_results=True)
     label = graph.get_edges()[0].get("label")
     assert label is not None
     # The "in °C" input-field clause uses the HTML entity, and the cumulative
@@ -352,9 +328,7 @@ def test_build_graph_with_results_without_source_output_omits_value() -> None:
         results_cumulative=pd.DataFrame(),
     )
     chart = SystemChart(ppdt)
-    graph = chart._build_graph(
-        with_labels=True, with_class_names=False, with_results=True
-    )
+    graph = chart._build_graph(with_labels=True, with_class_names=False, with_results=True)
     label = graph.get_edges()[0].get("label")
     assert label is not None
     # No ": <number>" cumulative suffix when there is no ComponentOutput.
@@ -387,9 +361,7 @@ def test_build_graph_merges_parallel_edges_with_newline() -> None:
         ]
     )
     chart = SystemChart(ppdt)
-    graph = chart._build_graph(
-        with_labels=True, with_class_names=False, with_results=False
-    )
+    graph = chart._build_graph(with_labels=True, with_class_names=False, with_results=False)
     edges = graph.get_edges()
     # A single edge for the shared node pair, with both labels joined by a literal \n.
     assert len(edges) == 1
@@ -429,15 +401,13 @@ def test_format_edge_label_without_results_is_base_label() -> None:
         src_object_name="Controller",
         src_field_name="TemperatureOut",
     )
-    assert chart._format_edge_label(cinput, with_results=False) == (
-        "TemperatureOut -> TemperatureIn in &#8451;"
-    )
+    assert chart._format_edge_label(cinput, with_results=False) == ("TemperatureOut -> TemperatureIn in &#8451;")
 
 
 @pytest.mark.base
 def test_format_edge_label_with_results_appends_annotation() -> None:
     """``_format_edge_label`` with ``with_results=True`` appends the result annotation."""
-    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.WATT)
+    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.WATT, component_id=ComponentID("Source"))
     chart = _chart_with_results(output, 1234.5678)
     cinput = _make_input(
         target_name="Controller",
@@ -447,9 +417,7 @@ def test_format_edge_label_with_results_appends_annotation() -> None:
         src_field_name="Out",
         source_output=output,
     )
-    assert chart._format_edge_label(cinput, with_results=True) == (
-        "Out -> In in W: 1234.568 W (mean)"
-    )
+    assert chart._format_edge_label(cinput, with_results=True) == ("Out -> In in W: 1234.568 W (mean)")
 
 
 @pytest.mark.base
@@ -472,7 +440,7 @@ def test_format_edge_label_with_results_but_no_source_output_omits_annotation() 
 @pytest.mark.base
 def test_format_edge_label_replaces_celsius_in_annotation_too() -> None:
     """The °C -> &#8451; replacement applies to the whole label, including the annotation."""
-    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.CELSIUS)
+    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.CELSIUS, component_id=ComponentID("Source"))
     chart = _chart_with_results(output, 21.5)
     cinput = _make_input(
         target_name="Controller",
@@ -492,7 +460,7 @@ def test_format_edge_label_replaces_celsius_in_annotation_too() -> None:
 @pytest.mark.base
 def test_compute_result_annotation_mean_unit() -> None:
     """A mean-aggregated unit keeps its unit and is tagged ``(mean)``."""
-    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.WATT)
+    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.WATT, component_id=ComponentID("Source"))
     chart = _chart_with_results(output, 1234.5678)
     assert chart._compute_result_annotation(output) == ": 1234.568 W (mean)"
 
@@ -500,7 +468,7 @@ def test_compute_result_annotation_mean_unit() -> None:
 @pytest.mark.base
 def test_compute_result_annotation_sum_unit() -> None:
     """A sum-aggregated unit keeps its unit and is tagged ``(sum)``."""
-    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.WATT_HOUR)
+    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.WATT_HOUR, component_id=ComponentID("Source"))
     chart = _chart_with_results(output, 42.0)
     assert chart._compute_result_annotation(output) == ": 42.0 Wh (sum)"
 
@@ -508,7 +476,7 @@ def test_compute_result_annotation_sum_unit() -> None:
 @pytest.mark.base
 def test_compute_result_annotation_per_timestep_strips_suffix() -> None:
     """A 'per timestep' sum unit is shown in its base unit (e.g. kWh, not 'kWh per timestep')."""
-    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.KWH_PER_TIMESTEP)
+    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.KWH_PER_TIMESTEP, component_id=ComponentID("Source"))
     chart = _chart_with_results(output, 7.5)
     assert chart._compute_result_annotation(output) == ": 7.5 kWh (sum)"
 
@@ -516,7 +484,7 @@ def test_compute_result_annotation_per_timestep_strips_suffix() -> None:
 @pytest.mark.base
 def test_compute_result_annotation_celsius_keeps_literal_degree_sign() -> None:
     r"""``_compute_result_annotation`` returns the raw suffix; °C entity replacement is ``_format_edge_label``'s job."""
-    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.CELSIUS)
+    output = ComponentOutput("Source", "Out", LoadTypes.ANY, Units.CELSIUS, component_id=ComponentID("Source"))
     chart = _chart_with_results(output, 21.5)
     # The annotation keeps the literal °C; only _format_edge_label replaces it.
     assert chart._compute_result_annotation(output) == ": 21.5 °C (mean)"

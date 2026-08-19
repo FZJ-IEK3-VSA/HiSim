@@ -5,7 +5,7 @@
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 import importlib
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Optional, Any, List
 
 import pandas as pd
 from bslib import bslib as bsl
@@ -13,6 +13,7 @@ from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
 from hisim.component import (
+    ComponentID,
     Component,
     ComponentConnection,
     ComponentInput,
@@ -42,10 +43,8 @@ __status__ = "development"
 class CarBatteryConfig(ConfigBase):
     """Configuration of a Car Battery."""
 
-    #: building_name in which component is
-    building_name: str
-    #: name of the device
-    name: str
+    #: structured identity (name, building, unit) of the component
+    component_id: ComponentID
     #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int
     #: name of battery to search in database (bslib)
@@ -65,11 +64,14 @@ class CarBatteryConfig(ConfigBase):
         return CarBattery.get_full_classname()
 
     @classmethod
-    def get_default_config(cls, building_name: str = "BUI1", name: str = "CarBattery") -> "CarBatteryConfig":
+    def get_default_config(
+        cls, component_id: Optional[ComponentID] = None, name: str = "CarBattery"
+    ) -> "CarBatteryConfig":
         """Returns default configuration of a Car Battery."""
+        if component_id is None:
+            component_id = ComponentID(name=name)
         config = CarBatteryConfig(
-            building_name=building_name,
-            name=name,
+            component_id=component_id,
             system_id="SG1",
             p_inv_custom=1e4,
             e_bat_custom=30,

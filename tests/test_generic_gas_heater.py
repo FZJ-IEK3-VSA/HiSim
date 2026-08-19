@@ -1,4 +1,5 @@
 """Test for generic gas heater module."""
+
 # clean
 import pytest
 from hisim import component as cp
@@ -26,9 +27,7 @@ def test_gas_heater() -> None:
     """
 
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
     # GasHeater
     temperature_delta_in_celsius = 10
     maximal_power_in_watt = 12_000
@@ -36,7 +35,7 @@ def test_gas_heater() -> None:
     # Set Gas Heater
     my_gas_heater_config = generic_boiler.GenericBoilerConfig.get_default_condensing_gas_boiler_config()
     my_gas_heater_config.temperature_delta_in_celsius = temperature_delta_in_celsius
-    my_gas_heater_config.maximal_power_in_watt = maximal_power_in_watt
+    my_gas_heater_config.maximal_thermal_power_in_watt = maximal_power_in_watt
 
     my_gas_heater = generic_boiler.GenericBoiler(
         config=my_gas_heater_config, my_simulation_parameters=my_simulation_parameters
@@ -44,13 +43,25 @@ def test_gas_heater() -> None:
 
     # Set Fake Outputs for Gas Heater
     control_signal_channel = cp.ComponentOutput(
-        "FakeControlSignal", "ControlSignal", lt.LoadTypes.ANY, lt.Units.PERCENT
+        "FakeControlSignal",
+        "ControlSignal",
+        lt.LoadTypes.ANY,
+        lt.Units.PERCENT,
+        component_id=cp.ComponentID("FakeControlSignal"),
     )
     operating_mode_channel = cp.ComponentOutput(
-        "FakeOperatingMode", "OperatingMode", lt.LoadTypes.ANY, lt.Units.ANY
+        "FakeOperatingMode",
+        "OperatingMode",
+        lt.LoadTypes.ANY,
+        lt.Units.ANY,
+        component_id=cp.ComponentID("FakeOperatingMode"),
     )
     temperature_delta_channel = cp.ComponentOutput(
-        "FakeTemperatureDelta", "TemperatureDelta", lt.LoadTypes.TEMPERATURE, lt.Units.KELVIN
+        "FakeTemperatureDelta",
+        "TemperatureDelta",
+        lt.LoadTypes.TEMPERATURE,
+        lt.Units.KELVIN,
+        component_id=cp.ComponentID("FakeTemperatureDelta"),
     )
 
     mass_flow_input_temperature_channel = cp.ComponentOutput(
@@ -58,6 +69,7 @@ def test_gas_heater() -> None:
         "MassflowInputTemperature",
         lt.LoadTypes.WATER,
         lt.Units.CELSIUS,
+        component_id=cp.ComponentID("FakeMassflowInputTemperature"),
     )
 
     test_components = [
@@ -74,9 +86,7 @@ def test_gas_heater() -> None:
     my_gas_heater.control_signal_channel.source_output = control_signal_channel
     my_gas_heater.operating_mode_channel.source_output = operating_mode_channel
     my_gas_heater.temperature_delta_channel.source_output = temperature_delta_channel
-    my_gas_heater.water_input_temperature_sh_channel.source_output = (
-        mass_flow_input_temperature_channel
-    )
+    my_gas_heater.water_input_temperature_sh_channel.source_output = mass_flow_input_temperature_channel
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components(test_components)
@@ -92,17 +102,11 @@ def test_gas_heater() -> None:
     log.information(str(stsv.values))
 
     # Mass-Flow out of Gas-Heater to heat up Storages or House
-    assert (
-        stsv.values[my_gas_heater.water_output_mass_flow_sh_channel.global_index]
-        == 0.2583732057416268
-    )
+    assert stsv.values[my_gas_heater.water_output_mass_flow_sh_channel.global_index] == 0.2583732057416268
     # Temperature of Water out of GasHeater
     assert (
         stsv.values[my_gas_heater.water_output_temperature_sh_channel.global_index]
-        == temperature_delta_in_celsius
-        + stsv.values[mass_flow_input_temperature_channel.global_index]
+        == temperature_delta_in_celsius + stsv.values[mass_flow_input_temperature_channel.global_index]
     )
     # Real Power of GasHeater
-    assert (
-        stsv.values[my_gas_heater.thermal_output_power_sh_channel.global_index] == 10_800
-    )
+    assert stsv.values[my_gas_heater.thermal_output_power_sh_channel.global_index] == 10_800

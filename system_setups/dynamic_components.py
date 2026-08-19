@@ -6,6 +6,7 @@ from typing import Optional
 
 # import hisim.components.random_numbers
 from hisim.simulator import SimulationParameters, Simulator
+from hisim.component import ComponentID
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import advanced_battery_bslib
 from hisim.components import weather
@@ -48,14 +49,14 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.get_default_config()
-    my_advanced_battery_config_1.name = "Battery1"
+    my_advanced_battery_config_1.component_id = ComponentID("Battery1")
     my_advanced_battery_config_1.system_id = "SG1"
     my_advanced_battery_config_1.custom_battery_capacity_generic_in_kilowatt_hour = 10.0
     my_advanced_battery_config_1.custom_pv_inverter_power_generic_in_watt = 5.0
     my_advanced_battery_config_1.source_weight = 1
 
     my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig.get_default_config()
-    my_advanced_battery_config_2.name = "Battery2"
+    my_advanced_battery_config_2.component_id = ComponentID("Battery2")
     my_advanced_battery_config_2.system_id = "SG1"
     my_advanced_battery_config_2.custom_battery_capacity_generic_in_kilowatt_hour = 5.0
     my_advanced_battery_config_2.custom_pv_inverter_power_generic_in_watt = 2.5
@@ -72,8 +73,8 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     my_advanced_fuel_cell_config_1 = advanced_fuel_cell.CHPConfig.get_default_config()
     my_advanced_fuel_cell_config_2 = advanced_fuel_cell.CHPConfig.get_default_config()
-    my_advanced_fuel_cell_config_1.name = "CHP1"
-    my_advanced_fuel_cell_config_2.name = "CHP2"
+    my_advanced_fuel_cell_config_1.component_id = ComponentID("CHP1")
+    my_advanced_fuel_cell_config_2.component_id = ComponentID("CHP2")
 
     my_advanced_fuel_cell_1 = advanced_fuel_cell.CHP(
         my_simulation_parameters=my_simulation_parameters,

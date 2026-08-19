@@ -38,6 +38,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
+from hisim.component import ComponentID
 
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -55,8 +56,7 @@ __status__ = "development"
 class VehiclePureConfig(cp.ConfigBase):
     """Vehicle Pure Config class."""
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     manufacturer: str
     model: str
     soc: float
@@ -70,12 +70,13 @@ class VehiclePureConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "VehiclePureConfig":
         """Gets a default config."""
+        if component_id is None:
+            component_id = ComponentID(name="Electrical Charger")
         return VehiclePureConfig(
-            building_name=building_name,
-            name="Electrical Charger",
+            component_id=component_id,
             manufacturer="Tesla",
             model="Model 3 v3",
             soc=1.0,
@@ -111,8 +112,7 @@ class EVChargerControllerConfig(cp.ConfigBase):
     integer codes have been dropped without replacement.
     """
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     mode: EVChargerMode
 
     @classmethod
@@ -123,13 +123,14 @@ class EVChargerControllerConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "EVChargerControllerConfig":
         """Gets a default config."""
+        if component_id is None:
+            component_id = ComponentID(name="ElectricalChargerController")
         return EVChargerControllerConfig(
-            name="ElectricalChargerController",
+            component_id=component_id,
             mode=EVChargerMode.STRAIGHT_CHARGING,
-            building_name=building_name,
         )
 
 
@@ -138,8 +139,7 @@ class EVChargerControllerConfig(cp.ConfigBase):
 class VehicleConfig(cp.ConfigBase):
     """Vehicle config class."""
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     manufacturer: str
     model: str
     soc: float
@@ -152,12 +152,13 @@ class VehicleConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "VehicleConfig":
         """Gets a default config."""
+        if component_id is None:
+            component_id = ComponentID(name="ElectricVehicle")
         return VehicleConfig(
-            building_name=building_name,
-            name="ElectricVehicle",
+            component_id=component_id,
             manufacturer="Renault",
             model="Zoe v3",
             soc=0.8,
@@ -169,8 +170,7 @@ class VehicleConfig(cp.ConfigBase):
 class EVChargerConfig(cp.ConfigBase):
     """Electrical vehicle config class."""
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     manufacturer: str
     charger_name: str
     electric_vehicle: Optional["VehiclePure"]
@@ -183,12 +183,13 @@ class EVChargerConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "EVChargerConfig":
         """Gets a default config."""
+        if component_id is None:
+            component_id = ComponentID(name="EV_Charger")
         return EVChargerConfig(
-            building_name=building_name,
-            name="EV_Charger",
+            component_id=component_id,
             manufacturer="myenergi",
             charger_name="Wallbox ZAPPI 222TW",
             electric_vehicle=None,
@@ -275,7 +276,7 @@ class VehiclePure(cp.Component):
         self.capacity = capacity
 
         cache_file_exists, cache_filepath = utils.get_cache_file(
-            self.config.name, self.evconfig, self.my_simulation_parameters
+            self.config.component_id.name, self.evconfig, self.my_simulation_parameters
         )
         if cache_file_exists:
             cache_df = pd.read_csv(cache_filepath, sep=",", decimal=".")
@@ -673,7 +674,7 @@ class EVCharger(cp.Component):
 
         self.build(
             manufacturer=config.manufacturer,
-            name=config.name,
+            name=config.component_id.name,
             electric_vehicle=config.electric_vehicle,
             sim_params=my_simulation_parameters,
         )

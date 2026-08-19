@@ -10,13 +10,13 @@ CHP is controlled by both (i) thermal demand and (ii) electricity demand - it is
 # Owned
 import importlib
 from dataclasses import dataclass
-from typing import List
+from typing import Optional, List
 from dataclasses_json import dataclass_json
 
 # Generic/Built-in
 from hisim import component as cp
 from hisim import utils
-from hisim.component import ConfigBase
+from hisim.component import ComponentID, ConfigBase
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 
@@ -35,9 +35,7 @@ __status__ = "development"
 class L1CHPControllerConfig(ConfigBase):
     """CHP Controller Config."""
 
-    building_name: str
-    #: name of the device
-    name: str
+    component_id: ComponentID
     #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int
     #: type of CHP: hydrogen or gas (hydrogen than considers also SOC of hydrogen storage)
@@ -65,12 +63,13 @@ class L1CHPControllerConfig(ConfigBase):
 
     @staticmethod
     def get_default_config_chp(
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "L1CHPControllerConfig":
         """Returns default configuration for the CHP controller."""
+        if component_id is None:
+            component_id = ComponentID(name="CHP Controller")
         config = L1CHPControllerConfig(
-            building_name=building_name,
-            name="CHP Controller",
+            component_id=component_id,
             source_weight=1,
             use=LoadTypes.GAS,
             electricity_threshold=300,
@@ -88,12 +87,13 @@ class L1CHPControllerConfig(ConfigBase):
 
     @staticmethod
     def get_default_config_fuel_cell(
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "L1CHPControllerConfig":
         """Returns default configuration for the fuel cell controller."""
+        if component_id is None:
+            component_id = ComponentID(name="Fuel Cell Controller")
         config = L1CHPControllerConfig(
-            building_name=building_name,
-            name="Fuel Cell Controller",
+            component_id=component_id,
             source_weight=1,
             use=LoadTypes.GREEN_HYDROGEN,
             electricity_threshold=300,
@@ -111,13 +111,14 @@ class L1CHPControllerConfig(ConfigBase):
 
     @staticmethod
     def get_default_config_chp_with_buffer(
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "L1CHPControllerConfig":
         """Returns default configuration for the CHP controller, when buffer storage for heating is available."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
+        if component_id is None:
+            component_id = ComponentID(name="CHP Controller")
         config = L1CHPControllerConfig(
-            building_name=building_name,
-            name="CHP Controller",
+            component_id=component_id,
             source_weight=1,
             use=LoadTypes.GAS,
             electricity_threshold=300,
@@ -135,13 +136,14 @@ class L1CHPControllerConfig(ConfigBase):
 
     @staticmethod
     def get_default_config_fuel_cell_with_buffer(
-        building_name: str = "BUI1",
+        component_id: Optional[ComponentID] = None,
     ) -> "L1CHPControllerConfig":
         """Returns default configuration for the fuel cell controller, when buffer storage for heating is available."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
+        if component_id is None:
+            component_id = ComponentID(name="CHP Controller")
         config = L1CHPControllerConfig(
-            building_name=building_name,
-            name="CHP Controller",
+            component_id=component_id,
             source_weight=1,
             use=LoadTypes.GREEN_HYDROGEN,
             electricity_threshold=300,

@@ -5,6 +5,7 @@ accumulator: the deficit must be scaled by the timestep duration so the
 cumulative value is an energy (kWh) rather than a raw sum of instantaneous
 power values (kW) that drifts with the simulation resolution.
 """
+
 # clean
 
 from typing import NamedTuple
@@ -34,16 +35,12 @@ def build_controller(seconds_per_timestep: int = 3600) -> _ControllerSetup:
     ``ComponentOutput`` source to its ``DemandProfile`` input channel,
     allocates a ``SingleTimeStepValues`` buffer, and assigns global indices.
     """
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
     config = fc.FuelCellControllerConfig.get_default_fuel_cell_controller_config()
-    controller = fc.FuelCellController(
-        my_simulation_parameters=my_simulation_parameters, config=config
-    )
+    controller = fc.FuelCellController(my_simulation_parameters=my_simulation_parameters, config=config)
 
     demand = cp.ComponentOutput(
-        "FakeDemand", "Demand", lt.LoadTypes.ELECTRICITY, lt.Units.KILOWATT
+        "FakeDemand", "Demand", lt.LoadTypes.ELECTRICITY, lt.Units.KILOWATT, component_id=cp.ComponentID("FakeDemand")
     )
     controller.demand_profile.source_output = demand
 

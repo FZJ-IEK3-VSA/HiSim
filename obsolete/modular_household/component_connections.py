@@ -21,7 +21,6 @@ from hisim.components import (
     advanced_battery_bslib,
     advanced_ev_battery_bslib,
     building,
-    controller_l1_building_heating,
     controller_l1_generic_ev_charge,
     controller_l1_heatpump,
     controller_l1_chp,

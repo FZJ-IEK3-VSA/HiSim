@@ -20,7 +20,6 @@ Submodules
    hisim.components.air_conditioner
    hisim.components.building
    hisim.components.configuration
-   hisim.components.controller_l1_building_heating
    hisim.components.controller_l1_chp
    hisim.components.controller_l1_electrolyzer
    hisim.components.controller_l1_electrolyzer_h2

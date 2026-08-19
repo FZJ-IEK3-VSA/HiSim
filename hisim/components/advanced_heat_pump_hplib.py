@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, List, Optional
 
 import pandas as pd
-from dataclass_wizard import JSONWizard
 from dataclasses_json import dataclass_json
 from hplib import hplib as hpl
 
@@ -1359,7 +1358,7 @@ class HeatPumpHplibController(Component):
 
 
 @dataclass
-class CalculationRequest(JSONWizard):
+class CalculationRequest:
     """Class for caching hplib parameters so that hplib.simulate does not need to run so often."""
 
     t_in_primary: float

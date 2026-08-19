@@ -7,14 +7,13 @@ import enum
 
 import datetime
 from dataclasses import dataclass
-from dataclass_wizard import JSONWizard
 
 from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
 
 
 @dataclass()
-class SimulationParameters(JSONWizard):
+class SimulationParameters:
 
     """Defines HOW the simulation is going to proceed: Time resolution, time span and all these things."""
 

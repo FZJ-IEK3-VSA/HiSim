@@ -385,8 +385,7 @@ class WeatherConfig(ConfigBase):
     """Configuration class for Weather.
 
     Decorated with dataclass_json like every other config class, so that
-    serialization uses the dataclass field names verbatim (snake_case) instead of
-    the camelCase dialect of the otherwise-shadowed JSONWizard base.
+    serialization uses the dataclass field names verbatim (snake_case).
     """
 
     component_id: ComponentID

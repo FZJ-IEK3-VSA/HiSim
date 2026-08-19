@@ -9,14 +9,13 @@ https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiede
 
 from typing import List, Dict
 from dataclasses import dataclass
-from dataclass_wizard import JSONWizard
 from hisim.loadtypes import DistrictNames
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation, KpiTagEnumClass
 
 
 @dataclass
-class KpiGenerator(JSONWizard, KpiPreparation):
+class KpiGenerator(KpiPreparation):
     """Class for generating and calculating key performance indicators."""
 
     post_processing_data_transfer: PostProcessingDataTransfer

@@ -90,7 +90,8 @@ def test_quantity_add_different_unit() -> None:
     watts = Quantity(1, Watt)
     kilowatts = Quantity(1, Kilowatt)
     with pytest.raises(TypeError):
-        _ = watts + kilowatts
+        # The operand mismatch is exactly what this test asserts at runtime.
+        _ = watts + kilowatts  # type: ignore[operator]
 
 
 @pytest.mark.base

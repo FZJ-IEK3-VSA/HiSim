@@ -10,7 +10,6 @@ from typing import Any, List, Optional, Dict
 
 import numpy as np
 import pandas as pd
-from dataclass_wizard import JSONWizard
 from dataclasses_json import dataclass_json
 from windpowerlib import ModelChain, WindTurbine
 
@@ -453,7 +452,7 @@ class Windturbine(cp.Component):
 
 
 @dataclass
-class CalculationRequest(JSONWizard):
+class CalculationRequest:
     """Class for caching windtubine parameters so that simulation does not need to run so often."""
 
     wind_speed_10m_in_m_per_sec: float

@@ -1,6 +1,7 @@
 """ Helper module to generate the JSON configurations. """
 # clean
 from __future__ import annotations
+import dataclasses
 import re
 import json
 from typing import List, Any, Dict, Tuple, cast, overload, TYPE_CHECKING
@@ -10,6 +11,7 @@ from pydantic import BaseModel, Field
 import humps
 # 1st party imports
 from hisim import log
+from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.components.generic_car import Car, GenericCarInformation
@@ -212,17 +214,20 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
 
 def get_filtered_simulation_parameters(my_sim: "Simulator"):
     """Gives the simulation parameters as a snake_case dict, with some fields excluded that are not strictly simulation parameters."""
-
-    def export_filtered(obj, exclude: set[str]) -> dict:
-        data = humps.decamelize(obj.to_dict())
-        return {k: v for k, v in data.items() if k not in exclude}
-    filtered = export_filtered(
-        my_sim.get_simulation_parameters(),
-        # Automatic camelCase conversion by dataclass-wizard
-        {"multipleBuildings", "resultDirectory", "cacheDirPath", "surplusControl", "multiple_buildings", "result_directory", "cache_dir_path", "surplus_control"},
-    )
-    # Also export the post_processing_options as strings, instead of integers
-    filtered["post_processing_options"] = [ppo.name for ppo in filtered["post_processing_options"]]
+    params = my_sim.get_simulation_parameters()
+    excluded = {"multiple_buildings", "result_directory", "cache_dir_path", "surplus_control"}
+    filtered = {
+        field.name: getattr(params, field.name)
+        for field in dataclasses.fields(params)
+        if field.name not in excluded
+    }
+    # JSON-portable spellings: datetimes as ISO strings, post-processing options by name
+    # instead of by integer value (the field is annotated List[int] but holds enum members).
+    filtered["start_date"] = params.start_date.isoformat()
+    filtered["end_date"] = params.end_date.isoformat()
+    filtered["post_processing_options"] = [
+        PostProcessingOptions(ppo).name for ppo in params.post_processing_options
+    ]
     return filtered
 
 

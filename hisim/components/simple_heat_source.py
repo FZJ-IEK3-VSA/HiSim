@@ -215,9 +215,11 @@ _LEGACY_CONFIG_FIELD_ALIASES: Dict[str, str] = {
     "temperature_out_in_celsius": "temperature_output_in_celsius",
 }
 
-# The @dataclass_json-provided decoder, captured before it is replaced below.
+# The @dataclass_json-provided decoder, captured before it is replaced below. The type
+# checker only sees ConfigBase's from_dict stub (a plain classmethod signature without
+# __func__), so the runtime unwrapping needs an ignore.
 _dataclass_json_from_dict: "Callable[..., SimpleHeatSourceConfig]" = (
-    SimpleHeatSourceConfig.from_dict.__func__
+    SimpleHeatSourceConfig.from_dict.__func__  # type: ignore[attr-defined]
 )
 
 
@@ -257,7 +259,7 @@ def _from_dict_with_legacy_aliases(
     return _dataclass_json_from_dict(cls, kvs, infer_missing=infer_missing)
 
 
-SimpleHeatSourceConfig.from_dict = _from_dict_with_legacy_aliases
+SimpleHeatSourceConfig.from_dict = _from_dict_with_legacy_aliases  # type: ignore[method-assign,assignment]
 
 
 class SimpleHeatSourceState:

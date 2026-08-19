@@ -37,7 +37,7 @@ costs and CO2 footprints are looked up from
 for the simulation year and country.
 """
 
-from typing import Optional
+from typing import Optional, TypeVar
 from hisim.component import CapexCostDataClass, ConfigBase
 from hisim.components.configuration import EmissionFactorsAndCostsForDevicesConfig
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
@@ -45,6 +45,10 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim.loadtypes import ComponentType, Units
 from hisim.units import Quantity
+
+# The capex overwrite helper hands back the very config it received, so callers keep
+# their concrete config type instead of being widened to ConfigBase.
+ConfigT = TypeVar("ConfigT", bound=ConfigBase)
 
 
 class CapexComputationHelperFunctions:
@@ -217,7 +221,7 @@ class CapexComputationHelperFunctions:
         return capex_cost_data_class
 
     @staticmethod
-    def overwrite_config_values_with_new_capex_values(config: ConfigBase, capex_cost_data_class: CapexCostDataClass) -> ConfigBase:
+    def overwrite_config_values_with_new_capex_values(config: ConfigT, capex_cost_data_class: CapexCostDataClass) -> ConfigT:
         """Overwrite capex-related fields on ``config`` with values from a ``CapexCostDataClass``.
 
         Args:

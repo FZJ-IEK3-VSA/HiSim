@@ -3,10 +3,11 @@
 
 Why this exists (and why mypy cannot do it)
 -------------------------------------------
-:class:`hisim.component.ConfigBase` inherits from ``dataclass_wizard.JSONWizard``.
-``dataclass_wizard`` ships no ``py.typed`` marker, so under ``ignore_missing_imports``
-mypy resolves ``JSONWizard`` to ``Any``. A class with an ``Any`` base is treated as
-having *arbitrary* attributes, so mypy silently accepts ``config.lifetime`` even when
+Config classes get their serialization API (``from_dict``/``to_dict``/...) injected
+dynamically by the ``@dataclass_json`` decorator, and ``dataclasses_json`` ships no
+``py.typed`` marker, so under ``ignore_missing_imports`` mypy resolves the decorator to
+``Any`` — and a class passed through an ``Any`` decorator is treated as having
+*arbitrary* attributes. mypy therefore silently accepts ``config.lifetime`` even when
 the dataclass only declares ``lifetime_in_years``. Enabling the ``attr-defined`` error
 code does not help: the blindness is structural, not a matter of configuration.
 
@@ -29,7 +30,8 @@ checked against that set. A value is known to be a config when it is:
     (the ``self.config = config`` / ``self.evconfig = config`` pattern).
 
 To stay free of false positives the checker skips any config class with a base it cannot
-resolve in the source tree, and it allows the dynamic ``JSONWizard`` serialisation API.
+resolve in the source tree, and it allows the serialisation API that the
+``@dataclass_json`` decorator injects dynamically.
 
 Gate: BLOCKING in CI (see ``.github/workflows/quality.yml``). ``obsolete/`` is excluded
 by default, matching ``ignore-paths`` in ``pylintrc-critical-only``.
@@ -50,14 +52,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-# Attributes that legitimately come from the dynamic JSONWizard base.
-JSONWIZARD_API = {
+# Attributes that legitimately come from the serialization API injected by the
+# @dataclass_json decorator (plus the usual dataclass dunders).
+SERIALIZATION_API = {
     "from_dict",
     "to_dict",
     "from_json",
     "to_json",
-    "from_list",
-    "list_to_json",
+    "schema",
     "__dict__",
     "__class__",
     "__dataclass_fields__",
@@ -67,7 +69,7 @@ JSONWIZARD_API = {
 
 # Bases that are known to be dynamic or trivial; inheriting one of them does not make a
 # config class unresolvable.
-DYNAMIC_BASES = {"JSONWizard", "ConfigBase", "object", "ABC", "Generic"}
+DYNAMIC_BASES = {"ConfigBase", "object", "ABC", "Generic"}
 
 # Annotation wrappers to unwrap when looking for the underlying class name.
 TYPING_WRAPPERS = {"Optional", "List", "Sequence", "Iterable", "Union"}
@@ -223,7 +225,7 @@ def config_classes(registry: Dict[str, List[ClassInfo]]) -> Dict[str, Set[str]]:
         # A class with a base we cannot see might inherit fields we cannot see, so skip it.
         if "ConfigBase" not in lineage or name == "ConfigBase" or unresolved:
             continue
-        fields = set(JSONWIZARD_API)
+        fields = set(SERIALIZATION_API)
         for ancestor in lineage:
             for info in registry.get(ancestor, []):
                 fields |= info.members

@@ -6,7 +6,6 @@ from abc import ABCMeta
 import dataclasses
 from typing import Any, ClassVar, TypeVar, overload, Generic
 
-from dataclass_wizard import JSONWizard
 from hisim.utils import InstanceCounter
 
 T = TypeVar("T", bound=type)
@@ -201,182 +200,182 @@ class Quantity(InstanceCounter, Generic[V, U]):
 
 
 @dataclasses.dataclass
-class Unitless(AbstractUnit, JSONWizard):
+class Unitless(AbstractUnit):
     """Unitless unit."""
 
     symbol: str = "-"
 
 
 @dataclasses.dataclass
-class Percent(AbstractUnit, JSONWizard):
+class Percent(AbstractUnit):
     """Percent unit."""
 
     symbol: str = "%"
 
 
 @dataclasses.dataclass
-class Watt(AbstractUnit, JSONWizard):
+class Watt(AbstractUnit):
     """Watt unit."""
 
     symbol: str = "W"
 
 
 @dataclasses.dataclass
-class Kilowatt(AbstractUnit, JSONWizard):
+class Kilowatt(AbstractUnit):
     """Kilowatt unit."""
 
     symbol: str = "kW"
 
 
 @dataclasses.dataclass
-class KilowattHourPerTimestep(AbstractUnit, JSONWizard):
+class KilowattHourPerTimestep(AbstractUnit):
     """Kilowatt Hour Per Timestep unit."""
 
     symbol: str = "kWh per timestep"
 
 
 @dataclasses.dataclass
-class WattPerSquareMeter(AbstractUnit, JSONWizard):
+class WattPerSquareMeter(AbstractUnit):
     """Watt Per Square Meter unit."""
 
     symbol: str = "W per square meter"
 
 
 @dataclasses.dataclass
-class WattPerMeter(AbstractUnit, JSONWizard):
+class WattPerMeter(AbstractUnit):
     """Watt Per Meter unit."""
 
     symbol: str = "W per meter"
 
 
 @dataclasses.dataclass
-class WattHourPerSquareMeter(AbstractUnit, JSONWizard):
+class WattHourPerSquareMeter(AbstractUnit):
     """Watt Hour Per Square Meter unit."""
 
     symbol: str = "Wh per square meter"
 
 
 @dataclasses.dataclass
-class MeterPerSecond(AbstractUnit, JSONWizard):
+class MeterPerSecond(AbstractUnit):
     """Meter Per Second unit."""
 
     symbol: str = "m/s"
 
 
 @dataclasses.dataclass
-class WattHour(AbstractUnit, JSONWizard):
+class WattHour(AbstractUnit):
     """Watt Hour unit."""
 
     symbol: str = "Wh"
 
 
 @dataclasses.dataclass
-class KilowattHour(AbstractUnit, JSONWizard):
+class KilowattHour(AbstractUnit):
     """Kilowatt Hour unit."""
 
     symbol: str = "kWh"
 
 
 @dataclasses.dataclass
-class Liter(AbstractUnit, JSONWizard):
+class Liter(AbstractUnit):
     """Liter unit."""
 
     symbol: str = "L"
 
 
 @dataclasses.dataclass
-class CubicMeters(AbstractUnit, JSONWizard):
+class CubicMeters(AbstractUnit):
     """Cubic Meters unit."""
 
     symbol: str = "m^3"
 
 
 @dataclasses.dataclass
-class LiterPerTimestep(AbstractUnit, JSONWizard):
+class LiterPerTimestep(AbstractUnit):
     """Liter Per Timestep unit."""
 
     symbol: str = "Liter per timestep"
 
 
 @dataclasses.dataclass
-class CubicMetersPerSecond(AbstractUnit, JSONWizard):
+class CubicMetersPerSecond(AbstractUnit):
     """Cubic Meters Per Second unit."""
 
     symbol: str = "Cubic meters per second"
 
 
 @dataclasses.dataclass
-class Kilogram(AbstractUnit, JSONWizard):
+class Kilogram(AbstractUnit):
     """Kilogram unit."""
 
     symbol: str = "kg"
 
 
 @dataclasses.dataclass
-class KilogramPerSecond(AbstractUnit, JSONWizard):
+class KilogramPerSecond(AbstractUnit):
     """Kilogram Per Second unit."""
 
     symbol: str = "kg/s"
 
 
 @dataclasses.dataclass
-class Celsius(AbstractUnit, JSONWizard):
+class Celsius(AbstractUnit):
     """Celsius unit."""
 
     symbol: str = "°C"
 
 
 @dataclasses.dataclass
-class Kelvin(AbstractUnit, JSONWizard):
+class Kelvin(AbstractUnit):
     """Kelvin unit."""
 
     symbol: str = "K"
 
 
 @dataclasses.dataclass
-class Degrees(AbstractUnit, JSONWizard):
+class Degrees(AbstractUnit):
     """Degrees unit."""
 
     symbol: str = "Degrees"
 
 
 @dataclasses.dataclass
-class Seconds(AbstractUnit, JSONWizard):
+class Seconds(AbstractUnit):
     """Seconds unit."""
 
     symbol: str = "s"
 
 
 @dataclasses.dataclass
-class Hours(AbstractUnit, JSONWizard):
+class Hours(AbstractUnit):
     """Hours unit."""
 
     symbol: str = "h"
 
 
 @dataclasses.dataclass
-class Timesteps(AbstractUnit, JSONWizard):
+class Timesteps(AbstractUnit):
     """Timesteps unit."""
 
     symbol: str = "timesteps"
 
 
 @dataclasses.dataclass
-class Years(AbstractUnit, JSONWizard):
+class Years(AbstractUnit):
     """Years unit."""
 
     symbol: str = "years"
 
 
 @dataclasses.dataclass
-class EurosPerKilowattHour(AbstractUnit, JSONWizard):
+class EurosPerKilowattHour(AbstractUnit):
     """Euros Per Kilowatt Hour unit."""
 
     symbol: str = "Euros per kWh"
 
 
 @dataclasses.dataclass
-class Euro(AbstractUnit, JSONWizard):
+class Euro(AbstractUnit):
     """Euro unit."""
 
     symbol: str = "Euro"

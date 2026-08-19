@@ -26,7 +26,6 @@ Submodules
    hisim.components.controller_l1_example_controller
    hisim.components.controller_l1_fuel_cell
    hisim.components.controller_l1_generic_ev_charge
-   hisim.components.controller_l1_generic_runtime
    hisim.components.controller_l1_heatpump
    hisim.components.controller_l1_rsoc
    hisim.components.controller_l2_energy_management_system

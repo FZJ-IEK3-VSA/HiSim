@@ -271,7 +271,7 @@
                     "dynamic": true,
                     "source_component_output": "EnergyDemandSh",
                     "source_object_name": "ConventionalPelletBoiler",
-                    "source_load_type": "Heating",
+                    "source_load_type": "Any",
                     "source_unit": "Wh",
                     "source_tags": [
                         "HEAT_CONSUMPTION"
@@ -282,7 +282,7 @@
                     "dynamic": true,
                     "source_component_output": "EnergyDemandDhw",
                     "source_object_name": "ConventionalPelletBoiler",
-                    "source_load_type": "Heating",
+                    "source_load_type": "Any",
                     "source_unit": "Wh",
                     "source_tags": [
                         "HEAT_CONSUMPTION"
@@ -451,7 +451,7 @@
         {
             "source": {
                 "component_name": "L2EMSElectricityController",
-                "field_name": "LoadingPowerInputForBattery_Output16"
+                "field_name": "LoadingPowerInputForBattery_Output15"
             },
             "target": {
                 "component_name": "Battery",

@@ -558,7 +558,7 @@
         {
             "source": {
                 "component_name": "L2EMSElectricityController",
-                "field_name": "LoadingPowerInputForBattery_Output16"
+                "field_name": "LoadingPowerInputForBattery_Output15"
             },
             "target": {
                 "component_name": "Battery",

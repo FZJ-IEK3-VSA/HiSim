@@ -1,6 +1,6 @@
 {
-    "name": "Simple Air Conditioner Household Building Sizer",
-    "description": "Household with a simple Carnot-efficiency air conditioner for cooling.",
+    "name": "Simple air conditioner household building sizer",
+    "description": "Simple air-conditioner household building-sizer system setup.",
     "multiple_buildings": false,
     "components": [
         {
@@ -53,7 +53,7 @@
                     "unit": null
                 },
                 "location": "Aachen",
-                "source_path": "<<utils.get_input_directory()>>\\weather\\test-reference-years_1995-2012_1-location\\data_processed\\aachen_center",
+                "source_path": "<<utils.get_input_directory()>>/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center",
                 "data_source": "DWD_TRY",
                 "predictive_control": false
             },

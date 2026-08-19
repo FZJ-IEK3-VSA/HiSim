@@ -7,6 +7,8 @@ components declare. Everything here is verifiable by hand.
 
 # clean
 
+from typing import Any, Dict
+
 import pytest
 
 from hisim.economics.carriers import EnergyCarrier
@@ -39,7 +41,7 @@ class TestUncertainValue:
     """§3.9 semantics."""
 
     def test_band_order_enforced(self):
-        """min <= best_estimate <= max is an invariant."""
+        """Ordering min <= best_estimate <= max is an invariant."""
         with pytest.raises(ValueError):
             UncertainValue(best_estimate=1.0, minimum=2.0, maximum=3.0)
 
@@ -414,8 +416,11 @@ class TestProvenanceLedger:
 class TestFactValidation:
     """§9.3: components fail fast on their own declarations."""
 
-    def _facts(self, **overrides) -> ComponentCostFacts:
-        arguments = {
+    def _facts(self, **overrides: Any) -> ComponentCostFacts:
+        # Annotated rather than inferred: the literal's values have no common type
+        # beyond ``object``, and ``**`` of a ``dict[str, object]`` matches none of the
+        # constructor's typed parameters.
+        arguments: Dict[str, Any] = {
             "asset_class": ComponentType.HEAT_PUMP,
             "size": 10.0,
             "size_unit": Units.KILOWATT,

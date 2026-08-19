@@ -1,0 +1,223 @@
+{
+  "comment": "User-facing eligibility questionnaire catalog (cost_spec.md §5.7). Localized question texts are legally sensitive and need review (spec Q31); languages shipped in v1: de + en.",
+  "questions": [
+    {
+      "field": "applicant.actor",
+      "answer_kind": "CHOICE",
+      "options": [
+        "OWNER_OCCUPIER",
+        "LANDLORD",
+        "WEG",
+        "TENANT"
+      ],
+      "question": {
+        "de": "In welcher Rolle stellen Sie den Foerderantrag?",
+        "en": "In what role are you applying for the subsidy?"
+      },
+      "option_labels": {
+        "de": {
+          "OWNER_OCCUPIER": "Selbstnutzende:r Eigentuemer:in",
+          "LANDLORD": "Vermieter:in",
+          "WEG": "Wohnungseigentuemergemeinschaft",
+          "TENANT": "Mieter:in"
+        },
+        "en": {
+          "OWNER_OCCUPIER": "Owner-occupier",
+          "LANDLORD": "Landlord",
+          "WEG": "Homeowners' association",
+          "TENANT": "Tenant"
+        }
+      },
+      "help": {
+        "de": "Einige Boni (z. B. Einkommens- und Geschwindigkeits-Bonus) gelten nur fuer selbstnutzende Eigentuemer:innen.",
+        "en": "Some bonuses (e.g. income and speed bonus) only apply to owner-occupiers."
+      }
+    },
+    {
+      "field": "applicant.taxable_household_income_in_euro",
+      "answer_kind": "INCOME_BAND",
+      "options": [
+        "<=40000",
+        "40001-90000",
+        ">90000"
+      ],
+      "question": {
+        "de": "In welchem Bereich liegt das zu versteuernde Haushaltseinkommen?",
+        "en": "In which band is your taxable household income?"
+      },
+      "option_labels": {
+        "de": {
+          "<=40000": "Bis 40.000 EUR",
+          "40001-90000": "40.001 bis 90.000 EUR",
+          ">90000": "Ueber 90.000 EUR"
+        },
+        "en": {
+          "<=40000": "Up to 40,000 EUR",
+          "40001-90000": "40,001 to 90,000 EUR",
+          ">90000": "Above 90,000 EUR"
+        }
+      },
+      "help": {
+        "de": "Bei einem zu versteuernden Haushaltseinkommen bis 40.000 EUR gibt es einen zusaetzlichen Einkommens-Bonus; bis 90.000 EUR einen zinsverbilligten Ergaenzungskredit.",
+        "en": "A taxable household income up to 40,000 EUR unlocks an additional income bonus; up to 90,000 EUR a subsidized supplementary loan."
+      }
+    },
+    {
+      "field": "applicant.main_residence",
+      "answer_kind": "BOOLEAN",
+      "question": {
+        "de": "Nutzen Sie das Gebaeude selbst als Hauptwohnsitz?",
+        "en": "Do you use the building yourself as your main residence?"
+      },
+      "help": {
+        "de": "Einkommens- und Geschwindigkeits-Bonus sowie der Steuerbonus nach §35c EStG setzen Selbstnutzung voraus.",
+        "en": "The income and speed bonuses and the §35c EStG tax credit require self-occupation."
+      }
+    },
+    {
+      "field": "building.construction_year",
+      "answer_kind": "YEAR",
+      "question": {
+        "de": "In welchem Jahr wurde das Gebaeude gebaut (Bauantrag)?",
+        "en": "In which year was the building constructed (building permit)?"
+      },
+      "help": {
+        "de": "Viele Programme foerdern nur Bestandsgebaeude ab einem Mindestalter.",
+        "en": "Many programs only fund existing buildings above a minimum age."
+      }
+    },
+    {
+      "field": "building.heritage_status",
+      "answer_kind": "CHOICE",
+      "options": [
+        "NONE",
+        "LISTED_MONUMENT",
+        "ENSEMBLE_PROTECTED",
+        "PRESERVATION_WORTHY"
+      ],
+      "question": {
+        "de": "Steht das Gebaeude unter Denkmalschutz oder gilt es als besonders erhaltenswerte Bausubstanz?",
+        "en": "Is the building a listed monument or otherwise classified as worth preserving?"
+      },
+      "option_labels": {
+        "de": {
+          "NONE": "Nein",
+          "LISTED_MONUMENT": "Ja, Einzeldenkmal",
+          "ENSEMBLE_PROTECTED": "Ja, Ensembleschutz",
+          "PRESERVATION_WORTHY": "Ja, besonders erhaltenswerte Bausubstanz"
+        },
+        "en": {
+          "NONE": "No",
+          "LISTED_MONUMENT": "Yes, listed monument",
+          "ENSEMBLE_PROTECTED": "Yes, protected ensemble",
+          "PRESERVATION_WORTHY": "Yes, classified as worth preserving"
+        }
+      },
+      "help": {
+        "de": "Bei Denkmalschutz gelten in vielen Foerderprogrammen erleichterte technische Anforderungen.",
+        "en": "Many subsidy schemes relax their technical requirements for heritage-protected buildings."
+      }
+    },
+    {
+      "field": "building.residential_floor_area_in_m2",
+      "answer_kind": "NUMBER",
+      "unit": "m2",
+      "question": {
+        "de": "Wie gross ist die Wohnflaeche des Gebaeudes?",
+        "en": "What is the residential floor area of the building?"
+      },
+      "help": {
+        "de": "Bei gemischt genutzten Gebaeuden wird nur der Wohnanteil gefoerdert.",
+        "en": "For mixed-use buildings only the residential share of the cost is eligible."
+      }
+    },
+    {
+      "field": "building.commercial_floor_area_in_m2",
+      "answer_kind": "NUMBER",
+      "unit": "m2",
+      "question": {
+        "de": "Wie gross ist die gewerblich genutzte Flaeche des Gebaeudes (0, falls keine)?",
+        "en": "What is the commercially used floor area of the building (0 if none)?"
+      },
+      "help": {
+        "de": "Bei gemischt genutzten Gebaeuden wird nur der Wohnanteil gefoerdert.",
+        "en": "For mixed-use buildings only the residential share of the cost is eligible."
+      }
+    },
+    {
+      "field": "building.dwelling_units",
+      "answer_kind": "NUMBER",
+      "unit": "units",
+      "question": {
+        "de": "Wie viele Wohneinheiten hat das Gebaeude?",
+        "en": "How many dwelling units does the building have?"
+      },
+      "help": {
+        "de": "Die foerderfaehigen Hoechstkosten sind je Wohneinheit gestaffelt.",
+        "en": "The eligible-cost caps are tiered per dwelling unit."
+      }
+    },
+    {
+      "field": "building.existing_heating.is_functional",
+      "answer_kind": "BOOLEAN",
+      "question": {
+        "de": "Ist die bestehende Heizung noch funktionstuechtig?",
+        "en": "Is the existing heating system still functional?"
+      },
+      "help": {
+        "de": "Der Klimageschwindigkeits-Bonus setzt den Austausch einer funktionstuechtigen fossilen Heizung voraus.",
+        "en": "The speed bonus requires replacing a still-functional fossil heating system."
+      }
+    },
+    {
+      "field": "building.existing_heating.energy_carrier",
+      "answer_kind": "CHOICE",
+      "options": [
+        "NATURAL_GAS",
+        "HEATING_OIL",
+        "PELLETS",
+        "WOOD_CHIPS",
+        "DISTRICT_HEATING",
+        "ELECTRICITY"
+      ],
+      "question": {
+        "de": "Womit heizt das Gebaeude derzeit?",
+        "en": "What does the building currently heat with?"
+      },
+      "option_labels": {
+        "de": {
+          "NATURAL_GAS": "Erdgas",
+          "HEATING_OIL": "Heizoel",
+          "PELLETS": "Pellets",
+          "WOOD_CHIPS": "Hackschnitzel",
+          "DISTRICT_HEATING": "Fernwaerme",
+          "ELECTRICITY": "Strom"
+        },
+        "en": {
+          "NATURAL_GAS": "Natural gas",
+          "HEATING_OIL": "Heating oil",
+          "PELLETS": "Pellets",
+          "WOOD_CHIPS": "Wood chips",
+          "DISTRICT_HEATING": "District heating",
+          "ELECTRICITY": "Electricity"
+        }
+      },
+      "help": {
+        "de": "Der Austausch fossiler Heizungen wird besonders gefoerdert.",
+        "en": "Replacing fossil heating systems receives extra support."
+      }
+    },
+    {
+      "field": "building.has_isfp",
+      "answer_kind": "BOOLEAN",
+      "question": {
+        "de": "Liegt fuer das Gebaeude ein individueller Sanierungsfahrplan (iSFP) vor?",
+        "en": "Does an individual renovation roadmap (iSFP) exist for the building?"
+      },
+      "help": {
+        "de": "Mit iSFP erhoeht sich die Foerderung fuer Massnahmen an der Gebaeudehuelle um 5 Prozentpunkte.",
+        "en": "With an iSFP the subsidy for building-envelope measures increases by 5 percentage points."
+      }
+    }
+  ]
+}

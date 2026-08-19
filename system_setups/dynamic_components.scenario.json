@@ -360,7 +360,7 @@
         {
             "source": {
                 "component_name": "L2EMSElectricityController",
-                "field_name": "ElectricityTargetOutput16"
+                "field_name": "ElectricityTargetOutput15"
             },
             "target": {
                 "component_name": "Battery1",
@@ -370,7 +370,7 @@
         {
             "source": {
                 "component_name": "L2EMSElectricityController",
-                "field_name": "ElectricityTargetOutput17"
+                "field_name": "ElectricityTargetOutput16"
             },
             "target": {
                 "component_name": "Battery2",
@@ -380,7 +380,7 @@
         {
             "source": {
                 "component_name": "L2EMSElectricityController",
-                "field_name": "ElectricityTargetOutput18"
+                "field_name": "ElectricityTargetOutput17"
             },
             "target": {
                 "component_name": "CHP1",
@@ -390,7 +390,7 @@
         {
             "source": {
                 "component_name": "L2EMSElectricityController",
-                "field_name": "ElectricityTargetOutput19"
+                "field_name": "ElectricityTargetOutput18"
             },
             "target": {
                 "component_name": "CHP2",

@@ -6,10 +6,10 @@ import datetime
 import math
 import os
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
 from enum import Enum, unique
 from typing import Any, List, Optional, Union
 
+from dataclasses_json import dataclass_json
 import numpy as np
 import pandas as pd
 import pvlib

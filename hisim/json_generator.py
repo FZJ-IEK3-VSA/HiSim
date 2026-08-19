@@ -62,6 +62,29 @@ class Scenario(BaseModel):
     connections: dict[str, Any] | list[Any] | None = None
 
 
+def count_outputs_created_by_constructor(component: L2GenericEnergyManagementSystem) -> int:
+    """Count the outputs the EMS builds for itself, before any system setup adds more.
+
+    The EMS creates dynamic outputs from inside its own ``__init__``, one per
+    ``get_default_connections_from_*`` helper. Those must not be written to the scenario
+    JSON, because the JSON executor instantiates the component the same way and would end
+    up with each of them twice. Outputs a system setup appended afterwards must be written,
+    and they are exactly the ones whose ``OutputN`` index runs past this count.
+
+    The count is measured rather than assumed: a pristine instance of the same class is
+    built from the same config and its outputs are counted. ``Component.__init__`` only
+    populates the instance -- it registers nothing globally -- so the throwaway instance is
+    free of side effects. Hard-coding the number instead silently rotted once already, when
+    retiring the modular DHW heat pump removed one of the EMS helpers and shifted every
+    setup-added output down by one index.
+    """
+    pristine_instance = type(component)(
+        my_simulation_parameters=component.my_simulation_parameters,
+        config=component.ems_config,
+    )
+    return len(pristine_instance.outputs)
+
+
 # Adapted from old json_generator.py
 def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tuple[Component, list[Any], list[Any]]:
     """Converts a component to a JSON-compatible dictionary."""
@@ -85,6 +108,12 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
 
     outs = []
     ins = []
+    # Used by the EMS special case inside the output loop below; see the comment there.
+    number_of_outputs_built_by_constructor = (
+        count_outputs_created_by_constructor(component)
+        if isinstance(component, L2GenericEnergyManagementSystem)
+        else 0
+    )
     for out in component.outputs:
         if isinstance(component, DynamicComponent):
             output_matches = [
@@ -100,10 +129,15 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
                 match = re.search(r"Output(\d+)$", out.field_name)
                 number = int(match.group(1)) if match else 100
 
-                # Handle special case for EMS
-                # For both cases, exactly 15 outputs are added during construction of the component
+                # Handle special case for EMS: its constructor already builds a batch of
+                # dynamic outputs (one per `get_default_connections_from_*` helper), and the
+                # JSON executor gets those back for free when it instantiates the component.
+                # Re-declaring them here would duplicate them, so only the outputs a system
+                # setup added on top of the constructor's belong in the file. The cut-off is
+                # read off a pristine instance instead of hard-coded, because it shifts
+                # whenever a default-connection helper is added or retired.
                 if isinstance(component, L2GenericEnergyManagementSystem):
-                    if number < 16:
+                    if number <= number_of_outputs_built_by_constructor:
                         continue
 
                 # add_component_output has been used

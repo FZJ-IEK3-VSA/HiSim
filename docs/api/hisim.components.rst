@@ -20,13 +20,12 @@ Submodules
    hisim.components.air_conditioner
    hisim.components.building
    hisim.components.configuration
-   hisim.components.controller_l1_building_heating
    hisim.components.controller_l1_chp
    hisim.components.controller_l1_electrolyzer
    hisim.components.controller_l1_electrolyzer_h2
    hisim.components.controller_l1_example_controller
    hisim.components.controller_l1_fuel_cell
-   hisim.components.controller_l1_generic_runtime
+   hisim.components.controller_l1_generic_ev_charge
    hisim.components.controller_l1_heatpump
    hisim.components.controller_l1_rsoc
    hisim.components.controller_l2_energy_management_system

@@ -7,13 +7,17 @@ the other way round:
 
     - :mod:`hisim.config.base` — ``ComponentID``, ``ConfigBase`` and ``DisplayConfig``,
       the three classes every component configuration is built from.
+    - :mod:`hisim.config.presets` — the ``Catalog`` helper giving a config class its
+      named default presets, plus the preset-provenance stamp.
     - :mod:`hisim.config.sizing` — design B of ``system_docs/config_defaults_spec.md``:
       the ``AUTO`` sentinel, ``sized_field``, the ``Size`` expression terms, the
       ``SizingContext`` snapshot and the ``resolve_config`` resolver.
-    - :mod:`hisim.config.presets` — the ``Catalog`` helper giving a config class its
-      named default presets, plus the preset-provenance stamp.
     - :mod:`hisim.config.engine` — the sizing-fact engine of spec §8.4, resolving
       cross-component sizing to a fixed point over a scenario's configs.
+
+The submodules are listed in dependency order, which is also the order this ``__init__``
+imports them: ``base`` and ``presets`` are leaves, ``sizing`` uses ``presets`` (to carry
+the preset stamp onto a resolved copy), and ``engine`` uses ``sizing``.
 
 **Layering rule.** No module in this package imports anything from the rest of HiSim at
 module level. The single sanctioned exception is
@@ -30,9 +34,58 @@ fully-qualified path.
 # clean
 
 from hisim.config.base import ComponentID, ConfigBase, DisplayConfig
+from hisim.config.presets import Catalog, preset_provenance
+from hisim.config.sizing import (
+    AUTO,
+    ConfigSizingError,
+    NothingToSizeError,
+    Sizable,
+    Size,
+    SizingContext,
+    SizingError,
+    SizingLaw,
+    SizingRecordEntry,
+    auto_fields,
+    concrete,
+    describe_auto_fields,
+    law,
+    resolve_config,
+    sizable_fields,
+    sized_field,
+)
+from hisim.config.engine import (
+    CONTRIBUTIONS_ATTRIBUTE,
+    FactContribution,
+    FactScope,
+    SizingFactEngine,
+    resolve_all,
+)
 
 __all__ = [
+    "AUTO",
+    "CONTRIBUTIONS_ATTRIBUTE",
+    "Catalog",
     "ComponentID",
     "ConfigBase",
+    "ConfigSizingError",
     "DisplayConfig",
+    "FactContribution",
+    "FactScope",
+    "NothingToSizeError",
+    "Sizable",
+    "Size",
+    "SizingContext",
+    "SizingError",
+    "SizingFactEngine",
+    "SizingLaw",
+    "SizingRecordEntry",
+    "auto_fields",
+    "concrete",
+    "describe_auto_fields",
+    "law",
+    "preset_provenance",
+    "resolve_all",
+    "resolve_config",
+    "sizable_fields",
+    "sized_field",
 ]

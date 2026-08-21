@@ -8,9 +8,10 @@ moved verbatim out of ``hisim/component.py``:
     2. class ConfigBase - the base class of every component configuration dataclass.
     3. class DisplayConfig - how a component is presented in postprocessing.
 
-The module imports nothing from the rest of HiSim, which is what lets the sizing
-machinery in this package depend on ``ConfigBase`` without closing an import cycle
-through ``hisim/component.py``.
+The module imports nothing from outside the ``hisim.config`` package, which is what lets
+the sizing machinery be reachable from ``ConfigBase`` (``resolve``/``auto_fields``
+delegate to :mod:`hisim.config.sizing`) without closing an import cycle through
+``hisim/component.py``.
 """
 
 # clean
@@ -20,9 +21,19 @@ from __future__ import annotations
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
 from dataclasses_json import dataclass_json
+
+# Imported from the submodule rather than through the package, so that this module stays
+# importable while ``hisim/config/__init__.py`` is still executing its own first line.
+# The aliases keep the module-level functions reachable from the identically named
+# ``ConfigBase`` methods that delegate to them.
+from hisim.config.sizing import (
+    SizingContext,
+    auto_fields as sizing_auto_fields,
+    resolve_config as sizing_resolve_config,
+)
 
 
 @dataclass_json
@@ -129,6 +140,20 @@ class ConfigBase:
 
     component_id: ComponentID
 
+    #: The sizing facts this config class contributes to the scenario-wide fact pool
+    #: (``system_docs/config_defaults_spec.md`` §8.4). Empty for the vast majority of
+    #: config classes; a class that *is* a fact source — the building, a boiler whose
+    #: controller sizes from its power band — overrides it with a tuple of
+    #: :class:`~hisim.config.engine.FactContribution` declarations, usually assigned
+    #: right below the class so the compute functions can be written as plain module
+    #: functions. Declared here so that every config class has the attribute and the
+    #: engine's contract is visible from the base class; the engine reads it by name via
+    #: ``CONTRIBUTIONS_ATTRIBUTE``. The element type stays ``Any`` deliberately: naming
+    #: ``FactContribution`` here would either invert the package layering (the base
+    #: classes importing the engine) or leave an unresolvable forward reference in an
+    #: annotation that ``dataclasses_json`` evaluates from every subclass's module.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[Any, ...]] = ()
+
     if typing.TYPE_CHECKING:
         # Historically ConfigBase inherited dataclass_wizard.JSONWizard, whose missing type
         # stubs made the whole class hierarchy Any-based: mypy accepted any attribute on a
@@ -189,6 +214,26 @@ class ConfigBase:
         rather than an AttributeError).
         """
         return dc.asdict(self)
+
+    def resolve(self, ctx: SizingContext) -> "ConfigBase":
+        """Returns a copy in which every AUTO field is computed by its declared law.
+
+        This is the design-B entry point of ``system_docs/config_defaults_spec.md`` §4.1:
+        idempotent no-op (still returning a fresh copy) when sizable fields exist but none
+        currently says AUTO, a ``NothingToSizeError`` when the class declares no sizable
+        field at all, and a hard error naming field and law when a law cannot be
+        evaluated against the given context. The returned copy carries its per-field
+        provenance as the ``sizing_record`` attribute.
+        """
+        return sizing_resolve_config(self, ctx)
+
+    def auto_fields(self) -> tuple:
+        """Names the fields of this config that still carry the AUTO sentinel.
+
+        Empty for a fully concrete config. ``Component.__init__`` uses this to reject
+        configs that still require sizing before they can reach a running simulation.
+        """
+        return sizing_auto_fields(self)
 
     def get_string_dict(self) -> List[str]:
         """Turns the config into a str list for the report."""

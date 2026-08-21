@@ -220,6 +220,19 @@ class Component:
         # self.singleton_simulation_repository: SingletonSimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
         if isinstance(my_config, cfg.ConfigBase):
+            # The central sizing check (config_defaults_spec.md §4.1): a config that still
+            # carries the AUTO sentinel anywhere must never reach a running component, no
+            # matter whether it came from a preset, a scenario file or manual construction.
+            # The error prints each unresolved field with its declared law, so the fix
+            # (call .resolve(ctx) or assign a concrete value) is obvious from the message.
+            unresolved = cfg.auto_fields(my_config)
+            if unresolved:
+                raise cfg.ConfigSizingError(
+                    f"The config of component '{my_config.component_id.key}' "
+                    f"({type(my_config).__name__}) still requires sizing in "
+                    f"{len(unresolved)} field(s):\n{cfg.describe_auto_fields(my_config)}\n"
+                    "Call .resolve(ctx) with a SizingContext or set the fields explicitly."
+                )
             # Subclasses read their concrete config's fields off this base-typed slot; that
             # works for the type checker because ConfigBase carries a checking-only
             # __getattr__/__setattr__ escape hatch (see there).

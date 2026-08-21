@@ -236,13 +236,18 @@ class BuildingInformation:
         ):
             raise ValueError("Only one variable can be used, the other one must be None.")
 
-            # scaling conditioned floor area
+        # The TABULA row is read-only after lookup: when A_C_Ref is 0, the substituted
+        # floor area used to be written back into self.buildingdata_ref["A_C_Ref"]
+        # (findings log entry 3). The write-back was never re-read - A_C_Ref is read
+        # exactly once, before this method runs - so it is dropped here and the row keeps
+        # what the TABULA file says.
+
+        # scaling conditioned floor area
         if self.buildingconfig.absolute_conditioned_floor_area_in_m2 is not None:
             # this is for preventing that the conditioned_floor_area is 0 (some buildings in TABULA have conditioned_floor_area (A_C_Ref) = 0)
             if conditioned_floor_area_in_m2_tabula_ref == 0:
                 scaled_conditioned_floor_area_in_m2 = self.buildingconfig.absolute_conditioned_floor_area_in_m2
                 factor_of_absolute_floor_area_to_tabula_floor_area = 1.0
-                self.buildingdata_ref["A_C_Ref"] = scaled_conditioned_floor_area_in_m2
             # scaling conditioned floor area
             else:
                 factor_of_absolute_floor_area_to_tabula_floor_area = (
@@ -258,7 +263,6 @@ class BuildingInformation:
             if conditioned_floor_area_in_m2_tabula_ref == 0:
                 scaled_conditioned_floor_area_in_m2 = self.buildingconfig.total_base_area_in_m2
                 factor_of_total_base_area_to_tabula_floor_area = 1.0
-                self.buildingdata_ref["A_C_Ref"] = scaled_conditioned_floor_area_in_m2
             # scaling conditioned floor area
             else:
                 factor_of_total_base_area_to_tabula_floor_area = (
@@ -273,7 +277,6 @@ class BuildingInformation:
         else:
             if conditioned_floor_area_in_m2_tabula_ref == 0:
                 scaled_conditioned_floor_area_in_m2 = 500.0
-                self.buildingdata_ref["A_C_Ref"] = scaled_conditioned_floor_area_in_m2
                 log.warning(
                     "There is no reference given for absolute conditioned floor area in m^2, so a default of 500 m^2 is used."
                 )
@@ -520,10 +523,16 @@ class BuildingInformation:
         self,
     ):
         """Manipulate building data of heat transfer."""
-        if self.buildingdata_ref["delta_U_ThermalBridging"].values[0] == 0:
-            self.buildingdata_ref["delta_U_ThermalBridging"] = 0.1
-
-        delta_u_thermalbridging = float(self.buildingdata_ref["delta_U_ThermalBridging"].values[0])
+        # The TABULA row is read-only after lookup: rows with delta_U_ThermalBridging == 0
+        # used to be patched to 0.1 in place before being read back (findings log entry 6),
+        # so the object's view of the row silently differed from the file. The correction
+        # is now an explicit local value; whether the 0.1 W/(m2 K) surcharge is good
+        # physics is a design-review question, not changed here.
+        delta_u_thermalbridging_from_tabula = self.buildingdata_ref["delta_U_ThermalBridging"].values[0]
+        if delta_u_thermalbridging_from_tabula == 0:
+            delta_u_thermalbridging = 0.1
+        else:
+            delta_u_thermalbridging = float(delta_u_thermalbridging_from_tabula)
 
         self.heat_conductance_thermal_bridging_in_watt_per_kelvin = (
             delta_u_thermalbridging * self.building_total_area_in_m2

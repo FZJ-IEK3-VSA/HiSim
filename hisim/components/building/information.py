@@ -263,36 +263,35 @@ class BuildingInformation:
         # exactly once, before this method runs - so it is dropped here and the row keeps
         # what the TABULA file says.
 
-        # scaling conditioned floor area
+        # The absolute-conditioned-floor-area and total-base-area branches used to be two
+        # verbatim copies of the same arithmetic; they are one parameterized path now,
+        # with the configured target area as the only difference.
         if self.buildingconfig.absolute_conditioned_floor_area_in_m2 is not None:
+            target_floor_area_in_m2_from_config: Optional[float] = (
+                self.buildingconfig.absolute_conditioned_floor_area_in_m2
+            )
+        else:
+            target_floor_area_in_m2_from_config = self.buildingconfig.total_base_area_in_m2
+
+        # scaling conditioned floor area
+        if target_floor_area_in_m2_from_config is not None:
             # this is for preventing that the conditioned_floor_area is 0 (some buildings in TABULA have conditioned_floor_area (A_C_Ref) = 0)
             if conditioned_floor_area_in_m2_tabula_ref == 0:
-                scaled_conditioned_floor_area_in_m2 = self.buildingconfig.absolute_conditioned_floor_area_in_m2
-                factor_of_absolute_floor_area_to_tabula_floor_area = 1.0
+                scaled_conditioned_floor_area_in_m2 = target_floor_area_in_m2_from_config
+                factor_of_config_floor_area_to_tabula_floor_area = 1.0
             # scaling conditioned floor area
             else:
-                factor_of_absolute_floor_area_to_tabula_floor_area = (
-                    self.buildingconfig.absolute_conditioned_floor_area_in_m2 / conditioned_floor_area_in_m2_tabula_ref
+                factor_of_config_floor_area_to_tabula_floor_area = (
+                    target_floor_area_in_m2_from_config / conditioned_floor_area_in_m2_tabula_ref
                 )
+                # Deliberately ref * (target / ref) instead of plain target: the round
+                # trip through the ratio produces e.g. 249.99999999999997 from a
+                # configured 250.0, and that float artifact is pinned behavior
+                # (findings log entry 4) - do not simplify algebraically.
                 scaled_conditioned_floor_area_in_m2 = (
-                    conditioned_floor_area_in_m2_tabula_ref * factor_of_absolute_floor_area_to_tabula_floor_area
+                    conditioned_floor_area_in_m2_tabula_ref * factor_of_config_floor_area_to_tabula_floor_area
                 )
-            scaling_factor_according_to_conditioned_living_area = factor_of_absolute_floor_area_to_tabula_floor_area
-
-        elif self.buildingconfig.total_base_area_in_m2 is not None:
-            # this is for preventing that the conditioned_floor_area is 0
-            if conditioned_floor_area_in_m2_tabula_ref == 0:
-                scaled_conditioned_floor_area_in_m2 = self.buildingconfig.total_base_area_in_m2
-                factor_of_total_base_area_to_tabula_floor_area = 1.0
-            # scaling conditioned floor area
-            else:
-                factor_of_total_base_area_to_tabula_floor_area = (
-                    self.buildingconfig.total_base_area_in_m2 / conditioned_floor_area_in_m2_tabula_ref
-                )
-                scaled_conditioned_floor_area_in_m2 = (
-                    conditioned_floor_area_in_m2_tabula_ref * factor_of_total_base_area_to_tabula_floor_area
-                )
-            scaling_factor_according_to_conditioned_living_area = factor_of_total_base_area_to_tabula_floor_area
+            scaling_factor_according_to_conditioned_living_area = factor_of_config_floor_area_to_tabula_floor_area
 
             # if no value for building size is provided in config, use reference value from Tabula or 500 m^2.
         else:
@@ -596,34 +595,28 @@ class BuildingInformation:
 
         Either from config or from tabula or through approximation with data from
         https://www.umweltbundesamt.de/daten/private-haushalte-konsum/wohnen/wohnflaeche#zahl-der-wohnungen-gestiegen.
+        The config and TABULA sources shared verbatim fallback logic; it is one
+        parameterized path now. Only the TABULA source falls back on a rescaled building
+        (``scaling_factor != 1``), because a rescaled reference apartment count no longer
+        matches the scaled floor area - a configured count is trusted as given.
         """
 
         if self.buildingconfig.number_of_apartments is not None:
             number_of_apartments_origin = self.buildingconfig.number_of_apartments
-
-            if number_of_apartments_origin == 0:
-                # check table from the link for the year 2021
-                average_living_area_per_apartment_in_2021_in_m2 = 92.1
-                number_of_apartments = conditioned_floor_area_in_m2 / average_living_area_per_apartment_in_2021_in_m2
-            elif number_of_apartments_origin > 0:
-                number_of_apartments = number_of_apartments_origin
-
-            else:
-                raise ValueError("Number of apartments can not be negative.")
-
-        elif self.buildingconfig.number_of_apartments is None:
+            use_average_apartment_size_fallback = number_of_apartments_origin == 0
+        else:
             number_of_apartments_origin = float(buildingdata["n_Apartment"].values[0])
-
             # if no value given or if the area given in the config is bigger than the tabula ref area
-            if number_of_apartments_origin == 0 or scaling_factor != 1:
-                # check table from the link for the year 2021
-                average_living_area_per_apartment_in_2021_in_m2 = 92.1
-                number_of_apartments = conditioned_floor_area_in_m2 / average_living_area_per_apartment_in_2021_in_m2
-            elif number_of_apartments_origin > 0:
-                number_of_apartments = number_of_apartments_origin
+            use_average_apartment_size_fallback = number_of_apartments_origin == 0 or scaling_factor != 1
 
-            else:
-                raise ValueError("Number of apartments can not be negative.")
+        if use_average_apartment_size_fallback:
+            # check table from the link for the year 2021
+            average_living_area_per_apartment_in_2021_in_m2 = 92.1
+            number_of_apartments = conditioned_floor_area_in_m2 / average_living_area_per_apartment_in_2021_in_m2
+        elif number_of_apartments_origin > 0:
+            number_of_apartments = number_of_apartments_origin
+        else:
+            raise ValueError("Number of apartments can not be negative.")
 
         return number_of_apartments
 

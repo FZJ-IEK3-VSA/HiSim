@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import enum
 import json
+import math
 import os
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict, List, Optional, Tuple
@@ -510,8 +511,6 @@ def synthetic_reference_spot_series(mean_price: float = 0.08, amplitude: float =
     Returns:
         8760 hourly prices in EUR/kWh, starting at hour 0 of January 1.
     """
-    import math
-
     prices = []
     for hour in range(8760):
         hour_of_day = hour % 24

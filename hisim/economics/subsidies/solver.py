@@ -42,6 +42,7 @@ from hisim.economics.subsidies.catalog import (
 )
 from hisim.economics.subsidies.context import SubsidyDataError
 
+
 class CumulationLimits:
     """Bounds the exponential cumulation solver is guarded by (§5.4).
 
@@ -57,7 +58,6 @@ class CumulationLimits:
     #: schemes apply to one measure would hang instead of returning a wrong answer. Real
     #: catalogs stay far below the limit (the shipped DE catalog holds nine schemes in total).
     MAX_CUMULATION_SCHEMES = 16
-
 
 
 def _eligible_cost_basis(
@@ -108,7 +108,6 @@ def _eligible_cost_basis(
         }
         basis = basis.clamp_upper(UncertainValue.exact(cap))
     return basis, binding
-
 
 
 def _share_benefit(scheme: SubsidyScheme) -> ShareBenefit:
@@ -472,7 +471,9 @@ def solve_cumulation(
 
     # Enumerate subsets (scheme sets are small, typically < 10 per measure).
     _check_cumulation_size(len(eligible), "eligible schemes")
-    best: Optional[Tuple[float, List[SubsidyScheme], List[SubsidyAward]]] = None
+    best_value = float("-inf")
+    best_combination: List[SubsidyScheme] = []
+    best_awards: List[SubsidyAward] = []
     best_per_slot: Dict[str, Optional[str]] = {}
     slot_getters = {
         "low": lambda value: value.maximum,  # optimistic world: max support
@@ -492,15 +493,15 @@ def solve_cumulation(
             if slot_name not in best_by_slot or slot_value > best_by_slot[slot_name][0] + 1e-9:
                 best_by_slot[slot_name] = (slot_value, key)
         best_estimate_value = _support_value(awards, measure, discount, slot_getters["best_estimate"])
-        if best is None or best_estimate_value > best[0] + 1e-9:
-            best = (best_estimate_value, combination, awards)
-    if best is None:
-        best = (0.0, [], [])
-    chosen_key = "|".join(sorted(scheme.id for scheme in best[1])) or "<none>"
+        if best_estimate_value > best_value + 1e-9:
+            best_value, best_combination, best_awards = best_estimate_value, combination, awards
+    if best_value == float("-inf"):
+        best_value = 0.0
+    chosen_key = "|".join(sorted(scheme.id for scheme in best_combination)) or "<none>"
     for slot_name in ("low", "high"):
         slot_best = best_by_slot.get(slot_name)
         best_per_slot[slot_name] = slot_best[1] if slot_best and slot_best[1] != chosen_key else None
-    decision.applied = best[2]
+    decision.applied = best_awards
     decision.other_slot_optimal_combination = best_per_slot
     # Optimistic upper bound over undetermined schemes: value if they all were eligible too.
     # Re-solving over eligible + undetermined (rather than adding the undetermined schemes' values)
@@ -524,7 +525,5 @@ def solve_cumulation(
             best_optimistic = max(
                 best_optimistic, _support_value(awards, measure, discount, slot_getters["best_estimate"])
             )
-        decision.undetermined_upper_bound_in_euro = max(0.0, best_optimistic - best[0])
+        decision.undetermined_upper_bound_in_euro = max(0.0, best_optimistic - best_value)
     return decision
-
-

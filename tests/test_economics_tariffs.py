@@ -43,6 +43,7 @@ from hisim.economics.uncertainty import UncertainValue
 
 pytestmark = pytest.mark.base
 
+
 def make_flat_contract(price: float = 0.30, standing: float = 0.0) -> TariffContract:
     """A flat contract for billing tests.
 
@@ -207,5 +208,3 @@ class TestTariffEngine:
         assert len(series) == 8760
         assert series == synthetic_reference_spot_series()
         assert min(series) >= 0.0
-
-

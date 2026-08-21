@@ -35,8 +35,6 @@ from hisim.economics.provenance import (
 from hisim.economics.timeline import CostCategory
 from hisim.loadtypes import ComponentType
 
-
-
 from hisim.economics.subsidies.context import SubsidyContextFields, SubsidyDataError
 
 
@@ -435,8 +433,7 @@ class OperationalBenefit(Benefit):
 
 
 class BenefitTypes:
-    """The benefit payload type of each kind — the single dispatch table used by loader and
-    engine.
+    """The benefit payload type of each kind — the single dispatch table used by loader and engine.
 
     One table serves both directions: :func:`parse_benefit` uses it to pick the payload class for a
     catalog entry, and :meth:`SubsidyScheme.__post_init__` uses it to verify that a scheme built in
@@ -845,7 +842,7 @@ class SubsidyCatalog:
         return [self.sources[source_id] for source_id in scheme.source_ids if source_id in self.sources]
 
     def source_resolver(self) -> Dict[str, ResolvedSource]:
-        """This catalog's registry entries in the report representation (§3.10).
+        """The catalog's registry entries in the report representation (§3.10).
 
         Hands the subsidy registry to the result object, which merges it with the cost database's
         registry — the two id spaces are disjoint — so that a subsidy flow explained through the
@@ -948,4 +945,3 @@ def _component_type(name: str, scheme_id: str) -> ComponentType:
 # solver. Nothing above this line reads a context or evaluates anything (§2.5: the data half
 # becomes `economics/data/`, this half `economics/engine/`; the cut is prepared, the physical
 # move is deliberately left to the package split so imports churn once, not twice).
-

@@ -13,6 +13,8 @@ any module above the rule engines belongs in the integration file.
 import dataclasses
 import json
 import os
+from typing import Any, Dict, Optional
+
 import pytest
 from hisim.economics import subsidies
 from hisim.economics.carriers import EnergyCarrier
@@ -53,6 +55,7 @@ pytestmark = pytest.mark.base
 
 DISCOUNT = EconomicParameters(price_basis_year=2024).discount_factor
 
+
 @pytest.fixture(name="catalog", scope="module")
 def fixture_catalog() -> SubsidyCatalog:
     """The shipped DE subsidy catalog.
@@ -64,6 +67,7 @@ def fixture_catalog() -> SubsidyCatalog:
     because loading resolves and validates the whole catalog including its source registry.
     """
     return SubsidyCatalog.load("DE")
+
 
 def make_measure(cost: float = 30000.0, scop: float = 4.0, refrigerant: str = "R290") -> MeasureForSubsidy:
     """A heat pump measure for subsidy tests.
@@ -86,6 +90,7 @@ def make_measure(cost: float = 30000.0, scop: float = 4.0, refrigerant: str = "R
         measure_kind="REPLACE",
         cost_by_category={CostCategory.INVESTMENT: UncertainValue.exact(cost)},
     )
+
 
 def full_context(income: float = 35000.0) -> SubsidyContext:
     """Owner-occupier with a functioning gas boiler, everything answered.
@@ -117,12 +122,13 @@ def full_context(income: float = 35000.0) -> SubsidyContext:
         ),
     )
 
+
 def make_scheme(
     scheme_id: str,
     eligibility: Condition,
     benefit_kind: BenefitKind = BenefitKind.SHARE_OF_ELIGIBLE_COST,
     benefit=None,
-    eligible_cost: EligibleCostSpec = None,
+    eligible_cost: Optional[EligibleCostSpec] = None,
 ) -> SubsidyScheme:
     """A minimal heat pump scheme whose eligibility is spelled out by the caller.
 
@@ -152,7 +158,8 @@ def make_scheme(
         payout_kind=PayoutKind.UPFRONT_GRANT,
     )
 
-def make_catalog(schemes, overall_cap_share: float = None) -> SubsidyCatalog:
+
+def make_catalog(schemes, overall_cap_share: Optional[float] = None) -> SubsidyCatalog:
     """An in-memory catalog around the given schemes.
 
     No file, no country data, no questions — the solver only needs the scheme list and the
@@ -169,7 +176,9 @@ def make_catalog(schemes, overall_cap_share: float = None) -> SubsidyCatalog:
         country="DE",
     )
 
+
 ALWAYS_ELIGIBLE = Condition(kind="all")
+
 
 def write_catalog(tmp_path, benefit: dict, scheme_id: str = "TEST_SCHEME") -> str:
     """Writes a one-scheme catalog with the given benefit object and returns its base path.
@@ -180,7 +189,7 @@ def write_catalog(tmp_path, benefit: dict, scheme_id: str = "TEST_SCHEME") -> st
     time, so these malformed payloads must be rejected while parsing the catalog, not later
     inside the solver where the scheme id is no longer at hand.
     """
-    catalog = {
+    catalog: Dict[str, Any] = {
         "catalog_snapshot_date": "2026-01-01",
         "overall_cap_share": None,
         "schemes": [
@@ -353,7 +362,8 @@ class TestConditionAstAndFieldVocabulary:
             newly_added_flag: bool = False
 
         monkeypatch.setitem(subsidies.SubsidyContextFields.CONTEXT_ROOTS, "applicant", ExtendedProfile)
-        assert "applicant.newly_added_flag" in subsidies._enumerate_context_fields()
+        fields = subsidies._enumerate_context_fields()  # pylint: disable=protected-access
+        assert "applicant.newly_added_flag" in fields
 
     def test_derived_fields_map_to_their_questions(self):
         """The derived-field registry replaces the special cases in engine and validation."""
@@ -446,7 +456,7 @@ class TestIneligibilityReasonsNameTheFailingCondition:
         condition = parse_condition(
             {"field": "applicant.taxable_household_income_in_euro", "op": "<=", "value": 40000}, "T"
         )
-        assert failed_condition_descriptions(condition, context, None) == []
+        assert not failed_condition_descriptions(condition, context, None)
 
 
 class TestSubsidyProvenance:
@@ -478,6 +488,7 @@ class TestSubsidyProvenance:
         ledger = ProvenanceLedger()
         catalog = make_catalog([make_scheme("TEST_IN_MEMORY", ALWAYS_ELIGIBLE)])
         scheme = catalog.scheme_by_id("TEST_IN_MEMORY")
+        assert scheme is not None
         record = ledger.get(catalog.provenance_for_scheme(scheme, ledger, UncertainValue.exact(5.0)))
         assert record.origin == ParameterOrigin.IN_MEMORY_DEFINITION
         assert record.source_ids == ()
@@ -546,5 +557,3 @@ class TestScenarioDataOverlays:
         database = CostDatabase()
         with pytest.raises(CostDataError, match="is not overlayable"):
             database.with_overlays({"devices_DE.HEAT_PUMP.legacy_flat_subsidy_share": 0.0}, "no_subsidy")
-
-

@@ -127,7 +127,8 @@ def validate_cost_database(
     path = base_path or CostDatabase.DEFAULT_PATH
     try:
         database = CostDatabase(path)
-    except Exception as err:  # pylint: disable=broad-except — every load error is a CI error
+    # Catching broadly is the point: every load error is a CI error.
+    except Exception as err:  # pylint: disable=broad-except
         report.errors.append(f"Cost database failed to load: {err}")
         return report
 
@@ -201,7 +202,8 @@ def validate_tariff_contracts(
             with open(full_path, encoding="utf-8") as file:
                 raw = json.load(file)
             contract = TariffContract.from_json(raw)
-        except Exception as err:  # pylint: disable=broad-except — every load error is a CI error
+        # Catching broadly is the point: every load error is a CI error.
+        except Exception as err:  # pylint: disable=broad-except
             report.errors.append(f"Tariff contract {file_name}: failed to parse: {err}")
             continue
         if contract.id != contract_id:

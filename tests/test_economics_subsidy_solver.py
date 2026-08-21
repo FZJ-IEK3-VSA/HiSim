@@ -8,6 +8,8 @@ condition and provenance tests are in `test_economics_subsidies.py`; evaluator-d
 are in `test_economics_subsidy_integration.py`.
 """
 
+from typing import Optional
+
 import pytest
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.facts import ComponentCostFacts, ExistingAsset
@@ -40,6 +42,7 @@ pytestmark = pytest.mark.base
 
 DISCOUNT = EconomicParameters(price_basis_year=2024).discount_factor
 
+
 @pytest.fixture(name="catalog", scope="module")
 def fixture_catalog() -> SubsidyCatalog:
     """The shipped DE subsidy catalog.
@@ -51,6 +54,7 @@ def fixture_catalog() -> SubsidyCatalog:
     because loading resolves and validates the whole catalog including its source registry.
     """
     return SubsidyCatalog.load("DE")
+
 
 def make_measure(cost: float = 30000.0, scop: float = 4.0, refrigerant: str = "R290") -> MeasureForSubsidy:
     """A heat pump measure for subsidy tests.
@@ -73,6 +77,7 @@ def make_measure(cost: float = 30000.0, scop: float = 4.0, refrigerant: str = "R
         measure_kind="REPLACE",
         cost_by_category={CostCategory.INVESTMENT: UncertainValue.exact(cost)},
     )
+
 
 def full_context(income: float = 35000.0) -> SubsidyContext:
     """Owner-occupier with a functioning gas boiler, everything answered.
@@ -104,12 +109,13 @@ def full_context(income: float = 35000.0) -> SubsidyContext:
         ),
     )
 
+
 def make_scheme(
     scheme_id: str,
     eligibility: Condition,
     benefit_kind: BenefitKind = BenefitKind.SHARE_OF_ELIGIBLE_COST,
     benefit=None,
-    eligible_cost: EligibleCostSpec = None,
+    eligible_cost: Optional[EligibleCostSpec] = None,
 ) -> SubsidyScheme:
     """A minimal heat pump scheme whose eligibility is spelled out by the caller.
 
@@ -139,7 +145,8 @@ def make_scheme(
         payout_kind=PayoutKind.UPFRONT_GRANT,
     )
 
-def make_catalog(schemes, overall_cap_share: float = None) -> SubsidyCatalog:
+
+def make_catalog(schemes, overall_cap_share: Optional[float] = None) -> SubsidyCatalog:
     """An in-memory catalog around the given schemes.
 
     No file, no country data, no questions — the solver only needs the scheme list and the
@@ -156,9 +163,11 @@ def make_catalog(schemes, overall_cap_share: float = None) -> SubsidyCatalog:
         country="DE",
     )
 
+
 ALWAYS_ELIGIBLE = Condition(kind="all")
 
 NEEDS_HOUSEHOLD_SIZE = Condition(kind="leaf", fieldname="applicant.household_size", op=">=", value=1)
+
 
 def banded_measure(investment: UncertainValue, planning: float = 0.0) -> MeasureForSubsidy:
     """A heat pump measure with a genuinely banded cost basis (§3.9).
@@ -179,6 +188,7 @@ def banded_measure(investment: UncertainValue, planning: float = 0.0) -> Measure
             CostCategory.PLANNING: UncertainValue.exact(planning),
         },
     )
+
 
 BEG_HP_SCHEMES = {
     "DE_BEG_EM_HP_BASE_2024",
@@ -459,6 +469,4 @@ class TestSubsidyModeFiltersBeforeTheSolve:
         filtered = required_questions(
             catalog, [make_measure()], context, 2024, admits=lambda scheme_id: False
         )
-        assert unfiltered and filtered == []
-
-
+        assert unfiltered and not filtered

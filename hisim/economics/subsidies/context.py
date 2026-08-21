@@ -27,8 +27,6 @@ from typing import (
 from hisim.economics.facts import ExistingAsset
 
 
-
-
 class SubsidyDataError(ValueError):
     """Raised for malformed subsidy catalogs.
 
@@ -256,4 +254,3 @@ def question_targets(fieldname: str) -> Tuple[str, ...]:
     can never disagree about which entry a catalog must ship.
     """
     return SubsidyContextFields.DERIVED_CONTEXT_FIELDS.get(fieldname, (fieldname,))
-

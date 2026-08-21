@@ -26,8 +26,6 @@ from hisim.economics.facts import ComponentCostFacts
 from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import UncertainValue
 
-
-
 from hisim.economics.subsidies.catalog import (
     Condition,
     PayoutKind,
@@ -64,8 +62,10 @@ class SubsidyContext:
     building: SubsidyBuildingContext = field(default_factory=SubsidyBuildingContext)
 
     def resolve_field(self, dotted: str, measure: Optional[ComponentCostFacts]) -> Tuple[bool, Any]:
-        """Resolves a condition field; returns (known, value). Unknown fields raise, unanswered
-        (None) values return (False, None) — the tri-state input (§5.7).
+        """Resolves a condition field; returns (known, value).
+
+        Unknown fields raise, unanswered (None) values return ``(False, None)`` — the tri-state
+        input (§5.7).
 
         The single place a dotted condition path becomes a value, and therefore the place the
         three-valued logic *originates*: a `False` in the first element means "this case has not
@@ -118,7 +118,7 @@ class SubsidyContext:
         return (value is not None), value
 
 
-def evaluate_condition(
+def evaluate_condition(  # pylint: disable=too-many-return-statements
     condition: Condition, context: SubsidyContext, measure: Optional[ComponentCostFacts]
 ) -> Tuple[Optional[bool], List[str]]:
     """Tri-state evaluation: (True/False/None, missing_fields). None = undetermined (§5.7).
@@ -424,7 +424,6 @@ class SubsidyDecision:
         }
 
 
-
 def assess_schemes(
     catalog: SubsidyCatalog,
     measure: MeasureForSubsidy,
@@ -480,7 +479,6 @@ def assess_schemes(
                 )
             )
     return assessments
-
 
 
 def required_questions(

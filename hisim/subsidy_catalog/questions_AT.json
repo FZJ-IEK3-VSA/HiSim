@@ -7,7 +7,7 @@
       "options": [
         "OWNER_OCCUPIER",
         "LANDLORD",
-        "WEG",
+        "CONDOMINIUM_ASSOCIATION",
         "TENANT"
       ],
       "question": {
@@ -18,13 +18,13 @@
         "de": {
           "OWNER_OCCUPIER": "Selbstnutzende:r Eigentuemer:in",
           "LANDLORD": "Vermieter:in",
-          "WEG": "Wohnungseigentuemergemeinschaft",
+          "CONDOMINIUM_ASSOCIATION": "Wohnungseigentuemergemeinschaft",
           "TENANT": "Mieter:in"
         },
         "en": {
           "OWNER_OCCUPIER": "Owner-occupier",
           "LANDLORD": "Landlord",
-          "WEG": "Homeowners' association",
+          "CONDOMINIUM_ASSOCIATION": "Homeowners' association",
           "TENANT": "Tenant"
         }
       },

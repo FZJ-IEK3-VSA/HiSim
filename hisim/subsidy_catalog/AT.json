@@ -12,7 +12,7 @@
       "source_ids": ["src_at_raus_aus_oel"],
       "applies_to": {"asset_classes": ["HEAT_PUMP"], "measure_kinds": ["REPLACE"]},
       "eligibility": {"all": [
-        {"field": "applicant.actor", "op": "in", "value": ["OWNER_OCCUPIER", "LANDLORD", "WEG"]},
+        {"field": "applicant.actor", "op": "in", "value": ["OWNER_OCCUPIER", "LANDLORD", "CONDOMINIUM_ASSOCIATION"]},
         {"field": "building.existing_heating.energy_carrier", "op": "in", "value": ["NATURAL_GAS", "HEATING_OIL"]}
       ]},
       "benefit": {"kind": "LUMP_SUM", "amount": 7500},

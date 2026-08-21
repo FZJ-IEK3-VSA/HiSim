@@ -287,7 +287,7 @@ With 35–50 a service lives inside a 20 a horizon, envelope economics are domin
 **residual value** (half the wall insulation cost is credited back at year 20 of a 40 a life)
 — that is the intended VDI 2067 treatment, not a bug. The DE catalog contains the BEG EM
 envelope schemes (15 % base with per-class U-value conditions + 5 % iSFP bonus, capped at
-20 %, mutually exclusive with §35c) and the `building.has_isfp` questionnaire entry.
+20 %, mutually exclusive with §35c) and the `building.has_renovation_roadmap` questionnaire entry (iSFP in the German catalog).
 
 `per_unit` is one of `"kW"`, `"kWh"`, `"liter"`, `"m2"` or `null` (absolute price per device);
 it must match the `size_unit` the component declares — the pre-run resolution check enforces

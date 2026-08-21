@@ -32,7 +32,7 @@
             "value": [
               "OWNER_OCCUPIER",
               "LANDLORD",
-              "WEG"
+              "CONDOMINIUM_ASSOCIATION"
             ]
           },
           {
@@ -363,7 +363,7 @@
             "value": [
               "OWNER_OCCUPIER",
               "LANDLORD",
-              "WEG"
+              "CONDOMINIUM_ASSOCIATION"
             ]
           },
           {
@@ -538,7 +538,7 @@
             "value": [
               "OWNER_OCCUPIER",
               "LANDLORD",
-              "WEG"
+              "CONDOMINIUM_ASSOCIATION"
             ]
           },
           {
@@ -619,7 +619,7 @@
             "value": [
               "OWNER_OCCUPIER",
               "LANDLORD",
-              "WEG"
+              "CONDOMINIUM_ASSOCIATION"
             ]
           },
           {
@@ -816,11 +816,11 @@
             "value": [
               "OWNER_OCCUPIER",
               "LANDLORD",
-              "WEG"
+              "CONDOMINIUM_ASSOCIATION"
             ]
           },
           {
-            "field": "building.has_isfp",
+            "field": "building.has_renovation_roadmap",
             "op": "==",
             "value": true
           }

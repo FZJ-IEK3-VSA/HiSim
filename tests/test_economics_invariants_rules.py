@@ -53,18 +53,22 @@ SEED_SUBSIDIES = 20260815
 
 SLOTS = ("minimum", "best_estimate", "maximum")
 
+
 def cost_band(rng: random.Random, high: float = 20000.0) -> UncertainValue:
     """A random non-negative band (cost-type parameter)."""
     values = sorted(rng.uniform(0.0, high) for _ in range(3))
     return UncertainValue(best_estimate=values[1], minimum=values[0], maximum=values[2])
 
+
 def maybe_exact(rng: random.Random, band: UncertainValue) -> UncertainValue:
     """Half the cases collapse to a degenerate band, so both regimes get exercised."""
     return UncertainValue.exact(band.best_estimate) if rng.random() < 0.5 else band
 
+
 def slot_values(band: UncertainValue) -> Tuple[float, float, float]:
     """(minimum, best_estimate, maximum) as a plain tuple, for compact failure messages."""
     return (band.minimum, band.best_estimate, band.maximum)
+
 
 def assert_bands_equal(actual: UncertainValue, expected: UncertainValue, context: str) -> None:
     """Slot-wise equality with a relative tolerance, reporting the generated case on failure."""
@@ -73,10 +77,12 @@ def assert_bands_equal(actual: UncertainValue, expected: UncertainValue, context
             f"slot {slot}: {slot_values(actual)} != {slot_values(expected)} — {context}"
         )
 
+
 def case_context(seed: int, case: int, **operands) -> str:
     """A reproduction hint: seed, case index and the generated operands."""
     rendered = ", ".join(f"{name}={value!r}" for name, value in operands.items())
     return f"case={case}, rng=random.Random({seed}), {rendered}"
+
 
 def random_flat_contract(rng: random.Random) -> TariffContract:
     """A FLAT contract with random price, standing charge and additive components."""
@@ -97,6 +103,7 @@ def random_flat_contract(rng: random.Random) -> TariffContract:
         source_ids=("inline:property test",),
     )
 
+
 def random_tou_contract(rng: random.Random) -> TariffContract:
     """A two-band time-of-use contract."""
     contract = random_flat_contract(rng)
@@ -113,6 +120,7 @@ def random_tou_contract(rng: random.Random) -> TariffContract:
     )
     return contract
 
+
 def scale_determinants(determinants: BillingDeterminants, factor: float) -> BillingDeterminants:
     """The same billing determinants with every energy quantity scaled."""
     return BillingDeterminants(
@@ -124,6 +132,7 @@ def scale_determinants(determinants: BillingDeterminants, factor: float) -> Bill
         },
     )
 
+
 GENERATED_BENEFIT_KINDS = [
     BenefitKind.SHARE_OF_ELIGIBLE_COST,
     BenefitKind.BONUS_SHARE,
@@ -133,6 +142,7 @@ GENERATED_BENEFIT_KINDS = [
 ]
 
 ELIGIBLE_COST_CATEGORIES = [CostCategory.INVESTMENT, CostCategory.PLANNING, CostCategory.REMOVAL]
+
 
 def random_scheme(rng: random.Random, index: int, group: str) -> SubsidyScheme:
     """A synthetic, always-eligible scheme with random benefit terms and eligible-cost spec."""
@@ -174,6 +184,7 @@ def random_scheme(rng: random.Random, index: int, group: str) -> SubsidyScheme:
         excludes=[],
         payout_kind=payout,
     )
+
 
 def random_subsidy_case(
     rng: random.Random,
@@ -344,8 +355,11 @@ class TestSubsidyBoundProperties:
             )
 
     def test_total_upfront_support_stays_within_the_eligible_cost_in_every_slot(self):
-        """The same bound, stated per slot (B12, fixed): each slot is a coherent world, so the
-        state-aid cap and the eligible cost must hold in each of them, not only in the best-estimate slot."""
+        """The same bound, stated per slot (B12, fixed).
+
+        Each slot is a coherent world, so the state-aid cap and the eligible cost must hold in
+        each of them, not only in the best-estimate slot.
+        """
         discount = EconomicParameters(price_basis_year=2024).discount_factor
         for case in range(CASES):
             seed = SEED_SUBSIDIES + case
@@ -388,5 +402,3 @@ class TestSubsidyBoundProperties:
                     assert getattr(paid, slot) <= getattr(basis, slot) + 1e-6, (
                         f"tax credit schedule exceeds the eligible basis in slot {slot} — {report}"
                     )
-
-

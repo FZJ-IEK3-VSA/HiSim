@@ -8,6 +8,8 @@ evaluation core is in `test_economics_engine.py`; views and financing are in
 `test_economics_engine_financing.py`.
 """
 
+from typing import Optional
+
 import pytest
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
@@ -32,6 +34,7 @@ from hisim.loadtypes import ComponentType, Units
 
 pytestmark = pytest.mark.base
 
+
 @pytest.fixture(name="database", scope="module")
 def fixture_database() -> CostDatabase:
     """The shipped cost database.
@@ -44,11 +47,12 @@ def fixture_database() -> CostDatabase:
     """
     return CostDatabase()
 
+
 def make_facts(
     investment: float = 1000.0,
     lifetime: float = 10.0,
     maintenance_rate: float = 0.0,
-    investment_band: UncertainValue = None,
+    investment_band: Optional[UncertainValue] = None,
     fixed_operation_cost: float = 0.0,
 ) -> ComponentCostFacts:
     """Fully overridden facts so tests do not depend on database values.
@@ -81,6 +85,7 @@ def make_facts(
         override_source="unit test",
     )
 
+
 def zero_rate_parameters(horizon: int = 10) -> EconomicParameters:
     """All rates zero: NPV must equal the plain sum (§9.4).
 
@@ -103,6 +108,7 @@ def zero_rate_parameters(horizon: int = 10) -> EconomicParameters:
         country="DE",
         price_basis_year=2024,
     )
+
 
 GREENFIELD_GROSS = Perspective(
     id="test_greenfield_gross",
@@ -151,7 +157,7 @@ class TestActorAllocation:
             assert getattr(total, attribute) == pytest.approx(getattr(system_npv, attribute))
 
     def test_tenant_pays_energy_landlord_pays_investment(self, database):
-        """BetrKV / HeizKV structure."""
+        """The BetrKV / HeizKV structure."""
         result = self._tenant_result(database)
         tenant_categories = {
             entry.category for entry in result.timeline.entries if entry.payer == Actor.TENANT
@@ -226,7 +232,7 @@ class TestActorAllocation:
         with pytest.raises(AssertionError):
             assert_zero_sum(system, [UncertainValue(best_estimate=101.0, minimum=80.0, maximum=130.0)])
 
-    def test_co2_split_responds_to_building_emissions(self, database):
+    def test_co2_split_responds_to_building_emissions(self):
         """A dirtier building shifts CO2 price cost to the landlord (§6.3)."""
         from hisim.economics.actors import DE2024Ruleset
 
@@ -582,5 +588,3 @@ class TestOneCanonicalBillDefinition:
         assert PlausibilityCategories.BILL_CATEGORIES is CategoryRules.BILL_CATEGORIES
         assert ViewCategories.BILL_CATEGORIES is CategoryRules.BILL_CATEGORIES
         assert CostCategory.FEED_IN_REVENUE not in CategoryRules.BILL_CATEGORIES
-
-

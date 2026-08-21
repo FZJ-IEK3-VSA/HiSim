@@ -51,12 +51,14 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from hisim import log
+from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
 from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs
 from hisim.economics.parameters import EconomicParameters
 from hisim.economics.perspectives import Perspective
 from hisim.economics.results import LifecycleCostResult
 from hisim.economics.subsidies import SubsidyCatalog
+from hisim.loadtypes import ComponentType
 
 
 class ScenarioLimits:
@@ -348,9 +350,6 @@ def _coerce_dict_key(fieldname: str, key: str) -> Any:
     and its value, since data files use either spelling; an unrecognized key is passed through
     unchanged rather than rejected.
     """
-    from hisim.economics.carriers import EnergyCarrier
-    from hisim.loadtypes import ComponentType
-
     if fieldname == "energy_price_escalation_rates":
         return EnergyCarrier(key)
     if fieldname == "investment_price_escalation_rates":

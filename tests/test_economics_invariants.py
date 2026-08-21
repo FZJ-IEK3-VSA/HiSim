@@ -67,19 +67,23 @@ NEGATIVE_CATEGORIES = frozenset(
 
 SLOTS = ("minimum", "best_estimate", "maximum")
 
+
 def coherent_band(rng: random.Random, low: float = -2000.0, high: float = 2000.0) -> UncertainValue:
     """A random band satisfying min <= best_estimate <= max."""
     values = sorted(rng.uniform(low, high) for _ in range(3))
     return UncertainValue(best_estimate=values[1], minimum=values[0], maximum=values[2])
+
 
 def cost_band(rng: random.Random, high: float = 20000.0) -> UncertainValue:
     """A random non-negative band (cost-type parameter)."""
     values = sorted(rng.uniform(0.0, high) for _ in range(3))
     return UncertainValue(best_estimate=values[1], minimum=values[0], maximum=values[2])
 
+
 def maybe_exact(rng: random.Random, band: UncertainValue) -> UncertainValue:
     """Half the cases collapse to a degenerate band, so both regimes get exercised."""
     return UncertainValue.exact(band.best_estimate) if rng.random() < 0.5 else band
+
 
 def random_timeline(rng: random.Random, horizon: int, count: int = 12) -> CashFlowTimeline:
     """A random timeline: random categories, years (some beyond the horizon) and amounts.
@@ -107,9 +111,11 @@ def random_timeline(rng: random.Random, horizon: int, count: int = 12) -> CashFl
         )
     return timeline
 
+
 def slot_values(band: UncertainValue) -> Tuple[float, float, float]:
     """(minimum, best_estimate, maximum) as a plain tuple, for compact failure messages."""
     return (band.minimum, band.best_estimate, band.maximum)
+
 
 def assert_bands_equal(actual: UncertainValue, expected: UncertainValue, context: str) -> None:
     """Slot-wise equality with a relative tolerance, reporting the generated case on failure."""
@@ -117,6 +123,7 @@ def assert_bands_equal(actual: UncertainValue, expected: UncertainValue, context
         assert getattr(actual, slot) == pytest.approx(getattr(expected, slot), rel=1e-9, abs=1e-9), (
             f"slot {slot}: {slot_values(actual)} != {slot_values(expected)} — {context}"
         )
+
 
 def case_context(seed: int, case: int, **operands) -> str:
     """A reproduction hint: seed, case index and the generated operands."""
@@ -128,7 +135,7 @@ class TestUncertaintyBandProperties:
     """§5.1: slot ordering, revenue mirroring, envelope subtraction, slot-wise caps."""
 
     def test_slot_ordering_survives_every_operation(self):
-        """min <= best_estimate <= max holds after +, -, scale, multiply_band, clamp_upper and sum."""
+        """The ordering min <= best_estimate <= max holds after +, -, scale, multiply_band, clamp_upper and sum."""
         for case in range(CASES):
             seed = SEED_BANDS + case
             rng = random.Random(seed)
@@ -143,14 +150,24 @@ class TestUncertaintyBandProperties:
                 cap=cap, factor=factor,
             )
             results: Dict[str, UncertainValue] = {}
+            # Loop variables are bound as lambda defaults: the operations run inside this same
+            # iteration, but the explicit binding keeps the closure honest (cell-var-from-loop).
             for name, operation in (
-                ("add", lambda: left + right),
-                ("sub", lambda: left - right),
-                ("scale", lambda: left.scale(factor)),
-                ("multiply_band", lambda: cost_left.multiply_band(cost_right)),
-                ("clamp_upper", lambda: left.clamp_upper(cap)),
-                ("sum", lambda: UncertainValue.sum([left, right, cost_left, cost_right])),
-                ("as_revenue", lambda: left.as_revenue()),
+                ("add", lambda left=left, right=right: left + right),
+                ("sub", lambda left=left, right=right: left - right),
+                ("scale", lambda left=left, factor=factor: left.scale(factor)),
+                (
+                    "multiply_band",
+                    lambda cost_left=cost_left, cost_right=cost_right: cost_left.multiply_band(cost_right),
+                ),
+                ("clamp_upper", lambda left=left, cap=cap: left.clamp_upper(cap)),
+                (
+                    "sum",
+                    lambda left=left, right=right, cost_left=cost_left, cost_right=cost_right: UncertainValue.sum(
+                        [left, right, cost_left, cost_right]
+                    ),
+                ),
+                ("as_revenue", left.as_revenue),
             ):
                 try:
                     results[name] = operation()
@@ -273,7 +290,5 @@ class TestTimelineProperties:
             dropped = frozenset(rng.sample(RANDOM_CATEGORIES, rng.randint(1, 6)))
             context = case_context(seed, case, rate=rate, dropped=sorted(item.value for item in dropped))
             kept_npv = timeline.without_categories(dropped).npv(rate)
-            dropped_npv = timeline.filtered(lambda entry: entry.category in dropped).npv(rate)
+            dropped_npv = timeline.filtered(lambda entry, dropped=dropped: entry.category in dropped).npv(rate)
             assert_bands_equal(kept_npv + dropped_npv, timeline.npv(rate), context)
-
-

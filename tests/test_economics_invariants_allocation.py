@@ -59,14 +59,17 @@ NEGATIVE_CATEGORIES = frozenset(
     }
 )
 
+
 def cost_band(rng: random.Random, high: float = 20000.0) -> UncertainValue:
     """A random non-negative band (cost-type parameter)."""
     values = sorted(rng.uniform(0.0, high) for _ in range(3))
     return UncertainValue(best_estimate=values[1], minimum=values[0], maximum=values[2])
 
+
 def maybe_exact(rng: random.Random, band: UncertainValue) -> UncertainValue:
     """Half the cases collapse to a degenerate band, so both regimes get exercised."""
     return UncertainValue.exact(band.best_estimate) if rng.random() < 0.5 else band
+
 
 def random_timeline(rng: random.Random, horizon: int, count: int = 12) -> CashFlowTimeline:
     """A random timeline: random categories, years (some beyond the horizon) and amounts.
@@ -94,14 +97,17 @@ def random_timeline(rng: random.Random, horizon: int, count: int = 12) -> CashFl
         )
     return timeline
 
+
 def slot_values(band: UncertainValue) -> Tuple[float, float, float]:
     """(minimum, best_estimate, maximum) as a plain tuple, for compact failure messages."""
     return (band.minimum, band.best_estimate, band.maximum)
+
 
 def case_context(seed: int, case: int, **operands) -> str:
     """A reproduction hint: seed, case index and the generated operands."""
     rendered = ", ".join(f"{name}={value!r}" for name, value in operands.items())
     return f"case={case}, rng=random.Random({seed}), {rendered}"
+
 
 def random_allocation_context(rng: random.Random, horizon: int, banded_basis: bool) -> AllocationContext:
     """A context that exercises the CO2 split, the maintenance split and the levy path (§6)."""
@@ -203,5 +209,3 @@ class TestActorAllocationProperties:
             if gap > 1e-6:
                 widened_cases += 1
         assert widened_cases, "no case actually minted a banded levy — the test would be vacuous"
-
-

@@ -84,14 +84,17 @@ NEGATIVE_CATEGORIES = frozenset(
 
 SLOTS = ("minimum", "best_estimate", "maximum")
 
+
 def cost_band(rng: random.Random, high: float = 20000.0) -> UncertainValue:
     """A random non-negative band (cost-type parameter)."""
     values = sorted(rng.uniform(0.0, high) for _ in range(3))
     return UncertainValue(best_estimate=values[1], minimum=values[0], maximum=values[2])
 
+
 def maybe_exact(rng: random.Random, band: UncertainValue) -> UncertainValue:
     """Half the cases collapse to a degenerate band, so both regimes get exercised."""
     return UncertainValue.exact(band.best_estimate) if rng.random() < 0.5 else band
+
 
 def random_timeline(rng: random.Random, horizon: int, count: int = 12) -> CashFlowTimeline:
     """A random timeline: random categories, years (some beyond the horizon) and amounts.
@@ -119,9 +122,11 @@ def random_timeline(rng: random.Random, horizon: int, count: int = 12) -> CashFl
         )
     return timeline
 
+
 def slot_values(band: UncertainValue) -> Tuple[float, float, float]:
     """(minimum, best_estimate, maximum) as a plain tuple, for compact failure messages."""
     return (band.minimum, band.best_estimate, band.maximum)
+
 
 def assert_bands_equal(actual: UncertainValue, expected: UncertainValue, context: str) -> None:
     """Slot-wise equality with a relative tolerance, reporting the generated case on failure."""
@@ -130,10 +135,12 @@ def assert_bands_equal(actual: UncertainValue, expected: UncertainValue, context
             f"slot {slot}: {slot_values(actual)} != {slot_values(expected)} — {context}"
         )
 
+
 def case_context(seed: int, case: int, **operands) -> str:
     """A reproduction hint: seed, case index and the generated operands."""
     rendered = ", ".join(f"{name}={value!r}" for name, value in operands.items())
     return f"case={case}, rng=random.Random({seed}), {rendered}"
+
 
 def property_scheme(
     scheme_id: str, kind: BenefitKind, benefit: Benefit, payout: PayoutKind
@@ -159,6 +166,7 @@ def property_scheme(
         payout_kind=payout,
     )
 
+
 def conservation_parameters(rng: Optional[random.Random] = None) -> EconomicParameters:
     """Deterministic (or randomized) parameters with a non-zero discount rate."""
     if rng is None:
@@ -178,6 +186,7 @@ def conservation_parameters(rng: Optional[random.Random] = None) -> EconomicPara
         investment_price_escalation_rate=rng.choice([0.0, 0.02]),
     )
 
+
 def pv_facts(investment: float, lifetime: float = 20.0) -> ComponentCostFacts:
     """Fully overridden PV facts so the case never depends on database values."""
     return ComponentCostFacts(
@@ -193,6 +202,7 @@ def pv_facts(investment: float, lifetime: float = 20.0) -> ComponentCostFacts:
         override_source="cost-spec-v2 §5.1 conservation test",
     )
 
+
 OPERATIONAL_INVESTMENT_IN_EURO = 20000.0
 
 OPERATIONAL_GRANT_RATE = 0.2
@@ -202,6 +212,7 @@ OPERATIONAL_RATE_PER_KWH = 0.05
 OPERATIONAL_DURATION_YEARS = 5
 
 OPERATIONAL_ENERGY_SOLD_IN_KWH = 3000.0
+
 
 def operational_subsidy_case() -> Tuple[EconomicEvaluator, EvaluationInputs, Perspective]:
     """Landlord-scope PV evaluation with an upfront grant and an operational per-kWh support."""
@@ -251,6 +262,7 @@ def operational_subsidy_case() -> Tuple[EconomicEvaluator, EvaluationInputs, Per
     )
     return evaluator, inputs, perspective
 
+
 def tax_credit_case() -> Tuple[EconomicEvaluator, EvaluationInputs, Perspective]:
     """Owner-occupier PV evaluation with an upfront grant and a three-year tax credit."""
     catalog = SubsidyCatalog(
@@ -286,6 +298,7 @@ def tax_credit_case() -> Tuple[EconomicEvaluator, EvaluationInputs, Perspective]
         subsidy_mode=SubsidyMode.full(),
     )
     return evaluator, inputs, perspective
+
 
 def discounted_sum(entries: List[CashFlowEntry], rate: float) -> UncertainValue:
     """The discounted total of the given entries, computed independently of CashFlowTimeline."""
@@ -592,5 +605,3 @@ class TestNumpyFinancialCrossCheck:
             )
             assert timeline.npv(rate).best_estimate == pytest.approx(amount, rel=1e-12), context
             assert float(npf.npv(rate, [amount])) == pytest.approx(amount, rel=1e-12), context
-
-

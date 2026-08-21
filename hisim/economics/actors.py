@@ -162,7 +162,7 @@ class OwnerOccupierRuleset:
     strict per-slot form of the invariant.
     """
 
-    def allocate(self, timeline: CashFlowTimeline, ctx: AllocationContext) -> CashFlowTimeline:
+    def allocate(self, timeline: CashFlowTimeline, ctx: AllocationContext) -> CashFlowTimeline:  # pylint: disable=unused-argument
         """Everything -> OWNER_OCCUPIER."""
         return CashFlowTimeline(
             entries=[entry.with_payer(Actor.OWNER_OCCUPIER) for entry in timeline.entries],
@@ -247,8 +247,8 @@ def _ordered_band(slots: dict) -> UncertainValue:
     outer = (slots["minimum"], slots["maximum"])
     return UncertainValue(
         best_estimate=best_estimate,
-        minimum=min(min(outer), best_estimate),
-        maximum=max(max(outer), best_estimate),
+        minimum=min(*outer, best_estimate),
+        maximum=max(*outer, best_estimate),
     )
 
 

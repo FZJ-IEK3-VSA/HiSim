@@ -9,6 +9,8 @@ in `test_economics_engine_financing.py`; actor allocation, the modernization lev
 canonical-definition pins are in `test_economics_engine_actors.py`.
 """
 
+from typing import Optional
+
 import pytest
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
@@ -27,6 +29,7 @@ from hisim.loadtypes import ComponentType, Units
 
 pytestmark = pytest.mark.base
 
+
 @pytest.fixture(name="database", scope="module")
 def fixture_database() -> CostDatabase:
     """The shipped cost database.
@@ -39,11 +42,12 @@ def fixture_database() -> CostDatabase:
     """
     return CostDatabase()
 
+
 def make_facts(
     investment: float = 1000.0,
     lifetime: float = 10.0,
     maintenance_rate: float = 0.0,
-    investment_band: UncertainValue = None,
+    investment_band: Optional[UncertainValue] = None,
     fixed_operation_cost: float = 0.0,
 ) -> ComponentCostFacts:
     """Fully overridden facts so tests do not depend on database values.
@@ -76,6 +80,7 @@ def make_facts(
         override_source="unit test",
     )
 
+
 def zero_rate_parameters(horizon: int = 10) -> EconomicParameters:
     """All rates zero: NPV must equal the plain sum (§9.4).
 
@@ -99,6 +104,7 @@ def zero_rate_parameters(horizon: int = 10) -> EconomicParameters:
         price_basis_year=2024,
     )
 
+
 GREENFIELD_GROSS = Perspective(
     id="test_greenfield_gross",
     installation_context=InstallationContext.GREENFIELD,
@@ -110,7 +116,7 @@ class TestUncertainValue:
     """§3.9 semantics."""
 
     def test_band_order_enforced(self):
-        """min <= best_estimate <= max is an invariant."""
+        """The ordering min <= best_estimate <= max is an invariant."""
         with pytest.raises(ValueError):
             UncertainValue(best_estimate=1.0, minimum=2.0, maximum=3.0)
 
@@ -223,7 +229,7 @@ class TestSlotProperties:
     """§3.9 / §9.4 property tests."""
 
     def test_degenerate_bands_make_all_slots_identical(self, database):
-        """min = best_estimate = max on every input -> LOW == BEST_ESTIMATE == HIGH everywhere."""
+        """Degenerate bands (min = best_estimate = max) give LOW == BEST_ESTIMATE == HIGH everywhere."""
         evaluator = EconomicEvaluator(database, zero_rate_parameters())
         inputs = EvaluationInputs(
             simulation_year=2024,
@@ -572,5 +578,3 @@ class TestNegativeFlexibilityValue:
             for finding in run_plausibility_checks(matrix)
             if finding.check_id == CheckIds.CHECK_FLEXIBILITY_VALUE
         ]
-
-

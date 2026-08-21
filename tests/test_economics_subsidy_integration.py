@@ -23,6 +23,7 @@ rule engines together, or in a number losing its provenance on the way to the re
 # clean
 
 import dataclasses
+from typing import Any, Dict
 
 import pytest
 
@@ -126,6 +127,7 @@ class TestSubsidyProvenanceThroughTheEvaluator:
             entry for entry in result.timeline.entries if entry.category == CostCategory.SUBSIDY
         ]
         assert subsidy_entries and {entry.subsidy_scheme_id for entry in subsidy_entries} == {"LEGACY_FLAT"}
+        assert result.ledger is not None
         shim_records = [
             record
             for record in result.ledger.records
@@ -141,7 +143,7 @@ class TestSubsidyProvenanceThroughTheEvaluator:
         )
 
     def test_subsidy_sources_reach_the_report(self, catalog):
-        """load -> ledger -> `explain`: a subsidy award resolves to the statute it comes from."""
+        """Load -> ledger -> `explain`: a subsidy award resolves to the statute it comes from."""
         from hisim.economics.evaluator import EconomicEvaluator, EvaluationInputs, SubjectCostFacts
         from hisim.economics.perspectives import InstallationContext, Perspective, SubsidyMode
 
@@ -172,6 +174,7 @@ class TestSubsidyProvenanceThroughTheEvaluator:
                 subsidy_mode=SubsidyMode.full(),
             ),
         )
+        assert result.ledger is not None
         subsidy_records = [
             record for record in result.ledger.records if record.parameter.startswith("subsidy.")
         ]
@@ -243,7 +246,7 @@ class TestScenarioAnalysis:
         assert len(scenario_set.expand()) == 1 + 4
 
     def test_non_sweepable_fields_rejected(self):
-        """country and dataset paths are not axes (§4.6)."""
+        """Country and dataset paths are not axes (§4.6)."""
         from hisim.economics.scenarios import ScenarioDataError, ScenarioSet
 
         for fieldname in ("country", "cost_database_path", "subsidy_catalog_path"):
@@ -435,5 +438,6 @@ class TestDeletedDeadSurfaceInTheEngine:
 
         fields = {field.name for field in dataclasses.fields(FinancingPlan)}
         assert "refinance_replacements" not in fields
+        stale_payload: Dict[str, Any] = {"refinance_replacements": True}
         with pytest.raises(TypeError):
-            FinancingPlan(**{"refinance_replacements": True})
+            FinancingPlan(**stale_payload)  # pylint: disable=unexpected-keyword-arg

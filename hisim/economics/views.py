@@ -41,8 +41,9 @@ category→group mapping into `fold_categories` / `fold_category_matrix`.
 
 from __future__ import annotations
 
+from collections.abc import Hashable
 from dataclasses import dataclass, field
-from typing import Any, Dict, Hashable, List, Mapping, Optional, Tuple, TypeVar
+from typing import Any, Dict, List, Mapping, Optional, Tuple, TypeVar
 
 from hisim.economics.calculators.subsidy_application import nominal_support_from_entries
 from hisim.economics.carriers import EnergyCarrier

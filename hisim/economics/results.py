@@ -533,8 +533,11 @@ def _subject_alignment_key(result: LifecycleCostResult, subject: str) -> str:
 
 
 class _SlotAccessors:
-    """The three evaluation worlds as (slot name, band accessor), in the order comparisons
-    report them. The names match `VariantComparison.discounted_payback_years`."""
+    """The three evaluation worlds as (slot name, band accessor).
+
+    Listed in the order comparisons report them. The names match
+    `VariantComparison.discounted_payback_years`.
+    """
 
     BY_SLOT = (
         ("low", lambda band: band.minimum),

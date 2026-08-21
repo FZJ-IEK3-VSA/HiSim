@@ -8,6 +8,8 @@ validation, and maintenance/fixed-operation charging. The evaluation core is in
 `test_economics_engine_actors.py`.
 """
 
+from typing import Dict, Optional
+
 import pytest
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.database import CostDatabase
@@ -35,6 +37,7 @@ from hisim.loadtypes import ComponentType, Units
 
 pytestmark = pytest.mark.base
 
+
 @pytest.fixture(name="database", scope="module")
 def fixture_database() -> CostDatabase:
     """The shipped cost database.
@@ -47,11 +50,12 @@ def fixture_database() -> CostDatabase:
     """
     return CostDatabase()
 
+
 def make_facts(
     investment: float = 1000.0,
     lifetime: float = 10.0,
     maintenance_rate: float = 0.0,
-    investment_band: UncertainValue = None,
+    investment_band: Optional[UncertainValue] = None,
     fixed_operation_cost: float = 0.0,
 ) -> ComponentCostFacts:
     """Fully overridden facts so tests do not depend on database values.
@@ -83,6 +87,7 @@ def make_facts(
         embodied_co2_override_in_kg=0.0,
         override_source="unit test",
     )
+
 
 def zero_rate_parameters(horizon: int = 10) -> EconomicParameters:
     """All rates zero: NPV must equal the plain sum (§9.4).
@@ -506,12 +511,10 @@ class TestMaintenanceAndFixedOperation:
             if entry.payer == Actor.TENANT
             and entry.category in (CostCategory.MAINTENANCE, CostCategory.FIXED_OPERATION)
         ]
-        per_year = {}
+        per_year: Dict[int, float] = {}
         for entry in tenant_recurring:
             per_year[entry.year] = per_year.get(entry.year, 0.0) + entry.amount_in_euro.best_estimate
         assert set(per_year) == set(range(1, 11))
         # 50 % of the 320 EUR maintenance (apportionable share) + 100 % of the 120 EUR fixed
         # operation cost = 280 EUR/a on the tenant.
         assert all(value == pytest.approx(160.0 + 120.0) for value in per_year.values())
-
-

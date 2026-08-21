@@ -150,10 +150,7 @@ def build_breakdowns(
     breakdowns: Dict[str, ComponentCostBreakdown] = {}
     for subject in scoped.subjects():
         subject_timeline = scoped.filtered(lambda entry, _subject=subject: entry.subject == _subject)
-        npv_by_category = {
-            category: value
-            for category, value in subject_timeline.npv_by(interest, lambda entry: entry.category).items()
-        }
+        npv_by_category = dict(subject_timeline.npv_by(interest, lambda entry: entry.category))
         total = subject_timeline.npv(interest)
         facts = facts_by_subject.get(subject)
         kind = SubjectKind.COMPONENT
@@ -227,9 +224,7 @@ def aggregate_timeline(
     """
     interest = parameters.interest_rate
     horizon = parameters.observation_period_in_years
-    npv_by_payer = {
-        payer: value for payer, value in timeline.npv_by(interest, lambda entry: entry.payer).items()
-    }
+    npv_by_payer = dict(timeline.npv_by(interest, lambda entry: entry.payer))
 
     # The perspective reports the scope actor's flows (SYSTEM = everything). One definition of
     # scoping, on the timeline itself, so `explain` cannot disagree with the KPI (§7 B4).
@@ -238,12 +233,8 @@ def aggregate_timeline(
 
     total_npv = scoped.npv(interest)
     annuity = parameters.annuity_factor()
-    npv_by_category = {
-        category: value for category, value in scoped.npv_by(interest, lambda entry: entry.category).items()
-    }
-    npv_by_component = {
-        subject: value for subject, value in scoped.npv_by(interest, lambda entry: entry.subject).items()
-    }
+    npv_by_category = dict(scoped.npv_by(interest, lambda entry: entry.category))
+    npv_by_component = dict(scoped.npv_by(interest, lambda entry: entry.subject))
     annual_series = scoped.nominal_annual_series(horizon)
     monthly_year1 = (
         annual_series[1].scale(1.0 / TimelineAggregation.MONTHS_PER_YEAR) if len(annual_series) > 1 else None

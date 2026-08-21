@@ -31,6 +31,8 @@ S4b decision to scope `year_zero_build_up` like the table beside it.
 
 # clean
 
+from typing import Dict
+
 import pytest
 
 from hisim.economics import views
@@ -219,7 +221,7 @@ class TestTimeSeriesViews:
         matrix = views.nominal_annual_matrix_by_category(result)
         assert len(matrix) == horizon + 1
         for year in range(horizon + 1):
-            expected = {}
+            expected: Dict[CostCategory, float] = {}
             for entry in result.scoped_timeline().entries:
                 if entry.year == year:
                     expected[entry.category] = (
@@ -390,7 +392,7 @@ class TestEnergyBills:
         """Categories, total and price, all recomputed from the timeline."""
         bills = views.carrier_year_one_bills(result)
         bill = bills["ELECTRICITY"]
-        expected_by_category = {}
+        expected_by_category: Dict[CostCategory, float] = {}
         for entry in result.scoped_timeline().entries:
             if entry.year == 1 and entry.subject in ("ELECTRICITY", "ELECTRICITY_FEED_IN"):
                 expected_by_category[entry.category] = (

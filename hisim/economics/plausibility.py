@@ -61,8 +61,10 @@ class CheckStatus:
 
 
 class CheckIds:
-    """Stable ids, one per check kind. Consumers (renderers, machine readers) switch on these
-    instead of parsing the human-readable name.
+    """Stable ids, one per check kind.
+
+    Consumers (renderers, machine readers) switch on these instead of parsing the
+    human-readable name.
 
     The `name` of a finding carries its scope ("subjects sum to total (greenfield_net)") and is
     written for a reader, so it changes whenever perspectives or wording change; the id does not.
@@ -418,7 +420,7 @@ def _effective_price_findings(
 
 
 def _flexibility_value_findings(reference: LifecycleCostResult) -> List[PlausibilityFinding]:
-    """WARNs when a dynamic-tariff carrier was timed worse than the flat mean price (issue #25b).
+    """Warns when a dynamic-tariff carrier was timed worse than the flat mean price (issue #25b).
 
     The §8.5 decomposition splits an energy bill into a volume effect and a *flexibility value* —
     what the timing of consumption was worth against a flat profile at the unweighted mean spot

@@ -124,10 +124,9 @@ class UnresolvedSubject:
 
 
 class _PriceBasisYearWarnings:
-    """Warn-once bookkeeping for `effective_price_basis_year` (log noise only, never
-    semantics).
+    """Warn-once bookkeeping for `effective_price_basis_year`.
 
-    The basis-year policy is re-resolved on every evaluation — once per perspective, and again
+    Log noise only, never semantics. The basis-year policy is re-resolved on every evaluation — once per perspective, and again
     for every cell of a scenario cube — so a simulation year the shipped data does not cover
     would otherwise log the identical warning thousands of times in a sweep. The seen keys live
     at class level so the deduplication also holds across separately constructed evaluators.

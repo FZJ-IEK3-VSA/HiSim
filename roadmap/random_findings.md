@@ -94,3 +94,58 @@ correction or addition.
   context-contributor design (spec §8.4) replaces the construction-time half of the
   singleton outright. The runtime-forecast half (MPC/PID heat-flux, weather and price
   forecasts) is still live and needs its own redesign decision — probably proper wiring.
+
+---
+
+## Rebuild on the cleaned building package (2026-08-21)
+
+Findings from rebuilding the same machinery as the layered `hisim/config/` package on top
+of the building-cleanup branch.
+
+- **[elegance→adopted] The config layer wants to be a package, not two modules.** The
+  spike's `hisim/sizing.py` + `hisim/sizing_engine.py` pair had to live *outside*
+  `hisim/component.py` for the cycle reason recorded above, but nothing expressed *why*
+  they sit where they sit. Moving `ConfigBase`, `ComponentID` and `DisplayConfig` out of
+  `component.py` into `hisim/config/base.py` and putting the machinery next to them turns
+  the accidental arrangement into a stated rule: `hisim/config/` imports nothing from the
+  rest of HiSim, `hisim/component.py` imports it. The cycle argument stops being folklore
+  in a docstring and becomes a property of the package boundary. Related: dropping the
+  compatibility aliases from `component.py` (169 files updated) is what makes the rule
+  checkable by grep rather than by trust.
+
+- **[friction] `SIZING_CONTRIBUTIONS` needed a home on `ConfigBase`.** The engine reads a
+  class attribute by name (`getattr(type(config), CONTRIBUTIONS_ATTRIBUTE, ())`), which
+  works at runtime but leaves mypy rejecting every `SomeConfig.SIZING_CONTRIBUTIONS = ...`
+  assignment on a class that did not pre-declare it — including the test fixtures, which
+  are the engine's own oracle. Declaring it once on `ConfigBase` fixes that, but the
+  element type has to stay `Any`: naming `FactContribution` would either invert the
+  package layering (base importing the engine) or leave a `TYPE_CHECKING`-only forward
+  reference in an annotation that `dataclasses_json` evaluates from every subclass's
+  module — the *same* trap as the `Sizable` alias one section above, hit from the other
+  direction. Third occurrence of the pattern; worth a rule: never put a name in a
+  `ConfigBase` annotation that is not importable at runtime from `hisim/config/base.py`.
+
+- **[friction] pylint's `cyclic-import` cannot see the difference between a lazy import
+  and a real one.** The spec's §4.1 resolution — `SizingContext.for_building` importing
+  the building package inside the method body — is invisible to Python's import system but
+  fully visible to pylint's import graph, so prospector reports the cycle anyway. Worse, it
+  attributes the message to an arbitrary module *outside* the cycle (a file under
+  `hisim/inputs/`), so a `# pylint: disable=cyclic-import` at the actual site does nothing.
+  Disabled in `.prospector.yml`, matching `pylintrc-critical-only`, which already disables
+  it. If the check is ever wanted back, the honest fix is to move `for_building` into the
+  building package and leave `SizingContext` fact-agnostic.
+
+- **[friction] Mechanical call-site rewriting needs a syntax gate, not a diff review.**
+  Converting the 72 `get_default_german_single_family_home` call sites with a
+  keyword-args-to-field-assignments script silently produced one wrecked file: the setup
+  whose last keyword argument ended `...,)` on the same line ran the "read until the
+  closing paren" loop past the end of the call and rewrote nine following statements into
+  attribute assignments. `compileall` over the touched trees caught it instantly. Any
+  future sweep of this shape should run a parse gate per file, not per tree.
+
+- **[elegance] `Catalog` attribute access is inherently `Any`.** `presets.X` cannot be
+  typed: a `ClassVar` may not contain a type variable, so `Catalog` cannot be generic over
+  the config class it serves. Call sites that immediately return the preset therefore need
+  an explicit annotation to satisfy `warn_return_any`. A `__class_getitem__`-based
+  `Catalog[SomeConfig]` declared as a plain class attribute (not `ClassVar`) might work
+  once the `Component[TConfig]` generics sweep lands; worth revisiting then.

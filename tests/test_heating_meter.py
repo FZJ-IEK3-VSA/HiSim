@@ -10,6 +10,7 @@ import pytest
 import numpy as np
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
+from hisim.config import SizingContext
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import (
@@ -125,10 +126,12 @@ def test_house(
     )
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
-            absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-            heating_system=my_hds_controller_information.hds_controller_config.heating_system,
+        heat_distribution_system.HeatDistributionConfig.presets.standard.resolve(
+            SizingContext(
+                water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
+                conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+                heat_distribution_system_type=my_hds_controller_information.hds_controller_config.heating_system,
+            )
         )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(

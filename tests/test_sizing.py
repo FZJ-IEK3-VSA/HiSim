@@ -18,6 +18,7 @@ import pytest
 from dataclasses_json import dataclass_json
 
 from hisim.config import ComponentID, ConfigBase
+from hisim.config import sizing
 from hisim.config.presets import Catalog, preset_provenance
 from hisim.config.sizing import (
     AUTO,
@@ -245,3 +246,64 @@ def test_for_building_snapshots_the_derived_building_facts():
     enriched = ctx.with_facts(water_mass_flow_rate_in_kg_per_second=0.27)
     assert enriched.water_mass_flow_rate_in_kg_per_second == 0.27
     assert ctx.water_mass_flow_rate_in_kg_per_second is None
+
+
+@pytest.mark.base
+def test_the_component_init_check_rejects_unresolved_configs():
+    """A config still carrying AUTO must never reach a component, with a lawful error."""
+    from hisim.components.generic_boiler import GenericBoiler, GenericBoilerConfig
+    from hisim.simulationparameters import SimulationParameters
+
+    parameters = SimulationParameters.one_day_only(2021, 3600)
+    with pytest.raises(ConfigSizingError, match=r"requires sizing in 2 field\(s\)"):
+        GenericBoiler(config=GenericBoilerConfig.presets.condensing_gas, my_simulation_parameters=parameters)
+
+
+@pytest.mark.base
+def test_boiler_presets_reproduce_the_former_factory_values():
+    """The pilot conversion is value-neutral: presets resolve to the old factory numbers."""
+    from hisim.components.generic_boiler import GenericBoilerConfig
+
+    ctx = SizingContext(heating_load_in_watt=8_000.0, number_of_apartments=1)
+    expected_max = max(8_000.0, 2_500.0 * 1) * 1.1  # the old scale_thermal_power
+    scaled = GenericBoilerConfig.presets.condensing_gas.resolve(ctx)
+    assert scaled.maximal_thermal_power_in_watt == expected_max
+    assert scaled.minimal_thermal_power_in_watt == 0.0
+    pellet = GenericBoilerConfig.presets.pellets.resolve(ctx)
+    assert pellet.minimal_thermal_power_in_watt == 1 / 12 * expected_max
+    nominal = GenericBoilerConfig.presets.condensing_gas_12kw
+    assert nominal.maximal_thermal_power_in_watt == 12_000.0
+    assert nominal.minimal_thermal_power_in_watt == 1_000.0
+    assert not sizing.auto_fields(nominal)
+
+
+@pytest.mark.base
+def test_hds_preset_is_sizing_mandatory_and_enum_typed():
+    """The heat distribution preset resolves its enum fact and rounds the mass flow."""
+    from hisim.components.heat_distribution_system import (
+        HeatDistributionConfig,
+        HeatDistributionSystemType,
+    )
+
+    ctx = SizingContext(
+        water_mass_flow_rate_in_kg_per_second=0.2712,
+        conditioned_floor_area_in_m2=121.2,
+        heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING,
+    )
+    resolved = HeatDistributionConfig.presets.standard.resolve(ctx)
+    assert resolved.water_mass_flow_rate_in_kg_per_second == 0.27  # the old factory's round(.., 2)
+    assert resolved.heating_system is HeatDistributionSystemType.FLOORHEATING
+    # enum-typed sizable field round-trips as a member, thanks to value_type
+    restored = HeatDistributionConfig.from_dict(resolved.to_dict())
+    assert restored.heating_system is HeatDistributionSystemType.FLOORHEATING
+
+
+@pytest.mark.base
+def test_ems_preset_has_nothing_to_size():
+    """The EMS is the IGNORED case: resolve raises instead of silently no-opping."""
+    from hisim.components.controller_l2_energy_management_system import EMSConfig
+
+    config = EMSConfig.presets.optimize_own_consumption
+    assert config.strategy == "optimize_own_consumption"
+    with pytest.raises(NothingToSizeError):
+        config.resolve(SizingContext(heating_load_in_watt=10_000.0))

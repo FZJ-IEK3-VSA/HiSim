@@ -282,11 +282,10 @@ def test_get_cost_capex_raises_on_unknown_heating_system() -> None:
     offending value.
     """
     invalid_heating_system = "NOT_A_HEATING_SYSTEM"  # not a HeatDistributionSystemType member
-    config = heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
-        water_mass_flow_rate_in_kg_per_second=0.1,
-        absolute_conditioned_floor_area_in_m2=100.0,
-        heating_system=invalid_heating_system,  # type: ignore[arg-type]  # intentionally invalid
-    )
+    config = heat_distribution_system.HeatDistributionConfig.presets.standard
+    config.water_mass_flow_rate_in_kg_per_second = 0.1
+    config.absolute_conditioned_floor_area_in_m2 = 100.0
+    config.heating_system = invalid_heating_system  # type: ignore[assignment]  # intentionally invalid
     simulation_parameters = SimulationParameters.one_day_only(2017, 60)
     with pytest.raises(ValueError, match="Unknown heating_system type"):
         heat_distribution_system.HeatDistribution.get_cost_capex(

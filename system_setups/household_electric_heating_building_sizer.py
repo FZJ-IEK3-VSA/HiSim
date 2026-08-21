@@ -318,7 +318,7 @@ def setup_function(
     if share_of_maximum_pv_potential != 0 and energy_system_config_.use_battery_and_ems:
 
         # Build EMS
-        my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
+        my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.presets.optimize_own_consumption
 
         my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
             my_simulation_parameters=my_simulation_parameters,

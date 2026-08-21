@@ -3,7 +3,7 @@
 # clean
 import importlib
 from enum import Enum, unique
-from typing import List, Any, Optional
+from typing import Any, ClassVar, List, Optional, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -18,7 +18,18 @@ from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import OpexCostDataClass, CapexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import (
+    Catalog,
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    FactContribution,
+    Sizable,
+    Size,
+    SizingContext,
+    concrete,
+    sized_field,
+)
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
@@ -81,48 +92,37 @@ class HeatDistributionConfig(ConfigBase):
         """Return the full class name of the base class."""
         return HeatDistribution.get_full_classname()  # type: ignore[no-any-return]
 
-    component_id: ComponentID
-    heating_system: HeatDistributionSystemType
-    water_mass_flow_rate_in_kg_per_second: float
-    absolute_conditioned_floor_area_in_m2: float
-    position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: Optional[float]
-    #: cost for investment in Euro
-    investment_costs_in_euro: Optional[float]
-    #: lifetime in years
-    lifetime_in_years: Optional[float]
-    # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: Optional[float]
-    # subsidies as percentage of investment costs
-    subsidy_as_percentage_of_investment_costs: Optional[float]
+    #: Named default presets. The heat distribution system has no defensible nominal —
+    #: every essential field is sized to the building it serves — so the standard preset
+    #: is a pure sizable template: all three sized fields default to AUTO and the config
+    #: cannot reach a component unresolved (config_defaults_spec.md design B).
+    PRESET_COMPONENT_ID: ClassVar[ComponentID] = ComponentID(name="HeatDistributionSystem")
 
-    @classmethod
-    def get_default_heat_distribution_config(
-        cls,
-        water_mass_flow_rate_in_kg_per_second: float,
-        absolute_conditioned_floor_area_in_m2: float,
-        heating_system: HeatDistributionSystemType,
-        name: str = "HeatDistributionSystem",
-        component_id: Optional[ComponentID] = None,
-        position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = PositionHotWaterStorageInSystemSetup.PARALLEL,  # noqa: E501
-    ) -> "HeatDistributionConfig":
-        """Get a default heat distribution system config."""
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        config = HeatDistributionConfig(
-            component_id=component_id,
-            heating_system=heating_system,
-            water_mass_flow_rate_in_kg_per_second=round(water_mass_flow_rate_in_kg_per_second, 2),
-            absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
-            position_hot_water_storage_in_system=position_hot_water_storage_in_system,
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-        )
-        return config
+    component_id: ComponentID
+    heating_system: Sizable[HeatDistributionSystemType] = sized_field(
+        rule=Size.HEAT_DISTRIBUTION_SYSTEM_TYPE, value_type=HeatDistributionSystemType
+    )
+    water_mass_flow_rate_in_kg_per_second: Sizable[float] = sized_field(
+        rule=Size.WATER_MASS_FLOW_RATE_IN_KG_PER_SECOND.rounded(2)
+    )
+    absolute_conditioned_floor_area_in_m2: Sizable[float] = sized_field(rule=Size.CONDITIONED_FLOOR_AREA_IN_M2)
+    position_hot_water_storage_in_system: PositionHotWaterStorageInSystemSetup = (
+        PositionHotWaterStorageInSystemSetup.PARALLEL
+    )
+    #: CO2 footprint of investment in kg; None means postprocessing looks it up.
+    device_co2_footprint_in_kg: Optional[float] = None
+    #: cost for investment in Euro; None means postprocessing looks it up.
+    investment_costs_in_euro: Optional[float] = None
+    #: lifetime in years; None means postprocessing looks it up.
+    lifetime_in_years: Optional[float] = None
+    # maintenance cost in euro per year; None means postprocessing looks it up.
+    maintenance_costs_in_euro_per_year: Optional[float] = None
+    # subsidies as percentage of investment costs; None means postprocessing looks it up.
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
+
+    presets: ClassVar[Catalog] = Catalog(
+        standard=lambda: HeatDistributionConfig(component_id=HeatDistributionConfig.PRESET_COMPONENT_ID),
+    )
 
 
 @dataclass
@@ -188,11 +188,11 @@ class HeatDistribution(cp.Component):
         self.water_temperature_output_in_celsius: float = 21
         self.water_input_temperature_in_celsius: float = 21
 
-        self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second: float = (
+        self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second: float = concrete(
             self.heat_distribution_system_config.water_mass_flow_rate_in_kg_per_second
         )
 
-        self.absolute_conditioned_floor_area_in_m2: float = (
+        self.absolute_conditioned_floor_area_in_m2: float = concrete(
             self.heat_distribution_system_config.absolute_conditioned_floor_area_in_m2
         )
 
@@ -647,7 +647,7 @@ class HeatDistribution(cp.Component):
 
         kpi_tag = KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM
         unit = lt.Units.SQUARE_METER
-        size_of_energy_system = config.absolute_conditioned_floor_area_in_m2
+        size_of_energy_system = concrete(config.absolute_conditioned_floor_area_in_m2)
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
             simulation_parameters=simulation_parameters,
@@ -843,6 +843,12 @@ class HeatDistribution(cp.Component):
 @dataclass
 class HeatDistributionControllerConfig(ConfigBase):
     """HeatDistribution Controller Config Class."""
+
+    #: Sizing facts this config contributes (spec §8.4): the water mass flow it derives
+    #: via HeatDistributionControllerInformation and the heat distribution system type —
+    #: the two sibling facts the HeatDistributionConfig preset resolves from. Assigned
+    #: below the class, next to the compute function.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[FactContribution, ...]] = ()
 
     @classmethod
     def get_main_classname(cls):
@@ -1460,3 +1466,28 @@ class HeatDistributionControllerInformation:
             * self.temperature_difference_between_flow_and_return_in_celsius
         )
         return heating_distribution_system_water_mass_flow_in_kg_per_second
+
+
+def _hds_controller_sizing_facts(
+    config: HeatDistributionControllerConfig, ctx: SizingContext
+) -> dict:
+    """Computes the heat-distribution sizing facts from the controller config (spec §8.4).
+
+    Uses the same HeatDistributionControllerInformation derivation the setups call today,
+    so engine-resolved values are identical to the hand-threaded ones. The context is
+    unused: the controller config already carries its building-derived parameters.
+    """
+    del ctx
+    information = HeatDistributionControllerInformation(config=config)
+    return {
+        "water_mass_flow_rate_in_kg_per_second": information.water_mass_flow_rate_in_kg_per_second,
+        "heat_distribution_system_type": config.heating_system,
+    }
+
+
+HeatDistributionControllerConfig.SIZING_CONTRIBUTIONS = (
+    FactContribution(
+        facts=("water_mass_flow_rate_in_kg_per_second", "heat_distribution_system_type"),
+        compute=_hds_controller_sizing_facts,
+    ),
+)

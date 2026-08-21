@@ -276,3 +276,33 @@ def test_unresolved_configs_keep_auto_until_the_engine_ran():
     )
     assert template.band_in_watt is AUTO  # input untouched
     assert resolved[1].band_in_watt == 2_000.0
+
+
+@pytest.mark.base
+def test_the_real_chain_resolves_seedlessly_and_order_independently():
+    """The chain building → HDS controller → HDS/boiler resolves from a shuffled, seedless input."""
+    from hisim.components.building import BuildingConfig
+    from hisim.components.generic_boiler import GenericBoilerConfig
+    from hisim.components.heat_distribution_system import (
+        HeatDistributionConfig,
+        HeatDistributionControllerConfig,
+        HeatDistributionSystemType,
+    )
+
+    building = BuildingConfig.presets.german_single_family_home
+    controller = HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
+        set_heating_temperature_for_building_in_celsius=20.0,
+        set_cooling_temperature_for_building_in_celsius=25.0,
+        heating_load_of_building_in_watt=7780.8,
+        heating_reference_temperature_in_celsius=-7.0,
+    )
+    hds = HeatDistributionConfig.presets.standard
+    boiler = GenericBoilerConfig.presets.condensing_gas
+    resolved = resolve_all([hds, boiler, building, controller])  # deliberately shuffled
+    resolved_hds, resolved_boiler = resolved[0], resolved[1]
+    assert resolved_hds.water_mass_flow_rate_in_kg_per_second == 0.27
+    assert resolved_hds.heating_system is HeatDistributionSystemType.FLOORHEATING
+    heating_load = SizingContext.for_building(building).heating_load_in_watt
+    assert heating_load is not None
+    assert resolved_boiler.maximal_thermal_power_in_watt == pytest.approx(heating_load * 1.1)
+    assert resolved_boiler.sizing_record  # provenance for the audit trail

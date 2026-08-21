@@ -9,7 +9,7 @@ The component with the lowest source weight is activated first.
 # clean
 from dataclasses import dataclass
 
-from typing import Any, List, Tuple, Optional, cast
+from typing import Any, ClassVar, List, Tuple, Optional, cast
 from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -19,7 +19,7 @@ from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import ComponentInput, ComponentOutput
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import Catalog, ConfigBase, ComponentID, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
@@ -75,17 +75,13 @@ class EMSConfig(ConfigBase):
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float]
 
-    @classmethod
-    def get_default_config_ems(
-        cls,
-        name: str = "L2EMSElectricityController",
-        component_id: Optional[ComponentID] = None,
-    ) -> "EMSConfig":
-        """Default Config for Energy Management System."""
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        config = EMSConfig(
-            component_id=component_id,
+    #: Named default presets (config_defaults_spec.md design B). The EMS declares no
+    #: sizable field — its config is strategy parameters and temperature offsets, nothing
+    #: physical to scale — so calling ``.resolve(ctx)`` on it raises NothingToSizeError
+    #: rather than silently no-opping: a setup that believes it sized the EMS is wrong.
+    presets: ClassVar[Catalog] = Catalog(
+        optimize_own_consumption=lambda: EMSConfig(
+            component_id=ComponentID(name="L2EMSElectricityController"),
             strategy="optimize_own_consumption",
             limit_to_shave=0,
             building_indoor_temperature_offset_value=2,
@@ -97,8 +93,8 @@ class EMSConfig(ConfigBase):
             lifetime_in_years=None,
             maintenance_costs_in_euro_per_year=None,
             subsidy_as_percentage_of_investment_costs=None,
-        )
-        return config
+        ),
+    )
 
 
 class EMSState:

@@ -74,7 +74,6 @@ class SimpleController(Component):
 
     def __init__(
         self,
-        name: str,
         my_simulation_parameters: SimulationParameters,
         config: SimpleControllerConfig,
         my_display_config: DisplayConfig | None = None,
@@ -82,9 +81,8 @@ class SimpleController(Component):
         """Initialize the controller and register its input/output channels.
 
         Args:
-            name: Name of the controller instance.
             my_simulation_parameters: Parameters of the current simulation.
-            config: Configuration providing the building name and component name.
+            config: Configuration providing the structured component identity.
             my_display_config: Optional display configuration; defaults to a new
                 DisplayConfig when None.
         """
@@ -112,6 +110,7 @@ class SimpleController(Component):
             SimpleController.GasHeaterPowerPercent,
             lt.LoadTypes.ANY,
             lt.Units.PERCENT,
+            output_description="Requested gas heater power level in percent (0 = off, 100 = full power).",
         )
         self.heater_state: int = 0
         self.previous_heater_state: int = self.heater_state

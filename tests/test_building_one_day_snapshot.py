@@ -52,7 +52,7 @@ request and, during the cleanup, may only be justified by a metadata change.
 
 import dataclasses
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
 import pytest
 
@@ -453,6 +453,35 @@ class OneDaySnapshot:
             payload[cls.output_section_name(variant_name)] = dict(result.output_vectors)
         return payload
 
+    #: Maximum distance, in units of the larger operand's ULP, at which two float outputs
+    #: still count as equal. The one-day outputs pass through transcendental functions
+    #: (``math.cos`` in the window model, numpy trigonometry inside pvlib) whose last bit is
+    #: legitimately platform-dependent — different libm builds round them differently — so a
+    #: golden generated on one machine can differ from another machine's run by a few ULPs on
+    #: the trig-derived columns (observed 2026-08-21: glibc 2.43 vs the ubuntu-latest CI
+    #: runner, 1-ULP shifts on 6–8 daylight timesteps of the solar-gain chain). Four ULPs
+    #: absorbs that noise while staying ~three orders of magnitude below anything a real
+    #: model change produces; the pure-arithmetic layer-1 golden stays bit-exact and remains
+    #: the referee for summation-order-level changes.
+    PLATFORM_ULP_TOLERANCE: ClassVar[int] = 4
+
+    @classmethod
+    def values_match(cls, expected: Any, actual: Any) -> bool:
+        """Compare one golden value against one current value, ULP-tolerantly for floats.
+
+        Exact equality short-circuits (also covering the non-float outputs); float pairs are
+        additionally accepted when they lie within :attr:`PLATFORM_ULP_TOLERANCE` ULPs of
+        each other, which is the cross-platform libm variance documented on that constant.
+        Anything else — differing types, integers that moved, floats beyond the ULP band —
+        is a genuine difference.
+        """
+        if expected == actual:
+            return True
+        if isinstance(expected, float) and isinstance(actual, float):
+            ulp_of_larger = math.ulp(max(abs(expected), abs(actual)))
+            return abs(expected - actual) <= cls.PLATFORM_ULP_TOLERANCE * ulp_of_larger
+        return False
+
     @classmethod
     def describe_vector_differences(cls, expected_vectors: Dict[str, Any], actual_vectors: Dict[str, Any]) -> str:
         """Describe how two sets of output vectors differ, compactly enough to read.
@@ -460,7 +489,8 @@ class OneDaySnapshot:
         A drifting thermal model moves whole vectors, so reporting every differing value
         would bury the signal. Instead each differing output is reported once with the number
         of differing timesteps and the first difference, which together identify both the
-        affected output and when it starts to deviate.
+        affected output and when it starts to deviate. Values are compared through
+        :meth:`values_match`, i.e. exactly except for the few-ULP platform band on floats.
         """
         report_lines: List[str] = []
         for field_name in sorted(set(expected_vectors) | set(actual_vectors)):
@@ -483,8 +513,10 @@ class OneDaySnapshot:
             differing_timesteps = [
                 timestep
                 for timestep, (expected, actual) in enumerate(zip(expected_vector, actual_vector))
-                if expected != actual
+                if not cls.values_match(expected, actual)
             ]
+            if not differing_timesteps:
+                continue
             first_timestep = differing_timesteps[0]
             report_lines.append(
                 f"  {field_name}: {len(differing_timesteps)} of {len(expected_vector)} timesteps differ, "
@@ -560,9 +592,12 @@ def test_one_day_output_vectors_match_golden(
 ) -> None:
     """Verify every output vector of one configuration variant against the golden.
 
-    All 96 values of all declared outputs are compared exactly, so a sign flip, a
-    one-timestep shift or a pair of swapped outputs fails here even though the daily totals
-    would be unchanged.
+    All 96 values of all declared outputs are compared, so a sign flip, a one-timestep
+    shift or a pair of swapped outputs fails here even though the daily totals would be
+    unchanged. Floats are compared up to the few-ULP platform band of
+    :attr:`OneDaySnapshot.PLATFORM_ULP_TOLERANCE` — the trig-derived columns legitimately
+    differ in the last bit between libm builds — while everything meaningful sits many
+    orders of magnitude above it.
     """
     expected_vectors = one_day_golden[OneDaySnapshot.output_section_name(variant_name)]
     actual_vectors = one_day_simulation_results[variant_name].output_vectors

@@ -57,6 +57,14 @@ that averages hide) to `tests/goldens/building_one_day.json`. One save/restore r
 mid-run exercises the convergence path. A second run with a scaled config (different
 floor area) covers the scaling branches. Target runtime: seconds.
 
+*Amended 2026-08-21 (findings entry 25):* layer-2 float comparison is exact **up to a
+few-ULP platform band** (`PLATFORM_ULP_TOLERANCE`), not bitwise — the trig-derived
+columns (window model `math.cos`, pvlib) legitimately differ in the last bit between
+libm builds, which turned CI red on 1-ULP shifts the day after the merge. Layer 1
+contains only IEEE basic arithmetic and stays strictly bitwise; it remains the referee
+for summation-order-level changes (the `sum()` and door-round-trip catches were layer-1
+catches and remain reproducible).
+
 **Layer 3: the existing golden / parity / scenario-freshness CI gates.**
 Nothing to build — declared here as the slow backstop every phase PR runs behind, exactly
 like every sweep before it.

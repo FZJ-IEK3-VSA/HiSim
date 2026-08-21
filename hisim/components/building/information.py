@@ -7,7 +7,8 @@ verbatim from the former single-module ``building.py``.
 
 # clean
 
-from typing import ClassVar, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import ClassVar, Dict, Iterable, List, Optional, Tuple
 
 import pandas as pd
 
@@ -63,6 +64,123 @@ class BuildingInformation:
     #: Transmission adjustment factor b applied to a floor whose U-value comes from the
     #: config instead of TABULA; the code does not document where the 0.5 comes from.
     FLOOR_ADJUSTMENT_FACTOR_FOR_CONFIGURED_U_VALUE: float = 0.5
+
+    @dataclass(frozen=True)
+    class EnvelopeElement:
+        """One row of the class-scoped envelope-element table.
+
+        The five envelope elements (floor, wall, roof, window, door) used to be handled by
+        ten near-identical ``set_*`` methods; the per-element knowledge those methods
+        duplicated lives in one frozen descriptor per element instead (cleanup phase 4).
+        A descriptor names the TABULA columns of the element's reference sub-areas, actual
+        U-values and transmission adjustment factors, the two ``BuildingConfig`` fields
+        that override area and U-value, and the two rules that vary between elements: the
+        adjustment factor used when TABULA's b_Transmission columns are not consulted, and
+        the door-only guard against a zero reference area. The descriptors are consumed by
+        :py:meth:`BuildingInformation._scaled_element_area_in_m2` and
+        :py:meth:`BuildingInformation._element_u_value_and_adjustment_factor`.
+        """
+
+        #: Human-readable element name; not used in any computation, but it makes the
+        #: frozen dataclass repr identify the element during debugging and in test output.
+        element_name: str
+        #: TABULA columns holding the element's reference sub-areas in m2 (``A_*``). Their
+        #: sum, scaled with the conditioned-living-area scaling factor, is the element
+        #: area, and it is also the weight and divisor of the U-value average.
+        area_columns: Tuple[str, ...]
+        #: TABULA columns holding the element's actual U-values in W/(m2 K)
+        #: (``U_Actual_*``), parallel to :py:attr:`area_columns` entry by entry so the
+        #: area-weighted U-value average pairs each U-value with its own sub-area.
+        u_value_columns: Tuple[str, ...]
+        #: TABULA columns holding the element's transmission adjustment factors
+        #: (``b_Transmission_*``); the largest one is used when the U-value comes from
+        #: TABULA. Empty for window and door, whose factor is never taken from TABULA.
+        transmission_adjustment_columns: Tuple[str, ...]
+        #: Name of the ``BuildingConfig`` field whose non-``None`` value replaces the
+        #: scaled TABULA area for this element (the ``*_area_in_m2`` fields).
+        configured_area_field: str
+        #: Name of the ``BuildingConfig`` field whose non-``None`` value replaces the
+        #: TABULA U-value average (the ``*_u_value_in_watt_per_m2_per_kelvin`` fields).
+        configured_u_value_field: str
+        #: Transmission adjustment factor used whenever the b_Transmission columns are not
+        #: consulted: always for elements that declare none (window and door use 1), and
+        #: when the U-value is configured for those that do (floor uses 0.5, wall and
+        #: roof use 1).
+        fixed_adjustment_factor: float
+        #: Whether a zero total TABULA reference area keeps the first raw U-value instead
+        #: of dividing by zero. Only the door sets this: its single-column weighted
+        #: average is the pinned ``(u * area) / area`` float round trip (findings log
+        #: entries 7 and 17), and the guard skips it when ``A_Door_1`` is 0.
+        keep_u_value_when_reference_area_is_zero: bool = False
+
+    # The envelope-element table: one descriptor per element, consumed by the explicit
+    # area and heat-transfer pipelines in get_building_area_parameters and
+    # get_building_heat_transfer_parameters. Adding an element means adding a descriptor
+    # here plus its named attribute assignments in those two pipelines.
+
+    #: Floor: two TABULA sub-areas, and the only element whose configured-U-value branch
+    #: uses an adjustment factor other than 1 (the undocumented 0.5).
+    FLOOR_ELEMENT: ClassVar[EnvelopeElement] = EnvelopeElement(
+        element_name="floor",
+        area_columns=("A_Floor_1", "A_Floor_2"),
+        u_value_columns=("U_Actual_Floor_1", "U_Actual_Floor_2"),
+        transmission_adjustment_columns=("b_Transmission_Floor_1", "b_Transmission_Floor_2"),
+        configured_area_field="floor_area_in_m2",
+        configured_u_value_field="floor_u_value_in_watt_per_m2_per_kelvin",
+        fixed_adjustment_factor=FLOOR_ADJUSTMENT_FACTOR_FOR_CONFIGURED_U_VALUE,
+    )
+    #: Wall: the only element with three TABULA sub-areas. Its derived attributes and
+    #: config fields are named "facade" while the TABULA columns say "Wall".
+    WALL_ELEMENT: ClassVar[EnvelopeElement] = EnvelopeElement(
+        element_name="wall",
+        area_columns=("A_Wall_1", "A_Wall_2", "A_Wall_3"),
+        u_value_columns=("U_Actual_Wall_1", "U_Actual_Wall_2", "U_Actual_Wall_3"),
+        transmission_adjustment_columns=("b_Transmission_Wall_1", "b_Transmission_Wall_2", "b_Transmission_Wall_3"),
+        configured_area_field="facade_area_in_m2",
+        configured_u_value_field="facade_u_value_in_watt_per_m2_per_kelvin",
+        fixed_adjustment_factor=1,
+    )
+    #: Roof: two TABULA sub-areas, adjustment factor 1 when the U-value is configured.
+    ROOF_ELEMENT: ClassVar[EnvelopeElement] = EnvelopeElement(
+        element_name="roof",
+        area_columns=("A_Roof_1", "A_Roof_2"),
+        u_value_columns=("U_Actual_Roof_1", "U_Actual_Roof_2"),
+        transmission_adjustment_columns=("b_Transmission_Roof_1", "b_Transmission_Roof_2"),
+        configured_area_field="roof_area_in_m2",
+        configured_u_value_field="roof_u_value_in_watt_per_m2_per_kelvin",
+        fixed_adjustment_factor=1,
+    )
+    #: Window: no b_Transmission columns (factor is always 1). The per-direction area
+    #: scaling is the one legitimate special case the table does not cover; it lives as
+    #: an explicit window-specific step in get_building_area_parameters, including the
+    #: pinned ZeroDivisionError for codes whose reference window areas are both zero
+    #: (findings log entries 1 and 2).
+    WINDOW_ELEMENT: ClassVar[EnvelopeElement] = EnvelopeElement(
+        element_name="window",
+        area_columns=("A_Window_1", "A_Window_2"),
+        u_value_columns=("U_Actual_Window_1", "U_Actual_Window_2"),
+        transmission_adjustment_columns=(),
+        configured_area_field="window_area_in_m2",
+        configured_u_value_field="window_u_value_in_watt_per_m2_per_kelvin",
+        fixed_adjustment_factor=1,
+    )
+    #: Door: a single TABULA sub-area, no b_Transmission columns, and the zero-area guard
+    #: that keeps the raw U-value when A_Door_1 is 0 instead of dividing by it.
+    DOOR_ELEMENT: ClassVar[EnvelopeElement] = EnvelopeElement(
+        element_name="door",
+        area_columns=("A_Door_1",),
+        u_value_columns=("U_Actual_Door_1",),
+        transmission_adjustment_columns=(),
+        configured_area_field="door_area_in_m2",
+        configured_u_value_field="door_u_value_in_watt_per_m2_per_kelvin",
+        fixed_adjustment_factor=1,
+        keep_u_value_when_reference_area_is_zero=True,
+    )
+
+    #: Directions for which TABULA lists per-direction window areas (the
+    #: ``A_Window_<direction>`` columns), in the order the per-direction scaling reads
+    #: them and in which ``scaled_window_areas_in_m2`` is laid out.
+    WINDOWS_DIRECTIONS: ClassVar[Tuple[str, ...]] = ("South", "East", "North", "West", "Horizontal")
 
     def __init__(
         self,
@@ -221,7 +339,19 @@ class BuildingInformation:
         }
 
     def get_building_area_parameters(self):
-        """Get the building parameter."""
+        """Derive every envelope area of the building as an explicit ordered pipeline.
+
+        The conditioned floor area and its scaling factor come first because every
+        TABULA-sourced area is scaled with that factor; then each envelope element's area
+        is assigned by name from the shared :py:meth:`_scaled_element_area_in_m2` helper
+        and the element's table descriptor, in the order the former per-element methods
+        ran. The window's per-direction scaling follows its area as the one element
+        special case the table does not cover: the per-direction TABULA window areas are
+        rescaled so their total matches the resulting window area, which divides by the
+        TABULA reference window area — zero for some codes, which therefore raise
+        (findings log entries 1 and 2, pinned behavior). The total envelope area closes
+        the pipeline.
+        """
         # Reference area [m^2] (TABULA: Reference floor area A_C_Ref )Ref: ISO standard 7.2.2.2
         self.conditioned_floor_area_in_m2_tabula_ref = float((self.buildingdata_ref["A_C_Ref"].values[0]))
 
@@ -231,19 +361,27 @@ class BuildingInformation:
             )
         )
 
-        self.set_floor_area_parameter()
+        self.floor_area_in_m2 = self._scaled_element_area_in_m2(self.FLOOR_ELEMENT)
+        self.facade_area_in_m2 = self._scaled_element_area_in_m2(self.WALL_ELEMENT)
+        self.roof_area_in_m2 = self._scaled_element_area_in_m2(self.ROOF_ELEMENT)
+        self.window_area_in_m2 = self._scaled_element_area_in_m2(self.WINDOW_ELEMENT)
 
-        # if self.facade_u_value_in_watt_per_m2_per_kelvin is not None or self.facade_area_in_m2 is not None:
-        self.set_wall_area_parameter()
+        # Window special case: rescale the per-direction TABULA window areas so their
+        # total matches the window area derived above. The divisor is the *reference*
+        # window area, so a configured window area cannot rescue a code whose reference
+        # areas are both zero — those codes raise ZeroDivisionError here, exactly as
+        # pinned in the golden (findings log entries 1 and 2).
+        self.window_scaling_factor = self.window_area_in_m2 / (
+            float(self.buildingdata_ref["A_Window_1"].values[0])
+            + float(self.buildingdata_ref["A_Window_2"].values[0])
+        )
+        self.windows_directions: List[str] = list(self.WINDOWS_DIRECTIONS)
+        self.scaled_window_areas_in_m2: List[float] = [
+            float(self.buildingdata_ref["A_Window_" + windows_direction].iloc[0]) * self.window_scaling_factor
+            for windows_direction in self.windows_directions
+        ]
 
-        # if self.roof_u_value_in_watt_per_m2_per_kelvin is not None or self.roof_area_in_m2 is not None:
-        self.set_roof_area_parameter()
-
-        # if self.window_u_value_in_watt_per_m2_per_kelvin is not None or self.window_area_in_m2 is not None:
-        self.set_window_area_parameter()
-
-        # if self.door_u_value_in_watt_per_m2_per_kelvin is not None or self.door_area_in_m2 is not None:
-        self.set_door_area_parameter()
+        self.door_area_in_m2 = self._scaled_element_area_in_m2(self.DOOR_ELEMENT)
 
         self.building_total_area_in_m2 = (
             self.window_area_in_m2
@@ -254,21 +392,60 @@ class BuildingInformation:
         )
 
     def get_building_heat_transfer_parameters(self):
-        """Get the building heat transfer parameter."""
+        """Derive every heat-transfer parameter of the building as an explicit ordered pipeline.
 
-        self.set_floor_heat_transfer_parameter()
+        For each envelope element the U-value and transmission adjustment factor come by
+        name from the shared :py:meth:`_element_u_value_and_adjustment_factor` helper and
+        the element's table descriptor, and the conductance [W/K] is U-value times element
+        area times adjustment factor — in that operand order, which is pinned float
+        behavior. Thermal bridging and ventilation follow, then the two totals; the method
+        requires :py:meth:`get_building_area_parameters` to have run, because the
+        conductances multiply with the element areas derived there.
+        """
+        (self.floor_u_value_in_watt_per_m2_per_kelvin, self.floor_adjustment_factor_from_tabula) = (
+            self._element_u_value_and_adjustment_factor(self.FLOOR_ELEMENT)
+        )
+        self.heat_conductance_floor_in_watt_per_kelvin = (
+            self.floor_u_value_in_watt_per_m2_per_kelvin
+            * self.floor_area_in_m2
+            * self.floor_adjustment_factor_from_tabula
+        )
 
-        # if self.facade_u_value_in_watt_per_m2_per_kelvin is not None or self.facade_area_in_m2 is not None:
-        self.set_wall_heat_transfer_parameter()
+        (self.facade_u_value_in_watt_per_m2_per_kelvin, self.facade_adjustment_factor_from_tabula) = (
+            self._element_u_value_and_adjustment_factor(self.WALL_ELEMENT)
+        )
+        self.heat_conductance_facade_in_watt_per_kelvin = (
+            self.facade_u_value_in_watt_per_m2_per_kelvin
+            * self.facade_area_in_m2
+            * self.facade_adjustment_factor_from_tabula
+        )
 
-        # if self.roof_u_value_in_watt_per_m2_per_kelvin is not None or self.roof_area_in_m2 is not None:
-        self.set_roof_heat_transfer_parameter()
+        (self.roof_u_value_in_watt_per_m2_per_kelvin, self.roof_adjustment_factor_from_tabula) = (
+            self._element_u_value_and_adjustment_factor(self.ROOF_ELEMENT)
+        )
+        self.heat_conductance_roof_in_watt_per_kelvin = (
+            self.roof_u_value_in_watt_per_m2_per_kelvin
+            * self.roof_area_in_m2
+            * self.roof_adjustment_factor_from_tabula
+        )
 
-        # if self.window_u_value_in_watt_per_m2_per_kelvin is not None or self.window_area_in_m2 is not None:
-        self.set_window_heat_transfer_parameter()
+        (self.window_u_value_in_watt_per_m2_per_kelvin, self.window_adjustment_factor_from_tabula) = (
+            self._element_u_value_and_adjustment_factor(self.WINDOW_ELEMENT)
+        )
+        self.heat_conductance_window_in_watt_per_kelvin = (
+            self.window_u_value_in_watt_per_m2_per_kelvin
+            * self.window_area_in_m2
+            * self.window_adjustment_factor_from_tabula
+        )
 
-        # if self.door_u_value_in_watt_per_m2_per_kelvin is not None or self.door_area_in_m2 is not None:
-        self.set_door_heat_transfer_parameter()
+        (self.door_u_value_in_watt_per_m2_per_kelvin, self.door_adjustment_factor_from_tabula) = (
+            self._element_u_value_and_adjustment_factor(self.DOOR_ELEMENT)
+        )
+        self.heat_conductance_door_in_watt_per_kelvin = (
+            self.door_u_value_in_watt_per_m2_per_kelvin
+            * self.door_area_in_m2
+            * self.door_adjustment_factor_from_tabula
+        )
 
         self.set_thermal_bridging_parameter()
 
@@ -350,289 +527,86 @@ class BuildingInformation:
 
         return scaling_factor_according_to_conditioned_living_area, scaled_conditioned_floor_area_in_m2
 
-    def set_floor_area_parameter(
-        self,
-    ):
-        """Set the floor area of the building.
+    @staticmethod
+    def _left_associated_float_sum(values: Iterable[float]) -> float:
+        """Add floats strictly left to right, like a chain of ``+`` operators does.
 
-        Uses the configured floor area when given, otherwise the sum of the two TABULA
-        floor areas scaled with the conditioned-living-area scaling factor. (The former
-        docstring said "roof" - a copy-paste error, fixed in cleanup phase 3.)
+        The built-in ``sum`` is NOT behavior-identical to chained ``+`` on floats: since
+        Python 3.12 it uses Neumaier compensated summation (CPython gh-100425), which can
+        differ from plain left-associated addition in the last mantissa bit — e.g. TABULA's
+        wall areas 255.95 + 38.48 + 52.92 give 347.35 chained but 347.34999999999997 via
+        ``sum``. The former per-element methods wrote the additions out as ``+`` chains and
+        the golden pins those exact bit patterns, so the shared helpers must sum this way.
         """
-        if self.buildingconfig.floor_area_in_m2 is None:
-            area_floor_1 = float(self.buildingdata_ref["A_Floor_1"].values[0])
-            area_floor_2 = float(self.buildingdata_ref["A_Floor_2"].values[0])
-            self.floor_area_in_m2 = (
-                area_floor_1 + area_floor_2
-            ) * self.scaling_factor_according_to_conditioned_living_area
-        else:
-            self.floor_area_in_m2 = self.buildingconfig.floor_area_in_m2
+        total = 0.0
+        for value in values:
+            total = total + value
+        return total
 
-    def set_wall_area_parameter(self):
-        """Set the facade (wall) area of the building.
+    def _scaled_element_area_in_m2(self, element: EnvelopeElement) -> float:
+        """Return the area [m2] of one envelope element, from the config or from TABULA.
 
-        Uses the configured facade area when given, otherwise the sum of the three TABULA
-        wall areas scaled with the conditioned-living-area scaling factor.
+        A non-``None`` value in the element's configured-area field of the building config
+        wins unchanged; otherwise the element's TABULA reference sub-areas (the descriptor's
+        ``area_columns``) are summed and scaled with the conditioned-living-area scaling
+        factor, exactly as each of the five former ``set_*_area_parameter`` methods did.
+        The helper only returns the value — the pipeline in
+        :py:meth:`get_building_area_parameters` assigns it to the element's named attribute.
         """
-        if self.buildingconfig.facade_area_in_m2 is None:
-            area_wall_1 = float(self.buildingdata_ref["A_Wall_1"].values[0])
-            area_wall_2 = float(self.buildingdata_ref["A_Wall_2"].values[0])
-            area_wall_3 = float(self.buildingdata_ref["A_Wall_3"].values[0])
-            self.facade_area_in_m2 = (
-                area_wall_1 + area_wall_2 + area_wall_3
-            ) * self.scaling_factor_according_to_conditioned_living_area
+        configured_area_in_m2: Optional[float] = getattr(self.buildingconfig, element.configured_area_field)
+        if configured_area_in_m2 is not None:
+            return configured_area_in_m2
+        tabula_reference_area_in_m2 = self._left_associated_float_sum(
+            float(self.buildingdata_ref[area_column].values[0]) for area_column in element.area_columns
+        )
+        return tabula_reference_area_in_m2 * self.scaling_factor_according_to_conditioned_living_area
 
-        else:
-            self.facade_area_in_m2 = self.buildingconfig.facade_area_in_m2
+    def _element_u_value_and_adjustment_factor(self, element: EnvelopeElement) -> Tuple[float, float]:
+        """Return the U-value [W/(m2 K)] and transmission adjustment factor of one element.
 
-    def set_roof_area_parameter(
-        self,
-    ):
-        """Set the roof area of the building.
-
-        Uses the configured roof area when given, otherwise the sum of the two TABULA
-        roof areas scaled with the conditioned-living-area scaling factor.
+        A non-``None`` value in the element's configured-U-value field of the building
+        config is returned unchanged, paired with the descriptor's fixed adjustment
+        factor. Otherwise the U-value is the TABULA sub-areas' area-weighted average of
+        the ``u_value_columns`` — with the summands in column order and the reference
+        areas as weights and divisor, so the float results of the former per-element
+        methods are reproduced bit for bit. For the door (one column, zero-area guard
+        set) that average IS the pinned ``(u * area) / area`` round trip, which is NOT a
+        float no-op — it shifts the last mantissa bit for 164 TABULA codes (findings log
+        entries 7 and 17) — so it must not be simplified algebraically; the guard skips
+        the division only when the reference area is zero and keeps the raw U-value. The
+        adjustment factor is the largest of the ``b_Transmission`` columns when the
+        descriptor names any, and the fixed factor otherwise (window and door).
         """
-        if self.buildingconfig.roof_area_in_m2 is None:
-            area_roof_1 = float(self.buildingdata_ref["A_Roof_1"].values[0])
-            area_roof_2 = float(self.buildingdata_ref["A_Roof_2"].values[0])
-            self.roof_area_in_m2 = (
-                area_roof_1 + area_roof_2
-            ) * self.scaling_factor_according_to_conditioned_living_area
-        else:
-            self.roof_area_in_m2 = self.buildingconfig.roof_area_in_m2
+        configured_u_value: Optional[float] = getattr(self.buildingconfig, element.configured_u_value_field)
+        if configured_u_value is not None:
+            return configured_u_value, element.fixed_adjustment_factor
 
-    def set_window_area_parameter(
-        self,
-    ):
-        """Set the total and per-direction window areas of the building.
-
-        Uses the configured window area when given, otherwise the sum of the two TABULA
-        window areas scaled with the conditioned-living-area scaling factor. The
-        per-direction TABULA window areas are then rescaled so their total matches the
-        resulting window area; this divides by the TABULA reference window area, which is
-        zero for some codes and makes those raise (findings log entries 1 and 2).
-        """
-        area_window_1_ref = float(self.buildingdata_ref["A_Window_1"].values[0])
-        area_window_2_ref = float(self.buildingdata_ref["A_Window_2"].values[0])
-        if self.buildingconfig.window_area_in_m2 is None:
-            self.window_area_in_m2 = (
-                area_window_1_ref + area_window_2_ref
-            ) * self.scaling_factor_according_to_conditioned_living_area
-        else:
-            self.window_area_in_m2 = self.buildingconfig.window_area_in_m2
-
-        self.window_scaling_factor = self.window_area_in_m2 / (area_window_1_ref + area_window_2_ref)
-
-        # scaling window areas over wall area
-        self.windows_directions: List[str] = [
-            "South",
-            "East",
-            "North",
-            "West",
-            "Horizontal",
+        u_values = [float(self.buildingdata_ref[u_value_column].values[0]) for u_value_column in element.u_value_columns]
+        reference_areas_in_m2 = [
+            float(self.buildingdata_ref[area_column].values[0]) for area_column in element.area_columns
         ]
+        total_reference_area_in_m2 = self._left_associated_float_sum(reference_areas_in_m2)
 
-        self.scaled_window_areas_in_m2: List[float] = []
-        for windows_direction in self.windows_directions:
-            window_area_of_direction_in_m2 = float(self.buildingdata_ref["A_Window_" + windows_direction].iloc[0])
-
-            self.scaled_window_areas_in_m2.append(window_area_of_direction_in_m2 * self.window_scaling_factor)
-
-    def set_door_area_parameter(
-        self,
-    ):
-        """Set the door area of the building.
-
-        Uses the configured door area when given, otherwise the TABULA door area scaled
-        with the conditioned-living-area scaling factor.
-        """
-        if self.buildingconfig.door_area_in_m2 is None:
-            area_door_1 = float(self.buildingdata_ref["A_Door_1"].values[0])
-            self.door_area_in_m2 = area_door_1 * self.scaling_factor_according_to_conditioned_living_area
+        if element.keep_u_value_when_reference_area_is_zero and total_reference_area_in_m2 == 0:
+            u_value = u_values[0]
         else:
-            self.door_area_in_m2 = self.buildingconfig.door_area_in_m2
+            u_value = (
+                self._left_associated_float_sum(
+                    sub_u_value * sub_area_in_m2
+                    for sub_u_value, sub_area_in_m2 in zip(u_values, reference_areas_in_m2)
+                )
+                / total_reference_area_in_m2
+            )
 
-    def set_floor_heat_transfer_parameter(
-        self,
-    ):
-        """Set the floor U-value, transmission adjustment factor and conductance.
-
-        Without a configured U-value, the area-weighted average of the two TABULA floor
-        U-values and the larger of their b_Transmission adjustment factors are used; with
-        one, the configured U-value is paired with a fixed adjustment factor of 0.5. The
-        conductance [W/K] is U-value times floor area times the adjustment factor.
-        """
-        if self.buildingconfig.floor_u_value_in_watt_per_m2_per_kelvin is None:
-
-            floor_u_value_in_watt_per_m2_per_kelvin_1 = float(self.buildingdata_ref["U_Actual_Floor_1"].values[0])
-            floor_u_value_in_watt_per_m2_per_kelvin_2 = float(self.buildingdata_ref["U_Actual_Floor_2"].values[0])
-
-            area_floor_1 = float(self.buildingdata_ref["A_Floor_1"].values[0])
-            area_floor_2 = float(self.buildingdata_ref["A_Floor_2"].values[0])
-
-            self.floor_u_value_in_watt_per_m2_per_kelvin = (
-                (floor_u_value_in_watt_per_m2_per_kelvin_1 * area_floor_1)
-                + (floor_u_value_in_watt_per_m2_per_kelvin_2 * area_floor_2)
-            ) / (area_floor_1 + area_floor_2)
-
-            b_floor_1 = float(self.buildingdata_ref["b_Transmission_Floor_1"].values[0])
-            b_floor_2 = float(self.buildingdata_ref["b_Transmission_Floor_2"].values[0])
-
-            self.floor_adjustment_factor_from_tabula = max([b_floor_1, b_floor_2])
-
+        if element.transmission_adjustment_columns:
+            adjustment_factor = max(
+                float(self.buildingdata_ref[adjustment_column].values[0])
+                for adjustment_column in element.transmission_adjustment_columns
+            )
         else:
-            self.floor_u_value_in_watt_per_m2_per_kelvin = self.buildingconfig.floor_u_value_in_watt_per_m2_per_kelvin
+            adjustment_factor = element.fixed_adjustment_factor
 
-            self.floor_adjustment_factor_from_tabula = self.FLOOR_ADJUSTMENT_FACTOR_FOR_CONFIGURED_U_VALUE
-
-        self.heat_conductance_floor_in_watt_per_kelvin = (
-            self.floor_u_value_in_watt_per_m2_per_kelvin
-            * self.floor_area_in_m2
-            * self.floor_adjustment_factor_from_tabula
-        )
-
-    def set_wall_heat_transfer_parameter(
-        self,
-    ):
-        """Set the facade (wall) U-value, transmission adjustment factor and conductance.
-
-        Without a configured U-value, the area-weighted average of the three TABULA wall
-        U-values and the largest of their b_Transmission adjustment factors are used; with
-        one, the configured U-value is paired with an adjustment factor of 1. The
-        conductance [W/K] is U-value times facade area times the adjustment factor.
-        """
-        if self.buildingconfig.facade_u_value_in_watt_per_m2_per_kelvin is None:
-
-            facade_u_value_in_watt_per_m2_per_kelvin_1 = float(self.buildingdata_ref["U_Actual_Wall_1"].values[0])
-            facade_u_value_in_watt_per_m2_per_kelvin_2 = float(self.buildingdata_ref["U_Actual_Wall_2"].values[0])
-            facade_u_value_in_watt_per_m2_per_kelvin_3 = float(self.buildingdata_ref["U_Actual_Wall_3"].values[0])
-
-            area_wall_1 = float(self.buildingdata_ref["A_Wall_1"].values[0])
-            area_wall_2 = float(self.buildingdata_ref["A_Wall_2"].values[0])
-            area_wall_3 = float(self.buildingdata_ref["A_Wall_3"].values[0])
-
-            self.facade_u_value_in_watt_per_m2_per_kelvin = (
-                (facade_u_value_in_watt_per_m2_per_kelvin_1 * area_wall_1)
-                + (facade_u_value_in_watt_per_m2_per_kelvin_2 * area_wall_2)
-                + (facade_u_value_in_watt_per_m2_per_kelvin_3 * area_wall_3)
-            ) / (area_wall_1 + area_wall_2 + area_wall_3)
-
-            b_wall_1 = float(self.buildingdata_ref["b_Transmission_Wall_1"].values[0])
-            b_wall_2 = float(self.buildingdata_ref["b_Transmission_Wall_2"].values[0])
-            b_wall_3 = float(self.buildingdata_ref["b_Transmission_Wall_3"].values[0])
-
-            self.facade_adjustment_factor_from_tabula = max([b_wall_1, b_wall_2, b_wall_3])
-
-        else:
-            self.facade_u_value_in_watt_per_m2_per_kelvin = self.buildingconfig.facade_u_value_in_watt_per_m2_per_kelvin
-
-            self.facade_adjustment_factor_from_tabula = 1
-
-        self.heat_conductance_facade_in_watt_per_kelvin = (
-            self.facade_u_value_in_watt_per_m2_per_kelvin
-            * self.facade_area_in_m2
-            * self.facade_adjustment_factor_from_tabula
-        )
-
-    def set_roof_heat_transfer_parameter(
-        self,
-    ):
-        """Set the roof U-value, transmission adjustment factor and conductance.
-
-        Without a configured U-value, the area-weighted average of the two TABULA roof
-        U-values and the larger of their b_Transmission adjustment factors are used; with
-        one, the configured U-value is paired with an adjustment factor of 1. The
-        conductance [W/K] is U-value times roof area times the adjustment factor.
-        """
-        if self.buildingconfig.roof_u_value_in_watt_per_m2_per_kelvin is None:
-            roof_u_value_in_watt_per_m2_per_kelvin_1 = float(self.buildingdata_ref["U_Actual_Roof_1"].values[0])
-            roof_u_value_in_watt_per_m2_per_kelvin_2 = float(self.buildingdata_ref["U_Actual_Roof_2"].values[0])
-
-            area_roof_1 = float(self.buildingdata_ref["A_Roof_1"].values[0])
-            area_roof_2 = float(self.buildingdata_ref["A_Roof_2"].values[0])
-
-            self.roof_u_value_in_watt_per_m2_per_kelvin = (
-                (roof_u_value_in_watt_per_m2_per_kelvin_1 * area_roof_1)
-                + (roof_u_value_in_watt_per_m2_per_kelvin_2 * area_roof_2)
-            ) / (area_roof_1 + area_roof_2)
-
-            b_roof_1 = float(self.buildingdata_ref["b_Transmission_Roof_1"].values[0])
-            b_roof_2 = float(self.buildingdata_ref["b_Transmission_Roof_2"].values[0])
-
-            self.roof_adjustment_factor_from_tabula = max([b_roof_1, b_roof_2])
-
-        else:
-            self.roof_u_value_in_watt_per_m2_per_kelvin = self.buildingconfig.roof_u_value_in_watt_per_m2_per_kelvin
-
-            self.roof_adjustment_factor_from_tabula = 1
-
-        self.heat_conductance_roof_in_watt_per_kelvin = (
-            self.roof_u_value_in_watt_per_m2_per_kelvin * self.roof_area_in_m2 * self.roof_adjustment_factor_from_tabula
-        )
-
-    def set_window_heat_transfer_parameter(
-        self,
-    ):
-        """Set the window U-value, adjustment factor and heat-transfer conductance.
-
-        Without a configured U-value, the area-weighted average of the two TABULA window
-        U-values is used; the adjustment factor is always 1 for windows. The conductance
-        [W/K] is U-value times window area times the adjustment factor.
-        """
-        if self.buildingconfig.window_u_value_in_watt_per_m2_per_kelvin is None:
-            window_u_value_in_watt_per_m2_per_kelvin_1 = float(self.buildingdata_ref["U_Actual_Window_1"].values[0])
-            window_u_value_in_watt_per_m2_per_kelvin_2 = float(self.buildingdata_ref["U_Actual_Window_2"].values[0])
-
-            area_window_1 = float(self.buildingdata_ref["A_Window_1"].values[0])
-            area_window_2 = float(self.buildingdata_ref["A_Window_2"].values[0])
-
-            self.window_u_value_in_watt_per_m2_per_kelvin = (
-                (window_u_value_in_watt_per_m2_per_kelvin_1 * area_window_1)
-                + (window_u_value_in_watt_per_m2_per_kelvin_2 * area_window_2)
-            ) / (area_window_1 + area_window_2)
-        else:
-            self.window_u_value_in_watt_per_m2_per_kelvin = self.buildingconfig.window_u_value_in_watt_per_m2_per_kelvin
-
-        self.window_adjustment_factor_from_tabula = 1
-
-        self.heat_conductance_window_in_watt_per_kelvin = (
-            self.window_u_value_in_watt_per_m2_per_kelvin
-            * self.window_area_in_m2
-            * self.window_adjustment_factor_from_tabula
-        )
-
-    def set_door_heat_transfer_parameter(
-        self,
-    ):
-        """Set the door U-value and heat-transfer conductance of the building.
-
-        The U-value comes from the config when given, otherwise from the TABULA row; the
-        conductance [W/K] is U-value times door area times the adjustment factor. The
-        ``(u * area) / area`` round trip below looks like a no-op but is NOT one in float
-        arithmetic: it shifts the last mantissa bit for 164 TABULA codes (e.g. a stored
-        2.2 becomes 2.2000000000000006), and that artifact is pinned behavior (findings
-        log entries 7 and 17) - do not simplify it away. The zero-area branch skips the
-        round trip to avoid dividing by zero and returns the U-value unchanged.
-        """
-        if self.buildingconfig.door_u_value_in_watt_per_m2_per_kelvin is None:
-            area_door_1 = float(self.buildingdata_ref["A_Door_1"].values[0])
-            door_u_value_in_watt_per_m2_per_kelvin = float(self.buildingdata_ref["U_Actual_Door_1"].values[0])
-
-            if area_door_1 != 0:
-                self.door_u_value_in_watt_per_m2_per_kelvin = (
-                    door_u_value_in_watt_per_m2_per_kelvin * area_door_1
-                ) / (area_door_1)
-            else:
-                self.door_u_value_in_watt_per_m2_per_kelvin = door_u_value_in_watt_per_m2_per_kelvin
-        else:
-            self.door_u_value_in_watt_per_m2_per_kelvin = self.buildingconfig.door_u_value_in_watt_per_m2_per_kelvin
-
-        self.door_adjustment_factor_from_tabula = 1
-
-        self.heat_conductance_door_in_watt_per_kelvin = (
-            self.door_u_value_in_watt_per_m2_per_kelvin * self.door_area_in_m2 * self.door_adjustment_factor_from_tabula
-        )
+        return u_value, adjustment_factor
 
     def set_thermal_bridging_parameter(
         self,

@@ -23,14 +23,6 @@ class BuildingInformation:
 
     """
 
-    # The derived attributes are computed by an ordered chain of set_*/get_* helper
-    # methods that __init__ invokes, partly two call levels deep - deeper than pylint's
-    # attribute-defined-outside-init follows. The former "fix" was ~40 dead bare
-    # annotations at the top of __init__ (removed in cleanup phase 3, hazard 3); the
-    # message is disabled explicitly instead until phase 4 replaces the mutation chain
-    # with an explicit pipeline.
-    # pylint: disable=attribute-defined-outside-init
-
     #: Process-wide cache of the TABULA housing CSV (class-scoped per repo convention).
     #: The file is static for the lifetime of a process, so it is read at most once and
     #: shared by every instantiation instead of being re-parsed per instance.
@@ -64,6 +56,27 @@ class BuildingInformation:
     #: Transmission adjustment factor b applied to a floor whose U-value comes from the
     #: config instead of TABULA; the code does not document where the 0.5 comes from.
     FLOOR_ADJUSTMENT_FACTOR_FOR_CONFIGURED_U_VALUE: float = 0.5
+    #: Effective-mass-area factor f_a per building heat capacity class, from ISO 13790,
+    #: table 12, p. 69/70; multiplied with the conditioned floor area it gives the
+    #: effective mass area A_m. Copied per instance into ``building_heat_capacity_class_f_a``.
+    BUILDING_HEAT_CAPACITY_CLASS_F_A: ClassVar[Dict[str, float]] = {
+        "very light": 2.5,
+        "light": 2.5,
+        "medium": 2.5,
+        "heavy": 3.0,
+        "very heavy": 3.5,
+    }
+    #: Internal heat capacity f_c [J/(m2 K)] per building heat capacity class, from ISO
+    #: 13790, table 12, p. 69/70; multiplied with the conditioned floor area it gives the
+    #: thermal capacity of the building mass. Copied per instance into
+    #: ``building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin``.
+    BUILDING_HEAT_CAPACITY_CLASS_F_C_IN_JOULE_PER_M2_PER_KELVIN: ClassVar[Dict[str, float]] = {
+        "very light": 8e4,
+        "light": 1.1e5,
+        "medium": 1.65e5,
+        "heavy": 2.6e5,
+        "very heavy": 3.7e5,
+    }
 
     @dataclass(frozen=True)
     class EnvelopeElement:
@@ -186,7 +199,17 @@ class BuildingInformation:
         self,
         config: BuildingConfig,
     ):
-        """Initialize the class."""
+        """Derive every building parameter as one explicit ordered pipeline.
+
+        Each step below is a method called directly from here that assigns its results to
+        named attributes, and the order is the data-flow order: the TABULA row lookup
+        first, then the envelope areas (which need the row and produce the scaling
+        factor), then the heat-transfer parameters (which need the areas), then the
+        thermal-mass constants and the maximum thermal demand (which need both), and the
+        TABULA reference indicators last. The former deeper chain of mutating helpers —
+        temporal coupling by convention — was flattened into this pipeline in cleanup
+        phase 4.
+        """
 
         self.buildingconfig = config
 
@@ -267,8 +290,34 @@ class BuildingInformation:
     def get_constants(
         self,
     ):
-        """Get the constants."""
-        self.set_constants()
+        """Derive the thermal-mass, surface-area and radiation constants of the building.
+
+        The fixed ISO 13790 coefficients are exposed as instance attributes (other
+        components read them off this class), the two heat-capacity-class lookup tables
+        are copied per instance from their class-scoped definitions, and the derived
+        capacities, surface areas, radiation reduction factors and the apartment count
+        are computed from the scaled conditioned floor area. Requires
+        :py:meth:`get_building_area_parameters` to have run.
+        """
+        # Heat transfer coefficient between nodes "m" and "s" (12.2.2 E64 P79); labeled as h_ms in paper [2] (*** Check header)
+        self.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin = (
+            self.HEAT_TRANSFER_COEFF_THERMAL_MASS_AND_INTERNAL_SURFACE_IN_WATT_PER_M2_PER_KELVIN
+        )
+        # Dimensionless ratio between surfaces and the useful surfaces (7.2.2.2 E9 P36); labeled as A_at in paper [2] (*** Check header); before lambda_at
+        self.ratio_between_internal_surface_area_and_floor_area = (
+            self.RATIO_BETWEEN_INTERNAL_SURFACE_AREA_AND_FLOOR_AREA
+        )
+        # Heat transfer coefficient between nodes "air" and "s" (7.2.2.2 E9 P35); labeled as h_is in paper [2] (*** Check header)
+        self.heat_transfer_coeff_indoor_air_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin = (
+            self.HEAT_TRANSFER_COEFF_INDOOR_AIR_AND_INTERNAL_SURFACE_IN_WATT_PER_M2_PER_KELVIN
+        )
+
+        # Copied per instance so a caller mutating its lookup table cannot affect other
+        # instances (the former set_constants built fresh dicts per instance as well).
+        self.building_heat_capacity_class_f_a: Dict[str, float] = dict(self.BUILDING_HEAT_CAPACITY_CLASS_F_A)
+        self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin: Dict[str, float] = dict(
+            self.BUILDING_HEAT_CAPACITY_CLASS_F_C_IN_JOULE_PER_M2_PER_KELVIN
+        )
 
         # Room Capacitance [J/K] (TABULA: Internal heat capacity) Ref: ISO standard 12.3.1.2
         # labeled as C_m in the paper [1] (** Check header), before c_m
@@ -304,39 +353,6 @@ class BuildingInformation:
                 buildingdata=self.buildingdata_ref,
             )
         )
-
-    def set_constants(self):
-        """Set important constants."""
-
-        # Heat transfer coefficient between nodes "m" and "s" (12.2.2 E64 P79); labeled as h_ms in paper [2] (*** Check header)
-        self.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin = (
-            self.HEAT_TRANSFER_COEFF_THERMAL_MASS_AND_INTERNAL_SURFACE_IN_WATT_PER_M2_PER_KELVIN
-        )
-        # Dimensionless ratio between surfaces and the useful surfaces (7.2.2.2 E9 P36); labeled as A_at in paper [2] (*** Check header); before lambda_at
-        self.ratio_between_internal_surface_area_and_floor_area = (
-            self.RATIO_BETWEEN_INTERNAL_SURFACE_AREA_AND_FLOOR_AREA
-        )
-        # Heat transfer coefficient between nodes "air" and "s" (7.2.2.2 E9 P35); labeled as h_is in paper [2] (*** Check header)
-        self.heat_transfer_coeff_indoor_air_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin = (
-            self.HEAT_TRANSFER_COEFF_INDOOR_AIR_AND_INTERNAL_SURFACE_IN_WATT_PER_M2_PER_KELVIN
-        )
-
-        # heat capacity class values in ISO 13790, table 12, p.69/70
-        self.building_heat_capacity_class_f_a: Dict[str, float] = {
-            "very light": 2.5,
-            "light": 2.5,
-            "medium": 2.5,
-            "heavy": 3.0,
-            "very heavy": 3.5,
-        }
-
-        self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin: Dict[str, float] = {
-            "very light": 8e4,
-            "light": 1.1e5,
-            "medium": 1.65e5,
-            "heavy": 2.6e5,
-            "very heavy": 3.7e5,
-        }
 
     def get_building_area_parameters(self):
         """Derive every envelope area of the building as an explicit ordered pipeline.
@@ -402,54 +418,36 @@ class BuildingInformation:
         requires :py:meth:`get_building_area_parameters` to have run, because the
         conductances multiply with the element areas derived there.
         """
-        (self.floor_u_value_in_watt_per_m2_per_kelvin, self.floor_adjustment_factor_from_tabula) = (
-            self._element_u_value_and_adjustment_factor(self.FLOOR_ELEMENT)
-        )
-        self.heat_conductance_floor_in_watt_per_kelvin = (
-            self.floor_u_value_in_watt_per_m2_per_kelvin
-            * self.floor_area_in_m2
-            * self.floor_adjustment_factor_from_tabula
+        u_value, b_factor = self._element_u_value_and_adjustment_factor(self.FLOOR_ELEMENT)
+        self.floor_u_value_in_watt_per_m2_per_kelvin = u_value
+        self.floor_adjustment_factor_from_tabula = b_factor
+        self.heat_conductance_floor_in_watt_per_kelvin = u_value * self.floor_area_in_m2 * b_factor
+
+        u_value, b_factor = self._element_u_value_and_adjustment_factor(self.WALL_ELEMENT)
+        self.facade_u_value_in_watt_per_m2_per_kelvin = u_value
+        self.facade_adjustment_factor_from_tabula = b_factor
+        self.heat_conductance_facade_in_watt_per_kelvin = u_value * self.facade_area_in_m2 * b_factor
+
+        u_value, b_factor = self._element_u_value_and_adjustment_factor(self.ROOF_ELEMENT)
+        self.roof_u_value_in_watt_per_m2_per_kelvin = u_value
+        self.roof_adjustment_factor_from_tabula = b_factor
+        self.heat_conductance_roof_in_watt_per_kelvin = u_value * self.roof_area_in_m2 * b_factor
+
+        u_value, b_factor = self._element_u_value_and_adjustment_factor(self.WINDOW_ELEMENT)
+        self.window_u_value_in_watt_per_m2_per_kelvin = u_value
+        self.window_adjustment_factor_from_tabula = b_factor
+        self.heat_conductance_window_in_watt_per_kelvin = u_value * self.window_area_in_m2 * b_factor
+
+        u_value, b_factor = self._element_u_value_and_adjustment_factor(self.DOOR_ELEMENT)
+        self.door_u_value_in_watt_per_m2_per_kelvin = u_value
+        self.door_adjustment_factor_from_tabula = b_factor
+        self.heat_conductance_door_in_watt_per_kelvin = u_value * self.door_area_in_m2 * b_factor
+
+        self.heat_conductance_thermal_bridging_in_watt_per_kelvin = (
+            self._thermal_bridging_conductance_in_watt_per_kelvin()
         )
 
-        (self.facade_u_value_in_watt_per_m2_per_kelvin, self.facade_adjustment_factor_from_tabula) = (
-            self._element_u_value_and_adjustment_factor(self.WALL_ELEMENT)
-        )
-        self.heat_conductance_facade_in_watt_per_kelvin = (
-            self.facade_u_value_in_watt_per_m2_per_kelvin
-            * self.facade_area_in_m2
-            * self.facade_adjustment_factor_from_tabula
-        )
-
-        (self.roof_u_value_in_watt_per_m2_per_kelvin, self.roof_adjustment_factor_from_tabula) = (
-            self._element_u_value_and_adjustment_factor(self.ROOF_ELEMENT)
-        )
-        self.heat_conductance_roof_in_watt_per_kelvin = (
-            self.roof_u_value_in_watt_per_m2_per_kelvin
-            * self.roof_area_in_m2
-            * self.roof_adjustment_factor_from_tabula
-        )
-
-        (self.window_u_value_in_watt_per_m2_per_kelvin, self.window_adjustment_factor_from_tabula) = (
-            self._element_u_value_and_adjustment_factor(self.WINDOW_ELEMENT)
-        )
-        self.heat_conductance_window_in_watt_per_kelvin = (
-            self.window_u_value_in_watt_per_m2_per_kelvin
-            * self.window_area_in_m2
-            * self.window_adjustment_factor_from_tabula
-        )
-
-        (self.door_u_value_in_watt_per_m2_per_kelvin, self.door_adjustment_factor_from_tabula) = (
-            self._element_u_value_and_adjustment_factor(self.DOOR_ELEMENT)
-        )
-        self.heat_conductance_door_in_watt_per_kelvin = (
-            self.door_u_value_in_watt_per_m2_per_kelvin
-            * self.door_area_in_m2
-            * self.door_adjustment_factor_from_tabula
-        )
-
-        self.set_thermal_bridging_parameter()
-
-        self.set_ventilation_heat_transfer_parameter()
+        self.heat_conductance_ventilation_in_watt_per_kelvin = self._ventilation_conductance_in_watt_per_kelvin()
 
         self.total_heat_conductance_transmission = (
             self.heat_conductance_door_in_watt_per_kelvin
@@ -608,37 +606,34 @@ class BuildingInformation:
 
         return u_value, adjustment_factor
 
-    def set_thermal_bridging_parameter(
-        self,
-    ):
-        """Set the thermal-bridging heat-transfer conductance of the building.
+    def _thermal_bridging_conductance_in_watt_per_kelvin(self) -> float:
+        """Return the thermal-bridging heat-transfer conductance of the building [W/K].
 
-        The conductance [W/K] is the TABULA delta_U_ThermalBridging surcharge times the
-        total envelope area, with rows that report 0 substituted by 0.1 W/(m2 K).
+        The conductance is the TABULA delta_U_ThermalBridging surcharge times the total
+        envelope area, with rows that report 0 substituted by 0.1 W/(m2 K). The TABULA row
+        is read-only after lookup: rows with delta_U_ThermalBridging == 0 used to be
+        patched to 0.1 in place before being read back (findings log entry 6), so the
+        object's view of the row silently differed from the file. The correction is an
+        explicit local value instead; whether the 0.1 W/(m2 K) surcharge is good physics
+        is a design-review question, not changed here.
         """
-        # The TABULA row is read-only after lookup: rows with delta_U_ThermalBridging == 0
-        # used to be patched to 0.1 in place before being read back (findings log entry 6),
-        # so the object's view of the row silently differed from the file. The correction
-        # is now an explicit local value; whether the 0.1 W/(m2 K) surcharge is good
-        # physics is a design-review question, not changed here.
         delta_u_thermalbridging_from_tabula = self.buildingdata_ref["delta_U_ThermalBridging"].values[0]
         if delta_u_thermalbridging_from_tabula == 0:
             delta_u_thermalbridging = self.THERMAL_BRIDGING_DELTA_U_WHEN_TABULA_IS_ZERO_IN_WATT_PER_M2_PER_KELVIN
         else:
             delta_u_thermalbridging = float(delta_u_thermalbridging_from_tabula)
 
-        self.heat_conductance_thermal_bridging_in_watt_per_kelvin = (
-            delta_u_thermalbridging * self.building_total_area_in_m2
-        )
+        return delta_u_thermalbridging * self.building_total_area_in_m2
 
-    def set_ventilation_heat_transfer_parameter(self):
-        """Set the ventilation heat-transfer conductance of the building.
+    def _ventilation_conductance_in_watt_per_kelvin(self) -> float:
+        """Return the ventilation heat-transfer conductance of the building [W/K].
 
-        The conductance [W/K] is the volumetric heat capacity of air times the total air
+        The conductance is the volumetric heat capacity of air times the total air
         exchange rate (use plus infiltration, from the TABULA row), the room height and
-        the scaled conditioned floor area.
+        the scaled conditioned floor area. Requires the area pipeline to have run for the
+        scaled conditioned floor area.
         """
-        self.heat_conductance_ventilation_in_watt_per_kelvin = (
+        return (
             self.HEAT_CAPACITY_OF_AIR_PER_VOLUME_IN_WATT_HOUR_PER_M3_PER_KELVIN
             * (
                 float(self.buildingdata_ref["n_air_use"].values[0])
@@ -747,8 +742,6 @@ class BuildingInformation:
         self.tabula_ref_heat_transfer_coeff_by_ventilation_ref_in_watt_per_m2_per_kelvin = float(
             buildingdata["h_Ventilation"].values[0]
         )
-        if self.tabula_ref_heat_transfer_coeff_by_ventilation_ref_in_watt_per_m2_per_kelvin is None:
-            raise ValueError("h_Ventilation was none.")
         # Heat transfer coefficient by ventilation in watt per kelvin
         # (the same TABULA column, made absolute with the scaled conditioned floor area)
         self.tabula_ref_heat_transfer_coeff_by_ventilation_reference_in_watt_per_kelvin = (
@@ -759,5 +752,3 @@ class BuildingInformation:
         self.tabula_ref_heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin = float(
             buildingdata["h_Transmission"].values[0]
         )
-        if self.tabula_ref_heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin is None:
-            raise ValueError("h_Transmission was none.")

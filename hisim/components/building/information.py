@@ -7,7 +7,7 @@ verbatim from the former single-module ``building.py``.
 
 # clean
 
-from typing import Dict, List, Tuple
+from typing import ClassVar, Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -21,6 +21,11 @@ class BuildingInformation:
     The class reads the building config and collects all the important parameters of the buidling.
 
     """
+
+    #: Process-wide cache of the TABULA housing CSV (class-scoped per repo convention).
+    #: The file is static for the lifetime of a process, so it is read at most once and
+    #: shared by every instantiation instead of being re-parsed per instance.
+    _housing_reference_dataframe: ClassVar[Optional[pd.DataFrame]] = None
 
     def __init__(
         self,
@@ -72,19 +77,35 @@ class BuildingInformation:
         """Actual U-value of the roof element from the TABULA reference data [W/(m2 K)]."""
         return float(self.buildingdata_ref["U_Actual_Roof_1"].values[0])
 
+    @classmethod
+    def read_housing_reference_dataframe(cls) -> pd.DataFrame:
+        """Return the TABULA housing CSV as a DataFrame, reading the file at most once per process.
+
+        ``BuildingInformation`` used to re-parse the 3281-row CSV on every instantiation,
+        which dominated the construction cost of the class (cleanup phase 3, hazard 5).
+        The parsed frame is cached in a class attribute because the file is static for the
+        lifetime of a process. The cached frame is shared, so callers must never mutate
+        it; :py:meth:`get_building_from_tabula` copies the selected row before exposing it.
+        """
+        housing_reference_dataframe = cls._housing_reference_dataframe
+        if housing_reference_dataframe is None:
+            housing_reference_dataframe = pd.read_csv(
+                utils.HISIMPATH["housing"],
+                decimal=",",
+                sep=";",
+                encoding="cp1252",
+                low_memory=False,
+            )
+            cls._housing_reference_dataframe = housing_reference_dataframe
+        return housing_reference_dataframe
+
     def get_building_from_tabula(
         self,
     ):
         """Get the building code from a TABULA building."""
-        d_f = pd.read_csv(
-            utils.HISIMPATH["housing"],
-            decimal=",",
-            sep=";",
-            encoding="cp1252",
-            low_memory=False,
-        )
+        d_f = self.read_housing_reference_dataframe()
 
-        # Gets parameters from chosen building
+        # Gets parameters from chosen building (copied, so the shared cached frame stays untouched)
         self.buildingdata_ref = d_f.loc[d_f["Code_BuildingVariant"] == self.buildingconfig.building_code].copy()
         self.buildingcode = self.buildingconfig.building_code
 

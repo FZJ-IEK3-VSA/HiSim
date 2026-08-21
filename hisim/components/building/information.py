@@ -7,18 +7,14 @@ verbatim from the former single-module ``building.py``.
 
 # clean
 
-from dataclasses import dataclass
 from typing import List, Tuple
 
 import pandas as pd
-from dataclasses_json import dataclass_json
 
 from hisim import log, utils
 from hisim.components.building.config import BuildingConfig
 
 
-@dataclass_json
-@dataclass
 class BuildingInformation:
     """Class for collecting important building parameters to pass to other components.
 

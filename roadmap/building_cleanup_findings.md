@@ -165,3 +165,20 @@ listed here for the design review's physics section.
     write-only. Strengthens the 6a.4 deletion (no historical consumer exists) and is
     the cleanest possible specimen of the tuple-unpack hazard class: the bug survived
     ~13 months precisely because it was harmless.
+25. **Layer 2's bitwise comparison did not survive contact with CI (fixed 2026-08-21).**
+    The day after the phase-1 merge, the one-day snapshot failed on the ubuntu-latest
+    runner: 1-ULP differences on 6–8 daylight timesteps of the trig-derived columns
+    (SolarGainThroughWindows and the heat fluxes computed from it), while OpenWindow,
+    the temperatures and every pure-arithmetic column matched exactly. Root cause:
+    `math.cos` (window model) and pvlib's numpy trigonometry bind to the platform's
+    libm, and this box's glibc 2.43 rounds those transcendentals' last bit differently
+    than the runner's older glibc — package versions were verified identical (pvlib
+    0.15.2 is the newest; numpy is forced <2 by oemof-solph on both sides). Fix: layer 2
+    compares floats up to `PLATFORM_ULP_TOLERANCE` (4 ULPs of the larger operand) —
+    verified to accept all eight CI-observed pairs and still reject sign flips and
+    1e-9-relative changes. Layer 1 (pure IEEE arithmetic, bit-exact on every platform)
+    stays strictly bitwise and remains the referee for ULP-level arithmetic changes;
+    the `sum()`-vs-chained-`+` and door-round-trip catches were layer-1 catches and are
+    unaffected. Lesson recorded: bitwise goldens are portable exactly as far as the
+    computation avoids transcendentals; the moment libm enters, the honest cross-platform
+    contract is a stated ULP band.

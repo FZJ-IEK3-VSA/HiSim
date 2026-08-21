@@ -89,10 +89,9 @@ def setup_function(
 
     # =================================================================================================================================
     # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home(
-        set_heating_temperature_in_celsius=20.0,
-        set_cooling_temperature_in_celsius=25.0,
-    )
+    my_building_config = building.BuildingConfig.presets.german_single_family_home
+    my_building_config.set_heating_temperature_in_celsius = 20.0
+    my_building_config.set_cooling_temperature_in_celsius = 25.0
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
     my_building_config.absolute_conditioned_floor_area_in_m2 = (

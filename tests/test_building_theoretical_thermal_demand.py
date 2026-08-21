@@ -12,7 +12,7 @@ from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import idealized_electric_heater
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from tests.testing_utils import TestingUtils
 
 

@@ -16,6 +16,7 @@ from hisim.components import (
     controller_l1_chp,
 )
 from hisim.simulationparameters import SimulationParameters
+from hisim.config import ComponentID
 
 
 @pytest.mark.base
@@ -52,28 +53,28 @@ def test_chp_system() -> None:
         "BufferTemperature",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.WATT,
-        component_id=cp.ComponentID("FakeBuffer"),
+        component_id=ComponentID("FakeBuffer"),
     )
     boiler_temperature = cp.ComponentOutput(
         "FakeBoilerTemperature",
         "HotWaterStorageTemperature",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.WATT,
-        component_id=cp.ComponentID("FakeBoilerTemperature"),
+        component_id=ComponentID("FakeBoilerTemperature"),
     )
     electricity_target = cp.ComponentOutput(
         "FakeElectricityTarget",
         "ElectricityTarget",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.WATT,
-        component_id=cp.ComponentID("FakeElectricityTarget"),
+        component_id=ComponentID("FakeElectricityTarget"),
     )
     hydrogensoc = cp.ComponentOutput(
         "FakeH2SOC",
         "HydrogenSOC",
         lt.LoadTypes.GREEN_HYDROGEN,
         lt.Units.PERCENT,
-        component_id=cp.ComponentID("FakeH2SOC"),
+        component_id=ComponentID("FakeH2SOC"),
     )
 
     number_of_outputs = fft.get_number_of_outputs(
@@ -229,7 +230,7 @@ def test_get_default_config_chp_default_building() -> None:
 def test_get_default_config_chp_custom_building_and_powers() -> None:
     """Test CHPConfig.get_default_config_chp with a custom building name and thermal_power=500."""
     config = generic_chp.CHPConfig.get_default_config_chp(
-        thermal_power=500, component_id=cp.ComponentID(name="CHP", building="Custom")
+        thermal_power=500, component_id=ComponentID(name="CHP", building="Custom")
     )
     assert config.component_id.building == "Custom"
     assert config.p_th == 500

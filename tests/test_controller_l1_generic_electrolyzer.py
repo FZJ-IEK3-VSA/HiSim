@@ -7,7 +7,7 @@ from hisim.components import controller_l1_electrolyzer_h2
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 @pytest.mark.base
@@ -49,7 +49,7 @@ def test_electrolyzer_controller() -> None:
         "Provided Load",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.KILOWATT,
-        component_id=cp.ComponentID("FakeProvidedLoad"),
+        component_id=ComponentID("FakeProvidedLoad"),
     )
 
     number_of_outputs = fft.get_number_of_outputs([my_controller, load_input])

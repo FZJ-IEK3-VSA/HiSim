@@ -14,7 +14,7 @@ from hisim.components import electricity_meter
 from hisim.components.weather_data_import import WeatherDataImport
 from hisim import utils
 from hisim import loadtypes
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 __authors__ = "Jonas Hoppe"

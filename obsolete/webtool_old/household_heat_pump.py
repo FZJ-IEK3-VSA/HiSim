@@ -14,7 +14,7 @@ from utspclient.helpers.lpgdata import (
 )
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim.simulator import Simulator, SimulationParameters
-from hisim.component import DisplayConfig
+from hisim.config import DisplayConfig
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import advanced_heat_pump_hplib

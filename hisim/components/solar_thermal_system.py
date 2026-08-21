@@ -8,7 +8,6 @@ from dataclasses_json import dataclass_json
 import pandas as pd
 from oemof.thermal.solar_thermal_collector import flat_plate_precalc
 from hisim.component import (
-    ComponentID,
     CapexCostDataClass,
     Component,
     ComponentConnection,
@@ -17,14 +16,13 @@ from hisim.component import (
     Coordinates,
     OpexCostDataClass,
     SingleTimeStepValues,
-    DisplayConfig,
 )
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import loadtypes, log, utils
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, PhysicsConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ConfigBase
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 

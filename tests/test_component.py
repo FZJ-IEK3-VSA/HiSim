@@ -14,7 +14,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import example_component
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from tests import functions_for_testing as fft
 
 
@@ -38,7 +38,7 @@ def test_component_output_and_input() -> None:
         sankey_flow_direction=True,
         output_description="Test output description",
         source_component_class="TestComponentClass",
-        component_id=cp.ComponentID("TestComponent"),
+        component_id=ComponentID("TestComponent"),
     )
 
     # Verify output attributes
@@ -108,12 +108,12 @@ def test_single_time_step_values() -> None:
 
     # Create outputs for testing
     output1 = cp.ComponentOutput(
-        "Component1", "Output1", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, component_id=cp.ComponentID("Component1")
+        "Component1", "Output1", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, component_id=ComponentID("Component1")
     )
     output1.global_index = 0
 
     output2 = cp.ComponentOutput(
-        "Component2", "Output2", lt.LoadTypes.HEATING, lt.Units.WATT, component_id=cp.ComponentID("Component2")
+        "Component2", "Output2", lt.LoadTypes.HEATING, lt.Units.WATT, component_id=ComponentID("Component2")
     )
     output2.global_index = 1
 
@@ -166,7 +166,7 @@ def test_single_time_step_values() -> None:
         output1,
         output2,
         cp.ComponentOutput(
-            "Component3", "Output3", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("Component3")
+            "Component3", "Output3", lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("Component3")
         ),
     ]
     outputs[2].global_index = 2
@@ -192,7 +192,7 @@ def test_config_base() -> None:
     - ConfigBase.get_main_classname() method
     """
     # Create a minimal config
-    config = cp.ConfigBase(component_id=ComponentID(name="TestConfig"))
+    config = ConfigBase(component_id=ComponentID(name="TestConfig"))
 
     # Verify config attributes
     assert config.component_id.name == "TestConfig"
@@ -305,7 +305,7 @@ def test_component_connections() -> None:
         field_name="ElectricityOutput",
         load_type=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.WATT,
-        component_id=cp.ComponentID("SourceComponent"),
+        component_id=ComponentID("SourceComponent"),
     )
     source_output.global_index = 0
 
@@ -501,7 +501,7 @@ def test_example_component_simulation() -> None:
         load_type=lt.LoadTypes.HEATING,
         unit=lt.Units.WATT,
         output_description="Thermal energy delivered",
-        component_id=cp.ComponentID("Source"),
+        component_id=ComponentID("Source"),
     )
 
     # Set source output
@@ -548,18 +548,18 @@ def test_component_name_with_multiple_buildings() -> None:
     sim_params.multiple_buildings = True
 
     # Create a minimal component with ConfigBase
-    config = cp.ConfigBase(component_id=ComponentID(name="TestComponent", building="Building1"))
+    config = ConfigBase(component_id=ComponentID(name="TestComponent", building="Building1"))
 
     # Create a simple component subclass for testing
     class TestComponent(cp.Component):
         """Minimal component subclass for testing component name generation."""
 
-        def __init__(self, config: cp.ConfigBase, my_simulation_parameters: SimulationParameters) -> None:
+        def __init__(self, config: ConfigBase, my_simulation_parameters: SimulationParameters) -> None:
             super().__init__(
                 name="TestComponent",
                 my_simulation_parameters=my_simulation_parameters,
                 my_config=config,
-                my_display_config=cp.DisplayConfig(),
+                my_display_config=DisplayConfig(),
             )
 
         def i_prepare_simulation(self) -> None:
@@ -590,7 +590,7 @@ def test_component_name_with_multiple_buildings() -> None:
     assert comp_name2 == "Building1_TestComponent"
 
     # A component whose identity carries no building keeps the bare name in both cases.
-    building_less = TestComponent(cp.ConfigBase(component_id=ComponentID(name="TestComponent")), sim_params)
+    building_less = TestComponent(ConfigBase(component_id=ComponentID(name="TestComponent")), sim_params)
     assert building_less.get_component_name() == "TestComponent"
 
     log.information(f"Component name with multiple_buildings=True: {comp_name}")
@@ -627,17 +627,17 @@ def test_component_base_still_raises_not_implemented_for_state_hooks() -> None:
     StatelessComponent (opt-in) provides the no-op defaults.
     """
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    config = cp.ConfigBase(component_id=ComponentID(name="TestComponent"))
+    config = ConfigBase(component_id=ComponentID(name="TestComponent"))
 
     class _StatefulComponent(cp.Component):
         """A minimal Component that does NOT override the state hooks."""
 
-        def __init__(self, config: cp.ConfigBase, my_simulation_parameters: SimulationParameters) -> None:
+        def __init__(self, config: ConfigBase, my_simulation_parameters: SimulationParameters) -> None:
             super().__init__(
                 name="TestComponent",
                 my_simulation_parameters=my_simulation_parameters,
                 my_config=config,
-                my_display_config=cp.DisplayConfig(),
+                my_display_config=DisplayConfig(),
             )
 
         def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
@@ -664,17 +664,17 @@ def test_stateless_component_noop_hooks_are_callable() -> None:
     inherited as no-ops.
     """
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    config = cp.ConfigBase(component_id=ComponentID(name="TestComponent"))
+    config = ConfigBase(component_id=ComponentID(name="TestComponent"))
 
     class _MinimalStateless(cp.StatelessComponent):
         """Minimal stateless component for testing inherited no-op hooks."""
 
-        def __init__(self, config: cp.ConfigBase, my_simulation_parameters: SimulationParameters) -> None:
+        def __init__(self, config: ConfigBase, my_simulation_parameters: SimulationParameters) -> None:
             super().__init__(
                 name="TestComponent",
                 my_simulation_parameters=my_simulation_parameters,
                 my_config=config,
-                my_display_config=cp.DisplayConfig(),
+                my_display_config=DisplayConfig(),
             )
 
         def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
@@ -802,14 +802,14 @@ def test_add_component_input_and_connect_propagates_allow_unconnected() -> None:
     from hisim.dynamic_component import DynamicComponent
 
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    config = cp.ConfigBase(component_id=ComponentID(name="TestDynamic"))
+    config = ConfigBase(component_id=ComponentID(name="TestDynamic"))
     dyn_component = DynamicComponent(
         my_component_inputs=[],
         my_component_outputs=[],
         name="TestDynamic",
         my_simulation_parameters=sim_params,
         my_config=config,
-        my_display_config=cp.DisplayConfig(),
+        my_display_config=DisplayConfig(),
     )
 
     dyn_component.add_component_input_and_connect(

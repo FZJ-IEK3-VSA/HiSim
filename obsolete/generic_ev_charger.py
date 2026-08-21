@@ -38,7 +38,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import ComponentID
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -53,7 +53,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class VehiclePureConfig(cp.ConfigBase):
+class VehiclePureConfig(ConfigBase):
     """Vehicle Pure Config class."""
 
     component_id: ComponentID
@@ -104,7 +104,7 @@ class EVChargerMode(str, Enum):
 
 @dataclass_json
 @dataclass
-class EVChargerControllerConfig(cp.ConfigBase):
+class EVChargerControllerConfig(ConfigBase):
     """Electrical vehicle charger controller config class.
 
     ``mode`` selects the charging strategy and is typed as
@@ -136,7 +136,7 @@ class EVChargerControllerConfig(cp.ConfigBase):
 
 @dataclass_json
 @dataclass
-class VehicleConfig(cp.ConfigBase):
+class VehicleConfig(ConfigBase):
     """Vehicle config class."""
 
     component_id: ComponentID
@@ -167,7 +167,7 @@ class VehicleConfig(cp.ConfigBase):
 
 @dataclass_json
 @dataclass
-class EVChargerConfig(cp.ConfigBase):
+class EVChargerConfig(ConfigBase):
     """Electrical vehicle config class."""
 
     component_id: ComponentID
@@ -226,7 +226,7 @@ class VehiclePure(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: VehiclePureConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.my_simulation_parameters = my_simulation_parameters
@@ -409,7 +409,7 @@ class Vehicle(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: VehicleConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.my_simulation_parameters = my_simulation_parameters
@@ -659,7 +659,7 @@ class EVCharger(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: EVChargerConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.my_simulation_parameters = my_simulation_parameters
@@ -919,7 +919,7 @@ class EVChargerController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: EVChargerControllerConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.my_simulation_parameters = my_simulation_parameters

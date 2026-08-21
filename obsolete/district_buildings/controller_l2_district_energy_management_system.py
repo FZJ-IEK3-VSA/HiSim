@@ -20,6 +20,7 @@ from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import ComponentInput, ComponentOutput
+from hisim.config import ConfigBase, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 from hisim.components import (
@@ -48,7 +49,7 @@ class EMSControlStrategy(IntEnum):
 
 @dataclass_json
 @dataclass
-class EMSDistrictConfig(cp.ConfigBase):
+class EMSDistrictConfig(ConfigBase):
     """L1 Controller Config."""
 
     @classmethod
@@ -176,7 +177,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         self,
         my_simulation_parameters: SimulationParameters,
         config: EMSDistrictConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Initializes."""
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []

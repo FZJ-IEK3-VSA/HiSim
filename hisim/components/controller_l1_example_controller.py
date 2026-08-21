@@ -14,8 +14,8 @@ from typing import Optional
 from dataclasses_json import dataclass_json
 
 # Owned
-from hisim.component import ComponentID
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, ConfigBase, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 

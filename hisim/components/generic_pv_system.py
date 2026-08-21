@@ -30,7 +30,8 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
 from hisim import utils
-from hisim.component import ComponentID, ConfigBase, OpexCostDataClass, CapexCostDataClass
+from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.weather import Weather
 from hisim.sim_repository_singleton import (
     SingletonSimRepository,
@@ -322,7 +323,7 @@ class PVSystem(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: PVSystemConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
+        my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
     ) -> None:
         """Initialize the class."""
         self.my_simulation_parameters = my_simulation_parameters

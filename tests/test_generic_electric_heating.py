@@ -20,7 +20,8 @@ import pandas as pd
 import pytest
 
 from hisim import loadtypes as lt
-from hisim.component import ComponentOutput, DisplayConfig
+from hisim.component import ComponentOutput
+from hisim.config import DisplayConfig
 from hisim.components.generic_electric_heating import ElectricHeating, ElectricHeatingConfig
 from hisim.simulationparameters import SimulationParameters
 

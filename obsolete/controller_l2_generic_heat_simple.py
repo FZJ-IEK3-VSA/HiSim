@@ -15,6 +15,7 @@ from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 from hisim.components.building import Building
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
+from hisim.config import ConfigBase, DisplayConfig
 
 __authors__ = "edited Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -28,7 +29,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class L2GenericHeatConfig(cp.ConfigBase):
+class L2GenericHeatConfig(ConfigBase):
     """L2 Controller Config."""
 
     building_name: str
@@ -200,11 +201,11 @@ class L2GenericHeatController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: L2GenericHeatConfig,
-        my_display_config: Optional[cp.DisplayConfig] = None,
+        my_display_config: Optional[DisplayConfig] = None,
     ) -> None:
         """For initializing."""
         if my_display_config is None:
-            my_display_config = cp.DisplayConfig()
+            my_display_config = DisplayConfig()
         if not config.__class__.__name__ == L2GenericHeatConfig.__name__:
             raise ValueError("Wrong config class.")
         self.my_simulation_parameters = my_simulation_parameters

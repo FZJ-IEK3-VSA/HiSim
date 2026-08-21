@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
 import hisim.component as cp
-from hisim.component import ComponentID, OpexCostDataClass, CapexCostDataClass
+from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import utils
@@ -26,7 +27,7 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class IdealizedHeaterConfig(cp.ConfigBase):
+class IdealizedHeaterConfig(ConfigBase):
     """Configuration of the Idealized Heater."""
 
     @classmethod
@@ -70,11 +71,11 @@ class IdealizedElectricHeater(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: IdealizedHeaterConfig,
-        my_display_config: cp.DisplayConfig | None = None,
+        my_display_config: DisplayConfig | None = None,
     ) -> None:
         """Construct all the necessary attributes."""
         self.my_simulation_parameters = my_simulation_parameters
-        my_display_config = my_display_config or cp.DisplayConfig()
+        my_display_config = my_display_config or DisplayConfig()
         self.config = config
         component_name = self.get_component_name()
         super().__init__(

@@ -54,6 +54,14 @@ UTSP_API_KEY
 ### Core simulation loop (`hisim/simulator.py`)
 `Simulator` owns a list of `ComponentWrapper` objects and runs `run_all_timesteps()`. Each time step iterates through all wrapped components, calling `i_simulate()` on each, until all outputs converge (checked via `SingleTimeStepValues.is_close_enough_to_previous()`). After convergence, `PostProcessor` is invoked.
 
+### Config layer (`hisim/config/`)
+The bottom layer, imported by everything else and importing nothing from the rest of HiSim.
+`hisim/config/base.py` holds `ComponentID` (the structured component identity),
+`ConfigBase` (the base class of every component configuration dataclass) and
+`DisplayConfig`. Import them as `from hisim.config import ConfigBase, ComponentID,
+DisplayConfig` — `hisim/component.py` deliberately keeps no compatibility aliases for
+them, so the layering is visible at every call site.
+
 ### Component model (`hisim/component.py`)
 Every device is a `Component` subclass. Each component:
 - Declares `ComponentInput` and `ComponentOutput` objects in `__init__` via `add_input()` / `add_output()`

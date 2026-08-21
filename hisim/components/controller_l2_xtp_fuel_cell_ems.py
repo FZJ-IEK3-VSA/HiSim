@@ -9,8 +9,8 @@ import json
 import math
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from hisim.component import ComponentID
-from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
 
 from hisim import loadtypes as lt
 from hisim import utils

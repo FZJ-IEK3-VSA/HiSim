@@ -17,7 +17,8 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.loadtypes import Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID, ComponentInput, ComponentConnection, OpexCostDataClass, CapexCostDataClass
+from hisim.component import ComponentInput, ComponentConnection, OpexCostDataClass, CapexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components import weather
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 
@@ -61,7 +62,7 @@ class FluidMediaType(str, Enum):
 
 @dataclass_json
 @dataclass
-class SimpleHeatSourceConfig(cp.ConfigBase):
+class SimpleHeatSourceConfig(ConfigBase):
     """Configuration of a generic HeatSource.
 
     JSON field-name migrations (issue #1603):
@@ -291,7 +292,7 @@ class SimpleHeatSource(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: SimpleHeatSourceConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
 

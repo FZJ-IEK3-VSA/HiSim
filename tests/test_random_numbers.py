@@ -22,7 +22,7 @@ import random
 
 import pytest
 
-from hisim.component import ComponentID, DisplayConfig
+from hisim.config import ComponentID, DisplayConfig
 from hisim.components.random_numbers import RandomNumbers, RandomNumbersConfig
 from hisim.simulationparameters import SimulationParameters
 

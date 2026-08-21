@@ -10,7 +10,8 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
-from hisim.component import ComponentID, ComponentInput, OpexCostDataClass, CapexCostDataClass
+from hisim.component import ComponentInput, OpexCostDataClass, CapexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -25,7 +26,7 @@ from hisim.postprocessing.cost_and_emission_computation.capex_computation import
 
 @dataclass_json
 @dataclass
-class ElectricityMeterConfig(cp.ConfigBase):
+class ElectricityMeterConfig(ConfigBase):
     """Electricity Meter Config."""
 
     @classmethod
@@ -91,7 +92,7 @@ class ElectricityMeter(DynamicComponent):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ElectricityMeterConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
+        my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
     ):
         """Initialize the component."""
         self.grid_energy_balancer_config = config

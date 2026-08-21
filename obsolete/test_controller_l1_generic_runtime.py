@@ -8,7 +8,7 @@ They need no ``SimulationParameters`` and no I/O.
 
 import pytest
 
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from hisim.components.controller_l1_generic_runtime import (
     L1Config,
     L1GenericRuntimeControllerState,

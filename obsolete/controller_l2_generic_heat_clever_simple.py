@@ -16,6 +16,7 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components import controller_l1_generic_runtime
 from hisim.components.building import Building
+from hisim.config import ConfigBase, DisplayConfig
 from repositories.HiSim.obsolete import generic_hot_water_storage_modular
 
 
@@ -31,7 +32,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class L2HeatSmartConfig(cp.ConfigBase):
+class L2HeatSmartConfig(ConfigBase):
     """L2 Config class."""
 
     building_name: str
@@ -158,7 +159,7 @@ class L2HeatSmartController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: L2HeatSmartConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         if not config.__class__.__name__ == L2HeatSmartConfig.__name__:

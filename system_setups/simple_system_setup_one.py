@@ -12,7 +12,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.components.random_numbers import RandomNumbers, RandomNumbersConfig
 from hisim.components.sumbuilder import SumBuilderForTwoInputs, SumBuilderConfig
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:

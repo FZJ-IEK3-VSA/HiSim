@@ -6,7 +6,8 @@
 from typing import List, Union, Dict, Optional, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from hisim.component import ComponentID, Component, SingleTimeStepValues, ConfigBase, DisplayConfig
+from hisim.component import Component, SingleTimeStepValues
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.generic_heat_pump import (
     GenericHeatPumpController,
     GenericHeatPumpControllerConfig,

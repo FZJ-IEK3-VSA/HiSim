@@ -16,13 +16,12 @@ from typing import Optional
 
 from dataclasses_json import dataclass_json
 
-from hisim import component as cp
-from hisim.component import ComponentID
+from hisim.config import ConfigBase, ComponentID
 
 
 @dataclass_json
 @dataclass
-class BuildingConfig(cp.ConfigBase):
+class BuildingConfig(ConfigBase):
     """Configuration of the Building class."""
 
     @classmethod

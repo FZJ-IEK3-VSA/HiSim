@@ -21,6 +21,7 @@ import hisim.component as cp
 import hisim.log
 from hisim import loadtypes as lt
 from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.config import ConfigBase, DisplayConfig
 from hisim.components import (
     controller_l1_building_heating,
     generic_chp,
@@ -43,7 +44,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class StorageConfig(cp.ConfigBase):
+class StorageConfig(ConfigBase):
     """Used in the HotWaterStorageClass defining the basics."""
 
     building_name: str
@@ -283,7 +284,7 @@ class HotWaterStorage(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: StorageConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
+        my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
     ):
         """Initializes instance of HotWaterStorage class."""
 

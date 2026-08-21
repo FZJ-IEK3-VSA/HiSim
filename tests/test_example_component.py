@@ -8,6 +8,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import example_component
 from hisim.simulationparameters import SimulationParameters
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -37,7 +38,7 @@ def test_example_component() -> None:
         field_name="thermal energy delivered",
         load_type=lt.LoadTypes.HEATING,
         unit=lt.Units.WATT,
-        component_id=cp.ComponentID("source"),
+        component_id=ComponentID("source"),
     )
     my_example_component.thermal_energy_delivered_c.source_output = thermal_energy_delivered_output
 

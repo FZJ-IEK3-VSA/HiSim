@@ -11,7 +11,7 @@ from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim.components import electricity_meter
 from hisim import loadtypes
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 def setup_function(

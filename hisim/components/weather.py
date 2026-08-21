@@ -16,8 +16,8 @@ import pvlib
 
 from hisim import loadtypes as lt
 from hisim import log, utils
-from hisim.component import ComponentID
-from hisim.component import Component, ComponentOutput, ConfigBase, SingleTimeStepValues, DisplayConfig, OpexCostDataClass, CapexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.component import Component, ComponentOutput, SingleTimeStepValues, OpexCostDataClass, CapexCostDataClass
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry

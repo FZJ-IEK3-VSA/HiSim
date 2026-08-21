@@ -16,7 +16,7 @@ from hisim.components.more_advanced_heat_pump_hplib import (
 )
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 @pytest.mark.base
@@ -48,24 +48,24 @@ def test_heat_pump_hplib_new() -> None:
         "Fake_on_off_switch",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("Fake_on_off_switch"),
+        component_id=ComponentID("Fake_on_off_switch"),
     )
     t_in_primary = cp.ComponentOutput(
         "Fake_t_in_primary",
         "Fake_t_in_primary",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("Fake_t_in_primary"),
+        component_id=ComponentID("Fake_t_in_primary"),
     )
     t_in_secondary_sh = cp.ComponentOutput(
         "Fake_t_in_secondary_hot_water",
         "Fake_t_in_secondary_hot_water",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("Fake_t_in_secondary_hot_water"),
+        component_id=ComponentID("Fake_t_in_secondary_hot_water"),
     )
     t_amb = cp.ComponentOutput(
-        "Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("Fake_t_amb")
+        "Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("Fake_t_amb")
     )
 
     # Initialize component

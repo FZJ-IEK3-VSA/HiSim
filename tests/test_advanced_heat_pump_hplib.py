@@ -13,7 +13,7 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim.units import Quantity, Watt, Celsius, Seconds, Kilogram, Euro, Years, Unitless
-from hisim.component import ComponentID
+from hisim.config import ComponentID, DisplayConfig
 
 
 def _make_heatpump_instance() -> HeatPumpHplib:
@@ -65,24 +65,24 @@ def test_heat_pump_hplib() -> None:
         "Fake_on_off_switch",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("Fake_on_off_switch"),
+        component_id=ComponentID("Fake_on_off_switch"),
     )
     t_in_primary: cp.ComponentOutput = cp.ComponentOutput(
         "Fake_t_in_primary",
         "Fake_t_in_primary",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("Fake_t_in_primary"),
+        component_id=ComponentID("Fake_t_in_primary"),
     )
     t_in_secondary: cp.ComponentOutput = cp.ComponentOutput(
         "Fake_t_in_secondary",
         "Fake_t_in_secondary",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("Fake_t_in_secondary"),
+        component_id=ComponentID("Fake_t_in_secondary"),
     )
     t_amb: cp.ComponentOutput = cp.ComponentOutput(
-        "Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("Fake_t_amb")
+        "Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("Fake_t_amb")
     )
 
     # Initialize component
@@ -159,7 +159,7 @@ def test_get_heatpump_cycles_counts_off_to_on_transitions(time_off_series: list[
         HeatPumpHplib.TimeOff,
         lt.LoadTypes.TIME,
         lt.Units.SECONDS,
-        component_id=cp.ComponentID("Heat Pump"),
+        component_id=ComponentID("Heat Pump"),
     )
     assert (
         instance.get_heatpump_cycles(output=output, index=1, postprocessing_results=postprocessing_results)
@@ -178,7 +178,7 @@ def test_get_heatpump_cycles_ignores_non_timeoff_output() -> None:
         HeatPumpHplib.ThermalOutputPower,
         lt.LoadTypes.HEATING,
         lt.Units.WATT,
-        component_id=cp.ComponentID("Heat Pump"),
+        component_id=ComponentID("Heat Pump"),
     )
     assert instance.get_heatpump_cycles(output=output, index=0, postprocessing_results=postprocessing_results) == 0
 
@@ -201,7 +201,7 @@ def test_get_heatpump_cycles_propagates_non_index_errors() -> None:
         HeatPumpHplib.TimeOff,
         lt.LoadTypes.TIME,
         lt.Units.SECONDS,
-        component_id=cp.ComponentID("Heat Pump"),
+        component_id=ComponentID("Heat Pump"),
     )
     with pytest.raises(TypeError, match="comparison failure should propagate"):
         instance.get_heatpump_cycles(output=output, index=1, postprocessing_results=postprocessing_results)
@@ -228,5 +228,5 @@ def test_heatpump_display_config_instance_isolation() -> None:
 
     # Identity check: they must NOT be the same object
     assert hp1.my_display_config is not hp2.my_display_config
-    assert isinstance(hp1.my_display_config, cp.DisplayConfig)
-    assert isinstance(hp2.my_display_config, cp.DisplayConfig)
+    assert isinstance(hp1.my_display_config, DisplayConfig)
+    assert isinstance(hp2.my_display_config, DisplayConfig)

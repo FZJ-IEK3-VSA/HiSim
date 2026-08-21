@@ -22,7 +22,7 @@ from hisim.components import generic_rsoc
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 @pytest.mark.base
@@ -80,7 +80,7 @@ def test_rsoc() -> None:
         "PowerInput",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.KILOWATT,
-        component_id=cp.ComponentID("FakePowerInput"),
+        component_id=ComponentID("FakePowerInput"),
     )
 
     input_state_rsoc = cp.ComponentOutput(
@@ -88,7 +88,7 @@ def test_rsoc() -> None:
         "RSOCInputState",
         lt.LoadTypes.ACTIVATION,
         lt.Units.ANY,
-        component_id=cp.ComponentID("FakeRSOCInputState"),
+        component_id=ComponentID("FakeRSOCInputState"),
     )
 
     number_of_outputs = fft.get_number_of_outputs([power_input, input_state_rsoc])

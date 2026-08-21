@@ -6,7 +6,7 @@ import pytest
 from hisim import component as cp
 from hisim.components import night_setback_controller
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 

@@ -6,7 +6,8 @@ from typing import List, Union, Dict, cast, Optional
 import dataclasses as dc
 import hisim.loadtypes as lt
 from hisim import log
-from hisim.component import Component, ComponentInput, ComponentOutput, ConfigBase, DisplayConfig
+from hisim.component import Component, ComponentInput, ComponentOutput
+from hisim.config import ConfigBase, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 
 

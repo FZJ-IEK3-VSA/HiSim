@@ -27,6 +27,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.result_path_provider import ResultPathProviderSingleton, RunMode
 from hisim.simulationparameters import SimulationParameters
 from hisim.simulator import Simulator
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from tests.postprocessing_option_test_framework import PostProcessingOptionTestFramework
 
 
@@ -65,8 +66,8 @@ class _ConvergingFeedbackComponent(cp.StatelessComponent):
         super().__init__(
             name=name,
             my_simulation_parameters=my_simulation_parameters,
-            my_config=cp.ConfigBase(component_id=cp.ComponentID(name=name)),
-            my_display_config=cp.DisplayConfig(),
+            my_config=ConfigBase(component_id=ComponentID(name=name)),
+            my_display_config=DisplayConfig(),
         )
         self._offset: float = offset
         self.feedback_input: cp.ComponentInput = self.add_input(

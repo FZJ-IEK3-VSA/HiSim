@@ -6,7 +6,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components import generic_heat_pump
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 @pytest.mark.base
@@ -68,7 +68,7 @@ def test_generic_heat_pump() -> None:
         "TemperatureAir",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.WATT,
-        component_id=cp.ComponentID("FakeTemperatureOutside"),
+        component_id=ComponentID("FakeTemperatureOutside"),
     )
 
     t_m_output = cp.ComponentOutput(
@@ -76,7 +76,7 @@ def test_generic_heat_pump() -> None:
         "TemperatureMean",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.WATT,
-        component_id=cp.ComponentID("FakeHouse"),
+        component_id=ComponentID("FakeHouse"),
     )
 
     my_heat_pump_controller.temperature_mean_channel.source_output = t_m_output

@@ -16,6 +16,7 @@ from hisim.components.controller_pid import (
 from hisim.loadtypes import LoadTypes, Units
 from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
 from hisim.simulationparameters import SimulationParameters
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 # 5R1C thermal coefficients used across the tests (W/K and J/K).
@@ -158,17 +159,17 @@ def _build_controller_with_inputs(
         "TemperatureMean",
         LoadTypes.TEMPERATURE,
         Units.CELSIUS,
-        component_id=cp.ComponentID("FakeBuilding"),
+        component_id=ComponentID("FakeBuilding"),
     )
     fake_phi_st = cp.ComponentOutput(
-        "FakeBuilding", "HeatFluxWallNode", LoadTypes.HEATING, Units.WATT, component_id=cp.ComponentID("FakeBuilding")
+        "FakeBuilding", "HeatFluxWallNode", LoadTypes.HEATING, Units.WATT, component_id=ComponentID("FakeBuilding")
     )
     fake_phi_m = cp.ComponentOutput(
         "FakeBuilding",
         "HeatFluxThermalMassNode",
         LoadTypes.HEATING,
         Units.WATT,
-        component_id=cp.ComponentID("FakeBuilding"),
+        component_id=ComponentID("FakeBuilding"),
     )
     controller.temperature_mean_channel.source_output = fake_temperature
     controller.heat_flow_rate_to_internal_surface_node_channel.source_output = fake_phi_st

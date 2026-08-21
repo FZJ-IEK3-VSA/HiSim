@@ -10,11 +10,12 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
+from hisim.config import ConfigBase, DisplayConfig
 
 
 @dataclass_json
 @dataclass
-class ControllerHeatConfig(cp.ConfigBase):
+class ControllerHeatConfig(ConfigBase):
     """Configuration of the Controller Heat class."""
 
     @classmethod
@@ -122,7 +123,7 @@ class ControllerHeat(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ControllerHeatConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.controller_heat_config = config

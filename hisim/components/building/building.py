@@ -25,6 +25,7 @@ from hisim.loadtypes import OutputPostprocessingRules
 from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
+from hisim.config import DisplayConfig
 
 
 class BuildingState:
@@ -128,7 +129,7 @@ class Building(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: BuildingConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
         self.buildingconfig = config

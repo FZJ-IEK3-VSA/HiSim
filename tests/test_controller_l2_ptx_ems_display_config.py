@@ -17,7 +17,7 @@ the misleading ``PowerToThird``/``EnergyToThird``) and the instance attribute
 
 import pytest
 
-from hisim.component import ComponentID, DisplayConfig
+from hisim.config import ComponentID, DisplayConfig
 from hisim.components.controller_l2_ptx_energy_management_system import (
     PTXController,
     PTXControllerConfig,

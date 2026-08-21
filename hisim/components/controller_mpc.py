@@ -12,7 +12,7 @@ import casadi as ca
 # Owned
 from hisim import utils
 from hisim import component as cp
-from hisim.component import ComponentID, ConfigBase
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
@@ -208,7 +208,7 @@ class MpcController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: MpcControllerConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Constructs all the neccessary attributes."""
 

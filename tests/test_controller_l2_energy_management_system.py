@@ -26,7 +26,7 @@ from hisim.components import (
     more_advanced_heat_pump_hplib
 )
 from hisim import utils
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 import hisim.loadtypes as lt
 
 from hisim.postprocessingoptions import PostProcessingOptions

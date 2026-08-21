@@ -10,6 +10,7 @@ from hisim.component import (
     ComponentInput,
     ComponentOutput,
 )
+from hisim.config import ConfigBase
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import utils
@@ -26,7 +27,7 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class GenericGasHeaterWithControllerConfig(cp.ConfigBase):
+class GenericGasHeaterWithControllerConfig(ConfigBase):
 
     """Configuration of the GasHeater class."""
 
@@ -56,7 +57,7 @@ class GenericGasHeaterWithControllerConfig(cp.ConfigBase):
 
 @dataclass_json
 @dataclass
-class GenericGasHeaterControllerConfig(cp.ConfigBase):
+class GenericGasHeaterControllerConfig(ConfigBase):
 
     """Configuration of the GasHeaterController class."""
 

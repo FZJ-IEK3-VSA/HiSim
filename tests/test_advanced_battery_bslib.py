@@ -7,7 +7,7 @@ from hisim.components import advanced_battery_bslib
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -59,7 +59,7 @@ def test_advanced_battery_bslib() -> None:
         "LoadingPowerInput",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.WATT,
-        component_id=cp.ComponentID("FakeLoadingPowerInput"),
+        component_id=ComponentID("FakeLoadingPowerInput"),
     )
 
     number_of_outputs = fft.get_number_of_outputs([my_advanced_battery, loading_power_input])

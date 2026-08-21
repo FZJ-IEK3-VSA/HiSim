@@ -18,7 +18,8 @@ from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import ComponentID, ComponentInput, ComponentOutput
+from hisim.component import ComponentInput, ComponentOutput
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
@@ -43,7 +44,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class EMSConfig(cp.ConfigBase):
+class EMSConfig(ConfigBase):
     """L1 Controller Config."""
 
     @classmethod
@@ -179,7 +180,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self,
         my_simulation_parameters: SimulationParameters,
         config: EMSConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Initializes."""
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []

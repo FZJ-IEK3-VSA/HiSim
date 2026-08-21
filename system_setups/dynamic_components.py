@@ -6,7 +6,7 @@ from typing import Optional
 
 # import hisim.components.random_numbers
 from hisim.simulator import SimulationParameters, Simulator
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import advanced_battery_bslib
 from hisim.components import weather

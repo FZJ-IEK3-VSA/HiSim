@@ -25,17 +25,15 @@ from hplib import hplib as hpl
 
 # Import modules from HiSim
 from hisim.component import (
-    ComponentID,
     Component,
     ComponentInput,
     ComponentOutput,
     SingleTimeStepValues,
-    ConfigBase,
     ComponentConnection,
     OpexCostDataClass,
-    DisplayConfig,
     CapexCostDataClass,
 )
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components import weather, simple_water_storage, heat_distribution_system
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules, ComponentType

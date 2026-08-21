@@ -9,9 +9,9 @@ from dataclasses_json import dataclass_json
 
 # Owned
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID, Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import loadtypes as lt
-from hisim.component import ConfigBase
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -79,9 +79,9 @@ class ExampleComponent(Component):
         capacity, and initial temperature).
 
     my_display_config : DisplayConfig, optional
-        A :py:class:`~hisim.component.DisplayConfig` object that controls
+        A :py:class:`~hisim.config.DisplayConfig` object that controls
         how the component is displayed in the simulation results.
-        Defaults to an empty :py:class:`~hisim.component.DisplayConfig`.
+        Defaults to an empty :py:class:`~hisim.config.DisplayConfig`.
 
     """
 

@@ -17,7 +17,7 @@ from hisim.components.controller_l1_example_controller import (
     SimpleController,
     SimpleControllerConfig,
 )
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 def _assert_defaults(config: SimpleControllerConfig, expected_building: Optional[str]) -> None:

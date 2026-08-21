@@ -8,7 +8,7 @@ from hisim.components import heat_distribution_system, building
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -157,21 +157,21 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         "WaterTemperatureInput",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
-        component_id=cp.ComponentID("FakeWaterTemperatureInput"),
+        component_id=ComponentID("FakeWaterTemperatureInput"),
     )
     residence_temperature_indoor_air = cp.ComponentOutput(
         "FakeResidenceTemperatureInput",
         "ResidenceTemperatureInput",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
-        component_id=cp.ComponentID("FakeResidenceTemperatureInput"),
+        component_id=ComponentID("FakeResidenceTemperatureInput"),
     )
     theoretical_thermal_building_demand = cp.ComponentOutput(
         "FakeTheoreticalThermalDemand",
         "TheoreticalThermalDemand",
         lt.LoadTypes.HEATING,
         lt.Units.WATT,
-        component_id=cp.ComponentID("FakeTheoreticalThermalDemand"),
+        component_id=ComponentID("FakeTheoreticalThermalDemand"),
     )
 
     state_from_hds_controller = cp.ComponentOutput(
@@ -179,7 +179,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         "StateController",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("FakeStateController"),
+        component_id=ComponentID("FakeStateController"),
     )
 
     # connect hds inputs to fake outputs

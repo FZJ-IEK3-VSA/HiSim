@@ -14,7 +14,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components import controller_l1_electrolyzer
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -28,7 +28,7 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class GenericElectrolyzerConfig(cp.ConfigBase):
+class GenericElectrolyzerConfig(ConfigBase):
     """Generic electrolyzer config."""
 
     component_id: ComponentID
@@ -115,7 +115,7 @@ class GenericElectrolyzer(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericElectrolyzerConfig,
-        my_display_config: Optional[cp.DisplayConfig] = None,
+        my_display_config: Optional[DisplayConfig] = None,
     ) -> None:
         """Initialize the electrolyzer component.
 
@@ -131,7 +131,7 @@ class GenericElectrolyzer(cp.Component):
         self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
         self.config: GenericElectrolyzerConfig = config
         if my_display_config is None:
-            my_display_config = cp.DisplayConfig()
+            my_display_config = DisplayConfig()
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,

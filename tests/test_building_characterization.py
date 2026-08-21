@@ -2,7 +2,7 @@
 
 ``hisim/components/building.py`` is about to be split and de-hazarded in a sequence of
 cleanup commits that are defined to be behavior-identical (see
-``system_docs/building_cleanup_spec.md``). ``BuildingInformation`` is where most of that
+``roadmap/building_cleanup_spec.md``). ``BuildingInformation`` is where most of that
 risk sits: roughly 690 lines that read a TABULA reference row and derive envelope areas,
 U-values, conductances, capacities and apartment counts through a chain of mutating
 ``set_*`` methods whose order is a convention rather than a contract. This module pins the

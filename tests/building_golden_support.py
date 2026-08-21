@@ -1,6 +1,6 @@
 """Shared machinery for the committed building golden snapshots (cleanup phase 1 harness).
 
-The building cleanup (see ``system_docs/building_cleanup_spec.md``) is defined to be
+The building cleanup (see ``roadmap/building_cleanup_spec.md``) is defined to be
 behavior-identical, and its referee is a pair of committed golden files: one
 characterization snapshot of :py:class:`hisim.components.building.BuildingInformation`
 over the whole TABULA catalogue, and one snapshot of a synthetic one-day ``Building``

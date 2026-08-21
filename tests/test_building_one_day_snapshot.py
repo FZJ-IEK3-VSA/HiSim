@@ -3,7 +3,7 @@
 Layer 1 (``tests/test_building_characterization.py``) pins what ``BuildingInformation``
 derives from the TABULA catalogue; it says nothing about the ~2000-line ``Building``
 component that turns those parameters into temperatures and heat flows. This module closes
-that gap for the cleanup phases described in ``system_docs/building_cleanup_spec.md``: it
+that gap for the cleanup phases described in ``roadmap/building_cleanup_spec.md``: it
 drives the component through one 15-minute-resolution day (96 timesteps) and snapshots
 **every output vector**, timestep by timestep, into a committed golden.
 

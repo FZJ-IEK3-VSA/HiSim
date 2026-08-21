@@ -84,7 +84,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         my_simulation_parameters=my_simulation_parameters,
         config=my_advanced_fuel_cell_config_2,
     )
-    my_cl2_config = cl2.EMSConfig.get_default_config_ems()
+    my_cl2_config = cl2.EMSConfig.presets.optimize_own_consumption
     my_cl2 = cl2.L2GenericEnergyManagementSystem(
         my_simulation_parameters=my_simulation_parameters, config=my_cl2_config
     )

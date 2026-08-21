@@ -26,7 +26,7 @@ from hisim.components import (
     more_advanced_heat_pump_hplib
 )
 from hisim import utils
-from hisim.config import ComponentID
+from hisim.config import ComponentID, SizingContext
 import hisim.loadtypes as lt
 
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -222,10 +222,12 @@ def test_house(
     my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
-        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
-        absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-        heating_system=my_hds_controller_information.hds_controller_config.heating_system,
+    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.presets.standard.resolve(
+        SizingContext(
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
+            conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+            heat_distribution_system_type=my_hds_controller_information.hds_controller_config.heating_system,
+    )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
@@ -241,7 +243,7 @@ def test_house(
     )
 
     # Build EMS
-    my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
+    my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.presets.optimize_own_consumption
 
     my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
         my_simulation_parameters=my_simulation_parameters,

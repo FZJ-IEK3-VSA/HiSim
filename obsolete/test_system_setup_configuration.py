@@ -60,7 +60,7 @@ def test_load_from_dict_applies_system_setup_config_overwrite() -> None:
 def test_load_from_dict_consumes_known_keys() -> None:
     """`load_from_dict` pops `building_config`, `options`, `system_setup_config`."""
     payload = {
-        "building_config": building.BuildingConfig.get_default_german_single_family_home().to_dict(),
+        "building_config": building.BuildingConfig.presets.german_single_family_home.to_dict(),
         "options": {"diesel_car": True},
         "system_setup_config": {"weather_location": "MUNICH"},
         "leftover_key": "ignored",
@@ -81,7 +81,7 @@ def test_load_from_dict_options_without_building_config_raises() -> None:
 
 def test_load_from_dict_with_building_config_uses_scaled_default() -> None:
     """A `building_config` triggers the scaled-default path with options applied."""
-    building_config = building.BuildingConfig.get_default_german_single_family_home()
+    building_config = building.BuildingConfig.presets.german_single_family_home
     config = Config.load_from_dict(
         {
             "building_config": building_config.to_dict(),
@@ -110,7 +110,7 @@ def test_load_from_json_missing_file_raises(tmp_path: Path) -> None:
 
 def test_load_from_json_matches_load_from_dict(tmp_path: Path) -> None:
     """`load_from_json` and `load_from_dict` agree for identical inputs."""
-    building_config = building.BuildingConfig.get_default_german_single_family_home()
+    building_config = building.BuildingConfig.presets.german_single_family_home
     payload = {
         "building_config": building_config.to_dict(),
         "options": {"diesel_car": True},

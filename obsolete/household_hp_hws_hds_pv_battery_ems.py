@@ -203,10 +203,9 @@ def setup_function(
     # Build Basic Components
 
     # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home(
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-        max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
-    )
+    my_building_config = building.BuildingConfig.presets.german_single_family_home
+    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+    my_building_config.max_thermal_building_demand_in_watt = max_thermal_building_demand_in_watt
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
     my_building_config.absolute_conditioned_floor_area_in_m2 = absolute_conditioned_floor_area_in_m2

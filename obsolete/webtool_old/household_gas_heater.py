@@ -84,7 +84,7 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
     @classmethod
     def get_default(cls) -> "HouseholdGasHeaterConfig":
         """Get default HouseholdGasHeaterConfig."""
-        building_config = building.BuildingConfig.get_default_german_single_family_home()
+        building_config = building.BuildingConfig.presets.german_single_family_home
         household_config = cls.get_scaled_default(building_config, options=HouseholdGasHeaterOptions())
         return household_config
 

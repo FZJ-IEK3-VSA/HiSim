@@ -89,9 +89,8 @@ class HouseholdAdvancedHpEvPvBatteryConfig(SystemSetupConfigBase):
         charging_power = float((charging_station_set.Name or "").split("with ")[1].split(" kW")[0])
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
-        building_config = building.BuildingConfig.get_default_german_single_family_home(
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
-        )
+        building_config = building.BuildingConfig.presets.german_single_family_home
+        building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
         my_building_information = building.BuildingInformation(config=building_config)
         hds_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
             set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,

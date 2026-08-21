@@ -121,7 +121,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     hds_name = "HeatDistributionSystem"
 
     # ===================================================================================================================
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_building_config = building.BuildingConfig.presets.german_single_family_home
     my_building_information = building.BuildingInformation(config=my_building_config)
 
     # Build Heat Distribution System

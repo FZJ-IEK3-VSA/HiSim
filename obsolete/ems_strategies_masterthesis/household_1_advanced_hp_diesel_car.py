@@ -81,9 +81,8 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
 
         heating_reference_temperature_in_celsius: float = -7
 
-        building_config = building.BuildingConfig.get_default_german_single_family_home(
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
-        )
+        building_config = building.BuildingConfig.presets.german_single_family_home
+        building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
 
         household_config = cls.get_scaled_default(building_config)
 

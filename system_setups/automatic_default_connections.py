@@ -62,9 +62,8 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # Build Basic Components
 
     # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home(
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
-    )
+    my_building_config = building.BuildingConfig.presets.german_single_family_home
+    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
 
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)

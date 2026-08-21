@@ -231,3 +231,17 @@ def test_size_terms_and_sizing_context_fields_are_one_registry():
     for field in dataclasses.fields(SizingContext):
         term = getattr(Size, field.name.upper())
         assert term.facts_read() == (field.name,)
+
+
+@pytest.mark.base
+def test_for_building_snapshots_the_derived_building_facts():
+    """for_building runs the TABULA lookup once and fills the building-scope facts."""
+    from hisim.components.building import BuildingConfig
+
+    ctx = SizingContext.for_building(BuildingConfig.presets.german_single_family_home)
+    assert ctx.heating_load_in_watt is not None and ctx.heating_load_in_watt > 0
+    assert ctx.number_of_apartments == 1
+    assert ctx.conditioned_floor_area_in_m2 == pytest.approx(121.2)
+    enriched = ctx.with_facts(water_mass_flow_rate_in_kg_per_second=0.27)
+    assert enriched.water_mass_flow_rate_in_kg_per_second == 0.27
+    assert ctx.water_mass_flow_rate_in_kg_per_second is None

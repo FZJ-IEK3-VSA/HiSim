@@ -31,6 +31,15 @@ pylint:
       - consider-using-min-builtin
       - consider-using-max-builtin
       - import-outside-toplevel
+      # HiSim resolves genuine layering cycles with deliberate lazy imports (the config
+      # layer's SizingContext.for_building reaching into the building package, a config
+      # class's get_main_classname reaching for its component). pylint counts a
+      # function-local import as a graph edge just like a module-level one, so those
+      # deliberate resolutions are reported anyway -- and it attributes the message to an
+      # arbitrary module outside the cycle, so it cannot be suppressed where the cycle
+      # actually is. The CI's own pylint profile (pylintrc-critical-only) disables it for
+      # the same reason.
+      - cyclic-import
 #    disable:
 #      - too-many-locals
 #      - arguments-differ

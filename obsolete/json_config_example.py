@@ -207,7 +207,7 @@
 #     }
 #     my_cfg.add_component(my_h2_storage)
 #     # Bulding
-#     my_bulding_config = building.Building.get_default_german_single_family_home()
+#     my_bulding_config = building.Building.presets.german_single_family_home
 #     my_bulding = {my_cfg.set_name(building.Building): my_bulding_config}
 #     my_cfg.add_component(my_bulding)
 #     my_bulding_controller_config = (

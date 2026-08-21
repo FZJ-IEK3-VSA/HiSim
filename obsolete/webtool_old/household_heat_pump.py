@@ -89,7 +89,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
     @classmethod
     def get_default(cls) -> "HouseholdHeatPumpConfig":
         """Get default HouseholdHeatPumpConfig."""
-        building_config = building.BuildingConfig.get_default_german_single_family_home()
+        building_config = building.BuildingConfig.presets.german_single_family_home
         household_config = cls.get_scaled_default(building_config, options=HouseholdHeatPumpOptions())
         return household_config
 

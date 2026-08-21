@@ -175,7 +175,7 @@ def setup_function(
 
     # Build Building
     # my_building = Building(
-    #    config=BuildingConfig.get_default_german_single_family_home(),
+    #    config=BuildingConfig.presets.german_single_family_home,
     #    my_simulation_parameters=my_simulation_parameters,
     # )
 

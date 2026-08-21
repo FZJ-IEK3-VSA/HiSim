@@ -10,6 +10,7 @@ from hisim.components import generic_boiler
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -47,21 +48,21 @@ def test_gas_heater() -> None:
         "ControlSignal",
         lt.LoadTypes.ANY,
         lt.Units.PERCENT,
-        component_id=cp.ComponentID("FakeControlSignal"),
+        component_id=ComponentID("FakeControlSignal"),
     )
     operating_mode_channel = cp.ComponentOutput(
         "FakeOperatingMode",
         "OperatingMode",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("FakeOperatingMode"),
+        component_id=ComponentID("FakeOperatingMode"),
     )
     temperature_delta_channel = cp.ComponentOutput(
         "FakeTemperatureDelta",
         "TemperatureDelta",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.KELVIN,
-        component_id=cp.ComponentID("FakeTemperatureDelta"),
+        component_id=ComponentID("FakeTemperatureDelta"),
     )
 
     mass_flow_input_temperature_channel = cp.ComponentOutput(
@@ -69,7 +70,7 @@ def test_gas_heater() -> None:
         "MassflowInputTemperature",
         lt.LoadTypes.WATER,
         lt.Units.CELSIUS,
-        component_id=cp.ComponentID("FakeMassflowInputTemperature"),
+        component_id=ComponentID("FakeMassflowInputTemperature"),
     )
 
     test_components = [

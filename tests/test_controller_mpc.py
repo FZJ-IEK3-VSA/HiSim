@@ -13,7 +13,7 @@ import pytest
 from hisim.components.controller_mpc import MpcController, MpcControllerConfig
 from hisim.loadtypes import Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 # Non-zero thermal coefficients so statespace() does not divide by zero.
 H_TR_W = 50.0

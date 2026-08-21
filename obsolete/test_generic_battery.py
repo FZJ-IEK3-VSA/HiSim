@@ -25,7 +25,7 @@ from projects.HiSim.obsolete.generic_battery import (
     select_battery_spec,
 )
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 # Mark every test in this module as a fast ``base`` test (see pytest.ini).

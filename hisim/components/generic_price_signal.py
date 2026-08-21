@@ -17,7 +17,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import loadtypes as lt
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
-from hisim.component import ComponentID
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -31,7 +31,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class PriceSignalConfig(cp.ConfigBase):
+class PriceSignalConfig(ConfigBase):
     """Configuration for the PriceSignal component.
 
     Holds all parameters required to configure the price signal component:
@@ -113,7 +113,7 @@ class PriceSignal(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: PriceSignalConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the PriceSignal component.
 

@@ -17,6 +17,7 @@ from hisim.components.controller_l2_energy_management_system import (
     L2GenericEnergyManagementSystem,
 )
 from hisim.dynamic_component import DynamicConnectionInput, DynamicConnectionOutput
+from hisim.config import ComponentID
 
 
 def _make_ems() -> L2GenericEnergyManagementSystem:
@@ -92,7 +93,7 @@ def test_sort_source_weights_returns_outputs_when_connected() -> None:
         "ElectricityTarget",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.WATT,
-        component_id=cp.ComponentID("Electrolyzer"),
+        component_id=ComponentID("Electrolyzer"),
     )
     _add_electrolyzer_output(ems, weight=5, label="Output_Test_Electrolyzer", value=output)
 

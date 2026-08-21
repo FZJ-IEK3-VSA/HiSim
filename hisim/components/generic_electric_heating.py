@@ -12,17 +12,15 @@ from dataclasses_json import dataclass_json
 from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.component import (
-    ComponentID,
     Component,
     ComponentConnection,
     SingleTimeStepValues,
     ComponentInput,
     ComponentOutput,
-    ConfigBase,
     OpexCostDataClass,
-    DisplayConfig,
     CapexCostDataClass,
 )
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.building import Building
 from hisim.components.weather import Weather
 from hisim.components.heat_distribution_system import HeatDistributionControllerConfig

@@ -22,7 +22,7 @@ import pandas as pd
 # Generic/Built-in
 from hisim import component as cp
 from hisim import utils
-from hisim.component import ComponentID, ConfigBase
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
@@ -194,7 +194,7 @@ class L1HeatPumpController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: L1HeatPumpConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the L1 heat pump controller.
 

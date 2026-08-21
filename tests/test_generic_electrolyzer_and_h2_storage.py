@@ -14,7 +14,7 @@ from hisim.components import generic_electrolyzer_and_h2_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.component import ComponentID
+from hisim.config import ComponentID, DisplayConfig
 
 
 @pytest.mark.base
@@ -96,21 +96,21 @@ def test_hydrogen_generator() -> None:
         "ElectricityInput",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.WATT,
-        component_id=cp.ComponentID("FakeElectricityInput"),
+        component_id=ComponentID("FakeElectricityInput"),
     )
     hydrogen_not_stored = cp.ComponentOutput(
         "FakeHydrogenNotStored",
         "HydrogenNotStored",
         lt.LoadTypes.GREEN_HYDROGEN,
         lt.Units.KG,
-        component_id=cp.ComponentID("FakeHydrogenNotStored"),
+        component_id=ComponentID("FakeHydrogenNotStored"),
     )
     discharging_hydrogen_amount_target = cp.ComponentOutput(
         "DischargingHydrogenAmountTarget",
         "DischargingHydrogenAmountTarget",
         lt.LoadTypes.GREEN_HYDROGEN,
         lt.Units.KG_PER_SEC,
-        component_id=cp.ComponentID("DischargingHydrogenAmountTarget"),
+        component_id=ComponentID("DischargingHydrogenAmountTarget"),
     )
 
     number_of_outputs = fft.get_number_of_outputs(
@@ -219,5 +219,5 @@ def test_display_config_instance_isolation() -> None:
     assert electrolyzer_1.my_display_config is not storage_1.my_display_config
 
     # Verify type correctness
-    assert isinstance(electrolyzer_1.my_display_config, cp.DisplayConfig)
-    assert isinstance(storage_1.my_display_config, cp.DisplayConfig)
+    assert isinstance(electrolyzer_1.my_display_config, DisplayConfig)
+    assert isinstance(storage_1.my_display_config, DisplayConfig)

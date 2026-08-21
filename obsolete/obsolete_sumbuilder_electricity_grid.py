@@ -9,12 +9,13 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import Component
+from hisim.config import ConfigBase
 from hisim.simulationparameters import SimulationParameters
 
 
 @dataclass_json
 @dataclass
-class ElectricityGridConfig(cp.ConfigBase):
+class ElectricityGridConfig(ConfigBase):
 
     """Electricity Grid Config."""
 

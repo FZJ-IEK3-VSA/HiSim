@@ -10,12 +10,10 @@ from hisim import log
 
 from hisim import component as cp
 from hisim.component import (
-    ComponentID,
     CapexCostDataClass,
-    ConfigBase,
-    DisplayConfig,
     OpexCostDataClass,
 )
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.configuration import (
     EmissionFactorsAndCostsForFuelsConfig,
 )

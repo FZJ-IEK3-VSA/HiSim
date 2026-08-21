@@ -21,7 +21,8 @@ from hisim.components import advanced_ev_battery_bslib
 from hisim.loadtypes import Units, ComponentType, InandOutputType
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
-from hisim.component import ComponentID, OpexCostDataClass, CapexCostDataClass
+from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -35,7 +36,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class ChargingStationConfig(cp.ConfigBase):
+class ChargingStationConfig(ConfigBase):
     """Definition of the configuration of Charging Station and the set point for the control."""
 
     component_id: ComponentID
@@ -135,7 +136,7 @@ class L1Controller(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ChargingStationConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initializes Car."""
         self.my_simulation_parameters = my_simulation_parameters

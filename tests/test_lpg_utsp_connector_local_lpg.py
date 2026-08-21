@@ -17,7 +17,7 @@ from hisim import component
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 load_dotenv()

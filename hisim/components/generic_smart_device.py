@@ -23,7 +23,8 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID, OpexCostDataClass
+from hisim.component import OpexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 
 __authors__ = "Johanna Ganglbauer"
@@ -38,7 +39,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class SmartDeviceConfig(cp.ConfigBase):
+class SmartDeviceConfig(ConfigBase):
     """Configuration of the smart device."""
 
     @classmethod
@@ -147,7 +148,7 @@ class SmartDevice(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: SmartDeviceConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the smart device component.
 

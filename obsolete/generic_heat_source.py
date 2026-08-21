@@ -24,6 +24,7 @@ from hisim.components.configuration import (
     PhysicsConfig,
 )
 from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.config import ConfigBase, DisplayConfig
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -37,7 +38,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class HeatSourceConfig(cp.ConfigBase):
+class HeatSourceConfig(ConfigBase):
     """Configuration of a generic HeatSource."""
 
     building_name: str
@@ -202,7 +203,7 @@ class HeatSource(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatSourceConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
 

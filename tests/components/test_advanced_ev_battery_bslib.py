@@ -18,7 +18,7 @@ from hisim.components.advanced_ev_battery_bslib import (
     CarBatteryConfig,
     EVBatteryState,
 )
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 @pytest.mark.base

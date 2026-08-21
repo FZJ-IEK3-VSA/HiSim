@@ -15,7 +15,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.components.generic_car import Car, GenericCarInformation
-from hisim.component import ConfigBase
+from hisim.config import ConfigBase, ComponentID
 import hisim.component as cp
 import hisim.dynamic_component as dcp
 from hisim.dynamic_component import DynamicComponent
@@ -428,12 +428,12 @@ def get_component_key_from_configuration(configuration: dict[str, Any]) -> str:
 
     A scenario JSON stores the component identity as a nested ``component_id`` object holding
     ``name``, ``building`` and ``unit``. This helper rebuilds the same runtime key that
-    :py:attr:`hisim.component.ComponentID.key` produces for the live configuration, so that a
+    :py:attr:`hisim.config.ComponentID.key` produces for the live configuration, so that a
     scenario entry can be matched against an already-instantiated component without anyone
     having to take an existing key apart.
     """
     identity = configuration.get("component_id") or {}
-    return cp.ComponentID(
+    return ComponentID(
         name=identity.get("name", ""),
         building=identity.get("building"),
         unit=identity.get("unit"),

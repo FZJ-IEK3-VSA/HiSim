@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Tuple, Type
 import pytest
 
 import hisim.components
-from hisim.component import ConfigBase
+from hisim.config import ConfigBase
 from hisim.components import generic_boiler
 from hisim.components import generic_pv_system
 from hisim.components import heat_distribution_system

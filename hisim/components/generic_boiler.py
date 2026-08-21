@@ -24,17 +24,15 @@ from hisim.components.configuration import (
     PhysicsConfig,
 )
 from hisim.component import (
-    ComponentID,
     Component,
     ComponentConnection,
     SingleTimeStepValues,
     ComponentInput,
     ComponentOutput,
-    ConfigBase,
     OpexCostDataClass,
-    DisplayConfig,
     CapexCostDataClass,
 )
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.dual_circuit_system import (
     DiverterValve,
     HeatingMode,

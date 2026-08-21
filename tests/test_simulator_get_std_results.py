@@ -22,6 +22,7 @@ import pytest
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulator import Simulator
+from hisim.config import ComponentID
 
 
 def _make_outputs(units: list[lt.Units]) -> list[cp.ComponentOutput]:
@@ -34,7 +35,7 @@ def _make_outputs(units: list[lt.Units]) -> list[cp.ComponentOutput]:
                 field_name=f"Output{i}",
                 load_type=lt.LoadTypes.ANY,
                 unit=unit,
-                component_id=cp.ComponentID(f"Comp{i}"),
+                component_id=ComponentID(f"Comp{i}"),
             )
         )
     return outputs

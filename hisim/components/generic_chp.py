@@ -16,7 +16,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components import controller_l1_chp
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -30,7 +30,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class CHPConfig(cp.ConfigBase):
+class CHPConfig(ConfigBase):
     """Defininition of configuration of combined heat and power plant (CHP)."""
 
     component_id: ComponentID
@@ -142,7 +142,7 @@ class SimpleCHP(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: CHPConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initializes the class."""
         self.my_simulation_parameters: SimulationParameters = my_simulation_parameters
@@ -291,5 +291,5 @@ class SimpleCHP(cp.Component):
     def write_to_report(self) -> List[str]:
         """Writes the information of the current component to the report."""
         # Despite its name, ConfigBase.get_string_dict() returns a List[str] of
-        # formatted "key: value" entries (see cp.ConfigBase), not a dict.
+        # formatted "key: value" entries (see ConfigBase), not a dict.
         return self.config.get_string_dict()

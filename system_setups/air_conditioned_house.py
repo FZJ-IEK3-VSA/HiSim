@@ -15,7 +15,7 @@ from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import air_conditioner
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 __authors__ = "Marwa Alfouly, Sebastian Dickler, Kristina Dabrock"

@@ -20,7 +20,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.fuel_meter import FuelMeter, FuelMeterConfig, FuelMeterState
-from hisim.component import ComponentID
+from hisim.config import ComponentID, DisplayConfig
 
 # Heating-oil density expressed in kg per liter. The stored field
 # ``fuel_density_in_kg_per_m3`` uses kg/m^3, and since 1 L == 1e-3 m^3 the
@@ -131,8 +131,8 @@ def test_fuel_meter_display_config_not_shared() -> None:
     )
 
     assert meter_a.my_display_config is not meter_b.my_display_config
-    assert isinstance(meter_a.my_display_config, cp.DisplayConfig)
-    assert isinstance(meter_b.my_display_config, cp.DisplayConfig)
+    assert isinstance(meter_a.my_display_config, DisplayConfig)
+    assert isinstance(meter_b.my_display_config, DisplayConfig)
 
     # mutating one must not affect the other
     meter_a.my_display_config.pretty_name = "meter_a"

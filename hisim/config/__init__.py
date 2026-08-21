@@ -1,0 +1,38 @@
+"""The configuration layer of HiSim: config base classes and the sizing machinery.
+
+This package is the *bottom* layer of HiSim. It holds everything a component
+configuration is made of, deliberately separated from the component runtime so that the
+dependency direction is unambiguous — ``hisim/component.py`` imports this package, never
+the other way round:
+
+    - :mod:`hisim.config.base` — ``ComponentID``, ``ConfigBase`` and ``DisplayConfig``,
+      the three classes every component configuration is built from.
+    - :mod:`hisim.config.sizing` — design B of ``system_docs/config_defaults_spec.md``:
+      the ``AUTO`` sentinel, ``sized_field``, the ``Size`` expression terms, the
+      ``SizingContext`` snapshot and the ``resolve_config`` resolver.
+    - :mod:`hisim.config.presets` — the ``Catalog`` helper giving a config class its
+      named default presets, plus the preset-provenance stamp.
+    - :mod:`hisim.config.engine` — the sizing-fact engine of spec §8.4, resolving
+      cross-component sizing to a fixed point over a scenario's configs.
+
+**Layering rule.** No module in this package imports anything from the rest of HiSim at
+module level. The single sanctioned exception is
+:meth:`hisim.config.sizing.SizingContext.for_building`, which imports the building
+package inside the method body: the building physics is what turns a ``BuildingConfig``
+into sizing facts, and the building package necessarily imports ``ConfigBase`` from here
+(see the §4.1 correction in the spec and entry 1 of ``roadmap/random_findings.md``).
+
+Importing the names from this package — ``from hisim.config import ConfigBase`` — is the
+canonical spelling; the submodules are equally importable for code that prefers the
+fully-qualified path.
+"""
+
+# clean
+
+from hisim.config.base import ComponentID, ConfigBase, DisplayConfig
+
+__all__ = [
+    "ComponentID",
+    "ConfigBase",
+    "DisplayConfig",
+]

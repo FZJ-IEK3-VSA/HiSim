@@ -23,12 +23,12 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 
 
 @dataclass_json
 @dataclass
-class CSVLoaderConfig(cp.ConfigBase):
+class CSVLoaderConfig(ConfigBase):
     """Configuration for the :class:`CSVLoader` component.
 
     Args:
@@ -129,7 +129,7 @@ class CSVLoader(cp.Component):
         self,
         config: CSVLoaderConfig,
         my_simulation_parameters: SimulationParameters,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
         inputs_dir: Path | None = None,
         dataframe: pd.DataFrame | None = None,
     ) -> None:
@@ -259,7 +259,7 @@ class CSVLoader(cp.Component):
         cls,
         config: CSVLoaderConfig,
         my_simulation_parameters: SimulationParameters,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
         inputs_dir: Path | None = None,
     ) -> "CSVLoader":
         """Construct a :class:`CSVLoader` by reading its CSV file from disk.

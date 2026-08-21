@@ -18,7 +18,8 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import ComponentID, CapexCostDataClass, OpexCostDataClass
+from hisim.component import CapexCostDataClass, OpexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.building import Building
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
 from hisim.simulationparameters import SimulationParameters
@@ -41,7 +42,7 @@ SECONDS_PER_DAY: int = 24 * SECONDS_PER_HOUR  # s per day
 
 @dataclass_json
 @dataclass
-class NightSetbackConfig(cp.ConfigBase):
+class NightSetbackConfig(ConfigBase):
     """Configuration of the night setback controller."""
 
     @classmethod
@@ -85,11 +86,11 @@ class NightSetbackController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: NightSetbackConfig,
-        my_display_config: Optional[cp.DisplayConfig] = None,
+        my_display_config: Optional[DisplayConfig] = None,
     ) -> None:
         """Construct the controller."""
         if my_display_config is None:
-            my_display_config = cp.DisplayConfig()
+            my_display_config = DisplayConfig()
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()

@@ -8,7 +8,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import generic_fuel_cell
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -61,7 +61,7 @@ def test_electrolyzer() -> None:
         "DemandProfile",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.KILOWATT,
-        component_id=cp.ComponentID("FakeDemandProfile"),
+        component_id=ComponentID("FakeDemandProfile"),
     )
 
     control_signal = cp.ComponentOutput(
@@ -69,7 +69,7 @@ def test_electrolyzer() -> None:
         "ControlSignal",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("FakeControlSignal"),
+        component_id=ComponentID("FakeControlSignal"),
     )
 
     number_of_outputs = fft.get_number_of_outputs([demand_profile_target, control_signal])

@@ -2,13 +2,13 @@
 
 from typing import Any, Dict, Optional
 import pytest
-from hisim import component
 from hisim import simulator as sim
 from hisim.components.dual_circuit_system import HeatingMode
 from hisim.components.generic_boiler import (
     GenericBoilerController,
     GenericBoilerControllerConfig,
 )
+from hisim.config import DisplayConfig
 
 
 @pytest.mark.base
@@ -92,7 +92,7 @@ def given_default_testee(
     testee = GenericBoilerController(
         simulationparameters,
         config,
-        component.DisplayConfig(),
+        DisplayConfig(),
     )
     return testee
 

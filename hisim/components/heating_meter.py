@@ -10,7 +10,8 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
-from hisim.component import ComponentID, ComponentInput, OpexCostDataClass
+from hisim.component import ComponentInput, OpexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -32,7 +33,7 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class HeatingMeterConfig(cp.ConfigBase):
+class HeatingMeterConfig(ConfigBase):
     """Configuration dataclass for the HeatingMeter component.
 
     Holds the building name and component name used to instantiate
@@ -82,7 +83,7 @@ class HeatingMeter(DynamicComponent):
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatingMeterConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
+        my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
     ) -> None:
         """Initialize the component."""
         self.config: HeatingMeterConfig = config

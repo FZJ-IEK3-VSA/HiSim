@@ -6,7 +6,7 @@ from typing import Any, Optional
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 from hisim.loadtypes import LoadTypes, ComponentType
-from hisim.component import ComponentID, ConfigBase
+from hisim.config import ConfigBase, ComponentID
 from hisim import log
 
 """

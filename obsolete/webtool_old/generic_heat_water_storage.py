@@ -10,7 +10,8 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Owned
-from hisim.component import Component, ComponentInput, ComponentOutput, ConfigBase
+from hisim.component import Component, ComponentInput, ComponentOutput
+from hisim.config import ConfigBase, DisplayConfig
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -147,7 +148,7 @@ class HeatStorage(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatStorageConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.heat_storage_config = config
@@ -465,7 +466,7 @@ class HeatStorageController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatStorageControllerConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.heat_storage_controller_config = config

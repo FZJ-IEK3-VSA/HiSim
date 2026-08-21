@@ -14,6 +14,7 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -93,7 +94,7 @@ def test_building() -> None:
         "ThermalDelivery",
         LoadTypes.HEATING,
         Units.WATT,
-        component_id=component.ComponentID("FakeThermalDeliveryMachine"),
+        component_id=ComponentID("FakeThermalDeliveryMachine"),
     )
     t_five = time.perf_counter()
     log.profile(f"T4: {t_four - t_five}")

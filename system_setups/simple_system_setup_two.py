@@ -15,7 +15,7 @@ from hisim.components.example_transformer import (
     ExampleTransformerConfig,
 )
 from hisim.components.sumbuilder import SumBuilderForTwoInputs, SumBuilderConfig
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:

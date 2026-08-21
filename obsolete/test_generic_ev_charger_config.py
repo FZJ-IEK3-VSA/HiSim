@@ -20,7 +20,7 @@ from projects.HiSim.obsolete.generic_ev_charger import (
     EVChargerControllerConfig,
     EVChargerMode,
 )
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 @pytest.mark.base

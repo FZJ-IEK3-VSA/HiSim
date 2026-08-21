@@ -10,7 +10,8 @@ from scipy.interpolate import interp1d
 import numpy as np
 
 # Import modules from HiSim
-from hisim.component import ComponentID, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
+from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
@@ -28,7 +29,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class ElectrolyzerConfig(cp.ConfigBase):
+class ElectrolyzerConfig(ConfigBase):
     """Configuration of the Electrolyzer."""
 
     @classmethod

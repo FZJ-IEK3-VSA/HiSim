@@ -12,6 +12,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components import generic_hydrogen_storage
+from hisim.config import ComponentID
 
 
 @pytest.mark.base
@@ -40,14 +41,14 @@ def test_h2_storage() -> None:
         "HydrogenInput",
         lt.LoadTypes.GREEN_HYDROGEN,
         lt.Units.KG_PER_SEC,
-        component_id=cp.ComponentID("FakeHydrogenInput"),
+        component_id=ComponentID("FakeHydrogenInput"),
     )
     h2_output: cp.ComponentOutput = cp.ComponentOutput(
         "FakeHydrogenOutput",
         "HydrogenOutput",
         lt.LoadTypes.GREEN_HYDROGEN,
         lt.Units.KG_PER_SEC,
-        component_id=cp.ComponentID("FakeHydrogenOutput"),
+        component_id=ComponentID("FakeHydrogenOutput"),
     )
 
     number_of_outputs: int = fft.get_number_of_outputs([my_h2_storage, h2_input, h2_output])
@@ -102,14 +103,14 @@ def test_h2_storage_simultaneous_charge_dominates() -> None:
         "HydrogenInput",
         lt.LoadTypes.GREEN_HYDROGEN,
         lt.Units.KG_PER_SEC,
-        component_id=cp.ComponentID("FakeHydrogenInput"),
+        component_id=ComponentID("FakeHydrogenInput"),
     )
     h2_output: cp.ComponentOutput = cp.ComponentOutput(
         "FakeHydrogenOutput",
         "HydrogenOutput",
         lt.LoadTypes.GREEN_HYDROGEN,
         lt.Units.KG_PER_SEC,
-        component_id=cp.ComponentID("FakeHydrogenOutput"),
+        component_id=ComponentID("FakeHydrogenOutput"),
     )
 
     number_of_outputs: int = fft.get_number_of_outputs([my_h2_storage, h2_input, h2_output])
@@ -153,14 +154,14 @@ def test_h2_storage_simultaneous_discharge_dominates() -> None:
         "HydrogenInput",
         lt.LoadTypes.GREEN_HYDROGEN,
         lt.Units.KG_PER_SEC,
-        component_id=cp.ComponentID("FakeHydrogenInput"),
+        component_id=ComponentID("FakeHydrogenInput"),
     )
     h2_output: cp.ComponentOutput = cp.ComponentOutput(
         "FakeHydrogenOutput",
         "HydrogenOutput",
         lt.LoadTypes.GREEN_HYDROGEN,
         lt.Units.KG_PER_SEC,
-        component_id=cp.ComponentID("FakeHydrogenOutput"),
+        component_id=ComponentID("FakeHydrogenOutput"),
     )
 
     number_of_outputs: int = fft.get_number_of_outputs([my_h2_storage, h2_input, h2_output])

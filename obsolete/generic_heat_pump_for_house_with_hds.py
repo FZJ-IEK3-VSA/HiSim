@@ -23,6 +23,7 @@ from hisim.components.weather import Weather
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.config import ConfigBase
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -36,7 +37,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class GenericHeatPumpConfigNew(cp.ConfigBase):
+class GenericHeatPumpConfigNew(ConfigBase):
 
     """HeatPump Config Class."""
 
@@ -69,7 +70,7 @@ class GenericHeatPumpConfigNew(cp.ConfigBase):
 
 @dataclass_json
 @dataclass
-class HeatPumpControllerConfigNew(cp.ConfigBase):
+class HeatPumpControllerConfigNew(ConfigBase):
 
     """HeatPump Controller Config Class."""
 

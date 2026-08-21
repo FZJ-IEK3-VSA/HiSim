@@ -16,7 +16,8 @@ from windpowerlib import ModelChain, WindTurbine
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import ComponentID, ConfigBase, OpexCostDataClass, CapexCostDataClass
+from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
@@ -146,7 +147,7 @@ class Windturbine(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: WindturbineConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.windturbineconfig = config

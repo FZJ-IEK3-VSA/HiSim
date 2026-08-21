@@ -9,7 +9,7 @@ from typing import List, Optional
 from dataclasses_json import dataclass_json
 
 from hisim import utils
-from hisim.component import ComponentID, ConfigBase, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters

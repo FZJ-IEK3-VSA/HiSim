@@ -58,7 +58,7 @@ import pytest
 
 from hisim import component as cp
 from hisim import utils
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from hisim.components.building import Building, BuildingConfig
 from hisim.simulationparameters import SimulationParameters
 from tests import building_golden_support as golden_support

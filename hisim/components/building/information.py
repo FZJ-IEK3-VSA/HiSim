@@ -7,7 +7,7 @@ verbatim from the former single-module ``building.py``.
 
 # clean
 
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import pandas as pd
 
@@ -28,42 +28,6 @@ class BuildingInformation:
     ):
         """Initialize the class."""
 
-        self.window_scaling_factor: float
-        self.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin: float
-        self.ratio_between_internal_surface_area_and_floor_area: float
-        self.heat_transfer_coeff_indoor_air_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin: float
-        self.building_heat_capacity_class_f_a: dict
-        self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin: dict
-        self.conditioned_floor_area_in_m2_tabula_ref: float
-        self.scaled_conditioned_floor_area_in_m2: float
-        self.scaling_factor_according_to_conditioned_living_area: float
-        self.building_total_area_in_m2: float
-        self.total_heat_conductance_transmission: float
-        self.total_heat_conductance_ventilation: float
-        self.floor_area_in_m2: float
-        self.facade_area_in_m2: float
-        self.roof_area_in_m2: float
-        self.window_area_in_m2: float
-        self.scaled_window_areas_in_m2: list
-        self.max_thermal_building_demand_in_watt: float
-        self.door_area_in_m2: float
-        self.floor_u_value_in_watt_per_m2_per_kelvin: float
-        self.floor_adjustment_factor_from_tabula: float
-        self.heat_conductance_floor_in_watt_per_kelvin: float
-        self.facade_u_value_in_watt_per_m2_per_kelvin: float
-        self.facade_adjustment_factor_from_tabula: float
-        self.roof_adjustment_factor_from_tabula: float
-        self.door_adjustment_factor_from_tabula: float
-        self.window_adjustment_factor_from_tabula: float
-        self.roof_u_value_in_watt_per_m2_per_kelvin: float
-        self.window_u_value_in_watt_per_m2_per_kelvin: float
-        self.door_u_value_in_watt_per_m2_per_kelvin: float
-        self.heat_conductance_facade_in_watt_per_kelvin: float
-        self.heat_conductance_roof_in_watt_per_kelvin: float
-        self.heat_conductance_window_in_watt_per_kelvin: float
-        self.heat_conductance_door_in_watt_per_kelvin: float
-        self.heat_conductance_thermal_bridging_in_watt_per_kelvin: float
-        self.heat_conductance_ventilation_in_watt_per_kelvin: float
         self.buildingconfig = config
 
         # get set temperatures for building
@@ -72,8 +36,6 @@ class BuildingInformation:
         self.heating_reference_temperature_in_celsius = self.buildingconfig.heating_reference_temperature_in_celsius
 
         self.building_heat_capacity_class = self.buildingconfig.building_heat_capacity_class
-
-        self.windows_directions: List[str]
 
         self.get_building_from_tabula()
 
@@ -178,7 +140,7 @@ class BuildingInformation:
         self.heat_transfer_coeff_indoor_air_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin = 3.45
 
         # heat capacity class values in ISO 13790, table 12, p.69/70
-        self.building_heat_capacity_class_f_a = {
+        self.building_heat_capacity_class_f_a: Dict[str, float] = {
             "very light": 2.5,
             "light": 2.5,
             "medium": 2.5,
@@ -186,7 +148,7 @@ class BuildingInformation:
             "very heavy": 3.5,
         }
 
-        self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin = {
+        self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin: Dict[str, float] = {
             "very light": 8e4,
             "light": 1.1e5,
             "medium": 1.65e5,
@@ -378,7 +340,7 @@ class BuildingInformation:
         self.window_scaling_factor = self.window_area_in_m2 / (area_window_1_ref + area_window_2_ref)
 
         # scaling window areas over wall area
-        self.windows_directions = [
+        self.windows_directions: List[str] = [
             "South",
             "East",
             "North",
@@ -386,7 +348,7 @@ class BuildingInformation:
             "Horizontal",
         ]
 
-        self.scaled_window_areas_in_m2 = []
+        self.scaled_window_areas_in_m2: List[float] = []
         for windows_direction in self.windows_directions:
             window_area_of_direction_in_m2 = float(self.buildingdata_ref["A_Window_" + windows_direction].iloc[0])
 

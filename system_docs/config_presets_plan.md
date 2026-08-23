@@ -66,7 +66,7 @@ top are the design-B foundation:
 
 ### Branch `json_v2` (the spike — old module layout: `hisim/sizing.py`, `hisim/sizing_engine.py`)
 
-Main-compatible parts **not yet in the rebuilt package** (phase 3 ports these):
+Main-compatible parts **not yet in the rebuilt package** (phase 4 ports these):
 
 - Design-B conversions of the heat pump example's chain:
   `more_advanced_heat_pump_hplib.py` (heat pump + its SH/DHW controllers),
@@ -90,7 +90,7 @@ audit dump, the closing-the-loop template test, grouped connections.
 - `hisim/json_executor.py::_get_default_config` (v1 executor) discovers defaults by
   name matching — it has **no preset awareness** and errors on classes with zero or
   multiple `*default*` methods. Converted classes lose their factories, so this must
-  learn `presets.canonical` (phase 4) before the sweep deletes factories broadly.
+  learn `presets.canonical` (phase 3) before the sweep deletes factories broadly.
 - A stray tracked file `main` (20 bytes, content "small_fixes_5 -") sits in the repo
   root — commit accident, delete opportunistically.
 
@@ -154,17 +154,69 @@ authoring.
 - [ ] PR opened (base: main), describing machinery + three pilots; #576 linked as
       the closed predecessor.
 
-### Phase 2 — port the spike's main-compatible conversions from `json_v2`
+### Phase 2 — team review (gates everything that repeats per class)
+
+Agenda: `roadmap/design_review_questions.md` (on `json_v2`) + the artifact pair
+(`heatpump_house_v2_template` / `_realized` / `_audit`). Not a coding session, and it
+needs nothing beyond phase 1: the artifacts live on `json_v2`, the machinery is
+reviewable in the phase-1 PR.
+
+**Why the review sits here and not after the ports** (reordered 2026-08-23): preset
+names are wire format, so every class converted before the Q5 naming convention risks
+a breaking rename; and the PV conversion exists on `json_v2` only in its B6-workaround
+form — porting it before B6 is decided means converting it twice. The decisions are
+cheap to make now and expensive to retrofit; conversions wait for them.
+
+- [ ] B6 decided (and B7 with it). — [ ] B8. — [ ] B9. — [ ] B10.
+- [ ] C10, C11, C12 each decided (physics/value changes are never bundled with sweeps).
+- [ ] D13 decided (delete vs `obsolete/`).
+- [ ] Q5: preset naming convention ratified (wire format — settle once).
+- [ ] Decisions recorded in `config_defaults_spec.md` / review doc, statuses updated.
+
+### Phase 3 — pre-sweep machinery finalization (implements the review's outcomes)
+
+Everything the conversions repeat, finished first:
+
+- [ ] B8: `Catalog[ConfigT]` generics; preset access statically typed.
+- [ ] B6 implementation per decision — (a2) field-granular fixed point + `Field("…")`
+      term (contained in `config/sizing.py` + `config/engine.py`), or (a1)
+      `reads_own=` for plain siblings. The PV port (phase 4) and the pellet/wood-chip
+      minimal-power law (already on `config_presets`) are written/adjusted directly
+      against the outcome — no interim workaround gets committed.
+- [ ] `json_executor._get_default_config`: prefer `presets.canonical` when the class
+      has a `Catalog`; keep the legacy name-match for unconverted classes; delete the
+      heuristic entirely at sweep end (phase 9).
+- [ ] B9 sentence + Q5 naming convention written into `config_defaults_spec.md`; the
+      three pilots' existing preset names audited against it (renaming is still free —
+      nothing referencing them has shipped).
+- [ ] B10 mechanism if adopted (`sized_field(..., note=)` / preset note).
+- [ ] D13 executed: zombies/defective components deleted or archived
+      (`controller_l1_building_heating`, `controller_l1_heatpump`,
+      `controller_l1_generic_runtime`, `generic_battery`, `generic_ev_charger`, …
+      per the D13 list) — shrinks the sweep denominator.
+- [ ] Contract test skeleton: iterate every `Catalog`-bearing class ×
+      {as-is, resolved(fixture ctx)}, invalid cells declared (`NothingToSizeError`),
+      so each sweep batch only *extends coverage* instead of writing new test shapes.
+- [ ] Delete the stray tracked `main` file in the repo root.
+
+*Fallback if the review cannot be scheduled promptly:* the decision-independent items
+(executor bridge, contract-test skeleton, stray-file deletion) may be pulled forward;
+everything whose shape a review question determines (generics API, B6, names, notes,
+D13) stays blocked — that blockage is the point of the ordering.
+
+### Phase 4 — port the spike's main-compatible conversions from `json_v2`
 
 Port, adapting `hisim.sizing`/`hisim.sizing_engine` imports to `hisim.config` and
 `building_config.py` targets to `building/config.py`. Use `git show json_v2:<file>` as
-the source of truth; do **not** cherry-pick blindly — the module layout differs.
+the source of truth; do **not** cherry-pick blindly — the module layout differs, and
+phase-2/3 outcomes (names per Q5, B6 mechanism, generics) apply directly, so the
+ported code's final form may deviate from the spike deliberately.
 
 - [ ] `more_advanced_heat_pump_hplib.py` — heat pump + SH/DHW controller configs.
 - [ ] `simple_water_storage.py` — `SimpleHotWaterStorage` + `SimpleDHWStorage` configs.
 - [ ] `advanced_battery_bslib.py` (sizes from PV peak power via flat-pool fallback).
-- [ ] `generic_pv_system.py` (carries the B6 workaround; convert as spiked, note the
-      known trap — it is resolved in phase 4 when B6 is decided).
+- [ ] `generic_pv_system.py` — written directly against the B6 decision (the spike's
+      per-preset `scaled_power_law` workaround is reference material, not the target).
 - [ ] `heat_distribution_system.py` — the controller-side fact contributions the spike
       added (the controller *config conversion itself* is batch S1).
 - [ ] `electricity_meter.py`, `weather.py` (B9 pattern: `for_location(...)`),
@@ -177,40 +229,6 @@ Gates: same as phase 1, plus the touched components' own test files
 (`test_more_advanced_heat_pump_hplib*.py`, `test_simple_hot_water_storage.py`,
 `test_advanced_battery_bslib.py`, …). Value parity with the old factories is the
 acceptance bar (golden + scenario freshness enforce it).
-
-### Phase 3 — team review (blocks the sweep by design)
-
-Agenda: `roadmap/design_review_questions.md` (on `json_v2`) + the artifact pair
-(`heatpump_house_v2_template` / `_realized` / `_audit`). Not a coding session.
-
-- [ ] B6 decided (and B7 with it). — [ ] B8. — [ ] B9. — [ ] B10.
-- [ ] C10, C11, C12 each decided (physics/value changes are never bundled with sweeps).
-- [ ] D13 decided (delete vs `obsolete/`).
-- [ ] Q5: preset naming convention ratified (wire format — settle once).
-- [ ] Decisions recorded in `config_defaults_spec.md` / review doc, statuses updated.
-
-### Phase 4 — pre-sweep machinery finalization
-
-Everything the sweep repeats ~70×, finished first:
-
-- [ ] B8: `Catalog[ConfigT]` generics; preset access statically typed.
-- [ ] B6 implementation per decision — (a2) field-granular fixed point + `Field("…")`
-      term (contained in `config/sizing.py` + `config/engine.py`), or (a1)
-      `reads_own=` for plain siblings. Rework the PV conversion to it; pellet/wood-chip
-      minimal-power law per B7 outcome.
-- [ ] `json_executor._get_default_config`: prefer `presets.canonical` when the class
-      has a `Catalog`; keep the legacy name-match for unconverted classes; delete the
-      heuristic entirely at sweep end (phase 9).
-- [ ] B9 sentence + Q5 naming convention written into `config_defaults_spec.md`.
-- [ ] B10 mechanism if adopted (`sized_field(..., note=)` / preset note).
-- [ ] D13 executed: zombies/defective components deleted or archived
-      (`controller_l1_building_heating`, `controller_l1_heatpump`,
-      `controller_l1_generic_runtime`, `generic_battery`, `generic_ev_charger`, …
-      per the D13 list) — shrinks the sweep denominator.
-- [ ] Contract test skeleton: iterate every `Catalog`-bearing class ×
-      {as-is, resolved(fixture ctx)}, invalid cells declared (`NothingToSizeError`),
-      so each sweep batch only *extends coverage* instead of writing new test shapes.
-- [ ] Delete the stray tracked `main` file in the repo root.
 
 ### Phases 5–8 — the repo-wide sweep, four batches (S1–S4)
 
@@ -316,12 +334,12 @@ column binds every file to exactly one phase so nothing is orphaned.
 
 | Module | Factories | Covered by |
 |---|---|---|
-| `simple_water_storage.py` | 5 | phase 2 |
-| `more_advanced_heat_pump_hplib.py` | 4 | phase 2 |
-| `generic_pv_system.py` | 3 | phase 2 |
-| `advanced_battery_bslib.py` | 2 | phase 2 |
-| `electricity_meter.py` | 1 | phase 2 |
-| `weather.py` | 1 | phase 2 (B9 constructor) |
+| `simple_water_storage.py` | 5 | phase 4 |
+| `more_advanced_heat_pump_hplib.py` | 4 | phase 4 |
+| `generic_pv_system.py` | 3 | phase 4 |
+| `advanced_battery_bslib.py` | 2 | phase 4 |
+| `electricity_meter.py` | 1 | phase 4 |
+| `weather.py` | 1 | phase 4 (B9 constructor) |
 | `generic_boiler.py` (controllers) | 4 | S1 |
 | `heat_distribution_system.py` (controller) | 1 | S1 |
 | `advanced_heat_pump_hplib.py` | 3 | S1 |
@@ -331,7 +349,7 @@ column binds every file to exactly one phase so nothing is orphaned.
 | `generic_electric_heating.py` | 2 | S1 |
 | `idealized_electric_heater.py` | 1 | S1 |
 | `night_setback_controller.py` | 1 | S1 |
-| `controller_l1_heatpump.py` | 3 | D13 (zombie — delete/archive in phase 4) |
+| `controller_l1_heatpump.py` | 3 | D13 (zombie — delete/archive in phase 3) |
 | `air_conditioner.py` | 3 | S2 |
 | `simple_air_conditioner.py` | 2 | S2 |
 | `controller_pid.py` | 1 | S2 |

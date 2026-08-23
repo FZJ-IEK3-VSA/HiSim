@@ -459,11 +459,16 @@ class OneDaySnapshot:
     #: legitimately platform-dependent — different libm builds round them differently — so a
     #: golden generated on one machine can differ from another machine's run by a few ULPs on
     #: the trig-derived columns (observed 2026-08-21: glibc 2.43 vs the ubuntu-latest CI
-    #: runner, 1-ULP shifts on 6–8 daylight timesteps of the solar-gain chain). Four ULPs
-    #: absorbs that noise while staying ~three orders of magnitude below anything a real
-    #: model change produces; the pure-arithmetic layer-1 golden stays bit-exact and remains
-    #: the referee for summation-order-level changes.
-    PLATFORM_ULP_TOLERANCE: ClassVar[int] = 4
+    #: runner, 1-ULP shifts on 6–8 daylight timesteps of the solar-gain chain). The variance
+    #: also exists *within* the CI fleet: the pinned Docker image runs on heterogeneous host
+    #: CPUs, numpy dispatches different SIMD kernels per CPU family, and the same commit then
+    #: passes on one runner and fails on the next (observed 2026-08-22: a deterministic 5-ULP
+    #: shift on 2 daylight timesteps of ``HeatFluxToThermalMass``, appearing and vanishing
+    #: across reruns on main). Sixteen ULPs gives headroom over the largest observed shift for
+    #: runner CPU families not yet sampled while staying ~three orders of magnitude below
+    #: anything a real model change produces; the pure-arithmetic layer-1 golden stays
+    #: bit-exact and remains the referee for summation-order-level changes.
+    PLATFORM_ULP_TOLERANCE: ClassVar[int] = 16
 
     @classmethod
     def values_match(cls, expected: Any, actual: Any) -> bool:

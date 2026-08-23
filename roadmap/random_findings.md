@@ -160,3 +160,13 @@ of the building-cleanup branch.
   class-scope TABULA CSV cache being rebuilt while another process imports). Harmless
   for CI (which runs one suite per checkout), but worth knowing before blaming a branch
   for a red local run — and worth a look if it ever appears in CI.
+
+- **[spec] The HDS controller's sizing facts are scope-GLOBAL, unlike the boiler's
+  CONNECTED power band.** Surfaced by auditing a ResolutionReport of the heat pump
+  building-sizer chain: `HeatDistributionControllerConfig.SIZING_CONTRIBUTIONS` declares
+  `water_mass_flow_rate...` and `heat_distribution_system_type` without a scope, i.e.
+  GLOBAL — two heat-distribution loops in one scenario would hard-error on the double
+  contribution rather than resolve per loop. Defensible today (one HDS per building) and
+  loud rather than wrong, but it is a modeling decision the CONNECTED alternative would
+  make differently; worth an explicit look when multi-loop or multi-building scenarios
+  reach the engine.

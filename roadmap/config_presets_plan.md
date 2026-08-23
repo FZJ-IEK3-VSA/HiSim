@@ -39,11 +39,14 @@ suites. **Everything below stacks on this.**
 The first commit is tree-identical to `origin/config_base_move`; the seven commits on
 top are the design-B foundation:
 
-- `hisim/config/sizing.py` (~640 lines): `AUTO` (copy-stable singleton), `Sizable`,
+- The sizing machinery, split over three modules (each ≤~300 lines, per the ≤500-line
+  module rule in §5): `hisim/config/laws.py` — the `SizingLaw` algebra (`*`,
+  `.at_least`, `.at_most`, `.rounded`, constants, function laws with mandatory
+  `reads=`) and the sizing errors; `hisim/config/context.py` — `SizingContext` and the
+  `Size.*` term vocabulary over exactly its fields (the single registry, side by side
+  in one file); `hisim/config/sizing.py` — `AUTO` (copy-stable singleton), `Sizable`,
   `sized_field` (law + wire codec in field metadata, `value_type=` for enum fields),
-  the `Size.*` expression terms derived from `SizingContext`'s fields, `SizingLaw`
-  algebra (`*`, `.at_least`, `.at_most`, `.rounded`, constants, function laws with
-  mandatory `reads=`), `resolve()`, `sizing_record` provenance, `concrete()`.
+  `resolve_config()`, `sizing_record` provenance, `concrete()`.
 - `hisim/config/engine.py` (~440 lines): the §8.4 fact engine — declared
   contributions (`SIZING_CONTRIBUTIONS`), static output names, graph validation
   (unprovided fact / cycle = hard errors naming parties), fixed-point resolution,
@@ -165,17 +168,22 @@ The code already exists on the rebased `config_presets` branch (§1); the sessio
 is verification and PR authoring, not implementation. This is the successor of the
 closed PR #576, re-opened now that the obsolete building commits are out of its diff.
 
-- [ ] Full `pytest -m base` plus the machinery's own suites,
-      `pytest tests/test_sizing.py tests/test_sizing_engine.py`, all green.
-- [ ] `pytest -m jsonconfig` green, and `scripts/regenerate_scenario_jsons.py`
+- [x] Full `pytest -m base` plus the machinery's own suites,
+      `pytest tests/test_sizing.py tests/test_sizing_engine.py`, all green
+      (2026-08-23: 4079 + 34 passed).
+- [x] `pytest -m jsonconfig` green, and `scripts/regenerate_scenario_jsons.py`
       produces no diff (the checked-in scenario JSONs match what the converted
-      configs actually serialize to — the "freshness" gate).
+      configs actually serialize to — the "freshness" gate). (2026-08-23: 22 passed,
+      regeneration diff-free.)
 - [ ] Golden gates unchanged (`scripts/golden_check.py` / `golden_validate.py`):
       the pilots' presets must reproduce the deleted factories' values exactly, so
-      simulation results cannot move.
-- [ ] mypy + flake8 clean on the touched files.
+      simulation results cannot move. (Runs in CI on the PR.)
+- [x] mypy + flake8 clean on the touched files (2026-08-23, `hisim/config/` and the
+      sizing tests).
 - [ ] Fresh PR opened against main (pushed from the other machine), describing the
-      machinery and the three pilots; #576 linked as the closed predecessor.
+      machinery and the three pilots; #576 linked as the closed predecessor. The PR
+      includes this plan (moved to `roadmap/`) and the `laws`/`context`/`sizing`
+      module split.
 
 ### Phase 2 — team review: settle every question that shapes per-class work
 
@@ -453,6 +461,10 @@ frozen preset names, and the fact engine.
   landing are breaking changes.
 - **Docstrings** ≥2–3 sentences on every new class/function; class-scope constants,
   no module-level mutable state.
+- **Module size:** new source files stay at or under ~500 lines; split by concern
+  before crossing it (the `laws`/`context`/`sizing` split of the machinery is the
+  precedent). Pre-existing oversized component files are not ridden along — they
+  shrink when their class is converted or in their own cleanup.
 - **Findings log:** append to `roadmap/random_findings.md`, full capture.
 - **This box never pushes**; PRs are opened/pushed from the user's other machine.
   GitHub state is read via anonymous `curl https://api.github.com/repos/FZJ-IEK3-VSA/HiSim/...`.

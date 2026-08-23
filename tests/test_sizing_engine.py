@@ -13,9 +13,18 @@ from dataclasses import dataclass
 import pytest
 from dataclasses_json import dataclass_json
 
-from hisim.config import ComponentID, ConfigBase
-from hisim.config.engine import FactContribution, FactScope, SizingError, resolve_all
-from hisim.config.sizing import AUTO, ConfigSizingError, Sizable, Size, SizingContext, sized_field
+from hisim.config import (
+    AUTO,
+    ComponentID,
+    ConfigBase,
+    ConfigSizingError,
+    Sizable,
+    Size,
+    SizingContext,
+    SizingError,
+    sized_field,
+)
+from hisim.config.engine import FactContribution, FactScope, resolve_all
 
 
 @dataclass_json

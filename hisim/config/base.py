@@ -25,12 +25,12 @@ from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
 from dataclasses_json import dataclass_json
 
-# Imported from the submodule rather than through the package, so that this module stays
-# importable while ``hisim/config/__init__.py`` is still executing its own first line.
-# The aliases keep the module-level functions reachable from the identically named
+# Imported from the submodules rather than through the package, so that this module
+# stays importable while ``hisim/config/__init__.py`` is still executing its own first
+# line. The aliases keep the module-level functions reachable from the identically named
 # ``ConfigBase`` methods that delegate to them.
+from hisim.config.context import SizingContext
 from hisim.config.sizing import (
-    SizingContext,
     auto_fields as sizing_auto_fields,
     resolve_config as sizing_resolve_config,
 )

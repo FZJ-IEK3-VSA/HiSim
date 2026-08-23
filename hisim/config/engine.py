@@ -47,7 +47,8 @@ from dataclasses import dataclass
 from typing import Any, Callable, ClassVar, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
 from hisim.config import sizing
-from hisim.config.sizing import ConfigSizingError, SizingContext, SizingError
+from hisim.config.context import SizingContext
+from hisim.config.laws import ConfigSizingError, SizingError, SizingLaw
 
 
 class FactScope:
@@ -162,7 +163,7 @@ class SizingFactEngine:
         needed: List[str] = []
         for field_name in sizing.auto_fields(config):
             value = getattr(config, field_name)
-            effective = value if isinstance(value, sizing.SizingLaw) else laws.get(field_name)
+            effective = value if isinstance(value, SizingLaw) else laws.get(field_name)
             if effective is not None:
                 needed.extend(effective.facts_read())
         return tuple(dict.fromkeys(needed))

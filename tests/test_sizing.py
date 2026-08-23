@@ -1,4 +1,4 @@
-"""Tests of the sizing machinery (``hisim/config/sizing.py``, design B of the config-defaults spec).
+"""Tests of the sizing machinery (``hisim/config/laws|context|sizing.py``, design B of the config-defaults spec).
 
 Covers the pieces the spike introduces: the copy-stable AUTO sentinel and its wire codec,
 expression and function laws, the resolve semantics (no-op vs. NothingToSizeError vs.
@@ -17,11 +17,10 @@ from dataclasses import dataclass
 import pytest
 from dataclasses_json import dataclass_json
 
-from hisim.config import ComponentID, ConfigBase
-from hisim.config import sizing
-from hisim.config.presets import Catalog, preset_provenance
-from hisim.config.sizing import (
+from hisim.config import (
     AUTO,
+    ComponentID,
+    ConfigBase,
     ConfigSizingError,
     NothingToSizeError,
     Sizable,
@@ -29,7 +28,9 @@ from hisim.config.sizing import (
     SizingContext,
     law,
     sized_field,
+    sizing,
 )
+from hisim.config.presets import Catalog, preset_provenance
 
 
 @dataclass_json

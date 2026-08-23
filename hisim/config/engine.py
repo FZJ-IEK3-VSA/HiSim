@@ -1,23 +1,23 @@
 """The sizing-fact engine: cross-component sizing resolved to a fixed point over configs.
 
-Implements §8.4 of ``system_docs/config_defaults_spec.md``. Cross-component sizing
-dependencies nest deeply (building → HDS controller → HDS; building → boiler → boiler
-controller), and the incumbent mechanism — the global ``SingletonSimRepository`` with
+Cross-component sizing dependencies nest deeply (building → HDS controller → HDS;
+building → boiler → boiler controller), and the incumbent mechanism — the global ``SingletonSimRepository`` with
 untyped enum-keyed entries and silent ``entry_exists`` fallbacks — has already rotted
 silently in production (dead keys, fallback-only reads). This engine is its typed,
 hard-erroring successor for the construction-time half, in three phases:
 
 1. **Registration** — every config's sizing *inputs* come from its laws' declared
-   ``facts_read``; its *outputs* are the :class:`FactContribution` declarations on the
-   config class. Output fact names are static per class; values are computed later and
-   may legitimately be ``None`` when a feature is off.
+   ``facts_read``; its *outputs* are the :class:`~hisim.config.contributions.FactContribution`
+   declarations on the config class (see that module for the declaration contract).
+   Output fact names are static per class; values are computed later and may
+   legitimately be ``None`` when a feature is off.
 2. **Graph validation** — a fact nobody provides, and a dependency cycle, are precise
    hard errors raised before anything is computed.
 3. **Fixed-point resolution** — iterate over the unresolved configs, resolving every one
    whose facts are all visible and folding its contributions into the fact pool, until
    none remain. Components are constructed afterwards, from fully concrete configs.
 
-Fact scoping (spec §8.4, decided 2026-08-19, refined 2026-08-20): scope-global facts
+Fact scoping: scope-global facts
 (building physics) live in a flat pool where a double contribution is a hard error;
 sibling facts (``scope=FactScope.CONNECTED``) resolve as a **hybrid**. Direct adjacency
 is consulted first when the v2 executor passes the scenario's parsed connections — this
@@ -35,7 +35,11 @@ components involved — the engine never guesses.
 The engine lives in its own module of the ``hisim.config`` package so that the
 machinery (:mod:`hisim.config.sizing`), the engine, and its consumers (the v2 executor,
 setups via :func:`resolve_all`) stay separately reviewable. Like every module of the
-package it imports nothing from the rest of HiSim.
+package it imports nothing from the rest of HiSim — except ``hisim.log``, the package's
+sanctioned logging exception (see the layering rule in ``hisim/config/__init__.py``).
+Every decision the engine makes is additionally recorded in a structured
+:class:`~hisim.config.report.ResolutionReport`, readable as ``engine.report`` after a
+run; the log stream and the report carry the same information at different lifetimes.
 """
 
 # clean
@@ -44,61 +48,21 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, Callable, ClassVar, Dict, List, Mapping, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
+from hisim import log
 from hisim.config import sizing
 from hisim.config.context import SizingContext
+from hisim.config.contributions import FactContribution, FactScope
 from hisim.config.laws import ConfigSizingError, SizingError, SizingLaw
-
-
-class FactScope:
-    """How a contributed fact is looked up by its consumers.
-
-    ``GLOBAL`` facts describe the scope itself (building physics) and live in a flat
-    per-scope pool — contributing the same global fact twice is a hard error.
-    ``CONNECTED`` facts describe one component (a boiler's power band) and are resolved
-    along the connection graph where one is available, so that two boilers in one
-    scenario stay unambiguous. Plain class-scoped string constants rather than an Enum,
-    because the values never travel through a file.
-    """
-
-    GLOBAL: ClassVar[str] = "GLOBAL"
-    CONNECTED: ClassVar[str] = "CONNECTED"
-
-
-@dataclass(frozen=True)
-class FactContribution:
-    """One declared output of a config class: which facts it computes, from what.
-
-    The ``facts`` names are **static per class** (spec §8.4): the set never depends on
-    resolution, only the values do — ``compute`` may return ``None`` for a fact whose
-    feature is off, and a consumer reading such a null fact fails hard with a
-    "provided as null by X" attribution. ``compute`` receives the (by then fully
-    resolved) config and the context view and must return exactly the declared keys.
-    """
-
-    facts: Tuple[str, ...]
-    compute: Callable[[Any, SizingContext], Mapping[str, Any]]
-    reads: Tuple[str, ...] = ()
-    scope: str = FactScope.GLOBAL
-
-    def __post_init__(self) -> None:
-        """Validates the declared fact names against the SizingContext registry.
-
-        Every engine fact must be a ``SizingContext`` field, so laws can read it and the
-        single-registry invariant of spec §4.1 extends to contributions.
-        """
-        known = {field.name for field in dataclasses.fields(SizingContext)}
-        unknown = [name for name in self.facts if name not in known]
-        if unknown:
-            raise SizingError(
-                f"FactContribution declares unknown fact(s) {unknown}; every fact must be "
-                "a SizingContext field (add the field and its Size term first)."
-            )
-
-
-#: Class attribute under which a config class declares its contributions.
-CONTRIBUTIONS_ATTRIBUTE = "SIZING_CONTRIBUTIONS"
+from hisim.config.report import (
+    ContributionRecord,
+    FactLookupRecord,
+    LookupMode,
+    OverrideRecord,
+    ResolutionReport,
+    SweepRecord,
+)
 
 
 @dataclass
@@ -153,6 +117,10 @@ class SizingFactEngine:
         self._declared_connected_providers: Dict[str, Set[str]] = {}  # fact -> declaring keys
         self._adjacency = {key: set(neighbors) for key, neighbors in (adjacency or {}).items()}
         self.resolution_order: List[str] = []
+        #: The structured record of every decision this run makes (sweeps, fact
+        #: lookups, contributions, pre-seed overrides); pure data, for tests, logs
+        #: and the audit artifact in the results directory.
+        self.report = ResolutionReport()
 
     # ------------------------------------------------------------------ registration
 
@@ -171,7 +139,7 @@ class SizingFactEngine:
     @staticmethod
     def _contributions(config: Any) -> Tuple[FactContribution, ...]:
         """Reads a config class's declared contributions (empty when none declared)."""
-        declared = getattr(type(config), CONTRIBUTIONS_ATTRIBUTE, ())
+        declared = getattr(type(config), FactContribution.CLASS_ATTRIBUTE, ())
         return tuple(declared)
 
     def register(self, configs: Sequence[Any]) -> List[_Node]:
@@ -249,11 +217,13 @@ class SizingFactEngine:
 
     # ------------------------------------------------------------------ resolution
 
-    def _visible_context(self, node: _Node) -> Tuple[Optional[SizingContext], List[str]]:
+    def _visible_context(
+        self, node: _Node
+    ) -> Tuple[Optional[SizingContext], List[str], List[FactLookupRecord]]:
         """Assembles the fact view of one consumer, or reports what is still missing.
 
         Pre-seeded facts win outright, and global facts are visible to everyone.
-        CONNECTED facts resolve as the hybrid of spec §8.4: when an adjacency exists and
+        CONNECTED facts resolve as a hybrid: when an adjacency exists and
         a *declared* provider of the fact sits among the consumer's direct neighbors, the
         lookup is restricted to those neighbors (this is what disambiguates two boilers);
         when no direct neighbor declares the fact — or no adjacency was given — the whole
@@ -266,12 +236,16 @@ class SizingFactEngine:
         silently narrows the source set.
 
         Returns:
-            The context and an empty list, or ``None`` and the facts still missing.
+            A ``(context, missing, lookups)`` triple: the context with an empty missing
+            list and one :class:`FactLookupRecord` per fact read, or ``None`` with the
+            facts still missing (the lookups of an incomplete view are not returned —
+            a consumer that cannot resolve yet has not *read* anything).
         """
         values: Dict[str, Any] = {}
         missing: List[str] = []
+        lookups: List[FactLookupRecord] = []
         for fact in node.needed_facts:
-            producer, value, still_missing = self._look_up_fact(node, fact)
+            producer, value, still_missing, mode, candidates = self._look_up_fact(node, fact)
             if still_missing:
                 missing.append(fact)
                 continue
@@ -281,12 +255,15 @@ class SizingFactEngine:
                     f"'{producer}' (its feature is off); the consumer cannot be sized from it."
                 )
             values[fact] = value
+            lookups.append(FactLookupRecord(
+                consumer=node.key, fact=fact, source=producer, value=value,
+                mode=mode, candidates=candidates))
         if missing:
-            return None, missing
-        return SizingContext(**values), []
+            return None, missing, []
+        return SizingContext(**values), [], lookups
 
-    def _look_up_fact(self, node: _Node, fact: str) -> Tuple[str, Any, bool]:
-        """Resolves one needed fact of one consumer to its unique source (spec §8.4).
+    def _look_up_fact(self, node: _Node, fact: str) -> Tuple[str, Any, bool, str, Tuple[str, ...]]:
+        """Resolves one needed fact of one consumer to its unique source.
 
         Implements the source selection of :meth:`_visible_context`: pre-seed first,
         then the hybrid CONNECTED lookup over the declared providers with the global
@@ -298,19 +275,26 @@ class SizingFactEngine:
             fact: The fact name, a ``SizingContext`` field.
 
         Returns:
-            A ``(producer, value, missing)`` triple; ``missing`` is ``True`` when the
-            fact has no value yet and the fixed point must retry.
+            A ``(producer, value, missing, mode, candidates)`` quintuple: ``missing``
+            is ``True`` when the fact has no value yet and the fixed point must retry;
+            ``mode`` is the :class:`LookupMode` that decided the source; ``candidates``
+            are the declared providers before the mode narrowed them, so the report can
+            show why a multi-provider fact was still unambiguous.
 
         Raises:
             ConfigSizingError: If more than one source could provide the fact.
         """
         if fact in self._preseeded:
             producer, value = self._global_facts[fact]
-            return producer, value, False
-        providers = set(self._declared_connected_providers.get(fact, ()))
+            return producer, value, False, LookupMode.PRESEED, ()
+        declared = tuple(sorted(self._declared_connected_providers.get(fact, ())))
+        providers = set(declared)
         neighborhood = self._adjacency.get(node.key) if self._adjacency else None
         if neighborhood and providers & neighborhood:
             providers &= neighborhood
+            mode = LookupMode.CONNECTED_ADJACENT
+        else:
+            mode = LookupMode.CONNECTED_POOL if providers else LookupMode.GLOBAL
         global_entry = self._global_facts.get(fact)
         sources = sorted(providers)
         if global_entry is not None:
@@ -326,11 +310,11 @@ class SizingFactEngine:
             (producer,) = providers
             contributed = self._connected_facts.get(producer, {})
             if fact not in contributed:
-                return producer, None, True
-            return producer, contributed[fact], False
+                return producer, None, True, mode, declared
+            return producer, contributed[fact], False, mode, declared
         if global_entry is not None:
-            return global_entry[0], global_entry[1], False
-        return "<nobody>", None, True
+            return global_entry[0], global_entry[1], False, mode, declared
+        return "<nobody>", None, True, mode, declared
 
     def _contribution_reads_visible(self, node: _Node) -> bool:
         """True when every fact a node's contributions read is available in the global pool."""
@@ -340,24 +324,39 @@ class SizingFactEngine:
             for fact in contribution.reads
         )
 
-    def _fold_contributions(self, node: _Node) -> None:
-        """Computes a resolved node's contributions and folds them into the fact pools."""
+    def _fold_contributions(self, node: _Node) -> List[ContributionRecord]:
+        """Computes a resolved node's contributions and folds them into the fact pools.
+
+        Returns the contribution records for the current sweep's report entry. A
+        contribution whose fact is pre-seeded loses to the pre-seed, but never
+        silently: both values land in ``report.overrides`` and an information-level log
+        line, instead of the computed value silently disappearing.
+        """
         view = SizingContext(**{
             fact: self._global_facts[fact][1]
             for contribution in node.contributions
             for fact in contribution.reads
         })
+        records: List[ContributionRecord] = []
         for contribution in node.contributions:
             computed = dict(contribution.compute(node.config, view))
             if set(computed) != set(contribution.facts):
                 raise SizingError(
                     f"{type(node.config).__name__} '{node.key}' computed the facts "
                     f"{sorted(computed)} but declared {sorted(contribution.facts)}; output "
-                    "names are static per class (spec §8.4)."
+                    "names are static per class, so the dependency graph stays checkable up front."
                 )
             for fact, value in computed.items():
                 if fact in self._preseeded:
-                    continue  # pre-seeded facts win, loudly: the audit sees <sizing_facts>
+                    preseeded_value = self._preseeded[fact]
+                    self.report.overrides.append(OverrideRecord(
+                        fact=fact, producer=node.key,
+                        computed_value=value, preseeded_value=preseeded_value))
+                    log.information(
+                        f"Sizing: 'sizing_facts' forces {fact}={preseeded_value!r}, shadowing "
+                        f"{value!r} computed by '{node.key}'."
+                    )
+                    continue
                 if contribution.scope == FactScope.GLOBAL:
                     if fact in self._global_facts and self._global_facts[fact][0] != "<seed>":
                         raise ConfigSizingError(
@@ -367,7 +366,11 @@ class SizingFactEngine:
                     self._global_facts[fact] = (node.key, value)
                 else:
                     self._connected_facts.setdefault(node.key, {})[fact] = value
+                records.append(ContributionRecord(
+                    producer=node.key, fact=fact, value=value, scope=contribution.scope))
+                log.debug(f"Sizing: '{node.key}' contributed {fact}={value!r} ({contribution.scope}).")
         node.contributed = True
+        return records
 
     def resolve_all(self, configs: Sequence[Any]) -> List[Any]:
         """Runs all three phases and returns the resolved configs, input order preserved.
@@ -386,13 +389,20 @@ class SizingFactEngine:
         self.validate(nodes)
         results: Dict[str, Any] = {}
         progress = True
+        sweep_number = 0
         while progress:
             progress = False
+            sweep_number += 1
+            resolved_this_sweep: List[str] = []
+            contributed_this_sweep: List[ContributionRecord] = []
+            waiting: Dict[str, Tuple[str, ...]] = {}
             for node in nodes:
                 if not node.resolved:
-                    context, missing = self._visible_context(node)
+                    context, missing, lookups = self._visible_context(node)
                     if context is None:
-                        del missing  # not an error yet; retried until no pass makes progress
+                        # Not an error yet; retried until no pass makes progress. The
+                        # waits are kept for this sweep's report entry.
+                        waiting[node.key] = tuple(missing)
                         continue
                     if sizing.sizable_fields(type(node.config)):
                         results[node.key] = node.config.resolve(context)
@@ -401,20 +411,36 @@ class SizingFactEngine:
                     node.config = results[node.key]
                     node.resolved = True
                     self.resolution_order.append(node.key)
+                    self.report.lookups.extend(lookups)
+                    resolved_this_sweep.append(node.key)
                     progress = True
                 if node.resolved and not node.contributed and self._contribution_reads_visible(node):
-                    self._fold_contributions(node)
+                    contributed_this_sweep.extend(self._fold_contributions(node))
                     progress = True
+            if progress:
+                self.report.sweeps.append(SweepRecord(
+                    number=sweep_number, resolved=tuple(resolved_this_sweep),
+                    contributed=tuple(contributed_this_sweep),
+                    waiting=tuple(sorted(waiting.items()))))
+                log.debug(
+                    f"Sizing sweep {sweep_number}: resolved "
+                    f"{', '.join(resolved_this_sweep) or '<contributions only>'}."
+                )
         stuck = [node for node in nodes if not node.resolved]
         if stuck:
             lines = []
             for node in stuck:
-                _, missing = self._visible_context(node)
+                _, missing, _ = self._visible_context(node)
                 lines.append(f"  {type(node.config).__name__} '{node.key}' waits for {missing}")
             raise ConfigSizingError(
                 "sizing made no further progress; the remaining configs wait on each other "
                 "or on facts nobody computed:\n" + "\n".join(lines)
+                + "\n\nResolution history up to the deadlock:\n" + self.report.render()
             )
+        log.information(
+            f"Sizing: resolved {len(nodes)} configs in {len(self.report.sweeps)} sweep(s); "
+            f"order: {', '.join(self.resolution_order)}."
+        )
         return [results[node.key] for node in nodes]
 
 
@@ -424,7 +450,7 @@ def resolve_all(
     adjacency: Optional[Mapping[str, Set[str]]] = None,
     preseeded_facts: Optional[Mapping[str, Any]] = None,
 ) -> List[Any]:
-    """Resolves every config of a scenario against the shared fact pool (spec §8.4).
+    """Resolves every config of a scenario against the shared fact pool.
 
     The one entry point both worlds use: the v2 executor passes the parsed connection
     adjacency and any file-level ``sizing_facts``; Python setups pass their seed context

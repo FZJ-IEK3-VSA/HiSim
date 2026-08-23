@@ -3,7 +3,7 @@
 A component configuration usually has several defensible defaults — a condensing gas
 boiler, an oil boiler, a pellet boiler, all on one ``GenericBoilerConfig`` — which HiSim
 used to express as a hundred-odd ``get_*default*`` factory methods with sixty-odd naming
-spellings. Design B of ``system_docs/config_defaults_spec.md`` replaces them with a
+spellings. The preset design replaces them with a
 single ``presets`` :class:`Catalog` per class: a small mapping from a preset name to a
 zero-argument builder, so a preset reference autocompletes, jumps to its definition, and
 can be enumerated by tests, the JSON executor and a future GUI palette without a regex.
@@ -27,8 +27,9 @@ class Catalog:
     (setups mutate configs freely, so sharing instances would be a footgun), lazily (no
     I/O at import time). The first entry is the canonical default, reachable as
     ``presets.canonical``; iteration yields ``(name, builder)`` pairs for the contract
-    test, the executor and the GUI palette. Preset names are wire format (spec §8.1) —
-    choose them with the care of API names.
+    test, the executor and the GUI palette. Preset names are wire format — scenario
+    files reference them by name, so a rename is a breaking change; choose them with
+    the care of API names.
 
     Every instance a Catalog access builds is stamped with its **preset provenance** —
     the preset's attribute name, under :attr:`PROVENANCE_ATTRIBUTE` — using the same

@@ -141,14 +141,14 @@ class ConfigBase:
     component_id: ComponentID
 
     #: The sizing facts this config class contributes to the scenario-wide fact pool
-    #: (``system_docs/config_defaults_spec.md`` §8.4). Empty for the vast majority of
+    #: (resolved engine-side before components are constructed). Empty for the vast majority of
     #: config classes; a class that *is* a fact source — the building, a boiler whose
     #: controller sizes from its power band — overrides it with a tuple of
     #: :class:`~hisim.config.engine.FactContribution` declarations, usually assigned
     #: right below the class so the compute functions can be written as plain module
     #: functions. Declared here so that every config class has the attribute and the
     #: engine's contract is visible from the base class; the engine reads it by name via
-    #: ``CONTRIBUTIONS_ATTRIBUTE``. The element type stays ``Any`` deliberately: naming
+    #: ``FactContribution.CLASS_ATTRIBUTE``. The element type stays ``Any`` deliberately: naming
     #: ``FactContribution`` here would either invert the package layering (the base
     #: classes importing the engine) or leave an unresolvable forward reference in an
     #: annotation that ``dataclasses_json`` evaluates from every subclass's module.
@@ -218,7 +218,7 @@ class ConfigBase:
     def resolve(self, ctx: SizingContext) -> "ConfigBase":
         """Returns a copy in which every AUTO field is computed by its declared law.
 
-        This is the design-B entry point of ``system_docs/config_defaults_spec.md`` §4.1:
+        This is the sizing entry point on every config:
         idempotent no-op (still returning a fresh copy) when sizable fields exist but none
         currently says AUTO, a ``NothingToSizeError`` when the class declares no sizable
         field at all, and a hard error naming field and law when a law cannot be

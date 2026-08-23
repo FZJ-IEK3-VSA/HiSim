@@ -111,6 +111,21 @@ def test_resolve_computes_auto_fields_and_records_provenance():
 
 
 @pytest.mark.base
+def test_the_sizing_record_captures_the_law_input_values():
+    """Each record entry keeps the (fact, value) pairs its law actually read.
+
+    Failure mode caught: a mis-sized field that cannot be diagnosed from the record
+    alone — knowing that the law read ``heating_load_in_watt`` is useless for checking
+    the arithmetic unless the record also says what that fact's value *was* at
+    resolution time (a later context would show different numbers).
+    """
+    resolved = _fixture_config().resolve(SizingContext(heating_load_in_watt=10_000.0))
+    fields = {entry.field: entry for entry in resolved.sizing_record}
+    assert fields["power_in_watt"].inputs == (("heating_load_in_watt", 10_000.0),)
+    assert fields["floor_value_in_watt"].inputs == ()  # a constant law reads nothing
+
+
+@pytest.mark.base
 def test_resolve_is_an_idempotent_noop_on_a_concrete_config():
     """Sizable fields exist but none is AUTO: resolve returns an equal fresh copy."""
     concrete = _SizableFixtureConfig(
@@ -226,7 +241,12 @@ def test_preset_provenance_survives_resolve_and_stays_invisible():
 
 @pytest.mark.base
 def test_size_terms_and_sizing_context_fields_are_one_registry():
-    """Every context fact has exactly one Size term and vice versa (spec §4.1)."""
+    """Every context fact has exactly one Size term and vice versa.
+
+    Failure mode caught: someone adds a SizingContext field without its Size term (laws
+    cannot read the new fact) or a Size term without its field (the term reads garbage) —
+    the two vocabularies silently drifting apart.
+    """
     term_names = {name for name in vars(Size) if name.isupper()}
     field_names = {field.name.upper() for field in dataclasses.fields(SizingContext)}
     assert term_names == field_names

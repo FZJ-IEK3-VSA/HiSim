@@ -1,4 +1,4 @@
-"""Tests of the sizing-fact engine (``hisim/config/engine.py``, spec §8.4).
+"""Tests of the sizing-fact engine (``hisim/config/engine.py``).
 
 Covers the three phases (registration, graph validation, fixed-point resolution), the
 fact-scoping rules (flat pool for global facts, connection-graph lookup for sibling
@@ -8,6 +8,7 @@ real production chain building → HDS controller → HDS / boiler, resolved see
 
 # clean
 
+import json
 from dataclasses import dataclass
 
 import pytest
@@ -22,9 +23,12 @@ from hisim.config import (
     Size,
     SizingContext,
     SizingError,
+    SizingFactEngine,
     sized_field,
 )
-from hisim.config.engine import FactContribution, FactScope, resolve_all
+from hisim.config.contributions import FactContribution, FactScope
+from hisim.config.engine import resolve_all
+from hisim.config.report import LookupMode
 
 
 @dataclass_json
@@ -109,7 +113,7 @@ def test_the_connection_graph_disambiguates_two_producers():
 def test_a_two_hop_single_provider_resolves_through_the_flat_pool_fallback():
     """No direct neighbor declares the fact, so the flat-pool fallback finds the sole provider.
 
-    This is the §8.4 hybrid refinement (2026-08-20): the consumer and its provider are
+    This is the hybrid lookup's fallback half: the consumer and its provider are
     two wiring hops apart (both connect to a hub, like battery and PV around the EMS),
     so a purely adjacency-scoped lookup would starve. Because no neighbor declares the
     fact, the lookup widens to the whole pool, where exactly one provider exists.
@@ -193,7 +197,11 @@ def test_a_null_fact_names_its_provider():
 
 @pytest.mark.base
 def test_preseeded_facts_win_over_contributions():
-    """File-level sizing_facts overrides beat contributed values, per spec §8.4."""
+    """File-level sizing_facts overrides beat contributed values.
+
+    Failure mode caught: a scenario's forced fact being ignored in favor of the
+    computed contribution, so the file would not mean what it says.
+    """
     resolved = resolve_all(
         [_producer("Boiler"), _consumer("Controller")],
         seed=SizingContext(heating_load_in_watt=10_000.0),
@@ -315,3 +323,134 @@ def test_the_real_chain_resolves_seedlessly_and_order_independently():
     assert heating_load is not None
     assert resolved_boiler.maximal_thermal_power_in_watt == pytest.approx(heating_load * 1.1)
     assert resolved_boiler.sizing_record  # provenance for the audit trail
+
+
+@pytest.mark.base
+def test_the_report_records_the_adjacency_narrowed_lookup():
+    """A fact lookup narrowed by the connection graph is recorded with source and mode.
+
+    Failure mode caught: the engine silently reading a sibling fact from the *wrong* of
+    two providers (or the adjacency narrowing silently not being applied at all) — the
+    resolved numbers would look plausible and nothing else in the run would reveal
+    which boiler the controller actually sized from.
+    """
+    engine = SizingFactEngine(
+        seed=SizingContext(heating_load_in_watt=10_000.0),
+        adjacency={"Controller": {"Boiler1"}},
+    )
+    engine.resolve_all([_producer("Boiler1"), _producer("Boiler2"), _consumer("Controller")])
+    lookups = {(entry.consumer, entry.fact): entry for entry in engine.report.lookups}
+    entry = lookups[("Controller", "maximal_thermal_power_in_watt")]
+    assert entry.source == "Boiler1"
+    assert entry.mode == LookupMode.CONNECTED_ADJACENT
+    assert set(entry.candidates) == {"Boiler1", "Boiler2"}
+
+
+@pytest.mark.base
+def test_the_report_records_the_flat_pool_fallback_mode():
+    """A two-hop lookup is recorded as CONNECTED_POOL, distinct from adjacency narrowing.
+
+    Failure mode caught: not being able to tell from a finished run whether a value came
+    through the consumer's direct neighborhood or through the pool-wide fallback — the
+    two modes have different ambiguity behavior, so debugging a mis-sized consumer
+    starts with knowing which rule decided its source.
+    """
+    engine = SizingFactEngine(
+        seed=SizingContext(heating_load_in_watt=10_000.0),
+        adjacency={"Controller": {"Hub"}, "Hub": {"Controller", "Boiler"}, "Boiler": {"Hub"}},
+    )
+    engine.resolve_all([_producer("Boiler"), _consumer("Controller")])
+    lookups = {(entry.consumer, entry.fact): entry for entry in engine.report.lookups}
+    entry = lookups[("Controller", "maximal_thermal_power_in_watt")]
+    assert entry.source == "Boiler"
+    assert entry.mode == LookupMode.CONNECTED_POOL
+
+
+@pytest.mark.base
+def test_a_shadowed_contribution_is_recorded_as_an_override():
+    """A pre-seeded fact that shadows a computed contribution keeps both values on record.
+
+    Failure mode caught: a file-level ``sizing_facts`` entry silently discarding the
+    value a config computed — when the forced number turns out wrong, the record must
+    show what the run *would* have computed, otherwise the discrepancy is invisible
+    after the fact.
+    """
+    engine = SizingFactEngine(
+        seed=SizingContext(heating_load_in_watt=10_000.0),
+        preseeded_facts={"maximal_thermal_power_in_watt": 2_000.0},
+    )
+    engine.resolve_all([_producer("Boiler"), _consumer("Controller")])
+    assert len(engine.report.overrides) == 1
+    override = engine.report.overrides[0]
+    assert override.fact == "maximal_thermal_power_in_watt"
+    assert override.producer == "Boiler"
+    assert override.computed_value == 10_000.0
+    assert override.preseeded_value == 2_000.0
+
+
+@pytest.mark.base
+def test_the_report_groups_resolution_into_sweeps_with_waits():
+    """The report shows per sweep what resolved and what was still waiting on which facts.
+
+    Failure mode caught: a dependency-ordering regression (a config resolving one sweep
+    earlier or later than intended) that changes nothing about the final values in the
+    happy case but would surface as wrong values once laws read stale facts — without
+    the sweep record such a regression is undetectable by value assertions alone.
+    """
+    engine = SizingFactEngine(seed=SizingContext(heating_load_in_watt=10_000.0))
+    engine.resolve_all([_consumer("Controller"), _producer("Boiler")])
+    first_sweep = engine.report.sweeps[0]
+    assert "Boiler" in first_sweep.resolved
+    assert dict(first_sweep.waiting)["Controller"] == ("maximal_thermal_power_in_watt",)
+    assert any("Controller" in sweep.resolved for sweep in engine.report.sweeps[1:])
+
+
+@pytest.mark.base
+def test_the_deadlock_error_carries_the_resolution_history():
+    """A no-progress error includes how far resolution got before it stuck.
+
+    Failure mode caught: a deadlock diagnosis that names the stuck configs but not the
+    sweeps that *did* succeed — in a large scenario the interesting question is why the
+    chain stopped where it did, which needs the history, not just the final waits.
+    """
+
+    @dataclass_json
+    @dataclass
+    class _StuckConfig(ConfigBase):
+        """Fixture that waits for a fact nobody left to resolve can contribute."""
+
+        component_id: ComponentID
+        value_in_watt: Sizable[float] = sized_field(rule=1.0 * Size.WATER_MASS_FLOW_RATE_IN_KG_PER_SECOND)
+
+        @classmethod
+        def get_main_classname(cls) -> str:
+            """Returns a dummy classname, as the ConfigBase contract requires."""
+            return "tests.test_sizing_engine._StuckConfig"
+
+    _StuckConfig.SIZING_CONTRIBUTIONS = (
+        FactContribution(
+            facts=("water_mass_flow_rate_in_kg_per_second",),
+            compute=lambda config, ctx: {"water_mass_flow_rate_in_kg_per_second": config.value_in_watt},
+            scope=FactScope.CONNECTED,
+        ),
+    )
+    with pytest.raises(ConfigSizingError, match=r"(?s)no further progress.*Resolution history.*sweep 1"):
+        resolve_all(
+            [_producer("Boiler"), _consumer("Controller"),
+             _StuckConfig(component_id=ComponentID(name="Snake"))],
+            seed=SizingContext(heating_load_in_watt=10_000.0),
+        )
+
+
+@pytest.mark.base
+def test_the_report_serializes_to_plain_json():
+    """The report's dict form is json-dumpable without custom encoders.
+
+    Failure mode caught: the audit-artifact writer crashing at the end of an otherwise
+    successful run because a report entry smuggled a non-serializable object (an enum
+    member, a config instance) into the record.
+    """
+    engine = SizingFactEngine(seed=SizingContext(heating_load_in_watt=10_000.0))
+    engine.resolve_all([_producer("Boiler"), _consumer("Controller")])
+    dumped = json.dumps(engine.report.to_dict())
+    assert "maximal_thermal_power_in_watt" in dumped

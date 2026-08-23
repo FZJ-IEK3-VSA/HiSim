@@ -1,18 +1,19 @@
 """The sizing context: the facts about the surrounding system that sizing laws read.
 
-This module holds the two halves of the fact vocabulary of design B
-(``system_docs/config_defaults_spec.md`` §4.1), deliberately side by side in one file:
+This module holds the two halves of the sizing-fact vocabulary, deliberately side by
+side in one file:
 :class:`SizingContext`, the frozen snapshot whose fields *are* the facts, and
 :class:`Size`, the expression terms over exactly those fields. Keeping them together is
 what makes the single-registry invariant — one term per fact, no drift — reviewable at
 a glance; ``tests/test_sizing.py`` asserts it mechanically.
 
 Per the ``hisim.config`` layering rule the module imports nothing from the rest of
-HiSim at module level. The single sanctioned exception in the whole package is
-:meth:`SizingContext.for_building`, which imports the building package inside the
-method body: the building physics is what turns a ``BuildingConfig`` into sizing facts,
-and the building package necessarily imports ``ConfigBase`` from this package (see the
-§4.1 correction in the spec and entry 1 of ``roadmap/random_findings.md``).
+HiSim at module level. This module carries one of the package's two sanctioned
+exceptions (the other being ``hisim.log``, see the package ``__init__``):
+:meth:`SizingContext.for_building` imports the building package inside the method
+body — the building physics is what turns a ``BuildingConfig`` into sizing facts, and
+the building package necessarily imports ``ConfigBase`` from this package, so a
+module-level import here would close the cycle.
 """
 
 # clean
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class SizingContext:
-    """The facts about the surrounding system that sizing laws may read (spec §4.1, §1).
+    """The facts about the surrounding system that sizing laws may read.
 
     A small frozen snapshot, scope-resolved: today per building via
     :meth:`for_building`, later per unit/apartment via a ``for_unit`` constructor —
@@ -95,7 +96,8 @@ class Size:
 
     Terms keep the full field name including its unit — ``Size.HEATING_LOAD_IN_WATT`` —
     matching the repository's unit-explicit naming convention. The one-term-per-field
-    invariant (the single registry of spec §4.1) is enforced by ``tests/test_sizing.py``
+    invariant (one shared fact vocabulary, so terms and facts cannot drift apart) is
+    enforced by ``tests/test_sizing.py``
     rather than by dynamic class construction, so type checkers see every term.
     """
 

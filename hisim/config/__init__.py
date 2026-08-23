@@ -13,23 +13,28 @@ the other way round:
       errors: *how* a sized value derives from the surrounding system.
     - :mod:`hisim.config.context` — the ``SizingContext`` fact snapshot and the
       ``Size`` term vocabulary over exactly its fields: *what* laws may read.
-    - :mod:`hisim.config.sizing` — design B of ``system_docs/config_defaults_spec.md``
-      at the field: the ``AUTO`` sentinel, ``sized_field`` and the ``resolve_config``
-      resolver.
-    - :mod:`hisim.config.engine` — the sizing-fact engine of spec §8.4, resolving
-      cross-component sizing to a fixed point over a scenario's configs.
+    - :mod:`hisim.config.contributions` — ``FactContribution``: what a config class
+      declares it computes for the scenario-wide fact pool.
+    - :mod:`hisim.config.sizing` — the sizable field machinery: the ``AUTO`` sentinel,
+      ``sized_field`` and the ``resolve_config`` resolver.
+    - :mod:`hisim.config.report` — the ``ResolutionReport``: the structured record of
+      every decision one engine run makes, for tests, logs and the audit artifact.
+    - :mod:`hisim.config.engine` — the sizing-fact engine, resolving cross-component
+      sizing to a fixed point over a scenario's configs.
 
 The submodules are listed in dependency order, which is also the order this ``__init__``
-imports them: ``base``, ``presets`` and ``laws`` are leaves, ``context`` builds its
-``Size`` terms from ``laws``, ``sizing`` uses ``laws`` and ``presets`` (to normalize
-field rules and carry the preset stamp onto a resolved copy), and ``engine`` uses all
-three sizing modules.
+imports them: ``base``, ``presets``, ``laws`` and ``report`` are leaves, ``context``
+builds its ``Size`` terms from ``laws``, ``sizing`` uses ``laws`` and ``presets`` (to
+normalize field rules and carry the preset stamp onto a resolved copy), and ``engine``
+uses all three sizing modules plus the report.
 
 **Layering rule.** No module in this package imports anything from the rest of HiSim at
-module level. The single sanctioned exception is
-:meth:`hisim.config.context.SizingContext.for_building`, which imports the building
-package inside the method body: the building physics is what turns a ``BuildingConfig``
-into sizing facts, and the building package necessarily imports ``ConfigBase`` from here,
+module level, with two sanctioned exceptions. First, ``hisim.log``: consistent logging
+across the whole application beats a package-local workaround, and ``hisim/log.py``
+imports only the standard library, so no cycle is possible through it. Second,
+:meth:`hisim.config.context.SizingContext.for_building` imports the building package
+inside the method body: the building physics is what turns a ``BuildingConfig`` into
+sizing facts, and the building package necessarily imports ``ConfigBase`` from here,
 so a module-level import in the other direction would close an import cycle.
 
 Importing the names from this package — ``from hisim.config import ConfigBase`` — is the
@@ -60,17 +65,12 @@ from hisim.config.sizing import (
     sizable_fields,
     sized_field,
 )
-from hisim.config.engine import (
-    CONTRIBUTIONS_ATTRIBUTE,
-    FactContribution,
-    FactScope,
-    SizingFactEngine,
-    resolve_all,
-)
+from hisim.config.report import ResolutionReport
+from hisim.config.contributions import FactContribution, FactScope
+from hisim.config.engine import SizingFactEngine, resolve_all
 
 __all__ = [
     "AUTO",
-    "CONTRIBUTIONS_ATTRIBUTE",
     "Catalog",
     "ComponentID",
     "ConfigBase",
@@ -79,6 +79,7 @@ __all__ = [
     "FactContribution",
     "FactScope",
     "NothingToSizeError",
+    "ResolutionReport",
     "Sizable",
     "Size",
     "SizingContext",

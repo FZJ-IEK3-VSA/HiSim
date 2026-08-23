@@ -47,11 +47,21 @@ top are the design-B foundation:
   in one file); `hisim/config/sizing.py` — `AUTO` (copy-stable singleton), `Sizable`,
   `sized_field` (law + wire codec in field metadata, `value_type=` for enum fields),
   `resolve_config()`, `sizing_record` provenance, `concrete()`.
-- `hisim/config/engine.py` (~440 lines): the §8.4 fact engine — declared
-  contributions (`SIZING_CONTRIBUTIONS`), static output names, graph validation
-  (unprovided fact / cycle = hard errors naming parties), fixed-point resolution,
-  **CONNECTED scope with adjacency-first + flat-pool-fallback hybrid** (the spike's
-  refinement is already in this rebuild), `resolve_all` for Python setups.
+- `hisim/config/contributions.py` — the declaration side of cross-component sizing
+  (`FactContribution`, `FactScope`, static output names); `hisim/config/engine.py`
+  (~470 lines): the fact engine — graph validation (unprovided fact / cycle = hard
+  errors naming parties), fixed-point resolution, **CONNECTED scope with
+  adjacency-first + flat-pool-fallback hybrid** (the spike's refinement is already in
+  this rebuild), `resolve_all` for Python setups.
+- **Transparency layer** (added 2026-08-23 for the review): `hisim/config/report.py` —
+  the `ResolutionReport`, a structured record of every engine decision (sweeps with
+  waits, fact lookups with their deciding mode, contributions, pre-seed overrides with
+  both values), exposed as `engine.report`, rendered into the deadlock error, and
+  json-serializable for the audit artifact; `hisim.log` lines at
+  information/debug level throughout engine and resolver (the package's layering rule
+  carries a sanctioned `hisim.log` exception — log.py imports only stdlib, so no cycle
+  is possible); `SizingRecordEntry.inputs` captures the `(fact, value)` pairs each law
+  read, so a wrong number is diagnosable from the record alone.
 - `hisim/config/presets.py` (~110 lines): `Catalog` (fresh instance per access,
   `canonical`, iteration) **including the preset-provenance stamp**
   (`preset_provenance` non-field attribute; the spike's stamp is already in this rebuild).
@@ -461,6 +471,10 @@ frozen preset names, and the fact engine.
   landing are breaking changes.
 - **Docstrings** ≥2–3 sentences on every new class/function; class-scope constants,
   no module-level mutable state.
+- **Docstrings are self-contained** (decided 2026-08-23): never reference the spec or
+  roadmap documents ("spec §8.4", "config_defaults_spec.md") — those are design
+  artifacts that will be removed, while docstrings stay with the code. Inline the
+  rationale instead of citing it. Test docstrings state the failure mode they catch.
 - **Module size:** new source files stay at or under ~500 lines; split by concern
   before crossing it (the `laws`/`context`/`sizing` split of the machinery is the
   precedent). Pre-existing oversized component files are not ridden along — they

@@ -149,3 +149,14 @@ of the building-cleanup branch.
   an explicit annotation to satisfy `warn_return_any`. A `__class_getitem__`-based
   `Catalog[SomeConfig]` declared as a plain class attribute (not `ClassVar`) might work
   once the `Component[TConfig]` generics sweep lands; worth revisiting then.
+
+- **[friction] `test_building_information_for_every_tabula_code` errors sporadically
+  when anything else runs in the repo concurrently.** Three `pytest -m base` runs that
+  overlapped with other work in the same checkout (a scenario-JSON regeneration, a
+  parallel pytest invocation, live source edits) each produced 1-2 collection/setup
+  ERRORs on random TABULA parametrizations of this test; the identical suite run
+  sequentially passes twice with zero errors, and every errored parametrization passes
+  in isolation. Plausibly contention around a shared file (logs/, results/, or the
+  class-scope TABULA CSV cache being rebuilt while another process imports). Harmless
+  for CI (which runs one suite per checkout), but worth knowing before blaming a branch
+  for a red local run — and worth a look if it ever appears in CI.

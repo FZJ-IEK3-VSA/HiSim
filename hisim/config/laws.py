@@ -1,7 +1,7 @@
 """Sizing laws: how a config field's value derives from the surrounding system.
 
-This module holds the *law* half of design B (``system_docs/config_defaults_spec.md``
-§4): the :class:`SizingLaw` base class, the expression-tree terms built by operator
+This module holds the *law* half of the declarative sizing design: the
+:class:`SizingLaw` base class, the expression-tree terms built by operator
 overloading (so a linear law reads like the formula it is, can describe itself in error
 messages, and can name the context facts it reads), the wrapper for genuinely
 computational function laws, and the :func:`law` normalizer that turns any of the three
@@ -50,7 +50,7 @@ class NothingToSizeError(SizingError):
 
     Passing a sizing context to a component that can never use one is a setup bug — the
     author believed something got sized that never could be — so it fails loudly instead
-    of silently doing nothing (spec §4.1). A class that *has* sizable fields which are
+    of silently doing nothing. A class that *has* sizable fields which are
     all currently concrete is the legitimate no-op case and does not raise.
     """
 
@@ -232,8 +232,8 @@ class _ConstantLaw(SizingLaw):
 class _FunctionLaw(SizingLaw):
     """A genuinely computational law: a plain function of the context.
 
-    Functions cannot be introspected, so the facts they read must be **declared**
-    (spec §4.1, decided 2026-08-19): without the declaration the sizing dependency
+    Functions cannot be introspected, so the facts they read must be **declared**:
+    without the declaration the sizing dependency
     graph would be a guess, silently degrading the engine's precise up-front errors
     into "no progress" mysteries. Enforcement happens at declaration time in
     :func:`law`, so a forgetful author fails on import, not three resolution waves in.
@@ -260,7 +260,7 @@ class _FunctionLaw(SizingLaw):
 def normalize_law(rule: Any, reads: Optional[Tuple[Any, ...]] = None) -> SizingLaw:
     """Turns whatever ``sized_field(rule=...)`` or :func:`law` received into a law object.
 
-    Accepts a ready law, a callable (which **must** declare its reads, spec §4.1), or any
+    Accepts a ready law, a callable (which **must** declare its reads), or any
     other value (wrapped as a constant law) — the three spellings the spec allows. The
     ``reads`` entries may be ``Size.*`` terms or plain fact names.
     """
@@ -286,7 +286,7 @@ def law(rule: Any, reads: Optional[Tuple[Any, ...]] = None) -> SizingLaw:
 
     Config classes use this to name a law once as a ``ClassVar`` and reuse it — in the
     field declaration and in presets that override the class law for one field (the
-    per-preset escape hatch of spec §4): a preset may assign a ``SizingLaw`` as a field
+    per-preset escape hatch): a preset may assign a ``SizingLaw`` as a field
     *value*, which the resolver treats like AUTO but computes with that law instead of
     the field's declared one. For callables, ``reads`` is mandatory (Size terms or
     plain fact names); see :class:`_FunctionLaw`.

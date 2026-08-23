@@ -1,7 +1,7 @@
 """Sizable config fields: the AUTO sentinel, ``sized_field`` and the resolver (design B).
 
-This module holds the *field* half of design B (``system_docs/config_defaults_spec.md``
-§4): everything a config class needs so that a preset, a scenario file or a hand-written
+This module holds the *field* half of the declarative sizing design: everything a
+config class needs so that a preset, a scenario file or a hand-written
 setup only ever says *concrete value* or *AUTO* for a field, while the field's sizing
 law lives once at its declaration:
 
@@ -19,9 +19,11 @@ vocabulary) in :mod:`hisim.config.context`; the named-preset half of design B in
 :mod:`hisim.config.presets`; and the cross-component fact resolution in
 :mod:`hisim.config.engine`.
 
-Per the ``hisim.config`` layering rule the module imports nothing from the rest of HiSim:
-``component.py`` imports it (for the central AUTO check and ``ConfigBase.resolve``), so
-any hisim import here would close a cycle.
+Per the ``hisim.config`` layering rule the module imports nothing from the rest of HiSim
+— except ``hisim.log``, the package's sanctioned logging exception (see the layering
+rule in ``hisim/config/__init__.py``): ``component.py`` imports this module (for the
+central AUTO check and ``ConfigBase.resolve``), so any other hisim import here would
+close a cycle.
 """
 
 # clean
@@ -34,6 +36,7 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Mapping, Option
 
 from dataclasses_json import config as dataclasses_json_config
 
+from hisim import log
 from hisim.config.laws import ConfigSizingError, NothingToSizeError, SizingLaw, normalize_law
 from hisim.config.presets import Catalog
 
@@ -55,7 +58,7 @@ class _AutoSize:
     """
 
     #: What the sentinel is spelled as in a JSON file. In-band by design: a scenario
-    #: file cannot express a *device* literally named "AUTO", which is accepted (§4.1).
+    #: file cannot express a *device* literally named "AUTO" — a deliberate trade-off.
     WIRE_SPELLING: ClassVar[str] = "AUTO"
 
     _instance: ClassVar[Optional["_AutoSize"]] = None
@@ -95,12 +98,16 @@ class SizingRecordEntry:
     A tuple of these is attached to a resolved config as its ``sizing_record`` (a plain
     attribute, deliberately not a dataclass field, so serialization and equality ignore
     it); the audit-artifact writer reads it to show per field how a value came to be.
+    ``inputs`` carries the *values* of the facts the law read as ``(fact, value)``
+    pairs, so a wrong result is diagnosable from the record alone — ``facts_read``
+    alone would name the ingredients but not what they were.
     """
 
     field: str
     law: str
     facts_read: Tuple[str, ...]
     value: Any
+    inputs: Tuple[Tuple[str, Any], ...] = ()
 
 
 def _encode_sizable(value: Any) -> Any:
@@ -231,7 +238,7 @@ def describe_auto_fields(config: Any) -> str:
 def resolve_config(config: ConfigT, ctx: "SizingContext") -> ConfigT:
     """Returns a copy of ``config`` in which every AUTO field is computed by its law.
 
-    Semantics per spec §4.1: raises :class:`NothingToSizeError` when the class declares
+    Raises :class:`NothingToSizeError` when the class declares
     no sizable field at all (sizing a component that can never use it is a setup bug);
     is an idempotent no-op — still returning a fresh copy — when sizable fields exist
     but none currently says AUTO, so "size everything" loops are safe. The returned copy
@@ -266,7 +273,7 @@ def resolve_config(config: ConfigT, ctx: "SizingContext") -> ConfigT:
         if not _needs_sizing(current):
             continue
         # A preset may override the class law for one field by assigning a SizingLaw as
-        # the field value (the per-preset escape hatch of spec §4) — e.g. the pellet
+        # the field value (the per-preset escape hatch) — e.g. the pellet
         # boiler's minimal power is a twelfth of its *sized* maximal power, while the gas
         # boiler's is a constant zero.
         effective_law = current if isinstance(current, SizingLaw) else declared_law
@@ -282,9 +289,16 @@ def resolve_config(config: ConfigT, ctx: "SizingContext") -> ConfigT:
             ) from error
         resolved[field_name] = value
         record.append(SizingRecordEntry(
-            field=field_name, law=effective_law.describe(), facts_read=effective_law.facts_read(), value=value))
+            field=field_name, law=effective_law.describe(), facts_read=effective_law.facts_read(), value=value,
+            inputs=tuple((fact, getattr(ctx, fact, None)) for fact in effective_law.facts_read())))
     result = dataclasses.replace(config, **resolved)  # type: ignore[type-var]
     setattr(result, "sizing_record", tuple(record))
+    if record:
+        key = getattr(getattr(config, "component_id", None), "key", type(config).__name__)
+        log.debug(
+            f"Sizing: resolved {type(config).__name__} '{key}': "
+            + "; ".join(f"{entry.field}={entry.value!r} <- {entry.law}" for entry in record)
+        )
     # Preset provenance rides along exactly like the sizing record: dataclasses.replace
     # copies fields only, so the non-field stamp must be carried over explicitly for the
     # template creator to still see which preset the resolved config came from.

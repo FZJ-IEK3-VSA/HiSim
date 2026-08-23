@@ -199,11 +199,13 @@ closed PR #576, re-opened now that the obsolete building commits are out of its 
 
 **Goal:** each open design question from §2 has a recorded decision, so that no later
 phase converts a class against rules that might still change. Not a coding session.
-The agenda is `roadmap/design_review_questions.md` (on `json_v2`, where every question
-is written out in full) plus the artifact pair the spike produced
-(`heatpump_house_v2_template` / `_realized` / `_audit`); nothing beyond phase 1 is
-needed, because the artifacts live on `json_v2` and the machinery is reviewable in the
-phase-1 PR.
+The agenda is **`roadmap/design_review_agenda.md`** (prepared 2026-08-23): fully
+self-contained, current with the as-built code, carrying only the still-open questions
+plus two that emerged after the spike (B8's `ClassVar` generics obstacle, B11 the
+contribution-scope rule surfaced by the report audit). The spike-era
+`roadmap/design_review_questions.md` on `json_v2` stays as the historical record of the
+already-decided A/B5 items. Nothing beyond phase 1 is needed: the machinery is
+reviewable in PR #586, and Exhibit A in the agenda shows a real resolution report.
 
 **Why the review sits here and not after the ports** (reordered 2026-08-23): preset
 names are wire format, so every class converted before the naming convention (Q5)

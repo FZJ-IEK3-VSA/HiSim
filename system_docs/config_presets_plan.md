@@ -127,103 +127,205 @@ audit dump, the closing-the-loop template test, grouped connections.
 
 ## 3. Phases
 
+The arc in one sentence: **land the foundation (0–1), make every repeating decision
+once (2), finish the machinery those decisions shape (3), then convert components —
+first the eight the spike already proved (4), then everything else in four
+domain-sized batches (5–8) — and finally remove the last legacy paths (9).** The
+ordering rule behind it: anything that would have to be redone per class if it changed
+(names, laws' capabilities, typing, test shape) is settled before the first
+repetition.
+
 Each phase is one session-sized unit with its own PR (pushes happen from the user's
 other machine; this box never pushes). A phase is *done* when its gates pass and its
 boxes are checked.
 
 ### Phase 0 — merge the layering base (no new code)
 
-- [ ] PR #582 (`config_base_move`) merged into main.
-- [ ] `config_presets` rebased onto the merge (drops its first commit; the seven
-      design-B commits remain).
+**Goal:** the `hisim/config/` package (with `ConfigBase`, `ComponentID`,
+`DisplayConfig` in `base.py`) exists on main, so every later phase has the layer it
+builds on. This is purely getting the already-open PR #582 over the line — no new
+implementation.
 
-Gates: CI on #582 (golden suites untouched).
+- [ ] PR #582 (`config_base_move`) merged into main.
+- [ ] `config_presets` rebased onto the merge. Its first commit is the same content
+      as #582 and disappears in the rebase; the seven design-B commits remain.
+
+Gates: CI on #582. The golden suites must be untouched — this PR only moves code and
+rewrites imports, so any numeric change would mean the move went wrong.
 
 ### Phase 1 — land the design-B foundation (replaces closed #576)
 
-Open a **fresh PR** from the rebased `config_presets` with exactly the seven design-B
-commits (§1). No new implementation work; the session's job is verification and PR
-authoring.
+**Goal:** the sizing machinery (`sizing.py`, `engine.py`, `presets.py`), the central
+`AUTO` check in `Component.__init__`, the building's fact contributions, and the three
+pilot conversions (boiler, heat distribution, EMS) are merged into main. After this
+phase, any component *can* be converted to presets — the rest of the plan is about
+converting them in the right order.
 
-- [ ] Full `pytest -m base` + `pytest tests/test_sizing.py tests/test_sizing_engine.py`.
-- [ ] `pytest -m jsonconfig` (regenerated scenario JSONs are fresh:
-      `scripts/regenerate_scenario_jsons.py` produces no diff).
-- [ ] Golden gates: `scripts/golden_check.py` / `golden_validate.py` unchanged
-      (presets must reproduce old factory values byte-identically).
+The code already exists on the rebased `config_presets` branch (§1); the session's job
+is verification and PR authoring, not implementation. This is the successor of the
+closed PR #576, re-opened now that the obsolete building commits are out of its diff.
+
+- [ ] Full `pytest -m base` plus the machinery's own suites,
+      `pytest tests/test_sizing.py tests/test_sizing_engine.py`, all green.
+- [ ] `pytest -m jsonconfig` green, and `scripts/regenerate_scenario_jsons.py`
+      produces no diff (the checked-in scenario JSONs match what the converted
+      configs actually serialize to — the "freshness" gate).
+- [ ] Golden gates unchanged (`scripts/golden_check.py` / `golden_validate.py`):
+      the pilots' presets must reproduce the deleted factories' values exactly, so
+      simulation results cannot move.
 - [ ] mypy + flake8 clean on the touched files.
-- [ ] PR opened (base: main), describing machinery + three pilots; #576 linked as
-      the closed predecessor.
+- [ ] Fresh PR opened against main (pushed from the other machine), describing the
+      machinery and the three pilots; #576 linked as the closed predecessor.
 
-### Phase 2 — team review (gates everything that repeats per class)
+### Phase 2 — team review: settle every question that shapes per-class work
 
-Agenda: `roadmap/design_review_questions.md` (on `json_v2`) + the artifact pair
-(`heatpump_house_v2_template` / `_realized` / `_audit`). Not a coding session, and it
-needs nothing beyond phase 1: the artifacts live on `json_v2`, the machinery is
-reviewable in the phase-1 PR.
+**Goal:** each open design question from §2 has a recorded decision, so that no later
+phase converts a class against rules that might still change. Not a coding session.
+The agenda is `roadmap/design_review_questions.md` (on `json_v2`, where every question
+is written out in full) plus the artifact pair the spike produced
+(`heatpump_house_v2_template` / `_realized` / `_audit`); nothing beyond phase 1 is
+needed, because the artifacts live on `json_v2` and the machinery is reviewable in the
+phase-1 PR.
 
 **Why the review sits here and not after the ports** (reordered 2026-08-23): preset
-names are wire format, so every class converted before the Q5 naming convention risks
-a breaking rename; and the PV conversion exists on `json_v2` only in its B6-workaround
-form — porting it before B6 is decided means converting it twice. The decisions are
-cheap to make now and expensive to retrofit; conversions wait for them.
+names are wire format, so every class converted before the naming convention (Q5)
+risks a breaking rename; and the PV conversion exists on `json_v2` only in its
+B6-workaround form — porting it before B6 is decided means converting it twice. The
+decisions are cheap to make now and expensive to retrofit; conversions wait for them.
 
-- [ ] B6 decided (and B7 with it). — [ ] B8. — [ ] B9. — [ ] B10.
-- [ ] C10, C11, C12 each decided (physics/value changes are never bundled with sweeps).
-- [ ] D13 decided (delete vs `obsolete/`).
-- [ ] Q5: preset naming convention ratified (wire format — settle once).
-- [ ] Decisions recorded in `config_defaults_spec.md` / review doc, statuses updated.
+The machinery/API questions (each multiplies by ~70 classes if decided late):
+
+- [ ] **B6 — may a sizing law read another field of the same config?** The concrete
+      case: the PV power law needs `share_of_maximum_pv_potential`, a sibling field.
+      Options: (a1) allow reads of plain (non-sizable) siblings only; (a2) lower the
+      engine's unit of progress from config to field, so any field can wait on any
+      concrete sibling (recommendation on file); (b) promote the share to a context
+      fact. B7 (a law reading the *resolved* value of a sizable sibling — the pellet
+      boiler's minimum power is 1/12 of its sized maximum) is decided by the same
+      choice: under (a2) it becomes a `Field("…")` term; otherwise law composition
+      stays the idiom.
+- [ ] **B8 — make `Catalog` generic** (`Catalog[GenericBoilerConfig]`), so preset
+      access is statically typed instead of `Any`. Small contained change; the
+      question is only whether to do it before the sweep (recommended) or never.
+- [ ] **B9 — which factories become presets at all.** Ratify the rule of thumb the
+      Weather conversion established: *identifier-parameterized lookups (dozens of
+      locations, TABULA codes, LPG households) keep a plain named constructor like
+      `for_location(...)`; presets are only for genuine named variant sets.*
+- [ ] **B10 — author-declared source notes.** Should hardcoded numbers be able to
+      carry a citation as data (`sized_field(..., note="VDI 4645")`) so it reaches
+      the audit record? Decide the shape now (strictly optional, only where a source
+      is actually known) or reject it — half-maintained citations are worse than none.
+
+The physics/value questions — each would change simulation results, so each needs its
+own explicit decision and, if accepted, its own commit with before/after evidence
+(never bundled into a conversion batch):
+
+- [ ] **C10 —** the UTSP connector fixtures spell `JsonReference` keys in snake_case
+      while the dataclass fields are `Name`/`Guid`/`StrVal`, so they silently
+      deserialize to empty references (invisible only because the fixtures run on the
+      predefined profile). Fix the spelling and verify a local-LPG run.
+- [ ] **C11 —** buffer storages in the combustion setups are sized from the *building
+      heating load* although the parameter is named after the *generator power* (a
+      different number once the boiler is sized). Bless the status quo or schedule
+      the change as a deliberate physics decision.
+- [ ] **C12 —** `HeatDistributionControllerConfig.heating_system`'s law is the
+      constant `FLOORHEATING`: `"AUTO"` there means "the usual choice", not "derived
+      from the building" (TABULA has no heat-distribution data). Bless that semantics
+      with a spec sentence, or commission a building-age→radiator heuristic (a
+      result-changing decision for old buildings).
+
+Process questions:
+
+- [ ] **D13 —** 14 components cannot be built from their own default configs (three
+      zombies importing long-deleted modules, six defective, five legitimately
+      data-dependent). Decide: delete outright, or move to `obsolete/`.
+- [ ] **Q5 — the preset naming convention.** Today's 64 factory-name spellings must
+      collapse into one scheme (casing, fuel/variant order, when to suffix a rating
+      like `_12kw`). Names become wire format the moment the v2 executor accepts
+      preset references, so this is an API-naming decision — settle it once, here.
+- [ ] Every decision recorded in `config_defaults_spec.md` / the review doc in the
+      same session, statuses flipped from "open" to "decided".
 
 ### Phase 3 — pre-sweep machinery finalization (implements the review's outcomes)
 
-Everything the conversions repeat, finished first:
+**Goal:** the machinery and conventions are in their *final* shape, so that the ~60
+class conversions in phases 4–8 are purely mechanical repetition and none of them ever
+has to be revisited. Everything in this phase is something the conversions would
+otherwise repeat or contradict.
 
-- [ ] B8: `Catalog[ConfigT]` generics; preset access statically typed.
-- [ ] B6 implementation per decision — (a2) field-granular fixed point + `Field("…")`
-      term (contained in `config/sizing.py` + `config/engine.py`), or (a1)
-      `reads_own=` for plain siblings. The PV port (phase 4) and the pellet/wood-chip
-      minimal-power law (already on `config_presets`) are written/adjusted directly
-      against the outcome — no interim workaround gets committed.
-- [ ] `json_executor._get_default_config`: prefer `presets.canonical` when the class
-      has a `Catalog`; keep the legacy name-match for unconverted classes; delete the
-      heuristic entirely at sweep end (phase 9).
-- [ ] B9 sentence + Q5 naming convention written into `config_defaults_spec.md`; the
-      three pilots' existing preset names audited against it (renaming is still free —
-      nothing referencing them has shipped).
-- [ ] B10 mechanism if adopted (`sized_field(..., note=)` / preset note).
-- [ ] D13 executed: zombies/defective components deleted or archived
+- [ ] Implement B8: make `Catalog` generic (`Catalog[ConfigT]`), so `presets.oil`
+      has a real static type. Every conversion after this point gets typed preset
+      access for free; without it, the sweep would replicate `Any`-typed access ~70×.
+- [ ] Implement the B6 decision — under (a2): field-granular fixed-point resolution
+      plus a `Field("…")` law term, contained in `config/sizing.py` +
+      `config/engine.py`; under (a1): a `reads_own=` declaration restricted to plain
+      sibling fields. Adjust the pellet/wood-chip minimal-power law (already on
+      `config_presets`) to the outcome. The PV conversion itself waits for phase 4 —
+      no interim workaround gets committed to main.
+- [ ] Teach the **v1 executor** about presets: `json_executor._get_default_config`
+      currently discovers a default by name-matching `*default*` methods and errors
+      on classes with zero or several — which after conversion is *every* converted
+      class. Change it to prefer `presets.canonical` when the class has a `Catalog`,
+      keeping the legacy name-match for not-yet-converted classes. (The heuristic is
+      deleted entirely in phase 9, when no class needs it anymore.)
+- [ ] Write the B9 rule ("lookups keep a constructor, presets are variant sets") and
+      the Q5 naming convention into `config_defaults_spec.md`, then audit the three
+      pilots' existing preset names against the convention and rename where they
+      deviate — renaming is still free, nothing referencing them has shipped.
+- [ ] Implement the B10 note mechanism if the review adopted it
+      (`sized_field(..., note=)` and/or a per-preset note).
+- [ ] Execute the D13 decision: delete or archive the unbuildable components
       (`controller_l1_building_heating`, `controller_l1_heatpump`,
       `controller_l1_generic_runtime`, `generic_battery`, `generic_ev_charger`, …
-      per the D13 list) — shrinks the sweep denominator.
-- [ ] Contract test skeleton: iterate every `Catalog`-bearing class ×
-      {as-is, resolved(fixture ctx)}, invalid cells declared (`NothingToSizeError`),
-      so each sweep batch only *extends coverage* instead of writing new test shapes.
-- [ ] Delete the stray tracked `main` file in the repo root.
+      per the D13 list). Doing this *before* the sweep shrinks it — nobody converts
+      a class that is about to be deleted.
+- [ ] Build the contract-test skeleton: one parameterized test that iterates every
+      `Catalog`-bearing config class over {preset as-is, preset resolved against a
+      fixture context}, with invalid cells declared rather than try/excepted
+      (`NothingToSizeError` for classes with nothing to size; surviving `AUTO`
+      expected in unsized cells). Each sweep batch then only *adds classes to
+      coverage* instead of inventing new test shapes.
+- [ ] Delete the stray tracked `main` file in the repo root (§1, commit accident).
 
 *Fallback if the review cannot be scheduled promptly:* the decision-independent items
 (executor bridge, contract-test skeleton, stray-file deletion) may be pulled forward;
 everything whose shape a review question determines (generics API, B6, names, notes,
 D13) stays blocked — that blockage is the point of the ordering.
 
-### Phase 4 — port the spike's main-compatible conversions from `json_v2`
+### Phase 4 — port the spike's conversions from `json_v2` into the new package
 
-Port, adapting `hisim.sizing`/`hisim.sizing_engine` imports to `hisim.config` and
-`building_config.py` targets to `building/config.py`. Use `git show json_v2:<file>` as
-the source of truth; do **not** cherry-pick blindly — the module layout differs, and
-phase-2/3 outcomes (names per Q5, B6 mechanism, generics) apply directly, so the
-ported code's final form may deviate from the spike deliberately.
+**Goal:** the eight component modules the spike already converted on `json_v2` are
+converted on main too — written against the *final* machinery and naming from phases
+2–3, so the heat-pump example's whole thermal chain sizes through the fact engine.
+This is the last "porting" phase; everything after it is fresh conversion work.
 
-- [ ] `more_advanced_heat_pump_hplib.py` — heat pump + SH/DHW controller configs.
-- [ ] `simple_water_storage.py` — `SimpleHotWaterStorage` + `SimpleDHWStorage` configs.
-- [ ] `advanced_battery_bslib.py` (sizes from PV peak power via flat-pool fallback).
-- [ ] `generic_pv_system.py` — written directly against the B6 decision (the spike's
-      per-preset `scaled_power_law` workaround is reference material, not the target).
-- [ ] `heat_distribution_system.py` — the controller-side fact contributions the spike
-      added (the controller *config conversion itself* is batch S1).
-- [ ] `electricity_meter.py`, `weather.py` (B9 pattern: `for_location(...)`),
-      `building/config.py` extensions, EMS mypy channel fixes.
-- [ ] Sizing-fact registry extensions on `SizingContext` for the above.
-- [ ] Setups/tests of the touched components moved to `presets.X` / `resolve`; their
-      legacy factories deleted; scenario JSONs regenerated.
+Method: use `git show json_v2:<file>` as the reference, then adapt — the spike uses
+the old module layout (`hisim.sizing`, `hisim.sizing_engine`, `building_config.py`),
+which maps to `hisim.config` and `building/config.py` here. Do **not** cherry-pick
+commits blindly; where phase-2/3 outcomes (names per Q5, B6 mechanism, generics)
+disagree with the spike, the outcomes win and the ported code deviates deliberately.
+
+- [ ] `more_advanced_heat_pump_hplib.py` — the heat pump config plus its
+      space-heating and DHW controller configs.
+- [ ] `simple_water_storage.py` — `SimpleHotWaterStorage` + `SimpleDHWStorage`
+      configs (buffer and DHW volume laws; C11's blessing/decision applies here).
+- [ ] `advanced_battery_bslib.py` — sizes from the PV peak power fact; this is the
+      case that needs the engine's flat-pool fallback, because battery and PV are
+      two wiring hops apart (both connect only to the EMS).
+- [ ] `generic_pv_system.py` — written directly against the B6 decision; the spike's
+      per-preset `scaled_power_law` workaround is reference material, not the target.
+- [ ] `heat_distribution_system.py` — the controller-side fact *contributions* the
+      spike added (water mass flow, temperatures). The controller's own config
+      conversion is batch S1, not here.
+- [ ] `electricity_meter.py`; `weather.py` (the B9 pattern: presets only for
+      `aachen`/`seville`, a `for_location(...)` constructor for the open location
+      space); `building/config.py` extensions; the EMS mypy channel fixes.
+- [ ] Extend `SizingContext` with the facts this chain reads (water mass flow,
+      storage set-temperatures, PV peak power, generator power band) — the `Size.*`
+      term vocabulary follows automatically from the dataclass fields.
+- [ ] Move all call sites (system setups, tests) of the touched components to
+      `presets.X` / `resolve(ctx)`; delete their legacy factories; regenerate the
+      scenario JSONs.
 
 Gates: same as phase 1, plus the touched components' own test files
 (`test_more_advanced_heat_pump_hplib*.py`, `test_simple_hot_water_storage.py`,
@@ -232,28 +334,48 @@ acceptance bar (golden + scenario freshness enforce it).
 
 ### Phases 5–8 — the repo-wide sweep, four batches (S1–S4)
 
-Per-class recipe, applied identically in every batch (this is the "don't miss
-anything" checklist — see also §5):
+**Goal (shared by all four batches):** every remaining config class in
+`hisim/components/` uses presets and sized fields instead of `get_*default*`/
+`get_scaled_*` factories, with values reproduced exactly. Each batch is one
+session-sized PR over one domain of components, so a half-done sweep is always a set
+of *whole* converted classes, never a class in limbo.
 
-1. Classify per B9: variant set → presets; identifier lookup → named constructor
-   (`for_…`), no presets for the open space.
-2. Presets `Catalog` on the config class; sizable fields → `sized_field` with laws
-   (function laws declare `reads=`); `SIZING_CONTRIBUTIONS` where the class feeds
-   sibling facts; preset names per the Q5 convention.
-3. Parity: new presets reproduce the old factory values exactly (assert in the batch
-   commit if not already golden-covered).
-4. Move every call site: `system_setups/*.py`, tests, other components.
-5. Delete the legacy factories (never leave twins behind).
-6. `scripts/regenerate_scenario_jsons.py`; commit the JSON diffs with the batch.
-7. mypy, flake8, `scripts/check_config_attrs.py`.
-8. Findings → `roadmap/random_findings.md` (`[bug]/[friction]/[spec]/[elegance]`).
+Per-class recipe, applied identically to every class in every batch (this is the
+"don't miss anything" checklist — see also §5):
 
-Batch boundaries (counts = legacy factories from the §6 inventory; adjust after D13):
+1. **Classify** per the B9 rule: a genuine set of named variants becomes presets; an
+   identifier-parameterized lookup (locations, database model names, household
+   definitions) keeps a plain named constructor (`for_…`) and gets no presets for
+   the open space.
+2. **Convert:** a `Catalog` of presets on the config class (names per the Q5
+   convention); fields whose values the old `get_scaled_*` twin computed become
+   `sized_field`s with their law declared at the field (function laws declare
+   `reads=`; enum-typed fields pass `value_type=`); if other components size against
+   this one, declare its `SIZING_CONTRIBUTIONS`.
+3. **Prove parity:** the new presets must reproduce the old factory values exactly —
+   assert it in the batch commit wherever the golden suites don't already cover the
+   component.
+4. **Move every call site:** `system_setups/*.py`, tests, and other components stop
+   calling the old factories and use `presets.X` / `resolve(ctx)`.
+5. **Delete the legacy factories** — a converted class keeps no twin.
+6. **Regenerate** the scenario JSONs (`scripts/regenerate_scenario_jsons.py`) and
+   commit the JSON diffs with the batch.
+7. **Static checks:** mypy, flake8, `scripts/check_config_attrs.py`.
+8. **Log findings** in `roadmap/random_findings.md`
+   (`[bug]/[friction]/[spec]/[elegance]`) — full capture, not curation.
 
-**Phase 5 = S1, heating generation & controllers (~20):**
-- [ ] `generic_boiler.py` — the 4 `GenericBoilerControllerConfig` factories
-      (power band via CONNECTED facts from the sized boiler)
-- [ ] `heat_distribution_system.py` — `HeatDistributionControllerConfig` (1; C12 applies)
+Batch boundaries below; the number after each file is its legacy factory count from
+the §6 inventory (recount after D13 removes components):
+
+**Phase 5 = S1, heating generation & controllers (~20).** Starts with the two
+controller configs that live in already-converted pilot files, because they exercise
+the hardest sizing pattern (facts from a *sibling component*, not the building):
+
+- [ ] `generic_boiler.py` — the 4 `GenericBoilerControllerConfig` factories; the
+      controller's min/max power band is derived from the sized boiler it is
+      connected to, i.e. a CONNECTED-scoped fact the boiler already contributes
+- [ ] `heat_distribution_system.py` — `HeatDistributionControllerConfig` (1); its
+      `heating_system` field carries the C12 semantics ("AUTO = the usual choice")
 - [ ] `advanced_heat_pump_hplib.py` (3) — [ ] `generic_heat_pump.py` (2)
 - [ ] `simple_heat_source.py` (4) — [ ] `generic_district_heating.py` (2)
 - [ ] `generic_electric_heating.py` (2) — [ ] `idealized_electric_heater.py` (1)
@@ -291,18 +413,26 @@ freshness, golden suites, mypy/flake8. One PR per batch.
 
 ### Phase 9 — closeout
 
-- [ ] Delete `json_executor._get_default_config`'s legacy name-matching branch (all
-      buildable classes now have `presets.canonical`).
-- [ ] Contract test covers every config class; `DEFAULT_CONFIG_ARGUMENTS`-style
-      exception tables gone.
-- [ ] Grep gate: zero `def get_.*(default|scaled)` (non-connection) left under
-      `hisim/components/`.
-- [ ] `Component[TConfig]` generics ride-along (sweep-6 deferral in
-      `roadmap/json_cleanup.md`) and remaining mypy escape hatches fall.
-- [ ] Spec statuses updated (`config_defaults_spec.md` §8b marked superseded by this
-      plan; this plan marked complete).
-- [ ] Handoff note to the `json_v2` MR plan: preset names frozen (wire format),
-      executor preset-reference work may proceed.
+**Goal:** no legacy default machinery survives anywhere — not in components, not in
+the executor, not in tests — and the presets/sizing layer is declared stable so the
+`json_v2` track can build its wire format on top of it.
+
+- [ ] Delete `json_executor._get_default_config`'s legacy name-matching branch: after
+      the sweep, every buildable class has `presets.canonical`, so the phase-3 bridge
+      is the only path and the heuristic is dead code.
+- [ ] The contract test covers every config class, and any per-class exception
+      tables it needed along the way (the `DEFAULT_CONFIG_ARGUMENTS` pattern) are
+      gone — a class either enumerates cleanly or declares its invalid cells.
+- [ ] Grep gate: zero non-connection `def get_.*(default|scaled)` methods left under
+      `hisim/components/` (the §6 regeneration command returns nothing).
+- [ ] Ride-alongs the sweep unblocks: `Component[TConfig]` generics (the sweep-6
+      deferral in `roadmap/json_cleanup.md`) and the remaining mypy escape hatches
+      around config typing fall away.
+- [ ] Spec statuses updated: `config_defaults_spec.md` §8b marked superseded by this
+      plan; this plan marked complete.
+- [ ] Handoff note to the `json_v2` MR plan: preset names are frozen (wire format
+      from here on — any later rename is a breaking change with a migration note),
+      so the executor's preset-reference work may proceed.
 
 ---
 

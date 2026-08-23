@@ -75,7 +75,7 @@ class EMSConfig(ConfigBase):
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float]
 
-    #: Named default presets (config_defaults_spec.md design B). The EMS declares no
+    #: Named default presets. The EMS declares no
     #: sizable field — its config is strategy parameters and temperature offsets, nothing
     #: physical to scale — so calling ``.resolve(ctx)`` on it raises NothingToSizeError
     #: rather than silently no-opping: a setup that believes it sized the EMS is wrong.

@@ -26,8 +26,7 @@ from hisim.config import Catalog, ComponentID, ConfigBase
 class BuildingConfig(ConfigBase):
     """Configuration of the Building class.
 
-    The named default variants live in :attr:`presets` (design B of
-    ``system_docs/config_defaults_spec.md``), which replaced the former
+    The named default variants live in :attr:`presets`, which replaced the former
     ``get_default_german_single_family_home`` factory. The building is the *source* of the
     sizing facts every other component sizes against (see :attr:`SIZING_CONTRIBUTIONS`) and
     therefore has no sizable field of its own: its presets are plain concrete archetypes, and
@@ -76,13 +75,14 @@ class BuildingConfig(ConfigBase):
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float]
 
-    #: Sizing facts this config contributes to the scenario-wide fact pool (spec §8.4).
+    #: Sizing facts this config contributes to the scenario-wide fact pool.
     #: Computed from the config alone via BuildingInformation, so the TABULA lookup runs
     #: once per resolution, never per consumer, and never needs a constructed component.
     #: Assigned in ``information.py``, next to the physics it calls.
     SIZING_CONTRIBUTIONS: ClassVar[tuple] = ()
 
-    #: Named building archetypes (preset names are wire format, spec §8.1). The canonical
+    #: Named building archetypes (preset names are wire format: scenario files
+    #: reference them, so renames are breaking changes). The canonical
     #: ``german_single_family_home`` is the TABULA/EPISCOPE reference house
     #: "DE.N.SFH.05.Gen.ReEx.001.002" with a medium heat-capacity class and 121.2 m²
     #: conditioned floor area — exactly what the deleted factory produced with all its

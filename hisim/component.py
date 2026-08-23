@@ -220,7 +220,7 @@ class Component:
         # self.singleton_simulation_repository: SingletonSimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
         if isinstance(my_config, cfg.ConfigBase):
-            # The central sizing check (config_defaults_spec.md §4.1): a config that still
+            # The central sizing check: a config that still
             # carries the AUTO sentinel anywhere must never reach a running component, no
             # matter whether it came from a preset, a scenario file or manual construction.
             # The error prints each unresolved field with its declared law, so the fix

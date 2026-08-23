@@ -95,7 +95,7 @@ class HeatDistributionConfig(ConfigBase):
     #: Named default presets. The heat distribution system has no defensible nominal —
     #: every essential field is sized to the building it serves — so the standard preset
     #: is a pure sizable template: all three sized fields default to AUTO and the config
-    #: cannot reach a component unresolved (config_defaults_spec.md design B).
+    #: cannot reach a component unresolved.
     PRESET_COMPONENT_ID: ClassVar[ComponentID] = ComponentID(name="HeatDistributionSystem")
 
     component_id: ComponentID
@@ -844,7 +844,7 @@ class HeatDistribution(cp.Component):
 class HeatDistributionControllerConfig(ConfigBase):
     """HeatDistribution Controller Config Class."""
 
-    #: Sizing facts this config contributes (spec §8.4): the water mass flow it derives
+    #: Sizing facts this config contributes: the water mass flow it derives
     #: via HeatDistributionControllerInformation and the heat distribution system type —
     #: the two sibling facts the HeatDistributionConfig preset resolves from. Assigned
     #: below the class, next to the compute function.
@@ -1471,7 +1471,7 @@ class HeatDistributionControllerInformation:
 def _hds_controller_sizing_facts(
     config: HeatDistributionControllerConfig, ctx: SizingContext
 ) -> dict:
-    """Computes the heat-distribution sizing facts from the controller config (spec §8.4).
+    """Computes the heat-distribution sizing facts from the controller config.
 
     Uses the same HeatDistributionControllerInformation derivation the setups call today,
     so engine-resolved values are identical to the hand-threaded ones. The context is

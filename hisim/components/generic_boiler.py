@@ -100,7 +100,7 @@ class GenericBoilerConfig(ConfigBase):
     """Configuration of the GenericBoiler class.
 
     Named default variants live in :attr:`presets` (one per fuel), and the power fields
-    are sizable (``config_defaults_spec.md`` design B): a preset carries ``AUTO`` where
+    are sizable: a preset carries ``AUTO`` where
     the value derives from the building, and ``.resolve(ctx)`` computes it. The former
     ``get_default_*``/``get_scaled_*`` factory pairs are replaced by exactly that split —
     the sizable preset resolves to what the scaled factory produced, the concrete
@@ -157,13 +157,14 @@ class GenericBoilerConfig(ConfigBase):
     subsidy_as_percentage_of_investment_costs: Optional[float] = None
     consumption_in_kilowatt_hour: float = 0.0
 
-    #: Sizing facts this config contributes (spec §8.4): its resolved power band, for
+    #: Sizing facts this config contributes: its resolved power band, for
     #: consumers wired to this boiler (its controller). CONNECTED scope: with the
     #: connection graph available (the v2 executor) the facts resolve along it, so two
     #: boilers in one scenario stay unambiguous; assigned below the class.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple["FactContribution", ...]] = ()
 
-    #: Named default variants, one per fuel (preset names are wire format, spec §8.1).
+    #: Named default variants, one per fuel (preset names are wire format: scenario
+    #: files reference them, so renames are breaking changes).
     #: The fuel presets are sizable templates (power fields AUTO); the ``*_12kw`` presets
     #: are the former nominal catalog devices. Capex fields stay None so postprocessing
     #: looks them up from the device database, exactly as the factories did.
@@ -1549,7 +1550,7 @@ class GenericBoilerController(Component):
 
 
 def _boiler_sizing_facts(config: GenericBoilerConfig, ctx: SizingContext) -> dict:
-    """Contributes the boiler's resolved power band for connected consumers (spec §8.4).
+    """Contributes the boiler's resolved power band for connected consumers.
 
     Computed after the boiler itself resolved, so the values are the final concrete
     numbers whether they came from a law, a preset constant or a manual override.

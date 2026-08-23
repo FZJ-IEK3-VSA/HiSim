@@ -5,7 +5,7 @@ for the layout and the TABULA reference). Holds ``BuildingInformation`` and, at 
 bottom of the module, the sizing-fact contribution of ``BuildingConfig``: the building is
 the root of the sizing dependency graph, and everything it contributes is derived by this
 module's physics, so the contribution is declared here and assigned onto the config class
-on import (spec §8.4).
+on import.
 """
 
 # clean
@@ -759,7 +759,7 @@ class BuildingInformation:
 
 
 def _building_sizing_facts(config: BuildingConfig, ctx: SizingContext) -> dict:
-    """Computes the building-scope sizing facts from a BuildingConfig (spec §8.4).
+    """Computes the building-scope sizing facts from a BuildingConfig.
 
     Runs the TABULA/EPISCOPE lookup once and snapshots the derived quantities; the
     context argument is unused because the building is the root of the fact graph.

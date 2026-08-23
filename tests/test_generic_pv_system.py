@@ -1,9 +1,12 @@
 """Test for generic pv system."""
 
+import os
+
 import pytest
 from tests import functions_for_testing as fft
 from hisim import sim_repository
 from hisim import component
+from hisim import utils
 from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim import simulator as sim
@@ -131,4 +134,64 @@ def test_photovoltaic_cec() -> None:
     my_pvs_config.power_in_watt = 10 * 1e3
     _run_pv_at_timestep_655(
         pvs_config=my_pvs_config, expected_power_w=340.552602382255
+    )
+
+
+@pytest.mark.extendedbase
+def test_photovoltaic_cache_roundtrip(tmp_path) -> None:
+    """Test that the PV cache is written at prepare time and read back identically.
+
+    Builds an Aachen weather component and a default (CEC) PV system with an
+    isolated cache directory, runs both i_prepare_simulation calls, and asserts
+    that the PV cache file exists immediately after preparation — before a
+    single i_simulate call — so that even interrupted simulations populate the
+    cache. Then prepares a second PV system with the identical configuration
+    and asserts that it takes the cache-hit path and yields the same
+    per-timestep AC power ratios as the freshly computed run (up to the
+    precision of the CSV text serialization of the cache file).
+    """
+    my_sim_params = sim.SimulationParameters.full_year(
+        year=2021, seconds_per_timestep=3600
+    )
+    my_sim_params.cache_dir_path = str(tmp_path)
+
+    repo = sim_repository.SimRepository()
+    my_weather_config = weather.WeatherConfig.get_default(
+        location_entry=weather.LocationEnum.AACHEN
+    )
+    my_weather = weather.Weather(
+        config=my_weather_config, my_simulation_parameters=my_sim_params
+    )
+    my_weather.set_sim_repo(repo)
+    my_weather.i_prepare_simulation()
+
+    my_pvs_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
+    my_pvs = generic_pv_system.PVSystem(
+        config=my_pvs_config, my_simulation_parameters=my_sim_params
+    )
+    my_pvs.set_sim_repo(repo)
+
+    file_exists, cache_filepath = utils.get_cache_file(
+        my_pvs_config.component_id.name, my_pvs_config, my_sim_params
+    )
+    assert not file_exists, "The isolated cache directory must start out empty."
+
+    my_pvs.i_prepare_simulation()
+
+    # The cache must be written during preparation, not at the end of the
+    # simulation loop, so that interrupted runs still populate it.
+    assert os.path.exists(cache_filepath)
+    assert (
+        len(my_pvs.ac_power_ratios_for_all_timesteps_output)
+        == my_sim_params.timesteps
+    )
+
+    my_pvs_cached = generic_pv_system.PVSystem(
+        config=my_pvs_config, my_simulation_parameters=my_sim_params
+    )
+    my_pvs_cached.set_sim_repo(repo)
+    my_pvs_cached.i_prepare_simulation()
+
+    assert my_pvs_cached.ac_power_ratios_for_all_timesteps_output == pytest.approx(
+        my_pvs.ac_power_ratios_for_all_timesteps_output
     )

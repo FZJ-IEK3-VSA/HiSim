@@ -646,17 +646,18 @@ class PVSystem(cp.Component):
         pass
 
     def i_prepare_simulation(self) -> None:
-        """Prepare the component by computing or loading the whole-year PV output.
+        """Prepare the component by computing or loading the whole simulation period's PV output.
 
         On a cache hit, the AC power ratios for every timestep are read from the
         cache CSV. On a cache miss, the yearly weather arrays published by the
-        weather component in the singleton simulation repository are fed through
-        one vectorized pvlib run (``simulate_cec`` or ``simulate_sandia``), which
-        is orders of magnitude faster than the per-timestep scalar pvlib calls
-        that were previously made from ``i_simulate``. The result is written to
-        the cache file immediately, so even simulations that are interrupted
-        later still populate the cache. After that, ``i_simulate`` only performs
-        array lookups.
+        weather component in the singleton simulation repository are truncated
+        to the simulated period and fed through one vectorized pvlib run
+        (``simulate_cec`` or ``simulate_sandia``), which is orders of magnitude
+        faster than the per-timestep scalar pvlib calls that were previously
+        made from ``i_simulate``. The result is written to the cache file
+        immediately, so even simulations that are interrupted later still
+        populate the cache. After that, ``i_simulate`` only performs array
+        lookups.
         """
         file_exists, self.cache_filepath = utils.get_cache_file(
             self.config.component_id.name, self.pvconfig, self.my_simulation_parameters
@@ -721,6 +722,29 @@ class PVSystem(cp.Component):
                 key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST  # noqa: E501
             )
             wind_speed = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST)
+
+            # The weather component always publishes arrays covering the whole
+            # year at the simulation's resolution, while the simulation itself
+            # may span only part of it (e.g. one day or one week). Both index
+            # their series by timestep from the same start, so truncating to
+            # the simulated period yields exactly the values the old
+            # per-timestep computation produced.
+            number_of_timesteps = self.my_simulation_parameters.timesteps
+            if len(dni) < number_of_timesteps:
+                raise ValueError(
+                    f"The yearly weather arrays in the singleton sim repository "
+                    f"hold {len(dni)} values but the simulation needs "
+                    f"{number_of_timesteps}. The arrays do not match the "
+                    f"simulation parameters (wrong resolution or duration)."
+                )
+            dni_extra = dni_extra[:number_of_timesteps]
+            dni = dni[:number_of_timesteps]
+            dhi = dhi[:number_of_timesteps]
+            ghi = ghi[:number_of_timesteps]
+            azimuth = azimuth[:number_of_timesteps]
+            apparent_zenith = apparent_zenith[:number_of_timesteps]
+            temperature = temperature[:number_of_timesteps]
+            wind_speed = wind_speed[:number_of_timesteps]
 
             if self.pvconfig.module_database == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE:
                 simulate_fct = self.simulate_cec

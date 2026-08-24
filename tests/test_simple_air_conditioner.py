@@ -14,6 +14,7 @@ from hisim.components.simple_air_conditioner import (
 )
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
+from hisim.config import ComponentID
 
 
 def _make_simulation_parameters() -> SimulationParameters:
@@ -46,7 +47,7 @@ def _wire_controller_inputs(controller: SimpleAirConditionerController, t_indoor
         "TemperatureIndoorAir",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
-        component_id=cp.ComponentID("FakeBuilding"),
+        component_id=ComponentID("FakeBuilding"),
     )
     t_indoor_output.global_index = 0
     controller.indoor_air_temperature_channel.source_output = t_indoor_output
@@ -201,21 +202,21 @@ def _wire_component_inputs(component: SimpleAirConditioner, t_out_c: float, t_in
         "TemperatureOutside",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
-        component_id=cp.ComponentID("FakeWeather"),
+        component_id=ComponentID("FakeWeather"),
     )
     t_in_output = cp.ComponentOutput(
         "FakeBuilding",
         "TemperatureIndoorAir",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
-        component_id=cp.ComponentID("FakeBuilding"),
+        component_id=ComponentID("FakeBuilding"),
     )
     modulation_output = cp.ComponentOutput(
         "FakeController",
         "ModulatingPowerSignal",
         lt.LoadTypes.ANY,
         lt.Units.PERCENT,
-        component_id=cp.ComponentID("FakeController"),
+        component_id=ComponentID("FakeController"),
     )
 
     # Assign indices: 0=t_out, 1=t_in, 2=modulation, 3..8=outputs
@@ -444,14 +445,14 @@ def test_integration_controller_and_component_end_to_end() -> None:
         "TemperatureOutside",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
-        component_id=cp.ComponentID("FakeWeather"),
+        component_id=ComponentID("FakeWeather"),
     )
     t_in_output = cp.ComponentOutput(
         "FakeBuilding",
         "TemperatureIndoorAir",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
-        component_id=cp.ComponentID("FakeBuilding"),
+        component_id=ComponentID("FakeBuilding"),
     )
 
     # Assign indices
@@ -529,14 +530,14 @@ def test_integration_controller_off_and_component_idle() -> None:
         "TemperatureOutside",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
-        component_id=cp.ComponentID("FakeWeather"),
+        component_id=ComponentID("FakeWeather"),
     )
     t_in_output = cp.ComponentOutput(
         "FakeBuilding",
         "TemperatureIndoorAir",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
-        component_id=cp.ComponentID("FakeBuilding"),
+        component_id=ComponentID("FakeBuilding"),
     )
 
     t_out_output.global_index = 1

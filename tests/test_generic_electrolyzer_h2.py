@@ -12,7 +12,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import generic_electrolyzer_h2
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -65,7 +65,7 @@ def test_electrolyzer() -> None:
         "LoadInput",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.KILOWATT,
-        component_id=cp.ComponentID("FakeLoadInput"),
+        component_id=ComponentID("FakeLoadInput"),
     )
 
     input_state = cp.ComponentOutput(
@@ -73,7 +73,7 @@ def test_electrolyzer() -> None:
         "InputState",
         lt.LoadTypes.ACTIVATION,
         lt.Units.ANY,
-        component_id=cp.ComponentID("FakeInputState"),
+        component_id=ComponentID("FakeInputState"),
     )
 
     number_of_outputs = fft.get_number_of_outputs([load_input, input_state])

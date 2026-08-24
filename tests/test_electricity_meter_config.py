@@ -16,7 +16,7 @@ from hisim.components.electricity_meter import (
     ElectricityMeterConfig,
     ElectricityMeterState,
 )
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 _OPTIONAL_FIELDS: tuple[str, ...] = (

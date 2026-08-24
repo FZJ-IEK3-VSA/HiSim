@@ -12,6 +12,7 @@ from hisim.components import advanced_fuel_cell
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -55,21 +56,21 @@ def build_chp_system(
         "ControlSignal",
         lt.LoadTypes.ANY,
         lt.Units.PERCENT,
-        component_id=cp.ComponentID("FakeControlSignal"),
+        component_id=ComponentID("FakeControlSignal"),
     )
     massflow_input_temperature = cp.ComponentOutput(
         "FakeMassflowInputTemperature",
         "MassflowInputTemperature",
         lt.LoadTypes.WATER,
         lt.Units.CELSIUS,
-        component_id=cp.ComponentID("FakeMassflowInputTemperature"),
+        component_id=ComponentID("FakeMassflowInputTemperature"),
     )
     electricity_from_chp_target = cp.ComponentOutput(
         "FakeElectricityFromCHPTarget",
         "ElectricityFromCHPTarget",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.WATT,
-        component_id=cp.ComponentID("FakeElectricityFromCHPTarget"),
+        component_id=ComponentID("FakeElectricityFromCHPTarget"),
     )
 
     my_chp_system.control_signal_channel.source_output = control_signal

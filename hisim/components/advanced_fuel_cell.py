@@ -10,8 +10,8 @@ import copy
 from dataclasses_json import dataclass_json
 
 import pandas as pd
-from hisim.component import ComponentID
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, ConfigBase, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
 
 from hisim.components.configuration import PhysicsConfig

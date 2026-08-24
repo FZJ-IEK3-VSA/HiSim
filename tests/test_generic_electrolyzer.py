@@ -13,6 +13,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components import generic_electrolyzer, controller_l1_electrolyzer
+from hisim.config import ComponentID, DisplayConfig
 
 
 @pytest.mark.base
@@ -47,14 +48,14 @@ def test_chp_system() -> None:
         "ElectricityTarget",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.WATT,
-        component_id=cp.ComponentID("FakeElectricityTarget"),
+        component_id=ComponentID("FakeElectricityTarget"),
     )
     hydrogensoc = cp.ComponentOutput(
         "FakeH2SOC",
         "HydrogenSOC",
         lt.LoadTypes.GREEN_HYDROGEN,
         lt.Units.PERCENT,
-        component_id=cp.ComponentID("FakeH2SOC"),
+        component_id=ComponentID("FakeH2SOC"),
     )
 
     number_of_outputs = fft.get_number_of_outputs(
@@ -142,8 +143,8 @@ def test_electrolyzer_controller_display_config_not_shared() -> None:
     )
 
     assert controller_a.my_display_config is not controller_b.my_display_config
-    assert isinstance(controller_a.my_display_config, cp.DisplayConfig)
-    assert isinstance(controller_b.my_display_config, cp.DisplayConfig)
+    assert isinstance(controller_a.my_display_config, DisplayConfig)
+    assert isinstance(controller_b.my_display_config, DisplayConfig)
 
     # mutating one must not affect the other
     controller_a.my_display_config.pretty_name = "controller_a"

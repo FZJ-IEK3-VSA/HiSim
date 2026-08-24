@@ -17,7 +17,8 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import ComponentID, OpexCostDataClass, CapexCostDataClass
+from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 
@@ -72,7 +73,7 @@ class PositionHotWaterStorageInSystemSetup(str, Enum):
 
 @dataclass_json
 @dataclass
-class HeatDistributionConfig(cp.ConfigBase):
+class HeatDistributionConfig(ConfigBase):
     """Configuration of the HeatingWaterStorage class."""
 
     @classmethod
@@ -169,7 +170,7 @@ class HeatDistribution(cp.Component):
         self,
         config: HeatDistributionConfig,
         my_simulation_parameters: SimulationParameters,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
         self.my_simulation_parameters = my_simulation_parameters
@@ -840,7 +841,7 @@ class HeatDistribution(cp.Component):
 
 @dataclass_json
 @dataclass
-class HeatDistributionControllerConfig(cp.ConfigBase):
+class HeatDistributionControllerConfig(ConfigBase):
     """HeatDistribution Controller Config Class."""
 
     @classmethod
@@ -958,7 +959,7 @@ class HeatDistributionController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatDistributionControllerConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
         self.hsd_controller_config = config

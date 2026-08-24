@@ -23,10 +23,7 @@ from hisim.components import (
     controller_l1_heatpump,
     electricity_meter,
 )
-from hisim.component import (
-    ConfigBase,
-    DisplayConfig,
-)
+from hisim.config import ConfigBase, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.units import Quantity, Celsius, Watt
 

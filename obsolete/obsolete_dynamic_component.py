@@ -3,7 +3,8 @@
 
 from typing import Any, List, Union, Dict
 import hisim.loadtypes as lt
-from hisim.component import Component, ConfigBase, SingleTimeStepValues, DisplayConfig
+from hisim.component import Component, SingleTimeStepValues
+from hisim.config import ConfigBase, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.dynamic_component import (
     DynamicConnectionInput,

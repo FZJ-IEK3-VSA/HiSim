@@ -30,6 +30,7 @@ from hisim import (
 from hisim import (
     loadtypes as lt,
 )
+from hisim.config import ConfigBase
 
 from hisim.components.configuration import (
     PhysicsConfig,
@@ -88,7 +89,7 @@ class Test_BuildingControllerConfig:
 
 @dataclass_json
 @dataclass
-class HeatingComponentInBuildingConfig(cp.ConfigBase):
+class HeatingComponentInBuildingConfig(ConfigBase):
 
     """Configuration of the heating component class."""
 

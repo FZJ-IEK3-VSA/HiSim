@@ -10,6 +10,7 @@ from hisim.components.air_conditioner import (
 )
 from hisim import component
 from hisim import simulator as sim
+from hisim.config import DisplayConfig
 from tests import functions_for_testing as fft
 
 
@@ -202,6 +203,6 @@ def given_default_testee(
     testee: AirConditionerController = AirConditionerController(
         simulationparameters,
         config,
-        component.DisplayConfig(),
+        DisplayConfig(),
     )
     return testee

@@ -7,6 +7,7 @@ from hisim.components import example_transformer
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import log
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -38,7 +39,7 @@ def test_example_transformer() -> None:
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
         output_description="Source 2",
-        component_id=cp.ComponentID("source"),
+        component_id=ComponentID("source"),
     )
     transformerinput2_output = cp.ComponentOutput(
         object_name="source",
@@ -46,7 +47,7 @@ def test_example_transformer() -> None:
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
         output_description="Source 2",
-        component_id=cp.ComponentID("source"),
+        component_id=ComponentID("source"),
     )
     my_example_transformer.input1.source_output = transformerinput1_output
     my_example_transformer.input2.source_output = transformerinput2_output

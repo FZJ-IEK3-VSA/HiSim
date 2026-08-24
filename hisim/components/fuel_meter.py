@@ -9,7 +9,8 @@ from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.component import ComponentID, ComponentInput, OpexCostDataClass
+from hisim.component import ComponentInput, OpexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -31,7 +32,7 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class FuelMeterConfig(cp.ConfigBase):
+class FuelMeterConfig(ConfigBase):
     """Fuel Meter Config."""
 
     @classmethod
@@ -74,11 +75,11 @@ class FuelMeter(DynamicComponent):
         self,
         my_simulation_parameters: SimulationParameters,
         config: FuelMeterConfig,
-        my_display_config: Optional[cp.DisplayConfig] = None,
+        my_display_config: Optional[DisplayConfig] = None,
     ) -> None:
         """Initialize the component."""
         if my_display_config is None:
-            my_display_config = cp.DisplayConfig(display_in_webtool=True)
+            my_display_config = DisplayConfig(display_in_webtool=True)
         self.config: FuelMeterConfig = config
         self.name: str = self.config.component_id.name
         self.my_component_inputs: List[DynamicConnectionInput] = []

@@ -3,7 +3,8 @@
 from typing import List
 
 import pytest
-from hisim.component import ComponentID, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.component import ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.config import ComponentID
 from hisim.components import controller_l2_smart_controller
 from hisim.components.controller_l2_smart_controller import SmartController, SmartControllerConfig
 from hisim.components.generic_heat_pump import GenericHeatPumpController

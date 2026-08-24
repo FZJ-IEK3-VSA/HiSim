@@ -7,7 +7,7 @@ results, processing them, and generating comparison charts.
 Configuration Schema
 --------------------
 
-:class:`ScenarioAnalysisConfig` (a :class:`~hisim.component.ConfigBase`
+:class:`ScenarioAnalysisConfig` (a :class:`~hisim.config.ConfigBase`
 dataclass) controls every aspect of the analysis.  Key fields include:
 
 * **Paths** -- ``cluster_storage_path``, ``module_results_directory``,
@@ -91,7 +91,7 @@ from dataclasses_json.core import _decode_dataclass
 from projects.HiSim.obsolete.scenario_evaluation import (
     result_data_processing,
 )
-from hisim.component import ConfigBase
+from hisim.config import ConfigBase
 from hisim import log
 from projects.HiSim.obsolete.scenario_evaluation import result_data_collection, result_data_plotting
 

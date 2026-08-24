@@ -21,7 +21,8 @@ import pandas as pd
 import pydot
 import pytest
 
-from hisim.component import ComponentID, ComponentInput, ComponentOutput
+from hisim.component import ComponentInput, ComponentOutput
+from hisim.config import ComponentID
 from hisim.loadtypes import LoadTypes, Units
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.system_chart import SystemChart

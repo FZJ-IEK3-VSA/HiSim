@@ -45,7 +45,8 @@ from hisim import loadtypes as lt
 from hisim import log, utils
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID, OpexCostDataClass
+from hisim.component import OpexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 # Constants for warm water fallback values used in i_simulate
@@ -63,7 +64,7 @@ class LpgDataAcquisitionMode(enum.Enum):
 
 @dataclass_json
 @dataclass
-class UtspLpgConnectorConfig(cp.ConfigBase):
+class UtspLpgConnectorConfig(ConfigBase):
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
 
     component_id: ComponentID
@@ -155,7 +156,7 @@ class UtspLpgConnector(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: UtspLpgConnectorConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initializes the component and retrieves the LPG data."""
         self.utsp_config: UtspLpgConnectorConfig = config

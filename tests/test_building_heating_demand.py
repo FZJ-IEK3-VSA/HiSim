@@ -17,7 +17,7 @@ from hisim.components import building
 from hisim.components import idealized_electric_heater
 from hisim import log
 from hisim import utils
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"

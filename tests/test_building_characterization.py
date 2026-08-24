@@ -61,7 +61,7 @@ import pandas
 import pytest
 
 from hisim import utils
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from hisim.components.building import BuildingConfig, BuildingInformation
 from tests import building_golden_support as golden_support
 

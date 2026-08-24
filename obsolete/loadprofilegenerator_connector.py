@@ -17,6 +17,7 @@ from hisim import utils
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
+from hisim.config import ConfigBase, DisplayConfig
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -30,7 +31,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class OccupancyConfig(cp.ConfigBase):
+class OccupancyConfig(ConfigBase):
 
     """Occupancy config class."""
 
@@ -156,7 +157,7 @@ class Occupancy(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: OccupancyConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         super().__init__(

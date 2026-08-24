@@ -12,16 +12,14 @@ import pandas as pd
 
 # Import modules from HiSim
 from hisim.component import (
-    ComponentID,
     Component,
     ComponentInput,
     ComponentOutput,
     SingleTimeStepValues,
-    ConfigBase,
     OpexCostDataClass,
-    DisplayConfig,
     CapexCostDataClass,
 )
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters

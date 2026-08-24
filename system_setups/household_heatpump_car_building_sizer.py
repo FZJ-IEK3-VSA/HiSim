@@ -12,7 +12,7 @@ from utspclient.helpers.lpgdata import (
     Households,
 )
 from hisim.simulator import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system

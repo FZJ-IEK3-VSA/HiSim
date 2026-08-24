@@ -18,7 +18,7 @@ from hisim.components import building
 from hisim.components import idealized_electric_heater
 from hisim import log
 from hisim import utils
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 # PATH and FUNC needed to build simulator, PATH is fake

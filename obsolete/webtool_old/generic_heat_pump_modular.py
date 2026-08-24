@@ -13,6 +13,7 @@ from dataclasses_json import dataclass_json
 import hisim.loadtypes as lt
 from hisim import component as cp
 from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.config import ConfigBase, DisplayConfig
 
 # Owned
 from hisim import utils
@@ -35,7 +36,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class HeatPumpConfig(cp.ConfigBase):
+class HeatPumpConfig(ConfigBase):
     """Configuration of a HeatPump."""
 
     building_name: str
@@ -234,7 +235,7 @@ class ModularHeatPump(cp.Component):
         self,
         config: HeatPumpConfig,
         my_simulation_parameters: SimulationParameters,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Initialize the class."""
         self.my_simulation_parameters = my_simulation_parameters

@@ -15,10 +15,10 @@ from typing import Optional
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import ComponentID, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
+from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import loadtypes
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ConfigBase
 
 __authors__ = "Tjarko Tjaden, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

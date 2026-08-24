@@ -14,14 +14,13 @@ import hisim.component as cp
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import (
-    ComponentID,
     SingleTimeStepValues,
     ComponentInput,
     ComponentOutput,
     OpexCostDataClass,
-    DisplayConfig,
     CapexCostDataClass,
 )
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.configuration import PhysicsConfig
 from hisim.components import configuration
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
@@ -71,7 +70,7 @@ class PositionHotWaterStorageInSystemSetup(str, Enum):
 
 @dataclass_json
 @dataclass
-class SimpleHotWaterStorageConfig(cp.ConfigBase):
+class SimpleHotWaterStorageConfig(ConfigBase):
     """Configuration of the SimpleHotWaterStorage class."""
 
     @classmethod
@@ -190,7 +189,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
 
 @dataclass_json
 @dataclass
-class SimpleHotWaterStorageControllerConfig(cp.ConfigBase):
+class SimpleHotWaterStorageControllerConfig(ConfigBase):
     """Configuration of the SimpleHotWaterStorageController class."""
 
     @classmethod
@@ -213,7 +212,7 @@ class SimpleHotWaterStorageControllerConfig(cp.ConfigBase):
 
 @dataclass_json
 @dataclass
-class SimpleDHWStorageConfig(cp.ConfigBase):
+class SimpleDHWStorageConfig(ConfigBase):
     """Configuration of the SimpleHotWaterStorage class."""
 
     @classmethod
@@ -312,7 +311,7 @@ class SimpleWaterStorage(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         name: str,
-        my_config: cp.ConfigBase,
+        my_config: ConfigBase,
         my_display_config: DisplayConfig,
     ) -> None:
         """Construct all the neccessary attributes."""

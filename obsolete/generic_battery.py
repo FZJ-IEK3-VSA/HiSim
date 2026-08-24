@@ -15,7 +15,7 @@ from hisim import utils
 from hisim.components.generic_ev_charger import SimpleStorageState
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
-from hisim.component import ComponentID
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -81,7 +81,7 @@ class GenericBatteryState:
 
 @dataclass_json
 @dataclass
-class GenericBatteryConfig(cp.ConfigBase):
+class GenericBatteryConfig(ConfigBase):
     """Configuration of the Generic Battery."""
 
     @classmethod
@@ -116,7 +116,7 @@ class GenericBatteryConfig(cp.ConfigBase):
 
 @dataclass_json
 @dataclass
-class BatteryControllerConfig(cp.ConfigBase):
+class BatteryControllerConfig(ConfigBase):
     """Configuration of the Generic Battery Controller."""
 
     @classmethod
@@ -188,7 +188,7 @@ class GenericBattery(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericBatteryConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
         battery_database: list[dict[str, Any]] | None = None,
     ) -> None:
         """Initialize the class.
@@ -398,7 +398,7 @@ class BatteryController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: BatteryControllerConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.my_simulation_parameters = my_simulation_parameters

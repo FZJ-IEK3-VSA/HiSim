@@ -114,7 +114,7 @@ class Finding:
 
 
 def bare_name(node: Optional[ast.expr]) -> Optional[str]:
-    """Reduce an expression to its bare class name (``cp.ConfigBase`` -> ``ConfigBase``)."""
+    """Reduce an expression to its bare class name (``cp.Component`` -> ``Component``)."""
     if isinstance(node, ast.Name):
         return node.id
     if isinstance(node, ast.Attribute):

@@ -11,7 +11,7 @@ from hisim import component as cp
 from hisim.components import controller_l2_xtp_fuel_cell_ems
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -52,7 +52,7 @@ def _set_demand(
         "DemandLoad",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.WATT,
-        component_id=cp.ComponentID("FakeDemandLoad"),
+        component_id=ComponentID("FakeDemandLoad"),
     )
     number_of_outputs = fft.get_number_of_outputs([controller, load_input])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)

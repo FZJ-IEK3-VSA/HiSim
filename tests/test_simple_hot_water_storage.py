@@ -7,7 +7,7 @@ from hisim import component as cp
 from hisim.components import simple_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -87,7 +87,7 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
         "WaterMassFlowRateFromHeatDistributionSystem",
         lt.LoadTypes.WARM_WATER,
         lt.Units.KG_PER_SEC,
-        component_id=cp.ComponentID("FakeWaterInputTemperatureFromHds"),
+        component_id=ComponentID("FakeWaterInputTemperatureFromHds"),
     )
 
     water_temperature_input_from_heat_distribution_system = cp.ComponentOutput(
@@ -95,7 +95,7 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
         "WaterTemperatureInputFromHeatDistributionSystem",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
-        component_id=cp.ComponentID("FakeWaterInputTemperatureFromHds"),
+        component_id=ComponentID("FakeWaterInputTemperatureFromHds"),
     )
 
     water_temperature_input_from_heat_generator = cp.ComponentOutput(
@@ -103,7 +103,7 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
         "WaterTemperatureInputFromHeatGenerator",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
-        component_id=cp.ComponentID("FakeWaterInputTemperatureFromHeatGenerator"),
+        component_id=ComponentID("FakeWaterInputTemperatureFromHeatGenerator"),
     )
 
     water_mass_flow_rate_from_heat_generator = cp.ComponentOutput(
@@ -111,11 +111,11 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
         "WaterMassFlowRateFromHeatGenerator",
         lt.LoadTypes.WARM_WATER,
         lt.Units.KG_PER_SEC,
-        component_id=cp.ComponentID("FakeWaterMassFlowRateFromHeatGenerator"),
+        component_id=ComponentID("FakeWaterMassFlowRateFromHeatGenerator"),
     )
 
     state_controller = cp.ComponentOutput(
-        "FakeState", "State", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("FakeState")
+        "FakeState", "State", lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("FakeState")
     )
 
     # connect fake inputs to simple hot water storage

@@ -8,13 +8,14 @@ from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.component import ComponentID, Component
+from hisim.component import Component
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 
 
 @dataclass_json
 @dataclass
-class SumBuilderConfig(cp.ConfigBase):
+class SumBuilderConfig(ConfigBase):
     """Configuration dataclass for sum-builder components.
 
     ``loadtype`` and ``unit`` define the physical quantity and its unit for
@@ -52,7 +53,7 @@ class CalculateOperation(cp.Component):
         self,
         config: SumBuilderConfig,
         my_simulation_parameters: SimulationParameters,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initializes the class."""
         self.my_simulation_parameters = my_simulation_parameters
@@ -158,7 +159,7 @@ class SumBuilderForTwoInputs(Component):
         self,
         config: SumBuilderConfig,
         my_simulation_parameters: SimulationParameters,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initializes the class."""
         self.my_simulation_parameters = my_simulation_parameters
@@ -240,7 +241,7 @@ class SumBuilderForThreeInputs(Component):
         self,
         config: SumBuilderConfig,
         my_simulation_parameters: SimulationParameters,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initializes the class."""
         self.my_simulation_parameters = my_simulation_parameters

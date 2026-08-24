@@ -7,7 +7,7 @@ from hisim.components import example_template
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import log
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -36,7 +36,7 @@ def test_example_template() -> None:
         field_name="input_from_another_component",
         load_type=lt.LoadTypes.ELECTRICITY,
         unit=lt.Units.WATT,
-        component_id=cp.ComponentID("source"),
+        component_id=ComponentID("source"),
     )
     my_example_template.input_from_other_component.source_output = input_from_another_component_output
 

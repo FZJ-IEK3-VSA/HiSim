@@ -29,7 +29,7 @@ from hisim.components.building import Building
 from hisim.components import controller_l2_energy_management_system
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 
 __authors__ = "edited Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -43,7 +43,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class L1BuildingHeatingConfig(cp.ConfigBase):
+class L1BuildingHeatingConfig(ConfigBase):
     """Configuration of Building Controller."""
 
     component_id: ComponentID
@@ -128,7 +128,7 @@ class L1BuildingHeatController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: L1BuildingHeatingConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the L1 building heat controller.
 

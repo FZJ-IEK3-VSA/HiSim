@@ -16,6 +16,7 @@ from hisim import component as cp
 from hisim.components import controller_l1_fuel_cell as fc
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -40,7 +41,7 @@ def build_controller(seconds_per_timestep: int = 3600) -> _ControllerSetup:
     controller = fc.FuelCellController(my_simulation_parameters=my_simulation_parameters, config=config)
 
     demand = cp.ComponentOutput(
-        "FakeDemand", "Demand", lt.LoadTypes.ELECTRICITY, lt.Units.KILOWATT, component_id=cp.ComponentID("FakeDemand")
+        "FakeDemand", "Demand", lt.LoadTypes.ELECTRICITY, lt.Units.KILOWATT, component_id=ComponentID("FakeDemand")
     )
     controller.demand_profile.source_output = demand
 

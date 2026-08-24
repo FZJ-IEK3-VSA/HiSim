@@ -1,6 +1,13 @@
 """Defines the component class and helpers.
 
 The component class is the base class for all other components.
+
+The configuration base classes this module used to define — ``ComponentID``,
+``ConfigBase`` and ``DisplayConfig`` — now live one layer below, in the
+:mod:`hisim.config` package, and are used here through the ``cfg`` module alias. No
+compatibility alias is left behind on purpose: ``hisim.component`` is the component
+*runtime*, and code that needs a configuration base class imports it from
+``hisim.config`` directly, which makes the layering visible at every call site.
 """
 
 # clean
@@ -10,11 +17,11 @@ import os
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import json
 import pandas as pd
-from dataclasses_json import dataclass_json
 
+from hisim import config as cfg
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.sim_repository import SimRepository
@@ -22,181 +29,6 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 
 # Package
-
-
-@dataclass_json
-@dataclass(frozen=True)
-class ComponentID:
-    """Structured, first-class identity of one component instance in a simulation.
-
-    A component used to be identified by a loose pair of strings on its configuration
-    (``name`` plus ``building_name``) that was collapsed into a runtime name by
-    ``Component.get_component_name()`` depending on the ``multiple_buildings`` simulation
-    parameter. ``ComponentID`` replaces that arrangement with a single immutable value
-    object: ``name`` says what the component is, ``building`` says which building object it
-    belongs to (``None`` for a plain single-building simulation), and ``unit`` says which
-    sub-unit of that building (for example an apartment) owns it. Only ``name`` is required;
-    the optional fields are simply absent when the surrounding simulation has no need for
-    them.
-
-    The unique runtime identifier is derived by the :py:attr:`key` property, which joins the
-    fields that are actually present with underscores in the order *building*, *unit*,
-    *name*. Absent fields contribute nothing at all, so ``ComponentID("Weather").key`` is
-    ``"Weather"``, ``ComponentID("Weather", building="BUI1").key`` is ``"BUI1_Weather"`` and
-    ``ComponentID("HeatPump", building="BUI1", unit="APT2").key`` is
-    ``"BUI1_APT2_HeatPump"``. The key is derived-only: it is written into component names,
-    output names and result columns, but it is never parsed back into its parts anywhere in
-    HiSim. Code that needs to know the building or the unit of a component reads the
-    structured fields instead.
-
-    Because the key merely concatenates the present fields, two different tuples can in
-    principle produce the same key (for example ``ComponentID("Pump", building="BUI1_APT2")``
-    and ``ComponentID("Pump", building="BUI1", unit="APT2")``). No new mechanism is needed to
-    catch that: such a collision shows up as two components claiming the same runtime name,
-    and the existing duplicate-component-name check performed when outputs are registered
-    with the simulator (see ``Simulator.add_component``) raises on it just as it does for any
-    other accidental name clash.
-
-    The class is frozen, so instances are hashable and safe to share between a configuration
-    and everything derived from it; use :py:func:`dataclasses.replace` to obtain a variant.
-    """
-
-    name: str
-    building: Optional[str] = None
-    unit: Optional[str] = None
-
-    #: Building label used for grouping when a component carries no explicit building.
-    #: Historically every configuration defaulted to the decorative string ``"BUI1"``, and
-    #: postprocessing (KPI collection, OPEX/CAPEX tables, the webtool result JSON) keys its
-    #: per-building groups by that string. Keeping the same label for building-less
-    #: components means the grouping output of a single-building simulation is byte-for-byte
-    #: what it was before ``ComponentID`` existed.
-    DEFAULT_BUILDING_LABEL: ClassVar[str] = "BUI1"
-
-    def __post_init__(self) -> None:
-        """Validates the identity right after construction.
-
-        The name is the only mandatory part of a component identity, and an empty or
-        whitespace-only name would silently produce an empty or malformed key later on.
-        Rejecting it here turns a confusing downstream naming problem into an immediate,
-        clearly attributable error.
-        """
-        if not isinstance(self.name, str) or not self.name.strip():
-            raise ValueError(f"A ComponentID needs a non-empty name, but got {self.name!r}.")
-
-    @property
-    def key(self) -> str:
-        """Derives the unique runtime identifier of this component.
-
-        The key is the string that HiSim uses as the component name, as the prefix of every
-        output's full name and therefore as the prefix of every result column. It is built by
-        joining the present fields with ``"_"`` in the order building, unit, name; fields that
-        are ``None`` simply do not appear. The key is derived-only and is never parsed back
-        into building/unit/name anywhere in the code base.
-        """
-        parts = [part for part in (self.building, self.unit, self.name) if part is not None]
-        return "_".join(parts)
-
-    @property
-    def building_label(self) -> str:
-        """Returns the building this component is grouped under in postprocessing.
-
-        Postprocessing aggregates results per building object (KPI collections, OPEX and
-        CAPEX tables, the building-sizer and webtool JSON exports), and those groups need a
-        string key even for components that carry no building of their own. This property
-        returns :py:attr:`building` when it is set and :py:attr:`DEFAULT_BUILDING_LABEL`
-        otherwise, which reproduces the historical behaviour where every configuration
-        carried the decorative default building name.
-        """
-        return self.building if self.building is not None else self.DEFAULT_BUILDING_LABEL
-
-
-@dataclass
-class ConfigBase:
-    """Base class for all configurations.
-
-    Every component configuration derives from this class and therefore carries exactly one
-    identity field, :py:attr:`component_id`, which replaces the former ``name`` plus
-    ``building_name`` string pair. In serialized form the identity is a nested object, i.e.
-    ``{"component_id": {"name": ..., "building": ..., "unit": ...}}``.
-
-    Serialization comes from the ``@dataclass_json`` decorator that every concrete config
-    class carries, which dumps and parses the dataclass field names verbatim (snake_case).
-    The :py:meth:`to_dict` defined here is only the fallback for the base class itself; a
-    decorated subclass shadows it with the dataclasses_json implementation.
-    """
-
-    component_id: ComponentID
-
-    if typing.TYPE_CHECKING:
-        # Historically ConfigBase inherited dataclass_wizard.JSONWizard, whose missing type
-        # stubs made the whole class hierarchy Any-based: mypy accepted any attribute on a
-        # ConfigBase-typed value. A lot of code depends on that leniency (components store
-        # their config in ConfigBase-typed slots and read/write subclass fields off it), so
-        # these type-checker-only escape hatches preserve it deliberately. Field-name
-        # correctness is enforced by scripts/check_config_attrs.py instead; making configs
-        # fully mypy-visible (a generic Component[TConfig]) is a planned sweep, see
-        # roadmap/json_cleanup.md. The classmethod stubs mirror the serialization API that
-        # the @dataclass_json decorator injects at runtime on every concrete config class.
-        def __getattr__(self, name: str) -> Any:
-            """Checking-only escape hatch: reads of undeclared fields resolve to Any."""
-            raise NotImplementedError
-
-        def __setattr__(self, name: str, value: Any) -> None:
-            """Checking-only escape hatch: writes to undeclared fields are accepted."""
-
-        def to_json(self, *args: Any, **kwargs: Any) -> str:  # pylint: disable=unused-argument
-            """Stub for the JSON dump that @dataclass_json injects at runtime."""
-            raise NotImplementedError
-
-        @classmethod
-        def from_dict(cls, kvs: Any, *args: Any, **kwargs: Any) -> Any:  # pylint: disable=unused-argument
-            """Stub for the dict decoder that @dataclass_json injects at runtime."""
-            raise NotImplementedError
-
-        @classmethod
-        def from_json(cls, data: Any, *args: Any, **kwargs: Any) -> Any:  # pylint: disable=unused-argument
-            """Stub for the JSON decoder that @dataclass_json injects at runtime."""
-            raise NotImplementedError
-
-    def __init__(self, component_id: ComponentID):
-        """Initializes a bare configuration from its structured identity.
-
-        Only :py:class:`ConfigBase` itself uses this constructor; every concrete subclass is a
-        dataclass and generates its own ``__init__`` that takes ``component_id`` as its first
-        field followed by the component-specific parameters.
-        """
-        self.component_id = component_id
-
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the fully qualified class name for the class that is getting configured. Used for Json."""
-        raise NotImplementedError("Missing a definition of the ")
-
-    @classmethod
-    def get_config_classname(cls):
-        """Gets the class name. Helper function for default connections."""
-        return cls.__module__ + "." + cls.__name__
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Dumps this configuration as a plain dict of its dataclass fields.
-
-        Every concrete config class shadows this method through its ``@dataclass_json``
-        decorator, so this fallback only serves the bare base class (and would serve an
-        accidentally undecorated subclass with a plain, non-JSON-normalized dataclass dump
-        rather than an AttributeError).
-        """
-        return dc.asdict(self)
-
-    def get_string_dict(self) -> List[str]:
-        """Turns the config into a str list for the report."""
-        my_dict = self.to_dict()
-        my_list = []
-        if len(my_dict) > 0:
-            for entry in my_dict.items():
-                label = " ".join(entry[0].rsplit("_")).capitalize()
-                my_list.append(label + ": " + str(entry[1]))
-        return my_list
 
 
 @dataclass
@@ -223,14 +55,14 @@ class ComponentOutput:  # noqa: too-few-public-methods
         output_description: Optional[str] = None,
         source_component_class: Optional[str] = None,
         *,
-        component_id: ComponentID,
+        component_id: cfg.ComponentID,
     ):
         """Defines a component output.
 
         Besides the display and load-type metadata, an output carries the structured identity
         of the component that produced it. Postprocessing needs to know which building object
         an output belongs to, and it must not obtain that by taking the runtime name apart, so
-        the owning :py:class:`ComponentID` is stored alongside the derived ``component_name``.
+        the owning :py:class:`~hisim.config.ComponentID` is stored alongside the derived ``component_name``.
         The identity is deliberately REQUIRED (keyword-only): an output without an owner would
         silently fall into the default building group and corrupt per-building KPIs, so a
         missing identity must fail at construction rather than at aggregation.
@@ -246,7 +78,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.sankey_flow_direction: Optional[bool] = sankey_flow_direction
         self.output_description: Optional[str] = output_description
         self.source_component_class: Optional[str] = source_component_class
-        self.component_id: ComponentID = component_id
+        self.component_id: cfg.ComponentID = component_id
 
     @property
     def building_label(self) -> str:
@@ -355,19 +187,6 @@ class SingleTimeStepValues:
         return error_msg
 
 
-@dataclass
-class DisplayConfig:
-    """Configure how to display this component in postprocessing."""
-
-    pretty_name: str | None = None
-    display_in_webtool: bool = False
-
-    @classmethod
-    def show(cls, pretty_name):
-        """Shortcut for showing in webtool with a specified name."""
-        return DisplayConfig(pretty_name, display_in_webtool=True)
-
-
 class Component:
     """Base class for all components."""
 
@@ -385,8 +204,8 @@ class Component:
         self,
         name: str,
         my_simulation_parameters: SimulationParameters,
-        my_config: ConfigBase,
-        my_display_config: DisplayConfig,
+        my_config: cfg.ConfigBase,
+        my_display_config: cfg.DisplayConfig,
     ) -> None:
         """Initializes the component class."""
         self.component_name: str = name
@@ -400,22 +219,22 @@ class Component:
         self.simulation_repository: SimRepository
         # self.singleton_simulation_repository: SingletonSimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
-        if isinstance(my_config, ConfigBase):
+        if isinstance(my_config, cfg.ConfigBase):
             # Subclasses read their concrete config's fields off this base-typed slot; that
             # works for the type checker because ConfigBase carries a checking-only
             # __getattr__/__setattr__ escape hatch (see there).
-            self.config: ConfigBase = my_config
+            self.config: cfg.ConfigBase = my_config
         else:
             raise ValueError(
                 "The argument my_config is not a ConfigBase object.",
                 "Please check your components' configuration classes and inherit from ConfigBase class according to hisim/components/example_component.py.",
             )
-        self.my_display_config: DisplayConfig = my_display_config
+        self.my_display_config: cfg.DisplayConfig = my_display_config
         self.log_connections: List[Any] = []
         self.enable_logging = my_simulation_parameters.log_connections
 
     @property
-    def component_id(self) -> ComponentID:
+    def component_id(self) -> cfg.ComponentID:
         """Returns the structured identity of this component.
 
         This is a convenience shortcut for ``self.config.component_id`` so that component code
@@ -429,7 +248,7 @@ class Component:
         """Creates the unique runtime name of this component.
 
         The name is derived purely from the structured identity on the configuration, i.e. it
-        is :py:attr:`ComponentID.key`. Unlike the previous implementation this no longer
+        is :py:attr:`~hisim.config.ComponentID.key`. Unlike the previous implementation this no longer
         consults the ``multiple_buildings`` simulation parameter: whether a building appears in
         the name is decided by whether the configuration carries a building at all, which makes
         the runtime name a property of the component itself rather than of a global flag.
@@ -627,7 +446,7 @@ class Component:
         raise NotImplementedError(f"{self.component_name} has no opex costs implemented.")
 
     @staticmethod
-    def get_cost_capex(config: ConfigBase, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
+    def get_cost_capex(config: cfg.ConfigBase, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         # pylint: disable=unused-argument
         """Calculates lifetime, total capital expenditure cost and total co2 footprint of production of device."""
         raise NotImplementedError(f"{config.get_main_classname()} has no capex costs implemented.")

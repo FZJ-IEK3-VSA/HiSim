@@ -14,6 +14,7 @@ from hisim import component
 from hisim import utils
 from hisim.components import weather
 from hisim.simulationparameters import SimulationParameters
+from hisim.config import DisplayConfig
 from tests import functions_for_testing as fft
 
 
@@ -239,8 +240,8 @@ def test_weather_default_display_config_is_not_shared() -> None:
         config=my_config, my_simulation_parameters=mysim
     )
 
-    assert isinstance(first.my_display_config, component.DisplayConfig)
-    assert isinstance(second.my_display_config, component.DisplayConfig)
+    assert isinstance(first.my_display_config, DisplayConfig)
+    assert isinstance(second.my_display_config, DisplayConfig)
     # Identity check: must not be the same shared instance.
     assert first.my_display_config is not second.my_display_config
 

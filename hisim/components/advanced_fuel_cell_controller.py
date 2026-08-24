@@ -2,7 +2,8 @@
 
 # clean
 from math import ceil
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.config import DisplayConfig
 from hisim import loadtypes as lt
 
 from hisim.components.configuration import (

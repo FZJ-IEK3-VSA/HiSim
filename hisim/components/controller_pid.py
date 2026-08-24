@@ -17,7 +17,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.building import Building
 from hisim import log
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
-from hisim.component import ComponentID
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 
 __authors__ = "Marwa Alfouly"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -31,7 +31,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class PIDControllerConfig(cp.ConfigBase):
+class PIDControllerConfig(ConfigBase):
     """Configuration of the PID Controller."""
 
     @classmethod
@@ -349,7 +349,7 @@ class PIDController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: PIDControllerConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Constructs all the neccessary attributes."""
         self.my_simulation_parameters = my_simulation_parameters

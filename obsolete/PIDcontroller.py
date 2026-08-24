@@ -20,11 +20,12 @@ from hisim.components.building import Building
 # from hisim.components.weather import Weather
 # from hisim.components.loadprofilegenerator_connector import Occupancy
 from hisim import log
+from hisim.config import ConfigBase
 
 
 @dataclass_json
 @dataclass
-class PIDControllerOneConfig(cp.ConfigBase):
+class PIDControllerOneConfig(ConfigBase):
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""

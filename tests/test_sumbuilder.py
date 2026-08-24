@@ -7,6 +7,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components import sumbuilder
 from hisim.simulationparameters import SimulationParameters
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -29,21 +30,21 @@ def test_sum_builder_for_three_inputs() -> None:
         field_name="input1",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
-        component_id=cp.ComponentID("fake1"),
+        component_id=ComponentID("fake1"),
     )
     fake_input2 = cp.ComponentOutput(
         object_name="fake2",
         field_name="input2",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
-        component_id=cp.ComponentID("fake2"),
+        component_id=ComponentID("fake2"),
     )
     fake_input3 = cp.ComponentOutput(
         object_name="fake3",
         field_name="input3",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
-        component_id=cp.ComponentID("fake3"),
+        component_id=ComponentID("fake3"),
     )
 
     # Connect fake inputs using source_output
@@ -101,14 +102,14 @@ def test_sum_builder_for_two_inputs() -> None:
         field_name="input1",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
-        component_id=cp.ComponentID("fake1"),
+        component_id=ComponentID("fake1"),
     )
     fake_input2 = cp.ComponentOutput(
         object_name="fake2",
         field_name="input2",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
-        component_id=cp.ComponentID("fake2"),
+        component_id=ComponentID("fake2"),
     )
 
     # Connect fake inputs using source_output
@@ -175,14 +176,14 @@ def test_calculate_operation_subtract() -> None:
         field_name="out1",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
-        component_id=cp.ComponentID("fake1"),
+        component_id=ComponentID("fake1"),
     )
     fake_output2 = cp.ComponentOutput(
         object_name="fake2",
         field_name="out2",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
-        component_id=cp.ComponentID("fake2"),
+        component_id=ComponentID("fake2"),
     )
     input1.source_output = fake_output1
     input2.source_output = fake_output2
@@ -247,14 +248,14 @@ def test_calculate_operation_simulate_invalid_operation_raises_value_error() -> 
         field_name="out1",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
-        component_id=cp.ComponentID("fake1"),
+        component_id=ComponentID("fake1"),
     )
     fake_output2 = cp.ComponentOutput(
         object_name="fake2",
         field_name="out2",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
-        component_id=cp.ComponentID("fake2"),
+        component_id=ComponentID("fake2"),
     )
     input1.source_output = fake_output1
     input2.source_output = fake_output2

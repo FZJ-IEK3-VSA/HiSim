@@ -38,7 +38,8 @@ for the simulation year and country.
 """
 
 from typing import Optional, TypeVar
-from hisim.component import CapexCostDataClass, ConfigBase
+from hisim.component import CapexCostDataClass
+from hisim.config import ConfigBase
 from hisim.components.configuration import EmissionFactorsAndCostsForDevicesConfig
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters

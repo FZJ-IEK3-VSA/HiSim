@@ -16,11 +16,10 @@ from hisim.component import (
     SingleTimeStepValues,
     ComponentInput,
     ComponentOutput,
-    ConfigBase,
     OpexCostDataClass,
-    DisplayConfig,
-    CapexCostDataClass
+    CapexCostDataClass,
 )
+from hisim.config import ConfigBase, DisplayConfig
 from hisim.components.simple_water_storage import SimpleHotWaterStorage
 from hisim.components.weather import Weather
 from hisim.components.heat_distribution_system import HeatDistributionController

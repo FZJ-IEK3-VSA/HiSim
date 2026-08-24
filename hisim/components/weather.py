@@ -822,48 +822,52 @@ class Weather(Component):
             )
             database.to_csv(cache_filepath)
 
-        # write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
-        if self.weather_config.predictive_control:
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST,
-                entry=self.temperature_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST,
-                entry=self.dhi_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST,
-                entry=self.dni_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST,
-                entry=self.dniextra_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST,
-                entry=self.ghi_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST,
-                entry=self.azimuth_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST,
-                entry=self.apparent_zenith_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST,
-                entry=self.wind_speed_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERPRESSUREYEARLYFORECAST,
-                entry=self.pressure_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERALTITUDEYEARLYFORECAST,
-                entry=self.altitude_list,
-            )
+        # Publish the full-year weather series to the singleton repository unconditionally.
+        # The PV system precomputes its whole-year output from these arrays in its
+        # i_prepare_simulation (vectorized pvlib run), and predictive components
+        # (building, MPC controller) read them at prepare time as well. Publishing is
+        # free: the singleton only stores references to lists this component keeps
+        # alive as attributes anyway.
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST,
+            entry=self.temperature_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST,
+            entry=self.dhi_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST,
+            entry=self.dni_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST,
+            entry=self.dniextra_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST,
+            entry=self.ghi_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST,
+            entry=self.azimuth_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST,
+            entry=self.apparent_zenith_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST,
+            entry=self.wind_speed_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERPRESSUREYEARLYFORECAST,
+            entry=self.pressure_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERALTITUDEYEARLYFORECAST,
+            entry=self.altitude_list,
+        )
 
     def interpolate(self, pd_database: Any, year: int) -> Any:
         """Interpolates a time series."""

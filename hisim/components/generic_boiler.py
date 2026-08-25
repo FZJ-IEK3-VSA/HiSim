@@ -38,7 +38,7 @@ from hisim.config import (
     ConfigBase,
     DisplayConfig,
     FactContribution,
-    FactScope,
+    Self,
     Sizable,
     SizingContext,
     SizingLaw,
@@ -134,9 +134,8 @@ class GenericBoilerConfig(ConfigBase):
         return maximal_thermal_power_in_watt
 
     #: Sizing law of the maximal thermal power: cover space heating or DHW, whichever is
-    #: larger (see :meth:`scale_thermal_power`). Named as a ClassVar so presets that need
-    #: a fraction of the *sized* maximum (pellet and wood chip minimal power) can reuse
-    #: the identical law instead of restating it.
+    #: larger (see :meth:`scale_thermal_power`). Named as a ClassVar so that the field
+    #: declaration reads as one line and the law can be described in one place.
     MAXIMAL_POWER_LAW: ClassVar[SizingLaw] = law(
         lambda ctx: GenericBoilerConfig.scale_thermal_power(ctx.heating_load_in_watt, ctx.number_of_apartments),
         reads=("heating_load_in_watt", "number_of_apartments"),
@@ -157,10 +156,10 @@ class GenericBoilerConfig(ConfigBase):
     subsidy_as_percentage_of_investment_costs: Optional[float] = None
     consumption_in_kilowatt_hour: float = 0.0
 
-    #: Sizing facts this config contributes: its resolved power band, for
-    #: consumers wired to this boiler (its controller). CONNECTED scope: with the
-    #: connection graph available (the v2 executor) the facts resolve along it, so two
-    #: boilers in one scenario stay unambiguous; assigned below the class.
+    #: Sizing facts this config contributes: its resolved power band, for consumers that
+    #: size from this boiler (its controller). With two boilers in one scenario each is
+    #: addressable as "<its name>.maximal_thermal_power_in_watt" and a consumer must say
+    #: which one it means; assigned below the class.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple["FactContribution", ...]] = ()
 
     #: Named default variants, one per fuel (preset names are wire format: scenario
@@ -198,14 +197,15 @@ class GenericBoilerConfig(ConfigBase):
             energy_carrier=lt.LoadTypes.PELLETS,
             boiler_type=BoilerType.CONVENTIONAL,
             # per-preset law: a pellet boiler cannot modulate below a twelfth of its
-            # (sized) maximal power, unlike the gas/oil default of zero.
-            minimal_thermal_power_in_watt=1 / 12 * GenericBoilerConfig.MAXIMAL_POWER_LAW,
+            # maximal power, unlike the gas/oil default of zero. Reading the sibling
+            # field keeps the two consistent even when an author pins the maximum.
+            minimal_thermal_power_in_watt=Self("maximal_thermal_power_in_watt") * (1 / 12),
         ),
         wood_chips=lambda: GenericBoilerConfig(
             component_id=ComponentID(name="ConventionalWoodChipBoiler"),
             energy_carrier=lt.LoadTypes.WOOD_CHIPS,
             boiler_type=BoilerType.CONVENTIONAL,
-            minimal_thermal_power_in_watt=1 / 12 * GenericBoilerConfig.MAXIMAL_POWER_LAW,
+            minimal_thermal_power_in_watt=Self("maximal_thermal_power_in_watt") * (1 / 12),
         ),
         hydrogen=lambda: GenericBoilerConfig(
             component_id=ComponentID(name="CondensingHydrogenBoiler"),
@@ -1566,6 +1566,5 @@ GenericBoilerConfig.SIZING_CONTRIBUTIONS = (
     FactContribution(
         facts=("maximal_thermal_power_in_watt", "minimal_thermal_power_in_watt"),
         compute=_boiler_sizing_facts,
-        scope=FactScope.CONNECTED,
     ),
 )

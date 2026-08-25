@@ -2,7 +2,7 @@
 
 This module holds the *declaration* side of cross-component sizing: a config class that
 is a source of sizing facts (the building contributing the heating load, a boiler
-contributing its power band for the controller wired to it) declares that as a tuple of
+contributing its power band for its controller) declares that as a tuple of
 :class:`FactContribution` objects on the class attribute named by
 :attr:`FactContribution.CLASS_ATTRIBUTE`. The *resolution* side — reading these
 declarations, validating the resulting dependency graph and computing the values at the
@@ -26,21 +26,6 @@ from hisim.config.context import SizingContext
 from hisim.config.laws import SizingError
 
 
-class FactScope:
-    """How a contributed fact is looked up by its consumers.
-
-    ``GLOBAL`` facts describe the scope itself (building physics) and live in a flat
-    per-scope pool — contributing the same global fact twice is a hard error.
-    ``CONNECTED`` facts describe one component (a boiler's power band) and are resolved
-    along the connection graph where one is available, so that two boilers in one
-    scenario stay unambiguous. Plain class-scoped string constants rather than an Enum,
-    because the values never travel through a file.
-    """
-
-    GLOBAL: ClassVar[str] = "GLOBAL"
-    CONNECTED: ClassVar[str] = "CONNECTED"
-
-
 @dataclass(frozen=True)
 class FactContribution:
     """One declared output of a config class: which facts it computes, from what.
@@ -50,6 +35,11 @@ class FactContribution:
     feature is off, and a consumer reading such a null fact fails hard with a
     "provided as null by X" attribution. ``compute`` receives the (by then fully
     resolved) config and the context view and must return exactly the declared keys.
+
+    Which consumer reads which provider is deliberately *not* declared here: every
+    declaring instance is addressable as ``"<instance name>.<fact>"``, a bare fact binds
+    when exactly one instance in the resolved set declares it, and every other case is
+    decided by the consumer's explicit sources mapping.
     """
 
     #: Name of the class attribute under which a config class declares its
@@ -60,7 +50,6 @@ class FactContribution:
     facts: Tuple[str, ...]
     compute: Callable[[Any, SizingContext], Mapping[str, Any]]
     reads: Tuple[str, ...] = ()
-    scope: str = FactScope.GLOBAL
 
     def __post_init__(self) -> None:
         """Validates the declared fact names against the SizingContext registry.

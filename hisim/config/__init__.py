@@ -9,12 +9,13 @@ the other way round:
       the three classes every component configuration is built from.
     - :mod:`hisim.config.presets` — the ``Catalog`` helper giving a config class its
       named default presets, plus the preset-provenance stamp.
-    - :mod:`hisim.config.laws` — the ``SizingLaw`` expression algebra and the sizing
-      errors: *how* a sized value derives from the surrounding system.
+    - :mod:`hisim.config.laws` — the ``SizingLaw`` expression algebra (including the
+      ``Self`` sibling term and the ``Many`` cardinality hook) and the sizing errors:
+      *how* a sized value derives from the surrounding system.
     - :mod:`hisim.config.context` — the ``SizingContext`` fact snapshot and the
       ``Size`` term vocabulary over exactly its fields: *what* laws may read.
     - :mod:`hisim.config.contributions` — ``FactContribution``: what a config class
-      declares it computes for the scenario-wide fact pool.
+      declares it computes for the other configs of the scenario.
     - :mod:`hisim.config.sizing` — the sizable field machinery: the ``AUTO`` sentinel,
       ``sized_field`` and the ``resolve_config`` resolver.
     - :mod:`hisim.config.report` — the ``ResolutionReport``: the structured record of
@@ -47,8 +48,11 @@ fully-qualified path.
 from hisim.config.base import ComponentID, ConfigBase, DisplayConfig
 from hisim.config.presets import Catalog, preset_provenance
 from hisim.config.laws import (
+    Cardinality,
     ConfigSizingError,
+    Many,
     NothingToSizeError,
+    Self,
     SizingError,
     SizingLaw,
     law,
@@ -56,30 +60,35 @@ from hisim.config.laws import (
 from hisim.config.context import Size, SizingContext
 from hisim.config.sizing import (
     AUTO,
+    OwnFields,
     Sizable,
     SizingRecordEntry,
     auto_fields,
     concrete,
     describe_auto_fields,
+    field_notes,
     resolve_config,
     sizable_fields,
     sized_field,
 )
 from hisim.config.report import ResolutionReport
-from hisim.config.contributions import FactContribution, FactScope
+from hisim.config.contributions import FactContribution
 from hisim.config.engine import SizingFactEngine, resolve_all
 
 __all__ = [
     "AUTO",
+    "Cardinality",
     "Catalog",
     "ComponentID",
     "ConfigBase",
     "ConfigSizingError",
     "DisplayConfig",
     "FactContribution",
-    "FactScope",
+    "Many",
     "NothingToSizeError",
+    "OwnFields",
     "ResolutionReport",
+    "Self",
     "Sizable",
     "Size",
     "SizingContext",
@@ -90,6 +99,7 @@ __all__ = [
     "auto_fields",
     "concrete",
     "describe_auto_fields",
+    "field_notes",
     "law",
     "preset_provenance",
     "resolve_all",

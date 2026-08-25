@@ -19,6 +19,7 @@ from dataclasses_json import dataclass_json
 
 from hisim.config import (
     AUTO,
+    Cardinality,
     ComponentID,
     ConfigBase,
     ConfigSizingError,
@@ -90,7 +91,7 @@ def test_expression_laws_read_like_the_formula_and_name_their_facts():
     ctx = SizingContext(heating_load_in_watt=10_000.0)
     rule = (1.1 * Size.HEATING_LOAD_IN_WATT).at_least(5_000).rounded(1)
     assert rule.evaluate(ctx) == 11_000.0
-    assert rule.facts_read() == ("heating_load_in_watt",)
+    assert rule.facts_read() == (("heating_load_in_watt", Cardinality.ONE),)
     assert "Size.HEATING_LOAD_IN_WATT" in rule.describe()
     clamped = (0.1 * Size.HEATING_LOAD_IN_WATT).at_least(5_000)
     assert clamped.evaluate(ctx) == 5_000
@@ -184,6 +185,32 @@ def test_a_preset_may_override_the_class_law_per_field():
 
 
 @pytest.mark.base
+def test_a_sized_field_keeps_its_author_note():
+    """An optional ``note=`` is stored on the field and readable without touching metadata.
+
+    Failure mode caught: the provenance of a hard-coded constant (a standard, a
+    datasheet) living only in a comment, so the audit trail can state the number but
+    never where it came from.
+    """
+
+    @dataclass_json
+    @dataclass
+    class _NotedConfig(ConfigBase):
+        """Fixture with one annotated and one unannotated sized field."""
+
+        component_id: ComponentID
+        volume_in_liter: Sizable[float] = sized_field(rule=50.0, note="VDI 4645 rule of thumb")
+        power_in_watt: Sizable[float] = sized_field(rule=0.0)
+
+        @classmethod
+        def get_main_classname(cls) -> str:
+            """Returns a dummy classname, as the ConfigBase contract requires."""
+            return "tests.test_sizing._NotedConfig"
+
+    assert sizing.field_notes(_NotedConfig) == {"volume_in_liter": "VDI 4645 rule of thumb"}
+
+
+@pytest.mark.base
 def test_auto_round_trips_through_the_wire_spelling():
     """to_dict writes "AUTO"; from_dict restores the sentinel; concrete values pass."""
     dumped = _fixture_config().to_dict()
@@ -252,7 +279,7 @@ def test_size_terms_and_sizing_context_fields_are_one_registry():
     assert term_names == field_names
     for field in dataclasses.fields(SizingContext):
         term = getattr(Size, field.name.upper())
-        assert term.facts_read() == (field.name,)
+        assert term.facts_read() == ((field.name, Cardinality.ONE),)
 
 
 @pytest.mark.base

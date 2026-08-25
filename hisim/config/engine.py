@@ -1,45 +1,33 @@
 """The sizing-fact engine: cross-component sizing resolved to a fixed point over configs.
 
 Cross-component sizing dependencies nest deeply (building → HDS controller → HDS;
-building → boiler → boiler controller), and the incumbent mechanism — the global ``SingletonSimRepository`` with
-untyped enum-keyed entries and silent ``entry_exists`` fallbacks — has already rotted
-silently in production (dead keys, fallback-only reads). This engine is its typed,
-hard-erroring successor for the construction-time half, in three phases:
+building → boiler → boiler controller), and the incumbent mechanism — the global
+``SingletonSimRepository`` with untyped enum-keyed entries and silent fallbacks — has
+already rotted in production. This engine is its typed, hard-erroring successor, in three
+phases: **registration** reads every config's inputs from its laws' ``facts_read`` and
+its outputs from the :class:`~hisim.config.contributions.FactContribution` declarations
+on its class; **validation** rejects a fact nobody provides before anything is computed;
+**resolution** sweeps the unresolved configs, sizing each one whose facts are bound and
+folding its contributions into the provider pool, until none remain.
 
-1. **Registration** — every config's sizing *inputs* come from its laws' declared
-   ``facts_read``; its *outputs* are the :class:`~hisim.config.contributions.FactContribution`
-   declarations on the config class (see that module for the declaration contract).
-   Output fact names are static per class; values are computed later and may
-   legitimately be ``None`` when a feature is off.
-2. **Graph validation** — a fact nobody provides, and a dependency cycle, are precise
-   hard errors raised before anything is computed.
-3. **Fixed-point resolution** — iterate over the unresolved configs, resolving every one
-   whose facts are all visible and folding its contributions into the fact pool, until
-   none remain. Components are constructed afterwards, from fully concrete configs.
+**The binding rule.** Every config instance is addressed by its instance name
+(``config.component_id.name``), and every fact its class declares is addressable as
+``"<name>.<fact>"``. The seed context participates as a provider named ``<seed>``, so
+seeding a fact a present config also declares is an ambiguity, not a silent preference.
+A bare fact in a law binds if and only if *exactly one* config in the resolved set
+declares it; with two or more the engine refuses to guess and names every candidate
+together with a paste-ready ``sources`` snippet, and with none it names the consumer and
+the fact. The consumer's ``sources`` entry — ``{consumer: {fact: "provider.fact"}}`` —
+decides every other case; it may only *redirect* an input, never compute one, so its
+values are qualified references and nothing else. Providership comes from the
+declarations alone and is fixed before the first sweep: a provider whose value happens
+to be ``None`` (its feature is off) still counts, so toggling a feature flag never
+silently re-binds a consumer to a different component.
 
-Fact scoping: scope-global facts
-(building physics) live in a flat pool where a double contribution is a hard error;
-sibling facts (``scope=FactScope.CONNECTED``) resolve as a **hybrid**. Direct adjacency
-is consulted first when the v2 executor passes the scenario's parsed connections — this
-is what keeps two boilers in one scenario unambiguous — and when *no direct neighbor
-declares* the fact, the lookup falls back to the flat-pool rule that governs the
-no-adjacency mode (Python setups): exactly one declared provider in the whole pool wins,
-two or more are a hard error naming the providers and the consumer. The with-adjacency
-behavior is thereby a strict refinement of the without-adjacency behavior instead of a
-different rule, so a consumer two wiring hops away from its only provider (the battery
-sizing from the PV through the EMS) still resolves. Providership is decided from the
-*declared* contributions, never from what happens to be computed yet, so the outcome is
-independent of resolution order. Anything genuinely ambiguous fails hard naming the
-components involved — the engine never guesses.
-
-The engine lives in its own module of the ``hisim.config`` package so that the
-machinery (:mod:`hisim.config.sizing`), the engine, and its consumers (the v2 executor,
-setups via :func:`resolve_all`) stay separately reviewable. Like every module of the
-package it imports nothing from the rest of HiSim — except ``hisim.log``, the package's
-sanctioned logging exception (see the layering rule in ``hisim/config/__init__.py``).
-Every decision the engine makes is additionally recorded in a structured
-:class:`~hisim.config.report.ResolutionReport`, readable as ``engine.report`` after a
-run; the log stream and the report carry the same information at different lifetimes.
+Like every module of the package it imports nothing from the rest of HiSim except
+``hisim.log`` (see the layering rule in ``hisim/config/__init__.py``). Every decision is
+also recorded in a :class:`~hisim.config.report.ResolutionReport`, readable as
+``engine.report`` after a run.
 """
 
 # clean
@@ -48,87 +36,108 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Set, Tuple, Union
 
 from hisim import log
 from hisim.config import sizing
 from hisim.config.context import SizingContext
-from hisim.config.contributions import FactContribution, FactScope
-from hisim.config.laws import ConfigSizingError, SizingError, SizingLaw
+from hisim.config.contributions import FactContribution
+from hisim.config.laws import Cardinality, ConfigSizingError, SizingError, SizingLaw
 from hisim.config.report import (
     ContributionRecord,
     FactLookupRecord,
     LookupMode,
-    OverrideRecord,
     ResolutionReport,
     SweepRecord,
 )
 
+#: One entry of a consumer's sources mapping: a qualified reference or a list of them.
+SourceReference = Union[str, Sequence[str]]
+
 
 @dataclass
 class _Node:
-    """The engine's per-config bookkeeping: identity, needs, offers, and progress state."""
+    """The engine's per-config bookkeeping: identity, needs, offers, and progress state.
 
-    key: str
+    ``needed_facts`` pairs every fact the config's pending laws read with the cardinality
+    they read it at, because the binding rule treats a one-read and a many-read
+    differently. ``contribution_reads`` are the facts the config needs to *compute* its
+    own contributions, a readiness condition separate from being sizable.
+    """
+
+    name: str
     config: Any
-    needed_facts: Tuple[str, ...]
+    needed_facts: Tuple[Tuple[str, Cardinality], ...]
+    contribution_reads: Tuple[str, ...]
     contributions: Tuple[FactContribution, ...]
     resolved: bool = False
     contributed: bool = False
+
+
+@dataclass
+class _Binding:
+    """The outcome of binding one needed fact of one consumer to a provider.
+
+    ``pending`` is the only non-failure state carrying no value: the bound provider has
+    not folded its contributions yet, so the fixed point retries the consumer later.
+    Everything genuinely wrong — no provider, several, a mapping to a non-provider, a
+    null value — has been raised before a binding is ever built.
+    """
+
+    provider: str
+    value: Any
+    mode: str
+    candidates: Tuple[str, ...]
+    pending: bool = False
 
 
 class SizingFactEngine:
     """Registration, validation and fixed-point resolution over one scenario's configs.
 
     Instantiate per resolution run (the engine is stateful bookkeeping, never shared),
-    seed it with a :class:`SizingContext` and optionally the connection adjacency, then
-    call :meth:`resolve_all`. The audit-facing result is :attr:`resolution_order` plus
-    each resolved config's own ``sizing_record``.
+    seed it with a :class:`SizingContext` and optionally the per-consumer ``sources``
+    mapping, then call :meth:`resolve_all`; the audit-facing result is
+    :attr:`resolution_order` plus each resolved config's ``sizing_record``.
     """
+
+    #: The provider name under which the seed context's facts enter the pool: a provider
+    #: like any other, so a seeded fact a present config also declares is an ambiguity.
+    SEED_PROVIDER: ClassVar[str] = "<seed>"
 
     def __init__(
         self,
         seed: Optional[SizingContext] = None,
-        adjacency: Optional[Mapping[str, Set[str]]] = None,
-        preseeded_facts: Optional[Mapping[str, Any]] = None,
+        sources: Optional[Mapping[str, Mapping[str, SourceReference]]] = None,
     ) -> None:
         """Prepares an engine run.
 
         Args:
-            seed: Starting facts (a setup's ``SizingContext.for_building`` result, for
-                example); ``None`` means an empty context.
-            adjacency: Component key → set of connected component keys, from the parsed
-                scenario connections. When given, ``CONNECTED``-scoped facts resolve
-                along it; when absent (Python setups), the flat-pool uniqueness rule
-                applies to them too.
-            preseeded_facts: File-level ``sizing_facts`` overrides; they win over any
-                contribution, loudly (recorded in the audit trail).
+            seed: Starting facts (a setup's ``SizingContext.for_building`` result);
+                ``None`` means an empty context.
+            sources: Per consumer name, per fact, the qualified reference(s) it shall
+                read. Needed exactly where two or more configs declare one fact.
         """
         base = seed if seed is not None else SizingContext()
-        self._global_facts: Dict[str, Tuple[str, Any]] = {
-            field.name: ("<seed>", getattr(base, field.name))
-            for field in dataclasses.fields(SizingContext)
-            if getattr(base, field.name) is not None
+        seed_facts = {
+            entry.name: getattr(base, entry.name)
+            for entry in dataclasses.fields(SizingContext)
+            if getattr(base, entry.name) is not None
         }
-        self._preseeded: Dict[str, Any] = dict(preseeded_facts or {})
-        for fact, value in self._preseeded.items():
-            self._global_facts[fact] = ("<sizing_facts>", value)
-        self._connected_facts: Dict[str, Dict[str, Any]] = {}  # producer key -> {fact: value}
-        self._declared_connected_providers: Dict[str, Set[str]] = {}  # fact -> declaring keys
-        self._adjacency = {key: set(neighbors) for key, neighbors in (adjacency or {}).items()}
+        self._providers: Dict[str, Set[str]] = {fact: {self.SEED_PROVIDER} for fact in seed_facts}
+        self._pool: Dict[str, Dict[str, Any]] = {self.SEED_PROVIDER: dict(seed_facts)}
+        self._sources: Dict[str, Dict[str, SourceReference]] = {
+            consumer: dict(entries) for consumer, entries in (sources or {}).items()
+        }
         self.resolution_order: List[str] = []
-        #: The structured record of every decision this run makes (sweeps, fact
-        #: lookups, contributions, pre-seed overrides); pure data, for tests, logs
-        #: and the audit artifact in the results directory.
+        #: The structured record of every decision this run makes (sweeps, fact lookups,
+        #: contributions); pure data, for tests, logs and the audit artifact.
         self.report = ResolutionReport()
 
-    # ------------------------------------------------------------------ registration
-
     @staticmethod
-    def _needed_facts(config: Any) -> Tuple[str, ...]:
-        """Collects the facts a config's unresolved fields will read, from their laws."""
+    def _needed_facts(config: Any) -> Tuple[Tuple[str, Cardinality], ...]:
+        """Collects the facts a config's unresolved fields will read, with cardinalities."""
         laws = sizing.sizable_fields(type(config))
-        needed: List[str] = []
+        needed: List[Tuple[str, Cardinality]] = []
         for field_name in sizing.auto_fields(config):
             value = getattr(config, field_name)
             effective = value if isinstance(value, SizingLaw) else laws.get(field_name)
@@ -137,238 +146,255 @@ class SizingFactEngine:
         return tuple(dict.fromkeys(needed))
 
     @staticmethod
-    def _contributions(config: Any) -> Tuple[FactContribution, ...]:
-        """Reads a config class's declared contributions (empty when none declared)."""
-        declared = getattr(type(config), FactContribution.CLASS_ATTRIBUTE, ())
-        return tuple(declared)
+    def _instance_name(config: Any) -> str:
+        """Returns the config's instance name, which is how providers are addressed.
+
+        Without a name the config can neither be pointed at by a sources mapping nor be
+        blamed in an error message, so a missing one is a :class:`SizingError`.
+        """
+        name = getattr(getattr(config, "component_id", None), "name", None)
+        if not isinstance(name, str) or not name:
+            raise SizingError(
+                f"{type(config).__name__} has no component_id.name; sizing addresses "
+                "every provider and consumer by its instance name."
+            )
+        return name
 
     def register(self, configs: Sequence[Any]) -> List[_Node]:
-        """Phase 1: builds the per-config nodes with their needs and offers.
+        """Phase 1: builds the per-config nodes and the fact → provider-names table.
 
-        Besides the nodes themselves this records, per CONNECTED-scoped fact, which
-        component keys *declare* it as an output. The provider sets of the hybrid lookup
-        (see :meth:`_visible_context`) are derived from these declarations rather than
-        from the values contributed so far, which is what makes the lookup — including
-        its ambiguity errors — independent of the order in which the fixed point happens
-        to resolve the nodes.
-
-        Args:
-            configs: Every config of the scenario, order-independent.
-
-        Returns:
-            The engine nodes, keyed by each config's derived component key.
-
-        Raises:
-            SizingError: If two configs share a component key (the engine could not
-                attribute facts or errors to either).
+        The provider table is derived from the class declarations of exactly the given
+        configs, never from what has been computed so far, which is what makes the binding
+        — ambiguity errors included — independent of the order the fixed point happens to
+        resolve the nodes in. Returns the nodes in input order; raises
+        :class:`SizingError` if a config has no instance name or two share one.
         """
         nodes: List[_Node] = []
         seen: Dict[str, str] = {}
         for config in configs:
-            key = config.component_id.key
-            if key in seen:
+            name = self._instance_name(config)
+            if name in seen:
                 raise SizingError(
-                    f"two configs share the component key '{key}' "
-                    f"({seen[key]} and {type(config).__name__}); sizing cannot attribute facts."
+                    f"two configs named '{name}' ({seen[name]}, {type(config).__name__}); "
+                    "sizing addresses every provider and consumer by its instance name."
                 )
-            seen[key] = type(config).__name__
-            contributions = self._contributions(config)
+            seen[name] = type(config).__name__
+            contributions = tuple(getattr(type(config), FactContribution.CLASS_ATTRIBUTE, ()))
             for contribution in contributions:
-                if contribution.scope != FactScope.CONNECTED:
-                    continue
                 for fact in contribution.facts:
-                    self._declared_connected_providers.setdefault(fact, set()).add(key)
-            nodes.append(
-                _Node(
-                    key=key,
-                    config=config,
-                    needed_facts=self._needed_facts(config),
-                    contributions=contributions,
-                )
-            )
+                    self._providers.setdefault(fact, set()).add(name)
+            nodes.append(_Node(
+                name=name,
+                config=config,
+                needed_facts=self._needed_facts(config),
+                contribution_reads=tuple(dict.fromkeys(
+                    fact for contribution in contributions for fact in contribution.reads)),
+                contributions=contributions,
+            ))
         return nodes
 
-    # ------------------------------------------------------------------ validation
-
     def validate(self, nodes: Sequence[_Node]) -> None:
-        """Phase 2: rejects unprovidable facts before anything is computed.
+        """Phase 2: rejects facts nobody provides, before anything is computed.
 
-        A fact is providable when the seed carries it, it is pre-seeded, or some present
-        config declares it as an output. Cycles are not detected here — they surface in
-        :meth:`resolve_all` as a no-progress state and are then diagnosed with the full
-        who-waits-for-whom picture, which is more informative than a bare cycle check.
+        Cycles are not detected here — they surface in :meth:`resolve_all` as a
+        no-progress state, diagnosed with the full who-waits-for-whom picture, which beats
+        a bare cycle check. The error names the consumer, the fact and the provider table.
+        """
+        for node in nodes:
+            needed = [fact for fact, _ in node.needed_facts] + list(node.contribution_reads)
+            for fact in needed:
+                if not self._providers.get(fact):
+                    raise ConfigSizingError(
+                        f"'{fact}' needed by '{node.name}' is provided by nobody; providers "
+                        f"of other facts: {self._describe_providers()}. Add the contributing "
+                        "component or seed the fact via the SizingContext."
+                    )
+
+    def _describe_providers(self) -> str:
+        """Renders the whole provider table for the unprovided-fact error message."""
+        if not self._providers:
+            return "<none>"
+        return ", ".join(
+            f"{fact} <- {', '.join(sorted(names))}" for fact, names in sorted(self._providers.items())
+        )
+
+    def _reference_provider(self, consumer: str, fact: str, reference: Any) -> str:
+        """Validates one ``"<name>.<fact>"`` reference and returns the provider it names.
 
         Raises:
-            ConfigSizingError: Naming the consumer, the fact, and — when a present
-                config class *could* contribute it — the provider hint.
+            ConfigSizingError: If the value is not a reference of that shape (a number, an
+                expression, a reference to a different fact), or names a config that does
+                not declare the fact — the message then lists what that config does declare.
         """
-        providable: Set[str] = set(self._global_facts)
-        for node in nodes:
-            for contribution in node.contributions:
-                providable.update(contribution.facts)
-        for node in nodes:
-            missing = [fact for fact in node.needed_facts if fact not in providable]
-            if missing:
-                raise ConfigSizingError(
-                    f"no config in this scenario contributes the fact(s) {missing}, needed by "
-                    f"{type(node.config).__name__} '{node.key}'. Add the contributing component, "
-                    "seed the fact via the SizingContext, or pre-seed it in 'sizing_facts'."
-                )
+        if not isinstance(reference, str) or reference != f"{reference.split('.', 1)[0]}.{fact}":
+            raise self._shape_error(consumer, fact, "one", reference)
+        provider = reference.split(".", 1)[0]
+        if provider not in self._providers.get(fact, set()):
+            declared = sorted(name for name, names in self._providers.items() if provider in names)
+            raise ConfigSizingError(
+                f"sources['{consumer}']['{fact}'] = '{reference}' but '{provider}' does not "
+                f"declare '{fact}' (declares: {', '.join(declared) or '<nothing>'})"
+            )
+        return provider
 
-    # ------------------------------------------------------------------ resolution
+    @staticmethod
+    def _shape_error(consumer: str, fact: str, shape: str, value: Any) -> ConfigSizingError:
+        """Builds the error for a sources value whose shape does not match the law's read.
+
+        The message quotes the offending value so a number or an expression string — the
+        two ways authors try to *compute* in a mapping that may only redirect — is
+        recognizable at a glance.
+        """
+        return ConfigSizingError(
+            f"sources['{consumer}']['{fact}']: expected {shape} reference(s) of the form "
+            f"'<name>.<fact>', got {value!r}"
+        )
+
+    def _unbindable_error(
+        self, consumer: str, fact: str, cardinality: Cardinality, candidates: Tuple[str, ...]
+    ) -> ConfigSizingError:
+        """Builds the error for a bare fact that no single provider can satisfy.
+
+        With no provider at all it names the consumer and lists the whole provider table,
+        so a missing component is obvious; with several it lists every candidate plus the
+        ``sources`` line that resolves the choice — a list for a many-read, one reference
+        for a scalar read — so the fix can be pasted.
+        """
+        references = [f"{name}.{fact}" for name in candidates]
+        if cardinality is Cardinality.MANY:
+            listed = ", ".join(f"'{reference}'" for reference in references)
+            return ConfigSizingError(
+                f"'{fact}' is read many-fold by '{consumer}' and is provided by "
+                f"{', '.join(candidates) or 'nobody'}; write "
+                f"sources={{'{consumer}': {{'{fact}': [{listed}]}}}} (an empty list for none)"
+            )
+        if not candidates:
+            return ConfigSizingError(
+                f"'{fact}' needed by '{consumer}' is provided by nobody; providers of other "
+                f"facts: {self._describe_providers()}"
+            )
+        return ConfigSizingError(
+            f"'{fact}' needed by '{consumer}' is provided by {', '.join(candidates)}; pass "
+            f"sources={{'{consumer}': {{'{fact}': '<one of {' or '.join(references)}>'}}}}"
+        )
+
+    def _bind(self, consumer: str, fact: str, cardinality: Cardinality) -> _Binding:
+        """Binds one needed fact of one consumer to its provider, or reports it pending.
+
+        Implements the binding rule of the module docstring: an explicit mapping wins and
+        is validated against the provider table, a bare fact needs exactly one declared
+        provider, and everything else raises naming what the author must write — for an
+        unprovided, ambiguous, wrongly mapped, mis-shaped or null-valued fact alike.
+        """
+        candidates = tuple(sorted(self._providers.get(fact, set())))
+        mapped = self._sources.get(consumer, {}).get(fact)
+        if mapped is None:
+            if cardinality is Cardinality.MANY and len(candidates) == 1:
+                return self._bind_many(fact, candidates, candidates)
+            if cardinality is Cardinality.MANY or len(candidates) != 1:
+                raise self._unbindable_error(consumer, fact, cardinality, candidates)
+            provider = candidates[0]
+            mode = LookupMode.SEED if provider == self.SEED_PROVIDER else LookupMode.UNIQUE
+            return self._bind_one(consumer, fact, provider, mode, candidates)
+        if cardinality is Cardinality.MANY:
+            if isinstance(mapped, str) or not isinstance(mapped, (list, tuple)):
+                raise self._shape_error(consumer, fact, "a list of", mapped)
+            chosen = tuple(self._reference_provider(consumer, fact, entry) for entry in mapped)
+            return self._bind_many(fact, chosen, candidates)
+        if not isinstance(mapped, str):
+            raise self._shape_error(consumer, fact, "one", mapped)
+        provider = self._reference_provider(consumer, fact, mapped)
+        return self._bind_one(consumer, fact, provider, LookupMode.EXPLICIT, candidates)
+
+    def _bind_one(self, consumer: str, fact: str, provider: str, mode: str,
+                  candidates: Tuple[str, ...]) -> _Binding:
+        """Reads one provider's value for a scalar fact, or reports the read as pending.
+
+        A provider that has not folded its contributions yet is not an error — the fixed
+        point comes back to it — but one that computed ``None`` is: its feature is off,
+        and sizing from a switched-off component would invent a number.
+        """
+        contributed = self._pool.get(provider, {})
+        if fact not in contributed:
+            return _Binding(provider=provider, value=None, mode=mode, candidates=candidates, pending=True)
+        value = contributed[fact]
+        if value is None:
+            raise ConfigSizingError(
+                f"'{fact}' provided as null by '{provider}' (feature off); '{consumer}' "
+                "cannot size from it."
+            )
+        return _Binding(provider=provider, value=value, mode=mode, candidates=candidates)
+
+    def _bind_many(self, fact: str, chosen: Tuple[str, ...], candidates: Tuple[str, ...]) -> _Binding:
+        """Collects several providers' values into a tuple for a many-cardinality read.
+
+        The tuple is assembled in the order the author wrote (or, for the single-provider
+        shortcut, the one candidate) so the eventual aggregation has a defined input
+        order. Evaluating a many term still raises: this value is a hook, not a result.
+        """
+        label = ", ".join(chosen) or "<none>"
+        if any(fact not in self._pool.get(provider, {}) for provider in chosen):
+            return _Binding(provider=label, value=None, mode=LookupMode.EXPLICIT,
+                            candidates=candidates, pending=True)
+        return _Binding(provider=label, value=tuple(self._pool[name][fact] for name in chosen),
+                        mode=LookupMode.EXPLICIT, candidates=candidates)
 
     def _visible_context(
         self, node: _Node
-    ) -> Tuple[Optional[SizingContext], List[str], List[FactLookupRecord]]:
+    ) -> Tuple[Optional[SizingContext], List[str], Dict[str, str], List[FactLookupRecord]]:
         """Assembles the fact view of one consumer, or reports what is still missing.
 
-        Pre-seeded facts win outright, and global facts are visible to everyone.
-        CONNECTED facts resolve as a hybrid: when an adjacency exists and
-        a *declared* provider of the fact sits among the consumer's direct neighbors, the
-        lookup is restricted to those neighbors (this is what disambiguates two boilers);
-        when no direct neighbor declares the fact — or no adjacency was given — the whole
-        pool applies under the uniqueness rule, so a consumer two wiring hops from its
-        only provider still resolves. Two remaining sources of one fact — two declared
-        providers, or a declared provider next to a seeded global value — are a hard
-        error naming every source and the consumer: the engine refuses to guess. Because
-        providership comes from the declarations, a provider that has not contributed its
-        value yet merely makes the fact *missing* (the fixed point retries), never
-        silently narrows the source set.
-
-        Returns:
-            A ``(context, missing, lookups)`` triple: the context with an empty missing
-            list and one :class:`FactLookupRecord` per fact read, or ``None`` with the
-            facts still missing (the lookups of an incomplete view are not returned —
-            a consumer that cannot resolve yet has not *read* anything).
+        Returns a ``(context, missing, fact_sources, lookups)`` quadruple: the context
+        with an empty missing list, the fact → provider-name map the sizing record needs,
+        and one :class:`FactLookupRecord` per fact read; or ``None`` with the missing
+        facts (an incomplete view has not *read* anything, so it records no lookups).
         """
         values: Dict[str, Any] = {}
+        providers: Dict[str, str] = {}
         missing: List[str] = []
         lookups: List[FactLookupRecord] = []
-        for fact in node.needed_facts:
-            producer, value, still_missing, mode, candidates = self._look_up_fact(node, fact)
-            if still_missing:
+        for fact, cardinality in node.needed_facts:  # binding order is irrelevant
+            binding = self._bind(node.name, fact, cardinality)
+            if binding.pending:
                 missing.append(fact)
                 continue
-            if value is None:
-                raise ConfigSizingError(
-                    f"the fact '{fact}' needed by '{node.key}' was provided as null by "
-                    f"'{producer}' (its feature is off); the consumer cannot be sized from it."
-                )
-            values[fact] = value
+            values[fact] = binding.value
+            providers[fact] = binding.provider
             lookups.append(FactLookupRecord(
-                consumer=node.key, fact=fact, source=producer, value=value,
-                mode=mode, candidates=candidates))
+                consumer=node.name, fact=fact, source=binding.provider, value=binding.value,
+                mode=binding.mode, candidates=binding.candidates))
         if missing:
-            return None, missing, []
-        return SizingContext(**values), [], lookups
+            return None, missing, {}, []
+        return SizingContext(**values), [], providers, lookups
 
-    def _look_up_fact(self, node: _Node, fact: str) -> Tuple[str, Any, bool, str, Tuple[str, ...]]:
-        """Resolves one needed fact of one consumer to its unique source.
+    def _fold_contributions(self, node: _Node) -> Optional[List[ContributionRecord]]:
+        """Computes a resolved node's contributions and folds them into the provider pool.
 
-        Implements the source selection of :meth:`_visible_context`: pre-seed first,
-        then the hybrid CONNECTED lookup over the declared providers with the global
-        pool as the shared baseline. Returns the producer label and value, or a
-        missing marker when the unique source has not contributed its value yet.
-
-        Args:
-            node: The consumer whose fact is looked up.
-            fact: The fact name, a ``SizingContext`` field.
-
-        Returns:
-            A ``(producer, value, missing, mode, candidates)`` quintuple: ``missing``
-            is ``True`` when the fact has no value yet and the fixed point must retry;
-            ``mode`` is the :class:`LookupMode` that decided the source; ``candidates``
-            are the declared providers before the mode narrowed them, so the report can
-            show why a multi-provider fact was still unambiguous.
-
-        Raises:
-            ConfigSizingError: If more than one source could provide the fact.
+        Returns the contribution records for the current sweep's report entry, or ``None``
+        while a fact the contributions themselves read is still pending. Values are stored
+        under the contributing instance's own name, so two instances of one class never
+        overwrite each other and a consumer always reads the provider it was bound to.
         """
-        if fact in self._preseeded:
-            producer, value = self._global_facts[fact]
-            return producer, value, False, LookupMode.PRESEED, ()
-        declared = tuple(sorted(self._declared_connected_providers.get(fact, ())))
-        providers = set(declared)
-        neighborhood = self._adjacency.get(node.key) if self._adjacency else None
-        if neighborhood and providers & neighborhood:
-            providers &= neighborhood
-            mode = LookupMode.CONNECTED_ADJACENT
-        else:
-            mode = LookupMode.CONNECTED_POOL if providers else LookupMode.GLOBAL
-        global_entry = self._global_facts.get(fact)
-        sources = sorted(providers)
-        if global_entry is not None:
-            sources.append(global_entry[0])
-        if len(sources) > 1:
-            raise ConfigSizingError(
-                f"the fact '{fact}' needed by '{node.key}' is provided by more than one "
-                f"source ({', '.join(sorted(sources))}); sizing refuses to guess. Connect "
-                "the consumer to exactly one provider, or pre-seed the fact in "
-                "'sizing_facts'."
-            )
-        if providers:
-            (producer,) = providers
-            contributed = self._connected_facts.get(producer, {})
-            if fact not in contributed:
-                return producer, None, True, mode, declared
-            return producer, contributed[fact], False, mode, declared
-        if global_entry is not None:
-            return global_entry[0], global_entry[1], False, mode, declared
-        return "<nobody>", None, True, mode, declared
-
-    def _contribution_reads_visible(self, node: _Node) -> bool:
-        """True when every fact a node's contributions read is available in the global pool."""
-        return all(
-            fact in self._global_facts
-            for contribution in node.contributions
-            for fact in contribution.reads
-        )
-
-    def _fold_contributions(self, node: _Node) -> List[ContributionRecord]:
-        """Computes a resolved node's contributions and folds them into the fact pools.
-
-        Returns the contribution records for the current sweep's report entry. A
-        contribution whose fact is pre-seeded loses to the pre-seed, but never
-        silently: both values land in ``report.overrides`` and an information-level log
-        line, instead of the computed value silently disappearing.
-        """
-        view = SizingContext(**{
-            fact: self._global_facts[fact][1]
-            for contribution in node.contributions
-            for fact in contribution.reads
-        })
+        read_values: Dict[str, Any] = {}
+        for fact in node.contribution_reads:
+            binding = self._bind(node.name, fact, Cardinality.ONE)
+            if binding.pending:
+                return None
+            read_values[fact] = binding.value
+        view = SizingContext(**read_values)
         records: List[ContributionRecord] = []
         for contribution in node.contributions:
             computed = dict(contribution.compute(node.config, view))
             if set(computed) != set(contribution.facts):
                 raise SizingError(
-                    f"{type(node.config).__name__} '{node.key}' computed the facts "
+                    f"{type(node.config).__name__} '{node.name}' computed the facts "
                     f"{sorted(computed)} but declared {sorted(contribution.facts)}; output "
                     "names are static per class, so the dependency graph stays checkable up front."
                 )
             for fact, value in computed.items():
-                if fact in self._preseeded:
-                    preseeded_value = self._preseeded[fact]
-                    self.report.overrides.append(OverrideRecord(
-                        fact=fact, producer=node.key,
-                        computed_value=value, preseeded_value=preseeded_value))
-                    log.information(
-                        f"Sizing: 'sizing_facts' forces {fact}={preseeded_value!r}, shadowing "
-                        f"{value!r} computed by '{node.key}'."
-                    )
-                    continue
-                if contribution.scope == FactScope.GLOBAL:
-                    if fact in self._global_facts and self._global_facts[fact][0] != "<seed>":
-                        raise ConfigSizingError(
-                            f"the global fact '{fact}' is contributed twice: by "
-                            f"'{self._global_facts[fact][0]}' and by '{node.key}'."
-                        )
-                    self._global_facts[fact] = (node.key, value)
-                else:
-                    self._connected_facts.setdefault(node.key, {})[fact] = value
-                records.append(ContributionRecord(
-                    producer=node.key, fact=fact, value=value, scope=contribution.scope))
-                log.debug(f"Sizing: '{node.key}' contributed {fact}={value!r} ({contribution.scope}).")
+                self._pool.setdefault(node.name, {})[fact] = value
+                records.append(ContributionRecord(producer=node.name, fact=fact, value=value))
+                log.debug(f"Sizing: '{node.name}' contributed {fact}={value!r}.")
         node.contributed = True
         return records
 
@@ -377,46 +403,43 @@ class SizingFactEngine:
 
         Configs without sizable fields pass through untouched (they may still
         contribute); configs with sizable-but-concrete fields are re-emitted as fresh
-        resolved copies, exactly like ``ConfigBase.resolve``. A no-progress state is
-        diagnosed with the full who-waits-for-what picture, which covers both genuine
-        cycles and starvation through null/withheld facts.
-
-        Raises:
-            ConfigSizingError: On unprovidable facts, ambiguous or null providers, or a
-                no-progress deadlock.
+        resolved copies, exactly like ``ConfigBase.resolve``. A no-progress state raises
+        with the full who-waits-for-what picture, which covers both genuine cycles and
+        starvation through null facts; every binding failure raises too.
         """
         nodes = self.register(configs)
         self.validate(nodes)
         results: Dict[str, Any] = {}
-        progress = True
-        sweep_number = 0
+        progress, sweep_number = True, 0
         while progress:
             progress = False
             sweep_number += 1
             resolved_this_sweep: List[str] = []
             contributed_this_sweep: List[ContributionRecord] = []
-            waiting: Dict[str, Tuple[str, ...]] = {}
+            waiting: Dict[str, Tuple[str, ...]] = {}  # config name -> facts still missing
             for node in nodes:
                 if not node.resolved:
-                    context, missing, lookups = self._visible_context(node)
+                    context, missing, providers, lookups = self._visible_context(node)
                     if context is None:
                         # Not an error yet; retried until no pass makes progress. The
                         # waits are kept for this sweep's report entry.
-                        waiting[node.key] = tuple(missing)
+                        waiting[node.name] = tuple(missing)
                         continue
                     if sizing.sizable_fields(type(node.config)):
-                        results[node.key] = node.config.resolve(context)
+                        results[node.name] = sizing.resolve_config(node.config, context, providers)
                     else:
-                        results[node.key] = node.config
-                    node.config = results[node.key]
+                        results[node.name] = node.config
+                    node.config = results[node.name]
                     node.resolved = True
-                    self.resolution_order.append(node.key)
+                    self.resolution_order.append(node.name)
                     self.report.lookups.extend(lookups)
-                    resolved_this_sweep.append(node.key)
+                    resolved_this_sweep.append(node.name)
                     progress = True
-                if node.resolved and not node.contributed and self._contribution_reads_visible(node):
-                    contributed_this_sweep.extend(self._fold_contributions(node))
-                    progress = True
+                if node.resolved and not node.contributed:
+                    folded = self._fold_contributions(node)
+                    if folded is not None:
+                        contributed_this_sweep.extend(folded)
+                        progress = True
             if progress:
                 self.report.sweeps.append(SweepRecord(
                     number=sweep_number, resolved=tuple(resolved_this_sweep),
@@ -428,43 +451,50 @@ class SizingFactEngine:
                 )
         stuck = [node for node in nodes if not node.resolved]
         if stuck:
-            lines = []
-            for node in stuck:
-                _, missing, _ = self._visible_context(node)
-                lines.append(f"  {type(node.config).__name__} '{node.key}' waits for {missing}")
+            lines = [
+                f"  {type(node.config).__name__} '{node.name}' waits for "
+                f"{self._visible_context(node)[1]}" for node in stuck]
             raise ConfigSizingError(
                 "sizing made no further progress; the remaining configs wait on each other "
                 "or on facts nobody computed:\n" + "\n".join(lines)
                 + "\n\nResolution history up to the deadlock:\n" + self.report.render()
             )
+        consumed = {(entry.source, entry.fact) for entry in self.report.lookups}
+        self.report.unconsumed = sorted(
+            (producer, fact)
+            for producer, facts in self._pool.items()
+            for fact in facts
+            if (producer, fact) not in consumed
+        )
         log.information(
             f"Sizing: resolved {len(nodes)} configs in {len(self.report.sweeps)} sweep(s); "
             f"order: {', '.join(self.resolution_order)}."
         )
-        return [results[node.key] for node in nodes]
+        return [results[node.name] for node in nodes]
 
 
 def resolve_all(
     configs: Sequence[Any],
     seed: Optional[SizingContext] = None,
-    adjacency: Optional[Mapping[str, Set[str]]] = None,
-    preseeded_facts: Optional[Mapping[str, Any]] = None,
+    sources: Optional[Mapping[str, Mapping[str, SourceReference]]] = None,
 ) -> List[Any]:
-    """Resolves every config of a scenario against the shared fact pool.
+    """Resolves every config of a scenario against the shared provider pool.
 
-    The one entry point both worlds use: the v2 executor passes the parsed connection
-    adjacency and any file-level ``sizing_facts``; Python setups pass their seed context
-    (typically ``SizingContext.for_building(...)``) — so the template path and the setup
-    path are structurally identical rather than parity-tested into agreement.
+    The one entry point both worlds use: the v2 executor passes the ``sizing_sources``
+    mapping it parsed from the file, Python setups pass their seed context (typically
+    ``SizingContext.for_building(...)``) and the same mapping in Python form where two
+    configs declare one fact — so the template path and the setup path are structurally
+    identical rather than parity-tested into agreement.
 
     Args:
-        configs: Every config of the scenario, order-independent.
+        configs: Every config of the scenario, order-independent; each must carry a
+            unique ``component_id.name``.
         seed: Starting facts; ``None`` for an empty context.
-        adjacency: Component key → connected keys, for CONNECTED-fact scoping.
-        preseeded_facts: File-level fact overrides; they win over contributions.
+        sources: Per consumer name, per fact, the qualified ``"<provider>.<fact>"``
+            reference(s) that consumer shall read.
 
     Returns:
         The resolved configs, in the input order.
     """
-    engine = SizingFactEngine(seed=seed, adjacency=adjacency, preseeded_facts=preseeded_facts)
+    engine = SizingFactEngine(seed=seed, sources=sources)
     return engine.resolve_all(configs)

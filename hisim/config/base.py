@@ -135,10 +135,11 @@ class ConfigBase:
         # ConfigBase-typed value. A lot of code depends on that leniency (components store
         # their config in ConfigBase-typed slots and read/write subclass fields off it), so
         # these type-checker-only escape hatches preserve it deliberately. Field-name
-        # correctness is enforced by scripts/check_config_attrs.py instead; making configs
-        # fully mypy-visible (a generic Component[TConfig]) is a planned sweep, see
-        # roadmap/json_cleanup.md. The classmethod stubs mirror the serialization API that
-        # the @dataclass_json decorator injects at runtime on every concrete config class.
+        # correctness is enforced by scripts/check_config_attrs.py instead. Making configs
+        # fully mypy-visible would mean a generic Component[TConfig] whose config slot has
+        # the concrete subclass type; that is a repo-wide sweep over every component and is
+        # deliberately not started here. The classmethod stubs mirror the serialization API
+        # that the @dataclass_json decorator injects at runtime on every concrete config class.
         def __getattr__(self, name: str) -> Any:
             """Checking-only escape hatch: reads of undeclared fields resolve to Any."""
             raise NotImplementedError

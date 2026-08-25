@@ -1,7 +1,7 @@
 # Building cleanup — findings log
 
 Observations collected while building the phase-1 test harness for
-`hisim/components/building.py` (plan of record: `roadmap/building_cleanup_spec.md`).
+`hisim/components/building.py` (plan of record: `roadmap/json_development/building_cleanup_spec.md`).
 Nothing here was fixed: ground rule 1 of the cleanup is "no value changes, ever", so
 current behaviour — including the crashes — was pinned in
 `tests/goldens/building_information.json` and `tests/goldens/building_one_day.json` and is

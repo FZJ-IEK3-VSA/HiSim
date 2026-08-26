@@ -51,7 +51,9 @@ class Fixtures:
     MINIMAL: ClassVar[Path] = MOCKUPS / "energy_system_mockup_minimal.yaml"
 
     #: One January day at a quarter-hour resolution, asking only for the result table.
-    PARAMETERS: ClassVar[Path] = Path(__file__).resolve().parent / "energy_systems" / "one_day_15min.simulation.yaml"
+    PARAMETERS: ClassVar[Path] = (
+        Path(__file__).resolve().parent.parent / "energy_systems" / "one_day_15min.simulation.yaml"
+    )
 
     @classmethod
     def parameters(cls, result_directory: Path) -> SimulationParameters:

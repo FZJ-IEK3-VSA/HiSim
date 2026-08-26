@@ -8,9 +8,11 @@ import hisim.loadtypes as lt
 from hisim import log
 from hisim.component import Component, ComponentInput, ComponentOutput
 from hisim.config import ConfigBase, DisplayConfig
-from hisim.energy_system.channels import DynamicConnectionChannel
-from hisim.energy_system.errors import EnergySystemBindingError, EnergySystemErrorId
-from hisim.energy_system.resolution import ResolvedDynamicConnection
+from hisim.config.channels import (
+    ChannelDeclarationError,
+    DynamicConnectionChannel,
+    ResolvedDynamicConnection,
+)
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -189,18 +191,16 @@ class DynamicComponent(Component):
             The declared channel.
 
         Raises:
-            EnergySystemBindingError: ``EF-28`` if this class declares no channel of that key.
+            ChannelDeclarationError: If this class declares no channel of that key. Only the
+                aggregator's own simulation code asks, always with a key from its own
+                declaration, so an unknown key is a defect of that class and never of a file.
         """
         for channel in cls.CHANNELS:
             if channel.key == key:
                 return channel
-        raise EnergySystemBindingError(
-            EnergySystemErrorId.NO_CHANNEL_MATCH,
-            cls.get_full_classname(),
-            f"the component declares no dynamic-connection channel '{key}'.",
-            alternatives=[channel.key for channel in cls.CHANNELS],
-            alternatives_label="channels",
-            offending_value=key,
+        raise ChannelDeclarationError(
+            f"{cls.get_full_classname()} declares no dynamic-connection channel '{key}'; "
+            f"its channels are {[channel.key for channel in cls.CHANNELS]}."
         )
 
     def get_channel_inputs(self, key: str) -> List[ComponentInput]:

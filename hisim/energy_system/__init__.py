@@ -62,6 +62,10 @@ The stages that need the component classes live in their own modules and are del
       end-of-line comments of a record. It is the one module that uses a second YAML library,
       because the canonical writer cannot attach comments, and it is never on a path that
       reads a file.
+    - :mod:`hisim.energy_system.schema_classes` — which component classes a file may name at all,
+      and what JSON Schema accepts the values one configuration field holds.
+    - :mod:`hisim.energy_system.schema_export` — the generated JSON Schema of the format, which an
+      editor binds to through the ``# yaml-language-server:`` line at the top of a file.
 
 Two further modules sit outside both groups. :mod:`hisim.energy_system.channels` holds the
 declaration of an aggregator's accepted flows and :mod:`hisim.energy_system.resolution` the

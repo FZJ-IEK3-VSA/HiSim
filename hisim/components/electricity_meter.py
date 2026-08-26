@@ -13,7 +13,7 @@ from hisim import loadtypes as lt
 from hisim.component import ComponentInput, OpexCostDataClass, CapexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
-from hisim.energy_system.channels import DispatchRule, DynamicConnectionChannel
+from hisim.config.channels import DispatchRule, DynamicConnectionChannel
 from hisim.dynamic_component import (
     DynamicComponent,
     DynamicConnectionInput,

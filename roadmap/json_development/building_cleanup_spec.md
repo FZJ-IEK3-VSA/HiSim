@@ -25,7 +25,7 @@ lands on clean, small files and its diff shows design, not archaeology.
    keeps alive via the package `__init__`. The harness is written once in phase 1 and is
    not edited in any later phase — a harness that must change mid-refactor proves nothing.
 4. Repo conventions apply: extensive docstrings, class-scoped constants, one concern per
-   commit, findings appended to `roadmap/random_findings.md`.
+   commit, findings appended to `roadmap/declarative_energy_systems/random_findings.md`.
 
 ## Phase 1 — the three-layer testing harness (first PR, pure addition)
 
@@ -219,7 +219,7 @@ responsibility map, which is the basis of the draft:
    SingletonSimRepository writes of 5R1C parameters (PID/MPC channel). Moving both
    isolates ALL of the component's singleton traffic in one file — directly useful for
    the pending singleton redesign (see the dead-keys finding in
-   `roadmap/random_findings.md`): the channel becomes one greppable module instead of
+   `roadmap/declarative_energy_systems/random_findings.md`): the channel becomes one greppable module instead of
    code woven through lifecycle methods.
 3. **Solar-gains provider** (`building/solar_gains.py`, ~130 lines): `get_windows()`,
    `get_solar_heat_gain_through_windows()` and the disk-cache read/write. This

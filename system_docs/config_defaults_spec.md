@@ -1,5 +1,14 @@
 # Config defaults and sizing — three candidate designs
 
+> **Status update 2026-08-25.** This document is the design record that produced the
+> `hisim/config` kernel (design B: field-declared laws, `AUTO`, presets). Two parts are
+> **superseded** and must not be read as current: §8.4 (executor-side sizing with fact
+> scopes and a file-level `sizing_facts` pre-seed — replaced by the explicit
+> `<name>.<fact>` binding rule of `roadmap/declarative_energy_systems/p1_sizing_kernel_requirements.md` R4.3)
+> and §8b (the two-PR plan — replaced by `roadmap/declarative_energy_systems/plan.md`).
+> The current requirements live under `roadmap/declarative_energy_systems/`; the
+> implementation follows `p1_implementation_spec.md` there.
+
 **Status:** draft for team discussion — nothing implemented. Two decisions already made
 (2026-08-19): design B was revised for readability (laws at the field, `AUTO` values —
 see the §4 revision note), and the JSON preset-reference contract §8.1(b) is wanted in

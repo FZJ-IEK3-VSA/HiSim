@@ -1,6 +1,6 @@
 # P2 — Energy-system file format and executor — requirements
 
-**Status:** in review · **Date:** 2026-08-25
+**Status:** in review · **Date:** 2026-08-26 (Q8, Q-P2.4–Q-P2.6 decided; AC-P2.1 amended; RQ3 dropped)
 **Author(s):** Noah Pflugradt (owner; `[given]`) · assistant (`[proposed]`, mockups)
 **Reviewers:** HiSim core team
 **Parent:** `roadmap/declarative_energy_systems/epic.md` (E1–E8 apply by reference) · **Plan:** `roadmap/declarative_energy_systems/plan.md` §P2 · **Depends on:** P1 accepted
@@ -68,7 +68,7 @@ Changes to the format are made as diffs on the mockups first, then reflected her
 - R3.1 `[proposed; v2 decision 21]` `preset` names a class preset; `config` holds sparse overrides only.
 - R3.2 `[proposed]` Any field may be set in `config`, including `AUTO` to re-open a field a preset pinned.
 - R3.6 `[proposed]` Unknown field, unknown preset, wrong type → hard error listing the valid names.
-- R3.8 `[proposed; from P1 Q-P1.6, shown in the mockups]` **Constructor form.** For classes parameterised by an open identifier space (Weather by location, Building by TABULA code, occupancy by LPG household) an entry may carry `constructor: {<name>: {<arg>: <value>, …}}` instead of `preset`, naming one of the class's declared named constructors with plain-value arguments (no expressions, E3). `config` overrides apply after the constructor exactly as after a preset. Unknown constructor, unknown or missing argument → hard error listing the constructor's parameters. The realized record expands a constructor entry to a full `config` like a preset, and the audit records the constructor and its arguments.
+- R3.8 `[proposed; from P1 Q-P1.6, shown in the mockups]` **Constructor form.** For classes parameterised by an open identifier space (Weather by location, Building by TABULA code, occupancy by LPG household) an entry may carry `constructor: {<name>: {<arg>: <value>, …}}` instead of `preset`, naming a classmethod decorated `@constructor` (its wire name is the full method name, `for_…`/`from_…`; P1 amendment of 2026-08-26) with plain-value arguments (no expressions, E3). `config` overrides apply after the constructor exactly as after a preset. Unknown constructor, unknown or missing argument → hard error listing the constructor's parameters. The realized record expands a constructor entry to a full `config` like a preset, and the audit records the constructor and its arguments.
 - R3.7 `[proposed; random_findings]` Enum-typed sizable fields (`Sizable[SomeEnum]`, e.g. `HeatDistributionConfig.heating_system`) decode from a file to the enum *member*, not to its string; the `sized_field` codec must not bypass the enum handling of the serialisation layer. (Today `"FLOORHEATING"` stays a `str`; equality holds only because config enums are `(str, Enum)`, `is` comparisons would silently fail.)
 
 ### R4 — Sizing sources `[given]`
@@ -106,7 +106,7 @@ Paths are `${var}/…` through the `PathResolver`; absolute paths in a file are 
 
 ### Quality
 - RQ2 `[proposed]` `schema_version: 3` is mandatory; other values are rejected with a message naming the supported version.
-- RQ3 `[proposed]` Load + validate + resolve performs no filesystem I/O beyond the file itself and the `${var}` resolution; TABULA/weather reads happen at build time (E5).
+- RQ3 `[dropped 2026-08-26, owner]` ~~Load + validate + resolve performs no filesystem I/O~~ — resolution folds the Building's contributions, which read the TABULA catalogue; the guarantee cannot hold and validation speed is not a hard requirement. AC-P2.9 is withdrawn.
 - RQ4 `[proposed]` A file survives `load → dump` unchanged (key order, list style), so programs can edit it (P5).
 
 ## 9. Constraints, Invariants and Assumptions
@@ -124,7 +124,7 @@ Paths are `${var}/…` through the `PathResolver`; absolute paths in a file are 
 
 | ID | Criterion | Verifies |
 |---|---|---|
-| AC-P2.1 | All three mockups load, validate, resolve, build and run. | R1, R2, R3, R6, R12, RQ2 |
+| AC-P2.1 `[amended 2026-08-26]` | All three mockups load, validate, expand groups and resolve against the enabled set; **UC1 additionally builds and runs end to end** — P2 converts the four classes UC1 needs (Weather, UtspLpgConnector, GenericBoilerController, ElectricityMeter) to presets/constructors. UC2/UC3 carry a pinned set of expected unknown-preset errors that shrinks as P4 converts classes; their end-to-end run is a P4 acceptance criterion. | R1, R2, R3, R6, R12, RQ2 |
 | AC-P2.2 | UC1 contains no `sizing_sources`; deleting the battery's line in UC2 fails with the quoted candidate error; deleting the EMS list fails likewise; `[]` on the EMS resolves. | R4.3, R4.4, R7 |
 | AC-P2.3 | Identity test over every (mockup, group) pair passes byte for byte; with `backup_heater` disabled in UC2 the three forced `sizing_sources` may be removed without error. | R14.3, R14.4, R4.3 |
 | AC-P2.4 | Re-running each realized record yields an identical realized record and identical results; its audit shows nothing sized; the `ev` group is absent from UC2's record. | R8.1, R8.2, C-P2.1 |
@@ -132,7 +132,7 @@ Paths are `${var}/…` through the `PathResolver`; absolute paths in a file are 
 | AC-P2.6 | The exported JSON Schema rejects an unknown preset and an unknown field for every converted class; `describe` and `facts` produce the listed content for the mockups. | R13.2, R13.3 |
 | AC-P2.7 | `dump(load(file)) == file` for the three mockups (after one canonicalising pass). | RQ4, R11 |
 | AC-P2.8 | A file with an absolute path, a duplicate key, or `schema_version: 2` is rejected at load. | R7, R12, RQ2 |
-| AC-P2.9 | Load/validate/resolve of UC3 performs no file I/O besides the energy system (checked by a monitored filesystem in the test). | RQ3 |
+| AC-P2.9 | *withdrawn 2026-08-26 with RQ3* | — |
 | AC-P2.10 | A component with no consumers produces a warning line in the resolution report, not an error. | R2.4 |
 | AC-P2.11 | A nested group, a component listed in two groups, and a grouped component whose name collides with an ungrouped one are each rejected at load with the names involved. | R14.1, R14.2 |
 | AC-P2.12 | A reference containing `[*]` or a relative path in `inputs` or `sizing_sources` is rejected at load. | R4.8 |
@@ -158,20 +158,23 @@ Paths are `${var}/…` through the `PathResolver`; absolute paths in a file are 
 *Context.* Decided on `json_v2` on 2026-08-20 (owner, `roadmap/design_review_questions.md` A4 extension): the realized record is YAML and each sized value gets an end-of-line comment such as `water_mass_flow_rate_in_kg_per_second: 0.27   # sized from HeatDistributionController`; comments are rendered from the audit data, never parsed back, only in generated files; the emitter is `ruamel.yaml` as a write-only dependency (the load path stays `yaml.safe_load`). The emitter exists on `json_v2`. What changed since: sizing sources are now explicit references, so the comment would read `# sized from pv_south.pv_peak_power_in_watt = 4200.0`, and disabled groups leave no trace in the record (R14), so "group X was off" can only live in the audit companion.
 *Options.* (a) **Keep** — one extra dependency (`ruamel.yaml`), the emitter ported; a human reading a realized record sees where every number came from without opening the audit file; re-running a record with comments stripped must give the same result (AC-P2.13). (b) **Drop** — the audit companion is the only provenance; realized records stay plain YAML writable with `yaml.safe_dump`; readers cross-reference two files.
 *Recommendation.* (a), unchanged from the `json_v2` decision — the main audience of a realized record is a person checking a run, and the cost is a write-only dependency that already exists on the branch.
+*Decision.* `[decided 2026-08-26, owner]` **(a)** keep — built as new work in P2 (PR-4): nothing exists to port (the `json_v2` branch has no YAML code; its only free text is the top-level `description`, kept as a field). PyYAML and ruamel.yaml (write-only) become declared dependencies.
 
 **Q-P2.4 — Do the `describe <class>` and `facts <energy_system>` CLI commands belong to P2 or to the P4 sweep?** · blocks R13.3, AC-P2.6, plan §P2/§P4
 *Context.* P1 delivers the introspection *data* (fields, presets, sizable fields with facts and cardinality, facts provided — R13.1). The CLI on top is roughly 100 lines. It is useful in two places: for authors of energy-system files (P2's audience) and as the per-batch review tool in P4 ("does `describe` show the right presets and facts for every converted class?" — plan B8).
 *Options.* (a) **P2** — available when the sweep starts, so each P4 batch is reviewed with it; P2 grows by the CLI and its tests. (b) **P4** — P2 stays format-only; the first sweep batches are reviewed by reading code; the CLI arrives mid-sweep.
 *Recommendation.* (a); the sweep is the larger review burden and the tool is small.
+*Decision.* `[decided 2026-08-26, owner]` P2, as **nested nouns**: `hisim energy-system describe <class>`, `hisim energy-system facts <file>`, `hisim energy-system run <file> <simulation>`; `hisim/cli.py` is created to repair the dangling `hisim=hisim.cli:main` entry point, leaving room for other command families (`hisim renovisor …`).
 
 **Q-P2.5 — What happens to the ~50 v1 `*.scenario.json` files and the `system_setups/` directory name?** · blocks C-P2.4, RQ2, plan §P3/§P5
 *Context.* `system_setups/` holds ~50 Python setups and their v1 JSON twins, regenerated by CI (`.github/workflows/scenario-json-freshness.yml`). v3 does not read v1 or v2 files (C-P2.4). P3 records every Python setup into a v3 `*.energy_system.yaml`; after that the v1 JSONs describe the same systems twice. The directory name says "setup" and the file suffix says "scenario", both terms this epic retires.
 *Options.* (a) **Retire in P5** — v1 JSONs and their freshness workflow are deleted once every setup has a recorded v3 file and the golden suites pass on those; `system_setups/` is renamed `energy_systems/` at the same time; no converter is written. (b) **Convert** — write a v1 → v3 converter so the JSONs migrate; keeps two representations alive until the Python setups are removed too. (c) **Rename directory now, in P2** — v3 fixtures land in `energy_systems/` from the start; v1 files stay where they are until P5.
 *Recommendation.* (c) for the directory (so no v3 file is ever created under the old name) and (a) for the files: the recorded v3 files *are* the conversion, a converter would be throw-away code.
-
+*Decision.* `[decided 2026-08-26, owner]` **Neither rename nor retire now.** `system_setups/` keeps the Python setups (and their v1 JSON twins) for the coming months; new v3 files live in a new top-level directory **`energy_systems/`** (`*.energy_system.yaml`). Retirement of `system_setups/` and the v1 freshness workflow is a later decision (after P3/P5), no v1→v3 converter.
 
 **Q-P2.6 — How does a file instantiate a class whose defaults are an identifier lookup (Weather by location, Building by TABULA code, occupancy by LPG household) when the identifier is not one of the presets?** · blocks R1.4, R3.8
 *Proposed answer* `[proposed 2026-08-25, after P1 Q-P1.6 was decided]`: an explicit **`constructor:` entry** naming one of the class's declared constructors with plain-value arguments, mutually exclusive with `preset`, followed by `config` overrides — R3.8; shown for all three classes in `energy_system_mockup.yaml` (weather `for_location`, occupancy `for_household`, building `for_tabula_code`) and for the building and three occupancies in `energy_system_mockup_mfh.yaml`. Rejected: a complete hand-written `config` (long, and the constructor logic would have to be re-typed by the author); an implicit canonical preset when `preset` is omitted (an inference, E1); constructor arguments as `config` overrides on `standard` with dependents re-derived by law (works only after Q-P1.4 and hides that a constructor ran).
+*Decision.* `[decided 2026-08-26, owner]` R3.8 accepted as proposed: `constructor: {<for_name>: {<arg>: <value>}}`, exactly one of `preset`/`constructor`, class side = `@constructor` classmethods (decided in P1 the same day).
 
 ## 12. Glossary
 

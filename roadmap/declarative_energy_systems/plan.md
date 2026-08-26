@@ -33,18 +33,20 @@ P1 sizing kernel ──► P2 file format & executor ──► P3 recording & se
 ## P1 — Sizing kernel
 
 - [ ] Requirements document accepted (Q-P1.9 decided against `roadmap/declarative_energy_systems/preset_naming_supplement.md`; then rename `BuildingConfig.presets.german_single_family_home` → `standard`, pick the canonical PV preset)
-- [ ] Solution design: binding rule API, how a preset acquires its instance name (was Q-P1.1), introspection surface
-- [ ] `FactScope`, adjacency, pre-seed removed; qualified-name lookup + `sources` mapping
-- [ ] Uniqueness evaluated over the given set; error lists candidates, ready to paste
-- [ ] Presets carry no `component_id`; name injected at construction
-- [ ] Contract test: fact-name collisions across non-interchangeable classes; one-vs-many misuse
-- [ ] Introspection: fields, presets, sizable fields + facts read, facts provided (data, not CLI)
-- [ ] Pilots (boiler, HDS, EMS) green on the new kernel; `tests/test_sizing_engine.py` rewritten
-- [ ] `roadmap/declarative_energy_systems/plan.md` §P1 checked off, plan on `config_presets` marked superseded
+- [x] Solution design: binding rule API, how a preset acquires its instance name (was Q-P1.1), introspection surface *(2026-08-25)*
+- [x] `FactScope`, adjacency, pre-seed removed; qualified-name lookup + `sources` mapping *(2026-08-25)*
+- [x] Uniqueness evaluated over the given set; error lists candidates, ready to paste *(2026-08-25)*
+- [x] Presets carry no `component_id`; name injected at construction *(2026-08-25)*
+- [x] Contract test: fact-name collisions across non-interchangeable classes; one-vs-many misuse *(2026-08-25)*
+- [x] Introspection: fields, presets, sizable fields + facts read, facts provided (data, not CLI) *(2026-08-25)*
+- [x] Pilots (boiler, HDS, EMS) green on the new kernel; `tests/test_sizing_engine.py` rewritten *(2026-08-25)*
+- [x] This plan's §P1 checked off; the former plan and review agenda on `config_presets` deleted, `random_findings.md` moved here *(2026-08-25)*
+- [ ] PR body of #586 rewritten to the P1 scope; branch pushed
 
 ## P2 — File format & executor
 
-- [ ] Requirements document accepted (incl. Q8 provenance comments, O2 metering base files)
+- [x] Requirements decisions taken 2026-08-26 (Q8 keep comments; nested CLI; `energy_systems/` alongside `system_setups/`; R3.8 accepted; AC-P2.1 amended; RQ3 dropped) — document acceptance pending review
+- [ ] Convert UC1's classes to presets/constructors: Weather (`preset_standard` + `for_location`), UtspLpgConnector (`preset_standard` + `for_household`), GenericBoilerController, ElectricityMeter
 - [ ] Solution design against the three mockups (they are the fixtures)
 - [ ] Schema v3 + static validation (`hisim/scenario_v2` → v3), duplicate-key loader for YAML and JSON
 - [ ] Consumer-side `inputs` (bare / explicit wire / aggregator feed) replaces grouped-by-source connections

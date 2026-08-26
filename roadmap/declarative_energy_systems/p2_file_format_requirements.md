@@ -77,10 +77,10 @@ Changes to the format are made as diffs on the mockups first, then reflected her
 - R4.8 `[proposed]` Wildcards and relative references are not part of v3 (reserved for a future preprocessor, E4).
 
 ### R6 — Simulation parameters separate `[proposed]`
-Time range, resolution, post-processing stay in `*.simulation.yaml/json`; an energy-system file contains none of them.
+Time range, resolution, post-processing stay in the simulation-parameters file (`*.simulation.yaml`; the existing `*.simulation.json` files keep working for the Python setups until they are migrated); an energy-system file contains none of them.
 
 ### R7 — Hard errors, no repair `[proposed]`
-Unknown component/field/preset/fact, unprovided fact, ambiguity, cycle, duplicate key (YAML and JSON), wrong `schema_version`, unresolvable `${var}` → hard error before any component is built. The only sanctioned dropping is R14's.
+Unknown component/field/preset/fact, unprovided fact, ambiguity, cycle, duplicate key, wrong `schema_version`, unresolvable `${var}` → hard error before any component is built. The only sanctioned dropping is R14's.
 
 ### R8 — Realized record and provenance `[proposed; v2 A3/A4]`
 - R8.1 `[proposed; v2 A4]` A run writes `realized.energy_system.yaml`: same format, presets expanded to full `config`, every sized value a number, `sizing_sources` always written, enabled groups kept, disabled groups **absent**. Re-running it sizes nothing and reproduces the run bit-for-bit.
@@ -89,6 +89,9 @@ Unknown component/field/preset/fact, unprovided fact, ambiguity, cycle, duplicat
 
 ### R11 — Readable, canonical style `[decided 2026-08-25]`
 Self-contained component blocks in the R1.4 key order; block lists, one item per line; no central connections block; the generator emits exactly this style so hand-written and generated files diff cleanly.
+
+### R15 — YAML is the only format `[decided 2026-08-26, owner]`
+Energy-system files are YAML (`*.energy_system.yaml`), hand-written and generated alike; JSON is **not** an accepted input format and `*.json` is not an accepted suffix, even though YAML parsers happen to accept JSON syntax. One loader, one canonical style (R11), one duplicate-key rule, one fixture format. The JSON artifacts that remain are the exported JSON *Schema* (the schema language's own format, R13.2) and the retired v1 `*.scenario.json` files, which v3 never reads. The HPC harness ships the YAML text inside its own job payload; RenoVisor writes YAML. Supersedes the inherited `json_v2` decision A3 ("JSON stays loadable").
 
 ### R12 — Resource references `[proposed; v2 §3.5]`
 Paths are `${var}/…` through the `PathResolver`; absolute paths in a file are an error at load.
@@ -131,7 +134,7 @@ Paths are `${var}/…` through the `PathResolver`; absolute paths in a file are 
 | AC-P2.5 | One test per hard-error condition in R7 and R2.3/R3.6, each asserting the message names the offending entry and (where applicable) the valid alternatives. | R7, R13.4 |
 | AC-P2.6 | The exported JSON Schema rejects an unknown preset and an unknown field for every converted class; `describe` and `facts` produce the listed content for the mockups. | R13.2, R13.3 |
 | AC-P2.7 | `dump(load(file)) == file` for the three mockups (after one canonicalising pass). | RQ4, R11 |
-| AC-P2.8 | A file with an absolute path, a duplicate key, or `schema_version: 2` is rejected at load. | R7, R12, RQ2 |
+| AC-P2.8 | A file with an absolute path, a duplicate key, or `schema_version: 2` is rejected at load; a `*.json` file is rejected as an unsupported format. | R7, R12, RQ2, R15 |
 | AC-P2.9 | *withdrawn 2026-08-26 with RQ3* | — |
 | AC-P2.10 | A component with no consumers produces a warning line in the resolution report, not an error. | R2.4 |
 | AC-P2.11 | A nested group, a component listed in two groups, and a grouped component whose name collides with an ungrouped one are each rejected at load with the names involved. | R14.1, R14.2 |

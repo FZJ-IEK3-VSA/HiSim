@@ -92,7 +92,7 @@ P2 turns the three mockups into a loadable format and an executor. The central d
 
 ### 3.1 Concepts
 
-- **Energy-system file** — one YAML (or JSON) document, `schema_version: 3`; suffix `*.energy_system.yaml`, directory `energy_systems/` (Q-P2.5c).
+- **Energy-system file** — one YAML document (YAML only, R15), `schema_version: 3`; suffix `*.energy_system.yaml`, directory `energy_systems/` (Q-P2.5c).
 - **Component entry** — the key is the instance name and the whole identity (R1.1, R1.3); the value carries `class`, `preset` xor `constructor`, `config`, `inputs`, `sizing_sources` in that order (R1.4).
 - **Input item** — one element of a consumer's `inputs`: bare source name, explicit wire, or aggregator feed (§3.2).
 - **Group** — `{enabled, components}`: a set with a flag, never a namespace (R14.1/14.2). **Enabled set** — what survives expansion; the *only* set the binding rule sees (R14.3, Q-P2.3).
@@ -120,14 +120,14 @@ Classification is total, by key presence: `input` ⇒ (b); any of `tags`/`weight
 
 An entry's config has exactly one of three origins, then sparse overrides: `preset: <name>` → `Cls.presets.<name>(key)` (`hisim/config/presets.py:Preset.__call__`); `constructor: {<name>: {<arg>: <value>}}` → `Cls.<name>(key, **args)` (R3.8, D4); or a complete `config:` block (R1.4). Overrides decode through the ported `serialization.py:ScenarioConfigCodec` — enums by member name, `"AUTO"` via the `sized_field` codec, `${var}` via `path_resolver.py`.
 
-`loader.py` accepts `.yaml`/`.yml`/`.json`, uses `yaml.safe_load` with a duplicate-key-rejecting constructor and `json.load` with the ported `_object_pairs_rejecting_duplicates` hook (A2, EF-02), and restricts the YAML-1.1 boolean resolver to `true|false` so an enum member spelled `NO`/`ON` survives as a string (§11 R-3). `${var}` is resolved through the ported `PathResolver` (`inputs`, `utsp_results`, `cache`, `cwd`); an absolute path anywhere in a config block is EF-05 (R12).
+`loader.py` accepts `.yaml`/`.yml` only (R15: a `.json` path is EF-00 unsupported format), uses `yaml.safe_load` with a duplicate-key-rejecting constructor; the ported JSON `object_pairs_hook` is dropped.
 
 ### 3.4 Executor lifecycle
 
 ```
-  *.energy_system.yaml  +  *.simulation.json/yaml
+  *.energy_system.yaml  +  *.simulation.yaml (existing *.simulation.json still accepted for the parameters file)
       │
-  1 LOAD      yaml.safe_load / json.load, duplicate-key hook, schema_version (RQ2, EF-01/02)
+  1 LOAD      yaml.safe_load only, duplicate-key hook, schema_version (RQ2, R15, EF-00/01/02)
       ▼       → EnergySystemFile (pydantic), key order preserved
   2 GROUPS    expand(): drop disabled components, every `inputs` item naming one, every
       │       sizing reference — scalar dangling = EF-42, list shrinks (may reach []) and the
@@ -314,7 +314,7 @@ Fail fast at the earliest stage that can know; nothing is repaired, defaulted or
 
 | Stage | IDs |
 |---|---|
-| 1 load | EF-01 `schema_version` ≠ 3 (names the supported version) · EF-02 duplicate key (YAML or JSON, whole document) · EF-03 malformed/unknown top-level key · EF-04 unresolvable `${var}` · EF-05 absolute path · EF-06 `[*]` or a relative reference |
+| 1 load | EF-01 `schema_version` ≠ 3 (names the supported version) · EF-00 unsupported suffix (not `.yaml`/`.yml`) · EF-02 duplicate key (whole document) · EF-03 malformed/unknown top-level key · EF-04 unresolvable `${var}` · EF-05 absolute path · EF-06 `[*]` or a relative reference |
 | 2 groups | EF-42 dangling scalar `sizing_sources` after the off rule |
 | 3 structural | EF-11 preset **and** constructor · EF-12 neither and `config` incomplete · EF-18 unknown entry key · EF-19 unclassifiable `inputs` item · EF-20 unknown source · EF-24 mixed spelling per pair · EF-25 duplicate feed `(source, output)` · EF-26 duplicate wire into one input · EF-50 nested group · EF-51 component in two groups · EF-52 duplicate name · EF-53 missing/non-bool `enabled` · EF-54 empty group |
 | 4 class-bound | EF-10 class not importable · EF-13 unknown preset · EF-14 unknown constructor · EF-15 unknown/missing constructor argument · EF-16 unknown config field · EF-17 undecodable value · EF-21/22 unknown output/input port · EF-23 bare item with no declared defaults · EF-27 feed at a non-aggregator · EF-28 no channel match / tie · EF-29 dispatch vs. `DispatchRule`, dispatch on weight 999 · EF-30 load-type/unit mismatch |
@@ -433,3 +433,4 @@ Fixtures are the three mockups plus D2's executable fixture; nothing parallel is
 - **CLI** `[decided 2026-08-26]` `hisim/cli.py` with nested nouns: `hisim energy-system describe|facts|run`.
 - **Provenance comments** `[decided 2026-08-26]` built in PR-4 (new work; PyYAML + ruamel.yaml declared).
 - **Constructors** `[decided 2026-08-26]` class side `@constructor` (P1 rework), file side R3.8 as proposed.
+- **Format** `[decided 2026-08-26]` YAML only (R15): the JSON loader path and the `.json` suffix are removed from §3/§5/§8; `component_connections.json` stays as the v1-compatible *output* wire log (A4), unaffected.

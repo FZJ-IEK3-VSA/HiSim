@@ -29,7 +29,7 @@ from typing import List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # scripts/ on sys.path
 
-from hpc_harness.client import HarnessClient  # noqa: E402
+from hpc_harness.client import HarnessClient  # noqa: E402  # pylint: disable=wrong-import-position
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SETUP_DIR = REPO_ROOT / "system_setups"

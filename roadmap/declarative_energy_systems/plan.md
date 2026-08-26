@@ -52,8 +52,8 @@ P1 sizing kernel ──► P2 file format & executor ──► P3 recording & se
 - [x] Consumer-side `inputs` (bare / explicit wire / aggregator feed) replaces grouped-by-source connections (PR-1/PR-3) *(2026-08-26)*
 - [x] Groups: parse, "off" rule, uniqueness over enabled set; class-bound validation, config decoding, sizing bridge to the kernel (PR-2) *(2026-08-26)*
 - [x] Executor: resolve (P1 API) → construct → connect; error catalogue with both ends named; UC1 runs end to end (PR-3) *(2026-08-26)*
-- [ ] Realized record (presets expanded, `AUTO` → numbers, disabled groups absent) + audit companion; YAML comments per A4 if Q8 confirms
-- [ ] Identity test over all mockups and groups
+- [x] Realized record (presets expanded, `AUTO` → numbers, disabled groups absent) + audit companion + wire log; provenance as YAML comments (ruamel, write-only) (PR-4) *(2026-08-26)*
+- [x] Identity test over all mockups and groups (PR-2 on the model, PR-4 on the record) *(2026-08-26)*
 - [ ] JSON Schema export; `describe <class>`, `facts <energy_system>` CLI
 - [ ] `${var}` path resolver carried over from `json_v2`
 - [ ] C10 — v3 fixtures spell UTSP `JsonReference`s as `Name`/`Guid`/`StrVal`; one local-LPG run verifies (own commit, before/after)

@@ -50,6 +50,18 @@ The stages that need the component classes live in their own modules and are del
       for those grown ports.
     - :mod:`hisim.energy_system.executor` — the order the stages run in, and the two entry
       points that build and run a file.
+    - :mod:`hisim.energy_system.metadata` — the version, the commit and the input files a
+      generated record names, and nothing that changes between two regenerations.
+    - :mod:`hisim.energy_system.record` — the realized record: a run written back as a file
+      that states every value it decided and therefore decides nothing when re-run.
+    - :mod:`hisim.energy_system.audit_records` — the shapes of a run's provenance, read both
+      by the audit writer and by the comment renderer.
+    - :mod:`hisim.energy_system.audit` — collecting that provenance from a finished build, and
+      writing it beside a record together with the flat log of every wire that was made.
+    - :mod:`hisim.energy_system.comments` — the writer that renders the same provenance as the
+      end-of-line comments of a record. It is the one module that uses a second YAML library,
+      because the canonical writer cannot attach comments, and it is never on a path that
+      reads a file.
 
 Two further modules sit outside both groups. :mod:`hisim.energy_system.channels` holds the
 declaration of an aggregator's accepted flows and :mod:`hisim.energy_system.resolution` the
@@ -80,6 +92,7 @@ from hisim.energy_system.errors import (
     EnergySystemError,
     EnergySystemErrorId,
     EnergySystemFormatError,
+    EnergySystemRecordError,
     EnergySystemSizingError,
     EnergySystemWiringError,
 )
@@ -129,6 +142,7 @@ __all__ = [
     "EnergySystemFile",
     "EnergySystemFormatError",
     "EnergySystemReader",
+    "EnergySystemRecordError",
     "EnergySystemSizingError",
     "EnergySystemWiringError",
     "ExpansionRecord",

@@ -29,7 +29,7 @@ import enum
 import typing
 from typing import Any, Dict, Mapping, Optional, Tuple, Type
 
-from hisim.config.sizing import AUTO, _AutoSize
+from hisim.config.sizing import AUTO, SizedFieldMetadata, _AutoSize
 from hisim.energy_system.errors import EnergySystemBindingError, EnergySystemErrorId
 
 
@@ -92,6 +92,96 @@ class ConfigValueCodec:
             except Exception as error:  # pylint: disable=broad-except
                 raise self._decoder_failure(field_name, value, location, name, error) from error
         return self._decode_by_annotation(field_name, value, location, name)
+
+    def to_deserializer_payload(
+        self, block: Mapping[str, Any], location: str, name: str
+    ) -> Dict[str, Any]:
+        """Rewrites a complete ``config`` block into the spelling the class itself reads.
+
+        A complete block is not applied field by field like a sparse override — the
+        configuration class deserializes it as a whole, because only the class knows how to
+        rebuild the nested objects some of its fields hold. That deserializer reads an
+        enum-typed field by the member's *value*, while this format writes enums by the
+        member's *name*, and the two differ for every enum whose values are not their names.
+        Bridging that difference here, rather than in the deserializer, keeps one spelling in
+        the file and leaves the class's own serialization untouched.
+
+        Nothing else is touched: numbers, strings, nested mappings and lists are handed on
+        exactly as written, and so is the bare word ``AUTO``, which a sizable field's own
+        decoder understands.
+
+        Args:
+            block: The complete ``config`` block as the file carries it.
+            location: The dotted key path of the block, for the message.
+            name: The component's name, for the message.
+
+        Returns:
+            A fresh mapping ready for the configuration class's deserializer.
+
+        Raises:
+            EnergySystemBindingError: ``EF-1A`` when a value on an enum-typed field names no
+                member, listing the members the enum has.
+        """
+        payload: Dict[str, Any] = {}
+        for key, value in block.items():
+            enum_class = self._enum_type_of(key)
+            if enum_class is None or not isinstance(value, str) or value == _AutoSize.WIRE_SPELLING:
+                payload[key] = value
+                continue
+            member = self._decode_enum(enum_class, value, f"{location}.{key}", name, key)
+            payload[key] = member.value
+        return payload
+
+    def wire_value(self, field_name: str, value: Any) -> Any:
+        """Returns a plain value spelled the way the field's own type spells it.
+
+        One mismatch is common enough to matter and invisible until it bites: a field annotated
+        ``float`` whose default was written as a whole number holds an ``int``. Reading such a
+        value back through the configuration class turns it into a ``float``, so a record that
+        wrote it as an ``int`` would describe a system that differs from the one its own
+        re-execution builds — not numerically, but textually, which is enough to break the
+        promise that re-running a record reproduces it.
+
+        Nothing else is converted. A value whose type the annotation admits is written as it is,
+        and a field whose annotation the codec could not resolve is left alone entirely.
+
+        Args:
+            field_name: The field the value belongs to.
+            value: The plain value about to be written.
+
+        Returns:
+            The value, widened to ``float`` where that is the only numeric type the field admits.
+        """
+        if isinstance(value, bool) or not isinstance(value, int):
+            return value
+        candidates = self._candidate_types(self.hints.get(field_name))
+        if float in candidates and int not in candidates:
+            return float(value)
+        return value
+
+    def _enum_type_of(self, field_name: str) -> Optional[Type[enum.Enum]]:
+        """Returns the enum a field is typed by, or ``None`` when it holds something else.
+
+        Both declaration styles are read: a plain annotation, whose union members carry the
+        enum, and a sizable field, whose declaration records the enum separately so that the
+        ``AUTO`` decoder can still coerce it.
+
+        Args:
+            field_name: The field to look up; a key that is no field at all answers ``None``.
+
+        Returns:
+            The enum class, or ``None``.
+        """
+        field = self.fields.get(field_name)
+        if field is None:
+            return None
+        recorded = field.metadata.get(SizedFieldMetadata.VALUE_TYPE)
+        if isinstance(recorded, type) and issubclass(recorded, enum.Enum):
+            return recorded
+        for candidate in self._candidate_types(self.hints.get(field_name)):
+            if isinstance(candidate, type) and issubclass(candidate, enum.Enum):
+                return candidate
+        return None
 
     def _decoder_failure(
         self, field_name: str, value: Any, location: str, name: str, error: Exception

@@ -81,9 +81,49 @@ class EnergySystemEmitter:
     comments and reuses the document produced here.
     """
 
-    #: Column at which the emitter wraps long scalars. Wider than the usual eighty so that
-    #: dotted class paths and long field names stay on one line.
-    LINE_WIDTH: ClassVar[int] = 120
+    #: Column at which the emitter would fold a long scalar onto a second line, set high
+    #: enough that it never does. Folding is the one place where two YAML libraries writing
+    #: the same document legitimately disagree — they choose different break points — and the
+    #: annotated writer of a run record runs on a different library by necessity, so a folded
+    #: scalar would make the two styles drift apart for reasons no reader would understand.
+    #: Never folding also keeps a long description or a long path greppable.
+    LINE_WIDTH: ClassVar[int] = 1_000_000
+
+    #: The tag PyYAML's implicit resolver gives a plain scalar that really is a string. Any
+    #: other answer means the unquoted spelling would be read back as a number, a boolean or
+    #: a date, which is what makes the quotes necessary.
+    STRING_TAG: ClassVar[str] = "tag:yaml.org,2002:str"
+
+    #: The other reason a string cannot be written plain: it spans lines, which the canonical
+    #: style writes as a quoted scalar folded over the following lines.
+    LINE_BREAK: ClassVar[str] = "\n"
+
+    @classmethod
+    def must_quote(cls, text: str) -> bool:
+        """Whether the canonical style writes this string in quotes rather than plain.
+
+        Two things stop a string from being written plain. Its unquoted spelling would be read
+        back as something else — ``yes`` and ``on`` under YAML 1.1's boolean rules, ``12`` under
+        its number rules — which is answered by PyYAML's own implicit resolver rather than by a
+        list of special words, so the rule cannot fall behind the resolver that reads these
+        files. Or it spans lines, which the canonical style writes as a quoted scalar folded
+        over the following lines.
+
+        The annotated writer of a run record uses a different YAML library, which answers both
+        questions differently: its resolver follows a later version of the specification, and it
+        prefers double quotes for a string that spans lines. Asking this method instead of that
+        library's own judgement is what keeps the two writers producing the same bytes.
+
+        Args:
+            text: The string about to be written.
+
+        Returns:
+            ``True`` when the string needs quoting to survive a round trip.
+        """
+        if cls.LINE_BREAK in text:
+            return True
+        resolver = yaml.resolver.Resolver()
+        return bool(resolver.resolve(yaml.nodes.ScalarNode, text, (True, False)) != cls.STRING_TAG)
 
     @classmethod
     def dump(cls, model: EnergySystemFile) -> str:

@@ -37,8 +37,10 @@ import yaml
 
 from hisim import log
 from hisim import simulator as sim
+from hisim.energy_system.audit import build_audit, write_audit
 from hisim.energy_system.bindings import ClassBindings
 from hisim.energy_system.classes import validate_classes
+from hisim.energy_system.comments import AnnotatedEmitter, write_record
 from hisim.energy_system.configure import ConfiguredSystem, configure_energy_system
 from hisim.energy_system.errors import (
     EnergySystemErrorId,
@@ -48,6 +50,7 @@ from hisim.energy_system.groups import ExpansionRecord, expand_groups
 from hisim.energy_system.loader import parse_energy_system
 from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.path_resolver import PathResolver
+from hisim.energy_system.record import realize, verify_rerun
 from hisim.energy_system.validation import validate_structure
 from hisim.energy_system.wiring import WiredSystem, wire_energy_system
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -185,6 +188,10 @@ class BuiltEnergySystem:
     the components and the connections that were made, and the warnings the run should print.
 
     The simulator is the object a caller runs; everything else is what a caller writes down.
+    The three trailing fields exist only for that writing: the two file names a record's metadata
+    states, the resolver that turns local paths back into portable references, and whether the
+    caller declared this to be the re-execution of a record, which is what turns the reproduction
+    guarantee from a claim into a check.
     """
 
     model: EnergySystemFile
@@ -194,6 +201,10 @@ class BuiltEnergySystem:
     wired: WiredSystem
     simulator: sim.Simulator
     warnings: Tuple[str, ...]
+    source_energy_system: str = ""
+    source_simulation_parameters: str = ""
+    path_resolver: Optional[PathResolver] = None
+    rerun: bool = False
 
 
 class EnergySystemExecutor:
@@ -223,6 +234,9 @@ class EnergySystemExecutor:
         path_resolver: Optional[PathResolver] = None,
         source_directory: str = "",
         source_filename: str = "",
+        source_energy_system: str = "",
+        source_simulation_parameters: str = "",
+        rerun: bool = False,
     ) -> None:
         """Prepares an executor for one loaded energy system.
 
@@ -233,12 +247,19 @@ class EnergySystemExecutor:
                 registry for this machine when omitted.
             source_directory: Directory reported to the simulator as the run's location.
             source_filename: File name reported to the simulator as the run's name.
+            source_energy_system: Path of the energy-system file, as a run record names it.
+            source_simulation_parameters: Path of the parameters file, likewise.
+            rerun: Whether the caller declared this to be the re-execution of a record, which
+                is what makes the reproduction guarantee checkable.
         """
         self.model = model
         self.simulation_parameters = simulation_parameters
         self.path_resolver = path_resolver
         self.source_directory = source_directory
         self.source_filename = source_filename
+        self.source_energy_system = source_energy_system
+        self.source_simulation_parameters = source_simulation_parameters
+        self.rerun = rerun
 
     def build(self) -> BuiltEnergySystem:
         """Runs every stage from the loaded file to a wired, registered simulator.
@@ -272,6 +293,10 @@ class EnergySystemExecutor:
             wired=wired,
             simulator=simulator,
             warnings=warnings,
+            source_energy_system=self.source_energy_system,
+            source_simulation_parameters=self.source_simulation_parameters,
+            path_resolver=self.path_resolver,
+            rerun=self.rerun,
         )
 
     def register(self, model: EnergySystemFile, wired: WiredSystem) -> sim.Simulator:
@@ -338,6 +363,7 @@ def build_energy_system(
     *,
     path_resolver: Optional[PathResolver] = None,
     rerun: bool = False,
+    simulation_parameters_path: Any = "",
 ) -> BuiltEnergySystem:
     """Loads an energy-system file and builds everything it describes, without running it.
 
@@ -353,6 +379,9 @@ def build_energy_system(
             for this machine when omitted.
         rerun: Whether a generated run record is being re-run, which is what makes a
             ``metadata`` block acceptable.
+        simulation_parameters_path: Path of the parameters file, when the caller read them from
+            one; a run record names it so that the pair which reproduces the run is written
+            down, and nothing else uses it.
 
     Returns:
         The built system, its simulator registered and wired.
@@ -369,8 +398,49 @@ def build_energy_system(
         path_resolver=path_resolver,
         source_directory=str(path.parent.resolve()),
         source_filename=path.stem,
+        source_energy_system=str(path),
+        source_simulation_parameters=str(simulation_parameters_path or ""),
+        rerun=rerun,
     )
     return executor.build()
+
+
+def write_records(built: BuiltEnergySystem, result_directory: str) -> Tuple[str, str, str]:
+    """Writes the three artifacts that describe one built energy system.
+
+    The realized record states what was built, annotated with where every number came from; the
+    audit companion states the same provenance as data nothing has to parse out of a comment; and
+    the wire log lists every connection that was made. All three are written before the first
+    timestep runs, so a run that crashes halfway still leaves behind a complete description of
+    the system it was running — which is when such a description is worth the most.
+
+    Nothing has to have been simulated for this to work. A caller that only built a system, to
+    see what a file would produce, gets the same three files.
+
+    Args:
+        built: The finished build.
+        result_directory: Where the artifacts go; created when it does not exist.
+
+    Returns:
+        The paths of the record, the audit and the wire log.
+
+    Raises:
+        EnergySystemRecordError: ``EF-60`` when the record would not be fully concrete, and
+            ``EF-61`` when this was a re-run that failed to reproduce the record it was given.
+    """
+    record = realize(built)
+    if built.rerun:
+        verify_rerun(built, record)
+    os.makedirs(result_directory, exist_ok=True)
+    record_path = write_record(
+        record, build_audit(built), os.path.join(result_directory, AnnotatedEmitter.RECORD_FILENAME)
+    )
+    audit_path, wire_path = write_audit(built, result_directory)
+    log.information(
+        f"Wrote the realized record of '{built.model.name}' to '{record_path}', its audit to "
+        f"'{audit_path}' and its wire log to '{wire_path}'."
+    )
+    return record_path, audit_path, wire_path
 
 
 def run_energy_system(
@@ -408,8 +478,12 @@ def run_energy_system(
         parameters.result_directory = result_directory
         os.makedirs(result_directory, exist_ok=True)
     built = build_energy_system(
-        energy_system_path, parameters, rerun=rerun
+        energy_system_path,
+        parameters,
+        rerun=rerun,
+        simulation_parameters_path=simulation_parameters_path,
     )
+    write_records(built, built.simulator.get_simulation_parameters().result_directory)
     log.information(f"Starting the simulation of '{built.model.name}'.")
     built.simulator.run_all_timesteps()
     log.information(

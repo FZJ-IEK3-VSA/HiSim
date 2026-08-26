@@ -52,7 +52,10 @@ class EnergySystemErrorId(enum.Enum):
     ones already in use: ``EF-1A``/``EF-1B`` close the entry band with the two conditions
     a value in a ``config`` block can hit, ``EF-2A`` closes the connection band with a tag
     name no enum knows, and ``EF-4A`` … ``EF-4H`` wrap the eight failure modes of the sizing
-    kernel one-to-one, with ``EF-4X`` for a kernel failure that matches none of them.
+    kernel one-to-one, with ``EF-4X`` for a kernel failure that matches none of them. The
+    ``EF-6x`` band closes the list with the two ways writing a run record can fail, neither
+    of which an author can cause: a record that is not fully concrete, and a re-execution
+    that did not reproduce the record it was handed.
 
     Not every member is reachable from the loader and the structural validator alone:
     the identifiers covering presets, config fields, ports and channels can only be
@@ -116,6 +119,8 @@ class EnergySystemErrorId(enum.Enum):
     DUPLICATE_NAME = "EF-52"
     GROUP_ENABLED_FLAG = "EF-53"
     EMPTY_GROUP = "EF-54"
+    RECORD_NOT_CONCRETE = "EF-60"
+    RERUN_NOT_REPRODUCED = "EF-61"
 
 
 class EnergySystemError(Exception):
@@ -340,4 +345,20 @@ class EnergySystemSizingError(EnergySystemCatalogueError):
     The kernel's own message is kept verbatim inside this one, because it already names the
     candidates and prints the paste-ready ``sizing_sources`` block; the wrapper adds what
     the kernel cannot know, namely which entry of which file the failing config came from.
+    """
+
+
+class EnergySystemRecordError(EnergySystemCatalogueError):
+    """A run record could not be written, or a re-execution did not reproduce one.
+
+    The two conditions in this class are the only ones in the whole catalogue that no author
+    can provoke: a record that still carries the ``AUTO`` sentinel or a value that cannot be
+    written as plain data, and a re-run whose own record differs from the record it was handed.
+    Both mean the machinery broke its own promise — a record is a complete, concrete statement
+    of what ran, and re-running one reproduces it — so they are raised loudly rather than
+    logged, even though nothing about the input file is wrong.
+
+    The message names the component and the field involved, because that is where a breach of
+    either promise is diagnosed: a configuration whose dump is not plain data, or a value that
+    the record and its re-execution disagree about.
     """

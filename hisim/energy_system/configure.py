@@ -64,6 +64,29 @@ class ConfiguredSystem:
     report: ResolutionReport
     warnings: Tuple[str, ...]
     bindings: ClassBindings
+    origins: Tuple[Tuple[str, Any], ...] = ()
+
+    def origin_of(self, name: str) -> Any:
+        """Returns one component's configuration as its preset or constructor produced it.
+
+        The value a run record calls a *preset default*: what the entry would have been
+        configured with had it written no ``config`` block at all. Keeping it is what lets an
+        audit state, per overridden field, the value the author replaced rather than only the
+        value they wrote.
+
+        Args:
+            name: The component's name, which is its key in the file.
+
+        Returns:
+            The configuration before the entry's own overrides were applied.
+
+        Raises:
+            KeyError: If the system holds no component of that name.
+        """
+        for component_name, config in self.origins:
+            if component_name == name:
+                return config
+        raise KeyError(name)
 
     def config_of(self, name: str) -> Any:
         """Returns the configuration of one component.
@@ -112,20 +135,22 @@ class EntryConfigurator:
         self.resolver = resolver
         self.codec = ConfigValueCodec(binding.config_class)
 
-    def build(self) -> Any:
+    def build(self) -> Tuple[Any, Any]:
         """Builds the entry's configuration object, overrides and paths applied.
 
         Returns:
-            The configuration, with every field the file set written and every field a law
-            owns still open for the sizing stage.
+            A pair of the configuration as the origin produced it — the preset or constructor
+            default a record compares an override against — and the finished configuration,
+            with every field the file set written and every field a law owns still open for
+            the sizing stage.
 
         Raises:
             EnergySystemBindingError: ``EF-1A`` for a value that does not fit its field, or a
                 builder that refused the arguments the entry passed.
         """
-        config = self._realize_origin()
-        config = self._apply_overrides(config)
-        return self._expand_paths(config)
+        origin = self._realize_origin()
+        config = self._apply_overrides(origin)
+        return origin, self._expand_paths(config)
 
     def _realize_origin(self) -> Any:
         """Calls the preset or the constructor, or deserializes the entry's own block.
@@ -146,7 +171,9 @@ class EntryConfigurator:
             return self._call_builder(self.binding.preset, {})
         if self.binding.constructor is not None and entry.constructor is not None:
             return self._call_builder(self.binding.constructor, dict(entry.constructor.arguments))
-        payload = dict(entry.config)
+        payload = self.codec.to_deserializer_payload(
+            entry.config, f"components.{entry.name}.config", entry.name
+        )
         payload["component_id"] = {"name": entry.name}
         try:
             return getattr(self.binding.config_class, "from_dict")(payload)
@@ -231,14 +258,14 @@ class EntryConfigurator:
         path_fields = [
             field.name
             for field in dataclasses.fields(self.binding.config_class)
-            if self._is_path_field(field.name)
+            if self.is_path_field(field.name)
         ]
         if not path_fields:
             return config
         return PathFieldCodec.resolve(config, path_fields, self.resolver)
 
     @classmethod
-    def _is_path_field(cls, field_name: str) -> bool:
+    def is_path_field(cls, field_name: str) -> bool:
         """Whether a field name marks its value as a filesystem location.
 
         Args:
@@ -290,13 +317,17 @@ def configure_energy_system(
     resolver = path_resolver if path_resolver is not None else PathResolver.default()
     names: List[str] = []
     configs: List[Any] = []
+    origins: List[Any] = []
     for binding in resolved_bindings:
+        origin, config = EntryConfigurator(binding, resolver).build()
         names.append(binding.name)
-        configs.append(EntryConfigurator(binding, resolver).build())
+        origins.append(origin)
+        configs.append(config)
     sized = resolve_sizing(configs, sizing_sources_bridge(model), names)
     return ConfiguredSystem(
         configs=tuple(zip(names, sized[0])),
         report=sized[1],
         warnings=unconsumed_warnings(sized[1]),
         bindings=resolved_bindings,
+        origins=tuple(zip(names, origins)),
     )

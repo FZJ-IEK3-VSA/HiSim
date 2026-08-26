@@ -2,9 +2,10 @@
 
 Layer 1 (``tests/test_building_characterization.py``) pins what ``BuildingInformation``
 derives from the TABULA catalogue; it says nothing about the ~2000-line ``Building``
-component that turns those parameters into temperatures and heat flows. This module closes
-that gap for the cleanup phases described in ``roadmap/building_cleanup_spec.md``: it
-drives the component through one 15-minute-resolution day (96 timesteps) and snapshots
+component that turns those parameters into temperatures and heat flows. This module
+closes that gap for the behavior-identical cleanup of that component (the package split
+and the removal of its positional-unpacking and ordering hazards): it drives the component
+through one 15-minute-resolution day (96 timesteps) and snapshots
 **every output vector**, timestep by timestep, into a committed golden.
 
 Vectors, not aggregates, on purpose: a daily mean hides a sign flip, a shifted timestep or a

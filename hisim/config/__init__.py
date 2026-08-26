@@ -19,8 +19,8 @@ the other way round:
 module level. The single sanctioned exception is
 :meth:`hisim.config.sizing.SizingContext.for_building`, which imports the building
 package inside the method body: the building physics is what turns a ``BuildingConfig``
-into sizing facts, and the building package necessarily imports ``ConfigBase`` from here
-(see the §4.1 correction in the spec and entry 1 of ``roadmap/random_findings.md``).
+into sizing facts, and the building package necessarily imports ``ConfigBase`` from here,
+so a module-level import in the other direction would close an import cycle.
 
 Importing the names from this package — ``from hisim.config import ConfigBase`` — is the
 canonical spelling; the submodules are equally importable for code that prefers the

@@ -1,9 +1,9 @@
 """Layer 1 of the building cleanup harness: a characterization snapshot of BuildingInformation.
 
-``hisim/components/building.py`` is about to be split and de-hazarded in a sequence of
-cleanup commits that are defined to be behavior-identical (see
-``roadmap/building_cleanup_spec.md``). ``BuildingInformation`` is where most of that
-risk sits: roughly 690 lines that read a TABULA reference row and derive envelope areas,
+``hisim/components/building.py`` is being split into a package and de-hazarded in a
+sequence of cleanup commits that are defined to be behavior-identical: code moves,
+numbers do not. ``BuildingInformation`` is where most of that risk sits:
+roughly 690 lines that read a TABULA reference row and derive envelope areas,
 U-values, conductances, capacities and apartment counts through a chain of mutating
 ``set_*`` methods whose order is a convention rather than a contract. This module pins the
 result of that chain for **every** building code in the TABULA housing CSV, so any later
@@ -30,8 +30,9 @@ What is covered:
 
 The config used for the sweep is built field by field instead of through
 ``BuildingConfig.get_default_german_single_family_home()``. The harness must survive the
-config-presets redesign that follows the cleanup and removes that factory, and per the
-phase spec a harness that has to be edited mid-refactor proves nothing.
+config-presets redesign that follows the cleanup and removes that factory: a harness that
+has to be edited mid-refactor proves nothing, because the edit itself could hide the change
+it is meant to catch.
 
 Speed: the production class re-reads the 3281-row housing CSV on every instantiation
 (caching it is a phase-3 concern, and this harness must not touch production code). A
@@ -48,8 +49,9 @@ Regeneration: run the module with ``HISIM_REGENERATE_BUILDING_GOLDENS=1``, e.g.:
 which rewrites ``tests/goldens/building_information.json`` in full (the whole sweep is
 regenerated regardless of any ``-k`` selection, so a partial run can never write a partial
 golden). Without the variable a missing golden is a hard error rather than a silent
-create. The golden's diff is part of the merge request, and per the phase spec the only
-legal justification during the cleanup is a metadata change, never a number.
+create. The golden's diff is part of the merge request, and during the behavior-identical
+cleanup the only legal justification for regenerating it is a metadata change (a renamed or
+added attribute), never a changed number.
 """
 
 # clean

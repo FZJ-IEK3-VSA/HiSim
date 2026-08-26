@@ -1,0 +1,443 @@
+# yaml-language-server: $schema=../../hisim/energy_system_v3.schema.json
+# ---------------------------------------------------------------------------
+# MOCKUP 4 — multi-family house, three apartments (2026-08-25).
+# Central air/water heat pump with buffer storage feeding three apartments, each
+# with its own heat distribution type, DHW storage + electric DHW heater, car and
+# charger; apartments 1 and 2 have a small 1 kW PV each; one big central PV with
+# battery and EMS; one grid meter.
+#
+# Written against roadmap/declarative_energy_systems/config_requirements_spec.md with the v1 limits:
+#  - no template/repeat layer (Q1/R5): the three apartments are written out; each
+#    is a group (R14) purely for readability and toggling. Names are global, so
+#    every apartment component carries an aptN_ prefix by convention.
+#  - the Building is ONE thermal zone: whatever a component would size from a
+#    per-apartment building fact must be given explicitly (marked O5).
+# Same format as mockups 2/3: one direction (class/preset/config/inputs/
+# sizing_sources at the consumer), block lists, no math.
+# ---------------------------------------------------------------------------
+schema_version: 3
+name: MFH, three apartments, central heat pump, central PV with battery and EMS
+description: >
+  Three-apartment building. Central heating (heat pump + buffer) with a different
+  distribution system per apartment; decentralized DHW, one car per apartment;
+  two small apartment PV systems plus one central PV with battery, all managed by
+  one EMS behind one grid meter.
+
+components:
+
+  weather:
+    class: hisim.components.weather.Weather
+    preset: standard
+
+  building:
+    class: hisim.components.building.Building
+    constructor:
+      for_tabula_code:
+        building_code: DE.N.MFH.05.Gen.ReEx.001.001
+    config:
+      number_of_apartments: 3
+    inputs:
+      - weather
+      - apt1_occupancy                      # O6: the Building takes ONE occupancy input today;
+      # - apt2_occupancy                    #     summing three needs an aggregating input on the
+      # - apt3_occupancy                    #     Building (component work, not format work)
+      - apt1_hds                            # heat into the zone from all three distribution systems
+      - apt2_hds
+      - apt3_hds
+      - ems
+    # provides: heating_load_in_watt (whole building), number_of_apartments,
+    # conditioned_floor_area_in_m2 (whole building), heating_reference_temperature_in_celsius
+
+  meter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    preset: standard
+    inputs:
+      - from: ems.TotalElectricityToOrFromGrid
+        tags: [ELECTRICITY_PRODUCTION]
+        weight: 999
+
+groups:
+
+  central_heating:
+    enabled: true
+    components:
+      heat_pump:
+        class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+        preset: air_water                   # thermal power AUTO <- building.heating_load_in_watt (whole
+        config:                             # building — correct: it heats all of it)
+          with_domestic_hot_water_preparation: false
+        inputs:
+          - weather
+          - heat_pump_controller_sh
+          - buffer_storage
+          - input: TemperatureInputPrimary
+            from: weather.DailyAverageOutsideTemperatures
+
+      heat_pump_controller_sh:
+        class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+        preset: standard
+        inputs:
+          - weather
+          - buffer_storage
+          - ems
+          # no HDS controller input: three of them exist; the SH controller follows the
+          # buffer temperature instead (preset `standard` allows an unconnected HDS input? -> O7)
+        sizing_sources:                     # heat pump + 3 DHW heaters provide the power band
+          maximal_thermal_power_in_watt: heat_pump.maximal_thermal_power_in_watt
+
+      buffer_storage:
+        class: hisim.components.simple_water_storage.SimpleHotWaterStorage
+        preset: heat_pump                   # volume AUTO <- maximal_thermal_power_in_watt (one)
+        inputs:
+          - heat_pump
+          - apt1_hds                        # return flows from all three distribution systems
+          - apt2_hds
+          - apt3_hds
+        sizing_sources:
+          maximal_thermal_power_in_watt: heat_pump.maximal_thermal_power_in_watt
+
+  central_electricity:
+    enabled: true
+    components:
+      pv_central:
+        class: hisim.components.generic_pv_system.PVSystem
+        preset: standard                    # power_in_watt AUTO <- building.conditioned_floor_area_in_m2 (roof of
+        inputs:                             # the whole building — correct for the central system)
+          - weather
+
+      battery:
+        class: hisim.components.advanced_battery_bslib.Battery
+        preset: sized_to_pv                 # ONE pv_peak_power_in_watt; three PV systems exist -> say which
+        inputs:
+          - input: LoadingPowerInput
+            from: ems.BatteryDispatch
+        sizing_sources:
+          pv_peak_power_in_watt: pv_central.pv_peak_power_in_watt
+
+      ems:
+        class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
+        preset: optimize_own_consumption
+        inputs:
+          - from: pv_central
+            component_type: PV
+            tags: [ELECTRICITY_PRODUCTION]
+            weight: 999
+          - from: heat_pump
+            component_type: HEAT_PUMP_BUILDING
+            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+            weight: 2
+            dispatch: {}
+          - from: battery.AcBatteryPowerUsed
+            component_type: BATTERY
+            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+            weight: 6
+            dispatch: {}
+          - from: apt1_occupancy
+            tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+            weight: 1
+          - from: apt1_dhw_heater
+            component_type: ELECTRIC_HEATER
+            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+            weight: 3
+            dispatch: {}
+          - from: apt1_charger
+            component_type: CAR_BATTERY
+            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+            weight: 4
+            dispatch: {}
+          - from: apt1_pv
+            component_type: PV
+            tags: [ELECTRICITY_PRODUCTION]
+            weight: 999
+          - from: apt2_occupancy
+            tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+            weight: 1
+          - from: apt2_dhw_heater
+            component_type: ELECTRIC_HEATER
+            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+            weight: 3
+            dispatch: {}
+          - from: apt2_charger
+            component_type: CAR_BATTERY
+            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+            weight: 4
+            dispatch: {}
+          - from: apt2_pv
+            component_type: PV
+            tags: [ELECTRICITY_PRODUCTION]
+            weight: 999
+          - from: apt3_occupancy
+            tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+            weight: 1
+          - from: apt3_dhw_heater
+            component_type: ELECTRIC_HEATER
+            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+            weight: 3
+            dispatch: {}
+          - from: apt3_charger
+            component_type: CAR_BATTERY
+            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+            weight: 4
+            dispatch: {}
+        sizing_sources:                     # MANY readers: the class sums (R4.4)
+          pv_peak_power_in_watt:
+            - pv_central.pv_peak_power_in_watt
+            - apt1_pv.pv_peak_power_in_watt
+            - apt2_pv.pv_peak_power_in_watt
+          maximal_thermal_power_in_watt:
+            - heat_pump.maximal_thermal_power_in_watt
+            - apt1_dhw_heater.maximal_thermal_power_in_watt
+            - apt2_dhw_heater.maximal_thermal_power_in_watt
+            - apt3_dhw_heater.maximal_thermal_power_in_watt
+
+  # --- apartments: written out, one group each (no repeat layer in v1) -----------
+  apartment_1:
+    enabled: true
+    components:
+      apt1_occupancy:
+        class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+        constructor:
+          for_household:
+            household: CHR01_COUPLE_BOTH_AT_WORK
+
+      apt1_hds_controller:
+        class: hisim.components.heat_distribution_system.HeatDistributionController
+        preset: floor_heating
+        config:
+          absolute_conditioned_floor_area_in_m2: 62   # O5: no per-unit building facts yet -> explicit
+        inputs:
+          - weather
+          - building
+          - ems
+
+      apt1_hds:
+        class: hisim.components.heat_distribution_system.HeatDistribution
+        preset: floor_heating
+        config:
+          absolute_conditioned_floor_area_in_m2: 62   # O5
+        inputs:
+          - building
+          - apt1_hds_controller
+          - buffer_storage                  # the central heating feeds every apartment's HDS
+        sizing_sources:                     # three HDS controllers provide the mass flow -> say which
+          water_mass_flow_rate_in_kg_per_second: apt1_hds_controller.water_mass_flow_rate_in_kg_per_second
+
+      apt1_dhw_storage:
+        class: hisim.components.simple_water_storage.SimpleDHWStorage
+        preset: per_apartment
+        config:
+          volume_in_liter: 120              # preset would size from building.number_of_apartments (=3); this
+                                            # storage serves ONE apartment -> concrete override (O5)
+        inputs:
+          - apt1_occupancy
+          - apt1_dhw_heater
+
+      apt1_dhw_heater:
+        class: hisim.components.generic_heat_source.HeatSource
+        preset: electric_dhw                # maximal_thermal_power_in_watt AUTO <- number_of_residents? no:
+                                            # <- the class law reads number_of_apartments; see O5
+        inputs:
+          - apt1_dhw_controller
+
+      apt1_dhw_controller:
+        class: hisim.components.controller_l1_heatpump.L1HeatPumpController
+        preset: dhw
+        inputs:
+          - apt1_dhw_storage
+        sizing_sources:                     # four providers of the power band (heat pump + 3 DHW heaters)
+          maximal_thermal_power_in_watt: apt1_dhw_heater.maximal_thermal_power_in_watt
+
+      apt1_car:
+        class: hisim.components.generic_car.Car
+        preset: bev_small
+        inputs:
+          - apt1_occupancy
+
+      apt1_charger:
+        class: hisim.components.generic_ev_charger.EVCharger
+        preset: home_11kw
+        inputs:
+          - apt1_car
+          - input: DispatchSignal
+            from: ems.ChargerDispatch_apt1   # derived port name (v2 spec §4.6)
+
+      apt1_pv:
+        class: hisim.components.generic_pv_system.PVSystem
+        preset: standard
+        config:
+          power_in_watt: 1000               # small balcony/roof-share system: concrete, not law-sized
+        inputs:
+          - weather
+  apartment_2:
+    enabled: true
+    components:
+      apt2_occupancy:
+        class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+        constructor:
+          for_household:
+            household: CHR02_FAMILY_TWO_KIDS
+
+      apt2_hds_controller:
+        class: hisim.components.heat_distribution_system.HeatDistributionController
+        preset: radiator
+        config:
+          absolute_conditioned_floor_area_in_m2: 88   # O5: no per-unit building facts yet -> explicit
+        inputs:
+          - weather
+          - building
+          - ems
+
+      apt2_hds:
+        class: hisim.components.heat_distribution_system.HeatDistribution
+        preset: radiator
+        config:
+          absolute_conditioned_floor_area_in_m2: 88   # O5
+        inputs:
+          - building
+          - apt2_hds_controller
+          - buffer_storage                  # the central heating feeds every apartment's HDS
+        sizing_sources:                     # three HDS controllers provide the mass flow -> say which
+          water_mass_flow_rate_in_kg_per_second: apt2_hds_controller.water_mass_flow_rate_in_kg_per_second
+
+      apt2_dhw_storage:
+        class: hisim.components.simple_water_storage.SimpleDHWStorage
+        preset: per_apartment
+        config:
+          volume_in_liter: 120              # preset would size from building.number_of_apartments (=3); this
+                                            # storage serves ONE apartment -> concrete override (O5)
+        inputs:
+          - apt2_occupancy
+          - apt2_dhw_heater
+
+      apt2_dhw_heater:
+        class: hisim.components.generic_heat_source.HeatSource
+        preset: electric_dhw                # maximal_thermal_power_in_watt AUTO <- number_of_residents? no:
+                                            # <- the class law reads number_of_apartments; see O5
+        inputs:
+          - apt2_dhw_controller
+
+      apt2_dhw_controller:
+        class: hisim.components.controller_l1_heatpump.L1HeatPumpController
+        preset: dhw
+        inputs:
+          - apt2_dhw_storage
+        sizing_sources:                     # four providers of the power band (heat pump + 3 DHW heaters)
+          maximal_thermal_power_in_watt: apt2_dhw_heater.maximal_thermal_power_in_watt
+
+      apt2_car:
+        class: hisim.components.generic_car.Car
+        preset: bev_medium
+        inputs:
+          - apt2_occupancy
+
+      apt2_charger:
+        class: hisim.components.generic_ev_charger.EVCharger
+        preset: home_11kw
+        inputs:
+          - apt2_car
+          - input: DispatchSignal
+            from: ems.ChargerDispatch_apt2   # derived port name (v2 spec §4.6)
+
+      apt2_pv:
+        class: hisim.components.generic_pv_system.PVSystem
+        preset: standard
+        config:
+          power_in_watt: 1000               # small balcony/roof-share system: concrete, not law-sized
+        inputs:
+          - weather
+  apartment_3:
+    enabled: true
+    components:
+      apt3_occupancy:
+        class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+        constructor:
+          for_household:
+            household: CHR03_SINGLE_RETIRED
+
+      apt3_hds_controller:
+        class: hisim.components.heat_distribution_system.HeatDistributionController
+        preset: radiator_low_temperature
+        config:
+          absolute_conditioned_floor_area_in_m2: 120   # O5: no per-unit building facts yet -> explicit
+        inputs:
+          - weather
+          - building
+          - ems
+
+      apt3_hds:
+        class: hisim.components.heat_distribution_system.HeatDistribution
+        preset: radiator_low_temperature
+        config:
+          absolute_conditioned_floor_area_in_m2: 120   # O5
+        inputs:
+          - building
+          - apt3_hds_controller
+          - buffer_storage                  # the central heating feeds every apartment's HDS
+        sizing_sources:                     # three HDS controllers provide the mass flow -> say which
+          water_mass_flow_rate_in_kg_per_second: apt3_hds_controller.water_mass_flow_rate_in_kg_per_second
+
+      apt3_dhw_storage:
+        class: hisim.components.simple_water_storage.SimpleDHWStorage
+        preset: per_apartment
+        config:
+          volume_in_liter: 120              # preset would size from building.number_of_apartments (=3); this
+                                            # storage serves ONE apartment -> concrete override (O5)
+        inputs:
+          - apt3_occupancy
+          - apt3_dhw_heater
+
+      apt3_dhw_heater:
+        class: hisim.components.generic_heat_source.HeatSource
+        preset: electric_dhw                # maximal_thermal_power_in_watt AUTO <- number_of_residents? no:
+                                            # <- the class law reads number_of_apartments; see O5
+        inputs:
+          - apt3_dhw_controller
+
+      apt3_dhw_controller:
+        class: hisim.components.controller_l1_heatpump.L1HeatPumpController
+        preset: dhw
+        inputs:
+          - apt3_dhw_storage
+        sizing_sources:                     # four providers of the power band (heat pump + 3 DHW heaters)
+          maximal_thermal_power_in_watt: apt3_dhw_heater.maximal_thermal_power_in_watt
+
+      apt3_car:
+        class: hisim.components.generic_car.Car
+        preset: bev_small
+        inputs:
+          - apt3_occupancy
+
+      apt3_charger:
+        class: hisim.components.generic_ev_charger.EVCharger
+        preset: home_11kw
+        inputs:
+          - apt3_car
+          - input: DispatchSignal
+            from: ems.ChargerDispatch_apt3   # derived port name (v2 spec §4.6)
+
+
+# ---------------------------------------------------------------------------
+# Open points (numbering continues from energy_system_mockup.yaml)
+#  O5  Per-apartment sizing with a single-zone Building. Every field that should
+#      derive from an apartment's own size (HDS floor area, DHW storage volume,
+#      DHW heater power) is set explicitly here — 4 lines per apartment, 12 total.
+#      When the Building grows per-unit facts (Q1), these lines disappear and an
+#      apartment's components size from `building.units.<name>.*` instead. The
+#      format does not change for that; only the fact names do.
+#  O6  The Building has one occupancy input; three occupancies need an aggregating
+#      input (dynamic connection on the Building, like heat sources) — component work.
+#  O7  The heat pump SH controller expects one HDS controller; with three, the
+#      controller-of-controllers question is a modeling question, not a format one.
+#      Marked here because a format mockup must not paper over it.
+#  O8  Readability at this size: 35 components, ~430 lines. The apartment groups
+#      are 95 % identical — the strongest argument yet for the R5 template layer
+#      (`template: apartment`, three named instances), which would cut this to
+#      roughly 200 lines. Not v1 (Q1), but this file is the test case for it.
+#
+# What R4.3 forced here (all of it unavoidable, all of it local):
+#   - each HDS names its own controller for the mass flow (3 controllers exist)
+#   - each DHW controller, the SH controller and the buffer name their heat source
+#     (4 providers of maximal_thermal_power_in_watt)
+#   - the battery names pv_central (3 PV systems exist); the EMS lists all three
+# Nothing else in the file is sizing text.
+# ---------------------------------------------------------------------------

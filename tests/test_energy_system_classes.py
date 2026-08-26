@@ -82,24 +82,16 @@ class ExpectedFailures:
     no such sizing fact.
     """
 
-    MINIMAL: ClassVar[Mapping[str, str]] = {
-        "weather": "EF-13",
-        "occupancy": "EF-13",
-        "hds_controller": "EF-13",
-        "boiler_controller": "EF-13",
-        "meter": "EF-13",
-    }
+    #: The minimal mockup is empty: every class it names is converted, which is what makes it
+    #: the file the executor test builds and runs end to end.
+    MINIMAL: ClassVar[Mapping[str, str]] = {}
 
     HEAT_PUMP: ClassVar[Mapping[str, str]] = {
-        "weather": "EF-15",
-        "occupancy": "EF-15",
-        "hds_controller": "EF-13",
         "heat_pump_controller_sh": "EF-13",
         "heat_pump_controller_dhw": "EF-13",
         "heat_pump": "EF-13",
         "buffer_storage": "EF-13",
         "dhw_storage": "EF-13",
-        "meter": "EF-13",
         "pv_south": "EF-13",
         "pv_east": "EF-13",
         "battery": "EF-13",
@@ -109,8 +101,6 @@ class ExpectedFailures:
     }
 
     MULTI_FAMILY: ClassVar[Mapping[str, str]] = {
-        "weather": "EF-13",
-        "meter": "EF-13",
         "heat_pump": "EF-13",
         "heat_pump_controller_sh": "EF-13",
         "buffer_storage": "EF-13",
@@ -121,7 +111,6 @@ class ExpectedFailures:
             f"apt{index}_{suffix}": error_id
             for index in (1, 2, 3)
             for suffix, error_id in (
-                ("occupancy", "EF-15"),
                 ("hds_controller", "EF-13"),
                 ("hds", "EF-13"),
                 ("dhw_storage", "EF-13"),

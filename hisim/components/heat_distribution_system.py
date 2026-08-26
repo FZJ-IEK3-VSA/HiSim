@@ -26,7 +26,9 @@ from hisim.config import (
     Sizable,
     Size,
     SizingContext,
+    SizingLaw,
     concrete,
+    law,
     preset,
     sized_field,
 )
@@ -851,14 +853,78 @@ class HeatDistributionControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return HeatDistributionController.get_full_classname()
 
+    @staticmethod
+    def specific_heating_load(heating_load_in_watt: float, conditioned_floor_area_in_m2: float) -> float:
+        """Returns the building's heating load per square metre of conditioned floor area.
+
+        The ratio is the one number that says how well insulated a building is, and it is what
+        the heating threshold below is chosen from. Setups computed it inline before; making it
+        a field of the controller means the number a run used is written down rather than
+        recomputed by every reader.
+        """
+        return heating_load_in_watt / conditioned_floor_area_in_m2
+
+    @staticmethod
+    def heating_threshold_for(specific_heating_load_of_building_in_watt_per_m2: float) -> float:
+        """Returns the outside temperature above which heating stops, by building efficiency.
+
+        An inefficient building cools out quickly in the mornings and evenings of the shoulder
+        season, so the worse the specific heating load, the earlier the heating has to come on:
+        16 °C up to 50 W/m², 18 °C up to 80 W/m² and 20 °C above that. The steps are the ones
+        :meth:`set_heating_threshold_temperature_based_on_building_efficiency` has always used.
+        """
+        threshold = HeatDistributionControllerConfig.set_heating_threshold_temperature_based_on_building_efficiency(
+            specific_heating_load_of_building_in_watt_per_m2=specific_heating_load_of_building_in_watt_per_m2,
+        )
+        return float(threshold)
+
+    #: Sizing law of the specific heating load: the building's load over its floor area.
+    SPECIFIC_LOAD_LAW: ClassVar[SizingLaw] = law(
+        lambda ctx: HeatDistributionControllerConfig.specific_heating_load(
+            ctx.heating_load_in_watt, ctx.conditioned_floor_area_in_m2
+        ),
+        reads=(Size.HEATING_LOAD_IN_WATT, Size.CONDITIONED_FLOOR_AREA_IN_M2),
+    )
+
+    #: Sizing law of the heating threshold: the step table over the sibling ratio above.
+    HEATING_THRESHOLD_LAW: ClassVar[SizingLaw] = law(
+        lambda ctx, own: HeatDistributionControllerConfig.heating_threshold_for(
+            own.value_of("specific_heating_load_of_building_in_watt_per_m2")
+        ),
+        reads=(),
+        fields=("specific_heating_load_of_building_in_watt_per_m2",),
+    )
+
     component_id: ComponentID
-    heating_system: HeatDistributionSystemType
-    set_heating_threshold_outside_temperature_in_celsius: float
-    heating_reference_temperature_in_celsius: float
-    set_heating_temperature_for_building_in_celsius: float
-    set_cooling_temperature_for_building_in_celsius: float
-    heating_load_of_building_in_watt: float
-    specific_heating_load_of_building_in_watt_per_m2: Optional[float]
+    #: Which emitter the water circuit feeds; an author choice, contributed onwards as a fact.
+    heating_system: HeatDistributionSystemType = HeatDistributionSystemType.FLOORHEATING
+    #: Derived from the building's efficiency by :meth:`heating_threshold_for`.
+    set_heating_threshold_outside_temperature_in_celsius: Sizable[float] = sized_field(
+        rule=HEATING_THRESHOLD_LAW
+    )
+    heating_reference_temperature_in_celsius: Sizable[float] = sized_field(
+        rule=Size.HEATING_REFERENCE_TEMPERATURE_IN_CELSIUS
+    )
+    set_heating_temperature_for_building_in_celsius: Sizable[float] = sized_field(
+        rule=Size.SET_HEATING_TEMPERATURE_IN_CELSIUS
+    )
+    set_cooling_temperature_for_building_in_celsius: Sizable[float] = sized_field(
+        rule=Size.SET_COOLING_TEMPERATURE_IN_CELSIUS
+    )
+    heating_load_of_building_in_watt: Sizable[float] = sized_field(rule=Size.HEATING_LOAD_IN_WATT.rounded(2))
+    specific_heating_load_of_building_in_watt_per_m2: Sizable[Optional[float]] = sized_field(rule=SPECIFIC_LOAD_LAW)
+
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "HeatDistributionControllerConfig":
+        """The one heat distribution controller, derived entirely from the building it serves.
+
+        Everything this controller needs is a property of the building — its heating load, its
+        floor area, its design outside temperature and the indoor temperatures the residents
+        set — so the preset pins nothing but the emitter type, which is the author's choice
+        between floor heating and radiators and is a one-line override in the file.
+        """
+        return cls(component_id=ComponentID(name=name))
 
     @classmethod
     def get_default_heat_distribution_controller_config(
@@ -1182,7 +1248,9 @@ class HeatDistributionController(cp.Component):
             # turning heat distributon system off when the average daily outside temperature is above a certain threshold
             summer_heating_mode = self.summer_heating_condition(
                 daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                set_heating_threshold_temperature_in_celsius=self.hsd_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+                set_heating_threshold_temperature_in_celsius=concrete(
+                    self.hsd_controller_config.set_heating_threshold_outside_temperature_in_celsius
+                ),
             )
 
             if self.controller_heat_distribution_mode == "heating":
@@ -1375,19 +1443,31 @@ class HeatDistributionControllerInformation:
         self.hds_controller_config: HeatDistributionControllerConfig = config
 
         self.build(
-            set_heating_threshold_temperature_in_celsius=self.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius,
-            heating_reference_temperature_in_celsius=self.hds_controller_config.heating_reference_temperature_in_celsius,
+            set_heating_threshold_temperature_in_celsius=concrete(
+                self.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius
+            ),
+            heating_reference_temperature_in_celsius=concrete(
+                self.hds_controller_config.heating_reference_temperature_in_celsius
+            ),
             heat_distribution_system_type=self.hds_controller_config.heating_system,
-            set_heating_temperature_for_building_in_celsius=self.hds_controller_config.set_heating_temperature_for_building_in_celsius,
-            set_cooling_temperature_for_building_in_celsius=self.hds_controller_config.set_cooling_temperature_for_building_in_celsius,
+            set_heating_temperature_for_building_in_celsius=concrete(
+                self.hds_controller_config.set_heating_temperature_for_building_in_celsius
+            ),
+            set_cooling_temperature_for_building_in_celsius=concrete(
+                self.hds_controller_config.set_cooling_temperature_for_building_in_celsius
+            ),
         )
         self.prepare_heating_distribution_temperature_calculation(
-            set_room_temperature_for_building_in_celsius=self.hds_controller_config.set_heating_temperature_for_building_in_celsius,
+            set_room_temperature_for_building_in_celsius=concrete(
+                self.hds_controller_config.set_heating_temperature_for_building_in_celsius
+            ),
             factor_of_oversizing_of_heat_distribution_system=1.0,
         )
 
         self.water_mass_flow_rate_in_kg_per_second: float = self.calculate_heating_distribution_system_water_mass_flow_rate(
-            max_thermal_building_demand_in_watt=self.hds_controller_config.heating_load_of_building_in_watt
+            max_thermal_building_demand_in_watt=concrete(
+                self.hds_controller_config.heating_load_of_building_in_watt
+            )
         )
 
     def build(

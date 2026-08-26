@@ -46,7 +46,7 @@ from hisim import log, utils
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor, preset
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 # Constants for warm water fallback values used in i_simulate
@@ -118,6 +118,83 @@ class UtspLpgConnectorConfig(ConfigBase):
             calculation_index_for_local_lpg=None
         )
         return config
+
+    @preset(note="CHR01, a couple both at work, on the shipped predefined profile")
+    @classmethod
+    def preset_standard(cls, name: str) -> "UtspLpgConnectorConfig":
+        """The reference household of this repository: CHR01, a couple both at work.
+
+        Every example household and every occupancy fixture in HiSim runs this profile, and it
+        is shipped with the repository as a predefined result so that a simulation needs neither
+        a running UTSP server nor a local LoadProfileGenerator installation. Any other household
+        of the LoadProfileGenerator catalogue is an identifier rather than a variant, which is
+        why this class ships this one preset and :meth:`for_household` for everything else.
+        """
+        return cls.for_household(name, household=Households.CHR01_Couple_both_at_Work)
+
+    @constructor(note="the household catalogue of the LoadProfileGenerator")
+    @classmethod
+    def for_household(
+        cls,
+        name: str,
+        household: Union[JsonReference, List[JsonReference]],
+        energy_intensity: EnergyIntensityType = EnergyIntensityType.EnergySaving,
+        travel_route_set: Optional[JsonReference] = None,
+        transportation_device_set: Optional[JsonReference] = None,
+        charging_station_set: Optional[JsonReference] = None,
+    ) -> "UtspLpgConnectorConfig":
+        """Builds an occupancy reading one household — or several — of the LPG catalogue.
+
+        The LoadProfileGenerator's households are a catalogue of hundreds of references, and a
+        multi-apartment building passes a list of them for one occupancy component, so the
+        household is an identifier space rather than a set of variants. The mobility references
+        default to the ones every HiSim setup uses, because they only matter once a car or a
+        charging station is part of the system and are then usually left as they are.
+
+        Args:
+            name: Instance name of the component being configured; it becomes its identity.
+            household: The catalogue household to simulate, or one reference per apartment.
+            energy_intensity: How economically the residents are assumed to behave.
+            travel_route_set: Commuting distances of the residents; the ten-kilometre set when
+                omitted.
+            transportation_device_set: Vehicles available to the residents; a bus and one small
+                car when omitted.
+            charging_station_set: Charging equipment at home; the 11 kW home charger when
+                omitted.
+
+        Returns:
+            A configuration reading that household from the shipped predefined profile.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
+            data_acquisition_mode=LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE,
+            name_of_predefined_loadprofile="CHR01 Couple both at Work",
+            predefined_loadprofile_filepaths=None,
+            household=household,
+            result_dir_path=utils.HISIMPATH["utsp_results"],
+            energy_intensity=energy_intensity,
+            travel_route_set=(
+                travel_route_set
+                if travel_route_set is not None
+                else TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
+            ),
+            transportation_device_set=(
+                transportation_device_set
+                if transportation_device_set is not None
+                else TransportationDeviceSets.Bus_and_one_30_km_h_Car
+            ),
+            charging_station_set=(
+                charging_station_set
+                if charging_station_set is not None
+                else ChargingStationSets.Charging_At_Home_with_11_kW
+            ),
+            profile_with_washing_machine_and_dishwasher=True,
+            predictive_control=False,
+            predictive=False,
+            cache_dir_path=None,
+            guid="",
+            calculation_index_for_local_lpg=None,
+        )
 
 
 class UtspLpgConnector(cp.Component):

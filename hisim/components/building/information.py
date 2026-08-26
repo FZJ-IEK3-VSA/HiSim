@@ -771,6 +771,8 @@ def _building_sizing_facts(config: BuildingConfig, ctx: SizingContext) -> dict:
         "number_of_apartments": information.number_of_apartments,
         "conditioned_floor_area_in_m2": information.scaled_conditioned_floor_area_in_m2,
         "heating_reference_temperature_in_celsius": config.heating_reference_temperature_in_celsius,
+        "set_heating_temperature_in_celsius": config.set_heating_temperature_in_celsius,
+        "set_cooling_temperature_in_celsius": config.set_cooling_temperature_in_celsius,
     }
 
 
@@ -781,6 +783,8 @@ BuildingConfig.SIZING_CONTRIBUTIONS = (
             "number_of_apartments",
             "conditioned_floor_area_in_m2",
             "heating_reference_temperature_in_celsius",
+            "set_heating_temperature_in_celsius",
+            "set_cooling_temperature_in_celsius",
         ),
         compute=_building_sizing_facts,
     ),

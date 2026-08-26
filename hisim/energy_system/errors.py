@@ -19,11 +19,13 @@ turns a rejection into a repair instruction, and it is the reason
 :class:`EnergySystemCatalogueError` takes the alternatives as structured data rather than
 leaving each call site to format them.
 
-Three concrete classes derive from it, one per lifecycle stage that can reject a file:
+Four concrete classes derive from it, one per lifecycle stage that can reject a file:
 :class:`EnergySystemFormatError` for everything decidable from the document alone,
-:class:`EnergySystemBindingError` for what only the component classes can decide, and
-:class:`EnergySystemSizingError` for what only the sizing kernel can. The split lets a caller
-tell "this file is wrong" from "these classes are not ready yet" without reading the message.
+:class:`EnergySystemBindingError` for what only the component classes can decide,
+:class:`EnergySystemSizingError` for what only the sizing kernel can, and
+:class:`EnergySystemWiringError` for what only the built components can. The split lets a
+caller tell "this file is wrong" from "these classes are not ready yet" without reading the
+message.
 """
 
 # clean
@@ -46,11 +48,11 @@ class EnergySystemErrorId(enum.Enum):
     decided, and each identifier is raised from exactly one place in the code so that
     a message cannot drift between two implementations of the same rule.
 
-    Two bands run past ten members and continue with letters rather than renumbering the
+    Three bands run past ten members and continue with letters rather than renumbering the
     ones already in use: ``EF-1A``/``EF-1B`` close the entry band with the two conditions
-    a value in a ``config`` block can hit, and ``EF-4A`` … ``EF-4H`` wrap the eight
-    failure modes of the sizing kernel one-to-one, with ``EF-4X`` for a kernel failure
-    that matches none of them.
+    a value in a ``config`` block can hit, ``EF-2A`` closes the connection band with a tag
+    name no enum knows, and ``EF-4A`` … ``EF-4H`` wrap the eight failure modes of the sizing
+    kernel one-to-one, with ``EF-4X`` for a kernel failure that matches none of them.
 
     Not every member is reachable from the loader and the structural validator alone:
     the identifiers covering presets, config fields, ports and channels can only be
@@ -68,6 +70,7 @@ class EnergySystemErrorId(enum.Enum):
     WILDCARD_OR_RELATIVE_REFERENCE = "EF-06"
     MALFORMED_BLOCK = "EF-07"
     INVALID_NAME = "EF-08"
+    METADATA_ON_A_PLAIN_RUN = "EF-09"
     CLASS_NOT_IMPORTABLE = "EF-10"
     PRESET_AND_CONSTRUCTOR = "EF-11"
     NO_CONFIGURATION_SOURCE = "EF-12"
@@ -81,9 +84,20 @@ class EnergySystemErrorId(enum.Enum):
     AUTO_ON_CONCRETE_FIELD = "EF-1B"
     UNCLASSIFIABLE_INPUT_ITEM = "EF-19"
     UNKNOWN_SOURCE = "EF-20"
+    UNKNOWN_OUTPUT_PORT = "EF-21"
+    UNKNOWN_INPUT_PORT = "EF-22"
+    NO_DECLARED_DEFAULTS = "EF-23"
     MIXED_INPUT_SPELLING = "EF-24"
     DUPLICATE_FEED = "EF-25"
     DUPLICATE_WIRE = "EF-26"
+    NOT_AN_AGGREGATOR = "EF-27"
+    NO_CHANNEL_MATCH = "EF-28"
+    DISPATCH_RULE_VIOLATED = "EF-29"
+    UNKNOWN_TAG = "EF-2A"
+    PORT_TYPE_MISMATCH = "EF-30"
+    UNCONNECTED_MANDATORY_INPUT = "EF-31"
+    PORT_NAME_COLLISION = "EF-32"
+    COMPONENT_CONSTRUCTION_FAILED = "EF-33"
     UNKNOWN_SIZING_SOURCE = "EF-40"
     SIZING_FACT_MISMATCH = "EF-41"
     DISABLED_SIZING_SOURCE = "EF-42"
@@ -120,7 +134,7 @@ class EnergySystemError(Exception):
 class EnergySystemCatalogueError(EnergySystemError):
     """Shared behaviour of every rejection that carries a catalogue identifier.
 
-    The three concrete error classes below differ only in which lifecycle stage decided
+    The four concrete error classes below differ only in which lifecycle stage decided
     the condition, and that difference matters to a caller: a tool checking files without
     HiSim's component tree can only ever see the document-level failures, whereas a run
     can see all three. What they share is the message discipline, which lives here: the
@@ -294,6 +308,23 @@ class EnergySystemBindingError(EnergySystemCatalogueError):
     not been converted to presets and laws, a perfectly well-formed file will raise this
     class and only this class, so a caller can distinguish "the file is wrong" from "the
     classes are not ready yet".
+    """
+
+
+class EnergySystemWiringError(EnergySystemCatalogueError):
+    """A file's connections could not be made between the components it describes.
+
+    Everything here needs the built components rather than only their classes, because HiSim
+    creates a component's ports in its constructor: whether a wire's two port names exist,
+    whether their load types and units agree, whether a bare item finds declared default
+    connections for the source's class, whether an aggregator feed matches one of the target's
+    declared channels, whether a dispatch block is allowed on that channel, whether an input is
+    fed twice and whether a mandatory input is left open.
+
+    A file raising this class is well formed, names classes that exist and configures them
+    correctly — the system it describes simply cannot be wired as written, so the message names
+    both ends of the offending connection and, where the set is closed, the ports or channels
+    that were available instead.
     """
 
 

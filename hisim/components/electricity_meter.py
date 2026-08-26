@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -11,8 +11,9 @@ from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput, OpexCostDataClass, CapexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
+from hisim.energy_system.channels import DispatchRule, DynamicConnectionChannel
 from hisim.dynamic_component import (
     DynamicComponent,
     DynamicConnectionInput,
@@ -65,6 +66,25 @@ class ElectricityMeterConfig(ConfigBase):
             subsidy_as_percentage_of_investment_costs=None,
         )
 
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "ElectricityMeterConfig":
+        """The one electricity meter: a pure aggregator with nothing to vary.
+
+        A meter has no technology, no rating and no operating mode — it sums what its
+        participants produce and consume — so there is exactly one defensible configuration of
+        it. Its four cost fields stay unset so that postprocessing looks the numbers up from the
+        device database rather than freezing them into the wire format.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
+            device_co2_footprint_in_kg=None,
+            investment_costs_in_euro=None,
+            lifetime_in_years=None,
+            maintenance_costs_in_euro_per_year=None,
+            subsidy_as_percentage_of_investment_costs=None,
+        )
+
 
 class ElectricityMeter(DynamicComponent):
     """Electricity meter class.
@@ -87,6 +107,40 @@ class ElectricityMeter(DynamicComponent):
     ElectricityConsumptionInWatt = "ElectricityConsumptionInWatt"
     ElectricityConsumptionOfBuildingsInWatt = "ElectricityConsumptionOfBuildingsInWatt"
     SurplusUnusedFromBuildingEMSOutput = "SurplusUnusedFromBuildingEMSOutput"
+
+    #: Stable key of the channel carrying electricity a participant produces.
+    PRODUCTION_CHANNEL = "production"
+
+    #: Stable key of the channel carrying electricity a participant consumes.
+    CONSUMPTION_UNCONTROLLED_CHANNEL = "consumption_uncontrolled"
+
+    #: The flows this meter understands. Until this declaration its accepted tags existed only
+    #: implicitly, inside the tag queries of :meth:`i_simulate`, which meant a participant whose
+    #: tags matched neither query wired cleanly and was then never summed — a wrong grid balance
+    #: that still looked plausible.
+    #:
+    #: Both channels forbid dispatch: a meter is a pure aggregator with no control authority, and
+    #: none of its outputs is a per-participant signal. The district-level queries of
+    #: :meth:`i_simulate` add a buildings tag to these same two tag sets; they need no channel of
+    #: their own, because subset matching lets a feed carrying the extra tag select the channel
+    #: here while the tag itself survives verbatim on the created port and stays visible to the
+    #: narrower query.
+    CHANNELS: Tuple[DynamicConnectionChannel, ...] = (
+        DynamicConnectionChannel(
+            key=PRODUCTION_CHANNEL,
+            tags=frozenset({lt.InandOutputType.ELECTRICITY_PRODUCTION}),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+        DynamicConnectionChannel(
+            key=CONSUMPTION_UNCONTROLLED_CHANNEL,
+            tags=frozenset({lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED}),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+    )
 
     def __init__(
         self,

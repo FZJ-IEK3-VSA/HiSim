@@ -46,12 +46,12 @@ P1 sizing kernel ──► P2 file format & executor ──► P3 recording & se
 ## P2 — File format & executor
 
 - [x] Requirements decisions taken 2026-08-26 (Q8 keep comments; nested CLI; `energy_systems/` alongside `system_setups/`; R3.8 accepted; AC-P2.1 amended; RQ3 dropped) — document acceptance pending review
-- [ ] Convert UC1's classes to presets/constructors: Weather (`preset_standard` + `for_location`), UtspLpgConnector (`preset_standard` + `for_household`), GenericBoilerController, ElectricityMeter
+- [x] Convert UC1's classes to presets/constructors: Weather, UtspLpgConnector, GenericBoilerController, ElectricityMeter, HeatDistributionController (PR-3) *(2026-08-26)*
 - [ ] Solution design against the three mockups (they are the fixtures)
 - [x] Schema v3 model + YAML-only loader with duplicate-key detection + structural validation (`hisim/energy_system/`, PR-1) *(2026-08-26)*
-- [ ] Consumer-side `inputs` (bare / explicit wire / aggregator feed) replaces grouped-by-source connections
+- [x] Consumer-side `inputs` (bare / explicit wire / aggregator feed) replaces grouped-by-source connections (PR-1/PR-3) *(2026-08-26)*
 - [x] Groups: parse, "off" rule, uniqueness over enabled set; class-bound validation, config decoding, sizing bridge to the kernel (PR-2) *(2026-08-26)*
-- [ ] Executor: resolve (P1 API) → construct → connect; error catalogue with both ends named
+- [x] Executor: resolve (P1 API) → construct → connect; error catalogue with both ends named; UC1 runs end to end (PR-3) *(2026-08-26)*
 - [ ] Realized record (presets expanded, `AUTO` → numbers, disabled groups absent) + audit companion; YAML comments per A4 if Q8 confirms
 - [ ] Identity test over all mockups and groups
 - [ ] JSON Schema export; `describe <class>`, `facts <energy_system>` CLI

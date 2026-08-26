@@ -46,35 +46,42 @@ components:
   hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: standard
+    config:
+      position_hot_water_storage_in_system: NO_STORAGE_MASS_FLOW_FIX   # no buffer in this house
     inputs:
       - building
       - hds_controller
-      - boiler
+      - input: WaterTemperatureInput            # the boiler feeds the circuit directly
+        from: boiler.WaterOutputTemperatureSh
 
   boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas                  # power band AUTO <- building (heating_load, apartments)
     inputs:
       - boiler_controller
+      - input: WaterInputTemperatureSh        # the circuit's return, no buffer in between
+        from: hds.WaterTemperatureOutput
 
   boiler_controller:
     class: hisim.components.generic_boiler.GenericBoilerController
-    preset: standard                        # reads the boiler's power band — one boiler, nothing to write
+    preset: modulating                      # reads the boiler's power band — one boiler, nothing to write
     inputs:
       - weather
       - hds_controller
-      - hds
+      - input: WaterTemperatureInputFromWaterStorage
+        from: hds.WaterTemperatureOutput
 
   meter:
     class: hisim.components.electricity_meter.ElectricityMeter
     preset: standard
     inputs:                                 # an aggregator lists its feeds
-      - from: occupancy
+      - from: occupancy                     # the port comes from the meter's own default
         tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
-        weight: 999
-      - from: boiler.ElectricityOutput
-        tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
-        weight: 999
+        weight: 999                         # reserved weight: measured, never controlled
+    # The gas boiler draws no electricity in this model, so the household's only electrical
+    # flow is the occupancy. A house with a PV string or a heat pump lists one feed per such
+    # component here, spelling the port as `from: <component>.<Output>` where the meter has
+    # no default for that class.
 
 # The realized record of this run is this file with `preset:` expanded into full
 # `config:` blocks and the boiler's two power fields as numbers, each carrying a

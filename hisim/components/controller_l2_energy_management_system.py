@@ -20,6 +20,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import ComponentInput, ComponentOutput
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
+from hisim.energy_system.channels import DispatchRule, DynamicConnectionChannel
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
@@ -168,6 +169,66 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     ElectricityToBuildingFromDistrictEMSOutput = "ElectricityToBuildingFromDistrictEMSOutput"
 
     PeakShavingStatus = "PeakShavingStatus"
+
+    #: Stable key of the channel carrying electricity a participant produces.
+    PRODUCTION_CHANNEL = "production"
+
+    #: Stable key of the channel carrying consumption this controller cannot influence.
+    CONSUMPTION_UNCONTROLLED_CHANNEL = "consumption_uncontrolled"
+
+    #: Stable key of the channel carrying consumption this controller dispatches to.
+    CONSUMPTION_CONTROLLED_CHANNEL = "consumption_controlled"
+
+    #: Stable key of the channel carrying a battery, which is a controllable consumer the
+    #: controller treats specially because it can also give electricity back.
+    STORAGE_CHANNEL = "storage"
+
+    #: The flows this energy management system understands. Until this declaration the accepted
+    #: tags existed only implicitly, inside the hard-coded tag queries of the ranking code, which
+    #: meant a participant whose tags matched no query wired cleanly and was then never read.
+    #:
+    #: The four channels are nested on purpose: ``storage`` is a strict superset of
+    #: ``consumption_controlled``, and most-specific matching is what routes a battery to the
+    #: former while an ordinary controllable consumer — a heat pump, whose extra descriptive tag
+    #: no channel consumes — falls to the latter. That mirrors the ranking code's existing
+    #: "is this participant a battery" branch instead of inventing a new tag value for it.
+    CHANNELS: Tuple[DynamicConnectionChannel, ...] = (
+        DynamicConnectionChannel(
+            key=PRODUCTION_CHANNEL,
+            tags=frozenset({lt.InandOutputType.ELECTRICITY_PRODUCTION}),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+        DynamicConnectionChannel(
+            key=CONSUMPTION_UNCONTROLLED_CHANNEL,
+            tags=frozenset({lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED}),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+        DynamicConnectionChannel(
+            key=CONSUMPTION_CONTROLLED_CHANNEL,
+            tags=frozenset({lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED}),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.REQUIRED,
+            dispatch_tags=frozenset({lt.InandOutputType.ELECTRICITY_TARGET}),
+        ),
+        DynamicConnectionChannel(
+            key=STORAGE_CHANNEL,
+            tags=frozenset(
+                {
+                    lt.ComponentType.BATTERY,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                }
+            ),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.REQUIRED,
+            dispatch_tags=frozenset({lt.InandOutputType.ELECTRICITY_TARGET}),
+        ),
+    )
 
     @utils.measure_execution_time
     def __init__(

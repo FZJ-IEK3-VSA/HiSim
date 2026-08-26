@@ -40,6 +40,24 @@ The stages that need the component classes live in their own modules and are del
       sizing kernel and translating its refusals.
     - :mod:`hisim.energy_system.configure` — building every configuration and resolving the
       sizing of the whole system.
+    - :mod:`hisim.energy_system.wiring` — constructing the components and planning every
+      connection the file's ``inputs`` items describe.
+    - :mod:`hisim.energy_system.wiring_checks` — one planned connection, the checks a whole
+      plan must pass and the step that applies it.
+    - :mod:`hisim.energy_system.feed_resolution` — turning an aggregator's feeds into the ports
+      it grows and the wires that fill them.
+    - :mod:`hisim.energy_system.aggregator_ports` — the uniqueness, freedom and existence rules
+      for those grown ports.
+    - :mod:`hisim.energy_system.executor` — the order the stages run in, and the two entry
+      points that build and run a file.
+
+Two further modules sit outside both groups. :mod:`hisim.energy_system.channels` holds the
+declaration of an aggregator's accepted flows and :mod:`hisim.energy_system.resolution` the
+record of one resolved feed; both import HiSim's load types and nothing else, and both are
+imported *by* component code — an aggregator declares its channels, a dynamic component creates
+the ports a resolved feed asks for — so they are deliberately free of everything else in this
+package. :mod:`hisim.energy_system.channel_matching` sits on top of the first and holds the rule
+that picks a channel for a feed.
 
 **Layering rule.** The re-exported modules import :mod:`hisim.config`, the standard library
 and PyYAML, and nothing else of HiSim. In particular no component module is imported while a
@@ -63,6 +81,7 @@ from hisim.energy_system.errors import (
     EnergySystemErrorId,
     EnergySystemFormatError,
     EnergySystemSizingError,
+    EnergySystemWiringError,
 )
 from hisim.energy_system.model import (
     AggregatorFeed,
@@ -111,6 +130,7 @@ __all__ = [
     "EnergySystemFormatError",
     "EnergySystemReader",
     "EnergySystemSizingError",
+    "EnergySystemWiringError",
     "ExpansionRecord",
     "ExplicitWire",
     "Group",

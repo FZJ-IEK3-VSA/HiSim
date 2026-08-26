@@ -137,7 +137,7 @@ class InterchangeableProviders:
 
 
 class PilotWireFormat:
-    """The literal preset, constructor and fact names of the four converted pilot classes.
+    """The literal preset, constructor and fact names of the converted classes.
 
     Preset names, constructor names and fact names are wire format: a scenario file spells
     them out, so a rename is a breaking change for every file already written. Repeating them here as
@@ -156,9 +156,14 @@ class PilotWireFormat:
             "wood_chips",
             "hydrogen",
         ),
+        "GenericBoilerControllerConfig": ("modulating", "on_off"),
         "HeatDistributionConfig": ("standard",),
+        "HeatDistributionControllerConfig": ("standard",),
         "EMSConfig": ("optimize_own_consumption",),
         "BuildingConfig": ("standard",),
+        "WeatherConfig": ("standard",),
+        "UtspLpgConnectorConfig": ("standard",),
+        "ElectricityMeterConfig": ("standard",),
     }
 
     #: Config class name → its named constructors, in declaration order. A constructor's
@@ -166,15 +171,21 @@ class PilotWireFormat:
     #: preset name is.
     CONSTRUCTOR_NAMES: Dict[str, Tuple[str, ...]] = {
         "GenericBoilerConfig": (),
+        "GenericBoilerControllerConfig": (),
         "HeatDistributionConfig": (),
+        "HeatDistributionControllerConfig": (),
         "EMSConfig": (),
         "BuildingConfig": ("for_tabula_code",),
+        "WeatherConfig": ("for_location",),
+        "UtspLpgConnectorConfig": ("for_household",),
+        "ElectricityMeterConfig": (),
     }
 
-    #: The scanned classes that legitimately ship no preset at all. Today only the heat
-    #: distribution controller, which is in the scan because it contributes facts and whose
-    #: configuration a setup always builds from the building it serves.
-    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = ("HeatDistributionControllerConfig",)
+    #: The scanned classes that legitimately ship no preset at all. Every class converted so
+    #: far has one, so the tuple is empty; it stays here because zero presets is a legal state
+    #: — a pure fact provider, or a class whose every instance is spelled out — and the day one
+    #: arrives it should be a decision recorded here rather than an oversight.
+    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = ()
 
     #: Config class name → the facts it contributes, in declaration order.
     FACT_NAMES: Dict[str, Tuple[str, ...]] = {
@@ -188,7 +199,13 @@ class PilotWireFormat:
             "number_of_apartments",
             "conditioned_floor_area_in_m2",
             "heating_reference_temperature_in_celsius",
+            "set_heating_temperature_in_celsius",
+            "set_cooling_temperature_in_celsius",
         ),
+        "WeatherConfig": (),
+        "UtspLpgConnectorConfig": (),
+        "ElectricityMeterConfig": (),
+        "GenericBoilerControllerConfig": (),
     }
 
 
@@ -218,7 +235,7 @@ def test_every_component_module_imports(scan):
 
 
 @pytest.mark.base
-def test_the_scan_finds_the_converted_pilot_classes(scan):
+def test_the_scan_finds_the_converted_classes(scan):
     """The scan really sees the classes it is supposed to check.
 
     Failure mode caught: a scan that quietly matches nothing — every other contract test in
@@ -226,7 +243,17 @@ def test_the_scan_finds_the_converted_pilot_classes(scan):
     """
     classes, _failures = scan
     names = {config_class.__name__ for config_class in classes}
-    assert {"GenericBoilerConfig", "HeatDistributionConfig", "EMSConfig", "BuildingConfig"} <= names
+    assert {
+        "GenericBoilerConfig",
+        "GenericBoilerControllerConfig",
+        "HeatDistributionConfig",
+        "HeatDistributionControllerConfig",
+        "EMSConfig",
+        "BuildingConfig",
+        "WeatherConfig",
+        "UtspLpgConnectorConfig",
+        "ElectricityMeterConfig",
+    } <= names
 
 
 @pytest.mark.base
@@ -400,8 +427,8 @@ def test_the_classes_without_a_preset_are_the_ones_known_to_have_none(scan):
 
 
 @pytest.mark.base
-def test_the_pilot_preset_and_fact_names_are_the_stored_wire_format():
-    """The pilots' preset and fact names match the literals a stored scenario relies on.
+def test_the_preset_and_fact_names_are_the_stored_wire_format():
+    """The converted classes' preset and fact names match the literals a stored scenario relies on.
 
     Failure mode caught: a rename that reads as harmless refactoring but silently
     invalidates every scenario file and every result column already written against the old
@@ -409,18 +436,25 @@ def test_the_pilot_preset_and_fact_names_are_the_stored_wire_format():
     """
     from hisim.components.building import BuildingConfig
     from hisim.components.controller_l2_energy_management_system import EMSConfig
-    from hisim.components.generic_boiler import GenericBoilerConfig
+    from hisim.components.electricity_meter import ElectricityMeterConfig
+    from hisim.components.generic_boiler import GenericBoilerConfig, GenericBoilerControllerConfig
     from hisim.components.heat_distribution_system import (
         HeatDistributionConfig,
         HeatDistributionControllerConfig,
     )
+    from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig
+    from hisim.components.weather import WeatherConfig
 
     by_name: Dict[str, Any] = {
         "GenericBoilerConfig": GenericBoilerConfig,
+        "GenericBoilerControllerConfig": GenericBoilerControllerConfig,
         "HeatDistributionConfig": HeatDistributionConfig,
         "HeatDistributionControllerConfig": HeatDistributionControllerConfig,
         "EMSConfig": EMSConfig,
         "BuildingConfig": BuildingConfig,
+        "WeatherConfig": WeatherConfig,
+        "UtspLpgConnectorConfig": UtspLpgConnectorConfig,
+        "ElectricityMeterConfig": ElectricityMeterConfig,
     }
     for class_name, expected in PilotWireFormat.PRESET_NAMES.items():
         assert tuple(presets_of(by_name[class_name])) == expected

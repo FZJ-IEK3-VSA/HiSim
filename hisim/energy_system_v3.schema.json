@@ -1,0 +1,1513 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "energy_system_v3.schema.json",
+  "title": "HiSim energy system, schema version 3",
+  "description": "A declarative description of one simulated household: its components, how each is configured, where each takes its inputs from and, where that is ambiguous, where each takes its sizing facts from.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "name"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 3,
+      "description": "The format version this file is written against."
+    },
+    "name": {
+      "type": "string",
+      "description": "The name of the energy system."
+    },
+    "description": {
+      "type": "string"
+    },
+    "components": {
+      "$ref": "#/$defs/components"
+    },
+    "groups": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/group"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Written by a generated run record and never by hand; a file carrying it is re-run explicitly rather than run as an authored energy system."
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "reference": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "source": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)?$"
+    },
+    "components": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "components"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "components": {
+          "$ref": "#/$defs/components"
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class"
+      ],
+      "properties": {
+        "class": {
+          "enum": [
+            "hisim.components.building.Building",
+            "hisim.components.building.building.Building",
+            "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
+            "hisim.components.electricity_meter.ElectricityMeter",
+            "hisim.components.generic_boiler.GenericBoiler",
+            "hisim.components.generic_boiler.GenericBoilerController",
+            "hisim.components.heat_distribution_system.HeatDistribution",
+            "hisim.components.heat_distribution_system.HeatDistributionController",
+            "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
+            "hisim.components.weather.Weather"
+          ],
+          "description": "The component class, as a dotted path."
+        },
+        "preset": {
+          "type": "string"
+        },
+        "constructor": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 1
+        },
+        "config": {
+          "type": "object"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/input_item"
+          }
+        },
+        "sizing_sources": {
+          "$ref": "#/$defs/sizing_sources"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.building.Building",
+                  "hisim.components.building.building.Building"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": {
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 1,
+                "propertyNames": {
+                  "enum": [
+                    "for_tabula_code"
+                  ]
+                },
+                "properties": {
+                  "for_tabula_code": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "building_code"
+                    ],
+                    "properties": {
+                      "building_code": {
+                        "type": "string"
+                      },
+                      "number_of_apartments": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "absolute_conditioned_floor_area_in_m2": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "total_base_area_in_m2": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "building_heat_capacity_class": {
+                        "type": "string"
+                      },
+                      "heating_reference_temperature_in_celsius": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              },
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "heating_reference_temperature_in_celsius": {
+                    "type": "number"
+                  },
+                  "building_code": {
+                    "type": "string"
+                  },
+                  "building_heat_capacity_class": {
+                    "type": "string"
+                  },
+                  "initial_internal_temperature_in_celsius": {
+                    "type": "number"
+                  },
+                  "absolute_conditioned_floor_area_in_m2": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "total_base_area_in_m2": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "number_of_apartments": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "max_thermal_building_demand_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "floor_u_value_in_watt_per_m2_per_kelvin": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "floor_area_in_m2": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "facade_u_value_in_watt_per_m2_per_kelvin": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "facade_area_in_m2": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "roof_u_value_in_watt_per_m2_per_kelvin": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "roof_area_in_m2": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "window_u_value_in_watt_per_m2_per_kelvin": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "window_area_in_m2": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "door_u_value_in_watt_per_m2_per_kelvin": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "door_area_in_m2": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "predictive": {
+                    "type": "boolean"
+                  },
+                  "set_heating_temperature_in_celsius": {
+                    "type": "number"
+                  },
+                  "set_cooling_temperature_in_celsius": {
+                    "type": "number"
+                  },
+                  "enable_opening_windows": {
+                    "type": "boolean"
+                  },
+                  "device_co2_footprint_in_kg": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "investment_costs_in_euro": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lifetime_in_years": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "subsidy_as_percentage_of_investment_costs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "optimize_own_consumption"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "strategy": {
+                    "type": "string"
+                  },
+                  "limit_to_shave": {
+                    "type": "number"
+                  },
+                  "building_indoor_temperature_offset_value": {
+                    "type": "number"
+                  },
+                  "domestic_hot_water_storage_temperature_offset_value": {
+                    "type": "number"
+                  },
+                  "space_heating_water_storage_temperature_offset_value": {
+                    "type": "number"
+                  },
+                  "device_co2_footprint_in_kg": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "investment_costs_in_euro": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lifetime_in_years": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "subsidy_as_percentage_of_investment_costs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.electricity_meter.ElectricityMeter"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "device_co2_footprint_in_kg": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "investment_costs_in_euro": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lifetime_in_years": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "subsidy_as_percentage_of_investment_costs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.generic_boiler.GenericBoiler"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "condensing_gas",
+                  "condensing_gas_12kw",
+                  "oil",
+                  "oil_12kw",
+                  "pellets",
+                  "wood_chips",
+                  "hydrogen"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "energy_carrier": {
+                    "enum": [
+                      "ANY",
+                      "ELECTRICITY",
+                      "IRRADIANCE",
+                      "SPEED",
+                      "HEATING",
+                      "COOLING",
+                      "TEMPERATURE",
+                      "PRESSURE",
+                      "TIME",
+                      "PRICE",
+                      "GAS",
+                      "AIR",
+                      "GREEN_HYDROGEN",
+                      "OXYGEN",
+                      "WATER",
+                      "WARM_WATER",
+                      "DIESEL",
+                      "OIL",
+                      "PELLETS",
+                      "WOOD_CHIPS",
+                      "DISTRICTHEATING",
+                      "ON_OFF",
+                      "ACTIVATION"
+                    ]
+                  },
+                  "boiler_type": {
+                    "enum": [
+                      "CONVENTIONAL",
+                      "CONDENSING"
+                    ]
+                  },
+                  "minimal_thermal_power_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "maximal_thermal_power_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "eff_th_min": {
+                    "type": "number"
+                  },
+                  "eff_th_max": {
+                    "type": "number"
+                  },
+                  "temperature_delta_in_celsius": {
+                    "type": "number"
+                  },
+                  "device_co2_footprint_in_kg": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "investment_costs_in_euro": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lifetime_in_years": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "subsidy_as_percentage_of_investment_costs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "consumption_in_kilowatt_hour": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "heating_load_in_watt",
+                    "number_of_apartments"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.generic_boiler.GenericBoilerController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "modulating",
+                  "on_off"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "is_modulating": {
+                    "type": "boolean"
+                  },
+                  "set_heating_threshold_outside_temperature_in_celsius": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "minimal_thermal_power_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "maximal_thermal_power_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "set_temperature_difference_for_full_power": {
+                    "type": "number"
+                  },
+                  "minimum_runtime_in_seconds": {
+                    "type": "number"
+                  },
+                  "minimum_resting_time_in_seconds": {
+                    "type": "number"
+                  },
+                  "with_domestic_hot_water_preparation": {
+                    "type": "boolean"
+                  },
+                  "secondary_mode": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "hysteresis_water_temperature_offset": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "maximal_thermal_power_in_watt",
+                    "minimal_thermal_power_in_watt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.heat_distribution_system.HeatDistribution"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "heating_system": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "RADIATOR",
+                          "FLOORHEATING",
+                          "LOW_TEMPERATURE_RADIATOR"
+                        ]
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "water_mass_flow_rate_in_kg_per_second": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "absolute_conditioned_floor_area_in_m2": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "position_hot_water_storage_in_system": {
+                    "enum": [
+                      "PARALLEL",
+                      "SERIES",
+                      "NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR",
+                      "NO_STORAGE_MASS_FLOW_FIX"
+                    ]
+                  },
+                  "device_co2_footprint_in_kg": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "investment_costs_in_euro": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lifetime_in_years": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "subsidy_as_percentage_of_investment_costs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "conditioned_floor_area_in_m2",
+                    "heat_distribution_system_type",
+                    "water_mass_flow_rate_in_kg_per_second"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.heat_distribution_system.HeatDistributionController"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": false,
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "heating_system": {
+                    "enum": [
+                      "RADIATOR",
+                      "FLOORHEATING",
+                      "LOW_TEMPERATURE_RADIATOR"
+                    ]
+                  },
+                  "set_heating_threshold_outside_temperature_in_celsius": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "heating_reference_temperature_in_celsius": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "set_heating_temperature_for_building_in_celsius": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "set_cooling_temperature_for_building_in_celsius": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "heating_load_of_building_in_watt": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  },
+                  "specific_heating_load_of_building_in_watt_per_m2": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": [
+                    "conditioned_floor_area_in_m2",
+                    "heating_load_in_watt",
+                    "heating_reference_temperature_in_celsius",
+                    "set_cooling_temperature_in_celsius",
+                    "set_heating_temperature_in_celsius"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": {
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 1,
+                "propertyNames": {
+                  "enum": [
+                    "for_household"
+                  ]
+                },
+                "properties": {
+                  "for_household": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "household"
+                    ],
+                    "properties": {
+                      "household": {},
+                      "energy_intensity": {
+                        "enum": [
+                          "EnergySaving",
+                          "Random",
+                          "EnergyIntensive",
+                          "AsOriginal",
+                          "EnergySavingPreferMeasured",
+                          "EnergyIntensivePreferMeasured"
+                        ]
+                      },
+                      "travel_route_set": {},
+                      "transportation_device_set": {},
+                      "charging_station_set": {}
+                    }
+                  }
+                }
+              },
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "data_acquisition_mode": {
+                    "enum": [
+                      "USE_PREDEFINED_PROFILE",
+                      "USE_UTSP",
+                      "USE_LOCAL_LPG"
+                    ]
+                  },
+                  "household": {},
+                  "energy_intensity": {
+                    "enum": [
+                      "EnergySaving",
+                      "Random",
+                      "EnergyIntensive",
+                      "AsOriginal",
+                      "EnergySavingPreferMeasured",
+                      "EnergyIntensivePreferMeasured"
+                    ]
+                  },
+                  "travel_route_set": {},
+                  "transportation_device_set": {},
+                  "charging_station_set": {},
+                  "profile_with_washing_machine_and_dishwasher": {
+                    "type": "boolean"
+                  },
+                  "predictive_control": {
+                    "type": "boolean"
+                  },
+                  "predictive": {
+                    "type": "boolean"
+                  },
+                  "result_dir_path": {
+                    "type": "string"
+                  },
+                  "cache_dir_path": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "name_of_predefined_loadprofile": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "predefined_loadprofile_filepaths": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "guid": {
+                    "type": "string"
+                  },
+                  "calculation_index_for_local_lpg": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "cars": {}
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.weather.Weather"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": {
+                "enum": [
+                  "standard"
+                ]
+              },
+              "constructor": {
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 1,
+                "propertyNames": {
+                  "enum": [
+                    "for_location"
+                  ]
+                },
+                "properties": {
+                  "for_location": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "location"
+                    ],
+                    "properties": {
+                      "location": {
+                        "enum": [
+                          "AACHEN",
+                          "BREMERHAVEN",
+                          "ROSTOCK",
+                          "HAMBURG",
+                          "POTSDAM",
+                          "ESSEN",
+                          "BAD_MARIENBURG",
+                          "KASSEL",
+                          "BRAUNLAGE",
+                          "CHEMNITZ",
+                          "HOF",
+                          "FICHTELBERG",
+                          "MANNHEIM",
+                          "MUEHLDORF",
+                          "STOETTEN",
+                          "GARMISCH_PARTENKIRCHEN",
+                          "MADRID",
+                          "SEVILLE",
+                          "ATHENS",
+                          "BELGRADE",
+                          "CYPRUS",
+                          "LJUBLIANA",
+                          "MILAN",
+                          "SARAJEVO",
+                          "VRANJE",
+                          "FR",
+                          "DE",
+                          "PL",
+                          "SE",
+                          "NO",
+                          "RS",
+                          "IT",
+                          "GB",
+                          "CY",
+                          "GR",
+                          "IE",
+                          "SI",
+                          "CZ",
+                          "AT",
+                          "HU",
+                          "BE",
+                          "ES",
+                          "DK",
+                          "NL",
+                          "BG"
+                        ]
+                      },
+                      "data_source": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "DWD_TRY",
+                              "NSRDB",
+                              "NSRDB_15MIN",
+                              "DWD_10MIN",
+                              "ERA5",
+                              "DWD_15MIN"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "location": {
+                    "type": "string"
+                  },
+                  "source_path": {
+                    "type": "string"
+                  },
+                  "data_source": {
+                    "enum": [
+                      "DWD_TRY",
+                      "NSRDB",
+                      "NSRDB_15MIN",
+                      "DWD_10MIN",
+                      "ERA5",
+                      "DWD_15MIN"
+                    ]
+                  },
+                  "predictive_control": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "input_item": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/default_inputs"
+        },
+        {
+          "$ref": "#/$defs/explicit_wire"
+        },
+        {
+          "$ref": "#/$defs/aggregator_feed"
+        }
+      ]
+    },
+    "default_inputs": {
+      "$ref": "#/$defs/name"
+    },
+    "explicit_wire": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input",
+        "from"
+      ],
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/name"
+        },
+        "from": {
+          "$ref": "#/$defs/reference"
+        }
+      }
+    },
+    "aggregator_feed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "tags"
+      ],
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/source"
+        },
+        "component_type": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "weight": {
+          "type": "integer"
+        },
+        "dispatch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "target_input": {
+              "$ref": "#/$defs/name"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "sizing_sources": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/reference"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/reference"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -33,13 +33,11 @@ To stay free of false positives the checker skips any config class with a base i
 resolve in the source tree, and it allows the serialisation API that the
 ``@dataclass_json`` decorator injects dynamically.
 
-Gate: BLOCKING in CI (see ``.github/workflows/quality.yml``). ``obsolete/`` is excluded
-by default, matching ``ignore-paths`` in ``pylintrc-critical-only``.
+Gate: BLOCKING in CI (see ``.github/workflows/quality.yml``).
 
 Examples
 --------
     python scripts/check_config_attrs.py                    # hisim, system_setups, tests
-    python scripts/check_config_attrs.py obsolete           # audit the obsolete tree too
     python scripts/check_config_attrs.py --root . hisim
 """
 from __future__ import annotations

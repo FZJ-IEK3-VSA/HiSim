@@ -19,8 +19,12 @@ delegate to :mod:`hisim.config.sizing`) without closing an import cycle through
 from __future__ import annotations
 
 import dataclasses as dc
+import enum
+import sys
+import types
 import typing
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, TypeVar
 
 from dataclasses_json import dataclass_json
@@ -32,6 +36,8 @@ from dataclasses_json import dataclass_json
 from hisim.config.context import SizingContext
 from hisim.config.presets import check_builder_declarations
 from hisim.config.sizing import (
+    SizedFieldMetadata,
+    _sizable_decoder,
     auto_fields as sizing_auto_fields,
     resolve_config as sizing_resolve_config,
 )
@@ -53,6 +59,76 @@ def _field_names_under_construction(config_class: type) -> List[str]:
         name for name, annotation in own.items() if not str(annotation).replace("typing.", "").startswith("ClassVar")
     ]
     return inherited + declared
+
+
+def _sizable_enum_type(annotation: Any, owner_module: Optional[types.ModuleType]) -> Optional[type]:
+    """Reads the enum a ``Sizable[SomeEnum]`` annotation names, or ``None`` for anything else.
+
+    The annotation of a field is either the live object — ``Sizable[X]`` expands to a union
+    containing ``X`` — or, in a module with postponed evaluation, the source text of it. Both
+    forms occur across HiSim's component modules, so both are read: the live form by walking
+    the union's members, the textual form by looking the inner name up in the module that
+    declared the field, where the enum is necessarily already defined or imported.
+
+    Args:
+        annotation: The annotation as it appears in the class's own ``__annotations__``.
+        owner_module: The module the config class is being defined in, or ``None`` when it
+            cannot be located, in which case a textual annotation cannot be resolved.
+
+    Returns:
+        The enum class the field holds, or ``None`` when the field is not an enum-typed
+        sizable field or the annotation cannot be resolved.
+    """
+    if not isinstance(annotation, str):
+        for argument in typing.get_args(annotation):
+            if isinstance(argument, type) and issubclass(argument, enum.Enum):
+                return argument
+        return None
+    text = annotation.strip()
+    prefix, suffix = "Sizable[", "]"
+    if not text.startswith(prefix) or not text.endswith(suffix) or owner_module is None:
+        return None
+    parts = text[len(prefix): -len(suffix)].strip().split(".")
+    resolved: Any = getattr(owner_module, parts[0], None)
+    for part in parts[1:]:
+        resolved = getattr(resolved, part, None)
+    return resolved if isinstance(resolved, type) and issubclass(resolved, enum.Enum) else None
+
+
+def _complete_sizable_enum_codecs(config_class: type) -> None:
+    """Fills in the wire decoder of every enum-typed sizable field that did not declare one.
+
+    A sizable field replaces the serialization layer's own decoder with one that understands
+    the ``AUTO`` sentinel, and that replacement is what makes an enum-typed sizable field a
+    trap: unless the declaration also passes ``value_type``, the member name read from a file
+    stays a plain string. Because HiSim's config enums derive from ``str``, the mistake is
+    invisible to every equality comparison and shows up only where a component compares by
+    identity — so the declaration is completed here instead of being left to be remembered.
+
+    Runs while the subclass object is created, before its ``@dataclass`` decorator has turned
+    the field descriptors into fields, which is the last moment at which the descriptor can
+    still be edited. A field whose annotation cannot be resolved is left alone: the check can
+    only strengthen a declaration it understands, never weaken one it does not.
+
+    Args:
+        config_class: The configuration class whose body has just executed.
+    """
+    owner_module = sys.modules.get(config_class.__module__)
+    for field_name, annotation in config_class.__dict__.get("__annotations__", {}).items():
+        descriptor = config_class.__dict__.get(field_name)
+        if not isinstance(descriptor, dc.Field):
+            continue
+        metadata = dict(descriptor.metadata)
+        if SizedFieldMetadata.LAW not in metadata or SizedFieldMetadata.VALUE_TYPE in metadata:
+            continue
+        enum_type = _sizable_enum_type(annotation, owner_module)
+        if enum_type is None:
+            continue
+        json_config = dict(metadata.get("dataclasses_json", {}))
+        json_config["decoder"] = _sizable_decoder(enum_type)
+        metadata["dataclasses_json"] = json_config
+        metadata[SizedFieldMetadata.VALUE_TYPE] = enum_type
+        descriptor.metadata = MappingProxyType(metadata)
 
 
 @dataclass_json
@@ -176,6 +252,7 @@ class ConfigBase:
         """
         super().__init_subclass__(**kwargs)
         check_builder_declarations(cls, _field_names_under_construction(cls))
+        _complete_sizable_enum_codecs(cls)
 
     #: The sizing facts this config class contributes to the scenario-wide fact pool
     #: (resolved engine-side before components are constructed). Empty for the vast majority of

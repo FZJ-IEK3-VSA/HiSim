@@ -16,8 +16,14 @@ every message built here: it names the offending element — the component name,
 group name or the dotted key path inside the document — and, whenever the set of
 acceptable values is closed and known, it lists that set. The second rule is what
 turns a rejection into a repair instruction, and it is the reason
-:class:`EnergySystemFormatError` takes the alternatives as structured data rather than
+:class:`EnergySystemCatalogueError` takes the alternatives as structured data rather than
 leaving each call site to format them.
+
+Three concrete classes derive from it, one per lifecycle stage that can reject a file:
+:class:`EnergySystemFormatError` for everything decidable from the document alone,
+:class:`EnergySystemBindingError` for what only the component classes can decide, and
+:class:`EnergySystemSizingError` for what only the sizing kernel can. The split lets a caller
+tell "this file is wrong" from "these classes are not ready yet" without reading the message.
 """
 
 # clean
@@ -40,6 +46,12 @@ class EnergySystemErrorId(enum.Enum):
     decided, and each identifier is raised from exactly one place in the code so that
     a message cannot drift between two implementations of the same rule.
 
+    Two bands run past ten members and continue with letters rather than renumbering the
+    ones already in use: ``EF-1A``/``EF-1B`` close the entry band with the two conditions
+    a value in a ``config`` block can hit, and ``EF-4A`` … ``EF-4H`` wrap the eight
+    failure modes of the sizing kernel one-to-one, with ``EF-4X`` for a kernel failure
+    that matches none of them.
+
     Not every member is reachable from the loader and the structural validator alone:
     the identifiers covering presets, config fields, ports and channels can only be
     decided once the component classes are imported, which happens in a later stage
@@ -56,10 +68,17 @@ class EnergySystemErrorId(enum.Enum):
     WILDCARD_OR_RELATIVE_REFERENCE = "EF-06"
     MALFORMED_BLOCK = "EF-07"
     INVALID_NAME = "EF-08"
+    CLASS_NOT_IMPORTABLE = "EF-10"
     PRESET_AND_CONSTRUCTOR = "EF-11"
     NO_CONFIGURATION_SOURCE = "EF-12"
+    UNKNOWN_PRESET = "EF-13"
     MALFORMED_CONSTRUCTOR = "EF-14"
+    UNKNOWN_CONSTRUCTOR = "EF-15"
+    CONSTRUCTOR_ARGUMENT = "EF-16"
+    UNKNOWN_CONFIG_FIELD = "EF-17"
     UNKNOWN_ENTRY_KEY = "EF-18"
+    UNDECODABLE_VALUE = "EF-1A"
+    AUTO_ON_CONCRETE_FIELD = "EF-1B"
     UNCLASSIFIABLE_INPUT_ITEM = "EF-19"
     UNKNOWN_SOURCE = "EF-20"
     MIXED_INPUT_SPELLING = "EF-24"
@@ -67,6 +86,17 @@ class EnergySystemErrorId(enum.Enum):
     DUPLICATE_WIRE = "EF-26"
     UNKNOWN_SIZING_SOURCE = "EF-40"
     SIZING_FACT_MISMATCH = "EF-41"
+    DISABLED_SIZING_SOURCE = "EF-42"
+    FACT_NOT_READ = "EF-43"
+    SIZING_UNPROVIDED = "EF-4A"
+    SIZING_AMBIGUOUS = "EF-4B"
+    SIZING_NOT_A_PROVIDER = "EF-4C"
+    SIZING_NULL_VALUE = "EF-4D"
+    SIZING_SHAPE_MISMATCH = "EF-4E"
+    SIZING_FIELD_CYCLE = "EF-4F"
+    SIZING_MANY_UNSUPPORTED = "EF-4G"
+    SIZING_DUPLICATE_NAME = "EF-4H"
+    SIZING_FAILED = "EF-4X"
     NESTED_GROUP = "EF-50"
     COMPONENT_IN_TWO_GROUPS = "EF-51"
     DUPLICATE_NAME = "EF-52"
@@ -87,22 +117,22 @@ class EnergySystemError(Exception):
     """
 
 
-class EnergySystemFormatError(EnergySystemError):
-    """A file was rejected because its text, shape or internal references are wrong.
+class EnergySystemCatalogueError(EnergySystemError):
+    """Shared behaviour of every rejection that carries a catalogue identifier.
 
-    This covers everything decidable from the document alone: an unsupported file
-    suffix, a wrong schema version, a duplicate key, an unknown top-level or entry
-    key, an input item matching none of the accepted shapes, a reference naming a
-    component that the file does not declare, a group rule violation and an absolute
-    filesystem path. None of these needs a component class to be imported, so they
-    are all reported before the first import happens.
+    The three concrete error classes below differ only in which lifecycle stage decided
+    the condition, and that difference matters to a caller: a tool checking files without
+    HiSim's component tree can only ever see the document-level failures, whereas a run
+    can see all three. What they share is the message discipline, which lives here: the
+    identifier, the location of the offending element and the problem text are kept as
+    separate attributes and assembled into one line of the form
+    ``EF-nn at <location>: <problem>``.
 
-    The exception carries the error identifier, the location of the offending element
-    and the problem text as separate attributes, and assembles them into one message
-    of the form ``EF-nn at <location>: <problem>``. When a closed set of acceptable
-    values exists it is appended as ``Valid <what>: a, b, c.``, optionally preceded by
-    a "did you mean" hint computed from the offending value, so that the message tells
-    the author both what is wrong and what may be written instead.
+    When a closed set of acceptable values exists it is appended as ``Valid <what>: a, b,
+    c.``, optionally preceded by a "did you mean" hint computed from the offending value,
+    so that the message tells the author both what is wrong and what may be written
+    instead. Taking the alternatives as structured data rather than as prose is what makes
+    that rule enforceable instead of a convention every call site re-implements.
     """
 
     #: How many close matches a "did you mean" hint offers at most. One suggestion is
@@ -232,3 +262,51 @@ class EnergySystemFormatError(EnergySystemError):
             cutoff=cls.SUGGESTION_CUTOFF,
         )
         return ", ".join(matches)
+
+
+class EnergySystemFormatError(EnergySystemCatalogueError):
+    """A file was rejected because its text, shape or internal references are wrong.
+
+    This covers everything decidable from the document alone: an unsupported file suffix,
+    a wrong schema version, a duplicate key, an unknown top-level or entry key, an input
+    item matching none of the accepted shapes, a reference naming a component that the
+    file does not declare, a group rule violation, an absolute filesystem path and a
+    sizing reference left dangling by a switched-off group. None of these needs a
+    component class to be imported, so they are all reported before the first import
+    happens.
+
+    Because the rules behind them are pure document rules, an editor plug-in, a schema
+    exporter or a batch-authoring tool can provoke and present exactly this class without
+    ever pulling in HiSim's component tree.
+    """
+
+
+class EnergySystemBindingError(EnergySystemCatalogueError):
+    """A file was rejected against the component classes it names.
+
+    Everything here needs the class in memory: whether the dotted class path imports at
+    all and names a component, whether the preset or the named constructor exists, whether
+    the constructor's arguments match its parameters, whether a ``config`` key is a field
+    of the config class, whether a value decodes into that field's type, and whether a
+    ``sizing_sources`` key is a fact the class's laws actually read.
+
+    The split from :class:`EnergySystemFormatError` is not cosmetic: as long as a class has
+    not been converted to presets and laws, a perfectly well-formed file will raise this
+    class and only this class, so a caller can distinguish "the file is wrong" from "the
+    classes are not ready yet".
+    """
+
+
+class EnergySystemSizingError(EnergySystemCatalogueError):
+    """Cross-component sizing could not be resolved for this file.
+
+    Raised for the conditions the sizing kernel decides — a fact nobody provides, a fact
+    several components provide with no source line to settle it, a source line naming a
+    component that does not declare the fact, a null-valued provider, a mapping whose shape
+    contradicts the law's cardinality, a cycle between sibling fields, a many-cardinality
+    read and a duplicate instance name — each wrapped with the file location that caused it.
+
+    The kernel's own message is kept verbatim inside this one, because it already names the
+    candidates and prints the paste-ready ``sizing_sources`` block; the wrapper adds what
+    the kernel cannot know, namely which entry of which file the failing config came from.
+    """

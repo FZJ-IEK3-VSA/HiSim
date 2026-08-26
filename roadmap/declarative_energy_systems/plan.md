@@ -50,7 +50,7 @@ P1 sizing kernel ──► P2 file format & executor ──► P3 recording & se
 - [ ] Solution design against the three mockups (they are the fixtures)
 - [x] Schema v3 model + YAML-only loader with duplicate-key detection + structural validation (`hisim/energy_system/`, PR-1) *(2026-08-26)*
 - [ ] Consumer-side `inputs` (bare / explicit wire / aggregator feed) replaces grouped-by-source connections
-- [ ] Groups: parse, "off" rule, uniqueness over enabled set
+- [x] Groups: parse, "off" rule, uniqueness over enabled set; class-bound validation, config decoding, sizing bridge to the kernel (PR-2) *(2026-08-26)*
 - [ ] Executor: resolve (P1 API) → construct → connect; error catalogue with both ends named
 - [ ] Realized record (presets expanded, `AUTO` → numbers, disabled groups absent) + audit companion; YAML comments per A4 if Q8 confirms
 - [ ] Identity test over all mockups and groups

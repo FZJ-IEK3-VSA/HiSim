@@ -241,7 +241,7 @@ groups:
     enabled: true
     components:
       heating_rod:
-        class: hisim.components.generic_heat_source.HeatSource
+        class: hisim.components.simple_heat_source.SimpleHeatSource
         preset: electric_backup             # maximal_thermal_power_in_watt AUTO <- heating_load_in_watt (share law)
         inputs:
           - heating_rod_controller
@@ -262,7 +262,7 @@ groups:
         inputs:
           - occupancy
       charging_station:
-        class: hisim.components.generic_ev_charger.EVCharger
+        class: hisim.components.controller_l1_generic_ev_charge.L1Controller
         preset: home_11kw
         inputs:
           - car

@@ -121,6 +121,29 @@ class RawDocument:
         return cls._parse(text, origin), origin
 
     @classmethod
+    def parse_text(cls, text: str, origin: str) -> Dict[str, Any]:
+        """Reads one document that is already in memory, under the same rules as a file.
+
+        A caller that holds the text of an energy system rather than a path — a test fixture, an
+        editor buffer, a document arriving over a network — still has to get the format's strict
+        reading: duplicate keys rejected, the boolean vocabulary restricted to ``true`` and
+        ``false``, and a top level that is a mapping. This is that entry point, and it is the
+        very code path :meth:`read` uses once it has the text, so the two can never diverge.
+
+        Args:
+            text: The whole YAML document.
+            origin: A short label naming where the text came from, used in messages.
+
+        Returns:
+            The parsed top-level mapping.
+
+        Raises:
+            EnergySystemFormatError: ``EF-02`` for a duplicate key, ``EF-03`` for a document
+                that is not a mapping, ``EF-07`` for text that is not YAML at all.
+        """
+        return cls._parse(text, origin)
+
+    @classmethod
     def _read_text(cls, source: Union[str, Path]) -> Tuple[str, str]:
         """Resolves the ambiguous source argument into YAML text and an origin label.
 

@@ -161,6 +161,9 @@ class SizedFieldMetadata:
 
     LAW: ClassVar[str] = SizingLaw.METADATA_KEY
     NOTE: ClassVar[str] = "hisim_sizing_note"
+    #: The concrete type the field's wire decoder coerces into, recorded so that the
+    #: class-creation check can tell a declared ``value_type`` from a forgotten one.
+    VALUE_TYPE: ClassVar[str] = "hisim_sizing_value_type"
 
 
 def sized_field(
@@ -199,6 +202,8 @@ def sized_field(
     metadata[SizedFieldMetadata.LAW] = normalize_law(rule, reads, fields)
     if note is not None:
         metadata[SizedFieldMetadata.NOTE] = note
+    if value_type is not None:
+        metadata[SizedFieldMetadata.VALUE_TYPE] = value_type
     metadata.update(dataclasses_json_config(encoder=_encode_sizable, decoder=_sizable_decoder(value_type)))
     # invalid-field-call is a false positive here: this helper returns the field()
     # descriptor for use inside a dataclass body, exactly like dataclasses_json.config.

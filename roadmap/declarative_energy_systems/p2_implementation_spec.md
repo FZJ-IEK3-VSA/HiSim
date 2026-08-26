@@ -434,3 +434,13 @@ Fixtures are the three mockups plus D2's executable fixture; nothing parallel is
 - **Provenance comments** `[decided 2026-08-26]` built in PR-4 (new work; PyYAML + ruamel.yaml declared).
 - **Constructors** `[decided 2026-08-26]` class side `@constructor` (P1 rework), file side R3.8 as proposed.
 - **Format** `[decided 2026-08-26]` YAML only (R15): the JSON loader path and the `.json` suffix are removed from §3/§5/§8; `component_connections.json` stays as the v1-compatible *output* wire log (A4), unaffected.
+
+## Amendments (PR-1, 2026-08-26)
+
+- **§6 modules** the loader split into `document.py` (strict YAML loader, duplicate-key walk, typed accessors) and `emitter.py` (canonical writer, the single emitter PR-4's comment renderer builds on) to keep `loader.py` ≤ 500 lines; `path_resolver.py` ported as-is with its errors folded into `EF-04`.
+- **§8 stages** `EF-40` (unknown sizing provider) and `EF-41` (fact half ≠ key) are raised structurally, not at resolve: both are decidable from the document alone.
+- **§5.4 `EF-05`** rule fixed: a key equal to or ending in `_path`/`_paths`/`_directory`/`_file`/`_filename` whose value starts with `/`, `\` or a Windows drive, scanned recursively over `config` and constructor arguments.
+- **New ids** `EF-07` wrong YAML kind, `EF-08` unusable name. Model is frozen pydantic v2 (`extra="forbid"`); the three `inputs` shapes are a discriminated union.
+- **Canonical style** indents block sequences under their key, so generated files diff cleanly against the hand-written mockups; `dump(load(f))` is a fixed point for all three mockups after one pass (AC-P2.7).
+- **D6** `PyYAML` added to `requirements.txt` (`setup.py` reads it); `ruamel.yaml` arrives with PR-4.
+- **For PR-2:** `groups.py` (`expand_groups` with `ExpansionRecord`, `EF-42` dangling scalar), the class-bound half of validation as a separate entry point, and the `sizing_sources` → `resolve_all(sources=)` bridge (`EF-43`, `EF-4A…4H` wrapping P1's `E-01…E-08`); `metadata` gating (DQ4) and `AUTO` wire decoding belong to the executor (PR-3).

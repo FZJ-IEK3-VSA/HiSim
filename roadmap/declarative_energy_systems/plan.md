@@ -48,7 +48,7 @@ P1 sizing kernel ──► P2 file format & executor ──► P3 recording & se
 - [x] Requirements decisions taken 2026-08-26 (Q8 keep comments; nested CLI; `energy_systems/` alongside `system_setups/`; R3.8 accepted; AC-P2.1 amended; RQ3 dropped) — document acceptance pending review
 - [ ] Convert UC1's classes to presets/constructors: Weather (`preset_standard` + `for_location`), UtspLpgConnector (`preset_standard` + `for_household`), GenericBoilerController, ElectricityMeter
 - [ ] Solution design against the three mockups (they are the fixtures)
-- [ ] Schema v3 + static validation (`hisim/scenario_v2` → v3), duplicate-key loader for YAML and JSON
+- [x] Schema v3 model + YAML-only loader with duplicate-key detection + structural validation (`hisim/energy_system/`, PR-1) *(2026-08-26)*
 - [ ] Consumer-side `inputs` (bare / explicit wire / aggregator feed) replaces grouped-by-source connections
 - [ ] Groups: parse, "off" rule, uniqueness over enabled set
 - [ ] Executor: resolve (P1 API) → construct → connect; error catalogue with both ends named

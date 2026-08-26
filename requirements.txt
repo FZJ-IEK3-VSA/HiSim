@@ -33,6 +33,8 @@ pyloadprofilegenerator
 portalocker
 pyhumps==3.8.0
 pydantic
+# Energy-system files (hisim/energy_system): the YAML read and write path
+PyYAML
 Pillow
 # RenoVisor translator (hisim/renovisor): REST result submission
 requests

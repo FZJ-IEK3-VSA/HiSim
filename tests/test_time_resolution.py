@@ -347,7 +347,7 @@ def run_cluster_house(
     # =================================================================================================================================
     # Build Basic Components
     # Build Building
-    my_building_config = building.BuildingConfig.presets.german_single_family_home
+    my_building_config = building.BuildingConfig.preset_standard("Building")
     my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
@@ -472,7 +472,9 @@ def run_cluster_house(
     my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.presets.standard.resolve(
+    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.preset_standard(
+        "HeatDistributionSystem"
+    ).resolve(
         SizingContext(
             water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
             conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
@@ -492,7 +494,11 @@ def run_cluster_house(
     )
 
     # Build EMS
-    my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.presets.optimize_own_consumption
+    my_electricity_controller_config = (
+        controller_l2_energy_management_system.EMSConfig.preset_optimize_own_consumption(
+            "L2EMSElectricityController"
+        )
+    )
 
     my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
         my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config,

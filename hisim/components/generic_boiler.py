@@ -33,7 +33,6 @@ from hisim.component import (
     CapexCostDataClass,
 )
 from hisim.config import (
-    Catalog,
     ComponentID,
     ConfigBase,
     DisplayConfig,
@@ -44,6 +43,7 @@ from hisim.config import (
     SizingLaw,
     concrete,
     law,
+    preset,
     sized_field,
 )
 from hisim.components.dual_circuit_system import (
@@ -99,8 +99,8 @@ class BoilerType(str, Enum):
 class GenericBoilerConfig(ConfigBase):
     """Configuration of the GenericBoiler class.
 
-    Named default variants live in :attr:`presets` (one per fuel), and the power fields
-    are sizable: a preset carries ``AUTO`` where
+    Named default variants are the ``preset_*`` classmethods below (one per fuel), and the
+    power fields are sizable: a preset carries ``AUTO`` where
     the value derives from the building, and ``.resolve(ctx)`` computes it. The former
     ``get_default_*``/``get_scaled_*`` factory pairs are replaced by exactly that split —
     the sizable preset resolves to what the scaled factory produced, the concrete
@@ -162,57 +162,93 @@ class GenericBoilerConfig(ConfigBase):
     #: which one it means; assigned below the class.
     SIZING_CONTRIBUTIONS: ClassVar[Tuple["FactContribution", ...]] = ()
 
-    #: Named default variants, one per fuel (preset names are wire format: scenario
-    #: files reference them, so renames are breaking changes).
-    #: The fuel presets are sizable templates (power fields AUTO); the ``*_12kw`` presets
-    #: are the former nominal catalog devices. Capex fields stay None so postprocessing
-    #: looks them up from the device database, exactly as the factories did.
-    presets: ClassVar[Catalog] = Catalog(
-        condensing_gas=lambda: GenericBoilerConfig(
-            component_id=ComponentID(name="CondensingGasBoiler"),
+    #: The named default boilers, one per fuel plus the nominal catalogue devices, are
+    #: declared below as ``preset_*`` classmethods (preset names are wire format: scenario
+    #: files reference them, so renames are breaking changes). The fuel presets are sizable
+    #: templates whose power fields stay ``AUTO`` for the resolver to scale to the building,
+    #: which is what the deleted ``get_scaled_*`` factories did; the ``*_12kw`` presets are
+    #: the former nominal defaults with both power fields pinned. Capex fields stay ``None``
+    #: throughout so postprocessing looks them up from the device database, exactly as the
+    #: factories did.
+
+    @preset
+    @classmethod
+    def preset_condensing_gas(cls, name: str) -> "GenericBoilerConfig":
+        """Condensing gas boiler, scaled to the building it heats."""
+        return cls(
+            component_id=ComponentID(name=name),
             energy_carrier=lt.LoadTypes.GAS,
             boiler_type=BoilerType.CONDENSING,
-        ),
-        condensing_gas_12kw=lambda: GenericBoilerConfig(
-            component_id=ComponentID(name="CondensingGasBoiler"),
+        )
+
+    @preset(note="nominal catalogue device")
+    @classmethod
+    def preset_condensing_gas_12kw(cls, name: str) -> "GenericBoilerConfig":
+        """Condensing gas boiler pinned to the 12 kW nominal device."""
+        return cls(
+            component_id=ComponentID(name=name),
             energy_carrier=lt.LoadTypes.GAS,
             boiler_type=BoilerType.CONDENSING,
             minimal_thermal_power_in_watt=1000.0,
             maximal_thermal_power_in_watt=12000.0,
-        ),
-        oil=lambda: GenericBoilerConfig(
-            component_id=ComponentID(name="ConventionalOilBoiler"),
+        )
+
+    @preset
+    @classmethod
+    def preset_oil(cls, name: str) -> "GenericBoilerConfig":
+        """Conventional oil boiler, scaled to the building it heats."""
+        return cls(
+            component_id=ComponentID(name=name),
             energy_carrier=lt.LoadTypes.OIL,
             boiler_type=BoilerType.CONVENTIONAL,
-        ),
-        oil_12kw=lambda: GenericBoilerConfig(
-            component_id=ComponentID(name="ConventionalOilBoiler"),
+        )
+
+    @preset(note="nominal catalogue device")
+    @classmethod
+    def preset_oil_12kw(cls, name: str) -> "GenericBoilerConfig":
+        """Conventional oil boiler pinned to the 12 kW nominal device."""
+        return cls(
+            component_id=ComponentID(name=name),
             energy_carrier=lt.LoadTypes.OIL,
             boiler_type=BoilerType.CONVENTIONAL,
             minimal_thermal_power_in_watt=1000.0,
             maximal_thermal_power_in_watt=12000.0,
-        ),
-        pellets=lambda: GenericBoilerConfig(
-            component_id=ComponentID(name="ConventionalPelletBoiler"),
+        )
+
+    @preset
+    @classmethod
+    def preset_pellets(cls, name: str) -> "GenericBoilerConfig":
+        """Pellet boiler, scaled to the building, modulating down to a twelfth of its maximum."""
+        return cls(
+            component_id=ComponentID(name=name),
             energy_carrier=lt.LoadTypes.PELLETS,
             boiler_type=BoilerType.CONVENTIONAL,
             # per-preset law: a pellet boiler cannot modulate below a twelfth of its
             # maximal power, unlike the gas/oil default of zero. Reading the sibling
             # field keeps the two consistent even when an author pins the maximum.
             minimal_thermal_power_in_watt=Self("maximal_thermal_power_in_watt") * (1 / 12),
-        ),
-        wood_chips=lambda: GenericBoilerConfig(
-            component_id=ComponentID(name="ConventionalWoodChipBoiler"),
+        )
+
+    @preset
+    @classmethod
+    def preset_wood_chips(cls, name: str) -> "GenericBoilerConfig":
+        """Wood chip boiler, scaled to the building, with the pellet modulation limit."""
+        return cls(
+            component_id=ComponentID(name=name),
             energy_carrier=lt.LoadTypes.WOOD_CHIPS,
             boiler_type=BoilerType.CONVENTIONAL,
             minimal_thermal_power_in_watt=Self("maximal_thermal_power_in_watt") * (1 / 12),
-        ),
-        hydrogen=lambda: GenericBoilerConfig(
-            component_id=ComponentID(name="CondensingHydrogenBoiler"),
+        )
+
+    @preset
+    @classmethod
+    def preset_hydrogen(cls, name: str) -> "GenericBoilerConfig":
+        """Condensing hydrogen boiler, scaled to the building it heats."""
+        return cls(
+            component_id=ComponentID(name=name),
             energy_carrier=lt.LoadTypes.GREEN_HYDROGEN,
             boiler_type=BoilerType.CONDENSING,
-        ),
-    )
+        )
 
 
 class GenericBoiler(Component):

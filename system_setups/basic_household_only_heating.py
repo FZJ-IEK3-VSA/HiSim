@@ -61,7 +61,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     # Build Building
     my_building = building.Building(
-        config=building.BuildingConfig.presets.german_single_family_home,
+        config=building.BuildingConfig.preset_standard("Building"),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_building_information = my_building.my_building_information
@@ -95,7 +95,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         config=my_heat_distribution_controller_config
     )
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.presets.standard.resolve(
+        heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
             SizingContext(
                 water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
@@ -109,7 +109,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     # Build Gas Heater
-    my_gas_heater_config = generic_boiler.GenericBoilerConfig.presets.condensing_gas_12kw
+    my_gas_heater_config = generic_boiler.GenericBoilerConfig.preset_condensing_gas_12kw("CondensingGasBoiler")
     my_gas_heater = generic_boiler.GenericBoiler(
         config=my_gas_heater_config,
         my_simulation_parameters=my_simulation_parameters,

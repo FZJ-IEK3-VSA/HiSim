@@ -74,7 +74,7 @@ def test_building_simulates_without_occupancy_connections() -> None:
     my_weather.i_prepare_simulation()
 
     # Building — default German single-family home, no occupancy component
-    my_building_config = building.BuildingConfig.presets.german_single_family_home
+    my_building_config = building.BuildingConfig.preset_standard("Building")
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )

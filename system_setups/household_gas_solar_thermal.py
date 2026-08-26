@@ -101,7 +101,7 @@ def setup_function(
     # Build Basic Components
 
     # Building
-    my_building_config = building.BuildingConfig.presets.german_single_family_home
+    my_building_config = building.BuildingConfig.preset_standard("Building")
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
         config=my_building_config,
@@ -139,7 +139,7 @@ def setup_function(
     )
 
     # Gas Heater (for space heating and DHW) - Component
-    my_gas_heater_config = generic_boiler.GenericBoilerConfig.presets.condensing_gas.resolve(
+    my_gas_heater_config = generic_boiler.GenericBoilerConfig.preset_condensing_gas("CondensingGasBoiler").resolve(
         SizingContext(heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt)
     )
     my_gas_heater = generic_boiler.GenericBoiler(
@@ -173,7 +173,7 @@ def setup_function(
 
     # Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.presets.standard.resolve(
+        heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
             SizingContext(
                 water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,

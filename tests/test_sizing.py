@@ -3,8 +3,9 @@
 Covers the pieces the spike introduces: the copy-stable AUTO sentinel and its wire codec,
 expression and function laws, the resolve semantics (no-op vs. NothingToSizeError vs.
 missing-fact errors), the per-preset law escape hatch, the sizing_record provenance, the
-Catalog preset helper, the central ``Component.__init__`` check, and the single-registry
-invariant between the ``Size`` terms and the ``SizingContext`` fields.
+central ``Component.__init__`` check, and the single-registry invariant between the
+``Size`` terms and the ``SizingContext`` fields. The preset machinery itself is covered
+by ``tests/test_presets.py``.
 """
 
 # clean
@@ -31,7 +32,6 @@ from hisim.config import (
     sized_field,
     sizing,
 )
-from hisim.config.presets import Catalog, preset_provenance
 
 
 @dataclass_json
@@ -223,50 +223,6 @@ def test_auto_round_trips_through_the_wire_spelling():
 
 
 @pytest.mark.base
-def test_catalog_builds_fresh_instances_and_knows_its_canonical():
-    """Every preset access is a new object; the first entry is the canonical default."""
-    presets = Catalog(one=_fixture_config, two=_fixture_config)
-    assert presets.one is not presets.one
-    assert presets.names() == ("one", "two")
-    assert isinstance(presets.canonical, _SizableFixtureConfig)
-    assert dict(iter(presets)).keys() == {"one", "two"}
-    with pytest.raises(AttributeError, match="no preset named 'three'"):
-        _ = presets.three
-    with pytest.raises(ValueError, match="shadow"):
-        Catalog(canonical=lambda: None)
-
-
-@pytest.mark.base
-def test_catalog_access_stamps_preset_provenance():
-    """Every Catalog access stamps the preset's name; other construction paths carry none."""
-    presets = Catalog(one=_fixture_config, two=_fixture_config)
-    assert preset_provenance(presets.one) == "one"
-    assert preset_provenance(presets.two) == "two"
-    assert preset_provenance(presets.canonical) == "one"
-    assert preset_provenance(_fixture_config()) is None
-
-
-@pytest.mark.base
-def test_preset_provenance_survives_resolve_and_stays_invisible():
-    """The stamp rides through resolve like sizing_record, and never leaks into fields.
-
-    Serialization, dataclass equality and ``dataclasses.replace`` must all ignore the
-    provenance -- it is an attribute, not a field -- while ``resolve`` carries it onto
-    the resolved copy so the template creator can still read it.
-    """
-    presets = Catalog(one=_fixture_config)
-    resolved = presets.one.resolve(SizingContext(heating_load_in_watt=10_000.0))
-    assert preset_provenance(resolved) == "one"
-    assert Catalog.PROVENANCE_ATTRIBUTE not in resolved.to_dict()
-    assert Catalog.PROVENANCE_ATTRIBUTE not in {field.name for field in dataclasses.fields(resolved)}
-    # replace() builds from fields only, so the copy is equal yet unstamped -- exactly
-    # like a manually constructed config with the same values.
-    manual = dataclasses.replace(resolved)
-    assert manual == resolved
-    assert preset_provenance(manual) is None
-
-
-@pytest.mark.base
 def test_size_terms_and_sizing_context_fields_are_one_registry():
     """Every context fact has exactly one Size term and vice versa.
 
@@ -287,7 +243,7 @@ def test_for_building_snapshots_the_derived_building_facts():
     """for_building runs the TABULA lookup once and fills the building-scope facts."""
     from hisim.components.building import BuildingConfig
 
-    ctx = SizingContext.for_building(BuildingConfig.presets.german_single_family_home)
+    ctx = SizingContext.for_building(BuildingConfig.preset_standard("Building"))
     assert ctx.heating_load_in_watt is not None and ctx.heating_load_in_watt > 0
     assert ctx.number_of_apartments == 1
     assert ctx.conditioned_floor_area_in_m2 == pytest.approx(121.2)
@@ -303,8 +259,9 @@ def test_the_component_init_check_rejects_unresolved_configs():
     from hisim.simulationparameters import SimulationParameters
 
     parameters = SimulationParameters.one_day_only(2021, 3600)
+    unresolved = GenericBoilerConfig.preset_condensing_gas("CondensingGasBoiler")
     with pytest.raises(ConfigSizingError, match=r"requires sizing in 2 field\(s\)"):
-        GenericBoiler(config=GenericBoilerConfig.presets.condensing_gas, my_simulation_parameters=parameters)
+        GenericBoiler(config=unresolved, my_simulation_parameters=parameters)
 
 
 @pytest.mark.base
@@ -314,12 +271,12 @@ def test_boiler_presets_reproduce_the_former_factory_values():
 
     ctx = SizingContext(heating_load_in_watt=8_000.0, number_of_apartments=1)
     expected_max = max(8_000.0, 2_500.0 * 1) * 1.1  # the old scale_thermal_power
-    scaled = GenericBoilerConfig.presets.condensing_gas.resolve(ctx)
+    scaled = GenericBoilerConfig.preset_condensing_gas("CondensingGasBoiler").resolve(ctx)
     assert scaled.maximal_thermal_power_in_watt == expected_max
     assert scaled.minimal_thermal_power_in_watt == 0.0
-    pellet = GenericBoilerConfig.presets.pellets.resolve(ctx)
+    pellet = GenericBoilerConfig.preset_pellets("ConventionalPelletBoiler").resolve(ctx)
     assert pellet.minimal_thermal_power_in_watt == 1 / 12 * expected_max
-    nominal = GenericBoilerConfig.presets.condensing_gas_12kw
+    nominal = GenericBoilerConfig.preset_condensing_gas_12kw("CondensingGasBoiler")
     assert nominal.maximal_thermal_power_in_watt == 12_000.0
     assert nominal.minimal_thermal_power_in_watt == 1_000.0
     assert not sizing.auto_fields(nominal)
@@ -338,7 +295,7 @@ def test_hds_preset_is_sizing_mandatory_and_enum_typed():
         conditioned_floor_area_in_m2=121.2,
         heat_distribution_system_type=HeatDistributionSystemType.FLOORHEATING,
     )
-    resolved = HeatDistributionConfig.presets.standard.resolve(ctx)
+    resolved = HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(ctx)
     assert resolved.water_mass_flow_rate_in_kg_per_second == 0.27  # the old factory's round(.., 2)
     assert resolved.heating_system is HeatDistributionSystemType.FLOORHEATING
     # enum-typed sizable field round-trips as a member, thanks to value_type
@@ -351,7 +308,7 @@ def test_ems_preset_has_nothing_to_size():
     """The EMS is the IGNORED case: resolve raises instead of silently no-opping."""
     from hisim.components.controller_l2_energy_management_system import EMSConfig
 
-    config = EMSConfig.presets.optimize_own_consumption
+    config = EMSConfig.preset_optimize_own_consumption("L2EMSElectricityController")
     assert config.strategy == "optimize_own_consumption"
     with pytest.raises(NothingToSizeError):
         config.resolve(SizingContext(heating_load_in_watt=10_000.0))

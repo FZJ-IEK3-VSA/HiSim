@@ -9,7 +9,7 @@ The component with the lowest source weight is activated first.
 # clean
 from dataclasses import dataclass
 
-from typing import Any, ClassVar, List, Tuple, Optional, cast
+from typing import Any, List, Tuple, Optional, cast
 from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -19,7 +19,7 @@ from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import ComponentInput, ComponentOutput
-from hisim.config import Catalog, ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
@@ -75,13 +75,12 @@ class EMSConfig(ConfigBase):
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float]
 
-    #: Named default presets. The EMS declares no
-    #: sizable field — its config is strategy parameters and temperature offsets, nothing
-    #: physical to scale — so calling ``.resolve(ctx)`` on it raises NothingToSizeError
-    #: rather than silently no-opping: a setup that believes it sized the EMS is wrong.
-    presets: ClassVar[Catalog] = Catalog(
-        optimize_own_consumption=lambda: EMSConfig(
-            component_id=ComponentID(name="L2EMSElectricityController"),
+    @preset
+    @classmethod
+    def preset_optimize_own_consumption(cls, name: str) -> "EMSConfig":
+        """The surplus controller that maximises the building's own PV consumption."""
+        return cls(
+            component_id=ComponentID(name=name),
             strategy="optimize_own_consumption",
             limit_to_shave=0,
             building_indoor_temperature_offset_value=2,
@@ -93,8 +92,7 @@ class EMSConfig(ConfigBase):
             lifetime_in_years=None,
             maintenance_costs_in_euro_per_year=None,
             subsidy_as_percentage_of_investment_costs=None,
-        ),
-    )
+        )
 
 
 class EMSState:

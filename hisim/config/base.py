@@ -30,10 +30,29 @@ from dataclasses_json import dataclass_json
 # line. The aliases keep the module-level functions reachable from the identically named
 # ``ConfigBase`` methods that delegate to them.
 from hisim.config.context import SizingContext
+from hisim.config.presets import check_builder_declarations
 from hisim.config.sizing import (
     auto_fields as sizing_auto_fields,
     resolve_config as sizing_resolve_config,
 )
+
+
+def _field_names_under_construction(config_class: type) -> List[str]:
+    """Names that will become dataclass fields of a class whose body has just executed.
+
+    ``dataclasses.fields`` cannot be used yet — the ``@dataclass`` decorator has not run
+    when ``__init_subclass__`` fires — so the names are read from the class's own
+    annotations plus the fields its bases already contributed. ``ClassVar`` annotations are
+    skipped because they never become fields; they are recognised textually, since with
+    postponed evaluation an annotation is a string and resolving it here would import every
+    module a config's annotations mention.
+    """
+    inherited = list(getattr(config_class, "__dataclass_fields__", {}))
+    own = config_class.__dict__.get("__annotations__", {})
+    declared = [
+        name for name, annotation in own.items() if not str(annotation).replace("typing.", "").startswith("ClassVar")
+    ]
+    return inherited + declared
 
 
 @dataclass_json
@@ -139,6 +158,19 @@ class ConfigBase:
     """
 
     component_id: ComponentID
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Validates the named builders a config class declares, before it is a dataclass.
+
+        Runs while the subclass object is created, which is *before* its ``@dataclass``
+        decorator processes the annotations — the earliest moment at which both the
+        decorated ``@preset``/``@constructor`` methods and the field names are visible.
+        Checking here is what turns a builder name that shadows a field into an immediate,
+        located error instead of a dataclass silently adopting the classmethod as that
+        field's default value.
+        """
+        super().__init_subclass__(**kwargs)
+        check_builder_declarations(cls, _field_names_under_construction(cls))
 
     #: The sizing facts this config class contributes to the scenario-wide fact pool
     #: (resolved engine-side before components are constructed). Empty for the vast majority of

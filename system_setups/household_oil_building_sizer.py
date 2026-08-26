@@ -218,7 +218,7 @@ def setup_function(
     # =================================================================================================================================
     # Build Basic Components
     # Build Building
-    my_building_config = building.BuildingConfig.presets.german_single_family_home
+    my_building_config = building.BuildingConfig.preset_standard("Building")
     my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
     my_building_config.max_thermal_building_demand_in_watt = max_thermal_building_demand_in_watt
     my_building_config.set_heating_temperature_in_celsius = building_set_heating_temperature_in_celsius
@@ -333,7 +333,7 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build Oil heater
-    my_oil_heater_config = generic_boiler.GenericBoilerConfig.presets.oil.resolve(
+    my_oil_heater_config = generic_boiler.GenericBoilerConfig.preset_oil("ConventionalOilBoiler").resolve(
         SizingContext(heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt)
     )
     my_oil_heater = generic_boiler.GenericBoiler(
@@ -381,7 +381,7 @@ def setup_function(
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.presets.standard.resolve(
+        heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
             SizingContext(
                 water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
                 conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
@@ -419,7 +419,11 @@ def setup_function(
     if share_of_maximum_pv_potential != 0 and energy_system_config_.use_battery_and_ems:
 
         # Build EMS
-        my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.presets.optimize_own_consumption
+        my_electricity_controller_config = (
+            controller_l2_energy_management_system.EMSConfig.preset_optimize_own_consumption(
+                "L2EMSElectricityController"
+            )
+        )
 
         my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
             my_simulation_parameters=my_simulation_parameters,

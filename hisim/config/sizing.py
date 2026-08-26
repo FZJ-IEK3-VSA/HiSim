@@ -49,7 +49,7 @@ from hisim.config.laws import (
     SizingLaw,
     normalize_law,
 )
-from hisim.config.presets import Catalog
+from hisim.config.presets import ConfigBuilder
 
 if TYPE_CHECKING:
     from hisim.config.context import SizingContext
@@ -406,8 +406,8 @@ def resolve_config(
     carries its provenance as the ``sizing_record`` attribute (a tuple of
     :class:`SizingRecordEntry`), deliberately not a dataclass field so that
     serialization, equality and ``dataclasses.replace`` all ignore it. A preset
-    provenance stamp (see :class:`hisim.config.presets.Catalog`) is carried onto the copy
-    the same way.
+    provenance stamp (see the ``preset`` decorator of :mod:`hisim.config.presets`) is
+    carried onto the copy the same way.
 
     Args:
         config: The config to resolve; it is never mutated.
@@ -481,7 +481,7 @@ def resolve_config(
     # Preset provenance rides along exactly like the sizing record: dataclasses.replace
     # copies fields only, so the non-field stamp must be carried over explicitly for the
     # template creator to still see which preset the resolved config came from.
-    provenance = getattr(config, Catalog.PROVENANCE_ATTRIBUTE, None)
+    provenance = getattr(config, ConfigBuilder.PROVENANCE_ATTRIBUTE, None)
     if provenance is not None:
-        setattr(result, Catalog.PROVENANCE_ATTRIBUTE, provenance)
+        setattr(result, ConfigBuilder.PROVENANCE_ATTRIBUTE, provenance)
     return result

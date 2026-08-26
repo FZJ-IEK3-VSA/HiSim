@@ -121,7 +121,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     hds_name = "HeatDistributionSystem"
 
     # ===================================================================================================================
-    my_building_config = building.BuildingConfig.presets.german_single_family_home
+    my_building_config = building.BuildingConfig.preset_standard("Building")
     my_building_information = building.BuildingInformation(config=my_building_config)
 
     # Build Heat Distribution System
@@ -282,7 +282,7 @@ def test_get_cost_capex_raises_on_unknown_heating_system() -> None:
     offending value.
     """
     invalid_heating_system = "NOT_A_HEATING_SYSTEM"  # not a HeatDistributionSystemType member
-    config = heat_distribution_system.HeatDistributionConfig.presets.standard
+    config = heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem")
     config.water_mass_flow_rate_in_kg_per_second = 0.1
     config.absolute_conditioned_floor_area_in_m2 = 100.0
     config.heating_system = invalid_heating_system  # type: ignore[assignment]  # intentionally invalid

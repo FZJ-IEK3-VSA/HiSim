@@ -306,7 +306,7 @@ class OneDaySnapshot:
         never gets to 25 degrees. Lowering the setpoints buys both branches without adding a
         third simulation run.
         """
-        config: BuildingConfig = BuildingConfig.presets.german_single_family_home
+        config: BuildingConfig = BuildingConfig.preset_standard("Building")
         if variant_name == cls.SCALED_VARIANT_NAME:
             config = dataclasses.replace(
                 config,

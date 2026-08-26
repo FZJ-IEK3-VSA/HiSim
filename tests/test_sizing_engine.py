@@ -161,7 +161,7 @@ def test_the_pilot_chain_resolves_without_any_sources_mapping():
         HeatDistributionSystemType,
     )
 
-    building = BuildingConfig.presets.german_single_family_home
+    building = BuildingConfig.preset_standard("Building")
     heating_load = SizingContext.for_building(building).heating_load_in_watt
     controller = HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
         set_heating_temperature_for_building_in_celsius=20.0,
@@ -169,8 +169,8 @@ def test_the_pilot_chain_resolves_without_any_sources_mapping():
         heating_load_of_building_in_watt=7780.8,
         heating_reference_temperature_in_celsius=-7.0,
     )
-    hds = HeatDistributionConfig.presets.standard
-    boiler = GenericBoilerConfig.presets.condensing_gas
+    hds = HeatDistributionConfig.preset_standard("HeatDistributionSystem")
+    boiler = GenericBoilerConfig.preset_condensing_gas("CondensingGasBoiler")
     resolved = resolve_all([hds, boiler, building, controller])  # deliberately shuffled
     resolved_hds, resolved_boiler = resolved[0], resolved[1]
     assert resolved_hds.water_mass_flow_rate_in_kg_per_second == 0.27
@@ -585,7 +585,7 @@ def test_a_sibling_read_is_recorded_as_a_self_input():
     """A law reading its own config's field records it as ``self.<field>`` with its value."""
     from hisim.components.generic_boiler import GenericBoilerConfig
 
-    pellet = GenericBoilerConfig.presets.pellets
+    pellet = GenericBoilerConfig.preset_pellets("ConventionalPelletBoiler")
     pellet.maximal_thermal_power_in_watt = 12_000.0
     resolved = pellet.resolve(SizingContext())
     entry = {item.field: item for item in resolved.sizing_record}["minimal_thermal_power_in_watt"]
@@ -606,7 +606,7 @@ def test_a_pinned_sibling_is_what_the_dependent_field_sizes_from():
     """
     from hisim.components.generic_boiler import GenericBoilerConfig
 
-    pellet = GenericBoilerConfig.presets.pellets
+    pellet = GenericBoilerConfig.preset_pellets("ConventionalPelletBoiler")
     pellet.maximal_thermal_power_in_watt = 12_000.0
     resolved = pellet.resolve(SizingContext())
     assert resolved.minimal_thermal_power_in_watt == 1_000.0
@@ -618,7 +618,7 @@ def test_a_sized_sibling_is_read_at_its_computed_value():
     """With both fields sized, the dependent one still reads the sibling's computed result."""
     from hisim.components.generic_boiler import GenericBoilerConfig
 
-    resolved = GenericBoilerConfig.presets.pellets.resolve(
+    resolved = GenericBoilerConfig.preset_pellets("ConventionalPelletBoiler").resolve(
         SizingContext(heating_load_in_watt=8_000.0, number_of_apartments=1)
     )
     expected_max = max(8_000.0, 2_500.0) * 1.1

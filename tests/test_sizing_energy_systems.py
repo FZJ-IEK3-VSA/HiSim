@@ -133,7 +133,7 @@ def simulation_for_one_timestep(
 
     # Set Residence
     my_residence_config = (
-        building.BuildingConfig.presets.german_single_family_home
+        building.BuildingConfig.preset_standard("Building")
     )
     my_residence_config.absolute_conditioned_floor_area_in_m2 = (
         absolute_conditioned_floor_area_in_m2

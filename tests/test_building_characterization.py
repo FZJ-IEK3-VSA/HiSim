@@ -31,7 +31,7 @@ What is covered:
 The config used for the sweep is built field by field instead of through the named
 default. The harness had to survive the config-presets redesign that followed the cleanup
 and replaced ``get_default_german_single_family_home`` with
-``BuildingConfig.presets.german_single_family_home``: a harness that has to be edited
+``BuildingConfig.preset_standard("Building")``: a harness that has to be edited
 mid-refactor proves nothing, because the edit itself could hide the change it is meant to
 catch -- and this one was not edited: the 3006 golden assertions did not move.
 

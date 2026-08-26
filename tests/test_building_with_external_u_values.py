@@ -81,7 +81,7 @@ def _build_components(
     set_cooling_temperature_for_building_in_celsius = 20.5
 
     # Build Building
-    my_building_config = building.BuildingConfig.presets.german_single_family_home
+    my_building_config = building.BuildingConfig.preset_standard("Building")
     my_building_config.facade_u_value_in_watt_per_m2_per_kelvin = u_value_params.u_value_facade_in_watt_per_m2_per_kelvin
     my_building_config.roof_u_value_in_watt_per_m2_per_kelvin = u_value_params.u_value_roof_in_watt_per_m2_per_kelvin
     my_building_config.window_u_value_in_watt_per_m2_per_kelvin = u_value_params.u_value_window_in_watt_per_m2_per_kelvin

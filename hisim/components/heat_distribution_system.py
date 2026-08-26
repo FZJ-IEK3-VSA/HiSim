@@ -19,7 +19,6 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.config import (
-    Catalog,
     ComponentID,
     ConfigBase,
     DisplayConfig,
@@ -28,6 +27,7 @@ from hisim.config import (
     Size,
     SizingContext,
     concrete,
+    preset,
     sized_field,
 )
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
@@ -92,12 +92,6 @@ class HeatDistributionConfig(ConfigBase):
         """Return the full class name of the base class."""
         return HeatDistribution.get_full_classname()  # type: ignore[no-any-return]
 
-    #: Named default presets. The heat distribution system has no defensible nominal —
-    #: every essential field is sized to the building it serves — so the standard preset
-    #: is a pure sizable template: all three sized fields default to AUTO and the config
-    #: cannot reach a component unresolved.
-    PRESET_COMPONENT_ID: ClassVar[ComponentID] = ComponentID(name="HeatDistributionSystem")
-
     component_id: ComponentID
     heating_system: Sizable[HeatDistributionSystemType] = sized_field(
         rule=Size.HEAT_DISTRIBUTION_SYSTEM_TYPE, value_type=HeatDistributionSystemType
@@ -120,9 +114,11 @@ class HeatDistributionConfig(ConfigBase):
     # subsidies as percentage of investment costs; None means postprocessing looks it up.
     subsidy_as_percentage_of_investment_costs: Optional[float] = None
 
-    presets: ClassVar[Catalog] = Catalog(
-        standard=lambda: HeatDistributionConfig(component_id=HeatDistributionConfig.PRESET_COMPONENT_ID),
-    )
+    @preset
+    @classmethod
+    def preset_standard(cls, name: str) -> "HeatDistributionConfig":
+        """The one heat distribution system, sized entirely to the building it serves."""
+        return cls(component_id=ComponentID(name=name))
 
 
 @dataclass

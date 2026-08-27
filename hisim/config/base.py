@@ -21,7 +21,7 @@ from __future__ import annotations
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, List, Optional, Tuple
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, TypeVar
 
 from dataclasses_json import dataclass_json
 
@@ -142,6 +142,11 @@ class ComponentID:
         return self.building if self.building is not None else self.DEFAULT_BUILDING_LABEL
 
 
+#: The concrete configuration class ``resolve`` is called on, so the copy it returns keeps
+#: that class for the type checker instead of widening to the base.
+ConfigBaseT = TypeVar("ConfigBaseT", bound="ConfigBase")
+
+
 @dataclass
 class ConfigBase:
     """Base class for all configurations.
@@ -247,7 +252,7 @@ class ConfigBase:
         """
         return dc.asdict(self)
 
-    def resolve(self, ctx: SizingContext) -> "ConfigBase":
+    def resolve(self: ConfigBaseT, ctx: SizingContext) -> ConfigBaseT:
         """Returns a copy in which every AUTO field is computed by its declared law.
 
         This is the sizing entry point on every config:
@@ -255,7 +260,9 @@ class ConfigBase:
         currently says AUTO, a ``NothingToSizeError`` when the class declares no sizable
         field at all, and a hard error naming field and law when a law cannot be
         evaluated against the given context. The returned copy carries its per-field
-        provenance as the ``sizing_record`` attribute.
+        provenance as the ``sizing_record`` attribute. The copy has the caller's concrete
+        class, so ``BoilerConfig.preset_x(...).resolve(ctx)`` is a ``BoilerConfig`` to the
+        type checker as well as at run time.
         """
         return sizing_resolve_config(self, ctx)
 

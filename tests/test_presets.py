@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from typing import cast
 
 import pytest
 from dataclasses_json import dataclass_json
@@ -205,7 +206,7 @@ def test_a_preset_builds_only_with_an_instance_name_and_stamps_its_provenance():
     assert preset_provenance(_StorageConfig.preset_fixed_300l("TankC")) == "fixed_300l"
     assert preset_provenance(_StorageConfig(component_id=ComponentID(name="Manual"))) is None
     with pytest.raises(TypeError):
-        _StorageConfig.preset_standard()  # pylint: disable=no-value-for-parameter
+        _StorageConfig.preset_standard()  # type: ignore[call-arg]  # pylint: disable=no-value-for-parameter
 
 
 @pytest.mark.base
@@ -266,8 +267,8 @@ def test_undecorated_classmethods_are_invisible_to_the_registries():
     Failure mode caught: a discovery that matches on the method name or on "returns the
     class", which would drag every helper classmethod of every config into the wire format.
     """
-    assert presets_of(_UndecoratedConfig) == {}
-    assert constructors_of(_UndecoratedConfig) == {}
+    assert not presets_of(_UndecoratedConfig)
+    assert not constructors_of(_UndecoratedConfig)
     assert _UndecoratedConfig.looks_like_a_preset("Tank").component_id.name == "Tank"
     assert preset_provenance(_UndecoratedConfig.looks_like_a_preset("Tank")) is None
 
@@ -326,6 +327,7 @@ def test_a_builder_without_its_name_prefix_or_with_a_wrong_signature_is_rejected
             @classmethod
             def make_it(cls, name: str, volume_in_liter: float) -> "_NoConstructorPrefix":
                 """A constructor whose method name lacks the prefix."""
+                del volume_in_liter  # the declaration, not the value, is under test
                 return cls(component_id=ComponentID(name=name))
 
     with pytest.raises(ValueError, match="declare it as a @constructor"):
@@ -337,6 +339,7 @@ def test_a_builder_without_its_name_prefix_or_with_a_wrong_signature_is_rejected
             @classmethod
             def preset_sized(cls, name: str, volume_in_liter: float) -> "_ParameterisedPreset":
                 """A preset with a parameter it has no business taking."""
+                del volume_in_liter  # the declaration, not the value, is under test
                 return cls(component_id=ComponentID(name=name))
 
     with pytest.raises(TypeError, match="applied above @classmethod"):
@@ -347,12 +350,12 @@ def test_a_builder_without_its_name_prefix_or_with_a_wrong_signature_is_rejected
             @preset
             def preset_standard(self, name: str) -> "_NotAClassmethod":
                 """A preset that is not a classmethod at all."""
-                return _StorageConfig(component_id=ComponentID(name=name))
+                return _StorageConfig(component_id=ComponentID(name=name))  # type: ignore[return-value]
 
 
 @pytest.mark.base
 def test_a_misspelled_preset_and_a_wrongly_typed_constructor_argument_are_static_errors():
-    """mypy rejects an unknown preset method and a constructor argument of the wrong type.
+    """Mypy rejects an unknown preset method and a constructor argument of the wrong type.
 
     Failure mode caught: the typed-builder promise quietly regressing to ``Any`` — a
     decorator returning ``Callable[..., Any]`` or a ``__getattr__``-based namespace would
@@ -443,13 +446,13 @@ def test_describe_config_covers_the_other_pilots_and_rejects_a_non_dataclass():
     assert [preset.name for preset in heat_distribution.presets] == ["standard"]
     assert heat_distribution.presets[0].pinned == ()
     assert len(heat_distribution.sizable_fields) == 3
-    assert heat_distribution.facts_provided == ()
+    assert not heat_distribution.facts_provided
 
-    assert describe_config(HeatDistributionConfig).constructors == ()
+    assert not describe_config(HeatDistributionConfig).constructors
 
     energy_management = describe_config(EMSConfig)
     assert [preset.name for preset in energy_management.presets] == ["optimize_own_consumption"]
-    assert energy_management.sizable_fields == ()
+    assert not energy_management.sizable_fields
 
     building = describe_config(BuildingConfig)
     assert [info.name for info in building.presets] == ["standard"]
@@ -458,7 +461,7 @@ def test_describe_config_covers_the_other_pilots_and_rejects_a_non_dataclass():
     assert tabula.parameters[0].name == "building_code"
     assert tabula.parameters[0].default is dataclasses.MISSING
     assert {parameter.name for parameter in tabula.parameters} >= {"number_of_apartments", "building_code"}
-    assert building.sizable_fields == ()
+    assert not building.sizable_fields
     assert "heating_load_in_watt" in building.facts_provided
 
     with pytest.raises(TypeError, match="config dataclass"):
@@ -500,8 +503,9 @@ def test_a_config_class_outside_the_kernel_resolves_through_resolve_all():
     storage = _StorageConfig.preset_standard("Tank")
     resolved = resolve_all([building, storage])
     resolved_storage = next(config for config in resolved if isinstance(config, _StorageConfig))
-    assert resolved_storage.volume_in_liter > 0.0
-    assert resolved_storage.reserve_in_liter == pytest.approx(resolved_storage.volume_in_liter * 0.1)
+    volume = cast(float, resolved_storage.volume_in_liter)  # resolved: nothing left to size
+    assert volume > 0.0
+    assert resolved_storage.reserve_in_liter == pytest.approx(volume * 0.1)
     assert resolved_storage.heat_loss_in_watt == 25.0
     assert preset_provenance(resolved_storage) == "standard"
     assert resolved_storage.volume_in_liter is not AUTO

@@ -360,7 +360,7 @@ def test_every_preset_wire_name_follows_the_naming_convention(scan):
                 f"{config_class.__name__} keeps '{standard}' next to {siblings}; rename it after "
                 "the variant it actually describes"
             )
-    assert offenders == []
+    assert not offenders
 
 
 @pytest.mark.base

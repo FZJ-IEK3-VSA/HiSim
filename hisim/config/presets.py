@@ -443,7 +443,7 @@ def check_builder_declarations(config_class: type, field_names: Iterable[str]) -
     known = set(field_names)
     clashes = []
     for method_name, marker in _markers_of(config_class):
-        for spelling in {method_name, marker.name}:
+        for spelling in sorted({method_name, marker.name}):
             if spelling in known:
                 clashes.append(f"{marker.kind.explain()} '{method_name}' collides with field '{spelling}'")
     if clashes:

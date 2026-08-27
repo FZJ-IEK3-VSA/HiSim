@@ -770,7 +770,7 @@ def test_a_config_without_an_instance_name_is_rejected_at_registration():
     """A config the mapping cannot point at must not enter a resolution."""
 
     nameless = _producer("Nameless")
-    nameless.component_id = None  # what a hand-built or half-deserialized config looks like
+    nameless.component_id = None  # type: ignore[assignment]  # a hand-built or half-deserialized config
     with pytest.raises(SizingError, match="has no component_id.name"):
         resolve_all([nameless])
 

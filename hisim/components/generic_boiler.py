@@ -1030,8 +1030,8 @@ class GenericBoilerControllerConfig(ConfigBase):
     @classmethod
     def get_default_modulating_generic_boiler_controller_config(
         cls,
-        maximal_thermal_power_in_watt: float,
-        minimal_thermal_power_in_watt: float,
+        maximal_thermal_power_in_watt: Sizable[float],
+        minimal_thermal_power_in_watt: Sizable[float],
         component_id: Optional[ComponentID] = None,
         secondary_mode: bool = False,
         with_domestic_hot_water_preparation: bool = False,
@@ -1044,8 +1044,8 @@ class GenericBoilerControllerConfig(ConfigBase):
             component_id=component_id,
             is_modulating=True,
             # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
+            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
             set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
             minimum_runtime_in_seconds=1800,
             minimum_resting_time_in_seconds=1800,
@@ -1058,21 +1058,26 @@ class GenericBoilerControllerConfig(ConfigBase):
     @classmethod
     def get_default_on_off_generic_boiler_controller_config(
         cls,
-        maximal_thermal_power_in_watt: float,
-        minimal_thermal_power_in_watt: float,
+        maximal_thermal_power_in_watt: Sizable[float],
+        minimal_thermal_power_in_watt: Sizable[float],
         with_domestic_hot_water_preparation: bool = False,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         component_id: Optional[ComponentID] = None,
     ) -> Any:
-        """Gets a default Generic Boiler Controller."""
+        """Gets a default Generic Boiler Controller.
+
+        The power band is usually read off a resolved boiler config, whose fields are typed
+        as sizable; the values must be concrete by the time a controller is built, and
+        ``concrete`` asserts exactly that instead of a cast at every call site.
+        """
         if component_id is None:
             component_id = ComponentID(name="OnOffBoilerController")
         return GenericBoilerControllerConfig(
             component_id=component_id,
             is_modulating=False,
             # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
+            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
             set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
             minimum_resting_time_in_seconds=0,
             minimum_runtime_in_seconds=0,
@@ -1085,8 +1090,8 @@ class GenericBoilerControllerConfig(ConfigBase):
     @classmethod
     def get_default_pellet_controller_config(
         cls,
-        maximal_thermal_power_in_watt: float,
-        minimal_thermal_power_in_watt: float,
+        maximal_thermal_power_in_watt: Sizable[float],
+        minimal_thermal_power_in_watt: Sizable[float],
         with_domestic_hot_water_preparation: bool = False,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         component_id: Optional[ComponentID] = None,
@@ -1098,8 +1103,8 @@ class GenericBoilerControllerConfig(ConfigBase):
             component_id=component_id,
             is_modulating=False,
             # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
+            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
             set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
             minimum_resting_time_in_seconds=15 * 60,
             minimum_runtime_in_seconds=30 * 60,
@@ -1112,8 +1117,8 @@ class GenericBoilerControllerConfig(ConfigBase):
     @classmethod
     def get_default_wood_chip_controller_config(
         cls,
-        maximal_thermal_power_in_watt: float,
-        minimal_thermal_power_in_watt: float,
+        maximal_thermal_power_in_watt: Sizable[float],
+        minimal_thermal_power_in_watt: Sizable[float],
         with_domestic_hot_water_preparation: bool = False,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         component_id: Optional[ComponentID] = None,
@@ -1125,8 +1130,8 @@ class GenericBoilerControllerConfig(ConfigBase):
             component_id=component_id,
             is_modulating=False,
             # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
+            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
             set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
             minimum_resting_time_in_seconds=30 * 60,
             minimum_runtime_in_seconds=60 * 60,

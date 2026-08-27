@@ -1,6 +1,6 @@
 # P4 — Component sweep — requirements
 
-**Status:** draft · **Date:** 2026-08-27
+**Status:** draft · **Date:** 2026-08-27 (D-20 answered and implemented in P2)
 **Author(s):** Noah Pflugradt (owner; `[given]`) · assistant (`[proposed]`, survey)
 **Reviewers:** HiSim core team
 **Parent:** `roadmap/declarative_energy_systems/epic.md` (E1–E8 apply by reference) · **Plan:** `roadmap/declarative_energy_systems/plan.md` §P4 · **Depends on:** P1 accepted; P2 for fixtures; P3 recorded files where they exist (Q-P3.1)
@@ -30,7 +30,7 @@ Surveyed: **88 config classes** in 65 modules; **9 converted** (4 of them still 
 - **Setup-side math left** (P3 inventory §2e): 5 expressions plus the pervasive `Information`-object threading; the surveys locate each in a class law.
 - **Dead code confirmed.** Of the plan's D13 list, the 6 defective (`generic_battery`, `generic_ev_charger`) and 2 of 3 zombies already left with `obsolete/` (#590); `controller_l1_heatpump` is live but has 0 call sites. New D13 members: `SmartDevice` (raises `KeyError` on construction), `ExtendedControllerSimulation` (reads class attributes of a defaults-free dataclass — unrunnable), `GenericElectrolyzerConfig.get_default_config` (mandatory argument), six H₂/RSOC classes whose only builders read two JSON files **absent from the repository**. Zero-call-site classes: `SimpleHotWaterStorageController`, `HeatPumpHplibControllerL1`, `L1HeatPumpController`, 9 legacy `configuration.py` classes, plus MPC/PID/wind/price signal/`Car` diesel with 0 setup uses.
 - **Dead singleton keys.** `WATERMASSFLOWRATEOFHEATGENERATOR`: 2 readers, 0 writers, and the reading branch would raise `UnboundLocalError` if ever taken. Six Building 5R1C keys: readers only in MPC/PID. `LOCATION`: written by the Weather, read by postprocessing (live).
-- **Recording defects found by the survey**, i.e. cases where a realized record would not re-execute today: `PVSystemConfig.get_scaled_pv_system` records `share_of_maximum_pv_potential = 1.0` whatever share it applied; `UtspLpgConnector` rewrites its own `data_acquisition_mode` at run time; `UtspLpgConnectorConfig.for_household` ignores its `household` argument in its default mode; constructor arguments reach builders undecoded, so `for_location` and `for_household` are uncallable from a file (only `for_tabula_code` works).
+- **Recording defects found by the survey**, i.e. cases where a realized record would not re-execute today: `PVSystemConfig.get_scaled_pv_system` records `share_of_maximum_pv_potential = 1.0` whatever share it applied; `UtspLpgConnector` rewrites its own `data_acquisition_mode` at run time; ~~`UtspLpgConnectorConfig.for_household` ignores its `household` argument in its default mode~~ (**fixed in P2 on 2026-08-27**, review of #592: the constructor takes the mode and derives the profile from the household, refusing what the predefined mode cannot serve — D-20 answered (a)); constructor arguments reach builders undecoded, so `for_location` and `for_household` are uncallable from a file (only `for_tabula_code` works).
 - **Convention conflicts** the supplement did not foresee: rating-suffixed presets named after default arguments, not devices (`air_water_8kw` ×2, `standard_5kwh` names a 10 kWh factory); `sizing_option` of the buffer storage is a factory *argument*, not a field, so conflict 4's resolution needs a new field; the CHP controller's four factories do not factor into fuel × buffer (a 42/50 °C flip between axes).
 
 **Stakeholders.** Producers: each class's module (E6). Consumers: energy-system files and their authors (P2), recorded files (P3, re-recorded per batch), `describe`/`facts` CLI and the JSON Schema, the wire-format pin test (EAC6), RenoVisor/building sizer/HPC (P5). Existing: golden suites (8 sizers), the 24 setups, 4 000+ tests.
@@ -138,7 +138,7 @@ Legend: **conv** convert · **del** delete · **done** converted (remaining work
 |---|---|---|---|---|---|
 | `WeatherConfig` | done | `standard`, `for_location(…)` | delete `get_default` (44 sites) — blocked: direct-file parameters, string locations, undecoded arguments | N | D-18, D-19 |
 | `BuildingConfig` | done | `standard`, `for_tabula_code` | + `roof_area_in_m2` fact; 20-field post-construction mutation → overrides or constructor; `heating_reference_temperature` from Weather? | N / P | D-21, D-22 |
-| `UtspLpgConnectorConfig` | done | `standard`, `for_household` | delete legacy factory (32 sites); `for_household` ignores its argument in default mode | N | D-20 |
+| `UtspLpgConnectorConfig` | done | `standard`, `for_household` | delete legacy factory (32 sites); the 11 sizers' `USE_LOCAL_LPG` + household-list + `cache_dir_path` overrides become `config:`/constructor arguments (`for_household` now takes `data_acquisition_mode`, P2 2026-08-27) | N | ~~D-20~~ |
 | `WeatherDataImport` | ex | | not a config; import fails (`wetterdienst`) | | |
 | `SmartDeviceConfig` | del | | defective (`KeyError` on construction) | | D-30 |
 
@@ -249,7 +249,7 @@ The 32 questions below are owner decisions surfaced by the survey. **Each five-p
 | **Providers and gates** | | | |
 | D-18 | `for_location` lacks the direct-file parameters 7 golden setups need | (a) add the two keyword parameters | B1 Weather, R3 |
 | D-19 | Constructor arguments undecoded — executor fix, widen signatures, or leave constructors Python-only? | (a) executor decodes by annotation (R2.3) | R2.3, B1 |
-| D-20 | `for_household` ignores its argument in the predefined-profile mode | (a) derive the profile name from `household`, raise when none ships | B1 UTSP |
+| D-20 | ~~`for_household` ignores its argument in the predefined-profile mode~~ | `[answered 2026-08-27, review of #592]` **(a)** implemented in P2: `data_acquisition_mode` parameter, profile derived from the household, refusal listing the shipped households and the computing modes | B1 UTSP |
 | D-22 | Building's 20-field post-construction mutation: `config:` overrides, wider constructor, or `for_measured_envelope`? | (a) overrides, recorder omits equal-to-default | R3 Building, P3 recorder |
 | D-26 | Five `read_config` readers zero-fill on unknown device: raise everywhere? | (a) raise, listing devices | R3 H₂ |
 | D-32 | Delete the `LOCATION` key and the six 5R1C keys? | (a) both, own commits (six with D-16) | R2.4 |

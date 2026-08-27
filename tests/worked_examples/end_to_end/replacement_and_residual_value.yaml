@@ -1,0 +1,51 @@
+# GENERATED from replacement_and_residual_value.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "replacement_and_residual_value"
+group: "end_to_end"
+spec_section: "3.6"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "A 10,000 EUR device with an 8-year service life over a 12-year horizon at 3 % interest, with investment prices escalating at 2 % per year. The device is replaced once in year 8 at the escalated price; at the end of the horizon 4 of the replacement's 8 years are still unused, so half of the escalated price is credited back as residual value."
+inputs:
+  investment_in_euro: 10000
+  lifetime_in_years: 8
+  maintenance_rate: 0
+  horizon_in_years: 12
+  interest_rate: 0.03
+  general_price_escalation_rate: 0
+  investment_price_escalation_rate: 0.02
+  energy_price_escalation_rate: 0
+expected:
+  nominal_replacement_year_8_in_euro:
+    value: 11716.59
+    abs_tol: 0.01
+    derivation: "investment_in_euro*(1+investment_price_escalation_rate)^lifetime_in_years"
+    note: "the replacement is bought at the escalated price of year 8"
+  npv_replacement_in_euro:
+    value: 9249.19
+    abs_tol: 0.01
+    derivation: "nominal_replacement_year_8_in_euro/(1+interest_rate)^8"
+  nominal_residual_value_year_12_in_euro:
+    value: -5858.30
+    abs_tol: 0.01
+    derivation: "-nominal_replacement_year_8_in_euro*(lifetime_in_years+8-horizon_in_years)/lifetime_in_years"
+    note: "4 of 8 years of the replacement are still unused at the end of the horizon"
+  npv_residual_value_in_euro:
+    value: -4108.89
+    abs_tol: 0.01
+    derivation: "nominal_residual_value_year_12_in_euro/(1+interest_rate)^horizon_in_years"
+  npv_investment_in_euro:
+    value: 10000.00
+    abs_tol: 0.01
+    derivation: "investment_in_euro"
+  total_npv_in_euro:
+    value: 15140.30
+    abs_tol: 0.01
+    derivation: "npv_investment_in_euro+npv_replacement_in_euro+npv_residual_value_in_euro"
+  annuity_factor:
+    value: 0.100462
+    abs_tol: 0.000001
+    derivation: "interest_rate*(1+interest_rate)^horizon_in_years/((1+interest_rate)^horizon_in_years-1)"
+  eac_in_euro:
+    value: 1521.03
+    abs_tol: 0.01
+    derivation: "total_npv_in_euro*annuity_factor"

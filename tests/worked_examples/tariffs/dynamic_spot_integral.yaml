@@ -1,0 +1,47 @@
+# GENERATED from dynamic_spot_integral.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "dynamic_spot_integral"
+group: "tariffs"
+spec_section: "8.4"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "A dynamic (spot) contract bills the cost the meter integrated during the simulation, not energy times an average price. 4,000 kWh were bought for 320 EUR of spot cost while the year's unweighted mean spot price was 0.10 EUR/kWh, so load shifting saved 80 EUR; the additive markup, grid fee and taxes are charged on the volume and carry no flexibility."
+inputs:
+  supply_kind: "DYNAMIC"
+  energy_bought_in_kwh: 4000
+  cost_integrated_in_euro: 320
+  mean_spot_price_in_euro_per_kwh: 0.1
+  markup_in_euro_per_kwh: 0.02
+  grid_fee_in_euro_per_kwh: 0.09
+  taxes_and_levies_in_euro_per_kwh: 0.06
+  standing_charge_in_euro_per_year: 90
+expected:
+  marginal_price_components_in_euro_per_kwh:
+    value: 0.170000
+    abs_tol: 0.000001
+    derivation: "markup_in_euro_per_kwh+grid_fee_in_euro_per_kwh+taxes_and_levies_in_euro_per_kwh"
+  energy_working_in_euro:
+    value: 1000.00
+    abs_tol: 0.01
+    derivation: "cost_integrated_in_euro+energy_bought_in_kwh*marginal_price_components_in_euro_per_kwh"
+  energy_standing_in_euro:
+    value: 90.00
+    abs_tol: 0.01
+    derivation: "standing_charge_in_euro_per_year"
+  total_bill_in_euro:
+    value: 1090.00
+    abs_tol: 0.01
+    derivation: "energy_working_in_euro+energy_standing_in_euro"
+  volume_effect_in_euro:
+    value: 1080.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*(mean_spot_price_in_euro_per_kwh+marginal_price_components_in_euro_per_kwh)"
+    note: "what the same volume would have cost at the average price"
+  flexibility_value_in_euro:
+    value: 80.00
+    abs_tol: 0.01
+    derivation: "energy_bought_in_kwh*mean_spot_price_in_euro_per_kwh-cost_integrated_in_euro"
+    note: "the saving of buying in cheap hours instead of at the average price"
+  mean_energy_price_in_euro_per_kwh:
+    value: 0.250000
+    abs_tol: 0.000001
+    derivation: "cost_integrated_in_euro/energy_bought_in_kwh+marginal_price_components_in_euro_per_kwh"

@@ -1,0 +1,75 @@
+# GENERATED from pv_feed_in_over_10_years.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "pv_feed_in_over_10_years"
+group: "end_to_end"
+spec_section: "3.6"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "An 8,000 EUR photovoltaic system with a 25-year service life evaluated over 10 years at 3 %. It feeds 3,000 kWh per year into the grid at a nominally fixed 0.08 EUR/kWh tariff and costs 1 % of the investment in maintenance. Because only 10 of the 25 years are used, 15/25 of the investment is credited back as a residual value at the end of the horizon."
+inputs:
+  investment_in_euro: 8000
+  lifetime_in_years: 25
+  maintenance_rate: 0.01
+  horizon_in_years: 10
+  interest_rate: 0.03
+  general_price_escalation_rate: 0
+  investment_price_escalation_rate: 0
+  energy_price_escalation_rate: 0
+  feed_in_escalation_rate: 0
+  energy_bought_in_kwh: 0
+  energy_sold_in_kwh: 3000
+  electricity_price_in_euro_per_kwh: 0
+  standing_charge_in_euro_per_year: 0
+  feed_in_rate_in_euro_per_kwh: 0.08
+expected:
+  present_value_factor_sum:
+    value: 8.530203
+    abs_tol: 0.000001
+    derivation: "(1-(1+interest_rate)^-horizon_in_years)/interest_rate"
+    note: "sum of the discount factors of years 1..10"
+  nominal_maintenance_year_1_in_euro:
+    value: 80.00
+    abs_tol: 0.01
+    derivation: "investment_in_euro*maintenance_rate"
+  nominal_feed_in_revenue_year_1_in_euro:
+    value: -240.00
+    abs_tol: 0.01
+    derivation: "-energy_sold_in_kwh*feed_in_rate_in_euro_per_kwh"
+    note: "negative under the cost-positive sign convention"
+  npv_investment_in_euro:
+    value: 8000.00
+    abs_tol: 0.01
+    derivation: "investment_in_euro"
+  npv_maintenance_in_euro:
+    value: 682.42
+    abs_tol: 0.01
+    derivation: "nominal_maintenance_year_1_in_euro*present_value_factor_sum"
+  npv_feed_in_revenue_in_euro:
+    value: -2047.25
+    abs_tol: 0.01
+    derivation: "nominal_feed_in_revenue_year_1_in_euro*present_value_factor_sum"
+  nominal_residual_value_year_10_in_euro:
+    value: -4800.00
+    abs_tol: 0.01
+    derivation: "-investment_in_euro*(lifetime_in_years-horizon_in_years)/lifetime_in_years"
+    note: "unused share of the service life, credited at the end of the horizon"
+  npv_residual_value_in_euro:
+    value: -3571.65
+    abs_tol: 0.01
+    derivation: "nominal_residual_value_year_10_in_euro/(1+interest_rate)^horizon_in_years"
+  total_npv_in_euro:
+    value: 3063.52
+    abs_tol: 0.01
+    derivation: "npv_investment_in_euro+npv_maintenance_in_euro+npv_feed_in_revenue_in_euro+npv_residual_value_in_euro"
+  annuity_factor:
+    value: 0.117231
+    abs_tol: 0.000001
+    derivation: "interest_rate*(1+interest_rate)^horizon_in_years/((1+interest_rate)^horizon_in_years-1)"
+  eac_in_euro:
+    value: 359.14
+    abs_tol: 0.01
+    derivation: "total_npv_in_euro*annuity_factor"
+  annual_cost_year_1_in_euro:
+    value: -160.00
+    abs_tol: 0.01
+    derivation: "nominal_maintenance_year_1_in_euro+nominal_feed_in_revenue_year_1_in_euro"
+    note: "nominal year-1 balance: maintenance minus feed-in revenue"

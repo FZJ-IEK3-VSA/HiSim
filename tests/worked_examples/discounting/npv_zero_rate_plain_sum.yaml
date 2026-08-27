@@ -1,0 +1,39 @@
+# GENERATED from npv_zero_rate_plain_sum.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "npv_zero_rate_plain_sum"
+group: "discounting"
+spec_section: "3.2"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "At a zero interest rate every discount factor is one, so the net present value of a cash-flow series is its plain sum and the equivalent annual cost is that sum spread evenly over the five years. The year-5 flow is net of a 3,000 EUR revenue and is therefore negative."
+inputs:
+  interest_rate: 0
+  observation_period_in_years: 5
+  cash_flow_year_0_in_euro: 10000
+  cash_flow_year_1_in_euro: 1200
+  cash_flow_year_2_in_euro: 1200
+  cash_flow_year_3_in_euro: 1200
+  cash_flow_year_4_in_euro: 1200
+  cash_flow_year_5_in_euro: -1800
+expected:
+  discount_factor_year_1:
+    value: 1.000000
+    abs_tol: 0.000001
+    derivation: "1/(1+interest_rate)^1"
+  discount_factor_year_5:
+    value: 1.000000
+    abs_tol: 0.000001
+    derivation: "1/(1+interest_rate)^5"
+  annuity_factor:
+    value: 0.200000
+    abs_tol: 0.000001
+    derivation: "1/observation_period_in_years"
+    note: "zero-rate branch of EconomicParameters.annuity_factor"
+  npv_in_euro:
+    value: 13000.00
+    abs_tol: 0.01
+    derivation: "SUM(cash_flow_year_0_in_euro:cash_flow_year_5_in_euro)"
+    note: "NPV at 0 % is the plain sum of the timeline"
+  eac_in_euro:
+    value: 2600.00
+    abs_tol: 0.01
+    derivation: "npv_in_euro*annuity_factor"

@@ -1,0 +1,38 @@
+# GENERATED from time_of_use_two_bands.xlsx by tools/convert_worked_examples.py.
+# Edit the workbook and re-run the converter; never edit this file by hand (§3.6).
+name: "time_of_use_two_bands"
+group: "tariffs"
+spec_section: "8.4"
+computed_by: "Claude draft + LibreOffice recalculation, 2026-08-12"
+description: "A two-band time-of-use contract: 1,200 kWh land in the peak band at 0.35 EUR/kWh and 2,300 kWh in the off-peak band at 0.22 EUR/kWh. Grid fee and taxes are additive per-kWh components charged on the whole volume, so the mean price is the total working cost divided by the total energy."
+inputs:
+  supply_kind: "TIME_OF_USE"
+  energy_bought_in_kwh: 3500
+  band_peak_energy_in_kwh: 1200
+  band_peak_price_in_euro_per_kwh: 0.35
+  band_offpeak_energy_in_kwh: 2300
+  band_offpeak_price_in_euro_per_kwh: 0.22
+  grid_fee_in_euro_per_kwh: 0.08
+  taxes_and_levies_in_euro_per_kwh: 0.05
+  standing_charge_in_euro_per_year: 100
+expected:
+  marginal_price_components_in_euro_per_kwh:
+    value: 0.130000
+    abs_tol: 0.000001
+    derivation: "grid_fee_in_euro_per_kwh+taxes_and_levies_in_euro_per_kwh"
+  energy_working_in_euro:
+    value: 1381.00
+    abs_tol: 0.01
+    derivation: "band_peak_energy_in_kwh*band_peak_price_in_euro_per_kwh+band_offpeak_energy_in_kwh*band_offpeak_price_in_euro_per_kwh+energy_bought_in_kwh*marginal_price_components_in_euro_per_kwh"
+  energy_standing_in_euro:
+    value: 100.00
+    abs_tol: 0.01
+    derivation: "standing_charge_in_euro_per_year"
+  total_bill_in_euro:
+    value: 1481.00
+    abs_tol: 0.01
+    derivation: "energy_working_in_euro+energy_standing_in_euro"
+  mean_energy_price_in_euro_per_kwh:
+    value: 0.394571
+    abs_tol: 0.000001
+    derivation: "energy_working_in_euro/energy_bought_in_kwh"

@@ -108,9 +108,6 @@ groups:
       battery:
         class: hisim.components.advanced_battery_bslib.Battery
         preset: sized_to_pv                 # ONE pv_peak_power_in_watt; three PV systems exist -> say which
-        inputs:
-          - input: LoadingPowerInput
-            from: ems.BatteryDispatch
         sizing_sources:
           pv_peak_power_in_watt: pv_central.pv_peak_power_in_watt
 
@@ -131,10 +128,10 @@ groups:
             component_type: BATTERY
             tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
             weight: 6
-            dispatch: {}
+            dispatch: {target_input: LoadingPowerInput}   # back-channel into the battery; never written at the battery
           - from: apt1_occupancy
             tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
-            weight: 1
+            weight: 999                     # measured, never ranked: the channel forbids dispatch
           - from: apt1_dhw_heater
             component_type: ELECTRIC_HEATER
             tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
@@ -151,7 +148,7 @@ groups:
             weight: 999
           - from: apt2_occupancy
             tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
-            weight: 1
+            weight: 999                     # measured, never ranked: the channel forbids dispatch
           - from: apt2_dhw_heater
             component_type: ELECTRIC_HEATER
             tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
@@ -168,7 +165,7 @@ groups:
             weight: 999
           - from: apt3_occupancy
             tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
-            weight: 1
+            weight: 999                     # measured, never ranked: the channel forbids dispatch
           - from: apt3_dhw_heater
             component_type: ELECTRIC_HEATER
             tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]

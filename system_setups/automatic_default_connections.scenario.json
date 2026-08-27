@@ -107,7 +107,7 @@
             "connect_automatically": true
         },
         {
-            "component_full_classname": "hisim.components.building.Building",
+            "component_full_classname": "hisim.components.building.building.Building",
             "configuration": {
                 "component_id": {
                     "name": "Building",
@@ -142,7 +142,7 @@
                 "maintenance_costs_in_euro_per_year": null,
                 "subsidy_as_percentage_of_investment_costs": null
             },
-            "config_full_classname": "hisim.components.building.BuildingConfig",
+            "config_full_classname": "hisim.components.building.config.BuildingConfig",
             "inputs": [],
             "outputs": [],
             "connect_automatically": true

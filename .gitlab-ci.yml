@@ -92,7 +92,7 @@ ruff:
     # this job gates everything else.
     - uv pip install -q --system "ruff==0.15.18"
   script:
-    - ruff check --output-format concise . --exclude obsolete
+    - ruff check --output-format concise .
 
 prospector:
   stage: quality

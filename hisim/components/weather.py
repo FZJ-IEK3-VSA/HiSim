@@ -16,8 +16,8 @@ import pvlib
 
 from hisim import loadtypes as lt
 from hisim import log, utils
-from hisim.component import ComponentID
-from hisim.component import Component, ComponentOutput, ConfigBase, SingleTimeStepValues, DisplayConfig, OpexCostDataClass, CapexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor, preset
+from hisim.component import Component, ComponentOutput, SingleTimeStepValues, OpexCostDataClass, CapexCostDataClass
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
@@ -463,6 +463,56 @@ class WeatherConfig(ConfigBase):
         )
         return config
 
+    @preset(note="the repository's reference climate")
+    @classmethod
+    def preset_standard(cls, name: str) -> "WeatherConfig":
+        """The reference weather of this repository: the DWD test reference year for Aachen.
+
+        Aachen is the location every example household and almost every test in HiSim runs on,
+        so it is the one climate a file may reference without saying anything further. Any other
+        station is an open identifier space rather than a variant, which is why this class ships
+        exactly this one preset and :meth:`for_location` for everything else.
+        """
+        return cls.for_location(name, location=LocationEnum.AACHEN)
+
+    @constructor(note="the stations of LocationEnum and their shipped data sets")
+    @classmethod
+    def for_location(
+        cls,
+        name: str,
+        location: LocationEnum,
+        data_source: Optional[WeatherDataSourceEnum] = None,
+    ) -> "WeatherConfig":
+        """Builds the weather of one catalogue station, with its shipped data set and reader.
+
+        A weather station is an identifier rather than a variant: there are dozens of them and
+        the set grows whenever a data set is added, so minting one preset per station would turn
+        arbitrary station names into permanent wire format. The catalogue entry carries
+        everything the configuration needs — the display name, the directory the shipped time
+        series lives in and the reader that understands its format — so naming the station is
+        the whole of the call.
+
+        Args:
+            name: Instance name of the component being configured; it becomes its identity.
+            location: The catalogue station to read the weather of.
+            data_source: Reader to use instead of the one the catalogue entry names, for a data
+                set that was re-exported in another format; the catalogue's own reader when
+                omitted.
+
+        Returns:
+            A configuration reading that station's shipped time series.
+        """
+        display_name, directory, subdirectory, file_stem, catalogue_source = location.value
+        return cls(
+            component_id=ComponentID(name=name),
+            location=display_name,
+            source_path=os.path.join(
+                utils.get_input_directory(), "weather", directory, subdirectory, file_stem
+            ),
+            data_source=data_source if data_source is not None else catalogue_source,
+            predictive_control=False,
+        )
+
 
 class Weather(Component):
     """Provide thermal and solar conditions of local weather."""
@@ -822,48 +872,52 @@ class Weather(Component):
             )
             database.to_csv(cache_filepath)
 
-        # write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
-        if self.weather_config.predictive_control:
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST,
-                entry=self.temperature_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST,
-                entry=self.dhi_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST,
-                entry=self.dni_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST,
-                entry=self.dniextra_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST,
-                entry=self.ghi_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST,
-                entry=self.azimuth_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST,
-                entry=self.apparent_zenith_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST,
-                entry=self.wind_speed_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERPRESSUREYEARLYFORECAST,
-                entry=self.pressure_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERALTITUDEYEARLYFORECAST,
-                entry=self.altitude_list,
-            )
+        # Publish the full-year weather series to the singleton repository unconditionally.
+        # The PV system precomputes its whole-year output from these arrays in its
+        # i_prepare_simulation (vectorized pvlib run), and predictive components
+        # (building, MPC controller) read them at prepare time as well. Publishing is
+        # free: the singleton only stores references to lists this component keeps
+        # alive as attributes anyway.
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST,
+            entry=self.temperature_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST,
+            entry=self.dhi_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST,
+            entry=self.dni_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST,
+            entry=self.dniextra_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST,
+            entry=self.ghi_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST,
+            entry=self.azimuth_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST,
+            entry=self.apparent_zenith_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST,
+            entry=self.wind_speed_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERPRESSUREYEARLYFORECAST,
+            entry=self.pressure_list,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WEATHERALTITUDEYEARLYFORECAST,
+            entry=self.altitude_list,
+        )
 
     def interpolate(self, pd_database: Any, year: int) -> Any:
         """Interpolates a time series."""

@@ -8,7 +8,7 @@ from hisim.components import heat_distribution_system, building
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -121,7 +121,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     hds_name = "HeatDistributionSystem"
 
     # ===================================================================================================================
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_building_config = building.BuildingConfig.preset_standard("Building")
     my_building_information = building.BuildingInformation(config=my_building_config)
 
     # Build Heat Distribution System
@@ -157,21 +157,21 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         "WaterTemperatureInput",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
-        component_id=cp.ComponentID("FakeWaterTemperatureInput"),
+        component_id=ComponentID("FakeWaterTemperatureInput"),
     )
     residence_temperature_indoor_air = cp.ComponentOutput(
         "FakeResidenceTemperatureInput",
         "ResidenceTemperatureInput",
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
-        component_id=cp.ComponentID("FakeResidenceTemperatureInput"),
+        component_id=ComponentID("FakeResidenceTemperatureInput"),
     )
     theoretical_thermal_building_demand = cp.ComponentOutput(
         "FakeTheoreticalThermalDemand",
         "TheoreticalThermalDemand",
         lt.LoadTypes.HEATING,
         lt.Units.WATT,
-        component_id=cp.ComponentID("FakeTheoreticalThermalDemand"),
+        component_id=ComponentID("FakeTheoreticalThermalDemand"),
     )
 
     state_from_hds_controller = cp.ComponentOutput(
@@ -179,7 +179,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         "StateController",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("FakeStateController"),
+        component_id=ComponentID("FakeStateController"),
     )
 
     # connect hds inputs to fake outputs
@@ -282,11 +282,10 @@ def test_get_cost_capex_raises_on_unknown_heating_system() -> None:
     offending value.
     """
     invalid_heating_system = "NOT_A_HEATING_SYSTEM"  # not a HeatDistributionSystemType member
-    config = heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
-        water_mass_flow_rate_in_kg_per_second=0.1,
-        absolute_conditioned_floor_area_in_m2=100.0,
-        heating_system=invalid_heating_system,  # type: ignore[arg-type]  # intentionally invalid
-    )
+    config = heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem")
+    config.water_mass_flow_rate_in_kg_per_second = 0.1
+    config.absolute_conditioned_floor_area_in_m2 = 100.0
+    config.heating_system = invalid_heating_system  # type: ignore[assignment]  # intentionally invalid
     simulation_parameters = SimulationParameters.one_day_only(2017, 60)
     with pytest.raises(ValueError, match="Unknown heating_system type"):
         heat_distribution_system.HeatDistribution.get_cost_capex(

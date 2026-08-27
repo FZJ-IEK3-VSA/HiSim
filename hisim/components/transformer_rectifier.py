@@ -8,11 +8,10 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import ComponentID
-from hisim.component import StatelessComponent, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.component import StatelessComponent, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ConfigBase
 
 
 @dataclass_json
@@ -72,9 +71,9 @@ class Transformer(StatelessComponent):
         ``efficiency`` expressed as a fraction in [0, 1]).
 
     my_display_config : DisplayConfig, optional
-        A :py:class:`~hisim.component.DisplayConfig` object that controls
+        A :py:class:`~hisim.config.DisplayConfig` object that controls
         how the component is displayed in the simulation results.
-        Defaults to an empty :py:class:`~hisim.component.DisplayConfig`.
+        Defaults to an empty :py:class:`~hisim.config.DisplayConfig`.
 
     """
 

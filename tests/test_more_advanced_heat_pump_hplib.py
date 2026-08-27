@@ -13,7 +13,7 @@ from hisim.components.more_advanced_heat_pump_hplib import (
 )
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 # Heat pump configuration constants
 CO2_FOOTPRINT_COEFFICIENT: float = 165.84  # kg CO2 per kW thermal power over lifetime
@@ -49,45 +49,45 @@ def test_heat_pump_hplib_new() -> None:
         "Fake_on_off_switch",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("Fake_on_off_switch"),
+        component_id=ComponentID("Fake_on_off_switch"),
     )
     on_off_switch_dhw = cp.ComponentOutput(
         "Fake_on_off_switch",
         "Fake_on_off_switch",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("Fake_on_off_switch"),
+        component_id=ComponentID("Fake_on_off_switch"),
     )
     const_thermal_power_value_dhw = cp.ComponentOutput(
         "Fake_const_thermal_power_value_dhw",
         "Fake_const_thermal_power_value_dhw",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("Fake_const_thermal_power_value_dhw"),
+        component_id=ComponentID("Fake_const_thermal_power_value_dhw"),
     )
     t_in_primary = cp.ComponentOutput(
         "Fake_t_in_primary",
         "Fake_t_in_primary",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("Fake_t_in_primary"),
+        component_id=ComponentID("Fake_t_in_primary"),
     )
     t_in_secondary_sh = cp.ComponentOutput(
         "Fake_t_in_secondary_hot_water",
         "Fake_t_in_secondary_hot_water",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("Fake_t_in_secondary_hot_water"),
+        component_id=ComponentID("Fake_t_in_secondary_hot_water"),
     )
     t_in_secondary_dhw = cp.ComponentOutput(
         "Fake_t_in_secondary_dhw",
         "Fake_t_in_secondary_dhw",
         lt.LoadTypes.ANY,
         lt.Units.ANY,
-        component_id=cp.ComponentID("Fake_t_in_secondary_dhw"),
+        component_id=ComponentID("Fake_t_in_secondary_dhw"),
     )
     t_amb = cp.ComponentOutput(
-        "Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("Fake_t_amb")
+        "Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("Fake_t_amb")
     )
 
     # Initialize component
@@ -202,14 +202,14 @@ def test_get_heatpump_cycles_counts_transitions() -> None:
     heatpump = MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=simpars)
 
     time_off_output = cp.ComponentOutput(
-        "HeatPump", heatpump.TimeOff, lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("HeatPump")
+        "HeatPump", heatpump.TimeOff, lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("HeatPump")
     )
     other_output = cp.ComponentOutput(
         "HeatPump",
         heatpump.ThermalOutputPowerSH,
         lt.LoadTypes.HEATING,
         lt.Units.WATT,
-        component_id=cp.ComponentID("HeatPump"),
+        component_id=ComponentID("HeatPump"),
     )
 
     # Column 0 holds the TimeOff series; an unrelated column sits at index 1.
@@ -253,7 +253,7 @@ def test_get_heatpump_cycles_propagates_non_index_errors() -> None:
     heatpump = MoreAdvancedHeatPumpHPLib(config=config, my_simulation_parameters=simpars)
 
     time_off_output = cp.ComponentOutput(
-        "HeatPump", heatpump.TimeOff, lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("HeatPump")
+        "HeatPump", heatpump.TimeOff, lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("HeatPump")
     )
     # A numpy array as an element makes ``off_time != 0`` return an array whose
     # truth value is ambiguous, raising ValueError — a non-IndexError that the

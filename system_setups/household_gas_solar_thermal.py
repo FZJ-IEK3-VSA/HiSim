@@ -12,6 +12,7 @@ from hisim.building_sizer_utils.interface_configs.modular_household_config impor
     read_in_configs,
 )
 from hisim.simulator import SimulationParameters
+from hisim.config import SizingContext
 from hisim.components import (
     gas_meter,
     generic_boiler,
@@ -100,7 +101,7 @@ def setup_function(
     # Build Basic Components
 
     # Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_building_config = building.BuildingConfig.preset_standard("Building")
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
         config=my_building_config,
@@ -138,8 +139,8 @@ def setup_function(
     )
 
     # Gas Heater (for space heating and DHW) - Component
-    my_gas_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_condensing_gas_boiler_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+    my_gas_heater_config = generic_boiler.GenericBoilerConfig.preset_condensing_gas("CondensingGasBoiler").resolve(
+        SizingContext(heating_load_in_watt=my_building_information.max_thermal_building_demand_in_watt)
     )
     my_gas_heater = generic_boiler.GenericBoiler(
         config=my_gas_heater_config,
@@ -172,10 +173,12 @@ def setup_function(
 
     # Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
-            absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-            heating_system=my_hds_controller_information.hds_controller_config.heating_system,
+        heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
+            SizingContext(
+                water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
+                conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+                heat_distribution_system_type=my_hds_controller_information.hds_controller_config.heating_system,
+            )
         )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(

@@ -14,7 +14,7 @@ from hisim.components import electricity_meter
 from hisim.components.weather_data_import import WeatherDataImport
 from hisim import utils
 from hisim import loadtypes
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 __authors__ = "Jonas Hoppe"
@@ -94,7 +94,7 @@ def setup_function(
 
     # Build Building
     my_building = building.Building(
-        config=building.BuildingConfig.get_default_german_single_family_home(),
+        config=building.BuildingConfig.preset_standard("Building"),
         my_simulation_parameters=my_simulation_parameters,
     )
 

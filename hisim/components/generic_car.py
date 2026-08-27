@@ -17,7 +17,8 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils, log
-from hisim.component import ComponentID, OpexCostDataClass, CapexCostDataClass
+from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.loadtypes import Units, ComponentType
 
@@ -143,7 +144,7 @@ class GenericCarInformation:
 
 @dataclass_json
 @dataclass
-class CarConfig(cp.ConfigBase):
+class CarConfig(ConfigBase):
     """Definition of configuration of Car."""
 
     component_id: ComponentID
@@ -240,7 +241,7 @@ class Car(cp.Component):
         my_simulation_parameters: SimulationParameters,
         config: CarConfig,
         data_dict_with_car_information: Dict,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
+        my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
     ) -> None:
         """Initializes Car."""
         self.my_simulation_parameters = my_simulation_parameters

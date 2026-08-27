@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Tuple, Type
 import pytest
 
 import hisim.components
-from hisim.component import ConfigBase
+from hisim.config import ConfigBase, SizingContext
 from hisim.components import generic_boiler
 from hisim.components import generic_pv_system
 from hisim.components import heat_distribution_system
@@ -68,8 +68,10 @@ class ConfigEnumSerializationCases:
     CONFIG_FACTORIES: Dict[str, Any] = {
         "WeatherConfig": lambda: weather.WeatherConfig.get_default(weather.LocationEnum.AACHEN),
         "PVSystemConfig": generic_pv_system.PVSystemConfig.get_default_pv_system,
-        "GenericBoilerConfig": generic_boiler.GenericBoilerConfig.get_default_condensing_gas_boiler_config,
-        "GenericOilBoilerConfig": generic_boiler.GenericBoilerConfig.get_default_conventional_oil_boiler_config,
+        "GenericBoilerConfig": lambda: (
+            generic_boiler.GenericBoilerConfig.preset_condensing_gas_12kw("CondensingGasBoiler")
+        ),
+        "GenericOilBoilerConfig": lambda: generic_boiler.GenericBoilerConfig.preset_oil_12kw("ConventionalOilBoiler"),
         "SimpleHotWaterStorageConfig": (
             simple_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config
         ),
@@ -78,10 +80,12 @@ class ConfigEnumSerializationCases:
         ),
         "SimpleHeatSourceConfig": simple_heat_source.SimpleHeatSourceConfig.get_default_config_const_power,
         "HeatDistributionConfig": lambda: (
-            heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
-                water_mass_flow_rate_in_kg_per_second=0.5,
-                absolute_conditioned_floor_area_in_m2=120.0,
-                heating_system=heat_distribution_system.HeatDistributionSystemType.RADIATOR,
+            heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
+                SizingContext(
+                    water_mass_flow_rate_in_kg_per_second=0.5,
+                    conditioned_floor_area_in_m2=120.0,
+                    heat_distribution_system_type=heat_distribution_system.HeatDistributionSystemType.RADIATOR,
+                )
             )
         ),
         "HeatDistributionControllerConfig": lambda: (

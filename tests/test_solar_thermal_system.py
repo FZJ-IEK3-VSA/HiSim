@@ -7,6 +7,7 @@ from oemof.thermal.solar_thermal_collector import flat_plate_precalc
 from hisim import sim_repository, component, log, simulator as sim
 from hisim.components import weather, solar_thermal_system
 from hisim.loadtypes import LoadTypes, Units
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -41,7 +42,7 @@ def test_solar_thermal_system() -> None:
         "ControlSignal",
         LoadTypes.ANY,
         Units.BINARY,
-        component_id=component.ComponentID("FakeControlState"),
+        component_id=ComponentID("FakeControlState"),
     )
     my_sts.control_signal_channel.source_output = state_controller
 

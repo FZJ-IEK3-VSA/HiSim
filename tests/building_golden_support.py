@@ -1,7 +1,8 @@
 """Shared machinery for the committed building golden snapshots (cleanup phase 1 harness).
 
-The building cleanup (see ``roadmap/building_cleanup_spec.md``) is defined to be
-behavior-identical, and its referee is a pair of committed golden files: one
+The building cleanup -- the split of the former 3,000-line ``building.py`` into a package
+and the removal of its ordering hazards -- is defined to be behavior-identical: no output
+value may change by so much as one mantissa bit. Its referee is a pair of committed golden files: one
 characterization snapshot of :py:class:`hisim.components.building.BuildingInformation`
 over the whole TABULA catalogue, and one snapshot of a synthetic one-day ``Building``
 simulation. Both layers need exactly the same three services -- an exact-float JSON
@@ -17,8 +18,9 @@ Non-finite floats are replaced by string sentinels, since ``float('nan') != floa
 would make a NaN-carrying snapshot permanently red and silently unverifiable.
 
 The goldens are rewritten only when the environment variable
-``HISIM_REGENERATE_BUILDING_GOLDENS`` is set to a truthy value, which the phase spec
-requires to be a deliberate act accompanied by a justification in the commit message.
+``HISIM_REGENERATE_BUILDING_GOLDENS`` is set to a truthy value. Regenerating is a
+deliberate act: the resulting golden diff is part of the merge request and must be
+justified in the commit message, because it is the only place a value change can be seen.
 Without it a missing golden raises :py:class:`MissingGoldenFileError` instead of being
 created on the fly, so an absent referee can never be mistaken for a passing test.
 """

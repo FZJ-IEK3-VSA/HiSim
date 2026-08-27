@@ -10,7 +10,7 @@ from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim.components import electricity_meter
 from hisim import loadtypes
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
@@ -69,7 +69,7 @@ def setup_function(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_building_config = building.BuildingConfig.preset_standard("Building")
 
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Build Occupancy

@@ -52,7 +52,7 @@ def test_building_scalability() -> None:
     #     if isinstance(building_code, str):
     # Set Residence
     my_residence_config = (
-        building.BuildingConfig.get_default_german_single_family_home()
+        building.BuildingConfig.preset_standard("Building")
     )
     my_residence_config.absolute_conditioned_floor_area_in_m2 = (
         absolute_conditioned_floor_area_in_m2

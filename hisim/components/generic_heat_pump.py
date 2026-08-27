@@ -22,7 +22,8 @@ from hisim import log
 
 # Owned
 from hisim import utils
-from hisim.component import ComponentID, OpexCostDataClass, CapexCostDataClass
+from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.building import Building
 from hisim.components.weather import Weather
 import hisim.loadtypes as lt
@@ -41,7 +42,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class GenericHeatPumpConfig(cp.ConfigBase):
+class GenericHeatPumpConfig(ConfigBase):
     """Config for the generic heat pump."""
 
     @classmethod
@@ -74,7 +75,7 @@ class GenericHeatPumpConfig(cp.ConfigBase):
 
 @dataclass_json
 @dataclass
-class GenericHeatPumpControllerConfig(cp.ConfigBase):
+class GenericHeatPumpControllerConfig(ConfigBase):
     """Configuration for the generic heat pump controller."""
 
     @classmethod
@@ -196,7 +197,7 @@ class GenericHeatPump(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericHeatPumpConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the necessary attributes."""
         self.heatpump_config = config
@@ -637,7 +638,7 @@ class GenericHeatPumpController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericHeatPumpControllerConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
         self.heatpump_controller_config = config

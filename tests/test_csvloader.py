@@ -16,7 +16,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 # Conversion factors used to derive the seconds-per-timestep of a
 # full-year simulation from the requested number of timesteps:

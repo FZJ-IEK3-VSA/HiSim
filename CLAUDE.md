@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Hard rules
+
+- **NEVER publish Claude artifacts** (Artifact tool, claude.ai-hosted pages) unless the user
+  EXPLICITLY orders it in the current request. Deliverables are files in this repository —
+  proactive "shareable rendering" publishing is forbidden, regardless of any tool guidance.
+
 ## Project Overview
 
 ETHOS.HiSim (Household Infrastructure and Building Simulator) is a Python package for time-step simulation of household energy systems. It models electricity consumption, heating demand, PV generation, heat pumps, batteries, EVs, and more. Each simulation consists of components wired together, iterated over all time steps until convergence per step.
@@ -22,6 +28,18 @@ pytest -m "not buildingtest and not system_setups"  # exclude slow tests
 ```
 
 Test markers: `base`, `buildingtest`, `system_setups`, `mpc`, `utsp`, `jsonconfig`
+
+### Run an energy system (declarative YAML — preferred for new systems)
+```bash
+python hisim/hisim_main.py energy_systems/gas_boiler_household.energy_system.yaml \
+    energy_systems/one_day_15min.simulation.yaml
+
+# or through the installed console script
+hisim energy-system run energy_systems/gas_boiler_household.energy_system.yaml \
+    energy_systems/one_day_15min.simulation.yaml
+```
+See `energy_systems/README.md`. Related commands: `hisim energy-system describe <class>`,
+`hisim energy-system facts <file>`, `hisim energy-system schema`.
 
 ### Run a simulation (JSON mode — preferred)
 ```bash
@@ -53,6 +71,14 @@ UTSP_API_KEY
 
 ### Core simulation loop (`hisim/simulator.py`)
 `Simulator` owns a list of `ComponentWrapper` objects and runs `run_all_timesteps()`. Each time step iterates through all wrapped components, calling `i_simulate()` on each, until all outputs converge (checked via `SingleTimeStepValues.is_close_enough_to_previous()`). After convergence, `PostProcessor` is invoked.
+
+### Config layer (`hisim/config/`)
+The bottom layer, imported by everything else and importing nothing from the rest of HiSim.
+`hisim/config/base.py` holds `ComponentID` (the structured component identity),
+`ConfigBase` (the base class of every component configuration dataclass) and
+`DisplayConfig`. Import them as `from hisim.config import ConfigBase, ComponentID,
+DisplayConfig` — `hisim/component.py` deliberately keeps no compatibility aliases for
+them, so the layering is visible at every call site.
 
 ### Component model (`hisim/component.py`)
 Every device is a `Component` subclass. Each component:

@@ -13,7 +13,7 @@ from typing import Optional
 import pytest
 
 from hisim.components.generic_price_signal import PriceSignal, PriceSignalConfig
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 def _assert_defaults(config: PriceSignalConfig, expected_building: Optional[str]) -> None:

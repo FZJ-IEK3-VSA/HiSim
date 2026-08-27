@@ -17,7 +17,7 @@ from hisim.components import building
 from hisim.components import idealized_electric_heater
 from hisim import log
 from hisim import utils
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -104,10 +104,9 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home(
-        set_cooling_temperature_in_celsius=set_cooling_temperature_for_building_in_celsius,
-        set_heating_temperature_in_celsius=set_heating_temperature_for_building_in_celsius,
-    )
+    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_building_config.set_cooling_temperature_in_celsius = set_cooling_temperature_for_building_in_celsius
+    my_building_config.set_heating_temperature_in_celsius = set_heating_temperature_for_building_in_celsius
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()

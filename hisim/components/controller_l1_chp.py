@@ -16,7 +16,7 @@ from dataclasses_json import dataclass_json
 # Generic/Built-in
 from hisim import component as cp
 from hisim import utils
-from hisim.component import ComponentID, ConfigBase
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 
@@ -242,7 +242,7 @@ class L1CHPController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: L1CHPControllerConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """For initializing."""
         if not config.__class__.__name__ == L1CHPControllerConfig.__name__:

@@ -3,6 +3,7 @@
 # clean
 from typing import Optional, Any
 from hisim.simulator import SimulationParameters
+from hisim.config import SizingContext
 from hisim.components import (
     heat_distribution_system,
     loadprofilegenerator_utsp_connector,
@@ -60,7 +61,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     # Build Building
     my_building = building.Building(
-        config=building.BuildingConfig.get_default_german_single_family_home(),
+        config=building.BuildingConfig.preset_standard("Building"),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_building_information = my_building.my_building_information
@@ -94,10 +95,12 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         config=my_heat_distribution_controller_config
     )
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
-            absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-            heating_system=my_hds_controller_information.hds_controller_config.heating_system,
+        heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
+            SizingContext(
+                water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
+                conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+                heat_distribution_system_type=my_hds_controller_information.hds_controller_config.heating_system,
+            )
         )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
@@ -106,7 +109,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     # Build Gas Heater
-    my_gas_heater_config = generic_boiler.GenericBoilerConfig.get_default_condensing_gas_boiler_config()
+    my_gas_heater_config = generic_boiler.GenericBoilerConfig.preset_condensing_gas_12kw("CondensingGasBoiler")
     my_gas_heater = generic_boiler.GenericBoiler(
         config=my_gas_heater_config,
         my_simulation_parameters=my_simulation_parameters,

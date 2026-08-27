@@ -29,7 +29,7 @@ class SystemSetupConfigBase:
     if TYPE_CHECKING:
         # The serialization API is injected at runtime by the @dataclass_json decorator on
         # each concrete subclass; these type-checker-only stubs mirror it (see the identical
-        # arrangement on hisim.component.ConfigBase).
+        # arrangement on hisim.config.ConfigBase).
         def to_dict(self) -> Dict[str, Any]:
             """Stub for the dict dump that @dataclass_json injects at runtime."""
             raise NotImplementedError

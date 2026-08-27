@@ -74,7 +74,7 @@ def test_building_simulates_without_occupancy_connections() -> None:
     my_weather.i_prepare_simulation()
 
     # Building — default German single-family home, no occupancy component
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_building_config = building.BuildingConfig.preset_standard("Building")
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -219,7 +219,7 @@ def test_scenario_json_structure() -> None:
 
     # Four components with the expected class names
     component_classnames = [c["component_full_classname"] for c in scenario["components"]]
-    assert "hisim.components.building.Building" in component_classnames
+    assert "hisim.components.building.building.Building" in component_classnames
     assert "hisim.components.weather.Weather" in component_classnames
     assert "hisim.components.simple_air_conditioner.SimpleAirConditioner" in component_classnames
     assert (
@@ -240,12 +240,12 @@ def test_scenario_json_structure() -> None:
     # Building config sanity: cooling setpoint 25 °C, connect_automatically True
     building_config = next(
         c["configuration"] for c in scenario["components"]
-        if c["component_full_classname"] == "hisim.components.building.Building"
+        if c["component_full_classname"] == "hisim.components.building.building.Building"
     )
     assert building_config["set_cooling_temperature_in_celsius"] == 25.0
     building_entry = next(
         c for c in scenario["components"]
-        if c["component_full_classname"] == "hisim.components.building.Building"
+        if c["component_full_classname"] == "hisim.components.building.building.Building"
     )
     assert building_entry["connect_automatically"] is True
 

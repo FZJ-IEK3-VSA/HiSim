@@ -18,7 +18,7 @@ from hisim.components import building
 from hisim.components import idealized_electric_heater
 from hisim import log
 from hisim import utils
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -81,14 +81,13 @@ def _build_components(
     set_cooling_temperature_for_building_in_celsius = 20.5
 
     # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home(
-        facade_u_value_in_watt_per_m2_per_kelvin=u_value_params.u_value_facade_in_watt_per_m2_per_kelvin,
-        roof_u_value_in_watt_per_m2_per_kelvin=u_value_params.u_value_roof_in_watt_per_m2_per_kelvin,
-        window_u_value_in_watt_per_m2_per_kelvin=u_value_params.u_value_window_in_watt_per_m2_per_kelvin,
-        door_u_value_in_watt_per_m2_per_kelvin=u_value_params.u_value_door_in_watt_per_m2_per_kelvin,
-        set_cooling_temperature_in_celsius=set_cooling_temperature_for_building_in_celsius,
-        set_heating_temperature_in_celsius=set_heating_temperature_for_building_in_celsius,
-    )
+    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_building_config.facade_u_value_in_watt_per_m2_per_kelvin = u_value_params.u_value_facade_in_watt_per_m2_per_kelvin
+    my_building_config.roof_u_value_in_watt_per_m2_per_kelvin = u_value_params.u_value_roof_in_watt_per_m2_per_kelvin
+    my_building_config.window_u_value_in_watt_per_m2_per_kelvin = u_value_params.u_value_window_in_watt_per_m2_per_kelvin
+    my_building_config.door_u_value_in_watt_per_m2_per_kelvin = u_value_params.u_value_door_in_watt_per_m2_per_kelvin
+    my_building_config.set_cooling_temperature_in_celsius = set_cooling_temperature_for_building_in_celsius
+    my_building_config.set_heating_temperature_in_celsius = set_heating_temperature_for_building_in_celsius
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()

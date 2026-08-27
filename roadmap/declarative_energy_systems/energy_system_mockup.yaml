@@ -1,0 +1,309 @@
+# yaml-language-server: $schema=../../hisim/energy_system_v3.schema.json   # R13: autocompletion/validation in the editor
+# ---------------------------------------------------------------------------
+# MOCKUP 2 — flat energy-system file with groups (2026-08-25, rev. 2: connections
+# moved onto the consuming component, no central connections block).
+# Written against roadmap/declarative_energy_systems/config_requirements_spec.md; §7 checklist at the end.
+# Hand-authored form: bare fact names wherever unique (R4.3); comments are the
+# author's own (a realized record carries machine comments instead, R8).
+# Simulation parameters are a separate file (R6).
+#
+# One direction throughout — every component block says:
+#   class / preset / config     what it is and how it is configured
+#   inputs                      where its inputs come from (R2)
+#   sizing_sources              where its sizing facts come from, only if ambiguous (R4)
+# Nothing is ever declared at the source.
+# ---------------------------------------------------------------------------
+schema_version: 3
+name: Household with heat pump, two PV strings, battery and EMS
+description: >
+  Single-family house, air/water heat pump for space heating and DHW, electric
+  backup heater, PV on two roof faces, battery with energy management. The second
+  PV string and the backup heater exist to show the cases where a sizing source
+  has to be written out.
+
+# --- components outside any group are always on -----------------------------
+components:
+
+  # --- lookup-parameterised classes: `standard` preset OR a constructor (P1 Q-P1.6) ---
+  # Weather, Building (TABULA) and occupancy (LPG) are parameterised by an open
+  # identifier space, not by a variant set. Each has exactly one preset, `standard`,
+  # and one or more named constructors. An entry carries EITHER `preset` OR
+  # `constructor`, never both; `config` overrides apply after either. Constructor
+  # arguments are plain values (no expressions, E3); the constructor's name and
+  # parameters are listed by `hisim config describe <class>` (R13).
+  weather:
+    class: hisim.components.weather.Weather
+    constructor:
+      for_location:                         # WeatherConfig.for_location(location=..., data_source=...)
+        location: BERLIN
+        data_source: DWD_15MIN
+    # a constructor may compute paths; they come out symbolic (R12):
+    # source_path -> "${inputs}/weather/dwd_15min/berlin"
+
+  occupancy:
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    constructor:
+      for_household:                        # UtspLpgConnectorConfig.for_household(...)
+        household: CHR03_Family_1_child_both_at_work
+        energy_intensity: EnergySaving
+
+  building:
+    class: hisim.components.building.Building
+    constructor:
+      for_tabula_code:                      # BuildingConfig.for_tabula_code(building_code=...)
+        building_code: DE.N.SFH.05.Gen.ReEx.001.002
+    config:                                 # sparse overrides apply after the constructor (R3.1)
+      number_of_apartments: 1
+      enable_opening_windows: true
+    inputs:
+      - weather
+      - occupancy
+      - hds
+      - ems                                 # lives in a group: dropped if that group is off (R14)
+    # provides facts: heating_load_in_watt, number_of_apartments,
+    # conditioned_floor_area_in_m2, heating_reference_temperature_in_celsius
+
+  hds_controller:
+    class: hisim.components.heat_distribution_system.HeatDistributionController
+    preset: standard                        # reads heating_load_in_watt — one provider, nothing to write
+    inputs:
+      - weather
+      - building
+      - ems
+
+  hds:
+    class: hisim.components.heat_distribution_system.HeatDistribution
+    preset: standard                        # reads water_mass_flow_rate_in_kg_per_second <- hds_controller
+    inputs:
+      - building
+      - hds_controller
+      - buffer_storage
+
+  # The three consumers below read ONE maximal_thermal_power_in_watt. With only the
+  # heat pump providing it they would write nothing; the backup_heater group adds a
+  # second provider, so all three must say which (R4.3 — the cliff is per fact and
+  # hits existing consumers; the error lists the candidates ready to paste; see O3).
+  heat_pump_controller_sh:
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+    preset: standard
+    inputs:
+      - weather
+      - hds_controller
+      - buffer_storage
+      - ems
+    sizing_sources:
+      maximal_thermal_power_in_watt: heat_pump.maximal_thermal_power_in_watt
+
+  heat_pump_controller_dhw:
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
+    preset: standard
+    inputs:
+      - dhw_storage
+      - ems
+    sizing_sources:
+      maximal_thermal_power_in_watt: heat_pump.maximal_thermal_power_in_watt
+
+  heat_pump:
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+    preset: air_water                       # thermal power AUTO <- building.heating_load_in_watt
+    config:
+      with_domestic_hot_water_preparation: true
+    inputs:
+      - weather
+      - heat_pump_controller_sh
+      - heat_pump_controller_dhw
+      - buffer_storage
+      - dhw_storage
+      - input: TemperatureInputPrimary      # one explicit wire (R2.2)
+        from: weather.DailyAverageOutsideTemperatures
+
+  buffer_storage:
+    class: hisim.components.simple_water_storage.SimpleHotWaterStorage
+    preset: heat_pump                       # volume AUTO <- maximal_thermal_power_in_watt (one)
+    inputs:
+      - hds
+      - heat_pump
+      - heating_rod
+    sizing_sources:
+      maximal_thermal_power_in_watt: heat_pump.maximal_thermal_power_in_watt
+
+  dhw_storage:
+    class: hisim.components.simple_water_storage.SimpleDHWStorage
+    preset: per_apartment                   # volume AUTO <- building.number_of_apartments
+    inputs:
+      - occupancy
+      - heat_pump
+
+  meter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    preset: standard
+    inputs:                                 # an aggregator lists its feeds (R2.3)
+      - from: ems.TotalElectricityToOrFromGrid
+        tags: [ELECTRICITY_PRODUCTION]
+        weight: 999
+      # see O2: with the ems group off, nothing feeds the meter. The direct feeds
+      # (heat_pump, pv_*, occupancy) would have to be listed here as well, but then
+      # they double-count while the ems is on. -> needs its own group, see footer.
+
+# --- groups: sets of components with a flag (R14) ----------------------------
+# Not scopes: names are still global. Off = the group's components vanish, along
+# with every `inputs` entry and every sizing reference pointing at them, wherever
+# written. The realized record then equals the file with the group deleted by hand.
+groups:
+
+  pv:
+    enabled: true
+    components:
+      pv_south:
+        class: hisim.components.generic_pv_system.PVSystem
+        preset: standard                    # power_in_watt AUTO <- building.conditioned_floor_area_in_m2
+        config: {azimuth: 180, tilt: 30}
+        inputs:
+          - weather
+      pv_east:
+        class: hisim.components.generic_pv_system.PVSystem
+        preset: standard
+        config:
+          azimuth: 90
+          tilt: 30
+          power_in_watt: 3000               # concrete: this string is not law-sized
+        inputs:
+          - weather
+
+  battery_and_ems:
+    enabled: true
+    components:
+      battery:
+        class: hisim.components.advanced_battery_bslib.Battery
+        preset: sized_to_pv                 # capacity law reads ONE pv_peak_power_in_watt
+        # two PV systems provide pv_peak_power_in_watt -> ambiguous -> must be written (R4.3).
+        # Without this line the executor errors:
+        #   "pv_peak_power_in_watt needed by 'battery' is provided by pv_east, pv_south;
+        #    add sizing_sources: {pv_peak_power_in_watt: <one of them>}"
+        sizing_sources:
+          pv_peak_power_in_watt: pv_south.pv_peak_power_in_watt
+
+      ems:
+        class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
+        preset: optimize_own_consumption
+        inputs:                             # the aggregator's participants, with tags/weights (R2.3)
+          - from: occupancy
+            tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+            weight: 999                     # measured, never ranked: the channel forbids dispatch
+          - from: pv_south
+            component_type: PV
+            tags: [ELECTRICITY_PRODUCTION]
+            weight: 999
+          - from: pv_east
+            component_type: PV
+            tags: [ELECTRICITY_PRODUCTION]
+            weight: 999
+          - from: heat_pump
+            component_type: HEAT_PUMP_BUILDING
+            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+            weight: 2
+            dispatch: {}                    # recorded control signal, nothing consumes it
+          - from: heating_rod
+            component_type: ELECTRIC_HEATER
+            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+            weight: 3
+            dispatch: {}
+          - from: battery.AcBatteryPowerUsed
+            component_type: BATTERY
+            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+            weight: 6
+            dispatch: {target_input: LoadingPowerInput}   # back-channel: ems.DispatchTobattery_LoadingPowerInput -> battery.LoadingPowerInput
+        # --- many-facts example -----------------------------------------------
+        # The EMS class declares two MANY readers (shown by `hisim config describe`):
+        #   reads pv_peak_power_in_watt          (many)  -> production band
+        #   reads maximal_thermal_power_in_watt  (many)  -> controllable thermal load
+        # In the class (laws.py algebra, scalar laws unchanged):
+        #   Size.PV_PEAK_POWER_IN_WATT.many.sum()
+        #   Size.MAXIMAL_THERMAL_POWER_IN_WATT.many.sum()
+        # The file only says WHICH providers feed each list; the class aggregates.
+        # List order is not guaranteed to the law (aggregates are order-independent).
+        sizing_sources:
+          pv_peak_power_in_watt:                          # two providers of one class
+            - pv_south.pv_peak_power_in_watt
+            - pv_east.pv_peak_power_in_watt
+          maximal_thermal_power_in_watt:                  # mixed providers
+            - heat_pump.maximal_thermal_power_in_watt
+            - heating_rod.maximal_thermal_power_in_watt   # not group-qualified: names are global
+        # A MANY reader with zero providers must still be written, explicitly:
+        #   sizing_sources: {pv_peak_power_in_watt: []}
+        # With `pv` off the pv list shrinks to [] and the shrink is recorded (R14);
+        # with `backup_heater` off the thermal list shrinks to the heat pump alone.
+
+  backup_heater:
+    enabled: true
+    components:
+      heating_rod:
+        class: hisim.components.simple_heat_source.SimpleHeatSource
+        preset: electric_backup             # maximal_thermal_power_in_watt AUTO <- heating_load_in_watt (share law)
+        inputs:
+          - heating_rod_controller
+      heating_rod_controller:
+        class: hisim.components.controller_l1_heatpump.L1HeatPumpController
+        preset: backup                      # reads ONE maximal_thermal_power_in_watt: two providers
+        inputs:
+          - buffer_storage
+        sizing_sources:
+          maximal_thermal_power_in_watt: heating_rod.maximal_thermal_power_in_watt
+
+  ev:
+    enabled: false                          # in the file, absent from the realized system
+    components:
+      car:
+        class: hisim.components.generic_car.Car
+        preset: bev_medium
+        inputs:
+          - occupancy
+      charging_station:
+        class: hisim.components.controller_l1_generic_ev_charge.L1Controller
+        preset: home_11kw
+        inputs:
+          - car
+      # its feed into the ems would be listed under ems.inputs — and because the
+      # ev group is off, that entry would be dropped. It is omitted here since
+      # the mockup shows the file as authored for the enabled set (see O3).
+
+# ---------------------------------------------------------------------------
+# How RenoVisor / the building sizer use this (Q6): one such base file per heating
+# system in system_setups/. Load, set building.config.building_code /
+# occupancy.preset / weather.preset, flip groups.<x>.enabled, dump.
+#
+# Open points:
+#  O1  RESOLVED by rev. 2: connections live at the consumer, always. No placement
+#      choice; an entry pointing at a disabled component is dropped wherever it is.
+#  O2  Metering with and without EMS: the meter's feeds differ (grid total from the
+#      EMS vs. direct feeds). Either the direct feeds form their own group
+#      (`direct_metering`, enabled iff battery_and_ems is off — a constraint the
+#      data cannot express, cf. R14) or the EMS-less variant is a separate base
+#      file. Recommendation: separate base file; the R14 identity test would fail
+#      loudly on the double-count otherwise, which is the test doing its job.
+#  O3  Is fact uniqueness (R4.3) evaluated over the whole file or over the enabled
+#      set? Over the file: toggles never change what must be written, but a
+#      disabled backup_heater still forces three sizing_sources lines. Over the
+#      enabled set: fewer lines, and consistent with the identity test (removing
+#      providers never creates ambiguity). Recommendation: enabled set. The same
+#      question applies to `inputs` entries pointing into disabled groups — they
+#      are dropped, not errors, by R14 either way.
+#  O4  Consumer-side wiring means a source nobody consumes is silent. Not an
+#      error (legal), but the resolution report should list unconsumed
+#      components as a warning.
+#
+# §7 checklist
+#  R1 components as a name -> class mapping; R1.2 two PVSystem instances
+#  R2 consumer-side `inputs`; bare = defaults; explicit wire; aggregator feeds (R2.3)
+#  R3 preset + sparse config; concrete override of a sized field (pv_east);
+#     constructor form for the three lookup-parameterised classes (weather,
+#     occupancy, building) — the alternative to `preset: standard`
+#  R4.3 bare names everywhere except where two providers exist
+#  R4.4 scalar vs list source; class aggregates; no `all`; no math
+#  R5  not needed (Q1); R6 separate simulation file; R7 hard errors quoted
+#  R8  realized record = this file, presets expanded, AUTO -> numbers, ev gone
+#  R9  recordable from Python: connect_input is target-centric already
+#  R10 RenoVisor pattern above; R11 one direction, no jumping between blocks
+#  R12 ${inputs}; R13 schema line at top; R14 four groups, one off
+#  N1/N2 nothing here is component-specific beyond names/presets/fields
+# ---------------------------------------------------------------------------

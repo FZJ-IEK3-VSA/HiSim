@@ -9,6 +9,7 @@ from hisim.components import example_storage
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import log
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -37,14 +38,14 @@ def test_example_storage() -> None:
         field_name="charging",
         load_type=lt.LoadTypes.WARM_WATER,
         unit=lt.Units.KWH,
-        component_id=cp.ComponentID("source"),
+        component_id=ComponentID("source"),
     )
     discharging_output: cp.ComponentOutput = cp.ComponentOutput(
         object_name="source",
         field_name="discharging",
         load_type=lt.LoadTypes.WARM_WATER,
         unit=lt.Units.KWH,
-        component_id=cp.ComponentID("source"),
+        component_id=ComponentID("source"),
     )
 
     my_example_storage.charging_input.source_output = charging_output

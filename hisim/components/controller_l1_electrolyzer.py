@@ -14,12 +14,12 @@ from hisim import utils
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 
 
 @dataclass_json
 @dataclass
-class L1ElectrolyzerControllerConfig(cp.ConfigBase):
+class L1ElectrolyzerControllerConfig(ConfigBase):
     """Electrolyzer Controller Config."""
 
     component_id: ComponentID
@@ -121,12 +121,12 @@ class L1GenericElectrolyzerController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: L1ElectrolyzerControllerConfig,
-        my_display_config: cp.DisplayConfig | None = None,
+        my_display_config: DisplayConfig | None = None,
     ) -> None:
         """Initialize the class."""
 
         if my_display_config is None:
-            my_display_config = cp.DisplayConfig()
+            my_display_config = DisplayConfig()
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()

@@ -18,7 +18,9 @@ from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import ComponentID, ComponentInput, ComponentOutput
+from hisim.component import ComponentInput, ComponentOutput
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
+from hisim.config.channels import DispatchRule, DynamicConnectionChannel
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
@@ -43,7 +45,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class EMSConfig(cp.ConfigBase):
+class EMSConfig(ConfigBase):
     """L1 Controller Config."""
 
     @classmethod
@@ -74,17 +76,12 @@ class EMSConfig(cp.ConfigBase):
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float]
 
+    @preset
     @classmethod
-    def get_default_config_ems(
-        cls,
-        name: str = "L2EMSElectricityController",
-        component_id: Optional[ComponentID] = None,
-    ) -> "EMSConfig":
-        """Default Config for Energy Management System."""
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        config = EMSConfig(
-            component_id=component_id,
+    def preset_optimize_own_consumption(cls, name: str) -> "EMSConfig":
+        """The surplus controller that maximises the building's own PV consumption."""
+        return cls(
+            component_id=ComponentID(name=name),
             strategy="optimize_own_consumption",
             limit_to_shave=0,
             building_indoor_temperature_offset_value=2,
@@ -97,7 +94,6 @@ class EMSConfig(cp.ConfigBase):
             maintenance_costs_in_euro_per_year=None,
             subsidy_as_percentage_of_investment_costs=None,
         )
-        return config
 
 
 class EMSState:
@@ -174,12 +170,72 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     PeakShavingStatus = "PeakShavingStatus"
 
+    #: Stable key of the channel carrying electricity a participant produces.
+    PRODUCTION_CHANNEL = "production"
+
+    #: Stable key of the channel carrying consumption this controller cannot influence.
+    CONSUMPTION_UNCONTROLLED_CHANNEL = "consumption_uncontrolled"
+
+    #: Stable key of the channel carrying consumption this controller dispatches to.
+    CONSUMPTION_CONTROLLED_CHANNEL = "consumption_controlled"
+
+    #: Stable key of the channel carrying a battery, which is a controllable consumer the
+    #: controller treats specially because it can also give electricity back.
+    STORAGE_CHANNEL = "storage"
+
+    #: The flows this energy management system understands. Until this declaration the accepted
+    #: tags existed only implicitly, inside the hard-coded tag queries of the ranking code, which
+    #: meant a participant whose tags matched no query wired cleanly and was then never read.
+    #:
+    #: The four channels are nested on purpose: ``storage`` is a strict superset of
+    #: ``consumption_controlled``, and most-specific matching is what routes a battery to the
+    #: former while an ordinary controllable consumer — a heat pump, whose extra descriptive tag
+    #: no channel consumes — falls to the latter. That mirrors the ranking code's existing
+    #: "is this participant a battery" branch instead of inventing a new tag value for it.
+    CHANNELS: Tuple[DynamicConnectionChannel, ...] = (
+        DynamicConnectionChannel(
+            key=PRODUCTION_CHANNEL,
+            tags=frozenset({lt.InandOutputType.ELECTRICITY_PRODUCTION}),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+        DynamicConnectionChannel(
+            key=CONSUMPTION_UNCONTROLLED_CHANNEL,
+            tags=frozenset({lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED}),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+        DynamicConnectionChannel(
+            key=CONSUMPTION_CONTROLLED_CHANNEL,
+            tags=frozenset({lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED}),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.REQUIRED,
+            dispatch_tags=frozenset({lt.InandOutputType.ELECTRICITY_TARGET}),
+        ),
+        DynamicConnectionChannel(
+            key=STORAGE_CHANNEL,
+            tags=frozenset(
+                {
+                    lt.ComponentType.BATTERY,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                }
+            ),
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.REQUIRED,
+            dispatch_tags=frozenset({lt.InandOutputType.ELECTRICITY_TARGET}),
+        ),
+    )
+
     @utils.measure_execution_time
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: EMSConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Initializes."""
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []

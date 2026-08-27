@@ -13,7 +13,7 @@ from hisim.components.generic_electrolyzer_h2 import (
     Electrolyzer,
     ElectrolyzerConfig,
 )
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 
 from hisim import loadtypes as lt
 

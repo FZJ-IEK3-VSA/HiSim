@@ -12,13 +12,12 @@ import pytest
 
 from hisim.components.transformer_rectifier import Transformer, TransformerConfig
 from hisim.component import (
-    ComponentID,
     Component,
     ComponentOutput,
-    DisplayConfig,
     SingleTimeStepValues,
     StatelessComponent,
 )
+from hisim.config import ComponentID, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft

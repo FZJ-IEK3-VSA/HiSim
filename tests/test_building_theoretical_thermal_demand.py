@@ -12,7 +12,7 @@ from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import idealized_electric_heater
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from tests.testing_utils import TestingUtils
 
 
@@ -65,7 +65,7 @@ def _build_components(
     )
 
     # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_building_config = building.BuildingConfig.preset_standard("Building")
 
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters

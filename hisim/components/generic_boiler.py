@@ -14,7 +14,7 @@ and as non-modulating on_off controller (which is used especially for pellet and
 # Owned
 import importlib
 from dataclasses import dataclass
-from typing import List, Any, Optional, Tuple
+from typing import Any, ClassVar, List, Optional, Tuple
 from enum import Enum, unique
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -24,16 +24,28 @@ from hisim.components.configuration import (
     PhysicsConfig,
 )
 from hisim.component import (
-    ComponentID,
     Component,
     ComponentConnection,
     SingleTimeStepValues,
     ComponentInput,
     ComponentOutput,
-    ConfigBase,
     OpexCostDataClass,
-    DisplayConfig,
     CapexCostDataClass,
+)
+from hisim.config import (
+    ComponentID,
+    ConfigBase,
+    DisplayConfig,
+    FactContribution,
+    Self,
+    Sizable,
+    Size,
+    SizingContext,
+    SizingLaw,
+    concrete,
+    law,
+    preset,
+    sized_field,
 )
 from hisim.components.dual_circuit_system import (
     DiverterValve,
@@ -86,69 +98,32 @@ class BoilerType(str, Enum):
 @dataclass_json
 @dataclass
 class GenericBoilerConfig(ConfigBase):
-    """Configuration of the GenericBoiler class."""
+    """Configuration of the GenericBoiler class.
+
+    Named default variants are the ``preset_*`` classmethods below (one per fuel), and the
+    power fields are sizable: a preset carries ``AUTO`` where
+    the value derives from the building, and ``.resolve(ctx)`` computes it. The former
+    ``get_default_*``/``get_scaled_*`` factory pairs are replaced by exactly that split —
+    the sizable preset resolves to what the scaled factory produced, the concrete
+    ``*_12kw`` presets are the former nominal defaults.
+    """
 
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""
         return GenericBoiler.get_full_classname()
 
-    component_id: ComponentID
-    energy_carrier: lt.LoadTypes
-    boiler_type: BoilerType
-    minimal_thermal_power_in_watt: float
-    maximal_thermal_power_in_watt: float
-    eff_th_min: float
-    eff_th_max: float
-    temperature_delta_in_celsius: float
-    #: CO2 footprint of investment in kg
-    device_co2_footprint_in_kg: Optional[float]
-    #: cost for investment in Euro
-    investment_costs_in_euro: Optional[float]
-    #: lifetime in years
-    lifetime_in_years: Optional[float]
-    # maintenance cost in euro per year
-    maintenance_costs_in_euro_per_year: Optional[float]
-    # subsidies as percentage of investment costs
-    subsidy_as_percentage_of_investment_costs: Optional[float]
-    #: energy consumption in kWh
-    consumption_in_kilowatt_hour: float
-
-    @classmethod
-    def get_default_condensing_gas_boiler_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Get a default condensing gas boiler."""
-        if component_id is None:
-            component_id = ComponentID(name="CondensingGasBoiler")
-        maximal_thermal_power_in_watt = 12000
-        config = GenericBoilerConfig(
-            component_id=component_id,
-            boiler_type=BoilerType.CONDENSING,
-            energy_carrier=lt.LoadTypes.GAS,
-            temperature_delta_in_celsius=20,
-            minimal_thermal_power_in_watt=1000,
-            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
-            eff_th_min=0.60,
-            eff_th_max=0.90,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-            consumption_in_kilowatt_hour=0,
-        )
-        return config
-
     @staticmethod
     def scale_thermal_power(
         heating_load_of_building_in_watt: float,
-        number_of_apartments_in_building: Optional[int],
+        number_of_apartments_in_building: Optional[float],
     ) -> float:
-        """Scale thermal power."""
+        """Scales the boiler's maximal thermal power to the building.
 
+        The boiler must cover the larger of the space-heating load and the domestic hot
+        water demand (approximated as 2.5 kW per apartment), plus ten percent when it
+        serves both purposes at once.
+        """
         maximal_thermal_power_in_watt_sh = heating_load_of_building_in_watt
         maximal_thermal_power_in_watt_dhw = (
             2500 * number_of_apartments_in_building if number_of_apartments_in_building is not None else 0
@@ -159,201 +134,122 @@ class GenericBoilerConfig(ConfigBase):
             maximal_thermal_power_in_watt *= 1.1  # add 10% when used for both SH and DHW
         return maximal_thermal_power_in_watt
 
+    #: Sizing law of the maximal thermal power: cover space heating or DHW, whichever is
+    #: larger (see :meth:`scale_thermal_power`). Named as a ClassVar so that the field
+    #: declaration reads as one line and the law can be described in one place.
+    MAXIMAL_POWER_LAW: ClassVar[SizingLaw] = law(
+        lambda ctx: GenericBoilerConfig.scale_thermal_power(ctx.heating_load_in_watt, ctx.number_of_apartments),
+        reads=("heating_load_in_watt", "number_of_apartments"),
+    )
+
+    component_id: ComponentID
+    energy_carrier: lt.LoadTypes
+    boiler_type: BoilerType
+    minimal_thermal_power_in_watt: Sizable[float] = sized_field(rule=0.0)
+    maximal_thermal_power_in_watt: Sizable[float] = sized_field(rule=MAXIMAL_POWER_LAW)
+    eff_th_min: float = 0.60
+    eff_th_max: float = 0.90
+    temperature_delta_in_celsius: float = 20.0
+    device_co2_footprint_in_kg: Optional[float] = None
+    investment_costs_in_euro: Optional[float] = None
+    lifetime_in_years: Optional[float] = None
+    maintenance_costs_in_euro_per_year: Optional[float] = None
+    subsidy_as_percentage_of_investment_costs: Optional[float] = None
+    consumption_in_kilowatt_hour: float = 0.0
+
+    #: Sizing facts this config contributes: its resolved power band, for consumers that
+    #: size from this boiler (its controller). With two boilers in one scenario each is
+    #: addressable as "<its name>.maximal_thermal_power_in_watt" and a consumer must say
+    #: which one it means; assigned below the class.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple["FactContribution", ...]] = ()
+
+    #: The named default boilers, one per fuel plus the nominal catalogue devices, are
+    #: declared below as ``preset_*`` classmethods (preset names are wire format: scenario
+    #: files reference them, so renames are breaking changes). The fuel presets are sizable
+    #: templates whose power fields stay ``AUTO`` for the resolver to scale to the building,
+    #: which is what the deleted ``get_scaled_*`` factories did; the ``*_12kw`` presets are
+    #: the former nominal defaults with both power fields pinned. Capex fields stay ``None``
+    #: throughout so postprocessing looks them up from the device database, exactly as the
+    #: factories did.
+
+    @preset
     @classmethod
-    def get_scaled_condensing_gas_boiler_config(
-        cls,
-        heating_load_of_building_in_watt: float,
-        number_of_apartments_in_building: Optional[int] = None,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Get a scaled condensing gas boiler scaled to heating load."""
-        if component_id is None:
-            component_id = ComponentID(name="CondensingGasBoiler")
-        maximal_thermal_power_in_watt = cls.scale_thermal_power(
-            heating_load_of_building_in_watt, number_of_apartments_in_building
-        )
-        config = GenericBoilerConfig(
-            component_id=component_id,
-            boiler_type=BoilerType.CONDENSING,
+    def preset_condensing_gas(cls, name: str) -> "GenericBoilerConfig":
+        """Condensing gas boiler, scaled to the building it heats."""
+        return cls(
+            component_id=ComponentID(name=name),
             energy_carrier=lt.LoadTypes.GAS,
-            temperature_delta_in_celsius=20,
-            minimal_thermal_power_in_watt=0,
-            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
-            eff_th_min=0.60,
-            eff_th_max=0.90,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-            consumption_in_kilowatt_hour=0,
-        )
-        return config
-
-    @classmethod
-    def get_default_conventional_oil_boiler_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Get a default conventional oil boiler."""
-        if component_id is None:
-            component_id = ComponentID(name="ConventionalOilBoiler")
-        maximal_thermal_power_in_watt = 12000
-        config = GenericBoilerConfig(
-            component_id=component_id,
-            boiler_type=BoilerType.CONVENTIONAL,
-            energy_carrier=lt.LoadTypes.OIL,
-            temperature_delta_in_celsius=20,
-            minimal_thermal_power_in_watt=1000,
-            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
-            eff_th_min=0.60,
-            eff_th_max=0.90,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-            consumption_in_kilowatt_hour=0,
-        )
-        return config
-
-    @classmethod
-    def get_scaled_conventional_oil_boiler_config(
-        cls,
-        heating_load_of_building_in_watt: float,
-        number_of_apartments_in_building: Optional[int] = None,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Get a default conventional oil boiler scaled to heating load."""
-        if component_id is None:
-            component_id = ComponentID(name="ConventionalOilBoiler")
-        maximal_thermal_power_in_watt = cls.scale_thermal_power(
-            heating_load_of_building_in_watt, number_of_apartments_in_building
-        )
-        config = GenericBoilerConfig(
-            component_id=component_id,
-            boiler_type=BoilerType.CONVENTIONAL,
-            energy_carrier=lt.LoadTypes.OIL,
-            temperature_delta_in_celsius=20,
-            minimal_thermal_power_in_watt=0,
-            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
-            eff_th_min=0.60,
-            eff_th_max=0.90,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-            consumption_in_kilowatt_hour=0,
-        )
-        return config
-
-    @classmethod
-    def get_scaled_conventional_pellet_boiler_config(
-        cls,
-        heating_load_of_building_in_watt: float,
-        number_of_apartments_in_building: Optional[int] = None,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Get a default conventional pellet boiler scaled to heating load.
-
-        So far we only have the lower heating value of pellets (see PhysicsConfig),
-        so only conventional pellet boilers are used.
-        """
-        if component_id is None:
-            component_id = ComponentID(name="ConventionalPelletBoiler")
-        maximal_thermal_power_in_watt = cls.scale_thermal_power(
-            heating_load_of_building_in_watt, number_of_apartments_in_building
-        )
-        config = GenericBoilerConfig(
-            component_id=component_id,
-            boiler_type=BoilerType.CONVENTIONAL,
-            energy_carrier=lt.LoadTypes.PELLETS,
-            temperature_delta_in_celsius=20,
-            minimal_thermal_power_in_watt=1 / 12 * maximal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
-            eff_th_min=0.60,
-            eff_th_max=0.90,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-            consumption_in_kilowatt_hour=0,
-        )
-        return config
-
-    @classmethod
-    def get_scaled_conventional_wood_chip_boiler_config(
-        cls,
-        heating_load_of_building_in_watt: float,
-        number_of_apartments_in_building: Optional[int] = None,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Get a default conventional wood chip boiler scaled to heating load.
-
-        So far we only have the lower heating value of wood chips (see PhysicsConfig),
-        so only conventional wood chip boilers are used.
-        """
-        if component_id is None:
-            component_id = ComponentID(name="ConventionalWoodChipBoiler")
-        maximal_thermal_power_in_watt = cls.scale_thermal_power(
-            heating_load_of_building_in_watt, number_of_apartments_in_building
-        )
-        config = GenericBoilerConfig(
-            component_id=component_id,
-            boiler_type=BoilerType.CONVENTIONAL,
-            energy_carrier=lt.LoadTypes.WOOD_CHIPS,
-            temperature_delta_in_celsius=20,
-            minimal_thermal_power_in_watt=1 / 12 * maximal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
-            eff_th_min=0.60,
-            eff_th_max=0.90,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-            consumption_in_kilowatt_hour=0,
-        )
-        return config
-
-    @classmethod
-    def get_scaled_condensing_hydrogen_boiler_config(
-        cls,
-        heating_load_of_building_in_watt: float,
-        number_of_apartments_in_building: Optional[int] = None,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Get a scaled condensing hydrogen boiler scaled to heating load."""
-        if component_id is None:
-            component_id = ComponentID(name="CondensingHydrogenBoiler")
-        maximal_thermal_power_in_watt = cls.scale_thermal_power(
-            heating_load_of_building_in_watt, number_of_apartments_in_building
-        )
-        config = GenericBoilerConfig(
-            component_id=component_id,
             boiler_type=BoilerType.CONDENSING,
-            energy_carrier=lt.LoadTypes.GREEN_HYDROGEN,
-            temperature_delta_in_celsius=20,
-            minimal_thermal_power_in_watt=0,
-            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
-            eff_th_min=0.60,
-            eff_th_max=0.90,
-            # capex and device emissions are calculated in get_cost_capex function by default
-            device_co2_footprint_in_kg=None,
-            investment_costs_in_euro=None,
-            lifetime_in_years=None,
-            maintenance_costs_in_euro_per_year=None,
-            subsidy_as_percentage_of_investment_costs=None,
-            consumption_in_kilowatt_hour=0,
         )
-        return config
+
+    @preset(note="nominal catalogue device")
+    @classmethod
+    def preset_condensing_gas_12kw(cls, name: str) -> "GenericBoilerConfig":
+        """Condensing gas boiler pinned to the 12 kW nominal device."""
+        return cls(
+            component_id=ComponentID(name=name),
+            energy_carrier=lt.LoadTypes.GAS,
+            boiler_type=BoilerType.CONDENSING,
+            minimal_thermal_power_in_watt=1000.0,
+            maximal_thermal_power_in_watt=12000.0,
+        )
+
+    @preset
+    @classmethod
+    def preset_oil(cls, name: str) -> "GenericBoilerConfig":
+        """Conventional oil boiler, scaled to the building it heats."""
+        return cls(
+            component_id=ComponentID(name=name),
+            energy_carrier=lt.LoadTypes.OIL,
+            boiler_type=BoilerType.CONVENTIONAL,
+        )
+
+    @preset(note="nominal catalogue device")
+    @classmethod
+    def preset_oil_12kw(cls, name: str) -> "GenericBoilerConfig":
+        """Conventional oil boiler pinned to the 12 kW nominal device."""
+        return cls(
+            component_id=ComponentID(name=name),
+            energy_carrier=lt.LoadTypes.OIL,
+            boiler_type=BoilerType.CONVENTIONAL,
+            minimal_thermal_power_in_watt=1000.0,
+            maximal_thermal_power_in_watt=12000.0,
+        )
+
+    @preset
+    @classmethod
+    def preset_pellets(cls, name: str) -> "GenericBoilerConfig":
+        """Pellet boiler, scaled to the building, modulating down to a twelfth of its maximum."""
+        return cls(
+            component_id=ComponentID(name=name),
+            energy_carrier=lt.LoadTypes.PELLETS,
+            boiler_type=BoilerType.CONVENTIONAL,
+            # per-preset law: a pellet boiler cannot modulate below a twelfth of its
+            # maximal power, unlike the gas/oil default of zero. Reading the sibling
+            # field keeps the two consistent even when an author pins the maximum.
+            minimal_thermal_power_in_watt=Self("maximal_thermal_power_in_watt") * (1 / 12),
+        )
+
+    @preset
+    @classmethod
+    def preset_wood_chips(cls, name: str) -> "GenericBoilerConfig":
+        """Wood chip boiler, scaled to the building, with the pellet modulation limit."""
+        return cls(
+            component_id=ComponentID(name=name),
+            energy_carrier=lt.LoadTypes.WOOD_CHIPS,
+            boiler_type=BoilerType.CONVENTIONAL,
+            minimal_thermal_power_in_watt=Self("maximal_thermal_power_in_watt") * (1 / 12),
+        )
+
+    @preset
+    @classmethod
+    def preset_hydrogen(cls, name: str) -> "GenericBoilerConfig":
+        """Condensing hydrogen boiler, scaled to the building it heats."""
+        return cls(
+            component_id=ComponentID(name=name),
+            energy_carrier=lt.LoadTypes.GREEN_HYDROGEN,
+            boiler_type=BoilerType.CONDENSING,
+        )
 
 
 class GenericBoiler(Component):
@@ -837,7 +733,7 @@ class GenericBoiler(Component):
             raise ValueError(f"Energy carrier {config.energy_carrier} for generic_boiler not implemented yet.")
 
         unit = lt.Units.KILOWATT
-        size_of_energy_system = config.maximal_thermal_power_in_watt * 1e-3
+        size_of_energy_system = concrete(config.maximal_thermal_power_in_watt) * 1e-3
 
         capex_cost_data_class = CapexComputationHelperFunctions.compute_capex_costs_and_emissions(
             simulation_parameters=simulation_parameters,
@@ -1121,22 +1017,57 @@ class GenericBoilerControllerConfig(ConfigBase):
         return GenericBoilerController.get_full_classname()
 
     component_id: ComponentID
-    is_modulating: bool
-    set_heating_threshold_outside_temperature_in_celsius: Optional[float]
-    minimal_thermal_power_in_watt: float
-    maximal_thermal_power_in_watt: float
-    set_temperature_difference_for_full_power: float
-    minimum_runtime_in_seconds: float
-    minimum_resting_time_in_seconds: float
-    with_domestic_hot_water_preparation: bool
-    secondary_mode: Optional[bool]  # If used as secondary heat generator for DHW in hybrid mode
-    hysteresis_water_temperature_offset: float
+    #: Whether the controller modulates the burner continuously or switches it on and off.
+    is_modulating: bool = True
+    #: Outside temperature above which the controller stops heating at all.
+    set_heating_threshold_outside_temperature_in_celsius: Optional[float] = 16.0
+    #: Lower end of the boiler's power band; copied from the boiler this controller regulates.
+    minimal_thermal_power_in_watt: Sizable[float] = sized_field(rule=Size.MINIMAL_THERMAL_POWER_IN_WATT)
+    #: Upper end of the boiler's power band; copied from the boiler this controller regulates.
+    maximal_thermal_power_in_watt: Sizable[float] = sized_field(rule=Size.MAXIMAL_THERMAL_POWER_IN_WATT)
+    set_temperature_difference_for_full_power: float = 5.0
+    minimum_runtime_in_seconds: float = 1800
+    minimum_resting_time_in_seconds: float = 1800
+    with_domestic_hot_water_preparation: bool = False
+    #: If used as secondary heat generator for DHW in hybrid mode.
+    secondary_mode: Optional[bool] = False
+    hysteresis_water_temperature_offset: float = 10.0
+
+    @preset
+    @classmethod
+    def preset_modulating(cls, name: str) -> "GenericBoilerControllerConfig":
+        """The continuously modulating control law, for a gas, oil or hydrogen boiler.
+
+        A modulating burner follows the heat demand within its power band instead of cycling,
+        which is what every condensing gas and oil boiler in this repository does. The power
+        band itself is not part of the preset: it is copied from the boiler this controller
+        regulates, so the two can never drift apart.
+        """
+        return cls(component_id=ComponentID(name=name), is_modulating=True)
+
+    @preset
+    @classmethod
+    def preset_on_off(cls, name: str) -> "GenericBoilerControllerConfig":
+        """The switching control law, for a burner that runs at one power or not at all.
+
+        The minimum runtime and resting time are what make a switching burner tolerable for the
+        device, and they differ per fuel: the values here are the ones the repository uses for a
+        generic on/off boiler, while a pellet boiler wants 30 and 15 minutes and a wood chip
+        boiler 60 and 30. Those are field overrides on this preset rather than presets of their
+        own, because the fuel is not a second control law — it only moves two numbers.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
+            is_modulating=False,
+            minimum_runtime_in_seconds=0,
+            minimum_resting_time_in_seconds=0,
+        )
 
     @classmethod
     def get_default_modulating_generic_boiler_controller_config(
         cls,
-        maximal_thermal_power_in_watt: float,
-        minimal_thermal_power_in_watt: float,
+        maximal_thermal_power_in_watt: Sizable[float],
+        minimal_thermal_power_in_watt: Sizable[float],
         component_id: Optional[ComponentID] = None,
         secondary_mode: bool = False,
         with_domestic_hot_water_preparation: bool = False,
@@ -1149,8 +1080,8 @@ class GenericBoilerControllerConfig(ConfigBase):
             component_id=component_id,
             is_modulating=True,
             # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
+            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
             set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
             minimum_runtime_in_seconds=1800,
             minimum_resting_time_in_seconds=1800,
@@ -1163,21 +1094,26 @@ class GenericBoilerControllerConfig(ConfigBase):
     @classmethod
     def get_default_on_off_generic_boiler_controller_config(
         cls,
-        maximal_thermal_power_in_watt: float,
-        minimal_thermal_power_in_watt: float,
+        maximal_thermal_power_in_watt: Sizable[float],
+        minimal_thermal_power_in_watt: Sizable[float],
         with_domestic_hot_water_preparation: bool = False,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         component_id: Optional[ComponentID] = None,
     ) -> Any:
-        """Gets a default Generic Boiler Controller."""
+        """Gets a default Generic Boiler Controller.
+
+        The power band is usually read off a resolved boiler config, whose fields are typed
+        as sizable; the values must be concrete by the time a controller is built, and
+        ``concrete`` asserts exactly that instead of a cast at every call site.
+        """
         if component_id is None:
             component_id = ComponentID(name="OnOffBoilerController")
         return GenericBoilerControllerConfig(
             component_id=component_id,
             is_modulating=False,
             # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
+            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
             set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
             minimum_resting_time_in_seconds=0,
             minimum_runtime_in_seconds=0,
@@ -1190,8 +1126,8 @@ class GenericBoilerControllerConfig(ConfigBase):
     @classmethod
     def get_default_pellet_controller_config(
         cls,
-        maximal_thermal_power_in_watt: float,
-        minimal_thermal_power_in_watt: float,
+        maximal_thermal_power_in_watt: Sizable[float],
+        minimal_thermal_power_in_watt: Sizable[float],
         with_domestic_hot_water_preparation: bool = False,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         component_id: Optional[ComponentID] = None,
@@ -1203,8 +1139,8 @@ class GenericBoilerControllerConfig(ConfigBase):
             component_id=component_id,
             is_modulating=False,
             # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
+            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
             set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
             minimum_resting_time_in_seconds=15 * 60,
             minimum_runtime_in_seconds=30 * 60,
@@ -1217,8 +1153,8 @@ class GenericBoilerControllerConfig(ConfigBase):
     @classmethod
     def get_default_wood_chip_controller_config(
         cls,
-        maximal_thermal_power_in_watt: float,
-        minimal_thermal_power_in_watt: float,
+        maximal_thermal_power_in_watt: Sizable[float],
+        minimal_thermal_power_in_watt: Sizable[float],
         with_domestic_hot_water_preparation: bool = False,
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0,
         component_id: Optional[ComponentID] = None,
@@ -1230,8 +1166,8 @@ class GenericBoilerControllerConfig(ConfigBase):
             component_id=component_id,
             is_modulating=False,
             # get min and max thermal power from Generic Boiler config
-            minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            minimal_thermal_power_in_watt=concrete(minimal_thermal_power_in_watt),
+            maximal_thermal_power_in_watt=concrete(maximal_thermal_power_in_watt),
             set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
             minimum_resting_time_in_seconds=30 * 60,
             minimum_runtime_in_seconds=60 * 60,
@@ -1688,3 +1624,24 @@ class GenericBoilerController(Component):
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         return []
+
+
+def _boiler_sizing_facts(config: GenericBoilerConfig, ctx: SizingContext) -> dict:
+    """Contributes the boiler's resolved power band for connected consumers.
+
+    Computed after the boiler itself resolved, so the values are the final concrete
+    numbers whether they came from a law, a preset constant or a manual override.
+    """
+    del ctx
+    return {
+        "maximal_thermal_power_in_watt": concrete(config.maximal_thermal_power_in_watt),
+        "minimal_thermal_power_in_watt": concrete(config.minimal_thermal_power_in_watt),
+    }
+
+
+GenericBoilerConfig.SIZING_CONTRIBUTIONS = (
+    FactContribution(
+        facts=("maximal_thermal_power_in_watt", "minimal_thermal_power_in_watt"),
+        compute=_boiler_sizing_facts,
+    ),
+)

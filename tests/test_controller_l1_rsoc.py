@@ -18,6 +18,7 @@ from hisim import component as cp
 from hisim.components import controller_l1_rsoc
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -66,7 +67,7 @@ def test_config_rsoc_building_override_and_defaults() -> None:
     """config_rsoc forwards the component identity and applies defaults for missing keys."""
     config = controller_l1_rsoc.RsocControllerConfig.config_rsoc(
         rsoc_name="RSOC_TEST",
-        component_id=cp.ComponentID(name="rSCO l1 Controller", building="BUI2"),
+        component_id=ComponentID(name="rSCO l1 Controller", building="BUI2"),
         config_json={"nom_load_soec": 40.0},
     )
     assert config.component_id.building == "BUI2"
@@ -120,7 +121,7 @@ def test_rsoc_controller_built_from_in_memory_config() -> None:
         controller_l1_rsoc.RsocController.ProvidedPower,
         lt.LoadTypes.ELECTRICITY,
         lt.Units.KILOWATT,
-        component_id=cp.ComponentID("FakeProvidedPower"),
+        component_id=ComponentID("FakeProvidedPower"),
     )
 
     number_of_outputs = fft.get_number_of_outputs([my_controller, provided_power])

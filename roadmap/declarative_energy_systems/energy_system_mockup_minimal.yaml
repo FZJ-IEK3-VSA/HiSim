@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=../../hisim/energy_system_v3.schema.json
+# ---------------------------------------------------------------------------
+# MOCKUP 3 — the minimal case (2026-08-25, rev. 2: connections moved onto the
+# consuming component). Gas boiler household, no groups, no EMS/PV/battery.
+# Every sized field has exactly one provider, so there is no sizing_sources
+# anywhere (R4.3: unambiguous -> nothing to write).
+#
+# One direction throughout: a component says what it is, how it is configured,
+# where its inputs come from (`inputs`) and, only if ambiguous, where its sizing
+# facts come from (`sizing_sources`). Nothing is declared at the source.
+#   - a bare name under `inputs` = that source's default connections into this
+#     component (the target's declared defaults for the source class, R2.1)
+#   - {input: X, from: source.Output}       = one explicit wire (R2.2)
+#   - {from: source, tags/weight/dispatch}  = a dynamic feed into an aggregator (R2.3)
+# ---------------------------------------------------------------------------
+schema_version: 3
+name: Gas boiler household
+description: Single-family house with a condensing gas boiler, floor heating and grid electricity.
+
+components:
+
+  weather:
+    class: hisim.components.weather.Weather
+    preset: standard                        # lookup class: one preset (Aachen), else `constructor: {for_location: …}`
+
+  occupancy:
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    preset: standard                        # CHR01 couple both at work
+
+  building:
+    class: hisim.components.building.Building
+    preset: standard                        # German SFH; RenoVisor instead writes
+                                            # constructor: {for_tabula_code: {building_code: …}}
+    inputs:
+      - weather
+      - occupancy
+      - hds
+
+  hds_controller:
+    class: hisim.components.heat_distribution_system.HeatDistributionController
+    preset: standard
+    inputs:
+      - weather
+      - building
+
+  hds:
+    class: hisim.components.heat_distribution_system.HeatDistribution
+    preset: standard
+    config:
+      position_hot_water_storage_in_system: NO_STORAGE_MASS_FLOW_FIX   # no buffer in this house
+    inputs:
+      - building
+      - hds_controller
+      - input: WaterTemperatureInput            # the boiler feeds the circuit directly
+        from: boiler.WaterOutputTemperatureSh
+
+  boiler:
+    class: hisim.components.generic_boiler.GenericBoiler
+    preset: condensing_gas                  # power band AUTO <- building (heating_load, apartments)
+    inputs:
+      - boiler_controller
+      - input: WaterInputTemperatureSh        # the circuit's return, no buffer in between
+        from: hds.WaterTemperatureOutput
+
+  boiler_controller:
+    class: hisim.components.generic_boiler.GenericBoilerController
+    preset: modulating                      # reads the boiler's power band — one boiler, nothing to write
+    inputs:
+      - weather
+      - hds_controller
+      - input: WaterTemperatureInputFromWaterStorage
+        from: hds.WaterTemperatureOutput
+
+  meter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    preset: standard
+    inputs:                                 # an aggregator lists its feeds
+      - from: occupancy                     # the port comes from the meter's own default
+        tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+        weight: 999                         # reserved weight: measured, never controlled
+    # The gas boiler draws no electricity in this model, so the household's only electrical
+    # flow is the occupancy. A house with a PV string or a heat pump lists one feed per such
+    # component here, spelling the port as `from: <component>.<Output>` where the meter has
+    # no default for that class.
+
+# The realized record of this run is this file with `preset:` expanded into full
+# `config:` blocks and the boiler's two power fields as numbers, each carrying a
+# machine comment ("# sized from building.heating_load_in_watt=8600, ...").
+# Re-running the realized record sizes nothing and reproduces the run (R8).

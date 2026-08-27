@@ -42,13 +42,19 @@ fail-under=10
 #from-stdin=
 
 # Files or directories to be skipped. They should be base names, not paths.
-ignore=["CVS", "conf.py", "household_AC.py"]
+ignore=CVS
 
 # Add files or directories matching the regular expressions patterns to the
 # ignore-list. The regex matches against paths and can be in Posix or Windows
 # format. Because '\' represents the directory delimiter on Windows systems, it
 # can't be used as an escape character.
-ignore-paths=["obsolete"]
+#
+# NOTE: this is a comma-separated list of regexes, NOT a JSON array. The value
+# ["obsolete"] that used to sit here was read as the character class ["obsolete"],
+# which .match()ed every path starting with one of " o b s l e t -- so tests/,
+# system_setups/, scripts/ and setup.py were silently never linted. Write bare
+# regexes, no brackets and no quotes.
+ignore-paths=
 
 # Files or directories matching the regular expression patterns are skipped.
 # The regex matches against base names, not paths. The default value ignores
@@ -191,7 +197,8 @@ disable=raw-checker-failed,
         cyclic-import,
         consider-using-generator,
         broad-except,
-        possibly-used-before-assignment
+        possibly-used-before-assignment,
+        import-outside-toplevel
 
 
 

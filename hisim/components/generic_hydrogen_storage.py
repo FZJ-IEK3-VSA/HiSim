@@ -12,7 +12,7 @@ from hisim import loadtypes as lt
 from hisim.components import generic_chp
 from hisim.components import generic_electrolyzer
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentID
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -26,7 +26,7 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class GenericHydrogenStorageConfig(cp.ConfigBase):
+class GenericHydrogenStorageConfig(ConfigBase):
     """Generic hydrogen storage config class."""
 
     component_id: ComponentID
@@ -120,7 +120,7 @@ class GenericHydrogenStorage(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericHydrogenStorageConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the generic hydrogen storage component.
 

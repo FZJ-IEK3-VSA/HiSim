@@ -8,6 +8,7 @@ from hisim import component as cp
 from hisim.components import simple_heat_source
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -39,10 +40,10 @@ def test_heat_source() -> None:
     )
 
     massflow = cp.ComponentOutput(
-        "Fake_massflow", "Fake_massflow", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("Fake_massflow")
+        "Fake_massflow", "Fake_massflow", lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("Fake_massflow")
     )
     temperature_input = cp.ComponentOutput(
-        "Fake_t_in", "Fake_t_in", lt.LoadTypes.ANY, lt.Units.ANY, component_id=cp.ComponentID("Fake_t_in")
+        "Fake_t_in", "Fake_t_in", lt.LoadTypes.ANY, lt.Units.ANY, component_id=ComponentID("Fake_t_in")
     )
 
     number_of_outputs = fft.get_number_of_outputs(

@@ -6,7 +6,7 @@ from typing import Optional
 
 # import hisim.components.random_numbers
 from hisim.simulator import SimulationParameters, Simulator
-from hisim.component import ComponentID
+from hisim.config import ComponentID
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import advanced_battery_bslib
 from hisim.components import weather
@@ -84,7 +84,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         my_simulation_parameters=my_simulation_parameters,
         config=my_advanced_fuel_cell_config_2,
     )
-    my_cl2_config = cl2.EMSConfig.get_default_config_ems()
+    my_cl2_config = cl2.EMSConfig.preset_optimize_own_consumption("L2EMSElectricityController")
     my_cl2 = cl2.L2GenericEnergyManagementSystem(
         my_simulation_parameters=my_simulation_parameters, config=my_cl2_config
     )

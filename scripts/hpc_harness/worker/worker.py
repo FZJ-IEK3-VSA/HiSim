@@ -60,6 +60,7 @@ class Worker:
         self.console_offset = 0
         self.gate_blocked_since: Optional[float] = None
         self._terminate = False
+        self._gate_starved = False  # set when the admission gate starves us out
         self._pending_reports: List[Dict[str, Any]] = []
         self._last_active = 0.0  # last time a job was leased or was running (idle-timeout clock)
 
@@ -478,7 +479,7 @@ class Worker:
             if errors:
                 self.client.report_errors(self.worker_id, errors)  # worker_id may be None
             if self.worker_id:
-                if getattr(self, "_gate_starved", False):
+                if self._gate_starved:
                     reason = "gate_starved"
                 self.client.deregister(self.worker_id, reason)
         except Exception:  # pylint: disable=broad-except

@@ -13,17 +13,15 @@ from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
 from hisim.component import (
-    ComponentID,
     Component,
     ComponentConnection,
     ComponentInput,
     ComponentOutput,
-    ConfigBase,
     SingleTimeStepValues,
     OpexCostDataClass,
-    DisplayConfig,
     CapexCostDataClass,
 )
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass

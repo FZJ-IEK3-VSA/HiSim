@@ -9,10 +9,10 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Owned
-from hisim.component import ComponentID, Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
-from hisim.component import ConfigBase
 
 
 class ExampleStorageState:

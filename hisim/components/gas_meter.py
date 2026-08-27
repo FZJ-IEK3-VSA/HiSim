@@ -15,7 +15,8 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
-from hisim.component import ComponentID, ComponentInput, ComponentOutput, OpexCostDataClass, CapexCostDataClass
+from hisim.component import ComponentInput, ComponentOutput, OpexCostDataClass, CapexCostDataClass
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -29,7 +30,7 @@ from hisim.postprocessing.cost_and_emission_computation.capex_computation import
 
 @dataclass_json
 @dataclass
-class GasMeterConfig(cp.ConfigBase):
+class GasMeterConfig(ConfigBase):
     """Configuration dataclass for the GasMeter component.
 
     Holds the building name, gas load type (GAS or GREEN_HYDROGEN), and optional
@@ -96,7 +97,7 @@ class GasMeter(DynamicComponent):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GasMeterConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
+        my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
     ) -> None:
         """Initialize the component."""
         self.grid_energy_balancer_config = config

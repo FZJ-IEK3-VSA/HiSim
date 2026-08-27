@@ -1,4 +1,4 @@
-"""Tests for the structured component identity :py:class:`hisim.component.ComponentID`.
+"""Tests for the structured component identity :py:class:`hisim.config.ComponentID`.
 
 These tests pin down the behaviour that the whole identity sweep rests on: how a runtime
 component name is derived from the structured fields, that the identity is an immutable and
@@ -20,7 +20,7 @@ from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.component import ComponentID, ConfigBase
+from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components import example_component
 from hisim.simulationparameters import SimulationParameters
 
@@ -64,7 +64,7 @@ class _NamedComponent(cp.Component):
             name=config.component_id.key,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
-            my_display_config=cp.DisplayConfig(),
+            my_display_config=DisplayConfig(),
         )
 
     def i_prepare_simulation(self) -> None:

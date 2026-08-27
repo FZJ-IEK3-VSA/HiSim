@@ -14,6 +14,7 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
+from hisim.config import ComponentID
 from tests import functions_for_testing as fft
 
 
@@ -71,7 +72,7 @@ def test_building() -> None:
     log.profile(f"T3: {t_four - t_three}")
 
     # Set Residence
-    my_residence_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_residence_config = building.BuildingConfig.preset_standard("Building")
 
     my_residence = building.Building(
         config=my_residence_config,
@@ -93,7 +94,7 @@ def test_building() -> None:
         "ThermalDelivery",
         LoadTypes.HEATING,
         Units.WATT,
-        component_id=component.ComponentID("FakeThermalDeliveryMachine"),
+        component_id=ComponentID("FakeThermalDeliveryMachine"),
     )
     t_five = time.perf_counter()
     log.profile(f"T4: {t_four - t_five}")

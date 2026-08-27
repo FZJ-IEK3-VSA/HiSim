@@ -132,12 +132,83 @@ class UtspLpgConnectorConfig(ConfigBase):
         """
         return cls.for_household(name, household=Households.CHR01_Couple_both_at_Work)
 
+    @classmethod
+    def predefined_households(cls) -> Tuple[str, ...]:
+        """Names the LoadProfileGenerator households whose profiles ship with the repository.
+
+        The predefined mode reads a precomputed profile out of ``hisim/inputs/loadprofiles``
+        instead of asking the LoadProfileGenerator for one, which is what lets the examples and
+        the test suite run without a UTSP server and without a local installation. Only a
+        household whose profile is actually shipped can be simulated that way; every other
+        household of the catalogue has to be computed by one of the two other modes.
+
+        Returns:
+            The names, sorted, of the catalogue households the predefined mode can serve.
+        """
+        catalogue = {
+            reference.Name
+            for reference in vars(Households).values()
+            if isinstance(reference, JsonReference) and reference.Name is not None
+        }
+        return tuple(sorted(catalogue & set(utils.HISIMPATH["occupancy"])))
+
+    @classmethod
+    def predefined_profile_of(
+        cls,
+        household: Union[JsonReference, List[JsonReference]],
+        data_acquisition_mode: LpgDataAcquisitionMode,
+    ) -> Optional[str]:
+        """Returns the predefined profile that serves one household, or ``None``.
+
+        Only the predefined mode reads a profile by name; the two computing modes hand the
+        household references to the LoadProfileGenerator itself and leave the name empty. The
+        check exists because the name, not the household, decides what the predefined mode
+        actually simulates: without it, asking for a household whose profile is not shipped
+        would quietly produce the profile of a different household.
+
+        Args:
+            household: The catalogue household, or one reference per apartment.
+            data_acquisition_mode: Where the profile comes from.
+
+        Returns:
+            The name of the profile to read, or ``None`` when the LoadProfileGenerator computes
+            the household.
+
+        Raises:
+            ValueError: If the predefined mode cannot serve the request, because several
+                households were given or because no profile for this one is shipped.
+        """
+        if data_acquisition_mode is not LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
+            return None
+        computing_modes = ", ".join(
+            mode.value
+            for mode in LpgDataAcquisitionMode
+            if mode is not LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
+        )
+        if isinstance(household, list):
+            raise ValueError(
+                f"{len(household)} households were given, and only the LoadProfileGenerator itself "
+                f"can simulate more than one; pass data_acquisition_mode as one of "
+                f"{computing_modes}."
+            )
+        shipped = cls.predefined_households()
+        if household.Name not in shipped:
+            raise ValueError(
+                f"no predefined profile for the household '{household.Name}' ships with this "
+                f"repository, and the predefined mode would therefore simulate a different "
+                f"household; shipped households: {', '.join(shipped)}. Pass "
+                f"data_acquisition_mode as one of {computing_modes} to have the "
+                f"LoadProfileGenerator compute this household."
+            )
+        return household.Name
+
     @constructor(note="the household catalogue of the LoadProfileGenerator")
     @classmethod
     def for_household(
         cls,
         name: str,
         household: Union[JsonReference, List[JsonReference]],
+        data_acquisition_mode: LpgDataAcquisitionMode = LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE,
         energy_intensity: EnergyIntensityType = EnergyIntensityType.EnergySaving,
         travel_route_set: Optional[JsonReference] = None,
         transportation_device_set: Optional[JsonReference] = None,
@@ -151,9 +222,17 @@ class UtspLpgConnectorConfig(ConfigBase):
         default to the ones every HiSim setup uses, because they only matter once a car or a
         charging station is part of the system and are then usually left as they are.
 
+        The household is only honoured as far as the chosen mode can honour it. In the default
+        predefined mode the profile is read from disk by name, so the household must be one of
+        the shipped ones (:meth:`predefined_households`) and anything else is refused rather
+        than silently replaced; the two computing modes pass the references to the
+        LoadProfileGenerator and accept the whole catalogue, a list of apartments included.
+
         Args:
             name: Instance name of the component being configured; it becomes its identity.
             household: The catalogue household to simulate, or one reference per apartment.
+            data_acquisition_mode: Where the profile comes from — the shipped predefined
+                profile, a local LoadProfileGenerator, or the UTSP.
             energy_intensity: How economically the residents are assumed to behave.
             travel_route_set: Commuting distances of the residents; the ten-kilometre set when
                 omitted.
@@ -163,12 +242,15 @@ class UtspLpgConnectorConfig(ConfigBase):
                 omitted.
 
         Returns:
-            A configuration reading that household from the shipped predefined profile.
+            A configuration simulating that household in the requested mode.
+
+        Raises:
+            ValueError: If the predefined mode cannot serve the requested household.
         """
         return cls(
             component_id=ComponentID(name=name),
-            data_acquisition_mode=LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE,
-            name_of_predefined_loadprofile="CHR01 Couple both at Work",
+            data_acquisition_mode=data_acquisition_mode,
+            name_of_predefined_loadprofile=cls.predefined_profile_of(household, data_acquisition_mode),
             predefined_loadprofile_filepaths=None,
             household=household,
             result_dir_path=utils.HISIMPATH["utsp_results"],

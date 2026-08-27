@@ -1164,6 +1164,13 @@
                     ],
                     "properties": {
                       "household": {},
+                      "data_acquisition_mode": {
+                        "enum": [
+                          "USE_PREDEFINED_PROFILE",
+                          "USE_UTSP",
+                          "USE_LOCAL_LPG"
+                        ]
+                      },
                       "energy_intensity": {
                         "enum": [
                           "EnergySaving",

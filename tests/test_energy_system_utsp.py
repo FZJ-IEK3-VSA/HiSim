@@ -36,7 +36,10 @@ from utspclient.helpers.lpgdata import (
     TravelRouteSets,
 )
 
-from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig
+from hisim.components.loadprofilegenerator_utsp_connector import (
+    LpgDataAcquisitionMode,
+    UtspLpgConnectorConfig,
+)
 from hisim.energy_system import dump_energy_system, parse_energy_system
 from hisim.energy_system.codec import ConfigValueCodec
 from hisim.energy_system.executor import SimulationParametersReader, build_energy_system
@@ -84,6 +87,8 @@ class References:
         return UtspLpgConnectorConfig.for_household(
             cls.NAME,
             household=Households.CHR03_Family_1_child_both_at_work,
+            # No profile for this household is shipped, so it is one the LPG has to compute.
+            data_acquisition_mode=LpgDataAcquisitionMode.USE_LOCAL_LPG,
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_30km_Commuting_Distance,
             transportation_device_set=TransportationDeviceSets.Bus_and_two_30_km_h_Cars,
             charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,
@@ -172,3 +177,80 @@ def test_the_realized_record_of_the_shipped_household_reads_its_occupancy_back(t
     )
 
     References.assert_same(built.configured.config_of(References.NAME), read_back)
+
+
+@pytest.mark.base
+def test_the_predefined_mode_refuses_a_household_whose_profile_is_not_shipped() -> None:
+    """Catches the household argument being decoration on the constructor that exists for it.
+
+    In the predefined mode the profile is read from disk by name, and the name — not the
+    household reference — decides what is simulated. Accepting any household there would mean
+    that asking for a family of three quietly produces the profile of the shipped couple: a run
+    that finishes, reports plausible numbers and answers a different question than the one the
+    file asked. The refusal has to name the household, the shipped alternatives and the modes
+    that can compute it, because the author's next step is to pick one of the three.
+    """
+    with pytest.raises(ValueError) as refused:
+        UtspLpgConnectorConfig.for_household(
+            "occupancy", household=Households.CHR03_Family_1_child_both_at_work
+        )
+
+    message = str(refused.value)
+    assert "CHR03 Family, 1 child, both at work" in message
+    assert "CHR01 Couple both at Work" in message
+    assert LpgDataAcquisitionMode.USE_LOCAL_LPG.value in message
+    assert LpgDataAcquisitionMode.USE_UTSP.value in message
+
+
+@pytest.mark.base
+def test_the_predefined_mode_refuses_several_households() -> None:
+    """Catches a multi-apartment occupancy silently collapsing to one shipped profile.
+
+    A list of households is what a multi-apartment building passes, and the predefined mode
+    reads exactly one profile file, so the list would be ignored altogether rather than merely
+    substituted. The count belongs in the message: it is what tells the author that the
+    apartments, not the household, are the reason the mode cannot serve them.
+    """
+    with pytest.raises(ValueError) as refused:
+        UtspLpgConnectorConfig.for_household(
+            "occupancy",
+            household=[Households.CHR01_Couple_both_at_Work, Households.CHR01_Couple_both_at_Work],
+        )
+
+    assert "2 households" in str(refused.value)
+
+
+@pytest.mark.base
+def test_a_computed_household_keeps_its_reference_and_names_no_profile() -> None:
+    """Catches a computing mode being handed the profile name of a household it is not simulating.
+
+    Once the LoadProfileGenerator computes the household, the profile name is not the source of
+    the data any more; leaving the shipped name behind would make the configuration claim a
+    household it does not simulate, and would be what the run silently falls back to if the
+    generator failed.
+    """
+    config = UtspLpgConnectorConfig.for_household(
+        "occupancy",
+        household=Households.CHR03_Family_1_child_both_at_work,
+        data_acquisition_mode=LpgDataAcquisitionMode.USE_LOCAL_LPG,
+    )
+
+    assert config.household is Households.CHR03_Family_1_child_both_at_work
+    assert config.name_of_predefined_loadprofile is None
+    assert config.data_acquisition_mode is LpgDataAcquisitionMode.USE_LOCAL_LPG
+
+
+@pytest.mark.base
+def test_the_shipped_household_is_the_one_the_preset_builds() -> None:
+    """Catches the shipped-profile list and the canonical preset drifting apart.
+
+    The preset exists because exactly one household can be simulated with nothing installed; if
+    a profile were added or removed without the preset following, the class would advertise a
+    default that the predefined mode cannot serve.
+    """
+    assert UtspLpgConnectorConfig.predefined_households() == ("CHR01 Couple both at Work",)
+
+    preset = UtspLpgConnectorConfig.preset_standard("occupancy")
+
+    assert preset.name_of_predefined_loadprofile == "CHR01 Couple both at Work"
+    assert preset.data_acquisition_mode is LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE

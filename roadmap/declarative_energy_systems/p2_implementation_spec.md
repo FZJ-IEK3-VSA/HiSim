@@ -496,3 +496,28 @@ Fixtures are the three mockups plus D2's executable fixture; nothing parallel is
 - **Layering follow-up done.** `hisim/config/channels.py` holds `DispatchRule`, `DynamicConnectionChannel`, `ConnectionTag`, `ResolvedDispatch`, `ResolvedDynamicConnection` and `ResolvedDynamicWire`; `hisim.energy_system.channels` keeps `FeedRequest` and `TagDecoder` and re-exports the declarations, and `hisim.energy_system.resolution` becomes a re-export. `hisim.loadtypes` is added to `hisim/config/__init__.py`'s sanctioned exceptions (it imports only the standard library, like `hisim.log`), together with the `TYPE_CHECKING`-only reference to `hisim.component`. Importing `hisim.dynamic_component`, the meter or the EMS now loads neither `hisim.energy_system` nor pydantic nor PyYAML, asserted in a fresh interpreter by `tests/test_energy_system_layering.py`.
 - **Error classification changed with the move.** The three raise sites that travelled to the leaf — a channel with no tags, a channel that forbids dispatch and names dispatch tags, `get_channel` on an undeclared key — are defects of a component class that no file can cause, and they now raise `ChannelDeclarationError` instead of `EF-28`/`EF-29`. Both identifiers stay in use, raised by the matcher for the file-caused conditions, where they were already tested.
 - **C-P2.6 verified at the config level; no live UTSP call was possible.** The defect is real and still present in the *v1* fixtures: 22 `system_setups/*.scenario.json` spell `household: {name, guid: {str_val}}` while `utspclient`'s dataclass declares `Name`/`Guid`/`StrVal`, and `json_executor.py:172-177` only survives it by pascalizing those four keys by hand. This format needs no such case: `ConfigBlockWriter` writes the class's own spelling, and `tests/test_energy_system_utsp.py` round-trips `UtspLpgConnectorConfig.for_household` with all four references chosen away from their defaults — writer → YAML → codec → `from_dict` — comparing name and Guid field for field, and does the same over the realized record of the shipped household. A live run against a UTSP server would need `UTSP_URL` and `UTSP_API_KEY`; the reference household ships as a predefined profile, so the offline round trip covers what the requirement is about (a reference that deserialises empty), and only the remote request itself is unexercised.
+
+## Amendments (PR-7, review of #592, 2026-08-27)
+
+- **The occupancy constructor now honours the household it is given** (review comment on
+  `loadprofilegenerator_utsp_connector.py:173`). `for_household` set
+  `name_of_predefined_loadprofile` to the shipped `"CHR01 Couple both at Work"` whatever
+  household it was handed, and the predefined mode reads the profile *by that name*, so asking
+  for any other household produced the couple's profile without a word. The constructor takes
+  `data_acquisition_mode` (default: the predefined profile) and derives the profile name from
+  the household through `predefined_profile_of`, which refuses a household with no shipped
+  profile and refuses a list of them, naming the shipped households and the two computing modes
+  in both messages; a computed household leaves the name empty rather than claiming a profile
+  it does not simulate. `predefined_households()` reads the shipped set from
+  `utils.HISIMPATH["occupancy"]` intersected with the catalogue, so adding a profile needs no
+  second list. `preset_standard` is unchanged in value — CHR01 in the predefined mode — and the
+  golden realized record is byte-identical. Four tests in `tests/test_energy_system_utsp.py`
+  pin the two refusals, the computed case and the preset; the exported JSON Schema gains the
+  new constructor parameter. A builder that raises reaches the author as `EF-17` naming the
+  constructor, which is how the refusal surfaces from a file.
+- **The naming of the builders stands** (review comment on `:137`, `build_occupancy_from_lpg_household`
+  suggested). The `preset_`/`for_`/`from_` prefixes are the decided convention (P1 amendment of
+  2026-08-26, Q-P1.9): the prefix marks *what kind of builder* a method is and is stripped for
+  the wire name, so the file spells `constructor: {for_household: {...}}`. A descriptive verb in
+  the method name would either leak into the wire format or need a second, hand-maintained
+  mapping; the class the method sits on supplies the noun the verb would repeat.

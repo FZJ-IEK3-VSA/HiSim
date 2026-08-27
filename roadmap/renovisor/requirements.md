@@ -1,6 +1,6 @@
 # RenoVisor backend: translation layer and API contract — requirements
 
-**Status:** draft (Q1, Q9 decided 2026-08-27: a reused container, files in and files out, driven by a C# service in another repo)
+**Status:** draft (Q1, Q9, Q10 decided 2026-08-27: a reused container running one calculation at a time, files in and files out, driven by a C# service in another repo)
 **Date:** 2026-08-27
 **Author(s):** assistant (all `[proposed]` items, evidence survey) · Noah Pflugradt (owner; all `[given]` items)
 **Reviewers:** HiSim core team · RenoVisor frontend team (§8.2 only)
@@ -57,7 +57,7 @@ energy-system file, runs it, and derives the contract's result payloads — repl
 `ModularHouseholdConfig` path and the "upload raw files, let the server interpret them"
 arrangement. It is a library, delivered as a container image that a C# service in a separate
 repository runs and reuses across calculations, handing each one a house configuration as a file and collecting its results as files; HiSim implements none of the contract's HTTP behaviour
-(decided 2026-08-27, §11 Q1). (b) A revised API contract in which every field either has a HiSim consumer, is
+(decided 2026-08-27, §11 Q1, Q9, Q10). (b) A revised API contract in which every field either has a HiSim consumer, is
 declared non-simulation, or is removed — and in which determinism, versioning and the meaning of
 a cost `Range` are stated, because the contract promises results that are cacheable forever.
 
@@ -334,10 +334,11 @@ that cannot import Python and cannot inspect a traceback.
 **R13.1 — A reused container must not carry state between calculations.** `[given 2026-08-27; replaces the "no ambient state" phrasing, which assumed a fresh process per run]`
 The *n*-th calculation in a container's life must produce exactly what it would have produced
 as the first. Because the process now outlives the calculation, this is a positive requirement
-on the implementation — state must be actively reset or isolated between calculations — not, as
-originally drafted, a prohibition on reading ambient state. It is what makes R10's determinism
-hold across a reused process rather than only within one run, and C13 records the specific
-hazards it has to defeat.
+on the implementation — state must be actively reset between calculations — not, as originally
+drafted, a prohibition on reading ambient state. It is what makes R10's determinism hold across
+a reused process rather than only within one run, and C13 records the specific hazards it has to
+defeat. Because calculations never overlap (R13.5), a reset at a single point in the lifecycle
+satisfies this; nothing has to become concurrent.
 
 **R13.3 — Reuse must be bounded and self-limiting.** `[proposed; follows from R13.1]`
 A long-lived container accumulates result directories, memory and cached data across
@@ -359,6 +360,14 @@ Note the boundary. R13.4 catches *filesystem* residue and is worth having for th
 cannot see the in-process state of C13, which leaves no file behind. The two controls are
 complementary and neither substitutes for the other — R13.4 is verified by AC11.5, R13.1 by
 the reuse identity test of AC11.1.
+
+**R13.5 — Single occupancy is a stated precondition, not an accident.** `[given 2026-08-27, owner]`
+A container serves one calculation at a time (Q10). The layer may therefore assume it is the
+only calculation in its process, and correspondingly it must **state that it is not safe to run
+two concurrently** — in the container's own documentation, so that neither the C# side nor a
+later HiSim change mistakes the absence of a crash for thread-safety. Parallelism is obtained by
+running more containers, which makes per-container memory the scaling limit and is what R13.3
+must bound.
 
 **R13.2 — Failures are reportable to a caller that cannot read Python.** `[proposed; follows from R11]`
 A refusal, a validation error and a crash must each be distinguishable from the container's
@@ -549,6 +558,11 @@ Irish archetype. The contract must carry the supported set explicitly.
   same failure mode and have not been surveyed. Whatever mechanism satisfies R13.1 must cover
   them, and the survey above is a starting point, not a complete list.
 
+  **Bounded by Q10** `[decided 2026-08-27]`: since calculations never overlap, every item above
+  is a *staleness* problem with a reset as its fix, not a *race* with a redesign as its fix. The
+  epic's parking-lot entry "runtime half of `SingletonSimRepository` … needs its own redesign,
+  probably proper wiring" stays parked and is not a dependency of this work.
+
 ### Assumptions requiring confirmation
 
 - **A-1** `[superseded 2026-08-27]` ~~The HTTP service is built outside HiSim.~~ Confirmed by
@@ -581,6 +595,7 @@ Irish archetype. The contract must carry the supported set explicitly.
 | AC11.3 | The same image and the same input, run on two different machines, produce equal results and equal version stamps. | R13.1, R10, R14 |
 | AC11.4 | Resource growth over a long sequence of calculations is bounded, or the recycle limit is stated and enforced. | R13.3 |
 | AC11.5 | After a calculation and the deletion of its output location, a working-tree cleanliness check (`git status --porcelain` or equivalent) reports nothing — no stray `results/`, no file written beside the package. | R13.4 |
+| AC11.6 | The container's documentation states that it serves one calculation at a time and is not safe to run two concurrently. | R13.5 |
 | AC12 | The `fast-estimate` and `detailed-simulation` results for one package are both produced and are distinguishable in the payload. | R12 |
 | AC13 | All golden suites pass; no result of an existing setup changes. | R15, C1 |
 | AC14 | The contract validates against an OpenAPI 3.1 validator after amendment, and every `x-contract-status: provisional` schema names its owner. | A1–A20 |
@@ -593,10 +608,12 @@ Irish archetype. The contract must carry the supported set explicitly.
 |---|---|---|
 | Q1 | HiSim supplies a calculation **library**, packaged as a container image. The service is a C# application in a separate repository. HiSim owns no HTTP, store, queue or auth. Rejected: HiSim hosting the service; a thin reference service in this repository. | 2026-08-27, owner |
 | Q9 | The interface is **files in, files out**, and containers are **reused** across calculations to avoid start-up cost. Rejected: stdin/stdout JSON; a hybrid; one container per calculation. | 2026-08-27, owner |
+| Q10 | A container runs **one calculation at a time**; parallelism comes from running more containers. Rejected: concurrent calculations in threads; concurrent calculations in subprocesses. | 2026-08-27, owner |
 
-Q9's answer removes the per-calculation start-up cost that made Q5 nearly forced, and replaces
-it with a harder problem: HiSim is not currently safe to run twice in one process (C13). R13.1
-and AC11.1 exist to close that, and Q10 asks how far the isolation has to go.
+Together these bound the isolation problem sharply. Reuse (Q9) means HiSim must survive being
+run repeatedly in one process, which it does not today (C13); single occupancy (Q10) means the
+fix is a **reset between calculations**, not thread-safety across 11 component modules. The
+`SingletonSimRepository` redesign stays in the epic's parking lot.
 
 ---
 
@@ -807,7 +824,7 @@ not new machinery.
 
 ---
 
-**Q9 — What exactly does the container take in and give back?** · blocks R13, R13.1, R13.2, R14, AC11, AC11.1, AC11.2
+**Q9 — What exactly does the container take in and give back?** · `[answered 2026-08-27]` — **files in, files out, container reused.** Entry kept for the alternatives it rejected.
 
 *Context.* Q1's answer fixes the mechanism (the C# service starts a container with a house
 configuration) but not its shape, and every detail of that shape is a thing the C# side has to
@@ -854,7 +871,7 @@ carries the one sub-decision that remains.
 
 ---
 
-**Q10 — Does a reused container run one calculation at a time, or several concurrently?** · blocks R13.1, R13.3, AC11.1, AC11.4
+**Q10 — Does a reused container run one calculation at a time, or several concurrently?** · `[answered 2026-08-27]` — **one calculation at a time.** Entry kept for the alternatives it rejected.
 
 *Context.* Q9 settled reuse but not concurrency, and the two isolation problems are not the same
 size. `SingletonSimRepository` is a process-wide singleton written from 29 call sites (C13); its
@@ -879,7 +896,13 @@ Python import once.
 into an open-ended thread-safety audit across 11 component modules for a benefit the C# side can
 get by running more containers.
 
-*Blocks.* R13.1, R13.3, AC11.1, AC11.4.
+*Answer.* `[decided 2026-08-27, owner]` **(a)** — one calculation at a time per container;
+parallelism comes from running more containers. Consequences: R13.1 is satisfied by a reset
+between calculations rather than by making shared state concurrent; the parking-lot
+`SingletonSimRepository` redesign is **not** pulled into this work; and the cost of parallelism
+moves to container memory, which is what R13.3 has to bound.
+
+*Blocks.* Closed.
 
 ---
 

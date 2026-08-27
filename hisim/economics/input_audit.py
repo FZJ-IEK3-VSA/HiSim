@@ -32,8 +32,10 @@ from hisim.economics.uncertainty import UncertainValue
 
 
 class OriginKind:
-    """How a row's unit price was resolved. The vocabulary is shared by both renderers; each
-    spells it its own way, which is formatting and therefore theirs to decide.
+    """How a row's unit price was resolved.
+
+    The vocabulary is shared by both renderers; each spells it its own way, which is formatting
+    and therefore theirs to decide.
 
     Three outcomes are possible and the distinction is the audit's central question: the price came
     from a per-field config override (OVERRIDE, which wins over the database whether or not a

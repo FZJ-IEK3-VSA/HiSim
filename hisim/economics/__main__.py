@@ -150,8 +150,13 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
     first = next(iter(matrix.results.values()), None)
     if first is not None:
         # The audit belongs to the stored evaluation: without it a later `report` could not
-        # render section 1 without reopening the cost database (W4.5).
-        from hisim.economics.audit import build_input_audit, write_cost_audit
+        # render section 1 without reopening the cost database (W4.5). The audit module itself
+        # arrives with the presentation part of this stack, so until then this subcommand fails
+        # on the import rather than on a half-written report.
+        from hisim.economics.audit import (  # pylint: disable=no-name-in-module,import-error
+            build_input_audit,
+            write_cost_audit,
+        )
 
         audit = build_input_audit(inputs, database, parameters, first)
         write_cost_audit(audit, args.results_dir)
@@ -221,8 +226,8 @@ def _evaluate_directory(
     Returns:
         The evaluated matrix and its input audit (None only when no perspective was evaluated).
     """
-    from hisim.economics.audit import build_input_audit
-    from hisim.economics.results import EvaluationMatrix
+    # See the note above: `audit` is part of the presentation layer of this stack.
+    from hisim.economics.audit import build_input_audit  # pylint: disable=no-name-in-module,import-error
 
     inputs = read_inputs(results_dir)
     parameters = _load_parameters(args)
@@ -291,8 +296,16 @@ def _cmd_report(args: argparse.Namespace) -> int:
         two compared directories share no perspective.
     """
     from hisim.economics.plausibility import run_plausibility_checks
-    from hisim.economics.report_plots import plot_payback_curve, write_report_plots
-    from hisim.economics.reporting import write_cost_summary, write_lifecycle_report
+
+    # Both renderers are the presentation layer of this stack, as `audit` above.
+    from hisim.economics.report_plots import (  # pylint: disable=no-name-in-module,import-error
+        plot_payback_curve,
+        write_report_plots,
+    )
+    from hisim.economics.reporting import (  # pylint: disable=no-name-in-module,import-error
+        write_cost_summary,
+        write_lifecycle_report,
+    )
     from hisim.economics.results import compare
 
     matrix, audit = _load_or_evaluate(args.results_dir, args, args.results_dir)
@@ -318,8 +331,6 @@ def _cmd_report(args: argparse.Namespace) -> int:
     if getattr(args, "scenarios", None):
         # The scenario cube is a fresh cube of evaluations by definition (§4.6), so this branch
         # needs the engine whether or not stored results exist.
-        from hisim.economics.scenarios import ScenarioSet, evaluate_cube, export_cube_csv, export_cube_json
-
         inputs = read_inputs(args.results_dir)
         parameters = _load_parameters(args)
         database = CostDatabase(parameters.cost_database_path)

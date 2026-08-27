@@ -387,7 +387,10 @@ class FactsExtraction:
     unresolved_reason: Optional[str] = None
 
 
-def extract_cost_facts(component: Any) -> FactsExtraction:
+# The seven returns are the precedence rule this function exists to state -- hook, declared
+# free of cost, unknown class, unpriceable configuration, extractor accident, no facts, facts --
+# and folding them into fewer branches would hide the order rather than simplify it.
+def extract_cost_facts(component: Any) -> FactsExtraction:  # pylint: disable=too-many-return-statements
     """Facts for one component: the adopted `get_cost_facts()` API first, adapter table second.
 
     The full-information entry point `bridge.py` uses, and the place the migration order is

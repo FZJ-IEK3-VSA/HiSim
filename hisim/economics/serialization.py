@@ -138,8 +138,6 @@ def facts_from_json(raw: dict) -> ComponentCostFacts:
     declaration goes through — a hand-edited inputs file with an implausible size or an unpriceable
     size unit is rejected here rather than producing nonsense downstream.
     """
-    from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
-
     kpi_tag = None
     if raw.get("kpi_tag"):
         kpi_tag = KpiTagEnumClass(raw["kpi_tag"])

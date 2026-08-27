@@ -33,7 +33,9 @@ pyloadprofilegenerator
 portalocker
 pyhumps==3.8.0
 pydantic
-# Energy-system files (hisim/energy_system): the YAML read and write path
+# Energy-system files (hisim/energy_system): the YAML read and write path. Also the worked-example
+# library, whose converter (tools/convert_worked_examples.py) writes the YAML fixtures that
+# tests/test_worked_examples.py reads (cost-spec-v2 §3.3).
 PyYAML
 # Energy-system run records (hisim/energy_system/comments.py): write-only, for the provenance
 # comments of a realized record; the read path stays on PyYAML's safe loader
@@ -42,9 +44,6 @@ ruamel.yaml
 # and the mockups against it; HiSim itself never imports it at runtime
 jsonschema
 Pillow
-# Worked-example library: tools/convert_worked_examples.py writes the YAML fixtures,
-# tests/test_worked_examples.py reads them (cost-spec-v2 §3.3).
-pyyaml
 # Independent implementation cross-check of the closed-form financial math
 # (tests/test_economics_invariants.py, cost-spec-v2 §5.3).
 numpy_financial

@@ -141,24 +141,6 @@ EXAMPLE_IDS = [f"{example['group']}/{example['name']}" for example in EXAMPLES]
 # --------------------------------------------------------------------------- group runners
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @pytest.fixture(name="synthetic_database", scope="module")
 def fixture_synthetic_database(tmp_path_factory) -> CostDatabase:
     """A cost database with nothing in it but one electricity price entry.

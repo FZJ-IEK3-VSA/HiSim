@@ -98,6 +98,7 @@ def _financing_values(inputs: Dict[str, Any]) -> Dict[str, float]:
     values["total_payments_in_euro"] = total_interest + total_repayment
     return values
 
+
 def _discounting_values(inputs: Dict[str, Any]) -> Dict[str, float]:
     """Discounts a hand-written cash-flow series with the engine's own timeline and factors.
 
@@ -142,6 +143,7 @@ def _discounting_values(inputs: Dict[str, Any]) -> Dict[str, float]:
         year_only = timeline.filtered(lambda entry, wanted=year: entry.year == wanted)
         values[f"discounted_cash_flow_year_{year}_in_euro"] = year_only.npv(rate).best_estimate
     return values
+
 
 def _tariff_contract(inputs: Dict[str, Any]) -> TariffContract:
     """Builds the contract an example describes through its flat input labels (§8.2).
@@ -196,6 +198,7 @@ def _tariff_contract(inputs: Dict[str, Any]) -> TariffContract:
         source_ids=("inline:worked example",),
     )
 
+
 def _tariff_values(inputs: Dict[str, Any]) -> Dict[str, float]:
     """Bills one year with `apply_tariff` and exposes the bill under the example labels (§8.4).
 
@@ -239,6 +242,7 @@ def _tariff_values(inputs: Dict[str, Any]) -> Dict[str, float]:
         "flexibility_value_in_euro": bill.flexibility_value_in_euro,
         "marginal_price_components_in_euro_per_kwh": contract.marginal_purchase_price_components().best_estimate,
     }
+
 
 def _subsidy_scheme(letter: str, inputs: Dict[str, Any]) -> SubsidyScheme:
     """Builds one synthetic scheme from the `scheme_<letter>_*` input labels (§5.2).
@@ -285,6 +289,7 @@ def _subsidy_scheme(letter: str, inputs: Dict[str, Any]) -> SubsidyScheme:
         excludes=([str(inputs[f"{prefix}excludes"])] if f"{prefix}excludes" in inputs else []),
         payout_kind=PayoutKind(str(inputs[f"{prefix}payout_kind"])),
     )
+
 
 def _subsidy_values(inputs: Dict[str, Any]) -> Dict[str, float]:
     """Solves the cumulation problem of a tiny in-memory catalog (§5.4).
@@ -346,6 +351,7 @@ def _subsidy_values(inputs: Dict[str, Any]) -> Dict[str, float]:
         values["eligible_cap_in_euro"] = cap
     return values
 
+
 def _levy_scheme(scheme_id: str, asset_class: ComponentType, rate: float) -> SubsidyScheme:
     """A synthetic upfront grant of `rate` on one asset class, for the levy package example.
 
@@ -375,6 +381,7 @@ def _levy_scheme(scheme_id: str, asset_class: ComponentType, rate: float) -> Sub
         payout_kind=PayoutKind.UPFRONT_GRANT,
     )
 
+
 def _modernization_levy_values(inputs: Dict[str, Any], database: CostDatabase) -> Dict[str, float]:
     """Evaluates a mixed retrofit package under the landlord/tenant split (§6.4, D27).
 
@@ -395,7 +402,7 @@ def _modernization_levy_values(inputs: Dict[str, Any], database: CostDatabase) -
     expected values from those copies, which makes a change to the shipped legal parameters fail
     this example loudly instead of silently re-baselining it.
     """
-    from hisim.economics.actors import AllocationContext, get_ruleset
+    from hisim.economics.actors import AllocationContext, DE2024Ruleset, get_ruleset
     from hisim.economics.perspectives import ActorScope
     from hisim.economics.provenance import ProvenanceLedger
     from hisim.economics.timeline import Actor
@@ -476,7 +483,7 @@ def _modernization_levy_values(inputs: Dict[str, Any], database: CostDatabase) -
         "present_value_factor_sum": sum(parameters.discount_factor(year) for year in range(1, horizon + 1)),
     }
     for subject, _asset_class, _unit, _investment in subjects:
-        values[f"subsidy_{subject.split('.')[-1].lower()}_in_euro"] = -sum(
+        values[f"subsidy_{subject.rsplit('.', maxsplit=1)[-1].lower()}_in_euro"] = -sum(
             entry.amount_in_euro.best_estimate
             for entry in result.timeline.entries
             if entry.category == CostCategory.SUBSIDY and entry.subject == subject
@@ -493,6 +500,10 @@ def _modernization_levy_values(inputs: Dict[str, Any], database: CostDatabase) -
     # The paragraph split, off the engine's own levy basis (the timeline books only the sum).
     build = evaluator.build_timeline(evaluation_inputs, perspective, ProvenanceLedger())
     ruleset = get_ruleset(True, parameters.country)
+    # The §559e example is German by construction. `get_ruleset` is typed to the protocol,
+    # which promises only `allocate`; the levy pools, bases and caps below are the German
+    # ruleset's own, so the concrete type is asserted rather than assumed.
+    assert isinstance(ruleset, DE2024Ruleset), "the §559e example needs the German ruleset"
     context = AllocationContext(
         horizon_years=horizon,
         living_area_in_m2=float(inputs["living_area_in_m2"]),
@@ -514,6 +525,7 @@ def _modernization_levy_values(inputs: Dict[str, Any], database: CostDatabase) -
     )
     values["general_cap_in_euro_per_year"] = ruleset.general_cap_rate(context) * months_of_area
     return values
+
 
 def _end_to_end_values(inputs: Dict[str, Any], database: CostDatabase) -> Dict[str, float]:
     """Evaluates a full variant through `EconomicEvaluator.evaluate` (§3.6, §3.7).

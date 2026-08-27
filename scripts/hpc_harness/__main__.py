@@ -10,7 +10,7 @@ from pathlib import Path
 if __package__ in (None, ""):  # `python scripts/hpc_harness` invocation
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hpc_harness.cli import main  # noqa: E402
+from hpc_harness.cli import main  # noqa: E402  # pylint: disable=wrong-import-position
 
 if __name__ == "__main__":
     sys.exit(main())

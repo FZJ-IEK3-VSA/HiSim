@@ -539,7 +539,7 @@ class Autoscaler:
                  "partition": p.partition}
                 for p in self.profiles
             ],
-            "trying_to_scale": bool(result.get("to_submit") or 0),
+            "trying_to_scale": bool(result.get("to_submit")),
             "submission_state_counts": writer.call(db.submission_state_counts),
             "submissions": writer.call(lambda c: db.recent_submissions(c, 100)),
         })

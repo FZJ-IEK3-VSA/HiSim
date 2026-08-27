@@ -125,8 +125,8 @@ class HarnessClient:
 
     def deregister(self, worker_id: str, reason: Optional[str] = None) -> None:
         """POST /workers/{id}/deregister (best effort, few tries)."""
+        saved = self.max_tries
         try:
-            saved = self.max_tries
             self.max_tries = 3
             self._post(f"/workers/{worker_id}/deregister", {"reason": reason})
         except Exception:  # pylint: disable=broad-except
@@ -136,8 +136,8 @@ class HarnessClient:
 
     def ship_logs(self, worker_id: str, records: List[Dict[str, Any]]) -> None:
         """POST /logs (best effort)."""
+        saved = self.max_tries
         try:
-            saved = self.max_tries
             self.max_tries = 2
             self._post("/logs", {"worker_id": worker_id, "records": records})
         except Exception:  # pylint: disable=broad-except
@@ -149,8 +149,8 @@ class HarnessClient:
         """POST /errors (best effort) — persistent error reporting (§4.7)."""
         if not errors:
             return
+        saved = self.max_tries
         try:
-            saved = self.max_tries
             self.max_tries = 2
             self._post("/errors", {"worker_id": worker_id, "errors": errors})
         except Exception:  # pylint: disable=broad-except
@@ -160,8 +160,8 @@ class HarnessClient:
 
     def upload_console(self, worker_id: str, text: str, next_offset: int) -> None:
         """POST /workers/{id}/console."""
+        saved = self.max_tries
         try:
-            saved = self.max_tries
             self.max_tries = 2
             self._post(
                 f"/workers/{worker_id}/console",

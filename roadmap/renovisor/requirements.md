@@ -1,6 +1,6 @@
 # RenoVisor backend: translation layer and API contract — requirements
 
-**Status:** draft (Q1 decided 2026-08-27: library in a container, C# service in another repo)
+**Status:** draft (Q1, Q9 decided 2026-08-27: a reused container, files in and files out, driven by a C# service in another repo)
 **Date:** 2026-08-27
 **Author(s):** assistant (all `[proposed]` items, evidence survey) · Noah Pflugradt (owner; all `[given]` items)
 **Reviewers:** HiSim core team · RenoVisor frontend team (§8.2 only)
@@ -56,7 +56,7 @@ the ten heating systems the contract offers cannot be expressed as an energy-sys
 energy-system file, runs it, and derives the contract's result payloads — replacing both the
 `ModularHouseholdConfig` path and the "upload raw files, let the server interpret them"
 arrangement. It is a library, delivered as a container image that a C# service in a separate
-repository starts per calculation; HiSim implements none of the contract's HTTP behaviour
+repository runs and reuses across calculations, handing each one a house configuration as a file and collecting its results as files; HiSim implements none of the contract's HTTP behaviour
 (decided 2026-08-27, §11 Q1). (b) A revised API contract in which every field either has a HiSim consumer, is
 declared non-simulation, or is removed — and in which determinism, versioning and the meaning of
 a cost `Range` are stated, because the contract promises results that are cacheable forever.
@@ -151,8 +151,10 @@ an open question (Q3).
 **Existing.** The RenoVisor frontend (co-owner of the contract's stable envelope; only it can
 sign off §8.2 changes). **The RenoVisor backend service — a C# application in a separate
 repository, which is the translation layer's only caller.** It owns every HTTP concern of the
-contract and invokes HiSim by starting a container, handing it a house configuration and
-collecting what comes back (Q1, decided 2026-08-27). The declarative-energy-systems epic (this
+contract and invokes HiSim through a **reused** container: a house configuration goes in as a
+file, results come back as files, and the same container serves the next calculation
+(Q1, Q9, decided 2026-08-27). It also owns the deletion of a result directory between
+calculations and the cleanliness check that proves nothing was left behind (R13.4). The declarative-energy-systems epic (this
 is its P5 RenoVisor track). The building sizer and HPC harness, which share the base-file
 mechanism and will inherit whatever is built here.
 
@@ -321,20 +323,42 @@ The layer must offer two tiers with a stated difference in method and a stated d
 accuracy. A `fast-estimate` result and a `detailed-simulation` result for the same package must
 be distinguishable in the payload. What the fast tier *is* is Q6.
 
-**R13 — A container invocation is the whole interface.** `[given 2026-08-27; supersedes the in-memory phrasing of R13, which assumed a Python caller]`
-The layer's only caller is a C# service that starts a container, supplies a house
-configuration and collects a result. The interface is therefore a process contract, not a
-Python API, and it must be specified as one: what the container is given, where it is given,
-what it produces, where it produces it, and what its exit status means. It must be usable by a
-caller that cannot import Python, cannot inspect a traceback and holds no HiSim state between
-invocations. The precise shape is Q9.
+**R13 — A file-based container interface is the whole interface.** `[given 2026-08-27; supersedes the in-memory phrasing of R13, which assumed a Python caller]`
+The layer's only caller is a C# service that supplies a house configuration as a file and
+collects the results as files, in a **reused** container that serves many calculations in
+succession. The interface is therefore a process contract, not a Python API, and it must be
+specified as one: where the configuration is read from, what is written where, and what
+signals that a calculation succeeded, was refused or failed. It must be usable by a caller
+that cannot import Python and cannot inspect a traceback.
 
-**R13.1 — One invocation is self-describing.** `[proposed]`
-Everything a run needs must arrive in that one invocation. The container must not read
-ambient state — no environment left over from a previous run, no cached result directory, no
-network fetch that could answer differently tomorrow. Two invocations of the same image with
-the same input must be indistinguishable, which is what makes R10 hold across container
-boundaries rather than only within one process.
+**R13.1 — A reused container must not carry state between calculations.** `[given 2026-08-27; replaces the "no ambient state" phrasing, which assumed a fresh process per run]`
+The *n*-th calculation in a container's life must produce exactly what it would have produced
+as the first. Because the process now outlives the calculation, this is a positive requirement
+on the implementation — state must be actively reset or isolated between calculations — not, as
+originally drafted, a prohibition on reading ambient state. It is what makes R10's determinism
+hold across a reused process rather than only within one run, and C13 records the specific
+hazards it has to defeat.
+
+**R13.3 — Reuse must be bounded and self-limiting.** `[proposed; follows from R13.1]`
+A long-lived container accumulates result directories, memory and cached data across
+calculations. The layer must either bound that growth or state the limit at which the caller
+should recycle the container, so the C# side can act on it rather than discover it in
+production.
+
+**R13.4 — A calculation writes only where it declared it would.** `[given 2026-08-27, owner]`
+Everything a calculation produces must land inside its declared output location, so that
+deleting that location returns the container to its pre-calculation state. Nothing may be
+written beside the package, into the working tree, or into a shared temporary area. The check
+is a filesystem-cleanliness assertion after a calculation — the owner's plan is a
+`git status --porcelain`-style test on the C# side, which is well aimed: `ResultPathProviderSingleton`'s
+default `base_path` is `Path(__file__).resolve().parent.parent / "results"`
+(`hisim/result_path_provider.py:105`), i.e. **inside the repository**, so a working-tree check
+catches precisely the residue that is easiest to write by accident.
+
+Note the boundary. R13.4 catches *filesystem* residue and is worth having for that alone; it
+cannot see the in-process state of C13, which leaves no file behind. The two controls are
+complementary and neither substitutes for the other — R13.4 is verified by AC11.5, R13.1 by
+the reuse identity test of AC11.1.
 
 **R13.2 — Failures are reportable to a caller that cannot read Python.** `[proposed; follows from R11]`
 A refusal, a validation error and a crash must each be distinguishable from the container's
@@ -493,14 +517,37 @@ Irish archetype. The contract must carry the supported set explicitly.
   model, error format, auth, IDs, naming — is co-owned and changes need frontend sign-off. A17
   is the only §8.2 item that touches it; the rest are payload changes the backend owns.
 - **C11** `[given 2026-08-27, owner]` The calling service is a C# application in a separate
-  repository. It invokes HiSim by starting a container with a house configuration. HiSim's
-  deliverable is therefore a container image with a process contract, and no part of the
-  contract's HTTP behaviour — caching, coalescing, hashing, auth, polling — is HiSim's to
-  implement or to test.
+  repository. It invokes HiSim through a container that is **reused across calculations**,
+  passing a house configuration in as a file and collecting results as files. HiSim's
+  deliverable is therefore a container image with a file-based process contract, and no part of
+  the contract's HTTP behaviour — caching, coalescing, hashing, auth, polling — is HiSim's to
+  implement or to test. The container's lifetime spanning many calculations is what makes C13
+  blocking.
 - **C12** `[proposed; follows from C11]` The interface crosses a language boundary. Anything
   HiSim wants the caller to act on — a refusal reason, a translation report, a version stamp —
   must be a structured document the C# side can deserialise, not a Python object and not a log
   line.
+- **C13** `[proposed; surveyed 2026-08-27]` **HiSim is not currently safe to run twice in one
+  process.** Container reuse (C11) makes this a blocking constraint rather than a latent one.
+  The survey found:
+  - `hisim/sim_repository_singleton.py:SingletonSimRepository` is a process-wide singleton,
+    written from **29 call sites across 11 component modules**, and **nothing in
+    `hisim_main.py`, `simulator.py` or `energy_system/executor.py` resets it between runs**.
+    `simulator.py:367` clears the *per-simulator* `SimRepository`, which is a different object.
+  - Its own `clear()` does `del self.my_dict`, so a second run in the same process meets a
+    deleted attribute rather than stale data. `reset()` exists beside it and its docstring says
+    it is for callers who "need a clean slate … across successive simulations" — the hazard is
+    known, the fix is written, and no production path calls it.
+  - `result_path_provider.py:ResultPathProviderSingleton` captures
+    `datetime.datetime.now()` in `__init__`, so the **first** calculation in a container fixes
+    the timestamp every later one uses. It has a `reset()` classmethod; nothing in a run calls it.
+  - `tests/test_singleton_sim_repository.py:211` clears `SingletonMeta._instances` by hand,
+    which is the test suite working around the same problem.
+
+  Beyond the two singletons, module-level caches (weather data, the TABULA table, pvlib
+  databases), logging level, matplotlib global state and RNG seeding are all candidates for the
+  same failure mode and have not been surveyed. Whatever mechanism satisfies R13.1 must cover
+  them, and the survey above is a starting point, not a complete list.
 
 ### Assumptions requiring confirmation
 
@@ -528,9 +575,12 @@ Irish archetype. The contract must carry the supported set explicitly.
 | AC8 | Every `Kpis` and `Costs` field the amended contract keeps is produced by a finished calculation, and each is traceable to a named HiSim KPI or cost-engine output. | R8, R9, A12, A13, A14 |
 | AC9 | The three values of a `Range` in one `Costs` object come from one evaluation slot; a test detects a mixed-slot object. | R9, A9 |
 | AC10 | A finished result carries a calculation version, and changing any of the translator, base files, component models or cost database changes it. | R14, A15 |
-| AC11 | A calculation runs end to end through the container interface alone, driven by a caller that imports no Python: input in, result out, exit status meaningful. | R13, C11 |
-| AC11.1 | The same image and the same input, run twice on different machines, produce equal results and equal version stamps. | R13.1, R10 |
-| AC11.2 | A refusal, a validation error and a crash are told apart from the container's exit status and output document, with no log parsing. | R13.2, R11, A16 |
+| AC11 | A calculation runs end to end through the file interface alone, driven by a caller that imports no Python: configuration in, results out, outcome signalled. | R13, C11 |
+| AC11.1 | **The reuse identity test.** A calculation run as the *n*-th in a container's life produces byte-identical outputs to the same calculation run as the first — verified for a sequence of *differing* calculations, since identical ones would not surface the leak. | R13.1, R10, C13 |
+| AC11.2 | A refusal, a validation error and a crash are told apart from the container's outcome signal and output document, with no log parsing. | R13.2, R11, A16 |
+| AC11.3 | The same image and the same input, run on two different machines, produce equal results and equal version stamps. | R13.1, R10, R14 |
+| AC11.4 | Resource growth over a long sequence of calculations is bounded, or the recycle limit is stated and enforced. | R13.3 |
+| AC11.5 | After a calculation and the deletion of its output location, a working-tree cleanliness check (`git status --porcelain` or equivalent) reports nothing — no stray `results/`, no file written beside the package. | R13.4 |
 | AC12 | The `fast-estimate` and `detailed-simulation` results for one package are both produced and are distinguishable in the payload. | R12 |
 | AC13 | All golden suites pass; no result of an existing setup changes. | R15, C1 |
 | AC14 | The contract validates against an OpenAPI 3.1 validator after amendment, and every `x-contract-status: provisional` schema names its owner. | A1–A20 |
@@ -541,10 +591,12 @@ Irish archetype. The contract must carry the supported set explicitly.
 
 | ID | Decision | Date, owner |
 |---|---|---|
-| Q1 | HiSim supplies a calculation **library**, packaged as a container image. The service is a C# application in a separate repository; it starts a container per calculation, hands it a house configuration and collects the result. HiSim owns no HTTP, store, queue or auth. Rejected: HiSim hosting the service; a thin reference service in this repository. | 2026-08-27, owner |
+| Q1 | HiSim supplies a calculation **library**, packaged as a container image. The service is a C# application in a separate repository. HiSim owns no HTTP, store, queue or auth. Rejected: HiSim hosting the service; a thin reference service in this repository. | 2026-08-27, owner |
+| Q9 | The interface is **files in, files out**, and containers are **reused** across calculations to avoid start-up cost. Rejected: stdin/stdout JSON; a hybrid; one container per calculation. | 2026-08-27, owner |
 
-Q1's answer opens Q9 (the process contract) and narrows Q5, since the C# side decides how many
-containers a package set costs.
+Q9's answer removes the per-calculation start-up cost that made Q5 nearly forced, and replaces
+it with a harder problem: HiSim is not currently safe to run twice in one process (C13). R13.1
+and AC11.1 exist to close that, and Q10 asks how far the isolation has to go.
 
 ---
 
@@ -784,7 +836,50 @@ record as first-class files rather than blobs, and leaves batching to the C# sid
 where the scheduling decisions already live. The package-set cost this implies is real and
 belongs in Q5's answer, not here.
 
-*Blocks.* R13, R13.1, R13.2, R14, AC11, AC11.1, AC11.2.
+*Answer.* `[decided 2026-08-27, owner]` **(a) files in, files out**, with the unit of work one
+calculation — but the container is **reused** across calculations rather than started per
+calculation, which is what pays off the start-up cost that made the per-calculation model
+expensive. The C# side additionally provides a function to delete a result directory outright
+and a working-tree cleanliness test after each calculation (R13.4, AC11.5).
+
+*What the answer costs.* Reuse converts a cheap guarantee into an expensive one. With a fresh
+process per calculation, R13.1's isolation was free; with a reused process it must be built,
+and C13 records that HiSim does not have it today — a process-wide `SingletonSimRepository`
+written from 29 call sites that no production path resets, and a `ResultPathProviderSingleton`
+that freezes a timestamp at first construction. This is now the main technical risk in §8.1
+and the reason AC11.1 is written as a sequence of *differing* calculations.
+
+*Blocks.* Closed. R13, R13.1, R13.2, R13.3, R13.4, R14, AC11–AC11.5 are now stated; Q10
+carries the one sub-decision that remains.
+
+---
+
+**Q10 — Does a reused container run one calculation at a time, or several concurrently?** · blocks R13.1, R13.3, AC11.1, AC11.4
+
+*Context.* Q9 settled reuse but not concurrency, and the two isolation problems are not the same
+size. `SingletonSimRepository` is a process-wide singleton written from 29 call sites (C13); its
+metaclass takes a lock only on first construction, and the repository's own `set_entry` /
+`get_entry` are plain dict operations with no locking. Sequential reuse therefore needs a reset
+between calculations — one mechanism, called at one place. Concurrent reuse needs the singleton
+to stop being process-wide at all, because two simulations sharing one dict is a data race, not
+a staleness problem. The epic already carries "runtime half of `SingletonSimRepository` … needs
+its own redesign, probably proper wiring" in its parking lot, with no trigger date.
+
+*Options.* (a) **One calculation at a time per container**, with the C# side running several
+containers for parallelism. Consequence: isolation is a reset between calculations, which the
+existing `reset()` methods almost provide; parallelism costs container memory rather than
+engineering. (b) **Several calculations concurrently in one container**, in threads.
+Consequence: pulls the parking-lot `SingletonSimRepository` redesign into this work as a
+blocker, and every module-level cache in C13's unsurveyed list becomes a race. (c) **Several
+concurrently, in subprocesses inside the container.** Consequence: isolation is free again
+(separate address spaces) and the start-up cost comes back, though a forked worker pool pays the
+Python import once.
+
+*Recommendation.* (a) first, (c) if throughput demands it. (b) turns a bounded reset problem
+into an open-ended thread-safety audit across 11 component modules for a benefit the C# side can
+get by running more containers.
+
+*Blocks.* R13.1, R13.3, AC11.1, AC11.4.
 
 ---
 

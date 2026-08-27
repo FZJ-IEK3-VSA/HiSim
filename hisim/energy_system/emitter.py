@@ -51,6 +51,7 @@ class CanonicalDumper(yaml.SafeDumper):
     indentation difference would make every such diff useless.
     """
 
+    # pylint: disable=unused-argument  # the refusal is the point; PyYAML passes it positionally
     def increase_indent(self, flow: bool = False, indentless: bool = False) -> None:
         """Indents block sequences instead of writing them flush with their parent key.
 
@@ -61,7 +62,10 @@ class CanonicalDumper(yaml.SafeDumper):
         Args:
             flow: Whether the collection being opened is written in flow style; passed
                 through unchanged.
-            indentless: PyYAML's request to skip the indent, which is always refused.
+            indentless: PyYAML's request to skip the indent, which is always refused. The
+                parameter is part of the signature PyYAML calls and is deliberately unused;
+                a linter that cannot import PyYAML sees no overridden method and says so,
+                which is why the pragma above is there.
         """
         super().increase_indent(flow, False)
 

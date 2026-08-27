@@ -159,6 +159,13 @@ components:
         path.write_text(cls.text(battery_feed, battery_inputs), encoding="utf-8")
         return path
 
+    #: The shipped one-day parameters, resolved from this file rather than from the working
+    #: directory: the test suite is run from ``tests/`` in CI and from the repository root
+    #: locally, so a relative path would find the file in only one of the two.
+    SHIPPED_PARAMETERS: ClassVar[Path] = (
+        Path(__file__).resolve().parents[1] / "energy_systems" / "one_day_15min.simulation.yaml"
+    )
+
     @classmethod
     def parameters(cls, directory: Path) -> SimulationParameters:
         """One simulated day at a quarter-hour, writing into the test directory.
@@ -184,7 +191,7 @@ def test_a_controlled_battery_is_ranked_told_what_to_draw_and_simulated(tmp_path
     weight, the battery would be ranked, never told anything, and the day would still simulate.
     """
     path = Household.write(tmp_path, Household.BATTERY_FEED_WITH_TARGET)
-    parameters_path = Path("energy_systems") / "one_day_15min.simulation.yaml"
+    parameters_path = Household.SHIPPED_PARAMETERS
 
     built = run_energy_system(path, parameters_path, result_directory=str(tmp_path / "results"))
 

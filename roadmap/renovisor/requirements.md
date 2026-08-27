@@ -10,7 +10,7 @@ document's §8.1, kept until the replacement is accepted) · `roadmap/renovisor/
 `roadmap/declarative_energy_systems/epic.md` and its `plan.md` P5 row (this work *is* the
 RenoVisor half of P5) · `roadmap/cost-spec-v2.md` (the cost engine the result payloads need)
 **Companions:** `roadmap/renovisor/field_inventory.md` (the counted survey) ·
-`roadmap/renovisor/mockups/heat_pump_household.energy_system.yaml` (what the translator emits)
+`roadmap/renovisor/mockups/heat_pump_household.energy_system.yaml` (a base file after parametrisation)
 
 **Tags:** feature, behavior-change, migration, compatibility, technical-debt
 **Keywords:** RenoVisor, API contract, OpenAPI, home inventory, package, energy-system file,
@@ -52,14 +52,17 @@ component work that has not happened, and 35 have no simulation consumer at all;
 fields, 3 exist; of the 9 cost ranges, 7 have an engine and 2 of those lack Irish data. Five of
 the ten heating systems the contract offers cannot be expressed as an energy-system file today.
 
-**Required.** (a) A translation layer that turns a home inventory plus a package into an
-energy-system file, runs it, and derives the contract's result payloads — replacing both the
-`ModularHouseholdConfig` path and the "upload raw files, let the server interpret them"
-arrangement. It is a library, delivered as a container image that a C# service in a separate
-repository runs and reuses across calculations, handing each one a house configuration as a file and collecting its results as files; HiSim implements none of the contract's HTTP behaviour
-(decided 2026-08-27, §11 Q1, Q9, Q10). (b) A revised API contract in which every field either has a HiSim consumer, is
-declared non-simulation, or is removed — and in which determinism, versioning and the meaning of
-a cost `Range` are stated, because the contract promises results that are cacheable forever.
+**Required.** (a) A translation layer that, from a home inventory plus a package, **selects one
+of a small set of hand-authored energy-system files and parametrises it** — overrides and group
+flags only, never a system authored from the request — runs it, and derives the contract's
+result payloads. This replaces both the `ModularHouseholdConfig` path and the "upload raw files,
+let the server interpret them" arrangement. It is a library, delivered as a container image that
+a C# service in a separate repository reuses across calculations, handing each one a house
+configuration as a file and collecting its results as files; HiSim implements none of the
+contract's HTTP behaviour (decided 2026-08-27, §11 Q1, Q9, Q10). (b) A revised API contract in
+which every field either has a HiSim consumer, is declared non-simulation, or is removed — and in
+which determinism, versioning and the meaning of a cost `Range` are stated, because the contract
+promises results that are cacheable forever.
 
 **Affected.** `hisim/renovisor/` (rewritten), `roadmap/renovisor/openapi.yaml` (amended), the
 declarative-energy-systems P4 sweep (13 modules become blocking), `hisim/economics` (Irish
@@ -166,7 +169,8 @@ countries beyond Ireland.
 | | |
 |---|---|
 | **Current behavior** | A CLI translates a v1 request into a `ModularHouseholdConfig`, picks one of ten Python setups, runs it in-process, and POSTs matched result files plus a mapping report to a URL. |
-| **Required behavior** | A container is started with a house configuration; inside it, a library turns that configuration and its package into an energy-system file, runs it deterministically, derives the contract's `kpis` and `costs`, and hands them back. The C# service serves them under a content-addressed URL. |
+| **Required behavior** | A reused container is handed a house configuration; inside it, a library **selects one of the checked-in energy-system files and parametrises it** — overrides and group flags, nothing authored from scratch — runs it deterministically, derives the contract's `kpis` and `costs`, and hands them back. The C# service serves them under a content-addressed URL. |
+| **Explicitly not** | Generating an energy system from the request. The systems are hand-authored and reviewed; the translator chooses among them and fills in values. What it may write is fenced by R4 and checked by AC3. |
 | **Decided** | `[decided 2026-08-27, owner]` The service is a C# application in another repository. HiSim supplies a calculation library, packaged as a container image the service starts per calculation. HiSim owns no HTTP, no store, no queue and no auth (Q1). |
 
 ## 5. Goals and non-goals
@@ -175,8 +179,11 @@ countries beyond Ireland.
 
 - **G1** Every field the contract keeps has a named consumer: a HiSim configuration field, an
   energy-system file element, a cost-engine input, or an explicit "non-simulation" declaration.
-- **G2** The translation layer emits energy-system files, not `ModularHouseholdConfig`, so that
-  the epic's EAC5 can be met and a request's simulation is a readable, re-executable artifact.
+- **G2** The translation layer runs a request by parametrising one of a small set of
+  hand-authored energy-system files, not by building a `ModularHouseholdConfig` and not by
+  generating a system per request, so that the epic's EAC5 can be met, every simulated system
+  has been reviewed by a person, and a request's simulation is a readable, re-executable
+  artifact.
 - **G3** Identical inputs produce identical results, bit for bit, so the contract's
   content-addressing and its `immutable` caching are sound rather than aspirational.
 - **G4** The backend derives the contract's result payloads; no consumer of the API needs to
@@ -212,9 +219,10 @@ without recomputing.
 
 *Input.* `POST /homeinventories/{hi_id}/packages` with a `PackageDefinition`; then
 `GET /homeinventories/{hi_id}/packages/{pkg_id}/detailed-simulation`.
-*Expected.* The package's measures are applied to the inventory, an energy-system file is
-emitted, HiSim runs it, and the KPI and cost payloads are derived from the run.
-The emitted file is the mockup
+*Expected.* The package's measures are applied to the inventory, the base energy-system file for
+its heating system is selected and parametrised, HiSim runs the result, and the KPI and cost
+payloads are derived from the run.
+The parametrised file is the mockup
 `roadmap/renovisor/mockups/heat_pump_household.energy_system.yaml` — **the external
 representation this document is chiefly about**. Its footer (M1–M5) states what it pins down:
 the translator writes only overrides and group flags; ten base files are needed and the
@@ -258,10 +266,13 @@ the API contract and need the frontend team's agreement. Provenance is on every 
 
 ### 8.1 Translation layer (R)
 
-**R1 — Emit energy-system files.** `[given; epic EAC5, plan P5]`
-The translation layer must produce a `*.energy_system.yaml` document plus a
-`*.simulation.yaml` parameters file for each calculation, and must not construct
-`ModularHouseholdConfig`, `ArcheTypeConfig` or `EnergySystemConfig`.
+**R1 — Run from a parametrised energy-system file.** `[given; epic EAC5, plan P5; corrected 2026-08-27, owner]`
+Each calculation must run a `*.energy_system.yaml` document obtained by **selecting one of the
+checked-in files and parametrising it** (R2, R3, R4), together with a `*.simulation.yaml`
+parameters file. The layer must not construct `ModularHouseholdConfig`, `ArcheTypeConfig` or
+`EnergySystemConfig`, and must not author an energy system from the request: the set of
+simulable systems is fixed, hand-written and reviewed, and a request chooses among them rather
+than describing a new one.
 
 **R2 — Base files, one per heating system.** `[given; plan P5 "base file per heating system"]`
 A checked-in base energy-system file must exist for each `heating_system.system` value the
@@ -272,14 +283,15 @@ Which base file a request uses must be a total function of a stated set of inven
 that the answer is inspectable without running anything. Currently that set is
 `heating_system.system` plus whichever fields Q4 resolves (EMS presence, solar-thermal use).
 
-**R4 — The translator writes only overrides and group flags.** `[proposed; from mockup M1]`
-Beyond the base file's content, a generated energy-system file may differ only by (a) `config`
+**R4 — Parametrising writes only overrides and group flags.** `[proposed; from mockup M1]`
+Beyond the base file's content, a parametrised energy-system file may differ only by (a) `config`
 field overrides, (b) `constructor` arguments, and (c) `groups.<name>.enabled` flags. The
 translator must never author `inputs`, `sizing_sources`, or a component entry. Rationale: wiring
 and sizing sources are the base file's reviewed content; a translator that writes them is a
-second, untested system description.
+second, untested system description. This requirement is what gives R1's "select, don't
+generate" a testable edge — AC3 diffs the parametrised file against its base.
 
-**R5 — Apply a package's measures to the inventory before emitting.** `[proposed; extends spec.md §3]`
+**R5 — Apply a package's measures to the inventory before parametrising.** `[proposed; extends spec.md §3]`
 A `PackageDefinition`'s measures must be applied to a copy of the home inventory, and the
 resulting inventory is what the emitter reads. Envelope measures must reach the per-element
 `BuildingConfig` U-value and area fields — not, as in v1, be folded into the TABULA
@@ -581,9 +593,9 @@ Irish archetype. The contract must carry the supported set explicitly.
 |---|---|---|
 | AC1 | Every field of the amended `HomeInventoryInput` is classified in the contract and appears in the translation report of any request that carries it. | R7, A1, A2 |
 | AC2 | For each supported `heating_system.system` value, a checked-in base energy-system file exists, loads, resolves, builds and runs. | R1, R2, C4 |
-| AC3 | A generated energy-system file differs from its base file only in `config` values, `constructor` arguments and group flags — verified mechanically by diffing against the base. | R4 |
+| AC3 | A parametrised energy-system file differs from its base file only in `config` values, `constructor` arguments and group flags — verified mechanically by diffing against the base. | R4 |
 | AC4 | An inventory plus a package whose measures change the roof produces a file whose `building.config.roof_u_value_in_watt_per_m2_per_kelvin` carries the measure's value. | R5, A6, A7 |
-| AC5 | Translating and running the same inventory and package twice produces byte-identical energy-system files and realized records, and equal result payloads. | R10, G3 |
+| AC5 | Translating and running the same inventory and package twice produces byte-identical parametrised energy-system files and realized records, and equal result payloads. | R10, G3 |
 | AC6 | Re-executing a stored realized record reproduces the run bit-for-bit. | R10, UC5 |
 | AC7 | An `IE` + `MFH` inventory returns `refused` with an enumerated reason naming the offending field, before any simulation starts. | R11, A16, UC3 |
 | AC8 | Every `Kpis` and `Costs` field the amended contract keeps is produced by a finished calculation, and each is traceable to a named HiSim KPI or cost-engine output. | R8, R9, A12, A13, A14 |
@@ -839,7 +851,7 @@ time is paid once per start.
 
 *Options.* (a) **Files in, files out**: a mounted input directory holding the house
 configuration, a mounted output directory receiving the result document, the translation report,
-the emitted energy-system file and the realized record. Consequence: the natural fit for what
+the parametrised energy-system file and the realized record. Consequence: the natural fit for what
 HiSim already writes, and the emitted YAML and record survive as debuggable artifacts for free;
 the C# side manages two mounts per call. (b) **stdin/stdout JSON**: one document in, one
 document out, nothing mounted. Consequence: the simplest thing to call from C#, and every
@@ -917,7 +929,12 @@ identified by the hash of its own contents (`pkg_id`).
 **Refused** — a terminal calculation state meaning the input was well-formed but not simulable,
 as distinct from a validation error and from a failure.
 **Base file** — a checked-in, hand-authored energy-system file, one per supported heating system,
-which the translator specialises by writing overrides and flipping group flags.
+which the translator specialises by writing overrides and flipping group flags. The set of base
+files is the complete set of systems RenoVisor can simulate.
+**Parametrise** — to take a base file and fill in a request's values: `config` overrides,
+`constructor` arguments and `groups.<name>.enabled` flags, and nothing else (R4). Deliberately
+not "generate": no energy system is ever authored from a request, so every system that runs has
+been read by a person.
 **Translation report** — the per-request record of what happened to every field of the request:
 `used`, `approximated`, `defaulted`, `ignored` or `non_simulation`.
 **Realized record** — the concrete, re-executable copy of an energy system that a run writes back,

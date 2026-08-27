@@ -1,12 +1,15 @@
 # yaml-language-server: $schema=../../../hisim/energy_system_v3.schema.json
 # ---------------------------------------------------------------------------
-# MOCKUP — the energy-system file the RenoVisor translation layer must EMIT for
-# one home inventory. It is the external representation the requirements
-# document (roadmap/renovisor/requirements.md §6, UC2) is about, so it is a
-# requirements artifact, not a design sketch.
+# MOCKUP — the `HeatPump` base file AFTER PARAMETRISATION for one home
+# inventory. It is the external representation the requirements document
+# (roadmap/renovisor/requirements.md §6, UC2) is about, so it is a requirements
+# artifact, not a design sketch.
 #
-# It is the `HeatPump` base file with the overrides of one inventory applied and
-# the optional groups flipped. Everything in it is either
+# Read it as a diff against a checked-in base file, not as a document the
+# translator wrote. The translator selects the base file for the inventory's
+# heating system and fills in values; it never authors an energy system from a
+# request, so every system that runs has been reviewed by a person (R1, R4).
+# Everything in it is either
 #   [base]      part of the checked-in base file, identical for every inventory
 #               that chose HeatPump, or
 #   [override]  written by the translator from a named HomeInventoryInput field,

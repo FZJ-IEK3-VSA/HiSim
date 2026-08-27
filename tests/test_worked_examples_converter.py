@@ -61,10 +61,13 @@ def _excel_value(formula: str, values=None) -> float:
 
     converter = _converter()
     tokens = Tokenizer(formula).items
+    # The two helpers are exactly the unit under test: the converter's Excel arithmetic is
+    # what these cases pin, and it has no public entry point that stops before the file write.
+    # pylint: disable=protected-access
     expression = converter._arithmetic_expression(  # noqa: SLF001 — the unit under test
         tokens, values or {}, "test"
     )
-    return converter._evaluate_arithmetic(expression)  # noqa: SLF001 — the unit under test
+    return float(converter._evaluate_arithmetic(expression))  # noqa: SLF001 — the unit under test
 
 
 class TestExcelUnaryMinusPrecedence:

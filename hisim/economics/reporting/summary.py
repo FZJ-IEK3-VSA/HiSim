@@ -22,7 +22,6 @@ from hisim.economics.results import EvaluationMatrix, VariantComparison
 from hisim.economics.uncertainty import UncertainValue
 
 
-
 class ReportFileNames:
     """Names of the report files written next to the results.
 
@@ -81,6 +80,7 @@ def _band_str(band: Optional[UncertainValue], unit: str = "EUR") -> str:
 
 
 # ---------------------------------------------------------------------------- plausibility (B)
+
 
 @dataclass
 class PlausibilityCheck:
@@ -144,7 +144,9 @@ def _finding_detail(finding: PlausibilityFinding) -> str:
     return _CheckHints.BY_CHECK_ID.get(finding.check_id, "")
 
 
-def _render_finding(finding: PlausibilityFinding) -> PlausibilityCheck:
+# One return per check kind is the mapping this function exists to be; collapsing them into a
+# table would move the formatting decisions away from the kind they belong to.
+def _render_finding(finding: PlausibilityFinding) -> PlausibilityCheck:  # pylint: disable=too-many-return-statements
     """Formats one typed finding into its panel row (no arithmetic beyond rounding).
 
     Each check kind has its own idea of what "value" and "expected" mean — a reconciliation
@@ -236,6 +238,7 @@ def _degenerate_note(matrix: EvaluationMatrix) -> str:
 
 
 # ---------------------------------------------------------------------------- markdown (C)
+
 
 def build_cost_summary_markdown(
     matrix: EvaluationMatrix,

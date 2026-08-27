@@ -346,7 +346,6 @@ class TestStoredResultsRoundTrip:
         stored files could not reproduce the rendering, the CLI would be quietly reporting on a
         second evaluation rather than on the one that was stored.
         """
-        from hisim.economics.audit import build_input_audit
         from hisim.economics.exports import (
             write_cash_flow_timeline,
             write_lifecycle_costs_json,

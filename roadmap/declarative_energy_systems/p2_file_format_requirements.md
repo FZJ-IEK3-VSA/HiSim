@@ -1,6 +1,6 @@
 # P2 — Energy-system file format and executor — requirements
 
-**Status:** in review · **Date:** 2026-08-26 (Q8, Q-P2.4–Q-P2.6 decided; AC-P2.1 amended; RQ3 dropped)
+**Status:** in review · **Date:** 2026-08-27 (R2.5 dispatch rule added; 08-26: Q8, Q-P2.4–Q-P2.6 decided; AC-P2.1 amended; RQ3 dropped)
 **Author(s):** Noah Pflugradt (owner; `[given]`) · assistant (`[proposed]`, mockups)
 **Reviewers:** HiSim core team
 **Parent:** `roadmap/declarative_energy_systems/epic.md` (E1–E8 apply by reference) · **Plan:** `roadmap/declarative_energy_systems/plan.md` §P2 · **Depends on:** P1 accepted
@@ -63,6 +63,7 @@ Changes to the format are made as diffs on the mockups first, then reflected her
 - R2.2 `[proposed; v2 §3.3]` Item shapes: bare source name → the target's default connections for that source class; `{input, from: source.Output}` → one explicit wire; `{from, component_type?, tags, weight, dispatch?}` → aggregator feed (semantics of v2 §3.3d unchanged, incl. weight 999, `dispatch` back-channel, `(source, output)` uniqueness). The don't-mix rule of v2 §3.4 applies per (consumer, source) pair.
 - R2.3 `[proposed]` Unknown source/port, no defaults for a bare item, duplicate feed, mixed spelling → hard error naming consumer and source.
 - R2.4 `[proposed]` A component that feeds nothing is legal and reported as a warning.
+- R2.5 `[proposed 2026-08-27; from the implementation]` **Dispatch back-channel.** A participant the aggregator controls is written as a feed with a `dispatch` block on the *aggregator's* side; `dispatch: {target_input: <Input>}` makes the executor create the aggregator's derived output (`DispatchTo<source>_<Input>`) **and** wire it into the participant's input; `dispatch: {}` creates a recorded signal nobody reads. Nothing is written at the participant: an explicit `{input, from}` wire may never name a derived port (its name is not in the file the author reads). A channel with `DispatchRule.REQUIRED` rejects a feed without `dispatch`; a bare item can therefore never stand for a controlled participant, because class-side default feeds carry no dispatch target — every controlled participant is spelled out (E1). A participant on a channel whose rule is `FORBIDDEN` (production, uncontrolled consumption) carries the monitored-only weight 999; a real rank there is rejected. The mockups were corrected accordingly on 2026-08-27 (the battery's wire moved from the battery to the EMS feed; uncontrolled feeds to 999). **Known mismatch, left for P4 B2:** the EMS's class-side default feed for the occupancy still declares weight 1 (`controller_l2_energy_management_system.py`, `get_default_connections_from_utsp_occupancy`), so a bare `- occupancy` item under an EMS is rejected with EF-29 until that declaration is aligned — a legacy-path behaviour check is needed before changing it, because the legacy ranking loop sees the weight.
 
 ### R3 — Configuration `[given]`
 - R3.1 `[proposed; v2 decision 21]` `preset` names a class preset; `config` holds sparse overrides only.
@@ -141,6 +142,7 @@ Paths are `${var}/…` through the `PathResolver`; absolute paths in a file are 
 | AC-P2.12 | A reference containing `[*]` or a relative path in `inputs` or `sizing_sources` is rejected at load. | R4.8 |
 | AC-P2.15 | UC2's `weather`, `occupancy` and `building` build through their constructors; a wrong constructor name or argument fails at load listing the valid parameters; the realized record shows them as full `config` blocks; `dump(load())` preserves the constructor form for hand-written files. | R3.8, R1.4 |
 | AC-P2.14 | A file setting an enum-typed sizable field yields the enum member after load (`is` comparison), for every such field in the converted classes. | R3.7 |
+| AC-P2.16 | A PV + battery + EMS + meter file whose battery feed carries `dispatch: {target_input: LoadingPowerInput}` builds, wires `ems.DispatchTobattery_LoadingPowerInput -> battery.LoadingPowerInput`, runs one day and writes results; the same file with `dispatch: {}` is rejected for the unfed mandatory input, and with an explicit wire onto the derived port for naming a derived port. | R2.5, R2.2 |
 | AC-P2.13 | If Q8 is confirmed: every sized value in a realized record carries a provenance comment; stripping all comments and re-running yields the identical result (comments are not load-bearing). | R8.3 |
 
 ## 11. Open Questions and Decisions

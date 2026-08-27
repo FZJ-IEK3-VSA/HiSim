@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=../hisim/energy_system_v3.schema.json
+# The gas-boiler single-family household: the reference energy system of this directory.
+# It is the runnable, canonically written twin of the design reference
+# roadmap/declarative_energy_systems/energy_system_mockup_minimal.yaml; a test keeps the two
+# identical after canonicalisation, so an edit to either must be made to both.
+# Run it with:
+#   hisim energy-system run energy_systems/gas_boiler_household.energy_system.yaml \
+#       energy_systems/one_day_15min.simulation.yaml
+schema_version: 3
+name: Gas boiler household
+description: Single-family house with a condensing gas boiler, floor heating and grid electricity.
+components:
+  weather:
+    class: hisim.components.weather.Weather
+    preset: standard
+  occupancy:
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    preset: standard
+  building:
+    class: hisim.components.building.Building
+    preset: standard
+    inputs:
+      - weather
+      - occupancy
+      - hds
+  hds_controller:
+    class: hisim.components.heat_distribution_system.HeatDistributionController
+    preset: standard
+    inputs:
+      - weather
+      - building
+  hds:
+    class: hisim.components.heat_distribution_system.HeatDistribution
+    preset: standard
+    config:
+      position_hot_water_storage_in_system: NO_STORAGE_MASS_FLOW_FIX
+    inputs:
+      - building
+      - hds_controller
+      - input: WaterTemperatureInput
+        from: boiler.WaterOutputTemperatureSh
+  boiler:
+    class: hisim.components.generic_boiler.GenericBoiler
+    preset: condensing_gas
+    inputs:
+      - boiler_controller
+      - input: WaterInputTemperatureSh
+        from: hds.WaterTemperatureOutput
+  boiler_controller:
+    class: hisim.components.generic_boiler.GenericBoilerController
+    preset: modulating
+    inputs:
+      - weather
+      - hds_controller
+      - input: WaterTemperatureInputFromWaterStorage
+        from: hds.WaterTemperatureOutput
+  meter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    preset: standard
+    inputs:
+      - from: occupancy
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999

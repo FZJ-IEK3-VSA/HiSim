@@ -33,6 +33,14 @@ pyloadprofilegenerator
 portalocker
 pyhumps==3.8.0
 pydantic
+# Energy-system files (hisim/energy_system): the YAML read and write path
+PyYAML
+# Energy-system run records (hisim/energy_system/comments.py): write-only, for the provenance
+# comments of a realized record; the read path stays on PyYAML's safe loader
+ruamel.yaml
+# Energy-system schema (tests/test_energy_system_schema.py): validates the exported JSON Schema
+# and the mockups against it; HiSim itself never imports it at runtime
+jsonschema
 Pillow
 # RenoVisor translator (hisim/renovisor): REST result submission
 requests

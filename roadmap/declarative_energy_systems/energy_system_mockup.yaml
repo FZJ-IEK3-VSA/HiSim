@@ -176,9 +176,6 @@ groups:
       battery:
         class: hisim.components.advanced_battery_bslib.Battery
         preset: sized_to_pv                 # capacity law reads ONE pv_peak_power_in_watt
-        inputs:
-          - input: LoadingPowerInput        # the EMS dispatch signal for this battery
-            from: ems.BatteryDispatch       # (derived port name, v2 spec §4.6)
         # two PV systems provide pv_peak_power_in_watt -> ambiguous -> must be written (R4.3).
         # Without this line the executor errors:
         #   "pv_peak_power_in_watt needed by 'battery' is provided by pv_east, pv_south;
@@ -192,7 +189,7 @@ groups:
         inputs:                             # the aggregator's participants, with tags/weights (R2.3)
           - from: occupancy
             tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
-            weight: 1
+            weight: 999                     # measured, never ranked: the channel forbids dispatch
           - from: pv_south
             component_type: PV
             tags: [ELECTRICITY_PRODUCTION]
@@ -215,7 +212,7 @@ groups:
             component_type: BATTERY
             tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
             weight: 6
-            dispatch: {}                    # the back-channel is wired at the battery (its input)
+            dispatch: {target_input: LoadingPowerInput}   # back-channel: ems.DispatchTobattery_LoadingPowerInput -> battery.LoadingPowerInput
         # --- many-facts example -----------------------------------------------
         # The EMS class declares two MANY readers (shown by `hisim config describe`):
         #   reads pv_peak_power_in_watt          (many)  -> production band
@@ -241,7 +238,7 @@ groups:
     enabled: true
     components:
       heating_rod:
-        class: hisim.components.generic_heat_source.HeatSource
+        class: hisim.components.simple_heat_source.SimpleHeatSource
         preset: electric_backup             # maximal_thermal_power_in_watt AUTO <- heating_load_in_watt (share law)
         inputs:
           - heating_rod_controller
@@ -262,7 +259,7 @@ groups:
         inputs:
           - occupancy
       charging_station:
-        class: hisim.components.generic_ev_charger.EVCharger
+        class: hisim.components.controller_l1_generic_ev_charge.L1Controller
         preset: home_11kw
         inputs:
           - car

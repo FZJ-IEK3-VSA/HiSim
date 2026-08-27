@@ -2,12 +2,17 @@
 # clean
 
 from dataclasses import dataclass
-from typing import List, Union, Dict, cast, Optional
+from typing import ClassVar, List, Union, Dict, Tuple, cast, Optional
 import dataclasses as dc
 import hisim.loadtypes as lt
 from hisim import log
 from hisim.component import Component, ComponentInput, ComponentOutput
 from hisim.config import ConfigBase, DisplayConfig
+from hisim.config.channels import (
+    ChannelDeclarationError,
+    DynamicConnectionChannel,
+    ResolvedDynamicConnection,
+)
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -85,7 +90,26 @@ def tags_search_and_compare(
 
 class DynamicComponent(Component):
 
-    """Class for components with a dynamic number of inputs and outputs."""
+    """Class for components with a dynamic number of inputs and outputs.
+
+    A dynamic component is an *aggregator*: it grows one input per participant handed to it
+    rather than declaring a fixed port per source. Two ways of handing participants over live
+    side by side. A Python setup calls the imperative add-API below, which names the created
+    port after the participant and a running counter. A declarative energy-system file instead
+    produces resolved feeds, which :meth:`resolve_dynamic_connections` turns into ports named by
+    the format's derived templates. Both paths fill the same ``my_component_inputs`` and
+    ``my_component_outputs`` bookkeeping, so every tag-based runtime lookup behaves identically
+    on a component wired either way and only the port names differ.
+
+    A subclass that means to accept declarative feeds declares its accepted flows in
+    :attr:`CHANNELS`; one that leaves the tuple empty accepts none, and a file addressing a feed
+    at it is rejected with a message saying so rather than with a confusing tag mismatch.
+    """
+
+    #: The flows this aggregator understands, as class-level data. Empty on the base class:
+    #: declaring channels is how a subclass states that it can classify participants at all, and
+    #: a subclass that has not declared them yet keeps working through the imperative add-API.
+    CHANNELS: ClassVar[Tuple[DynamicConnectionChannel, ...]] = ()
 
     def __init__(
         self,
@@ -151,6 +175,157 @@ class DynamicComponent(Component):
             )
         )
         return myoutput
+
+    @classmethod
+    def get_channel(cls, key: str) -> DynamicConnectionChannel:
+        """Looks one of this aggregator's declared channels up by its key.
+
+        Simulation code is meant to ask for participants by channel key rather than by a
+        hard-coded tag list, so that the declaration is the single source of truth for both file
+        validation and simulation and the two cannot drift apart. This accessor is that lookup.
+
+        Args:
+            key: The stable channel identifier, for instance ``"production"``.
+
+        Returns:
+            The declared channel.
+
+        Raises:
+            ChannelDeclarationError: If this class declares no channel of that key. Only the
+                aggregator's own simulation code asks, always with a key from its own
+                declaration, so an unknown key is a defect of that class and never of a file.
+        """
+        for channel in cls.CHANNELS:
+            if channel.key == key:
+                return channel
+        raise ChannelDeclarationError(
+            f"{cls.get_full_classname()} declares no dynamic-connection channel '{key}'; "
+            f"its channels are {[channel.key for channel in cls.CHANNELS]}."
+        )
+
+    def get_channel_inputs(self, key: str) -> List[ComponentInput]:
+        """Returns the dynamic inputs whose tags place them on one declared channel.
+
+        The channel-key form of :meth:`get_dynamic_inputs`: it looks the tag set up in the
+        declaration instead of repeating it at the call site. The matching itself is unchanged —
+        an input belongs to the channel when it carries all of the channel's tags — so replacing
+        a hard-coded query by this call preserves behaviour by construction.
+
+        Args:
+            key: The stable channel identifier.
+
+        Returns:
+            The dynamic inputs on that channel, in creation order.
+        """
+        channel = self.get_channel(key)
+        return self.get_dynamic_inputs(tags=sorted(channel.tags, key=lambda tag: tag.name))
+
+    def resolve_dynamic_connections(self, connections: List[ResolvedDynamicConnection]) -> None:
+        """Creates the ports of the feeds an energy-system file addressed at this aggregator.
+
+        One input per resolved feed and one output per dispatch block, named by the format's
+        derived templates and registered through exactly the bookkeeping the imperative add-API
+        fills. No wire is made here: the wiring stage connects the ports afterwards, so that a
+        wire born from a feed passes through the same final checks as one an author wrote.
+
+        Args:
+            connections: The resolved feeds, already validated against this component's
+                channels and sorted deterministically by the resolver.
+        """
+        for connection in connections:
+            self.add_resolved_dynamic_input(connection)
+            if connection.dispatch is not None:
+                self.add_resolved_dispatch_output(connection)
+
+    def add_resolved_dynamic_input(self, connection: ResolvedDynamicConnection) -> ComponentInput:
+        """Creates the aggregator input of one resolved feed.
+
+        The port's name comes from the derived template and doubles as the attribute label the
+        bookkeeping finds it under, which removes the positional ``Input_<source>_<field>_<n>``
+        naming and with it a whole class of insertion-order bugs. Load type and unit come from
+        the matched channel rather than from the participant's port, because the channel is the
+        aggregator's declared reading of the flow — and the two were already checked to agree.
+
+        Args:
+            connection: The resolved feed to create the input for.
+
+        Returns:
+            The created input port.
+        """
+        label = connection.aggregator_input_name
+        created_input = ComponentInput(
+            self.component_name,
+            label,
+            connection.channel.load_type,
+            connection.channel.unit,
+            True,
+        )
+        self.inputs.append(created_input)
+        setattr(self, label, created_input)
+        self.my_component_inputs.append(
+            DynamicConnectionInput(
+                source_component_class=label,
+                source_component_field_name=connection.source_output,
+                source_load_type=connection.channel.load_type,
+                source_unit=connection.channel.unit,
+                source_tags=list(connection.tags),
+                source_weight=connection.weight,
+            )
+        )
+        log.trace(f"Resolved dynamic input {label} on {self.component_name}")
+        return created_input
+
+    def add_resolved_dispatch_output(self, connection: ResolvedDynamicConnection) -> ComponentOutput:
+        """Creates the dispatch output of one resolved feed.
+
+        The output carries the tags the channel dispatches with plus the participant's own
+        component type, and the feed's weight; together these are exactly what the tag-and-weight
+        runtime lookups search for, which is how an aggregator built from a file satisfies
+        pairing invariants such as "every ranked input needs a target output of the same weight".
+
+        Args:
+            connection: The resolved feed whose dispatch block to create.
+
+        Returns:
+            The created output port.
+
+        Raises:
+            ValueError: If the feed carries no dispatch block, which the resolver never allows.
+        """
+        if connection.dispatch is None:
+            raise ValueError(
+                f"The resolved connection {connection.describe()} carries no dispatch block, "
+                "so no dispatch output can be created for it."
+            )
+        label = connection.dispatch_output_name
+        assert label is not None  # nosec - a dispatch block always derives a name
+        created_output = ComponentOutput(
+            object_name=self.component_name,
+            field_name=label,
+            load_type=connection.channel.load_type,
+            unit=connection.channel.unit,
+            sankey_flow_direction=True,
+            output_description=(
+                f"Dispatch signal the aggregator sends to '{connection.source_name}' on the "
+                f"channel '{connection.channel.key}'."
+            ),
+            component_id=self.config.component_id,
+        )
+        self.outputs.append(created_output)
+        setattr(self, label, created_output)
+        self.my_component_outputs.append(
+            DynamicConnectionOutput(
+                source_component_label=label,
+                source_component_class=None,
+                source_output_field_name=label,
+                source_tags=list(connection.dispatch.tags),
+                source_load_type=connection.channel.load_type,
+                source_unit=connection.channel.unit,
+                source_weight=connection.weight,
+            )
+        )
+        log.trace(f"Resolved dispatch output {label} on {self.component_name}")
+        return created_output
 
     def add_component_input_and_connect(
         self,

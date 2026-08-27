@@ -32,7 +32,7 @@ P1 sizing kernel ──► P2 file format & executor ──► P3 recording & se
 
 ## P1 — Sizing kernel
 
-- [ ] Requirements document accepted (Q-P1.9 decided against `roadmap/declarative_energy_systems/preset_naming_supplement.md`; then rename `BuildingConfig.presets.german_single_family_home` → `standard`, pick the canonical PV preset)
+- [x] Requirements document accepted (Q-P1.9 decided against `roadmap/declarative_energy_systems/preset_naming_supplement.md`; then rename `BuildingConfig.presets.german_single_family_home` → `standard`, pick the canonical PV preset) *(done 2026-08-26: all P1 questions decided, requirements accepted)*
 - [x] Solution design: binding rule API, how a preset acquires its instance name (was Q-P1.1), introspection surface *(2026-08-25)*
 - [x] `FactScope`, adjacency, pre-seed removed; qualified-name lookup + `sources` mapping *(2026-08-25)*
 - [x] Uniqueness evaluated over the given set; error lists candidates, ready to paste *(2026-08-25)*
@@ -41,22 +41,22 @@ P1 sizing kernel ──► P2 file format & executor ──► P3 recording & se
 - [x] Introspection: fields, presets, sizable fields + facts read, facts provided (data, not CLI) *(2026-08-25)*
 - [x] Pilots (boiler, HDS, EMS) green on the new kernel; `tests/test_sizing_engine.py` rewritten *(2026-08-25)*
 - [x] This plan's §P1 checked off; the former plan and review agenda on `config_presets` deleted, `random_findings.md` moved here *(2026-08-25)*
-- [ ] PR body of #586 rewritten to the P1 scope; branch pushed
+- [x] PR body of #586 rewritten to the P1 scope; branch pushed *(2026-08-26)*
 
 ## P2 — File format & executor
 
 - [x] Requirements decisions taken 2026-08-26 (Q8 keep comments; nested CLI; `energy_systems/` alongside `system_setups/`; R3.8 accepted; AC-P2.1 amended; RQ3 dropped) — document acceptance pending review
-- [ ] Convert UC1's classes to presets/constructors: Weather (`preset_standard` + `for_location`), UtspLpgConnector (`preset_standard` + `for_household`), GenericBoilerController, ElectricityMeter
-- [ ] Solution design against the three mockups (they are the fixtures)
-- [ ] Schema v3 + static validation (`hisim/scenario_v2` → v3), duplicate-key loader for YAML and JSON
-- [ ] Consumer-side `inputs` (bare / explicit wire / aggregator feed) replaces grouped-by-source connections
-- [ ] Groups: parse, "off" rule, uniqueness over enabled set
-- [ ] Executor: resolve (P1 API) → construct → connect; error catalogue with both ends named
-- [ ] Realized record (presets expanded, `AUTO` → numbers, disabled groups absent) + audit companion; YAML comments per A4 if Q8 confirms
-- [ ] Identity test over all mockups and groups
-- [ ] JSON Schema export; `describe <class>`, `facts <energy_system>` CLI
-- [ ] `${var}` path resolver carried over from `json_v2`
-- [ ] C10 — v3 fixtures spell UTSP `JsonReference`s as `Name`/`Guid`/`StrVal`; one local-LPG run verifies (own commit, before/after)
+- [x] Convert UC1's classes to presets/constructors: Weather, UtspLpgConnector, GenericBoilerController, ElectricityMeter, HeatDistributionController (PR-3) *(2026-08-26)*
+- [x] Solution design against the three mockups (they are the fixtures) *(`p2_implementation_spec.md` + PR amendments, 2026-08-26)*
+- [x] Schema v3 model + YAML-only loader with duplicate-key detection + structural validation (`hisim/energy_system/`, PR-1) *(2026-08-26)*
+- [x] Consumer-side `inputs` (bare / explicit wire / aggregator feed) replaces grouped-by-source connections (PR-1/PR-3) *(2026-08-26)*
+- [x] Groups: parse, "off" rule, uniqueness over enabled set; class-bound validation, config decoding, sizing bridge to the kernel (PR-2) *(2026-08-26)*
+- [x] Executor: resolve (P1 API) → construct → connect; error catalogue with both ends named; UC1 runs end to end (PR-3) *(2026-08-26)*
+- [x] Realized record (presets expanded, `AUTO` → numbers, disabled groups absent) + audit companion + wire log; provenance as YAML comments (ruamel, write-only) (PR-4) *(2026-08-26)*
+- [x] Identity test over all mockups and groups (PR-2 on the model, PR-4 on the record) *(2026-08-26)*
+- [x] JSON Schema export; `describe <class>`, `facts <energy_system>` CLI *(PR-5: `hisim energy-system describe|facts|schema|run`, 2026-08-26)*
+- [x] `${var}` path resolver carried over from `json_v2` *(PR-1, 2026-08-26)*
+- [x] C10 — v3 fixtures spell UTSP `JsonReference`s as `Name`/`Guid`/`StrVal`; one local-LPG run verifies (own commit, before/after) *(PR-6: the record round-trips the references with their real spelling; a live UTSP run needs `UTSP_URL`/`UTSP_API_KEY`, left to P5, 2026-08-26)*
 
 ## P3 — Recording & setup migration (outline; document later)
 

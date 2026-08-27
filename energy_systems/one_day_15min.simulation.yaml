@@ -1,0 +1,10 @@
+# One January day at a quarter-hour resolution: long enough for every component to run its own
+# state machine through a full heating day, short enough to finish in seconds. This is the pair to
+# reach for when trying an energy-system file out or when a test needs a real run; for a full year
+# use 2021_minutely.simulation.yaml beside it.
+start_date: "2021-01-01T00:00:00"
+end_date: "2021-01-02T00:00:00"
+seconds_per_timestep: 900
+post_processing_options:
+  - EXPORT_TO_CSV
+logging_level: 3

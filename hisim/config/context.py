@@ -52,6 +52,8 @@ class SizingContext:
     number_of_residents: Optional[float] = None
     maximal_thermal_power_in_watt: Optional[float] = None
     minimal_thermal_power_in_watt: Optional[float] = None
+    set_heating_temperature_in_celsius: Optional[float] = None
+    set_cooling_temperature_in_celsius: Optional[float] = None
 
     def with_facts(self, **facts: Any) -> "SizingContext":
         """Returns a copy of this context with the given facts added or replaced.
@@ -88,6 +90,8 @@ class SizingContext:
             heating_reference_temperature_in_celsius=building_config.heating_reference_temperature_in_celsius,
             number_of_apartments=information.number_of_apartments,
             conditioned_floor_area_in_m2=information.scaled_conditioned_floor_area_in_m2,
+            set_heating_temperature_in_celsius=building_config.set_heating_temperature_in_celsius,
+            set_cooling_temperature_in_celsius=building_config.set_cooling_temperature_in_celsius,
         )
 
 
@@ -112,3 +116,5 @@ class Size:
     NUMBER_OF_RESIDENTS: ClassVar[_FactTerm] = _FactTerm("number_of_residents")
     MAXIMAL_THERMAL_POWER_IN_WATT: ClassVar[_FactTerm] = _FactTerm("maximal_thermal_power_in_watt")
     MINIMAL_THERMAL_POWER_IN_WATT: ClassVar[_FactTerm] = _FactTerm("minimal_thermal_power_in_watt")
+    SET_HEATING_TEMPERATURE_IN_CELSIUS: ClassVar[_FactTerm] = _FactTerm("set_heating_temperature_in_celsius")
+    SET_COOLING_TEMPERATURE_IN_CELSIUS: ClassVar[_FactTerm] = _FactTerm("set_cooling_temperature_in_celsius")

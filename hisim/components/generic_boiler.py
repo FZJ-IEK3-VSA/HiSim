@@ -39,6 +39,7 @@ from hisim.config import (
     FactContribution,
     Self,
     Sizable,
+    Size,
     SizingContext,
     SizingLaw,
     concrete,
@@ -1016,16 +1017,51 @@ class GenericBoilerControllerConfig(ConfigBase):
         return GenericBoilerController.get_full_classname()
 
     component_id: ComponentID
-    is_modulating: bool
-    set_heating_threshold_outside_temperature_in_celsius: Optional[float]
-    minimal_thermal_power_in_watt: float
-    maximal_thermal_power_in_watt: float
-    set_temperature_difference_for_full_power: float
-    minimum_runtime_in_seconds: float
-    minimum_resting_time_in_seconds: float
-    with_domestic_hot_water_preparation: bool
-    secondary_mode: Optional[bool]  # If used as secondary heat generator for DHW in hybrid mode
-    hysteresis_water_temperature_offset: float
+    #: Whether the controller modulates the burner continuously or switches it on and off.
+    is_modulating: bool = True
+    #: Outside temperature above which the controller stops heating at all.
+    set_heating_threshold_outside_temperature_in_celsius: Optional[float] = 16.0
+    #: Lower end of the boiler's power band; copied from the boiler this controller regulates.
+    minimal_thermal_power_in_watt: Sizable[float] = sized_field(rule=Size.MINIMAL_THERMAL_POWER_IN_WATT)
+    #: Upper end of the boiler's power band; copied from the boiler this controller regulates.
+    maximal_thermal_power_in_watt: Sizable[float] = sized_field(rule=Size.MAXIMAL_THERMAL_POWER_IN_WATT)
+    set_temperature_difference_for_full_power: float = 5.0
+    minimum_runtime_in_seconds: float = 1800
+    minimum_resting_time_in_seconds: float = 1800
+    with_domestic_hot_water_preparation: bool = False
+    #: If used as secondary heat generator for DHW in hybrid mode.
+    secondary_mode: Optional[bool] = False
+    hysteresis_water_temperature_offset: float = 10.0
+
+    @preset
+    @classmethod
+    def preset_modulating(cls, name: str) -> "GenericBoilerControllerConfig":
+        """The continuously modulating control law, for a gas, oil or hydrogen boiler.
+
+        A modulating burner follows the heat demand within its power band instead of cycling,
+        which is what every condensing gas and oil boiler in this repository does. The power
+        band itself is not part of the preset: it is copied from the boiler this controller
+        regulates, so the two can never drift apart.
+        """
+        return cls(component_id=ComponentID(name=name), is_modulating=True)
+
+    @preset
+    @classmethod
+    def preset_on_off(cls, name: str) -> "GenericBoilerControllerConfig":
+        """The switching control law, for a burner that runs at one power or not at all.
+
+        The minimum runtime and resting time are what make a switching burner tolerable for the
+        device, and they differ per fuel: the values here are the ones the repository uses for a
+        generic on/off boiler, while a pellet boiler wants 30 and 15 minutes and a wood chip
+        boiler 60 and 30. Those are field overrides on this preset rather than presets of their
+        own, because the fuel is not a second control law — it only moves two numbers.
+        """
+        return cls(
+            component_id=ComponentID(name=name),
+            is_modulating=False,
+            minimum_runtime_in_seconds=0,
+            minimum_resting_time_in_seconds=0,
+        )
 
     @classmethod
     def get_default_modulating_generic_boiler_controller_config(

@@ -12,6 +12,7 @@ from pydantic import TypeAdapter
 from dotenv import load_dotenv
 
 try:
+    from hisim.energy_system.executor import SimulationParametersReader, run_energy_system
     from hisim.json_executor import setup_components_and_connections
     from hisim.postprocessingoptions import PostProcessingOptions
     import hisim.simulator as sim
@@ -35,6 +36,29 @@ __authors__: str = "Valentin Janser"
 __credits__: list[str] = ["Noah Pflugradt", "Katharina Rieck"]
 __maintainer__: str = "Valentin Janser"
 __email__: str = "v.janser@fz-juelich.de"
+
+
+class EnergySystemMode:
+    """The file names that select the declarative energy-system mode of this entry point.
+
+    HiSim's command line dispatches on the first argument's suffix and on nothing else, so the
+    third mode is defined by the two suffixes below and by no flag. The compound suffix is what
+    makes the dispatch unambiguous: a plain ``.yaml`` first argument stays unclaimed, because the
+    simulation-parameters files carry that suffix too and one of them handed over by mistake
+    should be reported as such rather than parsed as a household.
+
+    The accepted parameter suffixes are taken from the reader that will actually read the file,
+    so the check here and the parse there can never disagree about what is readable.
+    """
+
+    #: Suffixes of an energy-system file. A ``.json`` spelling is deliberately absent: this
+    #: format is YAML, and the ``.json`` first argument belongs to the older scenario mode.
+    SUFFIXES: tuple[str, ...] = (".energy_system.yaml", ".energy_system.yml")
+
+    #: Suffixes a simulation-parameters file may carry in this mode.
+    PARAMETER_SUFFIXES: tuple[str, ...] = (
+        SimulationParametersReader.YAML_SUFFIXES + (SimulationParametersReader.JSON_SUFFIX,)
+    )
 
 
 def is_hisim_root(path: Path) -> bool:
@@ -121,19 +145,25 @@ def initialize_from_python(
             sim_params_data = load_json_file(my_simulation_parameters)
             sim_params_data["start_date"] = datetime.fromisoformat(sim_params_data["start_date"])
             sim_params_data["end_date"] = datetime.fromisoformat(sim_params_data["end_date"])
-            sim_params_data["post_processing_options"] = [PostProcessingOptions[option] for option in sim_params_data.get("post_processing_options", [])]
+            sim_params_data["post_processing_options"] = [
+                PostProcessingOptions[option]
+                for option in sim_params_data.get("post_processing_options", [])
+            ]
             sim_params = SimulationParameters(**sim_params_data)
         elif isinstance(my_simulation_parameters, SimulationParameters):
             sim_params = my_simulation_parameters
         else:
             raise TypeError(
-                f"Type for simulation parameter argument {type(my_simulation_parameters)} either not recognized or not implemented yet. "
+                f"Type for simulation parameter argument {type(my_simulation_parameters)} "
+                "either not recognized or not implemented yet. "
                 "Should be string or SimulationParamters object."
             )
     else:
         sim_params = None
 
-    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{get_description_from_py(path_obj)}")
+    SingletonSimRepository().set_entry(
+        key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{get_description_from_py(path_obj)}"
+    )
 
     # Make setup function executable
     targetmodule = importlib.import_module(module_filename)
@@ -217,7 +247,9 @@ def initialize_from_json(
 
     # Load JSON files
     scenario_data = load_json_file(scenario)
-    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}")
+    SingletonSimRepository().set_entry(
+        key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}"
+    )
     # Missing in the following data: result_directory, surplus_control, cache_dir_path, multiple_buildings
     # -> Result Directory is set in prepare_simulation_directory function, called by run_all_timesteps
     # -> Cache Dir Path is filled by default in SimulationParameters
@@ -226,7 +258,10 @@ def initialize_from_json(
     sim_params_data["multiple_buildings"] = scenario_data.get("multiple_buildings", False)
     sim_params_data["start_date"] = datetime.fromisoformat(sim_params_data["start_date"])
     sim_params_data["end_date"] = datetime.fromisoformat(sim_params_data["end_date"])
-    sim_params_data["post_processing_options"] = [PostProcessingOptions[option] for option in sim_params_data.get("post_processing_options", [])]
+    sim_params_data["post_processing_options"] = [
+        PostProcessingOptions[option]
+        for option in sim_params_data.get("post_processing_options", [])
+    ]
     sim_params = SimulationParameters(**sim_params_data)
 
     my_sim = _build_simulator_from_scenario(scenario_data, path_to_module, sim_params)
@@ -266,7 +301,8 @@ def _build_simulator_from_scenario(
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=str(module_dir),
         module_filename=module_filename,
-        setup_function="setup_function",  # In JSON mode we do not use a setup function; but must not be None for post-processing
+        # In JSON mode we do not use a setup function; but it must not be None for post-processing
+        setup_function="setup_function",
         my_module_config=None,
         my_simulation_parameters=sim_params,
     )
@@ -299,7 +335,9 @@ def initialize_from_json_with_parameters(
         The initialized ``Simulator`` with its component graph wired.
     """
     scenario_data = load_json_file(scenario)
-    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}")
+    SingletonSimRepository().set_entry(
+        key=SingletonDictKeyEnum.DESCRIPTION, entry=f"{scenario_data.get('description', '')}"
+    )
     my_simulation_parameters.multiple_buildings = scenario_data.get("multiple_buildings", False)
     my_simulation_parameters.log_connections = True  # For easy post-processing (and debugging)
     return _build_simulator_from_scenario(scenario_data, scenario, my_simulation_parameters)
@@ -366,7 +404,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "inputs",
         nargs="+",
-        help=("JSON mode:\n" "  <scenario_params.json> <simulation_params.json> [scenario_delta.json]\n\n" "Legacy Python mode:\n" "  <module.py> [module_config]"),
+        help=(
+            "Energy-system mode:\n"
+            "  <household.energy_system.yaml> <simulation_params.{yaml,json}>\n\n"
+            "JSON mode:\n"
+            "  <scenario_params.json> <simulation_params.json> [scenario_delta.json]\n\n"
+            "Legacy Python mode:\n"
+            "  <module.py> [module_config]"
+        ),
     )
 
     return parser.parse_args()
@@ -394,6 +439,11 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
             - ``simulation``: Path to the simulation parameters JSON file.
             - ``delta``: Path to the optional delta JSON file, or ``None``.
 
+        For ``"energy_system"`` mode, the dictionary contains:
+            - ``energy_system``: Path to the ``*.energy_system.yaml`` file.
+            - ``simulation``: Path to the ``*.simulation.yaml`` or ``*.simulation.json``
+              file holding the period, the resolution and the post-processing options.
+
     Raises:
         ValueError: If the arguments do not match a supported execution mode,
             if the required number of arguments is not provided, if too many
@@ -403,10 +453,29 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
 
     inputs = args.inputs
 
+    if inputs[0].endswith(EnergySystemMode.SUFFIXES):
+        if len(inputs) != 2:
+            raise ValueError("The energy-system mode takes exactly 2 files:\n"
+                             "  <household.energy_system.yaml> <simulation_params.yaml|json>")
+        energy_system, simulation = inputs
+        if not simulation.endswith(EnergySystemMode.PARAMETER_SUFFIXES):
+            raise ValueError(
+                "Invalid simulation-parameters file in energy-system mode (must end in "
+                f"{' or '.join(EnergySystemMode.PARAMETER_SUFFIXES)}): {simulation}")
+        for f in inputs:
+            if not os.path.isfile(f):
+                raise FileNotFoundError(f"File not found: {f}")
+
+        return {
+            "mode": "energy_system",
+            "energy_system": energy_system,
+            "simulation": simulation,
+        }
+
     if inputs[0].endswith(".py"):
         if len(inputs) > 3:
             raise ValueError("The legancy Python mode accepts at most 3 arguments:\n"
-                            "  <module.py> <module_config.json> <simulation_params.json>")
+                             "  <module.py> <module_config.json> <simulation_params.json>")
 
         module_file = inputs[0]
         module_config = inputs[1] if len(inputs) >= 2 else None
@@ -444,7 +513,9 @@ def validate_args(args: argparse.Namespace) -> dict[str, Optional[str]]:
         }
 
     raise ValueError("First argument must be either:\n"
-                     "  - a Python file (*.py) for legacy Python mode, or\n" "  - a JSON file (*.json) for JSON mode")
+                     f"  - an energy-system file (*{EnergySystemMode.SUFFIXES[0]}) for energy-system mode,\n"
+                     "  - a Python file (*.py) for legacy Python mode, or\n"
+                     "  - a JSON file (*.json) for JSON mode")
 
 
 def get_required_config_value(config: dict[str, Optional[str]], key: str) -> str:
@@ -475,6 +546,13 @@ def main_cli() -> None:
     # Suppress warnings (e.g., from pvlib)
     warnings.filterwarnings("ignore")
 
+    if config["mode"] == "energy_system":
+        energy_system = get_required_config_value(config, "energy_system")
+        simulation = get_required_config_value(config, "simulation")
+        print(f"Running energy system {energy_system} with simulation parameters {simulation}")
+        run_energy_system(energy_system, simulation)
+        return
+
     my_sim: sim.Simulator
     ptm: str
     # Dispatching logic
@@ -491,7 +569,10 @@ def main_cli() -> None:
     elif config["mode"] == "json":
         scenario = get_required_config_value(config, "scenario")
         simulation = get_required_config_value(config, "simulation")
-        print(f"Running simulation of scenario {scenario} with simulation parameters {simulation}" + (f" and delta {config['delta']}" if config["delta"] else ""))
+        print(
+            f"Running simulation of scenario {scenario} with simulation parameters {simulation}"
+            + (f" and delta {config['delta']}" if config["delta"] else "")
+        )
         my_sim = initialize_from_json(
             scenario=scenario,
             simulation_parameters=simulation,

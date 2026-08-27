@@ -1,0 +1,16 @@
+# The whole of 2021 at a one-minute resolution with the standard plots: the parameters a
+# production run of a household uses. It is the YAML twin of
+# system_setups/2021_minutely_plots.simulation.json, without that file's
+# OPEN_DIRECTORY_IN_EXPLORER option, which opens a file browser and has no meaning on a server or
+# in a test.
+start_date: "2021-01-01T00:00:00"
+end_date: "2022-01-01T00:00:00"
+seconds_per_timestep: 60
+post_processing_options:
+  - PLOT_LINE
+  - PLOT_CARPET
+  - PLOT_SINGLE_DAYS
+  - PLOT_MONTHLY_BAR_CHARTS
+logging_level: 3
+skip_finished_results: false
+log_connections: false

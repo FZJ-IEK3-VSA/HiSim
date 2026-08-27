@@ -8,9 +8,10 @@ moved verbatim out of ``hisim/component.py``:
     2. class ConfigBase - the base class of every component configuration dataclass.
     3. class DisplayConfig - how a component is presented in postprocessing.
 
-The module imports nothing from the rest of HiSim, which is what lets the sizing
-machinery in this package depend on ``ConfigBase`` without closing an import cycle
-through ``hisim/component.py``.
+The module imports nothing from outside the ``hisim.config`` package, which is what lets
+the sizing machinery be reachable from ``ConfigBase`` (``resolve``/``auto_fields``
+delegate to :mod:`hisim.config.sizing`) without closing an import cycle through
+``hisim/component.py``.
 """
 
 # clean
@@ -20,9 +21,38 @@ from __future__ import annotations
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, TypeVar
 
 from dataclasses_json import dataclass_json
+
+# Imported from the submodules rather than through the package, so that this module
+# stays importable while ``hisim/config/__init__.py`` is still executing its own first
+# line. The aliases keep the module-level functions reachable from the identically named
+# ``ConfigBase`` methods that delegate to them.
+from hisim.config.context import SizingContext
+from hisim.config.presets import check_builder_declarations
+from hisim.config.sizing import (
+    auto_fields as sizing_auto_fields,
+    resolve_config as sizing_resolve_config,
+)
+
+
+def _field_names_under_construction(config_class: type) -> List[str]:
+    """Names that will become dataclass fields of a class whose body has just executed.
+
+    ``dataclasses.fields`` cannot be used yet — the ``@dataclass`` decorator has not run
+    when ``__init_subclass__`` fires — so the names are read from the class's own
+    annotations plus the fields its bases already contributed. ``ClassVar`` annotations are
+    skipped because they never become fields; they are recognised textually, since with
+    postponed evaluation an annotation is a string and resolving it here would import every
+    module a config's annotations mention.
+    """
+    inherited = list(getattr(config_class, "__dataclass_fields__", {}))
+    own = config_class.__dict__.get("__annotations__", {})
+    declared = [
+        name for name, annotation in own.items() if not str(annotation).replace("typing.", "").startswith("ClassVar")
+    ]
+    return inherited + declared
 
 
 @dataclass_json
@@ -112,6 +142,11 @@ class ComponentID:
         return self.building if self.building is not None else self.DEFAULT_BUILDING_LABEL
 
 
+#: The concrete configuration class ``resolve`` is called on, so the copy it returns keeps
+#: that class for the type checker instead of widening to the base.
+ConfigBaseT = TypeVar("ConfigBaseT", bound="ConfigBase")
+
+
 @dataclass
 class ConfigBase:
     """Base class for all configurations.
@@ -128,6 +163,33 @@ class ConfigBase:
     """
 
     component_id: ComponentID
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Validates the named builders a config class declares, before it is a dataclass.
+
+        Runs while the subclass object is created, which is *before* its ``@dataclass``
+        decorator processes the annotations — the earliest moment at which both the
+        decorated ``@preset``/``@constructor`` methods and the field names are visible.
+        Checking here is what turns a builder name that shadows a field into an immediate,
+        located error instead of a dataclass silently adopting the classmethod as that
+        field's default value.
+        """
+        super().__init_subclass__(**kwargs)
+        check_builder_declarations(cls, _field_names_under_construction(cls))
+
+    #: The sizing facts this config class contributes to the scenario-wide fact pool
+    #: (resolved engine-side before components are constructed). Empty for the vast majority of
+    #: config classes; a class that *is* a fact source — the building, a boiler whose
+    #: controller sizes from its power band — overrides it with a tuple of
+    #: :class:`~hisim.config.engine.FactContribution` declarations, usually assigned
+    #: right below the class so the compute functions can be written as plain module
+    #: functions. Declared here so that every config class has the attribute and the
+    #: engine's contract is visible from the base class; the engine reads it by name via
+    #: ``FactContribution.CLASS_ATTRIBUTE``. The element type stays ``Any`` deliberately: naming
+    #: ``FactContribution`` here would either invert the package layering (the base
+    #: classes importing the engine) or leave an unresolvable forward reference in an
+    #: annotation that ``dataclasses_json`` evaluates from every subclass's module.
+    SIZING_CONTRIBUTIONS: ClassVar[Tuple[Any, ...]] = ()
 
     if typing.TYPE_CHECKING:
         # Historically ConfigBase inherited dataclass_wizard.JSONWizard, whose missing type
@@ -189,6 +251,28 @@ class ConfigBase:
         rather than an AttributeError).
         """
         return dc.asdict(self)
+
+    def resolve(self: ConfigBaseT, ctx: SizingContext) -> ConfigBaseT:
+        """Returns a copy in which every AUTO field is computed by its declared law.
+
+        This is the sizing entry point on every config:
+        idempotent no-op (still returning a fresh copy) when sizable fields exist but none
+        currently says AUTO, a ``NothingToSizeError`` when the class declares no sizable
+        field at all, and a hard error naming field and law when a law cannot be
+        evaluated against the given context. The returned copy carries its per-field
+        provenance as the ``sizing_record`` attribute. The copy has the caller's concrete
+        class, so ``BoilerConfig.preset_x(...).resolve(ctx)`` is a ``BoilerConfig`` to the
+        type checker as well as at run time.
+        """
+        return sizing_resolve_config(self, ctx)
+
+    def auto_fields(self) -> tuple:
+        """Names the fields of this config that still carry the AUTO sentinel.
+
+        Empty for a fully concrete config. ``Component.__init__`` uses this to reject
+        configs that still require sizing before they can reach a running simulation.
+        """
+        return sizing_auto_fields(self)
 
     def get_string_dict(self) -> List[str]:
         """Turns the config into a str list for the report."""

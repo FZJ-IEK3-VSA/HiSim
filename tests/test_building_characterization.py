@@ -28,11 +28,12 @@ What is covered:
   maximum thermal demand), so the config-override branch of every ``set_*`` method and of
   the scaling/apartment helpers is inside the net as well.
 
-The config used for the sweep is built field by field instead of through
-``BuildingConfig.get_default_german_single_family_home()``. The harness must survive the
-config-presets redesign that follows the cleanup and removes that factory: a harness that
-has to be edited mid-refactor proves nothing, because the edit itself could hide the change
-it is meant to catch.
+The config used for the sweep is built field by field instead of through the named
+default. The harness had to survive the config-presets redesign that followed the cleanup
+and replaced ``get_default_german_single_family_home`` with
+``BuildingConfig.preset_standard("Building")``: a harness that has to be edited
+mid-refactor proves nothing, because the edit itself could hide the change it is meant to
+catch -- and this one was not edited: the 3006 golden assertions did not move.
 
 Speed: the production class re-reads the 3281-row housing CSV on every instantiation
 (caching it is a phase-3 concern, and this harness must not touch production code). A

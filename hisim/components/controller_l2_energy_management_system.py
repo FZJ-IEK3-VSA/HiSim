@@ -19,7 +19,7 @@ from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import ComponentInput, ComponentOutput
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, preset
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
@@ -75,17 +75,12 @@ class EMSConfig(ConfigBase):
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float]
 
+    @preset
     @classmethod
-    def get_default_config_ems(
-        cls,
-        name: str = "L2EMSElectricityController",
-        component_id: Optional[ComponentID] = None,
-    ) -> "EMSConfig":
-        """Default Config for Energy Management System."""
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        config = EMSConfig(
-            component_id=component_id,
+    def preset_optimize_own_consumption(cls, name: str) -> "EMSConfig":
+        """The surplus controller that maximises the building's own PV consumption."""
+        return cls(
+            component_id=ComponentID(name=name),
             strategy="optimize_own_consumption",
             limit_to_shave=0,
             building_indoor_temperature_offset_value=2,
@@ -98,7 +93,6 @@ class EMSConfig(ConfigBase):
             maintenance_costs_in_euro_per_year=None,
             subsidy_as_percentage_of_investment_costs=None,
         )
-        return config
 
 
 class EMSState:

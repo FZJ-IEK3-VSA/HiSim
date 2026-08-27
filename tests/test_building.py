@@ -72,7 +72,7 @@ def test_building() -> None:
     log.profile(f"T3: {t_four - t_three}")
 
     # Set Residence
-    my_residence_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_residence_config = building.BuildingConfig.preset_standard("Building")
 
     my_residence = building.Building(
         config=my_residence_config,

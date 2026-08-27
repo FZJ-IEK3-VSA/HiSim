@@ -104,7 +104,7 @@ The seed context (`SizingContext.for_building(...)` in Python setups) is a provi
 
 The pellet preset becomes `minimal_thermal_power_in_watt = Self.MAXIMAL_THERMAL_POWER_IN_WATT * (1 / 12)`; the PV class law reads `Self.SHARE_OF_MAXIMUM_PV_POTENTIAL` (a plain field), which closes the B6 trap without the per-preset law builder.
 
-### 3.4 Typed presets without names (Q-P1.5, R3.5, Q-P1.6)
+### 3.4 Typed presets without names (Q-P1.5, R3.5, Q-P1.6) `[superseded 2026-08-26 — see "Amendments (decorators, 2026-08-26)"]`
 
 ```python
 class GenericBoilerPresets(Presets["GenericBoilerConfig"]):
@@ -171,8 +171,8 @@ class SizingLaw:  evaluate(self, ctx: SizingContext, own: OwnFields) -> Any   # 
 class Self:       <FIELD>: _SelfTerm                                          # new, generated per config? no — see §13 DQ1
 def Many(term: _FactTerm) -> _ManyTerm                                        # new
 def sized_field(*, rule, value_type=None, note: str | None = None, **kw)      # changed: note
-class Presets(Generic[ConfigT]):  names() / canonical / __iter__ / notes()    # new (replaces Catalog)
-class Preset(Generic[ConfigT]):   __call__(name: str) -> ConfigT; note        # new
+class Presets(Generic[ConfigT]):  names() / canonical / __iter__ / notes()    # [superseded 2026-08-26]
+class Preset(Generic[ConfigT]):   __call__(name: str) -> ConfigT; note        # [superseded 2026-08-26]
 def preset_provenance(config) -> str | None                                   # unchanged
 def describe_config(cls) -> ConfigDescription                                 # new
 ```
@@ -270,7 +270,7 @@ Deleted: `FactScope`, `Catalog`, `OverrideRecord`, `adjacency`/`preseeded_facts`
 
 ## 11. Risks and unknowns
 
-- **R-1 Typing mechanism.** Descriptor attributes are the standard way to get `attr-defined` errors, but `Preset[ConfigT]` inside a `Presets["GenericBoilerConfig"]` forward reference must type-check under the repo's `mypy.ini`. Trigger: mypy reports `Any` or rejects the subclass. Mitigation: 30-line prototype as the first commit of PR-B; fallback is a `Literal`-typed `get()` (§4).
+- **R-1 Typing mechanism** `[resolved 2026-08-25]`. Prototyped (60 lines, `Preset(Generic[ConfigT])` with `__set_name__`/`__call__`, `Presets(Generic[ConfigT])` collecting attributes in `__init_subclass__`, `presets: ClassVar[Type["BoilerPresets"]]` assigned after the subclass) and checked with the repo's `mypy.ini` (mypy 2.3.0): a misspelled preset is `error: "type[BoilerPresets]" has no attribute "condensing_gaz" [attr-defined]`, a wrong builder argument is `[arg-type]` with the expected `str`, a correct call is typed as the config class; names, canonical, notes and provenance work at run time. No plugin, no stubs. The `Literal` fallback is not needed.
 - **R-2 Field ordering regressions.** `resolve_config` moves from declaration order to dependency order; a per-preset law that today relies on declaration order silently changes. Trigger: pilot golden diff. Mitigation: T-1 + I-4 test with reversed declaration order.
 - **R-3 `own` view leaks unresolved values.** A law reading an `AUTO` sibling before it is resolved must be impossible by construction (ordering), not by check. Mitigation: `OwnFields.__getattr__` raises on an unresolved `AUTO` field (defensive, covered by T-14).
 - **R-4 Seed as provider surprises setups** that both seed and pass a Building. Trigger: E-02 in a converted setup. Mitigation: the message names `<seed>`; the plan's P3 recorder never seeds.
@@ -307,3 +307,96 @@ Deleted: `FactScope`, `Catalog`, `OverrideRecord`, `adjacency`/`preseeded_facts`
 *Context.* `SizingContext` is a frozen dataclass shared across all consumers of a sweep; `own` is per config. Threading it through `evaluate(ctx, own)` changes the law protocol (all `_Law` subclasses, function laws receive it as a second lambda argument — existing pilot lambdas take one argument). A `dataclasses.replace(ctx, own=view)` per config keeps the one-argument lambdas but puts per-config state into a shared-looking object.
 *Options.* (a) `evaluate(ctx, own)`; function laws declared with `reads=` keep `lambda ctx: …` and get `own` only if they declare `fields=(…)` (the resolver inspects the declaration, not the signature). (b) `ctx.own` per config via `replace` — no protocol change; a law reading `ctx.own.x` on a context that has none fails at runtime.
 *Recommendation.* (a); the declaration-driven variant keeps existing lambdas untouched and makes sibling reads visible in `describe_config`.
+
+## Amendments (PR-A, 2026-08-25)
+
+Recorded while implementing §10 item 1; the code follows these, not the original text.
+
+- **§13 DQ1** `[decided 2026-08-25]` `Self("field_name")` is validated on the first `resolve_config` of the class (against its dataclass fields) and by the contract test over all classes, not at import time: a `dataclasses.field()` wrapper cannot see its owning class, and an import-time check would need a `ConfigBase` metaclass hook this phase does not budget.
+- **§13 DQ2** `[decided 2026-08-25]` `evaluate(ctx, own)`; a function law receives `own` only when declared with `fields=(...)`. `sized_field(...)` accepts `fields=` as well, so an inline function law can read a sibling.
+- **§5.3** additional public names: `SizedFieldMetadata` (class-scoped metadata keys `LAW`, `NOTE`, `FIELDS`), `field_notes()`, `OwnFields`/`OwnFieldsView`, `SourceReference`, `ResolutionReport.unconsumed`.
+- **§5.4 E-05** also covers a reference whose fact part is not the fact being bound (`sources[c][f] = "Boiler.some_other_fact"`).
+- **§8** `ResolutionReport.unconsumed: List[(producer, fact)]` lists provided facts nobody read, including `<seed>` facts; P2 decides whether to warn on seed facts.
+- **§6 budget** `engine.py` ≤ 500 lines (was ≤ 350): the binding table plus the error catalogue with full docstrings does not fit below without a `binding.py` split, which §6 does not sanction.
+- **§9 T-2 / T-14 fixtures** use `maximal_thermal_power_in_watt` with providers named `pv_east`/`pv_south` and a test-only config with a plain sibling field, because `pv_peak_power_in_watt` and the PV conversion arrive with P4.
+- **Open (for PR-B/P2):** a *contribution* whose `reads` hits a two-provider fact raises E-02 with the contributing config as consumer — correct by the rule, untested (no pilot has `reads`); a many-binding never reaches the E-04 null check because E-07 fires first — define when many is implemented.
+
+## Amendments (PR-B, 2026-08-25)
+
+- **§5.1** `[superseded 2026-08-26 — see "Amendments (decorators, 2026-08-26)"]` `Presets` exposes `names()`, `canonical()` (returns the `Preset`, so building still takes a name: `X.presets.canonical()("Name")`), `entries()`, `notes()`; iteration, `len()` and `in` on the class object come from a small `PresetsMeta` metaclass, because `presets` is always a `Type[...]`, never an instance.
+- **§3.4** `[superseded 2026-08-26 — the builder is a decorated classmethod; the ComponentID is still spelled out by the builder, for the same reason]` A `Preset` builder spells `component_id=ComponentID(name=name)` itself; a kernel-side helper is impossible without a cycle (`hisim.config.base` imports `sizing`) or without erasing the return type mypy needs. By design, not an omission.
+- **§3.6 / §5.3** `SizableFieldKind` is an enum (`LAW`, `CONSTANT`) with `.explain()` yielding "author default (constant law)"; `ConfigDescription.config_class_name` added; `FieldInfo.default` is `dataclasses.MISSING` for mandatory fields because `None` is a real default in HiSim configs.
+- **§12 I-8** corrected: today **no** fact is declared by two classes; `INTERCHANGEABLE_PROVIDERS` lists the two power facts with the boiler family only, and the heat-pump / electric / district-heating families join the entry when P4 converts them.
+- **Follow-up (P4/PR-C):** expose a public ordering/validation entry point so the contract test stops importing `sizing._resolution_order`; `BuildingConfig` has `standard` but no constructor over the TABULA code space yet (Q-P1.6 second half) — setups overwrite `building_code` on `standard` for now.
+- Conversion count: 129 call sites (tests 45 in 22 files, system_setups 51 in 19 files, obsolete 33 in 31 files); component names preserved verbatim, so no result column changes; zero `*.scenario.json` fixtures changed.
+
+## Amendments (decorators, 2026-08-26)
+
+`[decided 2026-08-26, owner]` **Presets and named constructors are decorated classmethods on the config class itself.** The `Presets` / `Preset` / `PresetsMeta` namespace of PR-B is deleted; the §3.4 and §5.1 text describing it is superseded by this section.
+
+**Decision.** A config class declares its named defaults as `@preset`-decorated classmethods and its named constructors as `@constructor`-decorated classmethods:
+
+```python
+@dataclass
+class GenericBoilerConfig(ConfigBase):
+    @preset(note="nominal catalogue device")          # bare `@preset` works too
+    @classmethod
+    def preset_condensing_gas_12kw(cls, name: str) -> "GenericBoilerConfig":
+        """Condensing gas boiler pinned to the 12 kW nominal device."""
+        return cls(component_id=ComponentID(name=name), ...)
+
+@dataclass
+class BuildingConfig(ConfigBase):
+    @preset(note="TABULA/EPISCOPE German single-family reference house")
+    @classmethod
+    def preset_standard(cls, name: str) -> "BuildingConfig":
+        """The German single-family reference house, the repo's default building."""
+        return cls.for_tabula_code(name, building_code="DE.N.SFH.05.Gen.ReEx.001.002",
+                                   absolute_conditioned_floor_area_in_m2=121.2)
+
+    @constructor
+    @classmethod
+    def for_tabula_code(cls, name: str, building_code: str, number_of_apartments: Optional[float] = None,
+                        ...) -> "BuildingConfig": ...
+```
+
+**Method-name prefixes (2026-08-26).** A preset method is named `preset_<wire_name>`; the decorator strips the prefix, and the remainder is the *wire name* used in the registry, in `preset_provenance`, in `describe_config` and in energy-system files (`preset: condensing_gas`). A constructor method is named `for_<...>` or `from_<...>` and its wire name is the full method name (`constructor: {for_tabula_code: {…}}`). Missing prefix is an error where the method is declared. The prefixes are what makes a call site self-explanatory: `GenericBoilerConfig.preset_condensing_gas("Boiler")` says what it fetches, where a bare `GenericBoilerConfig.condensing_gas("Boiler")` reads like an attribute access.
+
+**Why.** (1) *One mechanism for both.* Q-P1.6 gives lookup classes a preset **and** a constructor; with the namespace design the two lived in different places and only one of them was discoverable. Now both are classmethods, both are found by a marker scan, and a preset may simply delegate to a constructor (the Building does). (2) *Typing without a namespace class.* Both decorators are typed as identities (`def preset(func: BuilderT) -> BuilderT`), so the decorated method stays a fully typed classmethod: a misspelled name is `attr-defined` and a wrong argument `arg-type`, which is what Q-P1.5 demanded — without a `ClassVar[Type[XPresets]]` attribute, a post-class assignment and a second class per config. (3) *Docstrings per preset.* A lambda in a namespace body cannot carry one; a classmethod does, and it shows up in editors and in `help()`.
+
+**What replaced what.**
+
+| PR-B | now |
+|---|---|
+| `class XPresets(Presets[XConfig])` + `presets: ClassVar[Type[XPresets]]` + post-class assignment | `@preset`-decorated classmethods in the class body |
+| `Preset(lambda name: …, note=…)` | `@preset(note=…)` above `@classmethod` |
+| `X.presets.foo("N")` | `X.preset_foo("N")` |
+| `X.presets.names()` | `presets_of(X).keys()` |
+| `X.presets.canonical()("N")` | `canonical_preset(X).build("N")` |
+| `X.presets.notes()` | `{n: b.note for n, b in presets_of(X).items()}` |
+| `Preset.PROVENANCE_ATTRIBUTE` | `ConfigBuilder.PROVENANCE_ATTRIBUTE` (same value, `preset_provenance`) |
+| — | `@constructor` + `constructors_of(X)`; first user: `BuildingConfig.for_tabula_code` |
+
+**Rules.** A preset takes exactly `(cls, name: str)`; a constructor takes `(cls, name: str, *params)` with annotated, keyword-usable parameters. Both build the `ComponentID` from `name` themselves (the PR-B §3.4 reasoning still holds). A preset stamps `preset_provenance` with its wire name; a constructor stamps nothing, because its result is identified by the arguments it was called with, not by a name. Undecorated classmethods are invisible to discovery. Declaration order is the registry order and the first-declared preset is canonical. **Zero presets on a class is legal** — the contract test pins which converted classes have none.
+
+**Where the errors are raised.** The method-name prefix and the signature are checked *in the decorator*, i.e. while the class body executes, so the traceback points at the offending method. A builder name colliding with a field name is checked in `ConfigBase.__init_subclass__`, which runs after the class body and **before** `@dataclass` processes the annotations — the earliest point at which both the decorated methods and the field names are visible, and early enough to prevent `@dataclass` from silently adopting the classmethod as that field's default value.
+
+**Public surface (replaces the two `Presets`/`Preset` lines of §5.1).**
+
+```python
+def preset(func) -> func            # also preset(*, note: str)
+def constructor(func) -> func       # also constructor(*, note: str)
+def presets_of(cls) -> Mapping[str, ConfigBuilder]
+def constructors_of(cls) -> Mapping[str, ConfigBuilder]
+def canonical_preset(cls) -> Optional[ConfigBuilder]
+def preset_provenance(config) -> str | None                     # unchanged
+def check_builder_declarations(cls, field_names) -> None        # used by ConfigBase.__init_subclass__
+class ConfigBuilder: name, method_name, kind, note, build, function   # + the spelling constants
+class BuilderKind(Enum): PRESET, CONSTRUCTOR
+```
+
+**§3.6 introspection.** `ConfigDescription` gains `constructors: Tuple[ConstructorInfo, …]`, with `ConstructorInfo(name, parameters: Tuple[ParameterInfo(name, type_name, default), …], note)`; `ConfigDescription.PRESETS_ATTRIBUTE` is gone with the namespace it named.
+
+**§9 T-9** now runs mypy over a snippet with a misspelled preset method *and* a wrongly typed constructor argument. **§9 T-11** scans decorated classmethods instead of `Presets` subclasses and additionally enforces the Q-P1.9 naming rules on wire names (snake_case; digits only in a trailing rating suffix; `standard` only as the sole preset or beside `standard_<rating>`), wire-name uniqueness, and no collision with a field name.
+
+**Q-P1.6 second half is done:** `BuildingConfig.for_tabula_code(name, building_code, number_of_apartments=None, absolute_conditioned_floor_area_in_m2=None, total_base_area_in_m2=None, building_heat_capacity_class="medium", heating_reference_temperature_in_celsius=-7.0)`; `preset_standard` delegates to it and is field-for-field identical to the previous `standard` (verified by dump diff and by a test). Setups that overwrite `building_code` on `standard` may now call the constructor instead.

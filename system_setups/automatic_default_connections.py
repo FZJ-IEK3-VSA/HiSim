@@ -4,6 +4,7 @@
 
 from typing import Optional, Any
 from hisim.simulator import SimulationParameters
+from hisim.config import SizingContext
 
 from hisim.components import (
     building,
@@ -62,9 +63,8 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # Build Basic Components
 
     # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home(
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
-    )
+    my_building_config = building.BuildingConfig.preset_standard("Building")
+    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
 
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
@@ -169,10 +169,12 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heat_distribution_config(
-            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
-            absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-            heating_system=my_hds_controller_information.hds_controller_config.heating_system,
+        heat_distribution_system.HeatDistributionConfig.preset_standard("HeatDistributionSystem").resolve(
+            SizingContext(
+                water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kg_per_second,
+                conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+                heat_distribution_system_type=my_hds_controller_information.hds_controller_config.heating_system,
+            )
         )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(

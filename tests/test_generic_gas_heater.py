@@ -34,7 +34,7 @@ def test_gas_heater() -> None:
     maximal_power_in_watt = 12_000
     # ===================================================================================================================
     # Set Gas Heater
-    my_gas_heater_config = generic_boiler.GenericBoilerConfig.get_default_condensing_gas_boiler_config()
+    my_gas_heater_config = generic_boiler.GenericBoilerConfig.preset_condensing_gas_12kw("CondensingGasBoiler")
     my_gas_heater_config.temperature_delta_in_celsius = temperature_delta_in_celsius
     my_gas_heater_config.maximal_thermal_power_in_watt = maximal_power_in_watt
 

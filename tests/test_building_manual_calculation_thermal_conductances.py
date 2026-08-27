@@ -47,7 +47,7 @@ def test_building_thermal_conductance_calculation() -> None:
 
     # Set Residence
     my_residence_config = (
-        building.BuildingConfig.get_default_german_single_family_home()
+        building.BuildingConfig.preset_standard("Building")
     )
     my_residence_config.building_code = building_code
     my_residence_config.building_heat_capacity_class = building_heat_capacity_class

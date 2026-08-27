@@ -54,7 +54,7 @@ Never push; the user pushes from another machine.
   for string sets.
 - **Commits:** imperative subject, body explaining the why, ending with
   `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`. Never any session links.
-- **Findings log:** append accidental discoveries to `roadmap/random_findings.md` using
+- **Findings log:** append accidental discoveries to `roadmap/declarative_energy_systems/random_findings.md` using
   its existing `[bug]/[friction]/[spec]/[elegance]` legend. Full capture, not curation.
 - **Spec upkeep:** the step that implements a decision updates the spec's status text in
   the same commit.

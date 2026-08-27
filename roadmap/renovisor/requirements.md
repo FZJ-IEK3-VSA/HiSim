@@ -1,6 +1,6 @@
 # RenoVisor backend: translation layer and API contract — requirements
 
-**Status:** draft
+**Status:** draft (Q1 decided 2026-08-27: library in a container, C# service in another repo)
 **Date:** 2026-08-27
 **Author(s):** assistant (all `[proposed]` items, evidence survey) · Noah Pflugradt (owner; all `[given]` items)
 **Reviewers:** HiSim core team · RenoVisor frontend team (§8.2 only)
@@ -55,7 +55,9 @@ the ten heating systems the contract offers cannot be expressed as an energy-sys
 **Required.** (a) A translation layer that turns a home inventory plus a package into an
 energy-system file, runs it, and derives the contract's result payloads — replacing both the
 `ModularHouseholdConfig` path and the "upload raw files, let the server interpret them"
-arrangement. (b) A revised API contract in which every field either has a HiSim consumer, is
+arrangement. It is a library, delivered as a container image that a C# service in a separate
+repository starts per calculation; HiSim implements none of the contract's HTTP behaviour
+(decided 2026-08-27, §11 Q1). (b) A revised API contract in which every field either has a HiSim consumer, is
 declared non-simulation, or is removed — and in which determinism, versioning and the meaning of
 a cost `Range` are stated, because the contract promises results that are cacheable forever.
 
@@ -147,9 +149,12 @@ an open question (Q3).
 ### 4.5 Stakeholders and consumers
 
 **Existing.** The RenoVisor frontend (co-owner of the contract's stable envelope; only it can
-sign off §8.2 changes). The RenoVisor backend service that will host the translation layer. The
-declarative-energy-systems epic (this is its P5 RenoVisor track). The building sizer and HPC
-harness, which share the base-file mechanism and will inherit whatever is built here.
+sign off §8.2 changes). **The RenoVisor backend service — a C# application in a separate
+repository, which is the translation layer's only caller.** It owns every HTTP concern of the
+contract and invokes HiSim by starting a container, handing it a house configuration and
+collecting what comes back (Q1, decided 2026-08-27). The declarative-energy-systems epic (this
+is its P5 RenoVisor track). The building sizer and HPC harness, which share the base-file
+mechanism and will inherit whatever is built here.
 
 **Hypothetical, and therefore not a constraint.** A webtool, a template creator, other
 countries beyond Ireland.
@@ -159,8 +164,8 @@ countries beyond Ireland.
 | | |
 |---|---|
 | **Current behavior** | A CLI translates a v1 request into a `ModularHouseholdConfig`, picks one of ten Python setups, runs it in-process, and POSTs matched result files plus a mapping report to a URL. |
-| **Required behavior** | A library turns a home inventory and a package into an energy-system file, runs it deterministically, derives the contract's `kpis` and `costs`, and returns them to a service that serves them under a content-addressed URL. |
-| **Assumption** | The service (HTTP routing, job coalescing, caching, auth, storage) is built outside HiSim; HiSim supplies the calculation library. Confirm — Q1. |
+| **Required behavior** | A container is started with a house configuration; inside it, a library turns that configuration and its package into an energy-system file, runs it deterministically, derives the contract's `kpis` and `costs`, and hands them back. The C# service serves them under a content-addressed URL. |
+| **Decided** | `[decided 2026-08-27, owner]` The service is a C# application in another repository. HiSim supplies a calculation library, packaged as a container image the service starts per calculation. HiSim owns no HTTP, no store, no queue and no auth (Q1). |
 
 ## 5. Goals and non-goals
 
@@ -181,7 +186,9 @@ countries beyond Ireland.
 
 **Non-Goals**
 
-- The HTTP service itself: routing, auth, storage, job coalescing, PDF rendering (§4.6, Q1).
+- The HTTP service itself: routing, auth, storage, result caching, job coalescing, content
+  hashing, PDF rendering, and the scheduling of calculations. All of it belongs to the C#
+  service (§4.6, Q1 decided). HiSim is invoked, never polled.
 - Countries other than Ireland. The mechanism must not preclude them; only IE is verified.
 - Reworking the KPI computation or the cost engine beyond what the payloads need.
 - The building sizer and HPC harness tracks of P5, though they share the base files.
@@ -314,15 +321,32 @@ The layer must offer two tiers with a stated difference in method and a stated d
 accuracy. A `fast-estimate` result and a `detailed-simulation` result for the same package must
 be distinguishable in the payload. What the fast tier *is* is Q6.
 
-**R13 — Callable as a library, on in-memory input.** `[proposed; from executor.py:build_energy_system]`
-The layer must be usable from a hosting service without a subprocess and without requiring the
-caller to place files at particular paths. Note the current limitation:
-`hisim.energy_system.loader.load_energy_system` accepts YAML text, but
-`build_energy_system` takes a path.
+**R13 — A container invocation is the whole interface.** `[given 2026-08-27; supersedes the in-memory phrasing of R13, which assumed a Python caller]`
+The layer's only caller is a C# service that starts a container, supplies a house
+configuration and collects a result. The interface is therefore a process contract, not a
+Python API, and it must be specified as one: what the container is given, where it is given,
+what it produces, where it produces it, and what its exit status means. It must be usable by a
+caller that cannot import Python, cannot inspect a traceback and holds no HiSim state between
+invocations. The precise shape is Q9.
+
+**R13.1 — One invocation is self-describing.** `[proposed]`
+Everything a run needs must arrive in that one invocation. The container must not read
+ambient state — no environment left over from a previous run, no cached result directory, no
+network fetch that could answer differently tomorrow. Two invocations of the same image with
+the same input must be indistinguishable, which is what makes R10 hold across container
+boundaries rather than only within one process.
+
+**R13.2 — Failures are reportable to a caller that cannot read Python.** `[proposed; follows from R11]`
+A refusal, a validation error and a crash must each be distinguishable from the container's
+output alone — an exit status plus a structured document — without the C# service parsing a
+log. This is R11's requirement restated at the process boundary, and it is where R11 actually
+gets tested.
 
 **R14 — Version stamping.** `[proposed; from the contract's immutable caching]`
 Every finished result must carry the version of the calculation that produced it, covering the
-translator, the base files, the component models and the cost database.
+translator, the base files, the component models and the cost database. The container image
+digest is a candidate for this stamp, since it covers all four by construction; whether it is
+sufficient depends on how the image is built (Q9).
 
 **R15 — Compatibility: nothing else in HiSim regresses.** `[given; epic C1/E7]`
 The golden suites must pass unchanged. The v1 translator and its contract may be deleted only
@@ -468,11 +492,20 @@ Irish archetype. The contract must carry the supported set explicitly.
 - **C10** `[proposed; contract description]` The contract's envelope — endpoint shapes, status
   model, error format, auth, IDs, naming — is co-owned and changes need frontend sign-off. A17
   is the only §8.2 item that touches it; the rest are payload changes the backend owns.
+- **C11** `[given 2026-08-27, owner]` The calling service is a C# application in a separate
+  repository. It invokes HiSim by starting a container with a house configuration. HiSim's
+  deliverable is therefore a container image with a process contract, and no part of the
+  contract's HTTP behaviour — caching, coalescing, hashing, auth, polling — is HiSim's to
+  implement or to test.
+- **C12** `[proposed; follows from C11]` The interface crosses a language boundary. Anything
+  HiSim wants the caller to act on — a refusal reason, a translation report, a version stamp —
+  must be a structured document the C# side can deserialise, not a Python object and not a log
+  line.
 
 ### Assumptions requiring confirmation
 
-- **A-1** `[proposed]` The HTTP service, its storage, its job coalescing and its PDF rendering
-  are built outside HiSim; HiSim supplies a calculation library (Q1).
+- **A-1** `[superseded 2026-08-27]` ~~The HTTP service is built outside HiSim.~~ Confirmed by
+  the owner and promoted to C11; the service is a C# application in another repository.
 - **A-2** `[proposed]` Ireland is the only country that must work; the mechanism must not
   preclude others.
 - **A-3** `[proposed]` The 27 non-simulation fields are genuinely wanted by the product, and
@@ -495,18 +528,27 @@ Irish archetype. The contract must carry the supported set explicitly.
 | AC8 | Every `Kpis` and `Costs` field the amended contract keeps is produced by a finished calculation, and each is traceable to a named HiSim KPI or cost-engine output. | R8, R9, A12, A13, A14 |
 | AC9 | The three values of a `Range` in one `Costs` object come from one evaluation slot; a test detects a mixed-slot object. | R9, A9 |
 | AC10 | A finished result carries a calculation version, and changing any of the translator, base files, component models or cost database changes it. | R14, A15 |
-| AC11 | The layer can be driven end to end from another process's memory, with no fixed filesystem layout. | R13 |
+| AC11 | A calculation runs end to end through the container interface alone, driven by a caller that imports no Python: input in, result out, exit status meaningful. | R13, C11 |
+| AC11.1 | The same image and the same input, run twice on different machines, produce equal results and equal version stamps. | R13.1, R10 |
+| AC11.2 | A refusal, a validation error and a crash are told apart from the container's exit status and output document, with no log parsing. | R13.2, R11, A16 |
 | AC12 | The `fast-estimate` and `detailed-simulation` results for one package are both produced and are distinguishable in the payload. | R12 |
 | AC13 | All golden suites pass; no result of an existing setup changes. | R15, C1 |
 | AC14 | The contract validates against an OpenAPI 3.1 validator after amendment, and every `x-contract-status: provisional` schema names its owner. | A1–A20 |
 
 ## 11. Open questions and decisions
 
-No decisions have been taken yet; every item below is open.
+### Decision register
+
+| ID | Decision | Date, owner |
+|---|---|---|
+| Q1 | HiSim supplies a calculation **library**, packaged as a container image. The service is a C# application in a separate repository; it starts a container per calculation, hands it a house configuration and collects the result. HiSim owns no HTTP, store, queue or auth. Rejected: HiSim hosting the service; a thin reference service in this repository. | 2026-08-27, owner |
+
+Q1's answer opens Q9 (the process contract) and narrows Q5, since the C# side decides how many
+containers a package set costs.
 
 ---
 
-**Q1 — Does HiSim supply a calculation library, or the HTTP service itself?** · blocks R13, A-1, and the scope of everything in §8.1
+**Q1 — Does HiSim supply a calculation library, or the HTTP service itself?** · `[answered 2026-08-27]` — **(a) library, invoked as a container.** Entry kept below for the reviewer who argued the alternatives. Blocked R13, A-1, and the scope of §8.1.
 
 *Context.* The contract specifies 15 paths with lazy start, job coalescing, ETags, RFC 7807
 errors, Supabase JWT validation and a GDPR cascade. None of that is simulation work, and none of
@@ -528,7 +570,12 @@ replaceable. Consequence: middle cost; the seam of (a) plus a reference implemen
 content-addressed inputs" — describes a caching layer in front of a pure function, and that pure
 function is the only part HiSim is qualified to own.
 
-*Blocks.* R13, A-1, and how much of §8.1 is in scope at all.
+*Answer.* `[decided 2026-08-27, owner]` **(a)**, with the invocation mechanism specified: the
+service is C#, lives in another repository, and calls HiSim by starting a container with a house
+configuration in it. Note what this changes about (a) as it was drafted — the seam is a
+*process* boundary, not a Python import, so R13's original demand for in-memory entry points is
+the wrong requirement and has been replaced (R13, R13.1, R13.2, C11, C12). It also makes the
+container image a natural carrier for the version stamp of R14.
 
 ---
 
@@ -626,6 +673,11 @@ rule, and probably required regardless.
 *Recommendation.* (b) for ownership plus (c) for cost. HiSim should price and simulate packages,
 not decide which renovations to recommend.
 
+*Sharpened by Q1's answer (2026-08-27).* With calculations run as containers started by the C#
+service, a package set of 100+ packages is 100+ container starts unless the unit of work is
+widened (Q9). That makes (c) not merely advisable but close to forced, and it moves the
+batching decision to the C# side, which owns scheduling.
+
 *Blocks.* R6, UC1.
 
 ---
@@ -700,6 +752,39 @@ what it says, and the catalogue mechanism already exists — this is data entry 
 not new machinery.
 
 *Blocks.* R9, A20, C8, AC8.
+
+---
+
+**Q9 — What exactly does the container take in and give back?** · blocks R13, R13.1, R13.2, R14, AC11, AC11.1, AC11.2
+
+*Context.* Q1's answer fixes the mechanism (the C# service starts a container with a house
+configuration) but not its shape, and every detail of that shape is a thing the C# side has to
+code against. Four sub-decisions are entangled and should be taken together: **how input
+arrives** (a mounted volume with a file at a fixed path, an argument, or stdin), **how output
+leaves** (files in a mounted result directory, or one JSON document on stdout), **what the exit
+status means** (R13.2 needs success, refusal, validation error and crash to be four
+distinguishable outcomes), and **what the unit of work is** — one package per container, or one
+container computing a whole package set. The last is not cosmetic: at 100+ packages per set
+(contract, `packageset`), the choice is between 100 container starts and one, and HiSim's import
+time is paid once per start.
+
+*Options.* (a) **Files in, files out**: a mounted input directory holding the house
+configuration, a mounted output directory receiving the result document, the translation report,
+the emitted energy-system file and the realized record. Consequence: the natural fit for what
+HiSim already writes, and the emitted YAML and record survive as debuggable artifacts for free;
+the C# side manages two mounts per call. (b) **stdin/stdout JSON**: one document in, one
+document out, nothing mounted. Consequence: the simplest thing to call from C#, and every
+artifact of R7 and UC5 has to be embedded in the response or thrown away. (c) **A hybrid** —
+configuration on stdin, results into a mounted directory, a summary document on stdout.
+Consequence: covers both, at the cost of two mechanisms to document.
+
+*Recommendation.* (a), with the unit of work being one *calculation* (one inventory, one
+package, one tier). It matches what HiSim already produces, keeps the R7 report and the R10
+record as first-class files rather than blobs, and leaves batching to the C# side, which is
+where the scheduling decisions already live. The package-set cost this implies is real and
+belongs in Q5's answer, not here.
+
+*Blocks.* R13, R13.1, R13.2, R14, AC11, AC11.1, AC11.2.
 
 ---
 

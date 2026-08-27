@@ -43,8 +43,8 @@ Keywords: RenoVisor, OpenAPI, home inventory, package, energy-system YAML, conte
 ## 3. Executive summary
 
 **Problem.** Two contracts and one implementation, none of which line up. The drafted API
-(v0.3) speaks of home inventories, packages, fast estimates and detailed simulations, and
-expects each finished calculation to carry 13 KPI fields and 9 cost ranges. The existing
+(v0.3) speaks of home inventories, packages and calculation results, and expects each finished
+calculation to carry 13 KPI fields and 9 cost ranges. The existing
 translator (`hisim/renovisor/`, 7 modules, ~1,700 lines) speaks the v1 contract, emits a
 `ModularHouseholdConfig` for one of ten Python setups, and states in its own specification that
 deriving result payloads is out of scope. Counted against HiSim as it stands: of the contract's
@@ -109,26 +109,24 @@ Full survey in `roadmap/renovisor/field_inventory.md`. Headline numbers:
 | `HeatingSystems` values the contract offers | 10 (**5** expressible as an energy-system file today) |
 | Component classes an energy-system file can use today | 8 across 6 modules |
 | Component classes the ten base files need | ≈26 across ≈19 modules |
-| Contract operations that need a HiSim result | 3 of 17 (`fast-estimate`, `detailed-simulation`, `report.pdf`); `packageset` is served from calculations HiSim performs but does not enumerate |
+| Contract operations answered by a HiSim calculation | 2 of 17 (`detailed-simulation`, `report.pdf`); `packageset` and `fast-estimate` are produced outside HiSim |
 | Irish subsidy catalogues in `hisim/subsidy_catalog/` | 0 (`AT.json`, `DE.json` only) |
 | Irish tariff files in `hisim/cost_database/tariffs/` | 0 (`DE_DYNAMIC_SYNTHETIC_2024.json` only) |
 
 ### 4.3 What the contract asks for that v1 never did
 
-Four capabilities are new, not refinements. (A fifth, generating the package set, is what the
-contract's `packageset` resource is for; it is outside HiSim — §5 — and is not listed.)
+Three capabilities are new, not refinements. Two more that the contract carries — enumerating a
+package set, and the `fast-estimate` tier — are produced outside HiSim (§5) and are not listed.
 
 1. **Result derivation.** v1 uploaded HiSim's result *files* and left interpretation to the
    receiving server (`spec.md` §1: "explicitly out of scope for v1"). v0.3's `CalculationStatus.
    result` is a `Package` carrying `kpis` and `costs` — 13 + 27 numbers the backend must produce.
-2. **Two calculation tiers.** `fast-estimate` and `detailed-simulation` are separate resources
-   with separate result URLs. HiSim has one tier: a full simulation. There is no fast path.
-3. **A read-through, content-addressed service.** Results are `GET`, lazily started, coalesced
+2. **A read-through, content-addressed service.** Results are `GET`, lazily started, coalesced
    across duplicate requests, and — once finished — cached `immutable` for a year. v1 is a
    one-shot CLI that pushes to a URL. *This one lands entirely on the C# side (C11) and is
    listed here only because it is what makes determinism (R10) and versioning (R14) load-bearing
    for HiSim: a result the service will cache for a year had better be reproducible.*
-4. **Refusal as a first-class outcome.** `CalculationState` includes `refused`. v1 has exit
+3. **Refusal as a first-class outcome.** `CalculationState` includes `refused`. v1 has exit
    codes; the notion that a *valid* request may be un-simulable (no TABULA archetype, an
    unsupported combination) has no representation in it.
 
@@ -355,10 +353,11 @@ well-formed but not simulable" (a refusal, with a machine-readable code and the 
 fields) and "the simulation failed" (a failure). It must decide refusals before starting a
 simulation wherever the condition allows it.
 
-**R12 — Two calculation tiers.** `[given; contract fast-estimate / detailed-simulation]`
-The layer must offer two tiers with a stated difference in method and a stated difference in
-accuracy. A `fast-estimate` result and a `detailed-simulation` result for the same package must
-be distinguishable in the payload. What the fast tier *is* is Q6.
+**R12 — Two calculation tiers.** `[withdrawn 2026-08-27, owner]`
+~~The layer must offer a fast tier and a detailed tier.~~ The `fast-estimate` is produced outside
+HiSim. HiSim performs one kind of calculation — a simulation — and needs no notion of a tier at
+all. What varies between runs is the parameters file the caller sends (A18), which is a
+parameter of a calculation and not a mode of one.
 
 **R13 — A file-based container interface is the whole interface.** `[given 2026-08-27; supersedes the in-memory phrasing of R13, which assumed a Python caller]`
 The layer's only caller is a C# service that supplies a house configuration as a file and
@@ -597,9 +596,8 @@ cascades to.
 The C# service supplies a `simulationparameters.json` alongside the house configuration; period,
 resolution and post-processing options are its choice, not a constant of the image. Three
 consequences for this document:
-  - The two tiers of R12 differ by *which parameters file the service sends*, which makes Q6's
-    option (a) — a shorter simulation — the cheap one to implement and removes the need for any
-    tier switch inside HiSim.
+  - There is no tier switch inside HiSim (R12 withdrawn). A shorter or coarser run is simply a
+    different parameters file, decided by the caller.
   - The parameters are an input to the calculation and therefore an input to R10's determinism
     and R14's version stamp: the same configuration under different parameters is a different
     result and must not collide in the service's cache.
@@ -768,7 +766,6 @@ frontend sign-off" no longer binds any requirement here.
 | AC11.4 | Resource growth over a long sequence of calculations is bounded, or the recycle limit is stated and enforced. | R13.3 |
 | AC11.5 | After a calculation and the deletion of its output location, a working-tree cleanliness check (`git status --porcelain` or equivalent) reports nothing — no stray `results/`, no file written beside the package. | R13.4 |
 | AC11.6 | The container's documentation states that it serves one calculation at a time and is not safe to run two concurrently. | R13.5 |
-| AC12 | The `fast-estimate` and `detailed-simulation` results for one package are both produced and are distinguishable in the payload. | R12 |
 | AC13 | All golden suites pass; no result of an existing setup changes. | R15, C1 |
 | AC14 | The contract validates against an OpenAPI 3.1 validator after amendment, and every `x-contract-status: provisional` schema names its owner. | A1–A24 |
 
@@ -784,7 +781,9 @@ frontend sign-off" no longer binds any requirement here.
 | Q7 / A12 | The 10 KPI fields HiSim cannot compute **stay in the contract and are served as constants** until implemented over the coming months. Every mocked value is labelled as mocked in the result. Rejected: dropping them; serving null; splitting them into a separately-owned block. | 2026-08-27, owner |
 | A6 | `Measure` is **replaced outright** by a discriminated union — a measure is a typed, targeted write to the home inventory. Proposal: `mockups/measures.schema.yaml`. | 2026-08-27, owner |
 | A17 | **Withdrawn.** The per-user/content-addressed contradiction is real but is between the frontend and the C# service; it does not reach HiSim. | 2026-08-27, owner |
-| A18 | The C# service supplies a **`simulationparameters.json`** per calculation; the tiers differ by which one it sends. | 2026-08-27, owner |
+| A18 | The C# service supplies a **`simulationparameters.json`** per calculation. | 2026-08-27, owner |
+| R6 / Q5 | **Package generation is outside HiSim.** A package arrives already decided; HiSim calculates the one it is given. | 2026-08-27, owner |
+| R12 / Q6 | **The `fast-estimate` tier is outside HiSim.** HiSim performs one kind of calculation and has no notion of a tier; what varies is the parameters file. | 2026-08-27, owner |
 | R13.2 | Failures are reported through a structured **`errors.json`** written into the output location, with reason codes from a published catalogue. | 2026-08-27, owner |
 
 Together these bound the isolation problem sharply. Reuse (Q9) means HiSim must survive being
@@ -905,33 +904,17 @@ Package generation is outside HiSim (§5 non-goals, R6 withdrawn), so this is no
 document answers. Kept as a marker because the reasoning it carried has to land somewhere: the
 cost of calculating a large package set is real — one calculation per package, one container
 occupancy each (Q9, Q10) — and it now sits entirely with whoever schedules the calculations. If
-that party wants a cheaper package set, the lever is the fast tier (Q6) and the parameters file
-it sends (A18), not anything HiSim decides.
+that party wants a cheaper package set, the lever is the parameters file it sends (A18), not
+anything HiSim decides.
 
 ---
 
-**Q6 — What is the `fast-estimate` tier?** · blocks R12, A18, AC12
+**Q6 — What is the `fast-estimate` tier?** · `[withdrawn 2026-08-27, owner]`
 
-*Context.* The contract has two calculation resources per package with identical shapes. HiSim
-has one method: a time-step simulation, 15-minute resolution, a full year for the building-sizer
-setups. There is no reduced-order path, no cached-response surrogate and no steady-state
-calculation in the repository.
-
-*Options.* (a) **A shorter simulation** — one representative week or a set of design days,
-scaled up. Consequence: cheap to build (it is a different `*.simulation.yaml`), and the accuracy
-loss on annual energy is unquantified. (b) **A steady-state or degree-day calculation** beside
-HiSim. Consequence: genuinely fast, a second physics implementation to validate against the
-first. (c) **A surrogate fitted to detailed runs.** Consequence: fastest, needs a training
-corpus and a stated validity domain, and it is a research project. (d) **The same detailed
-simulation, with the tiers differing only in queue priority.** Consequence: no accuracy question
-at all; the contract's two resources become a scheduling hint, and the frontend's "fast" promise
-becomes false.
-
-*Recommendation.* (a) as the first implementation, with the accuracy loss measured against the
-detailed tier on a fixture set and stated in the result. It is the only option that is both
-cheap and honest about what it is.
-
-*Blocks.* R12, A18, AC12.
+The fast tier is produced outside HiSim, so this is not a question this document answers. It was
+the one place a second physics implementation might have entered the repository — a degree-day
+calculation or a fitted surrogate beside the simulation — and that risk goes with it. HiSim has
+one method: run the system. What a caller varies is the parameters file (A18).
 
 ---
 
@@ -1017,7 +1000,7 @@ configuration on stdin, results into a mounted directory, a summary document on 
 Consequence: covers both, at the cost of two mechanisms to document.
 
 *Recommendation.* (a), with the unit of work being one *calculation* (one inventory, one
-package, one tier). It matches what HiSim already produces, keeps the R7 report and the R10
+package, one parameters file). It matches what HiSim already produces, keeps the R7 report and the R10
 record as first-class files rather than blobs, and leaves batching to the C# side, which is
 where the scheduling decisions already live.
 
@@ -1084,7 +1067,8 @@ immutable, identified by the hash of its canonicalised form (`hi_id`).
 identified by the hash of its own contents (`pkg_id`).
 **Package set** — the packages offered for one home inventory. Produced outside HiSim; named
 here only because the contract has a resource for it.
-**Fast estimate / detailed simulation** — the contract's two calculation tiers for one package.
+**Fast estimate** — the contract's cheap calculation tier, produced outside HiSim.
+**Detailed simulation** — the contract's tier that a HiSim run answers.
 **Refused** — a terminal calculation state meaning the input was well-formed but not simulable,
 as distinct from a validation error and from a failure.
 **Base file** — a checked-in, hand-authored energy-system file, one per supported heating system,

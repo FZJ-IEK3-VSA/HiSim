@@ -26,8 +26,8 @@ P1 sizing kernel ──► P2 file format & executor ──► P3 recording & se
 |---|---|---|---|---|
 | **P1 Sizing kernel** | `hisim/config` reworked: `Catalog` without `component_id`; `AUTO`/`sized_field`/laws unchanged; the fact binding rule as a Python API (`resolve_all(configs, sources=…)`); scalar cardinality only; contract tests; introspection API | PR #582 (`config_base_move`) | pure code + tests; inventory; pilots pass | `p1_sizing_kernel_requirements.md` |
 | **P2 File format & executor** | schema v3 (components / `inputs` / `preset` / `config` / `sizing_sources` / groups), YAML + JSON loading with duplicate-key detection, hard-error catalogue, `${var}` paths, JSON Schema export, realized record + audit companion, `describe`/`facts` CLI | P1 | the three mockups load, resolve, build and run; identity test | `p2_file_format_requirements.md` |
-| **P3 Recording & setup migration** | recorder (`setup_function` → energy-system file), all ~50 setups recorded and checked in, golden parity | P2 | golden suites green on recorded files | written after P1 acceptance |
-| **P4 Component sweep** | ~85 factories → presets + laws; setup-side sizing moved into classes; dead SimRepository sizing keys deleted | P1 (P2 for fixtures) | per batch: contract test, golden parity | batch checklist below; no requirements document |
+| **P3 Recording & setup migration** | recorder (`setup_function` → energy-system file), all ~50 setups recorded and checked in, golden parity | P2 | golden suites green on recorded files | `p3_recording_requirements.md` |
+| **P4 Component sweep** | ~85 factories → presets + laws; setup-side sizing moved into classes; dead SimRepository sizing keys deleted | P1 (P2 for fixtures) | per batch: contract test, golden parity | `p4_component_sweep_requirements.md` (per-class registry; survey in `p4_class_survey.md`) |
 | **P5 Consumer integration** | RenoVisor, building sizer and HPC harness on energy-system files; `ModularHouseholdConfig` deleted | P2, P3 | consumers' own tests | written after P2 acceptance |
 
 ## P1 — Sizing kernel
@@ -58,13 +58,22 @@ P1 sizing kernel ──► P2 file format & executor ──► P3 recording & se
 - [x] `${var}` path resolver carried over from `json_v2` *(PR-1, 2026-08-26)*
 - [x] C10 — v3 fixtures spell UTSP `JsonReference`s as `Name`/`Guid`/`StrVal`; one local-LPG run verifies (own commit, before/after) *(PR-6: the record round-trips the references with their real spelling; a live UTSP run needs `UTSP_URL`/`UTSP_API_KEY`, left to P5, 2026-08-26)*
 
-## P3 — Recording & setup migration (outline; document later)
+## P3 — Recording & setup migration
 
+Requirements: `p3_recording_requirements.md` (draft 2026-08-27; inventory in `p3_setup_inventory.md`).
+
+- [ ] Requirements document accepted (Q-P3.1–Q-P3.7 decided)
 - [ ] Recorder: run a `setup_function` under a recording simulator, emit an energy-system file in canonical style
 - [ ] Every setup recorded; recorded files checked in next to the setups
 - [ ] Golden suites run on recorded files; setups themselves kept until P5 confirms no consumer needs them
 
 ## P4 — Component sweep (batches; each a mechanical PR)
+
+Requirements: `p4_component_sweep_requirements.md` (draft 2026-08-27; per-class table R3, gates R2, physics changes R5,
+decisions D-1…D-32 with full text in `p4_class_survey.md`). Its R7 reorders the batches below by recorded-setup impact;
+the list here is kept until the document is accepted.
+
+- [ ] Requirements document accepted (D-1…D-32 decided)
 
 Gates before the first batch (inherited from the branch agenda; each is its own commit,
 never bundled with a conversion because each changes results or deletes code):

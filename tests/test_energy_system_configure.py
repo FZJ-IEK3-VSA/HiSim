@@ -27,7 +27,7 @@ import importlib
 import pkgutil
 import typing
 from dataclasses import dataclass
-from typing import Any, ClassVar, Iterator, List, Tuple
+from typing import Any, ClassVar, Iterator, List, Tuple, Type
 
 import pytest
 from dataclasses_json import dataclass_json
@@ -219,7 +219,7 @@ def kernel_message(configs: List[Any], sources: Any = None) -> str:
     raise AssertionError("the kernel was expected to refuse these configurations")
 
 
-def sizable_enum_fields() -> Iterator[Tuple[type, str, type]]:
+def sizable_enum_fields() -> Iterator[Tuple[type, str, Type[enum.Enum]]]:
     """Yields every enum-typed sizable field HiSim's component packages declare.
 
     Walking the whole component tree rather than a hand-kept list is what makes the enum
@@ -424,12 +424,12 @@ def test_the_bridge_only_carries_the_components_that_survived_expansion() -> Non
     grouped = model.model_copy(
         update={
             "groups": {},
-            "components": {name: entry for name, entry in model.components.items()},
+            "components": dict(model.components),
         }
     )
     expanded, _ = expand_groups(grouped)
 
-    assert sizing_sources_bridge(expanded) == {}
+    assert not sizing_sources_bridge(expanded)
 
 
 @pytest.mark.base

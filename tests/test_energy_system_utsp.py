@@ -122,7 +122,7 @@ def test_a_named_constructors_catalogue_references_survive_the_record_round_trip
     reloaded = yaml.safe_load(yaml.safe_dump(block))
     codec = ConfigValueCodec(UtspLpgConnectorConfig)
     payload = codec.to_deserializer_payload(reloaded, "components.occupancy.config", References.NAME)
-    payload[ConfigBlockWriter.IDENTITY_FIELD] = written.component_id.to_dict()
+    payload[ConfigBlockWriter.IDENTITY_FIELD] = written.component_id.to_dict()  # type: ignore[attr-defined]
     read_back = UtspLpgConnectorConfig.from_dict(payload)
 
     References.assert_same(written, read_back)

@@ -589,7 +589,7 @@ def test_a_disabled_group_records_exactly_what_deleting_it_by_hand_would(tmp_pat
     assert off_record == deleted_record
     assert "hisim.components.electricity_meter" not in off_record
     assert build_audit(off_build).disabled_groups == (TwoGroupFile.DISABLED_GROUP,)
-    assert build_audit(deleted_build).disabled_groups == ()
+    assert not build_audit(deleted_build).disabled_groups
     assert "heating" in off_record, "an enabled group is part of the system and stays"
 
 

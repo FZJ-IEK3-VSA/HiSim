@@ -57,7 +57,7 @@ def _strict_boolean_resolvers() -> Dict[Any, List[Tuple[str, Pattern[str]]]]:
     return table
 
 
-class StrictYamlLoader(yaml.SafeLoader):
+class StrictYamlLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors  # PyYAML's own loader stack
     """The safe YAML loader with YAML 1.1's surprising boolean spellings removed.
 
     Everything else about :class:`yaml.SafeLoader` is kept: no arbitrary Python object is

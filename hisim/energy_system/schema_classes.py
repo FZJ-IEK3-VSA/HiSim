@@ -29,6 +29,7 @@ import inspect
 import pkgutil
 import sys
 import typing
+from types import NoneType
 from typing import Any, Dict, List, Optional, Tuple
 
 from hisim.config.introspection import describe_config
@@ -74,7 +75,7 @@ class ComponentClassScan:
         for info in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
             try:
                 module = importlib.import_module(info.name)
-            except Exception:  # pylint: disable=broad-except  (a partial installation still exports)
+            except Exception:  # pylint: disable=broad-except  # a partial installation still exports
                 continue
             for _name, candidate in inspect.getmembers(module, inspect.isclass):
                 if not issubclass(candidate, Component) or candidate.__module__ != module.__name__:
@@ -105,7 +106,7 @@ class ComponentClassScan:
         """
         try:
             hints = typing.get_type_hints(component_class.__init__)
-        except Exception:  # pylint: disable=broad-except  (an unresolvable annotation is a "no")
+        except Exception:  # pylint: disable=broad-except  # an unresolvable annotation is a "no"
             return None
         config_class = hints.get(cls.CONFIG_PARAMETER)
         if isinstance(config_class, type) and dataclasses.is_dataclass(config_class):
@@ -250,7 +251,7 @@ class JsonTypes:
             The schema, or ``None`` for the sizing sentinel and the law type, which are never
             written into a file.
         """
-        if candidate is type(None):
+        if candidate is NoneType:
             return {"type": "null"}
         if not isinstance(candidate, type):
             return dict(cls.ANY)

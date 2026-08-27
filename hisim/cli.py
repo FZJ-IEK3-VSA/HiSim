@@ -394,17 +394,20 @@ class EnergySystemCommands:
     @classmethod
     def facts(cls, arguments: argparse.Namespace, out: TextIO, error_stream: TextIO) -> int:
         """Prints the sizing resolution of one energy-system file without running it."""
+        del error_stream  # every command shares one signature; this one reports nothing separately
         return FactsRenderer.render(Path(arguments.energy_system), out)
 
     @classmethod
     def schema(cls, arguments: argparse.Namespace, out: TextIO, error_stream: TextIO) -> int:
         """Writes the JSON Schema of the format, either to the committed file or to a given path."""
+        del error_stream  # every command shares one signature; this one reports nothing separately
         print(f"Wrote the schema of the energy-system format to {export_schema(arguments.out)}.", file=out)
         return ExitCodes.OK
 
     @classmethod
     def run(cls, arguments: argparse.Namespace, out: TextIO, error_stream: TextIO) -> int:
         """Runs one energy-system file over one simulation period."""
+        del error_stream  # every command shares one signature; failures propagate as exceptions
         built = run_energy_system(
             arguments.energy_system,
             arguments.simulation_parameters,

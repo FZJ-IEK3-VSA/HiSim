@@ -27,6 +27,7 @@ from __future__ import annotations
 import dataclasses
 import enum
 import typing
+from types import NoneType
 from typing import Any, Dict, Mapping, Optional, Tuple, Type
 
 from hisim.config.sizing import AUTO, SizedFieldMetadata, _AutoSize
@@ -281,7 +282,7 @@ class ConfigValueCodec:
         arguments = typing.get_args(annotation)
         if not arguments:
             return (annotation,)
-        return tuple(argument for argument in arguments if argument is not type(None))
+        return tuple(argument for argument in arguments if argument is not NoneType)
 
     @classmethod
     def _decode_enum(

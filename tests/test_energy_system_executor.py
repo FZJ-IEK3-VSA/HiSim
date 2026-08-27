@@ -80,7 +80,7 @@ def test_the_minimal_mockup_names_only_converted_classes() -> None:
     of it names a preset that does not exist, the run below fails for a reason that has nothing
     to do with the executor.
     """
-    assert dict(ExpectedFailures.MINIMAL) == {}
+    assert not dict(ExpectedFailures.MINIMAL)
 
 
 @pytest.mark.base

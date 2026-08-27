@@ -17,7 +17,7 @@ validator pins, seen from the other side.
 
 # clean
 
-from typing import Any, ClassVar, Dict, List, Tuple
+from typing import Any, ClassVar, Dict, List, Tuple, cast
 
 import jsonschema
 import pytest
@@ -64,7 +64,7 @@ class Documents:
 @pytest.fixture(name="schema", scope="module")
 def fixture_schema() -> Dict[str, Any]:
     """Loads the committed schema once for the whole module."""
-    return yaml.safe_load(default_schema_path().read_text(encoding="utf-8"))
+    return cast(Dict[str, Any], yaml.safe_load(default_schema_path().read_text(encoding="utf-8")))
 
 
 @pytest.fixture(name="validator", scope="module")

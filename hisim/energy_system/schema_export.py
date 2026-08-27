@@ -352,7 +352,7 @@ class SchemaBuilder:
         for name, builder in constructors_of(config_class).items():
             try:
                 resolved[name] = dict(typing.get_type_hints(builder.function))
-            except Exception:  # pylint: disable=broad-except  (an unresolvable annotation stays open)
+            except Exception:  # pylint: disable=broad-except  # an unresolvable annotation stays open
                 resolved[name] = {}
         return resolved
 
@@ -373,7 +373,7 @@ class SchemaBuilder:
         """
         try:
             hints = typing.get_type_hints(config_class)
-        except Exception:  # pylint: disable=broad-except  (an unresolvable field stays permissive)
+        except Exception:  # pylint: disable=broad-except  # an unresolvable field stays permissive
             hints = {}
         sizable = {field.name for field in description.fields if field.sizable}
         return {

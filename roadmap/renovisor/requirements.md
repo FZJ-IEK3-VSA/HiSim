@@ -109,28 +109,26 @@ Full survey in `roadmap/renovisor/field_inventory.md`. Headline numbers:
 | `HeatingSystems` values the contract offers | 10 (**5** expressible as an energy-system file today) |
 | Component classes an energy-system file can use today | 8 across 6 modules |
 | Component classes the ten base files need | ≈26 across ≈19 modules |
-| Contract operations that need a HiSim result | 9 of 17 |
+| Contract operations that need a HiSim result | 3 of 17 (`fast-estimate`, `detailed-simulation`, `report.pdf`); `packageset` is served from calculations HiSim performs but does not enumerate |
 | Irish subsidy catalogues in `hisim/subsidy_catalog/` | 0 (`AT.json`, `DE.json` only) |
 | Irish tariff files in `hisim/cost_database/tariffs/` | 0 (`DE_DYNAMIC_SYNTHETIC_2024.json` only) |
 
 ### 4.3 What the contract asks for that v1 never did
 
-Five capabilities are new, not refinements:
+Four capabilities are new, not refinements. (A fifth, generating the package set, is what the
+contract's `packageset` resource is for; it is outside HiSim — §5 — and is not listed.)
 
 1. **Result derivation.** v1 uploaded HiSim's result *files* and left interpretation to the
    receiving server (`spec.md` §1: "explicitly out of scope for v1"). v0.3's `CalculationStatus.
    result` is a `Package` carrying `kpis` and `costs` — 13 + 27 numbers the backend must produce.
-2. **Package generation.** `GET /homeinventories/{hi_id}/packageset` is documented as returning
-   "100+ packages once finished; the frontend picks three to display". Nothing generates,
-   scores or ranks renovation packages today.
-3. **Two calculation tiers.** `fast-estimate` and `detailed-simulation` are separate resources
+2. **Two calculation tiers.** `fast-estimate` and `detailed-simulation` are separate resources
    with separate result URLs. HiSim has one tier: a full simulation. There is no fast path.
-4. **A read-through, content-addressed service.** Results are `GET`, lazily started, coalesced
+3. **A read-through, content-addressed service.** Results are `GET`, lazily started, coalesced
    across duplicate requests, and — once finished — cached `immutable` for a year. v1 is a
    one-shot CLI that pushes to a URL. *This one lands entirely on the C# side (C11) and is
    listed here only because it is what makes determinism (R10) and versioning (R14) load-bearing
    for HiSim: a result the service will cache for a year had better be reproducible.*
-5. **Refusal as a first-class outcome.** `CalculationState` includes `refused`. v1 has exit
+4. **Refusal as a first-class outcome.** `CalculationState` includes `refused`. v1 has exit
    codes; the notion that a *valid* request may be un-simulable (no TABULA archetype, an
    unsupported combination) has no representation in it.
 
@@ -204,8 +202,11 @@ countries beyond Ireland.
 - Countries other than Ireland. The mechanism must not preclude them; only IE is verified.
 - Reworking the KPI computation or the cost engine beyond what the payloads need.
 - The building sizer and HPC harness tracks of P5, though they share the base files.
-- A renovation-*advice* engine: which packages are worth recommending is a product question;
-  this document requires only that a package set can be produced and priced (see R6, Q5).
+- **Package generation, in full.** `[given 2026-08-27, owner]` Deciding which renovation
+  packages exist for a dwelling, enumerating them, scoring or ranking them is outside HiSim
+  entirely. A package arrives as an input to a calculation, already decided. Whoever produces
+  them — the C# service, a product catalogue, the frontend — is not this document's concern, and
+  nothing in §8.1 may assume HiSim can enumerate a set.
 
 ## 6. Use cases and mockups
 
@@ -317,13 +318,12 @@ resulting inventory is what the emitter reads. Envelope measures must reach the 
 refurbishment variant — because those ten fields exist and are directly consumable
 (`field_inventory.md` rows 13–22).
 
-**R6 — Enumerate a package set.** `[given; from the contract's packageset resource, which the C# service backs]`
-Given a dwelling configuration, the layer must be able to produce the set of packages the
-product offers for it, each with an id computed by the same rule as a package supplied to it
-directly — so that a package reached either way collapses to the same identity. Enumerating a
-set and calculating one package are separate operations; whether the C# service asks for the
-set and then requests calculations one at a time, or something else, is its decision. How many
-packages, and by what selection rule, is Q5.
+**R6 — Enumerate a package set.** `[withdrawn 2026-08-27, owner]`
+~~Given a dwelling configuration, the layer must produce the set of packages the product offers
+for it.~~ Package generation is outside HiSim (§5 non-goals). A package arrives already decided;
+the layer calculates the one it is given. ID stability still matters and did not go with this
+requirement — it lives on in A6.5, because two clients specifying the same renovation must reach
+the same `pkg_id` however the package was arrived at.
 
 **R7 — Report the fate of every field.** `[given; spec.md §6, strengthened]`
 Every leaf field present in a configuration must appear exactly once in a machine-readable
@@ -508,8 +508,9 @@ The requirements the replacement must satisfy:
   the same `pkg_id`" — fails if clients mint random ids.
 - **A6.6 — `alternatives` is removed.** A package is one concrete plan whose hash identifies one
   simulation. A measure carrying alternatives makes it a set of plans, and leaves "which
-  alternative produced these KPIs?" unanswerable. Alternatives belong to the package-set
-  generator (R6, Q5): they are how the set is enumerated, not what a member contains.
+  alternative produced these KPIs?" unanswerable. Alternatives belong to whatever enumerates
+  packages, which is outside HiSim (§5): they are how a set is generated, not what a member of
+  it contains.
 - **A6.7 — Units follow the inventory's convention.** `_in_watt`, `_in_kwh`, `_in_liters`,
   `_in_degree`. The drafted `thickness_mm` and `capacity_kw` use a different convention from
   every other schema in the document, and `capacity_kw` is ambiguous between thermal and
@@ -898,32 +899,14 @@ real cost; a silently double-counted meter is a wrong number.
 
 ---
 
-**Q5 — What generates the 100+ packages, and who owns the rule?** · blocks R6, UC1
+**Q5 — What generates the packages, and who owns the rule?** · `[withdrawn 2026-08-27, owner]`
 
-*Context.* The contract documents `GET …/packageset` as returning "100+ packages once finished;
-the frontend picks three to display". Nothing in HiSim generates renovation packages, scores
-them or ranks them; the v1 translator ran one simulation per invocation and the caller chose the
-measures. If each of 100 packages needs a detailed simulation, one package set is 100 full-year
-simulations.
-
-*Options.* (a) **A combinatorial generator in the translation layer**, over an enumerated
-measure vocabulary (A6), with the product's selection rule expressed as data. Consequence:
-HiSim owns a product decision; the rule needs a product owner to state it. (b) **The package set
-is supplied to the backend** as a catalogue the product team maintains, and the backend only
-prices it. Consequence: clean separation; requires the catalogue to exist. (c) **The package set
-is computed by the fast tier only**, with detailed simulation reserved for packages the user
-opens. Consequence: makes the cost of (a) or (b) bearable — this is orthogonal to who owns the
-rule, and probably required regardless.
-
-*Recommendation.* (b) for ownership plus (c) for cost. HiSim should price and simulate packages,
-not decide which renovations to recommend.
-
-*Sharpened by Q1's answer (2026-08-27).* With calculations run as containers started by the C#
-service, a package set of 100+ packages is 100+ container starts unless the unit of work is
-widened (Q9). That makes (c) not merely advisable but close to forced, and it moves the
-batching decision to the C# side, which owns scheduling.
-
-*Blocks.* R6, UC1.
+Package generation is outside HiSim (§5 non-goals, R6 withdrawn), so this is not a question this
+document answers. Kept as a marker because the reasoning it carried has to land somewhere: the
+cost of calculating a large package set is real — one calculation per package, one container
+occupancy each (Q9, Q10) — and it now sits entirely with whoever schedules the calculations. If
+that party wants a cheaper package set, the lever is the fast tier (Q6) and the parameters file
+it sends (A18), not anything HiSim decides.
 
 ---
 
@@ -1020,9 +1003,8 @@ arrives** (a mounted volume with a file at a fixed path, an argument, or stdin),
 leaves** (files in a mounted result directory, or one JSON document on stdout), **what the exit
 status means** (R13.2 needs success, refusal, validation error and crash to be four
 distinguishable outcomes), and **what the unit of work is** — one package per container, or one
-container computing a whole package set. The last is not cosmetic: at 100+ packages per set
-(contract, `packageset`), the choice is between 100 container starts and one, and HiSim's import
-time is paid once per start.
+container computing several. The last is not cosmetic: a caller wanting many packages priced
+pays one container occupancy each, and HiSim's import time is paid once per container start.
 
 *Options.* (a) **Files in, files out**: a mounted input directory holding the house
 configuration, a mounted output directory receiving the result document, the translation report,
@@ -1037,8 +1019,7 @@ Consequence: covers both, at the cost of two mechanisms to document.
 *Recommendation.* (a), with the unit of work being one *calculation* (one inventory, one
 package, one tier). It matches what HiSim already produces, keeps the R7 report and the R10
 record as first-class files rather than blobs, and leaves batching to the C# side, which is
-where the scheduling decisions already live. The package-set cost this implies is real and
-belongs in Q5's answer, not here.
+where the scheduling decisions already live.
 
 *Answer.* `[decided 2026-08-27, owner]` **(a) files in, files out**, with the unit of work one
 calculation — but the container is **reused** across calculations rather than started per
@@ -1046,7 +1027,9 @@ calculation, which is what pays off the start-up cost that made the per-calculat
 expensive. The C# side additionally provides a function to delete a result directory outright
 and a working-tree cleanliness test after each calculation (R13.4, AC11.5).
 
-*What the answer costs.* Reuse converts a cheap guarantee into an expensive one. With a fresh
+*What the answer costs.* Reuse largely settles the throughput worry on its own — the import
+cost is paid once per container, not once per calculation — but it converts a cheap guarantee
+into an expensive one. With a fresh
 process per calculation, R13.1's isolation was free; with a reused process it must be built,
 and C13 records that HiSim does not have it today — a process-wide `SingletonSimRepository`
 written from 29 call sites that no production path resets, and a `ResultPathProviderSingleton`
@@ -1099,7 +1082,8 @@ moves to container memory, which is what R13.3 has to bound.
 immutable, identified by the hash of its canonicalised form (`hi_id`).
 **Package** — a set of renovation measures plus grant selections, a schedule and financing,
 identified by the hash of its own contents (`pkg_id`).
-**Package set** — the 100+ packages the backend derives from one home inventory.
+**Package set** — the packages offered for one home inventory. Produced outside HiSim; named
+here only because the contract has a resource for it.
 **Fast estimate / detailed simulation** — the contract's two calculation tiers for one package.
 **Refused** — a terminal calculation state meaning the input was well-formed but not simulable,
 as distinct from a validation error and from a failure.

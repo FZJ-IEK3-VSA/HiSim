@@ -176,10 +176,13 @@ NO_STORAGE_MASS_FLOW_FIX` and no DHW branch at all.
 
 ## 7. Endpoint surface
 
-`roadmap/renovisor/openapi.yaml`: 15 paths, 17 operations, 20 schemas. Of the 17 operations, 9
-need a HiSim result to answer: `packageset`, `fast-estimate`, `detailed-simulation`,
-`report.pdf`, `POST /homeinventories/{hi_id}/packages`, and the four `from-*` creation routes,
-each of which must produce an inventory that is actually simulable.
+`roadmap/renovisor/openapi.yaml`: 15 paths, 17 operations, 20 schemas.
+
+Three operations are answered by a HiSim calculation: `fast-estimate`, `detailed-simulation` and
+`report.pdf`. `packageset` is served from many such calculations, but *enumerating* the packages
+is outside HiSim (requirements §5), so it is not one of the three. The four `from-*` creation
+routes and `POST …/packages` constrain HiSim only indirectly: whatever they accept must be
+simulable, which is what the 79-field survey above is about.
 
 ## 8. What the v1 translator does today, for comparison
 

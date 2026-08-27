@@ -178,11 +178,16 @@ NO_STORAGE_MASS_FLOW_FIX` and no DHW branch at all.
 
 `roadmap/renovisor/openapi.yaml`: 15 paths, 17 operations, 20 schemas.
 
-Three operations are answered by a HiSim calculation: `fast-estimate`, `detailed-simulation` and
-`report.pdf`. `packageset` is served from many such calculations, but *enumerating* the packages
-is outside HiSim (requirements §5), so it is not one of the three. The four `from-*` creation
-routes and `POST …/packages` constrain HiSim only indirectly: whatever they accept must be
-simulable, which is what the 79-field survey above is about.
+**One** operation is answered by a HiSim calculation: `detailed-simulation`. Three others are
+produced outside HiSim (requirements §5) — `packageset` enumerates packages, `fast-estimate` is a
+cheaper tier computed elsewhere, and `report.pdf` is rendered from a result payload rather than
+by a simulation. The four `from-*` creation routes and `POST …/packages` constrain HiSim only
+indirectly: whatever they accept must be simulable, which is what the 79-field survey above is
+about.
+
+The ratio is the point. Of seventeen operations the contract defines, HiSim answers one — and
+the reason this document is long is that answering that one well requires the other sixteen to
+agree about what a dwelling, a package and a result are.
 
 ## 8. What the v1 translator does today, for comparison
 

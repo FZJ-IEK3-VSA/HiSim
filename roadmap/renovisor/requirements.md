@@ -109,7 +109,7 @@ Full survey in `roadmap/renovisor/field_inventory.md`. Headline numbers:
 | `HeatingSystems` values the contract offers | 10 (**5** expressible as an energy-system file today) |
 | Component classes an energy-system file can use today | 8 across 6 modules |
 | Component classes the ten base files need | ≈26 across ≈19 modules |
-| Contract operations answered by a HiSim calculation | 2 of 17 (`detailed-simulation`, `report.pdf`); `packageset` and `fast-estimate` are produced outside HiSim |
+| Contract operations answered by a HiSim calculation | **1 of 17** (`detailed-simulation`); `packageset`, `fast-estimate` and `report.pdf` are produced outside HiSim |
 | Irish subsidy catalogues in `hisim/subsidy_catalog/` | 0 (`AT.json`, `DE.json` only) |
 | Irish tariff files in `hisim/cost_database/tariffs/` | 0 (`DE_DYNAMIC_SYNTHETIC_2024.json` only) |
 
@@ -195,8 +195,14 @@ countries beyond Ireland.
 **Non-Goals**
 
 - The HTTP service itself: routing, auth, storage, result caching, job coalescing, content
-  hashing, PDF rendering, and the scheduling of calculations. All of it belongs to the C#
-  service (§4.6, Q1 decided). HiSim is invoked, never polled.
+  hashing, and the scheduling of calculations. All of it belongs to the C# service (§4.6, Q1
+  decided). HiSim is invoked, never polled.
+- **The PDF report.** `[given 2026-08-27, owner]` The contract's `report.pdf` resource is
+  rendered outside HiSim, from the result payload HiSim returns. Nothing in §8.1 produces a
+  document for a human reader; the deliverable is data. Note that HiSim's own
+  `GENERATE_PDF_REPORT` post-processing option is a different thing — a developer's artifact of a
+  run, reachable through the parameters file (A18) if a caller ever wants it, and not the
+  contract's report.
 - Countries other than Ireland. The mechanism must not preclude them; only IE is verified.
 - Reworking the KPI computation or the cost engine beyond what the payloads need.
 - The building sizer and HPC harness tracks of P5, though they share the base files.

@@ -42,6 +42,9 @@ ruamel.yaml
 # and the mockups against it; HiSim itself never imports it at runtime
 jsonschema
 Pillow
+# Independent implementation cross-check of the closed-form financial math
+# (tests/test_economics_invariants.py, cost-spec-v2 §5.3).
+numpy_financial
 # RenoVisor translator (hisim/renovisor): REST result submission
 requests
 # HPC harness (scripts/hpc_harness): REST queue server + worker fleet

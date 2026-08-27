@@ -16,8 +16,8 @@ what makes a full factorial sweep a matter of milliseconds per cell.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, Optional
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, Optional
 
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.timeline import discount_factor
@@ -123,3 +123,12 @@ class EconomicParameters:
         if interest == 0.0:
             return 1.0 / years
         return interest * (1.0 + interest) ** years / ((1.0 + interest) ** years - 1.0)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """The parameter record as a JSON-serializable dict, one key per field.
+
+        Consumed by `LifecycleCostResult.to_json` so the assumptions travel with every stored
+        result (§4.6). Plain `asdict` is sufficient: every enum in the record is a str-enum, so
+        the per-carrier and per-asset-class rate dicts keep JSON-compatible string keys.
+        """
+        return asdict(self)

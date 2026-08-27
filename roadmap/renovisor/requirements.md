@@ -126,7 +126,9 @@ Five capabilities are new, not refinements:
    with separate result URLs. HiSim has one tier: a full simulation. There is no fast path.
 4. **A read-through, content-addressed service.** Results are `GET`, lazily started, coalesced
    across duplicate requests, and — once finished — cached `immutable` for a year. v1 is a
-   one-shot CLI that pushes to a URL.
+   one-shot CLI that pushes to a URL. *This one lands entirely on the C# side (C11) and is
+   listed here only because it is what makes determinism (R10) and versioning (R14) load-bearing
+   for HiSim: a result the service will cache for a year had better be reproducible.*
 5. **Refusal as a first-class outcome.** `CalculationState` includes `refused`. v1 has exit
    codes; the notion that a *valid* request may be un-simulable (no TABULA archetype, an
    unsupported combination) has no representation in it.
@@ -171,7 +173,7 @@ countries beyond Ireland.
 | **Current behavior** | A CLI translates a v1 request into a `ModularHouseholdConfig`, picks one of ten Python setups, runs it in-process, and POSTs matched result files plus a mapping report to a URL. |
 | **Required behavior** | A reused container is handed a house configuration; inside it, a library **selects one of the checked-in energy-system files and parametrises it** — overrides and group flags, nothing authored from scratch — runs it deterministically, derives the contract's `kpis` and `costs`, and hands them back. The C# service serves them under a content-addressed URL. |
 | **Explicitly not** | Generating an energy system from the request. The systems are hand-authored and reviewed; the translator chooses among them and fills in values. What it may write is fenced by R4 and checked by AC3. |
-| **Decided** | `[decided 2026-08-27, owner]` The service is a C# application in another repository. HiSim supplies a calculation library, packaged as a container image the service starts per calculation. HiSim owns no HTTP, no store, no queue and no auth (Q1). |
+| **Decided** | `[decided 2026-08-27, owner]` The service is a C# application in another repository. HiSim supplies a calculation library, packaged as a container image the service reuses across calculations, calling it with a file (Q1, Q9, Q10). HiSim owns no HTTP, no store, no queue and no auth, and nothing in §8.1 may assume otherwise. |
 
 ## 5. Goals and non-goals
 
@@ -206,46 +208,62 @@ countries beyond Ireland.
 
 ## 6. Use cases and mockups
 
-### UC1 — Create a home inventory and get its package set
+**Whose use cases these are.** Every case below is written at HiSim's boundary: a file arrives,
+a calculation happens, files come back. There is no HTTP on this side — no `POST`, no `202`, no
+polling, no cache. The contract's endpoints appear in this document only as §8.2's subject
+matter and as the reason a payload has the fields it has; the C# service maps between the two
+(C11), and how it does so is not HiSim's to specify.
 
-*Input.* `POST /homeinventories` with the 79-field body; then
-`GET /homeinventories/{hi_id}/packageset`.
-*Expected.* The POST returns a content hash. The GET returns `202 queued`, then `202 running`,
-then `200` with a `PackagesetResult` whose packages each carry `kpis` and `costs`. A second
-identical POST returns the same hash; a second GET after completion is served from cache
-without recomputing.
+One thing Q9's answer did not settle: whether the inventory and the package arrive as one
+document or two. The cases below say "a configuration file" and stay deliberately neutral;
+whoever writes the process contract decides (Q9 sub-item, noted in R13).
 
-### UC2 — One package, simulated in detail
+### UC1 — One calculation
 
-*Input.* `POST /homeinventories/{hi_id}/packages` with a `PackageDefinition`; then
-`GET /homeinventories/{hi_id}/packages/{pkg_id}/detailed-simulation`.
-*Expected.* The package's measures are applied to the inventory, the base energy-system file for
-its heating system is selected and parametrised, HiSim runs the result, and the KPI and cost
-payloads are derived from the run.
-The parametrised file is the mockup
+*Input.* The translation layer is called with a configuration file describing one dwelling, one
+package of measures and which tier is wanted.
+*Expected.* It selects the base energy-system file for the dwelling's heating system,
+parametrises it, runs it, and leaves behind the result payload (`kpis`, `costs`), the
+translation report of R7, the parametrised energy-system file and the run's realized record.
+Nothing is uploaded, and nothing is fetched.
+
+### UC2 — What parametrisation produces
+
+*Input.* The UC1 configuration, for an Irish 1988 detached house with a heat pump, PV and a
+battery.
+*Expected.* The parametrised file is the mockup
 `roadmap/renovisor/mockups/heat_pump_household.energy_system.yaml` — **the external
 representation this document is chiefly about**. Its footer (M1–M5) states what it pins down:
-the translator writes only overrides and group flags; ten base files are needed and the
-EMS-less variants double that to twenty; every override traces to one named contract field.
+only overrides and group flags are written; ten base files are needed and the EMS-less variants
+double that to twenty; every override traces to one named contract field.
 
-### UC3 — A request that cannot be simulated
+### UC3 — A configuration that cannot be simulated
 
-*Input.* A home inventory with `country_code: IE` and `tabula_building_type: MFH`.
-*Expected.* `200` with `status: refused` and a reason the frontend can render — the Irish TABULA
-table has 48 `SFH`, 51 `TH` and 19 `AB` rows and **no** `MFH` row. Not a 500, not a silently
-substituted archetype.
+*Input.* A configuration with `country_code: IE` and `tabula_building_type: MFH`.
+*Expected.* A refusal, signalled so the caller can tell it from a crash, naming the offending
+field and carrying a machine-readable reason — the Irish TABULA table has 48 `SFH`, 51 `TH` and
+19 `AB` rows and **no** `MFH` row. Decided before any simulation starts. Not a traceback, and not
+a silently substituted archetype. What the C# service turns this into is its own affair.
 
-### UC4 — An inventory field with no consumer
+### UC4 — A field with no consumer
 
-*Input.* An inventory stating `battery_storage.state_of_health_in_percent: 90`.
+*Input.* A configuration stating `battery_storage.state_of_health_in_percent: 90`.
 *Expected.* The simulation ignores it (HiSim has no capacity-fade model), and the run's
 translation report says so in as many words. Under R7 no field is silently dropped.
 
-### UC5 — Re-running a stored result
+### UC5 — Re-running a realized record
 
 *Input.* The realized record written by a finished calculation, re-executed.
 *Expected.* Byte-identical results. This is the epic's identity test applied to RenoVisor's
-output, and it is what makes the contract's `Cache-Control: immutable` defensible.
+output, and it is what lets the C# side treat a finished result as final.
+
+### UC6 — Many calculations in one container
+
+*Input.* A sequence of *differing* configuration files handed to the same container, one after
+another (Q9, Q10).
+*Expected.* Each produces exactly what it would have produced as the first calculation of a
+fresh container, and after each one's output location is deleted, nothing of it remains on disk.
+This is the case C13 says HiSim does not survive today, and it is what AC11.1 and AC11.5 test.
 
 ## 7. Why it matters
 
@@ -298,16 +316,20 @@ resulting inventory is what the emitter reads. Envelope measures must reach the 
 refurbishment variant — because those ten fields exist and are directly consumable
 (`field_inventory.md` rows 13–22).
 
-**R6 — Produce a package set.** `[given; contract GET …/packageset]`
-Given a home inventory, the layer must produce a set of `PackageDefinition`s covering the
-measure combinations the product offers, each with an id computed by the same rule as a
-user-registered package. How many, and by what selection rule, is Q5.
+**R6 — Enumerate a package set.** `[given; from the contract's packageset resource, which the C# service backs]`
+Given a dwelling configuration, the layer must be able to produce the set of packages the
+product offers for it, each with an id computed by the same rule as a package supplied to it
+directly — so that a package reached either way collapses to the same identity. Enumerating a
+set and calculating one package are separate operations; whether the C# service asks for the
+set and then requests calculations one at a time, or something else, is its decision. How many
+packages, and by what selection rule, is Q5.
 
 **R7 — Report the fate of every field.** `[given; spec.md §6, strengthened]`
-Every leaf field present in a request must appear exactly once in a machine-readable
+Every leaf field present in a configuration must appear exactly once in a machine-readable
 translation report with a status of `used`, `approximated`, `defaulted`, `ignored` or
-`non_simulation`. The report must be retrievable for any finished calculation. This is the
-mechanism that keeps §4.2's counts honest as HiSim's fidelity grows.
+`non_simulation`. The report is written beside the results of the calculation it describes, so
+that a caller holding a result also holds the account of how faithfully it was simulated. This
+is the mechanism that keeps §4.2's counts honest as HiSim's fidelity grows.
 
 **R8 — Derive the KPI payload.** `[given; contract Kpis]`
 The layer must compute every `Kpis` field the amended contract keeps, from the finished run,
@@ -591,13 +613,13 @@ Irish archetype. The contract must carry the supported set explicitly.
 
 | ID | Criterion | Verifies |
 |---|---|---|
-| AC1 | Every field of the amended `HomeInventoryInput` is classified in the contract and appears in the translation report of any request that carries it. | R7, A1, A2 |
+| AC1 | Every field of the amended `HomeInventoryInput` is classified in the contract and appears in the translation report of any calculation whose configuration carries it. | R7, A1, A2 |
 | AC2 | For each supported `heating_system.system` value, a checked-in base energy-system file exists, loads, resolves, builds and runs. | R1, R2, C4 |
 | AC3 | A parametrised energy-system file differs from its base file only in `config` values, `constructor` arguments and group flags — verified mechanically by diffing against the base. | R4 |
 | AC4 | An inventory plus a package whose measures change the roof produces a file whose `building.config.roof_u_value_in_watt_per_m2_per_kelvin` carries the measure's value. | R5, A6, A7 |
 | AC5 | Translating and running the same inventory and package twice produces byte-identical parametrised energy-system files and realized records, and equal result payloads. | R10, G3 |
 | AC6 | Re-executing a stored realized record reproduces the run bit-for-bit. | R10, UC5 |
-| AC7 | An `IE` + `MFH` inventory returns `refused` with an enumerated reason naming the offending field, before any simulation starts. | R11, A16, UC3 |
+| AC7 | An `IE` + `MFH` configuration is refused, distinguishably from a crash, with an enumerated reason naming the offending field, before any simulation starts. | R11, A16, UC3 |
 | AC8 | Every `Kpis` and `Costs` field the amended contract keeps is produced by a finished calculation, and each is traceable to a named HiSim KPI or cost-engine output. | R8, R9, A12, A13, A14 |
 | AC9 | The three values of a `Range` in one `Costs` object come from one evaluation slot; a test detects a mixed-slot object. | R9, A9 |
 | AC10 | A finished result carries a calculation version, and changing any of the translator, base files, component models or cost database changes it. | R14, A15 |

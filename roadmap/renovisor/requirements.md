@@ -1,6 +1,6 @@
 # RenoVisor backend: translation layer and API contract — requirements
 
-**Status:** draft (Q1, Q9, Q10 decided 2026-08-27: a reused container running one calculation at a time, files in and files out, driven by a C# service in another repo)
+**Status:** draft (2026-08-27: interface decided — a reused container, one calculation at a time, files in and files out, driven by a C# service in another repo; `Measure` replaced; mocked KPIs accepted)
 **Date:** 2026-08-27
 **Author(s):** assistant (all `[proposed]` items, evidence survey) · Noah Pflugradt (owner; all `[given]` items)
 **Reviewers:** HiSim core team · RenoVisor frontend team (§8.2 only)
@@ -10,7 +10,8 @@ document's §8.1, kept until the replacement is accepted) · `roadmap/renovisor/
 `roadmap/declarative_energy_systems/epic.md` and its `plan.md` P5 row (this work *is* the
 RenoVisor half of P5) · `roadmap/cost-spec-v2.md` (the cost engine the result payloads need)
 **Companions:** `roadmap/renovisor/field_inventory.md` (the counted survey) ·
-`roadmap/renovisor/mockups/heat_pump_household.energy_system.yaml` (a base file after parametrisation)
+`roadmap/renovisor/mockups/heat_pump_household.energy_system.yaml` (a base file after parametrisation) ·
+`roadmap/renovisor/mockups/measures.schema.yaml` (the proposed replacement for `Measure`, A6)
 
 **Tags:** feature, behavior-change, migration, compatibility, technical-debt
 **Keywords:** RenoVisor, API contract, OpenAPI, home inventory, package, energy-system file,
@@ -331,10 +332,12 @@ translation report with a status of `used`, `approximated`, `defaulted`, `ignore
 that a caller holding a result also holds the account of how faithfully it was simulated. This
 is the mechanism that keeps §4.2's counts honest as HiSim's fidelity grows.
 
-**R8 — Derive the KPI payload.** `[given; contract Kpis]`
-The layer must compute every `Kpis` field the amended contract keeps, from the finished run,
-and must state for each the boundary and period it was computed over. A field it cannot compute
-must be absent, never zero.
+**R8 — Derive the KPI payload, and label what is not derived.** `[given; contract Kpis; amended 2026-08-27, owner]`
+The layer must compute every `Kpis` field it can from the finished run, and must state for each
+the boundary and period it was computed over. For the ten fields with no HiSim source, the MVP
+serves constants (A12); each such value must be **labelled as mocked in the result itself**, so
+that no consumer can mistake a placeholder for a simulated number. A field that is neither
+computed nor deliberately mocked is absent, never zero.
 
 **R9 — Derive the cost payload.** `[given; contract Costs]`
 The layer must compute every `Costs` field the amended contract keeps, using
@@ -403,11 +406,29 @@ later HiSim change mistakes the absence of a crash for thread-safety. Parallelis
 running more containers, which makes per-container memory the scaling limit and is what R13.3
 must bound.
 
-**R13.2 — Failures are reportable to a caller that cannot read Python.** `[proposed; follows from R11]`
-A refusal, a validation error and a crash must each be distinguishable from the container's
-output alone — an exit status plus a structured document — without the C# service parsing a
-log. This is R11's requirement restated at the process boundary, and it is where R11 actually
-gets tested.
+**R13.2 — Every failure is written to `errors.json`.** `[given 2026-08-27, owner]`
+A calculation that does not succeed must write a structured `errors.json` into its output
+location, listing every error with a machine-readable reason, so the C# service can read what
+went wrong from a file rather than parse a log or a traceback. Refusals, validation errors and
+crashes all land there and are distinguishable within it. Three properties the file needs, which
+follow from what the caller does with it:
+
+- **R13.2.1 — Written on every unsuccessful outcome, at a fixed path.** The C# side must be able
+  to look in one known place. An outcome with no `errors.json` and no result is itself a defect —
+  a container that died without writing one is indistinguishable from a container that hung.
+- **R13.2.2 — Reasons come from a closed, published catalogue.** A reason code the service has
+  never seen cannot be rendered to a user or routed to a retry policy. This is A16's requirement
+  on the contract's side, met here on HiSim's: the catalogue is the shared vocabulary, and it
+  belongs in the container's documentation next to R13.5's occupancy note.
+- **R13.2.3 — An error names what it is about.** The offending field path for a validation error
+  or a refusal (UC3's `tabula_building_type`), the component or the stage for a crash. A reason
+  code alone tells the service which class of thing went wrong but not what to say about it.
+
+An unexpected exception is a legitimate entry: it becomes an error with a generic code, its
+message, and enough of the traceback for a HiSim developer — the C# side never has to read that
+part, but the alternative is losing it. Whether `errors.json` is also written on success, empty,
+is a detail for the process contract; writing it always is the friendlier shape, since the
+service then reads one file unconditionally.
 
 **R14 — Version stamping.** `[proposed; from the contract's immutable caching]`
 Every finished result must carry the version of the calculation that produced it, covering the
@@ -453,16 +474,58 @@ v0.3 dropped v1's `kmPerYear` but kept per-km consumption. A vehicle's annual en
 therefore driven by an *occupancy* field. Either restore a per-vehicle mileage field with a
 stated consumer, or state that mileage comes from `travel_route_set`.
 
-**A6 — Give `Measure` a closed vocabulary.** `[proposed; contract Measure schema]`
-`Measure` is `{type: string, material_id, subtype, thickness_mm, capacity_kw, alternatives}`
-with `type` unconstrained and no target element. The translator must know which building
-element a measure changes and to what value. Required: an enumerated `type`, a target element
-where one applies, and a stated rule for turning `material_id` + `thickness_mm` into a U-value.
+**A6 — Replace `Measure` outright.** `[given 2026-08-27, owner: "needs to be fully revised"; proposal in `mockups/measures.schema.yaml`]`
+The drafted `Measure` is a single flat object —
+`{type: string, material_id, subtype, thickness_mm, capacity_kw, alternatives}` — for a domain
+that contains at least five unrelated families: envelope work, heat-supply replacement, thermal
+storage, electricity generation and storage, and vehicles. Every field is optional and most are
+meaningless for most types; `type` is unconstrained; nothing says which element or which
+instance a measure applies to. It cannot be revised field by field and is replaced.
 
-**A7 — `Material` must carry thermal properties.** `[proposed; follows from A6]`
-`/materials` returns `{id, name, description, category, image_url}`. If a measure is specified
-as a material and a thickness, the same catalogue must carry the thermal conductivity that
-makes the conversion possible, and it must be the *same* catalogue the calculation uses.
+**The organising idea of the replacement.** *A measure is a typed, targeted write to the home
+inventory, stating the post-measure state of one named block.* Wall insulation, a heat-pump swap
+and an electric car have nothing in common as physical work and everything in common as edits to
+a `HomeInventoryInput`. The complete proposal is
+`roadmap/renovisor/mockups/measures.schema.yaml` — a paste-ready OpenAPI 3.1 fragment, 14
+variants under a `type` discriminator, each declaring in `x-writes` the inventory path it sets.
+
+The requirements the replacement must satisfy:
+
+- **A6.1 — Closed, discriminated vocabulary.** `type` is an enumeration; each variant carries
+  only the fields that apply to it. An unknown `type` is rejected, not ignored.
+- **A6.2 — Every measure names its target.** The building element, the store, the vehicle —
+  whatever the measure applies to, where more than one candidate exists.
+- **A6.3 — Replacement semantics, not deltas.** A measure states what the block looks like
+  afterwards. "+100 mm of insulation" is ambiguous about what it was added to and does not
+  compose when two measures touch one element; "the roof's U-value is now 0.16" is neither.
+- **A6.4 — Closure over the inventory.** Applying a package's measures to a valid
+  `HomeInventoryInput` must yield a valid `HomeInventoryInput`. This is the requirement that
+  makes the vocabulary unable to express anything the simulator cannot consume — by
+  construction rather than by discipline — and it makes R5 a replay of writes rather than
+  per-measure application logic.
+- **A6.5 — Stable, content-derived `measure_id`.** Needed because `Schedule` must reference
+  measures (A22) and because the contract's dedup promise — "submitting identical blocks returns
+  the same `pkg_id`" — fails if clients mint random ids.
+- **A6.6 — `alternatives` is removed.** A package is one concrete plan whose hash identifies one
+  simulation. A measure carrying alternatives makes it a set of plans, and leaves "which
+  alternative produced these KPIs?" unanswerable. Alternatives belong to the package-set
+  generator (R6, Q5): they are how the set is enumerated, not what a member contains.
+- **A6.7 — Units follow the inventory's convention.** `_in_watt`, `_in_kwh`, `_in_liters`,
+  `_in_degree`. The drafted `thickness_mm` and `capacity_kw` use a different convention from
+  every other schema in the document, and `capacity_kw` is ambiguous between thermal and
+  electrical power.
+- **A6.8 — A measure carries no price.** Cost, grant and duration are computed by the backend
+  from the measure's type and specification. A measure that priced itself would let two packages
+  with identical physical content disagree, and would put policy data in a request body.
+
+**A7 — Envelope measures state a U-value; `Material` stays advisory.** `[revised 2026-08-27; follows A6.3]`
+HiSim consumes U-values — `BuildingConfig` carries all ten per-element fields — and cannot
+derive one from a material id, because `/materials` returns
+`{id, name, description, category, image_url}` with no thermal conductivity. Rather than block on
+extending the catalogue, the measure states `resulting_u_value_in_watt_per_m2_per_kelvin`
+outright and treats `material_id` and `thickness_mm` as pricing inputs. The catalogue may gain
+conductivity later without a contract change. Whoever computes the U-value from a build-up does
+so before the request, so the backend never guesses at a construction it was not told about.
 
 **A8 — State the envelope precedence rule.** `[proposed; field_inventory rows 11, 13–22]`
 `retrofit_status` (a TABULA variant) and `envelope_details` (ten explicit U-values and areas)
@@ -485,11 +548,25 @@ Declared `string`; it is a number.
 compete with HiSim's sizing laws, which compute the same quantities. The contract must say
 whether a stated value pins the size or is only a hint.
 
-**A12 — Resolve the 10 KPI fields with no HiSim source.** `[proposed; field_inventory §3]`
+**A12 — The 10 KPI fields with no HiSim source stay in the contract, mocked for the MVP.** `[decided 2026-08-27, owner]`
 `energy_label`, `disruption_days_by_level` (4), `indoor_air_quality`,
-`thermal_insulation_effect`, `summer_heat_protection`, `comfort.heating`, `comfort.cooling`.
-Each must be dropped, deferred with a stated owner outside HiSim, or specified precisely enough
-to be implemented. See Q7.
+`thermal_insulation_effect`, `summer_heat_protection`, `comfort.heating`, `comfort.cooling` are
+all implemented over the coming months and are served as **constants** until they are. The
+contract keeps them; the frontend can build against the full KPI object from the start.
+
+This makes R8's "a field it cannot compute must be absent, never zero" the wrong rule for these
+ten, and replaces it with a stricter one: **a mocked value must be labelled as mocked in the
+result**, not merely documented as mocked. A constant that looks like a computed number is worse
+than an absent field, because it is a plausible number in a renovation recommendation that no
+simulation stands behind, and nothing downstream — a comparison between two packages, a
+screenshot in a report, a user's decision — can tell. The label is also what makes the mocks
+removable: it names exactly which results become stale when a real implementation lands, and it
+turns "which KPIs are real yet?" into a query rather than an archaeology exercise.
+
+Note the interaction with caching (Q2): a result cached `immutable` for a year while its
+`energy_label` is a constant will still be a constant a year later, after the real
+implementation ships. Whatever answers Q2 must cover a mock being replaced, which is a version
+change like any other (R14).
 
 **A13 — Resolve `property_value_increase_in_percent`.** `[proposed; field_inventory §4]`
 No model, no data source, and no evident path to one. Recommend removal.
@@ -515,10 +592,22 @@ inventory may belong to several users. Deleting it for one user would remove ano
 contract must state whether the store is per-content or per-user, and what `DELETE /users/me`
 cascades to.
 
-**A18 — State the simulation parameters the tiers use.** `[proposed; follows R12]`
-The period, resolution and weather year of each tier are part of what makes a result what it is.
-They are not in the contract, and the contract has no field through which a caller could set
-them — which is correct, but then they must be pinned by the contract version.
+**A18 — Simulation parameters arrive from the caller.** `[decided 2026-08-27, owner; supersedes "pinned by the contract version"]`
+The C# service supplies a `simulationparameters.json` alongside the house configuration; period,
+resolution and post-processing options are its choice, not a constant of the image. Three
+consequences for this document:
+  - The two tiers of R12 differ by *which parameters file the service sends*, which makes Q6's
+    option (a) — a shorter simulation — the cheap one to implement and removes the need for any
+    tier switch inside HiSim.
+  - The parameters are an input to the calculation and therefore an input to R10's determinism
+    and R14's version stamp: the same configuration under different parameters is a different
+    result and must not collide in the service's cache.
+  - HiSim already reads this file. `hisim/energy_system/executor.py:SimulationParametersReader`
+    accepts `*.simulation.yaml` or `*.simulation.json`, so the mechanism exists; what is open is
+    only whether the RenoVisor field set matches the one that reader expects.
+The contract itself needs no parameters field — correctly, since the frontend never chooses them
+— but a finished result should name the parameters it was computed under, for the same reason
+A4 asks it to name its weather basis.
 
 **A19 — Note the enum coupling to HiSim internals.** `[proposed; §4.4]`
 `heating_system.system`, `heat_distribution_system` and the `envelope_details` field names are
@@ -530,6 +619,48 @@ free to change.
 `GrantScheme` is Ireland-first by its own description, but nothing in the contract says which
 country codes are actually supported, and `tabula_building_type` offers `MFH`, which has no
 Irish archetype. The contract must carry the supported set explicitly.
+
+**A21 — Reconcile the two building-element vocabularies.** `[proposed; measured 2026-08-27]`
+The contract carries two disagreeing element vocabularies. `building_config.envelope_details`
+has **five** — floor, facade, roof, window, door. `condition_assessment.building_elements` has
+**nine** — external_facade, exterior_walls, interior_walls, floors, attic_ceiling, attic_roof,
+roof_covering, windows, house_door. They do not nest: `attic_ceiling`, `attic_roof` and
+`roof_covering` all fall into `roof`; `external_facade` and `exterior_walls` both fall into
+`facade`; `interior_walls` maps to nothing thermal at all. A measure targeting `attic_ceiling`
+therefore has no U-value field to write to. Measures target the five, because those are what the
+thermal model resolves; whether the condition vocabulary shrinks to match, or stays a
+finer-grained survey instrument with a documented mapping onto the five, is the frontend team's
+call — but the mapping must exist and be stated.
+
+**A22 — `Schedule` must reference measures by id.** `[proposed; contract Schedule schema]`
+`Schedule.phase_order` is `[string]`, and measures have no identity, so the strings name nothing.
+No conforming client could write a valid schedule against the draft. With A6.5's `measure_id`,
+`Schedule` becomes phases that list measure ids, and every measure of a package appears in
+exactly one phase.
+
+**A23 — Ventilation has a condition but no existence.** `[proposed; measured 2026-08-27]`
+`condition_assessment.energy_systems.ventilation_system` lets a user report the condition of a
+ventilation system, but `energy_system_config` has no ventilation block, so the inventory cannot
+state that one exists or what it is. A ventilation measure has nowhere to write. Either
+`HomeInventoryInput` gains the block, or ventilation leaves the contract; it cannot stay as
+drafted. Note that HiSim has no infiltration or MVHR parameter either, so adding the block buys
+reporting and pricing, not simulation, until that changes.
+
+**A24 — Vehicles need stable ids.** `[proposed; follows A6.2]`
+`electric_vehicles[]` and `fossil_vehicles[]` entries carry no identifier, so a measure cannot
+name the vehicle it replaces or removes. Positional references are not an option: an index is not
+stable under a list reorder, and a package's hash must not change because the inventory was
+re-serialised. This is a change to `HomeInventoryInput`, which is why it and the measure model
+cannot be revised separately.
+
+**A17 — Reconcile per-user endpoints with content addressing.** `[withdrawn 2026-08-27, owner]`
+~~`GET /homeinventories` is per-user while `security: []` makes it anonymous and the store is
+content-addressed.~~ A real contradiction in the draft, but between the frontend and the C#
+service; nothing about it reaches HiSim, which owns no store and no auth (C11). Dropped from
+this document's scope. Left in place per the decision-log rule so the reviewer who reads §8.2
+for a second time can see it was considered and why it went. Note that with A17 gone, **every
+remaining §8.2 item is a payload change the backend owns**, and C10's "the envelope needs
+frontend sign-off" no longer binds any requirement here.
 
 ## 9. Constraints, invariants and assumptions
 
@@ -617,22 +748,28 @@ Irish archetype. The contract must carry the supported set explicitly.
 | AC2 | For each supported `heating_system.system` value, a checked-in base energy-system file exists, loads, resolves, builds and runs. | R1, R2, C4 |
 | AC3 | A parametrised energy-system file differs from its base file only in `config` values, `constructor` arguments and group flags — verified mechanically by diffing against the base. | R4 |
 | AC4 | An inventory plus a package whose measures change the roof produces a file whose `building.config.roof_u_value_in_watt_per_m2_per_kelvin` carries the measure's value. | R5, A6, A7 |
+| AC4.1 | Applying any package's measures to a valid `HomeInventoryInput` yields a valid `HomeInventoryInput` — checked by schema-validating the post-measure inventory, over every measure variant. | A6.4 |
+| AC4.2 | Two clients submitting the same renovation produce the same `pkg_id`; reordering the measures of a package does not change it. | A6.5, A6.6 |
+| AC4.3 | Every measure variant declares the inventory path it writes, and every path it declares exists in `HomeInventoryInput`. | A6.1, A6.2, A23, A24 |
 | AC5 | Translating and running the same inventory and package twice produces byte-identical parametrised energy-system files and realized records, and equal result payloads. | R10, G3 |
 | AC6 | Re-executing a stored realized record reproduces the run bit-for-bit. | R10, UC5 |
 | AC7 | An `IE` + `MFH` configuration is refused, distinguishably from a crash, with an enumerated reason naming the offending field, before any simulation starts. | R11, A16, UC3 |
-| AC8 | Every `Kpis` and `Costs` field the amended contract keeps is produced by a finished calculation, and each is traceable to a named HiSim KPI or cost-engine output. | R8, R9, A12, A13, A14 |
+| AC8 | Every `Kpis` and `Costs` field the amended contract keeps is produced by a finished calculation, and each is traceable to a named HiSim KPI, a cost-engine output, or a declared mock. | R8, R9, A12, A13, A14 |
+| AC8.1 | Every mocked KPI value is labelled as mocked in the result; a consumer can list which KPIs of a result are simulated and which are placeholders without consulting documentation. | R8, A12 |
 | AC9 | The three values of a `Range` in one `Costs` object come from one evaluation slot; a test detects a mixed-slot object. | R9, A9 |
 | AC10 | A finished result carries a calculation version, and changing any of the translator, base files, component models or cost database changes it. | R14, A15 |
 | AC11 | A calculation runs end to end through the file interface alone, driven by a caller that imports no Python: configuration in, results out, outcome signalled. | R13, C11 |
 | AC11.1 | **The reuse identity test.** A calculation run as the *n*-th in a container's life produces byte-identical outputs to the same calculation run as the first — verified for a sequence of *differing* calculations, since identical ones would not surface the leak. | R13.1, R10, C13 |
-| AC11.2 | A refusal, a validation error and a crash are told apart from the container's outcome signal and output document, with no log parsing. | R13.2, R11, A16 |
+| AC11.2 | A refusal, a validation error and a crash each write `errors.json` at the fixed path, and are told apart from its contents alone, with no log parsing. | R13.2, R13.2.1, R11, A16 |
+| AC11.2a | Every reason code an `errors.json` can carry is in the published catalogue, and every catalogue entry is reachable by some input. | R13.2.2 |
+| AC11.2b | A validation error or refusal names the offending field path; a crash names its stage. | R13.2.3, UC3 |
 | AC11.3 | The same image and the same input, run on two different machines, produce equal results and equal version stamps. | R13.1, R10, R14 |
 | AC11.4 | Resource growth over a long sequence of calculations is bounded, or the recycle limit is stated and enforced. | R13.3 |
 | AC11.5 | After a calculation and the deletion of its output location, a working-tree cleanliness check (`git status --porcelain` or equivalent) reports nothing — no stray `results/`, no file written beside the package. | R13.4 |
 | AC11.6 | The container's documentation states that it serves one calculation at a time and is not safe to run two concurrently. | R13.5 |
 | AC12 | The `fast-estimate` and `detailed-simulation` results for one package are both produced and are distinguishable in the payload. | R12 |
 | AC13 | All golden suites pass; no result of an existing setup changes. | R15, C1 |
-| AC14 | The contract validates against an OpenAPI 3.1 validator after amendment, and every `x-contract-status: provisional` schema names its owner. | A1–A20 |
+| AC14 | The contract validates against an OpenAPI 3.1 validator after amendment, and every `x-contract-status: provisional` schema names its owner. | A1–A24 |
 
 ## 11. Open questions and decisions
 
@@ -643,6 +780,11 @@ Irish archetype. The contract must carry the supported set explicitly.
 | Q1 | HiSim supplies a calculation **library**, packaged as a container image. The service is a C# application in a separate repository. HiSim owns no HTTP, store, queue or auth. Rejected: HiSim hosting the service; a thin reference service in this repository. | 2026-08-27, owner |
 | Q9 | The interface is **files in, files out**, and containers are **reused** across calculations to avoid start-up cost. Rejected: stdin/stdout JSON; a hybrid; one container per calculation. | 2026-08-27, owner |
 | Q10 | A container runs **one calculation at a time**; parallelism comes from running more containers. Rejected: concurrent calculations in threads; concurrent calculations in subprocesses. | 2026-08-27, owner |
+| Q7 / A12 | The 10 KPI fields HiSim cannot compute **stay in the contract and are served as constants** until implemented over the coming months. Every mocked value is labelled as mocked in the result. Rejected: dropping them; serving null; splitting them into a separately-owned block. | 2026-08-27, owner |
+| A6 | `Measure` is **replaced outright** by a discriminated union — a measure is a typed, targeted write to the home inventory. Proposal: `mockups/measures.schema.yaml`. | 2026-08-27, owner |
+| A17 | **Withdrawn.** The per-user/content-addressed contradiction is real but is between the frontend and the C# service; it does not reach HiSim. | 2026-08-27, owner |
+| A18 | The C# service supplies a **`simulationparameters.json`** per calculation; the tiers differ by which one it sends. | 2026-08-27, owner |
+| R13.2 | Failures are reported through a structured **`errors.json`** written into the output location, with reason codes from a published catalogue. | 2026-08-27, owner |
 
 Together these bound the isolation problem sharply. Reuse (Q9) means HiSim must survive being
 run repeatedly in one process, which it does not today (C13); single occupancy (Q10) means the
@@ -810,7 +952,7 @@ cheap and honest about what it is.
 
 ---
 
-**Q7 — Who owns the 10 KPI fields HiSim cannot compute?** · blocks A12, R8, AC8
+**Q7 — Who owns the 10 KPI fields HiSim cannot compute?** · `[answered 2026-08-27]` — **HiSim does; constants until implemented, labelled as mocked.** Entry kept for the alternatives it rejected.
 
 *Context.* `field_inventory.md` §3: of 13 `Kpis` fields, HiSim can produce 3.
 `energy_label` needs an Irish BER/DEAP rating procedure. `disruption_days_by_level` (4 fields)
@@ -831,7 +973,18 @@ problem; the fields still need definitions.
 the ten (`comfort.*`) are worth keeping and specifying, since HiSim already simulates what they
 need.
 
-*Blocks.* A12, R8, AC8.
+*Answer.* `[decided 2026-08-27, owner]` **A fourth option: keep all ten and serve constants**
+until the real implementations land over the coming months. HiSim owns them; nothing is dropped
+and nothing is split out. The frontend builds against the full KPI object from day one.
+
+*What the answer requires in exchange.* A mocked value must be **labelled as mocked in the
+result** (A12, R8, AC8.1). A constant that is indistinguishable from a computed number is worse
+than an absent field: it is a plausible figure in a renovation recommendation with no simulation
+behind it, and no downstream consumer — a package comparison, a report, a homeowner's decision —
+can tell. The label is also what makes the mocks removable, since it names exactly which cached
+results go stale when a real implementation ships (Q2, R14).
+
+*Blocks.* Closed.
 
 ---
 

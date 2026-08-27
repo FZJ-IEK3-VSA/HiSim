@@ -1,0 +1,488 @@
+# ---------------------------------------------------------------------------
+# MOCKUP — proposed replacement for the `Measure` schema of
+# roadmap/renovisor/openapi.yaml v0.3.0-draft. An OpenAPI 3.1 schema fragment,
+# ready to paste into `components.schemas` once agreed.
+#
+# It is the external representation requirement A6 is about, so it is a
+# requirements artifact rather than a design sketch. Its footer states what it
+# fixes and what it costs.
+#
+# THE ORGANISING IDEA
+#
+#   A measure is a typed, targeted WRITE to the home inventory, stating the
+#   post-measure state of one named block.
+#
+# That single sentence is what makes wall insulation, a heat-pump swap and an
+# electric car members of one type. They have nothing in common as physical
+# work; they have everything in common as edits to a `HomeInventoryInput`.
+# Three consequences fall straight out:
+#
+#   - Applying a package is replaying its writes onto a copy of the inventory
+#     (R5). No measure-specific application logic.
+#   - The post-measure inventory must itself be a valid HomeInventoryInput.
+#     So the measure vocabulary CANNOT express anything the simulator cannot
+#     consume — by construction, not by discipline.
+#   - Every override in a parametrised energy-system file traces back through
+#     one inventory field to one measure, which is what R7's translation report
+#     needs and what AC4 tests.
+#
+# Each variant below therefore carries `x-writes`: the inventory path it sets.
+# That is not decoration — it is the mapping the translation layer implements
+# and the check that keeps this schema and `HomeInventoryInput` in step.
+# ---------------------------------------------------------------------------
+
+Measure:
+  x-contract-status: provisional
+  description: |
+    One renovation decision, stated as the post-measure state of one part of the
+    home inventory. Discriminated on `type`; each variant carries only the
+    fields that apply to it.
+
+    Semantics are always REPLACEMENT, never delta. A measure says what the
+    block looks like afterwards, not what changed. "+100 mm of insulation" is
+    ambiguous about what it was added to and does not compose when two measures
+    touch one element; "the roof's U-value is now 0.16" is neither.
+  oneOf:
+    - $ref: '#/components/schemas/InsulateMeasure'
+    - $ref: '#/components/schemas/ReplaceWindowsMeasure'
+    - $ref: '#/components/schemas/ReplaceDoorMeasure'
+    - $ref: '#/components/schemas/ImproveAirtightnessMeasure'
+    - $ref: '#/components/schemas/ReplaceHeatGeneratorMeasure'
+    - $ref: '#/components/schemas/ReplaceHeatDistributionMeasure'
+    - $ref: '#/components/schemas/InstallThermalStorageMeasure'
+    - $ref: '#/components/schemas/InstallPhotovoltaicsMeasure'
+    - $ref: '#/components/schemas/InstallBatteryStorageMeasure'
+    - $ref: '#/components/schemas/InstallSolarThermalMeasure'
+    - $ref: '#/components/schemas/InstallVentilationMeasure'
+    - $ref: '#/components/schemas/ReplaceVehicleMeasure'
+    - $ref: '#/components/schemas/InstallChargerMeasure'
+    - $ref: '#/components/schemas/DecommissionMeasure'
+  discriminator:
+    propertyName: type
+    mapping:
+      insulate: '#/components/schemas/InsulateMeasure'
+      replace_windows: '#/components/schemas/ReplaceWindowsMeasure'
+      replace_door: '#/components/schemas/ReplaceDoorMeasure'
+      improve_airtightness: '#/components/schemas/ImproveAirtightnessMeasure'
+      replace_heat_generator: '#/components/schemas/ReplaceHeatGeneratorMeasure'
+      replace_heat_distribution: '#/components/schemas/ReplaceHeatDistributionMeasure'
+      install_thermal_storage: '#/components/schemas/InstallThermalStorageMeasure'
+      install_photovoltaics: '#/components/schemas/InstallPhotovoltaicsMeasure'
+      install_battery_storage: '#/components/schemas/InstallBatteryStorageMeasure'
+      install_solar_thermal_system: '#/components/schemas/InstallSolarThermalMeasure'
+      install_ventilation_system: '#/components/schemas/InstallVentilationMeasure'
+      replace_vehicle: '#/components/schemas/ReplaceVehicleMeasure'
+      install_charger: '#/components/schemas/InstallChargerMeasure'
+      decommission: '#/components/schemas/DecommissionMeasure'
+
+MeasureBase:
+  x-contract-status: provisional
+  description: |
+    What every measure carries regardless of family.
+
+    Note what is NOT here: no cost, no grant amount, no duration. Those are
+    computed by the backend from `type` plus the specification, priced against
+    the materials and cost catalogues. A measure that carried its own price
+    would let two packages with the same physical content disagree about it,
+    and would put policy data in the request body.
+  type: object
+  required: [measure_id, type]
+  properties:
+    measure_id:
+      type: string
+      description: |
+        Stable identifier within the package, referenced by `Schedule` and by
+        per-measure results. Must be unique in the package and must be derived
+        from the measure's content rather than assigned randomly, or two
+        identical packages would hash differently (see the footer, F3).
+      examples: [roof-insulation]
+    type:
+      type: string
+      description: The discriminator. Closed vocabulary; unknown values are rejected, not ignored.
+
+# ---------------------------------------------------------------------------
+# FAMILY 1 — Envelope. Writes building_config.envelope_details.
+# ---------------------------------------------------------------------------
+
+BuildingElement:
+  x-contract-status: provisional
+  description: |
+    The elements the thermal model actually resolves, and the ONLY vocabulary a
+    measure may target. It is deliberately the five of `envelope_details`, not
+    the nine of `condition_assessment.building_elements`; see footer F5, which
+    is a defect in the draft this mockup does not paper over.
+  type: string
+  enum: [roof, facade, floor, window, door]
+
+InsulateMeasure:
+  x-contract-status: provisional
+  description: Add insulation to an opaque element. Applies to roof, facade and floor only.
+  x-writes: building_config.envelope_details.<element>_u_value_in_watt_per_m2_per_kelvin
+  allOf:
+    - $ref: '#/components/schemas/MeasureBase'
+    - type: object
+      required: [element, resulting_u_value_in_watt_per_m2_per_kelvin]
+      properties:
+        element:
+          allOf: [{ $ref: '#/components/schemas/BuildingElement' }]
+          description: One of roof, facade, floor. Rejected for window and door, which are replaced, not insulated.
+        material_id:
+          type: string
+          description: A `/materials` entry. Optional, and PRICING-ONLY unless the catalogue carries thermal conductivity (A7).
+        thickness_mm:
+          type: number
+          description: Optional, pricing-only. It does not determine the U-value; the U-value is stated outright.
+        resulting_u_value_in_watt_per_m2_per_kelvin:
+          type: number
+          description: |
+            The element's U-value after the work. REQUIRED and authoritative:
+            the one number the simulation consumes. Whoever computes it from a
+            material and a thickness does so before the request, so that the
+            backend never has to guess a build-up it was not told about.
+          examples: [0.16]
+
+ReplaceWindowsMeasure:
+  x-contract-status: provisional
+  description: Replace the glazing. Area is unchanged unless stated.
+  x-writes: building_config.envelope_details.window_u_value_in_watt_per_m2_per_kelvin (and window_area_in_m2 when given)
+  allOf:
+    - $ref: '#/components/schemas/MeasureBase'
+    - type: object
+      required: [resulting_u_value_in_watt_per_m2_per_kelvin]
+      properties:
+        resulting_u_value_in_watt_per_m2_per_kelvin: { type: number, examples: [0.9] }
+        resulting_area_in_m2:
+          type: number
+          description: Only when the opening is resized; omit to keep the existing area.
+        material_id: { type: string, description: Pricing only. }
+
+ReplaceDoorMeasure:
+  x-contract-status: provisional
+  x-writes: building_config.envelope_details.door_u_value_in_watt_per_m2_per_kelvin
+  allOf:
+    - $ref: '#/components/schemas/MeasureBase'
+    - type: object
+      required: [resulting_u_value_in_watt_per_m2_per_kelvin]
+      properties:
+        resulting_u_value_in_watt_per_m2_per_kelvin: { type: number, examples: [1.2] }
+        material_id: { type: string, description: Pricing only. }
+
+ImproveAirtightnessMeasure:
+  x-contract-status: provisional
+  description: |
+    NO SIMULATION CONSUMER TODAY. `BuildingConfig` has no infiltration
+    parameter, so this measure is priced but not simulated, and the translation
+    report must say so on every request that carries it (R7). Kept in the
+    vocabulary because it is a real product offering and because inventing it
+    later would be a breaking change.
+  x-writes: nothing (pricing and reporting only)
+  allOf:
+    - $ref: '#/components/schemas/MeasureBase'
+    - type: object
+      properties:
+        resulting_air_change_rate_per_hour: { type: number, examples: [1.5] }
+
+# ---------------------------------------------------------------------------
+# FAMILY 2 — Heat supply. Writes energy_system_config.heating_system.
+# ---------------------------------------------------------------------------
+
+ReplaceHeatGeneratorMeasure:
+  x-contract-status: provisional
+  description: |
+    Swap the heat generator. This is the measure that changes which base
+    energy-system file the request runs (R2, R3), so it is the one measure with
+    a structural consequence rather than a numeric one.
+  x-writes: energy_system_config.heating_system
+  allOf:
+    - $ref: '#/components/schemas/MeasureBase'
+    - type: object
+      required: [system]
+      properties:
+        system:
+          type: string
+          description: The same closed set as `HomeInventoryInput.energy_system_config.heating_system.system`.
+          enum: [HeatPump, ElectricHeating, OilHeating, GasHeating, PelletHeating,
+                 WoodChipHeating, DistrictHeating, HydrogenHeating, GasSolarThermal,
+                 HeatPumpSolarThermal]
+          examples: [HeatPump]
+        power_in_watt:
+          type: number
+          description: Optional. Omit to let the backend size it; see A11 for which wins when both a size and a sizing law exist.
+        heatpump_flow_temperature_in_celsius:
+          type: number
+          description: Only for HeatPump and HeatPumpSolarThermal.
+        with_dhw_preparation: { type: boolean }
+
+ReplaceHeatDistributionMeasure:
+  x-contract-status: provisional
+  description: Change the emitters — the measure that makes a low-flow-temperature heat pump viable.
+  x-writes: energy_system_config.heating_system.heat_distribution_system
+  allOf:
+    - $ref: '#/components/schemas/MeasureBase'
+    - type: object
+      required: [heat_distribution_system]
+      properties:
+        heat_distribution_system:
+          type: string
+          enum: ['Conventional Radiator', 'Floorheating', 'Low Temperature Radiator']
+
+InstallThermalStorageMeasure:
+  x-contract-status: provisional
+  description: Install or replace a buffer store or a domestic hot-water cylinder.
+  x-writes: energy_system_config.water_storage.<store>
+  allOf:
+    - $ref: '#/components/schemas/MeasureBase'
+    - type: object
+      required: [store, volume_in_liters]
+      properties:
+        store:
+          type: string
+          enum: [hot_water_storage, domestic_hot_water_storage]
+        volume_in_liters: { type: number, examples: [500] }
+
+# ---------------------------------------------------------------------------
+# FAMILY 3 — Electricity. Writes photovoltaics / battery_storage.
+# ---------------------------------------------------------------------------
+
+InstallPhotovoltaicsMeasure:
+  x-contract-status: provisional
+  description: |
+    Install or extend a PV array. States the array's total post-measure size,
+    not the addition, so that a package extending an existing 3 kW array to
+    8 kW says 8000 and not 5000.
+  x-writes: energy_system_config.photovoltaics
+  allOf:
+    - $ref: '#/components/schemas/MeasureBase'
+    - type: object
+      required: [power_in_watt]
+      properties:
+        power_in_watt: { type: number, examples: [5000] }
+        azimuth_in_degree: { type: number, examples: [180] }
+        tilt_in_degree: { type: number, examples: [35] }
+
+InstallBatteryStorageMeasure:
+  x-contract-status: provisional
+  x-writes: energy_system_config.battery_storage
+  allOf:
+    - $ref: '#/components/schemas/MeasureBase'
+    - type: object
+      required: [capacity_in_kwh]
+      properties:
+        capacity_in_kwh: { type: number, examples: [10] }
+        power_in_watt:
+          type: number
+          description: NO SIMULATION CONSUMER (A2). Priced and reported, not simulated.
+
+InstallSolarThermalMeasure:
+  x-contract-status: provisional
+  description: |
+    `used_for_space_heating` / `used_for_dhw` are STRUCTURAL: they decide which
+    storage the collector feeds and therefore which base file runs, not a value
+    in one. Combinations without a base file are refused (R11), not approximated.
+  x-writes: energy_system_config.solar_thermal_system
+  allOf:
+    - $ref: '#/components/schemas/MeasureBase'
+    - type: object
+      required: [collector_area_in_m2]
+      properties:
+        collector_area_in_m2: { type: number, examples: [8] }
+        azimuth_in_degree: { type: number, examples: [180] }
+        tilt_in_degree: { type: number, examples: [35] }
+        used_for_space_heating: { type: boolean }
+        used_for_dhw: { type: boolean }
+
+InstallVentilationMeasure:
+  x-contract-status: provisional
+  description: |
+    NO INVENTORY BLOCK TO WRITE TO. `condition_assessment.energy_systems` has a
+    `ventilation_system` entry, but `energy_system_config` has no ventilation
+    block at all, so the contract can describe the condition of a ventilation
+    system it cannot describe the existence of (footer F6). Either
+    `HomeInventoryInput` gains the block or this measure is dropped; it cannot
+    stay as drafted.
+  x-writes: energy_system_config.ventilation_system — DOES NOT EXIST, see F6
+  allOf:
+    - $ref: '#/components/schemas/MeasureBase'
+    - type: object
+      properties:
+        ventilation_type:
+          type: string
+          enum: [extract_only, mechanical_with_heat_recovery]
+        heat_recovery_efficiency_in_percent: { type: number, examples: [85] }
+
+# ---------------------------------------------------------------------------
+# FAMILY 4 — Mobility. Writes energy_system_config.vehicles.
+# ---------------------------------------------------------------------------
+
+VehicleRef:
+  x-contract-status: provisional
+  description: |
+    Names one vehicle of the inventory. Requires `HomeInventoryInput`'s vehicle
+    entries to carry a stable `vehicle_id`, which they do not today (footer F4).
+    Positional references were rejected: an index is not stable under a list
+    reorder, and a package's hash must not change because the inventory was
+    re-serialised.
+  type: object
+  required: [vehicle_id]
+  properties:
+    vehicle_id: { type: string, examples: [car-1] }
+
+ReplaceVehicleMeasure:
+  x-contract-status: provisional
+  description: |
+    Replace a vehicle, or add one. `target` names the vehicle being replaced;
+    omit it to add a vehicle without removing anything. The replacement is
+    always an electric vehicle — a package that swaps one combustion car for
+    another is not a renovation measure and is out of the product's scope.
+  x-writes: energy_system_config.vehicles
+  allOf:
+    - $ref: '#/components/schemas/MeasureBase'
+    - type: object
+      required: [replacement]
+      properties:
+        target:
+          allOf: [{ $ref: '#/components/schemas/VehicleRef' }]
+          description: Omit to add rather than replace.
+        replacement:
+          type: object
+          required: [consumption_in_kwh_per_km]
+          properties:
+            consumption_in_kwh_per_km: { type: number, examples: [0.15] }
+            battery_capacity_in_kwh: { type: number, examples: [60] }
+            model: { type: string, description: 'NO SIMULATION CONSUMER (A2): display and pricing only.' }
+
+InstallChargerMeasure:
+  x-contract-status: provisional
+  description: A home charge point. Annual mileage comes from `occupancy_config.travel_route_set`, not from here (A5).
+  x-writes: energy_system_config.vehicles.charger
+  allOf:
+    - $ref: '#/components/schemas/MeasureBase'
+    - type: object
+      required: [power_in_watt]
+      properties:
+        power_in_watt: { type: number, examples: [11000] }
+
+# ---------------------------------------------------------------------------
+# FAMILY 5 — Removal.
+# ---------------------------------------------------------------------------
+
+DecommissionMeasure:
+  x-contract-status: provisional
+  description: |
+    Remove something without replacing it — the oil tank after a heat-pump
+    swap, a solar-thermal loop, a scrapped car. One variant rather than a
+    `remove_*` per block, because the payload is the same in every case: which
+    block goes.
+  x-writes: sets the named block to absent
+  allOf:
+    - $ref: '#/components/schemas/MeasureBase'
+    - type: object
+      required: [target_block]
+      properties:
+        target_block:
+          type: string
+          enum: [photovoltaics, battery_storage, solar_thermal_system,
+                 hot_water_storage, domestic_hot_water_storage, vehicle]
+        vehicle:
+          allOf: [{ $ref: '#/components/schemas/VehicleRef' }]
+          description: Required when target_block is `vehicle`.
+
+# ---------------------------------------------------------------------------
+# The two schemas that have to change with Measure
+# ---------------------------------------------------------------------------
+
+Schedule:
+  x-contract-status: provisional
+  description: |
+    When the package's measures happen. REPLACES the drafted `Schedule`, whose
+    `phase_order: [string]` referenced nothing at all — measures had no ids, so
+    the strings could not name them (footer F2).
+  type: object
+  properties:
+    preferred_start: { type: string, examples: ['2026-09'] }
+    phases:
+      type: array
+      items:
+        type: object
+        required: [measure_ids]
+        properties:
+          starts_in_year: { type: integer, examples: [2026] }
+          measure_ids:
+            type: array
+            items: { type: string }
+            description: References `Measure.measure_id`. Every measure of the package appears in exactly one phase.
+
+PackageDefinition:
+  x-contract-status: provisional
+  description: |
+    Unchanged in shape, but `measures` now holds the discriminated union above,
+    and `alternatives` is gone from the measure (footer F1).
+  type: object
+  required: [measures]
+  properties:
+    measures:
+      type: array
+      items: { $ref: '#/components/schemas/Measure' }
+    grants: { $ref: '#/components/schemas/Grants' }
+    schedule: { $ref: '#/components/schemas/Schedule' }
+    financing: { $ref: '#/components/schemas/Financing' }
+
+# ---------------------------------------------------------------------------
+# What this mockup fixes, and what it costs
+#
+# F1  `alternatives: [string]` is REMOVED from the measure. A package is one
+#     concrete plan whose hash identifies one simulation; a measure carrying
+#     alternatives makes it a set of plans, and there is no defensible answer to
+#     "which alternative did these KPIs come from?". Alternatives belong to the
+#     package-set generator (R6, Q5) — they are how the set is enumerated, not
+#     what a member of it contains.
+#
+# F2  Measures gain `measure_id`, which `Schedule` needs. The drafted
+#     `phase_order: [string]` referenced measures that had no identity, so no
+#     conforming client could have written a valid schedule.
+#
+# F3  `measure_id` must be derived from content, not assigned. Two users
+#     specifying the same renovation must produce the same `pkg_id`, and the
+#     contract's dedup promise ("submitting identical blocks returns the same
+#     pkg_id") fails outright if a client is free to mint random ids.
+#
+# F4  Vehicle entries in `HomeInventoryInput` need a stable `vehicle_id` so a
+#     measure can name one. This is a change to the inventory, not only to the
+#     measure — the two cannot be revised separately.
+#
+# F5  The contract carries TWO disagreeing element vocabularies: five in
+#     `envelope_details` (floor, facade, roof, window, door), nine in
+#     `condition_assessment.building_elements` (external_facade, exterior_walls,
+#     interior_walls, floors, attic_ceiling, attic_roof, roof_covering, windows,
+#     house_door). They do not nest: `attic_ceiling`, `attic_roof` and
+#     `roof_covering` all fall into `roof`, and `interior_walls` maps to nothing
+#     thermal at all. Measures target the five, because those are what the
+#     thermal model resolves. Whether the condition vocabulary shrinks to match,
+#     or stays as a finer-grained survey instrument that maps onto the five, is
+#     a decision for the frontend team (A21).
+#
+# F6  `install_ventilation_system` has nowhere to write: `condition_assessment`
+#     can report a ventilation system's condition, but `energy_system_config`
+#     has no ventilation block, so the inventory cannot say one exists. Either
+#     the block is added or the measure goes.
+#
+# F7  Units follow the inventory's convention (`_in_watt`, `_in_kwh`,
+#     `_in_liters`, `_in_degree`), replacing the drafted `thickness_mm` /
+#     `capacity_kw`, which used a different convention from every other schema
+#     in the document and left `capacity_kw` ambiguous between thermal and
+#     electrical power.
+#
+# F8  Envelope measures state a RESULTING U-VALUE, not a material and a
+#     thickness. HiSim consumes U-values (`BuildingConfig` has all ten
+#     per-element fields); it cannot derive one from a material id unless the
+#     materials catalogue carries thermal conductivity, which today it does not
+#     (A7). Making the U-value authoritative and the material advisory removes
+#     the dependency in the direction that blocks nothing: the catalogue can
+#     gain conductivity later without a contract change.
+#
+# COST OF THIS PROPOSAL
+#   14 measure schemas instead of 1, plus changes to `Schedule`,
+#   `PackageDefinition` and `HomeInventoryInput` (F4). The frontend gains a
+#   closed vocabulary it can generate forms from; it loses the freedom to send a
+#   measure type the backend has never heard of, which is the point.
+# ---------------------------------------------------------------------------

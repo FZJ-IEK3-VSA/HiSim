@@ -150,10 +150,8 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
     first = next(iter(matrix.results.values()), None)
     if first is not None:
         # The audit belongs to the stored evaluation: without it a later `report` could not
-        # render section 1 without reopening the cost database (W4.5). The audit module itself
-        # arrives with the presentation part of this stack, so until then this subcommand fails
-        # on the import rather than on a half-written report.
-        from hisim.economics.audit import (  # pylint: disable=no-name-in-module,import-error
+        # render section 1 without reopening the cost database (W4.5).
+        from hisim.economics.audit import (
             build_input_audit,
             write_cost_audit,
         )
@@ -226,8 +224,7 @@ def _evaluate_directory(
     Returns:
         The evaluated matrix and its input audit (None only when no perspective was evaluated).
     """
-    # See the note above: `audit` is part of the presentation layer of this stack.
-    from hisim.economics.audit import build_input_audit  # pylint: disable=no-name-in-module,import-error
+    from hisim.economics.audit import build_input_audit
 
     inputs = read_inputs(results_dir)
     parameters = _load_parameters(args)
@@ -297,12 +294,8 @@ def _cmd_report(args: argparse.Namespace) -> int:
     """
     from hisim.economics.plausibility import run_plausibility_checks
 
-    # Both renderers are the presentation layer of this stack, as `audit` above.
-    from hisim.economics.report_plots import (  # pylint: disable=no-name-in-module,import-error
-        plot_payback_curve,
-        write_report_plots,
-    )
-    from hisim.economics.reporting import (  # pylint: disable=no-name-in-module,import-error
+    from hisim.economics.report_plots import plot_payback_curve, write_report_plots
+    from hisim.economics.reporting import (
         write_cost_summary,
         write_lifecycle_report,
     )

@@ -19,8 +19,8 @@ from hisim.economics.results import EvaluationMatrix, LifecycleCostResult, Varia
 from hisim.economics.uncertainty import Slot, UncertainValue
 
 
-
 from hisim.economics.reporting.summary import _band_str, _fmt
+
 
 class _ReportStyle:
     """Inline style constants of the self-contained HTML/SVG output.
@@ -354,12 +354,12 @@ def _annual_flow_svg(result: LifecycleCostResult) -> str:
     for year, groups in enumerate(per_year):
         x = left + year * bar_w
         y_pos, y_neg = zero_y, zero_y
-        for index in range(len(PresentationStyle.DISPLAY_GROUPS)):
+        for index, display_group in enumerate(PresentationStyle.DISPLAY_GROUPS):
             value = groups.get(index, 0.0)
             if not value:
                 continue
             bar_h = abs(value) * scale
-            tooltip = f"year {year} - {PresentationStyle.DISPLAY_GROUPS[index][0]}: {_fmt(value)} EUR"
+            tooltip = f"year {year} - {display_group[0]}: {_fmt(value)} EUR"
             if value > 0:
                 y_pos -= bar_h
                 parts.append(_rect(x + 1, y_pos, bar_w - 2, bar_h - min(1.0, bar_h * 0.3), f"var(--g{index})", tooltip))
@@ -591,12 +591,12 @@ def _stacked_subject_svg(result: LifecycleCostResult) -> str:
         parts.append(_text(left - 8, mid + 4, breakdown.subject, 11, "end"))
         x_pos = zero_x
         x_neg = zero_x
-        for index in range(len(PresentationStyle.DISPLAY_GROUPS)):
+        for index, display_group in enumerate(PresentationStyle.DISPLAY_GROUPS):
             value = values.get(index, 0.0)
             if not value:
                 continue
             bar_w = abs(value) * scale
-            tooltip = f"{breakdown.subject} - {PresentationStyle.DISPLAY_GROUPS[index][0]}: {_fmt(value)} EUR NPV"
+            tooltip = f"{breakdown.subject} - {display_group[0]}: {_fmt(value)} EUR NPV"
             if value > 0:
                 parts.append(
                     _rect(x_pos, y + 5, max(bar_w - 1.5, 0.5), row_h - 10, f"var(--g{index})", tooltip, rx=2)
@@ -667,5 +667,3 @@ def _payback_svg(comparison: VariantComparison) -> str:
     parts.append(_text(left - 6, to_y(top_value) + 8, _fmt(top_value), 10, "end", "var(--muted)"))
     parts.append("</svg>")
     return "".join(parts)
-
-

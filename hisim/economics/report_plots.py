@@ -30,6 +30,10 @@ from typing import Dict, List, Optional
 import matplotlib
 
 matplotlib.use("Agg")  # postprocessing runs headless
+
+# The backend has to be chosen before pyplot is imported, which is exactly what both linters
+# read as a misplaced import; every import below this line is in that position on purpose.
+# pylint: disable=wrong-import-position
 import matplotlib.pyplot as plt  # noqa: E402  — backend must be set before pyplot
 
 from hisim.economics import views  # noqa: E402
@@ -39,6 +43,8 @@ from hisim.economics.results import (  # noqa: E402
     LifecycleCostResult,
     cumulative_discounted_savings,
 )
+
+# pylint: enable=wrong-import-position
 
 
 class _Palette:
@@ -234,7 +240,7 @@ def plot_perspective_costs(matrix: EvaluationMatrix, path: str) -> str:
     axis.errorbar(best_estimates, positions, xerr=[lows, highs], fmt="o", color=PresentationStyle.GROUP_COLORS_LIGHT[0],
                   ecolor=PresentationStyle.GROUP_COLORS_LIGHT[0], elinewidth=2, capsize=3, markersize=7,
                   markeredgecolor=_Palette.SURFACE, markeredgewidth=1.5)
-    for position, (label, best_estimate) in enumerate(zip(labels, best_estimates)):
+    for position, (_label, best_estimate) in enumerate(zip(labels, best_estimates)):
         axis.text(best_estimates[position] + highs[position] + max(best_estimates) * 0.02, position,
                   f"{best_estimate:,.0f} EUR/a", va="center", fontsize=7.5, color=_Palette.MUTED)
     axis.set_yticks(list(positions), labels, fontsize=8, color=_Palette.INK)

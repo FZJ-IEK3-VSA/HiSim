@@ -22,7 +22,6 @@ from hisim.economics.results import EvaluationMatrix, VariantComparison
 from hisim.economics.uncertainty import UncertainValue
 
 
-
 from hisim.economics.reporting.summary import (
     ReportFileNames,
     _band_str,
@@ -53,6 +52,7 @@ from hisim.economics.reporting.sections import (
     _subsidy_section_html,
     _timeline_section_html,
 )
+
 
 def _perspective_section_html(matrix: EvaluationMatrix) -> str:
     """Section 6: equivalent annual cost across perspectives, with bands and the result table.

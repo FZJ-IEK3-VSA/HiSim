@@ -19,7 +19,6 @@ from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import UncertainValue
 
 
-
 from hisim.economics.reporting.summary import _band_str, _decisions_by_content, _fmt, _perspectives_note
 from hisim.economics.reporting.charts import (
     _annual_flow_svg,
@@ -38,6 +37,7 @@ from hisim.economics.reporting.charts import (
 )
 
 # ---------------------------------------------------------------------------- HTML report (A)
+
 
 class _ReportCss:
     """The report stylesheet, inlined into the self-contained HTML.
@@ -93,7 +93,7 @@ footer { color: var(--muted); font-size: 12px; margin: 10px 4px; }
 
 
 def _origin_label(row: ResolvedInputRow) -> str:
-    """This report's spelling of a resolved row's origin (the audit decided the precedence).
+    """Spells out a resolved row's origin for this report (the audit decided the precedence).
 
     Answers "where did this price actually come from" in one cell of the input-audit table:
     a config override (with the source it cited, or a loud `NO SOURCE`), the database entry key
@@ -109,7 +109,7 @@ def _origin_label(row: ResolvedInputRow) -> str:
 
 
 def _audit_section_html(audit: InputAuditReport) -> str:
-    """Section 1: input audit — are the declared facts and resolved prices right?
+    """Section 1: input audit, checking the declared facts and the resolved prices.
 
     Renders the rows `audit.build_input_audit` resolved; override precedence, the flags and the
     source list are decided there, once, and written to `cost_audit.csv` from the same rows.
@@ -121,8 +121,10 @@ def _audit_section_html(audit: InputAuditReport) -> str:
     an implausible size or price in this table long before it is a surprising NPV. The sources
     table is appended so the prices above can be checked for currency in the same place.
     """
+    # A named template beats an f-string here: seven placeholders, three of them formatted,
+    # and the row's shape stays readable as HTML.
     rows = [
-        "<tr><td>{subject}</td><td>{cls}</td><td>{size:,.1f} {unit}</td><td>{price}</td>"
+        "<tr><td>{subject}</td><td>{cls}</td><td>{size:,.1f} {unit}</td><td>{price}</td>"  # pylint: disable=consider-using-f-string
         "<td>{life}</td><td>{origin}</td><td class=\"flag\">{flags}</td></tr>".format(
             subject=_esc(row.subject),
             cls=_esc(row.asset_class),
@@ -241,8 +243,10 @@ def _investment_section_html(result: LifecycleCostResult) -> str:
 
 
 def _timeline_detail_table(result: LifecycleCostResult) -> str:
-    """Every flow behind the timeline chart: (year, subject, category) with nominal band and
-    discounted value — the §3.6 canonical timeline as a verification table.
+    """Every flow behind the timeline chart, as a verification table.
+
+    One row per (year, subject, category) with its nominal band and discounted value — the
+    §3.6 canonical timeline, laid out for checking.
 
     Rows, ordering, the float-noise cut-off and the subtotals all come from
     `views.timeline_detail_rows`; this only lays them out.
@@ -428,7 +432,6 @@ def _subsidy_composition_svg(matrix: EvaluationMatrix) -> str:
     )
 
 
-
 def _subsidy_awards_table(matrix: EvaluationMatrix) -> str:
     """All awards across measures: scheme, amount band, payout kind, binding caps.
 
@@ -543,5 +546,3 @@ def _subsidy_section_html(matrix: EvaluationMatrix) -> str:
         + _subsidy_awards_table(matrix)
         + "</section>"
     )
-
-

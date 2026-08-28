@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import ClassVar, List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -12,6 +12,7 @@ from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput, OpexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config.channels import DispatchRule, DynamicConnectionChannel
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -78,6 +79,41 @@ class HeatingMeter(DynamicComponent):
     HeatProduction: str = "HeatProduction"
     CumulativeConsumption: str = "CumulativeConsumption"
     CumulativeProduction: str = "CumulativeProduction"
+
+    #: Stable key of the channel carrying heat a participant delivered into the network.
+    PRODUCTION_CHANNEL: ClassVar[str] = "production"
+
+    #: Stable key of the channel carrying heat a participant drew out of it.
+    CONSUMPTION_UNCONTROLLED_CHANNEL: ClassVar[str] = "consumption_uncontrolled"
+
+    #: The two flows this meter understands, declared so that an energy-system file can address a
+    #: heat source or a heat consumer at it. They repeat the tags, load type, unit and
+    #: monitored-only weight that
+    #: :meth:`get_default_connections_from_more_advanced_heat_pump` and
+    #: :meth:`get_default_connections_from_heat_distribution_system` already build, so the
+    #: declaration describes the wiring the meter has always accepted rather than a new one.
+    #:
+    #: Both are concrete here, unlike the fuel and gas meters: everything this meter measures is
+    #: heat in watts, and nothing about the household changes that, so the strict form keeps the
+    #: check that catches a temperature summed into a power balance.
+    #:
+    #: Dispatch is forbidden on both, because a meter measures and never controls.
+    CHANNELS: Tuple[DynamicConnectionChannel, ...] = (
+        DynamicConnectionChannel(
+            key=PRODUCTION_CHANNEL,
+            tags=frozenset({lt.InandOutputType.HEAT_DELIVERED}),
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+        DynamicConnectionChannel(
+            key=CONSUMPTION_UNCONTROLLED_CHANNEL,
+            tags=frozenset({lt.InandOutputType.HEAT_CONSUMPTION}),
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+    )
 
     def __init__(
         self,

@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import ClassVar, List, Optional
+from typing import ClassVar, List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -11,6 +11,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput, OpexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config.channels import DispatchRule, DynamicConnectionChannel
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -70,6 +71,35 @@ class FuelMeter(DynamicComponent):
     # Outputs
     HeatConsumption: ClassVar[str] = "HeatConsumption"
     CumulativeConsumption: ClassVar[str] = "CumulativeConsumption"
+
+    #: Stable key of the one channel this meter has: the fuel a participant burned, reported as
+    #: energy. Named like the electricity meter's channel of the same role so that a reader who
+    #: has seen one aggregator's declaration recognises the other's.
+    CONSUMPTION_UNCONTROLLED_CHANNEL: ClassVar[str] = "consumption_uncontrolled"
+
+    #: The one flow this meter understands, declared so that an energy-system file can address a
+    #: heat source at it. It is a description of the wiring the setups already build through
+    #: :meth:`get_default_connections_from_generic_boiler` and its district-heating twin, and it
+    #: repeats their tag, unit and weight exactly rather than inventing a second vocabulary.
+    #:
+    #: The load type is the wildcard because the carrier of this one flow is not a property of
+    #: the meter: a boiler types its energy-demand outputs by fuel, so the same channel sees oil
+    #: in one household and wood chips in the next, and a district-heating source feeds it space
+    #: heating and hot water — two load types — in a single household. The unit stays strict,
+    #: because the sum in :meth:`i_simulate` is in watt-hours whatever the carrier.
+    #:
+    #: Dispatch is forbidden: a meter measures and never controls, so every participant carries
+    #: the reserved monitored-only weight and none of the meter's outputs is a per-participant
+    #: signal.
+    CHANNELS: Tuple[DynamicConnectionChannel, ...] = (
+        DynamicConnectionChannel(
+            key=CONSUMPTION_UNCONTROLLED_CHANNEL,
+            tags=frozenset({lt.InandOutputType.HEAT_CONSUMPTION}),
+            load_type=lt.LoadTypes.ANY,
+            unit=lt.Units.WATT_HOUR,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+    )
 
     def __init__(
         self,

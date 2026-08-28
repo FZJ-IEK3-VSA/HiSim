@@ -17,7 +17,9 @@ Three stages, in this order, and separate on purpose:
       :mod:`~hisim.energy_system.recording.configs` (preset plus deviation, or a full block) and
       :mod:`~hisim.energy_system.recording.inputs` (bare item, aggregator feed or explicit wire).
     - :mod:`hisim.energy_system.recording.session` — the order they run in, the comment header a
-      recorded file carries, and the check that the file really builds again.
+      recorded file carries, and the check that the file really builds again, helped by
+      :mod:`~hisim.energy_system.recording.parameters`, which decides whether the run's parameters
+      are already described by a file beside it or need one of their own.
 
 What a recording never contains is as much of the definition as what it does. No ``AUTO``, because
 a recording states what ran; no ``sizing_sources``, because where a number came from is not
@@ -34,6 +36,14 @@ from hisim.energy_system.recording.builder import EnergySystemBuilder, PortableP
 from hisim.energy_system.recording.configs import EntryConfigWriter
 from hisim.energy_system.recording.inputs import InputItemWriter
 from hisim.energy_system.recording.names import RecordedNames
+from hisim.energy_system.recording.parameters import (
+    ParameterFileLibrary,
+    ParameterFileName,
+    ParameterFileWriter,
+    ParameterNormalisation,
+    ParameterReference,
+    normalise_parameters,
+)
 from hisim.energy_system.recording.observe import (
     ObservedComponent,
     ObservedDispatch,
@@ -56,6 +66,11 @@ __all__ = [
     "ObservedComponent",
     "ObservedDispatch",
     "ObservedFeed",
+    "ParameterFileLibrary",
+    "ParameterFileName",
+    "ParameterFileWriter",
+    "ParameterNormalisation",
+    "ParameterReference",
     "PortablePathGuard",
     "RecordedFileWriter",
     "RecordedNames",
@@ -64,6 +79,7 @@ __all__ = [
     "RecordingSession",
     "SystemObserver",
     "build",
+    "normalise_parameters",
     "observe",
     "record_setup",
 ]

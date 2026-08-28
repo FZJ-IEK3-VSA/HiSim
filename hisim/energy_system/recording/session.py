@@ -24,13 +24,14 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar, Tuple
+from typing import ClassVar, Optional, Tuple
 
 from hisim.energy_system.errors import EnergySystemError, EnergySystemErrorId, EnergySystemRecordingError
 from hisim.energy_system.loader import dump_energy_system
 from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.recording.builder import build
 from hisim.energy_system.recording.observe import RecordedSystem, observe
+from hisim.energy_system.recording.parameters import ParameterFileLibrary, ParameterReference
 from hisim.energy_system.schema_export import default_schema_path
 from hisim.simulationparameters import SimulationParameters
 
@@ -45,7 +46,10 @@ class RecordingResult:
     second time to make those comparisons would be comparing two runs rather than one.
 
     ``text`` is the exact bytes written, header comments included, so a freshness check compares
-    strings instead of re-reading what it just wrote.
+    strings instead of re-reading what it just wrote, and ``parameters`` names the parameters file
+    the header points at, which is not always the one the caller supplied: the recording follows
+    the parameters the setup ended up with, and those may already be described by another file or
+    by none at all.
     """
 
     setup: str
@@ -53,6 +57,7 @@ class RecordingResult:
     model: EnergySystemFile
     text: str
     observed: RecordedSystem
+    parameters: ParameterReference
 
 
 class RecordedFileWriter:
@@ -145,18 +150,50 @@ class RecordingSession:
     #: the shared parameter files, which is where every file of this format lives.
     DEFAULT_OUTPUT_DIRECTORY: ClassVar[str] = "energy_systems"
 
-    def __init__(self, module_path: Path, parameters_path: Path, out_dir: Path) -> None:
+    def __init__(
+        self,
+        module_path: Path,
+        parameters_path: Path,
+        out_dir: Path,
+        library: Optional[ParameterFileLibrary] = None,
+    ) -> None:
         """Prepares one recording.
 
         Args:
             module_path: The ``system_setups/*.py`` module to record.
-            parameters_path: The simulation-parameters file the run uses, named in the header.
+            parameters_path: The simulation-parameters file the run is started from. It is what
+                the setup is handed, not necessarily what the recording ends up naming.
             out_dir: Directory the recorded file is written to; created when it does not exist.
+            library: The parameter files this recording may reference, and where a new one goes.
+                One library shared across a fleet-wide run is what lets two setups needing the
+                same new parameters share a single file; the default library searches both the
+                repository's own directory and the output directory.
         """
         self.module_path = Path(module_path).resolve()
         self.parameters_path = Path(parameters_path)
         self.out_dir = Path(out_dir)
         self.stem = self.module_path.stem
+        self.library = library if library is not None else self.default_library(self.module_path, self.out_dir)
+
+    @classmethod
+    def default_library(cls, near: Path, out_dir: Path) -> ParameterFileLibrary:
+        """Builds the parameter-file library a single recording uses when a caller supplies none.
+
+        It searches the repository's own directory first and the output directory second, so that
+        a caller recording into a temporary place still references the committed parameter files
+        instead of writing private copies of them, while a genuinely new parameter set lands where
+        the caller asked for the recording.
+
+        Args:
+            near: The setup being recorded, from which the repository is found.
+            out_dir: Where the recording is written.
+
+        Returns:
+            The library.
+        """
+        return ParameterFileLibrary(
+            search=(cls.default_output_directory(near), Path(out_dir)), write_to=Path(out_dir)
+        )
 
     @classmethod
     def default_output_directory(cls, near: Path) -> Path:
@@ -216,11 +253,17 @@ class RecordingSession:
         simulator.prepare_calculation()
         simulator.connect_all_components()
         observed = observe(simulator, setup=setup_name)
+        reference = self.library.reference(simulator.get_simulation_parameters())
         model = build(observed, self.stem, get_description_from_py(self.module_path) or None)
-        text = self.write(model, setup_name)
-        self.verify(len(text), simulator.get_simulation_parameters().result_directory)
+        text = self.write(model, setup_name, reference.path)
+        self.verify(len(text), reference.path, simulator.get_simulation_parameters().result_directory)
         return RecordingResult(
-            setup=setup_name, path=self.path, model=model, text=text, observed=observed
+            setup=setup_name,
+            path=self.path,
+            model=model,
+            text=text,
+            observed=observed,
+            parameters=reference,
         )
 
     @property
@@ -232,23 +275,25 @@ class RecordingSession:
         """
         return self.out_dir / f"{self.stem}{RecordedFileWriter.SUFFIX}"
 
-    def write(self, model: EnergySystemFile, setup_name: str) -> str:
+    def write(self, model: EnergySystemFile, setup_name: str, parameters_path: Path) -> str:
         """Writes the header and the canonical body of one recorded file.
 
         Args:
             model: The model to emit.
             setup_name: The setup as the header names it.
+            parameters_path: The parameters file the header names, which is the one describing
+                what the setup ended up with rather than the one it was started from.
 
         Returns:
             The text written.
         """
         self.out_dir.mkdir(parents=True, exist_ok=True)
-        header = RecordedFileWriter.header(setup_name, self.relative(self.parameters_path), self.out_dir)
+        header = RecordedFileWriter.header(setup_name, self.relative(parameters_path), self.out_dir)
         text = header + dump_energy_system(model)
         self.path.write_text(text, encoding="utf-8")
         return text
 
-    def verify(self, written: int, result_directory: str) -> None:
+    def verify(self, written: int, parameters_path: Path, result_directory: str) -> None:
         """Loads the file back through the executor and builds the system it describes.
 
         This is the recorder's whole claim, so it is checked on every recording rather than in a
@@ -259,6 +304,9 @@ class RecordingSession:
         Args:
             written: Length of the file just written, quoted in the message so that a failure says
                 whether anything was produced at all.
+            parameters_path: The parameters file the recording references, read fresh so that the
+                verification proves the *pair* builds rather than inheriting the Python run's
+                mutations.
             result_directory: Where the verification build may put anything it writes, taken from
                 the run that was just recorded so that a caller's temporary directory is honoured.
 
@@ -267,7 +315,7 @@ class RecordingSession:
         """
         from hisim.energy_system.executor import build_energy_system  # noqa: PLC0415
 
-        parameters = self.read_parameters()
+        parameters = self.read_parameters(parameters_path)
         parameters.result_directory = result_directory
         try:
             build_energy_system(self.path, parameters)
@@ -291,7 +339,8 @@ class RecordingSession:
         """
         return self.relative(self.module_path)
 
-    def read_parameters(self) -> SimulationParameters:
+    @classmethod
+    def read_parameters(cls, parameters_path: Path) -> SimulationParameters:
         """Reads a fresh parameters object for the verification build.
 
         A fresh read rather than the object the setup was handed, because a setup routinely mutates
@@ -299,16 +348,24 @@ class RecordingSession:
         verification is meant to prove the *file* builds, not to inherit whatever the Python path
         left behind.
 
+        Args:
+            parameters_path: The parameters file the recording references.
+
         Returns:
             The parameters as the file on disk states them.
         """
         from hisim.energy_system.executor import SimulationParametersReader  # noqa: PLC0415
 
-        return SimulationParametersReader.read(self.parameters_path)
+        return SimulationParametersReader.read(parameters_path)
 
 
 def record_setup(
-    module_path: Path, parameters: SimulationParameters, out_dir: Path, *, parameters_path: Path
+    module_path: Path,
+    parameters: SimulationParameters,
+    out_dir: Path,
+    *,
+    parameters_path: Path,
+    library: Optional[ParameterFileLibrary] = None,
 ) -> RecordingResult:
     """Records one Python setup as an energy-system file and proves the file builds.
 
@@ -323,6 +380,9 @@ def record_setup(
         parameters_path: The parameters file the object was read from. A recording names both of
             its inputs in the file's header, and the object alone is nameless, so the path is asked
             for rather than reconstructed.
+        library: The parameter files this recording may reference; the default searches the
+            repository's own directory and the output directory. A caller recording several setups
+            passes one library to all of them so that they can share a newly written file.
 
     Returns:
         The recording, carrying the file, its text and the observation it was built from.
@@ -330,5 +390,5 @@ def record_setup(
     Raises:
         EnergySystemRecordingError: For any of the ``EF-Rx`` conditions.
     """
-    session = RecordingSession(Path(module_path), Path(parameters_path), Path(out_dir))
+    session = RecordingSession(Path(module_path), Path(parameters_path), Path(out_dir), library)
     return session.record(parameters)

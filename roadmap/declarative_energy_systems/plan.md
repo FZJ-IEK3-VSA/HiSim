@@ -29,7 +29,7 @@ P1 sizing kernel ──► P2 file format & executor ──► P3 recording & se
 | **P1 Sizing kernel** | `hisim/config` reworked: `Catalog` without `component_id`; `AUTO`/`sized_field`/laws unchanged; the fact binding rule as a Python API (`resolve_all(configs, sources=…)`); scalar cardinality only; contract tests; introspection API | PR #582 (`config_base_move`) | pure code + tests; inventory; pilots pass | `p1_sizing_kernel_requirements.md` |
 | **P2 File format & executor** | schema v3 (components / `inputs` / `preset` / `config` / `sizing_sources` / groups), YAML + JSON loading with duplicate-key detection, hard-error catalogue, `${var}` paths, JSON Schema export, realized record + audit companion, `describe`/`facts` CLI | P1 | the three mockups load, resolve, build and run; identity test | `p2_file_format_requirements.md` |
 | **P2.1 Exclusive variants** | `variants: {selected, options}` — exactly one option live, options are complete alternative worlds so two of them may wire the same component differently; the case is the RenoVisor backend's "EMS with battery, or a bare meter" | P2 | the UC2 mockup's variant loads and resolves; identity test per (variant, option) | `p2_file_format_requirements.md` R15 (amendment) |
-| **P3 Recording & setup migration** | recorder (`setup_function` → energy-system file), all ~50 setups recorded and checked in, golden parity | P2 | golden suites green on recorded files | `p3_recording_requirements.md` |
+| **P3 Recording & setup migration** | recorder (`setup_function` → energy-system file), every in-scope setup recorded and checked in, the grouping pass (R10), the temporary parity rig (R11) | P2 | golden suites green on recorded files; every rig triple identical | `p3_recording_requirements.md` |
 | **P4 Component sweep** | ~85 factories → presets + laws; setup-side sizing moved into classes; dead SimRepository sizing keys deleted | P1 (P2 for fixtures) | per batch: contract test, golden parity | `p4_component_sweep_requirements.md` (per-class registry; survey in `p4_class_survey.md`) |
 | **P5 Consumer integration** | RenoVisor, building sizer and HPC harness on energy-system files; `ModularHouseholdConfig` deleted | P2, P2.1, P3 | consumers' own tests | written after P2 acceptance |
 
@@ -80,12 +80,28 @@ is a format decision and the format should be settled before hand-authored files
 
 Requirements: `p3_recording_requirements.md` (in review 2026-08-28; inventory in `p3_setup_inventory.md`).
 
-- [ ] Requirements document accepted (Q-P3.4–Q-P3.7 decided; **2026-08-28: Q-P3.1 record now and re-record per P4 batch, Q-P3.2 KPI parity is the oracle, Q-P3.3 the semi-manual grouping pass R10**)
+- [ ] Requirements document accepted (Q-P3.4, Q-P3.5, Q-P3.6 decided; **2026-08-28: Q-P3.1 record now and re-record per P4 batch, Q-P3.2 KPI parity is the oracle, Q-P3.3 the semi-manual grouping pass R10, Q-P3.7 the temporary parity rig R11**)
 - [ ] Recorder: run a `setup_function` under a recording simulator, emit an energy-system file in canonical style
 - [ ] Every in-scope setup recorded flat; recorded files checked in (`energy_systems/`, pending Q-P3.4)
 - [ ] Golden suites run on recorded files; setups themselves kept until P5 confirms no consumer needs them
 - [ ] Grouping pass (R10), after the flat files exist: probe list per setup, prefilled workbook, `grouping import` to a committed `<stem>.grouping.yaml`, second recorder pass building groups and variants
 - [ ] Every probe column asserted byte for byte against its flat recording (R10.6) — the grouping pass needs no new golden runs
+
+Migration parity rig (R11) — temporary, `workflow_dispatch` only, exists to make the migration safe and is removed with it:
+
+- [ ] `one_week_july` parameter set next to `one_week_only`, so cooling and solar-thermal setups are measured somewhere other than their annual minimum
+- [ ] Rig: run each (setup, probe configuration, window) triple twice in one container — Python path and recorded file — and compare component set, wire set, shared result columns and KPIs at **exact equality** (same machine, so no tolerance is needed)
+- [ ] Structural verdict for the seven setups whose KPI layer crashes today, so they are covered without waiting for repairs
+- [ ] One dispatch prints one table of every triple; failures upload both KPI sets, both CSVs and the wire diff
+- [ ] **P3's last PR deletes the workflow, its config and its scripts** (R11.8, AC-P3.20); the six setups the scan clears are then candidates for the permanent gate, decided on the rig's evidence
+
+Not blocking P3 — the KPI-layer repair list found by `golden_validate.py --scan-all` (2026-08-28):
+
+- [ ] `dynamic_components` (CHP1) and `electrolyzer_with_renewables` (transformer/rectifier): components with no KPI method
+- [ ] `basic_household_only_heating`: `NoneType * float` inside KPI computation
+- [ ] `simple_air_conditioner_household_building_sizer`: division by zero on a January window
+- [ ] `household_gas_solar_thermal`: grid import 21.72 kWh above total consumption 10.9 kWh — an energy-balance inconsistency, worth fixing on its own merits
+- [ ] `simple_system_setup_one`/`_two`: toy examples whose components will never carry meaningful KPIs — exclude rather than implement
 
 ## P4 — Component sweep (batches; each a mechanical PR)
 

@@ -1,6 +1,6 @@
 # P3 — Recording and setup migration — requirements
 
-**Status:** in review · **Date:** 2026-08-28 (Q-P3.1 record now; Q-P3.2 KPI parity; Q-P3.3 the semi-manual grouping pass, R10) · drafted 2026-08-27
+**Status:** in review · **Date:** 2026-08-28 (Q-P3.1 record now; Q-P3.2 KPI parity; Q-P3.3 the semi-manual grouping pass, R10; Q-P3.7 the temporary migration parity rig, R11) · drafted 2026-08-27
 **Author(s):** Noah Pflugradt (owner; `[given]`) · assistant (`[proposed]`, inventory)
 **Reviewers:** HiSim core team
 **Parent:** `roadmap/declarative_energy_systems/epic.md` (E1–E8 apply by reference) · **Plan:** `roadmap/declarative_energy_systems/plan.md` §P3 · **Depends on:** P2 accepted
@@ -42,7 +42,7 @@ Today a system exists twice: as Python and as a generated v1 `*.scenario.json` (
 
 ## 5. Goals and Non-Goals
 
-**Goals** — G1 every in-scope setup has a checked-in v3 twin produced by one command · G2 the eight golden setups pass the KPI gate as recorded files · G3 a setup change without a re-record fails CI · G4 the P1/P2 conversions show up as `preset:` + sparse `config` in recorded files, and each P4 batch shrinks the files by re-recording only · G5 the forks a module configuration takes become groups and variants through one human judgement per setup, recorded in a reviewable table, with every probed configuration proving the result byte for byte (R10).
+**Goals** — G1 every in-scope setup has a checked-in v3 twin produced by one command · G2 the eight golden setups pass the KPI gate as recorded files · G3 a setup change without a re-record fails CI · G4 the P1/P2 conversions show up as `preset:` + sparse `config` in recorded files, and each P4 batch shrinks the files by re-recording only · G5 the forks a module configuration takes become groups and variants through one human judgement per setup, recorded in a reviewable table, with every probed configuration proving the result byte for byte (R10) · G6 while the migration runs, every in-scope setup — including the seven whose KPI layer is broken — has its Python and file paths compared at exact equality, in both a winter and a summer week (R11).
 **Non-Goals** — inferring a group or a variant from observation alone (R10.3: the tool prefills, a person decides) · converting classes to presets/laws (P4) · changing any setup's behaviour, wiring or numbers · deleting `system_setups/`, the Python setups or the v1 JSONs (Q-P2.5: later decision) · migrating `SimulationParameters` side effects into the energy-system file (they belong to the simulation-parameters file, P2 R6) · recording result-path/singleton bookkeeping (a harness concern, P5) · a Python→YAML source translator (the recorder observes a run; it does not parse code) · groups for forks the recorded run did not take.
 
 ## 6. Use Cases and Mockups
@@ -55,6 +55,7 @@ The external representation is fixed by P2 (mockups + `energy_systems/gas_boiler
 | UC-P3.2 | same file after P4 batch B5 (PV, battery) re-recorded | the PV and battery blocks collapse to `preset:` + overrides; everything else byte-identical — the diff *is* the batch's review artefact |
 | UC-P3.3 | `household_heatpump_car_building_sizer.py` recorded with the default household | the N cars the occupancy produced (`Car_0`, `CarBattery_0`, `L1EVChargeControl_0`, …) as ordinary flat components; changing N means re-recording, not editing |
 | UC-P3.4 | CI on a PR that edits `household_oil_building_sizer.py` but not its twin | freshness job fails with the diff of the re-recorded file |
+| UC-P3.6 | the rig dispatched on a PR that changes the recorder | one table: every in-scope setup × its probe configurations × {January week, July week}, each cell the verdict of comparing the Python run with the recorded file in the same container |
 | UC-P3.5 | `household_heatpump_building_sizer.py` probed under four module configurations, its table filled in once | the workbook prefills `meter` as `≠` in the no-EMS column (present, wired differently) and `battery`/`ems` as `—`; a person writes `variant:electricity_management/…` on all three rows and `override` on the PV-share row; the grouped file then reproduces all four flat recordings byte for byte (R10.6) |
 
 `energy_systems/gas_boiler_household.energy_system.yaml` (hand-written, P2) stays as the readable exemplar; UC-P3.1 is what a recorded file looks like *before* P4 and is deliberately less pretty.
@@ -133,17 +134,57 @@ R10 adds a second pass in which a person makes that judgement once per setup, in
   assertion holds for the combinations the probe list contains and nowhere else. A probe list that toggles each fork
   alone therefore proves nothing about two forks together, and the report says so, naming the untested combinations.
 
+### R11 — The migration parity rig `[decided 2026-08-28; Q-P3.7]`
+For the duration of P3 the project runs a second gate whose only question is whether the Python path and the recorded
+file produce the same simulation. It is dispatched by hand, never on push, and it is deleted when P3 ends. It is not an
+extension of the golden gate and it blesses nothing.
+
+- R11.1 **A/B, not a reference.** A job runs one (setup, configuration, window) triple twice inside one container —
+  once through `setup_function`, once through its recorded file — and compares the two runs with each other. No golden
+  reference is produced, so a setup needs no entry in `golden_config.json` to be covered, and nothing has to be
+  re-blessed when a P4 batch changes a number.
+- R11.2 **Exact equality, not a tolerance.** Both runs happen on one machine, where determinism is byte-exact
+  (`golden_ref_spec.md` §7); the `rel_tol = 1e-9` of the permanent gate exists to absorb cross-machine drift, which this
+  rig does not have. So the comparison demands equality. A triple that only passes with a tolerance is a finding to
+  investigate, not a threshold to widen.
+- R11.3 **Three comparisons, in this order:** the component set and the wire set (R3.3); then every column of
+  `all_results.csv` whose name exists on both paths, exactly; then `all_kpis.json`, exactly, where KPI computation
+  succeeds. The aggregator ports the two paths name differently (C-P3.2) are excluded from the column comparison by
+  name and are covered by the wire-set check instead.
+- R11.4 **The KPI-broken setups are still covered.** Seven in-scope setups crash inside KPI computation today, after
+  the simulation itself has finished: `dynamic_components` and `electrolyzer_with_renewables` (a component with no KPI
+  method), `simple_system_setup_one`/`_two` (likewise, and both are toy examples), `basic_household_only_heating`
+  (`NoneType * float`), `simple_air_conditioner_household_building_sizer` (division by zero) and
+  `household_gas_solar_thermal` (grid import above total consumption) — measured by
+  `scripts/golden_validate.py --scan-all` on 2026-08-28. R11.3's first two comparisons need no KPIs, so those setups
+  are covered anyway and the crash is recorded as a known state rather than counted as a parity failure. Repairing
+  them is its own workstream and does not gate P3.
+- R11.5 **Two windows.** Every triple runs a January week and a July week — `one_week_only` and a new `one_week_july`,
+  both at 60 s. A single window measures the cooling and solar-thermal setups at their annual minimum, and the
+  January-only window is why the air-conditioner setup divides by zero in the scan.
+- R11.6 **One configuration axis.** The configurations are R10's probe list, so the rig, the grouping table and the
+  recorded files share one definition of the configurations a setup has.
+- R11.7 **Manual, aggregated and loud.** `workflow_dispatch` only, with filters for setup, window and configuration; a
+  summary job prints one table covering every triple; a failing triple uploads both KPI sets, both result CSVs and the
+  wire diff.
+- R11.8 **Removal is part of P3.** The workflow, its configuration and its scripts are deleted in P3's last PR — a
+  checkbox in the plan, not an intention. What survives is whatever earned a place in the permanent gate: the six
+  setups the scan already clears (`household_heatpump_solar_thermal_building_sizer`,
+  `household_heatpump_car_building_sizer`, `household_gas_solar_thermal_building_sizer`,
+  `automatic_default_connections`, `basic_household`, `default_connections`) are the candidates, decided at the end of
+  P3 on the rig's evidence rather than before it.
+
 ## 9. Constraints, Invariants and Assumptions
 
 - C-P3.1 `[given]` Golden parity (E7); `golden_references/` is not re-blessed by P3.
-- C-P3.2 `[proposed; inventory §5c]` Aggregator port names differ between the two paths; anything that compares result columns by name is not a valid P3 oracle. If byte-identical CSVs are ever required, the legacy path must adopt the declarative port names first (a P4/P5 decision, own commit, result-column renames).
+- C-P3.2 `[proposed; inventory §5c, refined 2026-08-28]` Aggregator port names differ between the two paths; anything that compares *all* result columns by name is not a valid P3 oracle. The columns whose names do agree are comparable, and R11.3 compares them exactly while leaving the aggregator ports to the wire-set check. If byte-identical CSVs are ever required, the legacy path must adopt the declarative port names first (a P4/P5 decision, own commit, result-column renames).
 - C-P3.3 `[proposed; inventory §2d]` Wiring conditional on constructed data (`parameters["Group"]`) is fully determined at record time; the recorded wire is the branch taken. Fine for P3; it becomes a class-side default connection when hplib is converted (P4 B1).
 - C-P3.4 `[proposed]` Recording runs constructors: UTSP-dependent setups record with the predefined/local LPG profile the tests use today; a live UTSP is never required for recording.
 - C-P3.5 `[proposed; inventory §2e]` Recorded files stay concrete (R2.4): the five residual setup-side arithmetic expressions and the `Information`-object threading appear as plain numbers. P4 turns them into laws, but a re-recorded file never shows `AUTO`; P4's only visible effect on a recorded file is that `config` blocks shrink to `preset:` + overrides.
 - C-P3.6 `[decided 2026-08-28; R10]` No group and no variant is ever inferred. Observation supplies the three-state matrix; the assignment of a difference to membership or to an override is a person's, recorded in the table, reviewed as a diff of `<stem>.grouping.yaml`.
 - C-P3.7 `[decided 2026-08-28; R10.7]` A grouped file's guarantees reach exactly as far as its probe list. Combinations never probed are untested, named as such in the report, and are not a claim the file makes.
 - A1 `[proposed]` Post-construction recording is acceptable (see §4).
-- A2 `[proposed]` The 4 non-golden sizers and 11 non-sizer setups need no new numeric oracle in P3; R3.2/R3.3 are their gate. Adding them to `golden_config.json` is a separate decision (Q-P3.7).
+- A2 `[decided 2026-08-28; Q-P3.7]` The 13 in-scope setups with no numeric oracle get one for the duration of the migration through R11, not by joining `golden_config.json`. A temporary A/B rig needs no references, covers the seven setups whose KPI layer crashes, and compares more strictly than the permanent gate can. Which of them join the permanent gate afterwards is decided at the end of P3 (R11.8).
 
 ## 10. Acceptance Criteria
 
@@ -163,6 +204,10 @@ R10 adds a second pass in which a person makes that judgement once per setup, in
 | AC-P3.14 | The prefilled workbook marks a component absent, identical or differing against the baseline, and the importer rejects a workbook with a differing component that carries no assignment, naming it. | R10.2, R10.3 |
 | AC-P3.15 | `<stem>.grouping.yaml` is committed and the workbook is not; regenerating the workbook from the probe runs and re-importing it yields the identical `.grouping.yaml`. | R10.4 |
 | AC-P3.16 | The grouping report lists the `override` differences as consumer knobs and names the fork combinations the probe list never exercised. | R10.5, R10.7 |
+| AC-P3.17 | One dispatch of the rig covers every in-scope (setup, configuration, window) triple and prints them as one table; the January and July windows both appear for every triple. | R11.1, R11.5, R11.7 |
+| AC-P3.18 | Changing one config value in a recorded file makes its triple fail and the report names the columns or KPIs that moved; the comparison is exact, so no threshold can hide it. | R11.2, R11.3 |
+| AC-P3.19 | The seven KPI-broken setups return a structural verdict — component set and wire set compared, KPI stage reported as unavailable — rather than an error. | R11.4, R11.3 |
+| AC-P3.20 | P3's final PR deletes the workflow, its configuration and its scripts, and the repository contains no reference to them afterwards. | R11.8 |
 | AC-P3.11 | The out-of-scope list is printed by the recording script with one reason each; no recorded file exists for them. | R5.2 |
 | AC-P3.12 | No recorded energy-system file contains a simulation-parameter key (duration, resolution, post-processing option, logging level, cache path); a schema-level test rejects them. | R8 |
 
@@ -174,6 +219,7 @@ R10 adds a second pass in which a person makes that judgement once per setup, in
 |---|---|---|---|
 | Q-P3.1 | Record now with literal `config` blocks, or run P4 first? | R2.2, R2.4, G4, plan ordering | `[answered 2026-08-28]` (a) record now; P4 batches re-record and the shrinking diff is each batch's review artefact |
 | Q-P3.2 | KPI parity at `rel_tol = 1e-9`, or byte-identical result CSVs? | R3.1, C-P3.2, AC-P3.2 | `[answered 2026-08-28]` (a) KPI parity, the existing oracle. Renaming the legacy aggregator ports to make CSVs comparable stays a P4/P5 item, not a condition of the migration |
+| Q-P3.7 | Do the 13 setups without a numeric oracle get one in P3? | A2, AC-P3.3, R11 | `[answered 2026-08-28]` yes, but not by joining the permanent gate: a **temporary A/B parity rig** (R11), dispatched by hand, comparing the Python path against the recorded file inside one container at exact equality, over a January and a July week, deleted in P3's last PR |
 | Q-P3.3 | Are the 12 module-config sizers recorded once with class defaults, and is the PV/battery/EMS fork flat or a group? | R6, R2.4, R10, AC-P3.9 | `[answered 2026-08-28]` **semi-manual, two passes** (R10): flat recordings of a probe list of configurations, a prefilled table where a person assigns each differing component to a group, a variant option or an override, and a second pass that builds the grouped file — with every probe column asserting the result byte for byte |
 
 `[proposed]` items not listed below (R1.1–R1.3, R2.1–R2.3, R2.5, R3.2–R3.3, R4, R7, R9, C-P3.3–C-P3.4, A1) are confirmed by silence at review.
@@ -198,12 +244,6 @@ R10 adds a second pass in which a person makes that judgement once per setup, in
 *Recommendation.* (b): useful for a developer comparing a run, no repository noise, consistent with v1.
 *Blocks.* R8.
 
-**Q-P3.7 — Do the 13 setups without a numeric oracle get one in P3?** · blocks A2, AC-P3.3
-*Context.* Only the 8 golden sizers are compared numerically; the other 4 sizers (both solar-thermal, car, simple AC) and all 11 non-sizer setups have file-existence tests only. R3.2/R3.3 give them structural equality and self-re-execution, but no Python-vs-file value comparison. Adding a setup to `golden_config.json` costs a full-year run per CI pass (the year job runs after quality gates) and a blessed reference.
-*Options.* (a) **No** — R3.2/R3.3 only; adding golden coverage is a separate, later decision. (b) Add the 4 remaining sizers (the P5 base files) to `golden_config.json` in P3 — 8 more year runs, references blessed from the Python path before recording. (c) Add all 13.
-*Recommendation.* (a) for P3; (b) as the first item of P5 since those four become base files RenoVisor may select.
-*Blocks.* A2, AC-P3.3.
-
 ## 12. Glossary
 
-See the epic. P3-specific: **recorded file** — a v3 energy-system file produced by observing a `setup_function` run, realized-style (concrete values, no `AUTO`/`sizing_sources`); **twin** — the generated file paired with a Python setup (v1: `*.scenario.json`; v3: `*.energy_system.yaml`); **freshness** — a CI check that regenerates a twin and fails on any diff; **base file** — the recorded file of one heating-system sizer with class-default module configuration, the P5 consumer input; **KPI parity** — equality of every entry of `all_kpis.json` within `rel_tol = 1e-9`, the golden oracle.
+See the epic. P3-specific: **recorded file** — a v3 energy-system file produced by observing a `setup_function` run, realized-style (concrete values, no `AUTO`/`sizing_sources`); **twin** — the generated file paired with a Python setup (v1: `*.scenario.json`; v3: `*.energy_system.yaml`); **freshness** — a CI check that regenerates a twin and fails on any diff; **base file** — the recorded file of one heating-system sizer with class-default module configuration, the P5 consumer input; **KPI parity** — equality of every entry of `all_kpis.json` within `rel_tol = 1e-9`, the golden oracle; **probe list** — the authored set of module configurations a setup is recorded under, the configuration axis of both the grouping table (R10) and the parity rig (R11); **parity rig** — the temporary, hand-dispatched workflow that runs a setup both ways in one container and compares them exactly, removed when P3 ends.

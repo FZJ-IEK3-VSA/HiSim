@@ -201,6 +201,46 @@ All of these assert artefact existence only — `finished.flag`, a non-empty res
 
 ---
 
+### 4f. Oracle eligibility of every setup — measured 2026-08-28
+
+`python scripts/golden_validate.py --scan-all` probes each `system_setups/*.py` with a one-day run, executed twice,
+UTSP unset, `COMPUTE_KPIS` + `WRITE_KPIS_TO_JSON` on, and reports offline-runnable / KPI-complete / deterministic.
+**14 of 24 pass, 10 fail.** Eight of the passing ones are the setups already in the gate, so six new setups could be
+blessed today with no repair work at all:
+
+| Setup | Verdict | KPIs / blocker |
+|---|---|---|
+| `household_heatpump_solar_thermal_building_sizer` | pass | 125 |
+| `household_heatpump_car_building_sizer` | pass | 121 |
+| `household_gas_solar_thermal_building_sizer` | pass | 110 |
+| `automatic_default_connections` | pass | 105 |
+| `basic_household` | pass | 72 |
+| `default_connections` | pass | 72 |
+| `household_heatpump_building_sizer` | pass (gated) | 112 |
+| `household_gas_building_sizer` | pass (gated) | 106 |
+| `household_hydrogen_boiler_building_sizer` | pass (gated) | 106 |
+| `household_oil_building_sizer` | pass (gated) | 104 |
+| `household_pellets_building_sizer` | pass (gated) | 104 |
+| `household_wood_chips_building_sizer` | pass (gated) | 104 |
+| `household_district_heating_building_sizer` | pass (gated) | 96 |
+| `household_electric_heating_building_sizer` | pass (gated) | 90 |
+| `dynamic_components` | fail | `NotImplementedError: CHP1 has no kpis implemented` |
+| `electrolyzer_with_renewables` | fail | `NotImplementedError: Standard transformer and rectifier unit has no kpis implemented` |
+| `simple_system_setup_one` | fail | `NotImplementedError: Random numbers 100-200 has no kpis implemented` |
+| `simple_system_setup_two` | fail | same |
+| `basic_household_only_heating` | fail | `TypeError: unsupported operand type(s) for *: 'NoneType' and 'float'` |
+| `air_conditioned_house` | fail | same `TypeError` (also out of scope, R5.2) |
+| `simple_air_conditioner_household_building_sizer` | fail | `ZeroDivisionError: float division by zero` |
+| `household_gas_solar_thermal` | fail | `ValueError: relative elecricity demand … over 100 %` — grid import 21.72 kWh, total consumption 10.9 kWh |
+| `basic_household_with_weather_data_request` | fail | `ModuleNotFoundError: wetterdienst` (out of scope, R5.2) |
+| `simple_weather_data_import` | fail | same (out of scope, R5.2) |
+
+Two things follow. **Every failure happens after the simulation succeeded** — the logs read `Simulation took 0.81s` →
+`Computing KPIs…` → exception — so the blockers sit in the KPI layer, not in the physics or the wiring, and a parity
+oracle that does not need KPIs (R11.3) covers those setups regardless. And the air conditioner's division by zero is
+the window, not the setup: `one_week_only`/`one_day_only` start on 1 January, where a cooling system has no demand to
+divide by, which is the evidence behind R11.5's second window.
+
 ## 5. Existing recording / introspection hooks
 
 **Verdict: the Simulator retains enough to reconstruct a file after `setup_function` ran, and a working precedent already exists in the v1 JSON path.**

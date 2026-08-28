@@ -10,11 +10,9 @@ preset pins and every value the system computes for itself, follows from those d
 
 | File | What it is |
 |---|---|
-| `gas_boiler_household.energy_system.yaml` | A single-family house with a condensing gas boiler, floor heating and grid electricity. The reference system of this directory, hand-written. |
-| `basic_household.energy_system.yaml` | Recorded twin of `system_setups/basic_household.py`. |
-| `dynamic_components.energy_system.yaml` | Recorded twin of `system_setups/dynamic_components.py`: an energy management system ranking two batteries and two fuel cells. |
-| `automatic_default_connections.energy_system.yaml` | Recorded twin of `system_setups/automatic_default_connections.py`: a heat-pump household wired entirely by declared defaults. |
-| `one_day_15min.simulation.yaml` | One January day at a quarter-hour resolution. The pair to reach for when trying a file out; the test suite runs against this file too. |
+| `gas_boiler_household.energy_system.yaml` | A single-family house with a condensing gas boiler, floor heating and grid electricity. The reference system of this directory, and the only hand-written one. |
+| `<setup>.energy_system.yaml` | The recorded twin of `system_setups/<setup>.py`, one per setup. Generated; see "Recording a Python setup" below. |
+| `one_day_15min.simulation.yaml` | One January day at a quarter-hour resolution. The pair to reach for when trying a file out; the test suite and every recording run against this file too. |
 | `2021_minutely.simulation.yaml` | The whole of 2021 at a one-minute resolution with the standard plots. |
 
 Two kinds of file live side by side and are never mixed:
@@ -70,12 +68,18 @@ preset, a constructor or a field.
 
 ## Recording a Python setup
 
-The files marked "recorded twin" above are not hand-written. They were produced by running the
-Python setup and writing down what it built:
+Every `<setup>.energy_system.yaml` here is generated. It was produced by running the Python setup
+and writing down what it built — one setup at a time:
 
 ```bash
 hisim energy-system record system_setups/basic_household.py \
     energy_systems/one_day_15min.simulation.yaml
+```
+
+or the whole fleet at once, which is what regenerates this directory:
+
+```bash
+python scripts/record_all_setups.py
 ```
 
 The recorder observes a finished run — it never parses the setup's source — so a twin states what
@@ -88,8 +92,32 @@ rather than left behind.
 
 Recording is deterministic: the same setup and the same parameters produce the same bytes on any
 machine. A twin is therefore regenerated rather than edited — change the setup, re-record, and read
-the diff. A test in `tests/test_energy_system_recording.py` compares each committed twin against a
-fresh recording, so a setup that changes without its twin fails the suite.
+the diff. `python scripts/record_all_setups.py --check` re-records every setup into a throwaway
+directory and fails on any difference, which is what the `energy-system-freshness` workflow runs on
+every pull request, so a setup cannot change without its twin.
+
+There is no skip list. A setup that cannot be recorded is a defect in the setup or a gap in the
+format, and the driver names every one it could not record and exits non-zero. Two setups are in
+that state today: `household_gas_solar_thermal`, whose electricity meter is wired to the occupancy
+twice — once explicitly and once through the meter's own declared default — so the format refuses
+the duplicate feed the setup really does build; and `household_heatpump_car_building_sizer`, whose
+`Car` components need a data dictionary computed from the occupancy instance at setup time, which
+is a constructor argument the declarative path has no way to supply.
+
+## Simulation-parameters files are shared, never duplicated
+
+A recording does not write a parameters file of its own. It compares the parameters the setup
+ended up with against every `*.simulation.yaml` here, references the one that says the same thing,
+and only writes a new file when nothing matches — including nothing written earlier in the same
+run, so two setups needing identical parameters share one file. The comparison is semantic: the
+period, the resolution, the post-processing options as a set, the logging level, the country and
+the year. Machine-specific fields take no part in it and are never written, `cache_dir_path` above
+all, which eleven setups point at a cluster directory behind an existence probe.
+
+A file written this way is named for its content — the horizon, the resolution and what its option
+set is for, as in `one_week_minutely_kpis.simulation.yaml` — and never for the setup that first
+needed it, because it is shared from the moment a second setup matches it. The freshness job also
+asserts that no two files here describe the same run, so a duplicate cannot be added by hand.
 
 ## Relation to `system_setups/`
 

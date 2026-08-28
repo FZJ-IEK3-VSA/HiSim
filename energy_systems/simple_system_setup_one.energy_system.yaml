@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=../hisim/energy_system_v3.schema.json
+# Recorded from system_setups/simple_system_setup_one.py with energy_systems/one_day_15min.simulation.yaml by the HiSim energy-system recorder v1.
+schema_version: 3
+name: simple_system_setup_one
+description: Simple System Setup Module.
+components:
+  RandomNumbers100To200:
+    class: hisim.components.random_numbers.RandomNumbers
+    config:
+      timesteps: 96
+      minimum: 100.0
+      maximum: 200.0
+  RandomNumbers10To20:
+    class: hisim.components.random_numbers.RandomNumbers
+    config:
+      timesteps: 96
+      minimum: 10.0
+      maximum: 20.0
+  Sum:
+    class: hisim.components.sumbuilder.SumBuilderForTwoInputs
+    config:
+      loadtype: ANY
+      unit: ANY
+    inputs:
+      - input: Input1
+        from: RandomNumbers100To200.RandomNumbers
+      - input: Input2
+        from: RandomNumbers10To20.RandomNumbers

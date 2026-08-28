@@ -30,6 +30,7 @@ import datetime
 
 import pytest
 
+from hisim.config import ComponentID
 from hisim.components.tariff_provider import TariffProvider, TariffProviderConfig
 from hisim.economics.carriers import EnergyCarrier
 from hisim.economics.facts import BillingDeterminants
@@ -46,6 +47,10 @@ from hisim.economics.tariffs import (
 from hisim.economics.timeline import CostCategory
 from hisim.economics.uncertainty import UncertainValue
 from hisim.simulationparameters import SimulationParameters
+
+# The price helpers below are what the published outputs are computed from, so the tests
+# call them directly rather than re-deriving the expected numbers a second way.
+# pylint: disable=protected-access
 
 pytestmark = pytest.mark.base
 
@@ -66,8 +71,7 @@ def make_provider(contract: TariffContract, seconds_per_timestep: int = 3600) ->
     provider = TariffProvider(
         my_simulation_parameters=parameters,
         config=TariffProviderConfig(
-            building_name="BUI1",
-            name="TariffProvider",
+            component_id=ComponentID(name="TariffProvider"),
             tariff_contract_id="SYNTHETIC_TEST",
             forecast_horizon_in_hours=24,
         ),
@@ -326,6 +330,7 @@ def connected_grid_input(provider: TariffProvider):
         field_name="ElectricityToGrid",
         load_type=provider.electricity_from_grid_input.loadtype,
         unit=provider.electricity_from_grid_input.unit,
+        component_id=ComponentID(name="Meter"),
     )
     source.global_index = grid_index
     provider.electricity_from_grid_input.source_output = source
@@ -336,7 +341,7 @@ def capacity_charge_at(provider, stsv, grid_index: int, timestep: int, power_in_
     """Runs one iteration at the given draw and returns the marginal capacity charge published."""
     stsv.values[grid_index] = power_in_watt
     provider.i_simulate(timestep, stsv, False)
-    return stsv.values[provider.capacity_charge_output.global_index]
+    return float(stsv.values[provider.capacity_charge_output.global_index])
 
 
 def _single_time_step_values(provider: TariffProvider):

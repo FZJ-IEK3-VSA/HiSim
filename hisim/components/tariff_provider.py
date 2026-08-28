@@ -30,11 +30,11 @@ import datetime
 from dataclasses import dataclass
 from typing import Any, List, Optional
 
-from dataclass_wizard import JSONWizard
+from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.component import ConfigBase, DisplayConfig
+from hisim.config import ComponentID, ConfigBase, DisplayConfig
 from hisim.economics.database import CostDataError
 from hisim.economics.facts import CostRelevance
 from hisim.economics.tariffs import (
@@ -55,8 +55,9 @@ __license__ = "MIT"
 __status__ = "development"
 
 
+@dataclass_json
 @dataclass
-class TariffProviderConfig(ConfigBase, JSONWizard):
+class TariffProviderConfig(ConfigBase):
     """Configuration of the tariff provider.
 
     Deliberately thin: everything price-bearing lives in the tariff contract data file, so the
@@ -65,12 +66,12 @@ class TariffProviderConfig(ConfigBase, JSONWizard):
     config is what allows a scenario to swap the tariff by id, and what guarantees that the
     simulated control signal and the postprocessing bill come from the same source (§8.1).
 
-    As a `ConfigBase`/`JSONWizard` dataclass it is also the JSON-mode surface of this component:
+    As a `dataclasses_json` `ConfigBase` dataclass it is also the JSON-mode surface of this
+    component:
     a `*.scenario.json` names `TariffProvider.get_full_classname()` and supplies these fields.
     """
 
-    building_name: str
-    name: str
+    component_id: ComponentID
     #: Contract id resolved against hisim/cost_database/tariffs/, or "SYNTHETIC_TEST" for the
     #: deterministic synthetic reference profile (spec Q16).
     tariff_contract_id: str
@@ -83,7 +84,7 @@ class TariffProviderConfig(ConfigBase, JSONWizard):
         return TariffProvider.get_full_classname()
 
     @classmethod
-    def get_default_config(cls, building_name: str = "BUI1") -> "TariffProviderConfig":
+    def get_default_config(cls, component_id: Optional[ComponentID] = None) -> "TariffProviderConfig":
         """Default: the deterministic synthetic dynamic tariff (for tests).
 
         The default deliberately selects `SYNTHETIC_TEST` rather than a shipped contract: real
@@ -91,9 +92,10 @@ class TariffProviderConfig(ConfigBase, JSONWizard):
         a DYNAMIC catalog entry would fail on a fresh checkout. The synthetic profile is a closed
         formula, hence reproducible bit for bit, which is what lets tests assert exact prices.
         """
+        if component_id is None:
+            component_id = ComponentID(name="TariffProvider")
         return TariffProviderConfig(
-            building_name=building_name,
-            name="TariffProvider",
+            component_id=component_id,
             tariff_contract_id="SYNTHETIC_TEST",
             forecast_horizon_in_hours=24,
         )
@@ -155,8 +157,9 @@ class TariffProvider(cp.Component):
             config: The tariff configuration, above all the contract id.
             my_display_config: Standard HiSim webtool/report visibility settings.
         """
+        self.config = config
         super().__init__(
-            name=config.name,
+            name=self.get_component_name(),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

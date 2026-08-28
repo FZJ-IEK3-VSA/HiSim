@@ -25,7 +25,7 @@ class TestCliAndExports:
     """§3.10 / §4.6 CLI on a stored result directory."""
 
     def test_evaluate_and_explain_cli(self, tmp_path, capsys):
-        """python -m hisim.economics evaluate/explain works offline on archived inputs."""
+        """The evaluate and explain subcommands work offline on archived inputs."""
         from hisim.economics.__main__ import main
         from hisim.economics.serialization import write_inputs
 
@@ -292,5 +292,3 @@ class TestParityHarness:
         investment_row = next(row for row in rows if row["Figure"] == "investment")
         assert float(investment_row["Delta"]) == pytest.approx(0.0, abs=0.01)
         assert investment_row["Note"] == ""
-
-

@@ -31,11 +31,12 @@ def _simulator(parameters: SimulationParameters) -> Simulator:
     setup function is actually imported, which these tests never do. That keeps the accessor under
     test isolated from everything a real run would drag in.
     """
-    return Simulator(
+    simulator: Simulator = Simulator(
         module_directory="system_setups",
         module_filename="does_not_need_to_exist.py",
         my_simulation_parameters=parameters,
     )
+    return simulator
 
 
 class TestSimulationParametersAccessor:

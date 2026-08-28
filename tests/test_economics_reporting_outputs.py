@@ -24,6 +24,7 @@ from hisim.loadtypes import ComponentType, Units
 
 pytestmark = pytest.mark.base
 
+
 @pytest.fixture(name="database", scope="module")
 def fixture_database() -> CostDatabase:
     """The shipped cost database.
@@ -34,6 +35,7 @@ def fixture_database() -> CostDatabase:
     of this file.
     """
     return CostDatabase()
+
 
 def make_inputs(energy_kwh: float = 5000.0, investment: float = 16000.0) -> EvaluationInputs:
     """A small but complete evaluation input set.
@@ -61,6 +63,7 @@ def make_inputs(energy_kwh: float = 5000.0, investment: float = 16000.0) -> Eval
         living_area_in_m2=150.0,
     )
 
+
 def _audit(database, inputs, matrix):
     """The typed input audit the report's section 1 renders (W4.6).
 
@@ -76,6 +79,7 @@ def _audit(database, inputs, matrix):
         inputs, database, EconomicParameters(country="DE", price_basis_year=inputs.simulation_year),
         next(iter(matrix.results.values())),
     )
+
 
 @pytest.fixture(name="matrix", scope="module")
 def fixture_matrix(database) -> EvaluationMatrix:
@@ -108,7 +112,8 @@ class TestInputAudit:
         assert row.unit_price_in_euro is not None
         assert row.unit_price_in_euro.best_estimate == pytest.approx(16000.0)
 
-        csv_text = open(write_cost_audit(audit, str(tmp_path)), encoding="utf-8").read()
+        with open(write_cost_audit(audit, str(tmp_path)), encoding="utf-8") as audit_file:
+            csv_text = audit_file.read()
         assert "config override (test)" in csv_text
         html_text = build_lifecycle_report_html(matrix, run_plausibility_checks(matrix), audit)
         assert "override (test)" in html_text
@@ -182,7 +187,8 @@ class TestInputAudit:
         audit = build_input_audit(
             inputs, database, EconomicParameters(country="DE", price_basis_year=2026)
         )
-        lines = open(write_cost_audit(audit, str(tmp_path)), encoding="utf-8").read().splitlines()
+        with open(write_cost_audit(audit, str(tmp_path)), encoding="utf-8") as audit_file:
+            lines = audit_file.read().splitlines()
         header = lines[0].split(";")
         assert header.index("Price basis") == header.index("Unit price min") - 1
         basis_column = header.index("Price basis")
@@ -218,7 +224,8 @@ class TestInputAudit:
         assert row.origin_kind == OriginKind.ORIGIN_UNRESOLVED
         assert _csv_origin(row) == "unresolved - not priced"
 
-        lines = open(write_cost_audit(audit, str(tmp_path)), encoding="utf-8").read().splitlines()
+        with open(write_cost_audit(audit, str(tmp_path)), encoding="utf-8") as audit_file:
+            lines = audit_file.read().splitlines()
         header = lines[0].split(";")
         cells = lines[1].split(";")
         assert cells[header.index("Investment origin")] == "unresolved - not priced"
@@ -239,7 +246,6 @@ class TestSubsidyDecisionsAcrossPerspectives:
         in the rendered cards is a difference the mode caused.
         """
         from hisim.economics.perspectives import InstallationContext, Perspective
-        from hisim.economics.results import EvaluationMatrix
         from hisim.economics.subsidies import (
     ApplicantActor,
     ApplicantProfile,
@@ -384,5 +390,3 @@ class TestPngsAndCli:
             assert (variant_dir / file_name).is_file(), file_name
         summary = (variant_dir / "cost_summary.md").read_text(encoding="utf-8")
         assert "## Variant comparison" in summary
-
-

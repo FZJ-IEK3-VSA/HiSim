@@ -37,6 +37,7 @@ the hook cannot express them. Quantities are kWh on both paths (D26).
 
 import datetime
 import json
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -92,6 +93,10 @@ class _Config:
     """
 
     def __init__(self, **attributes) -> None:
+        """Takes any keyword as an attribute; `fuel_loadtype` is declared because tests set it."""
+        # `getattr(config, "fuel_loadtype", None)` is what the adapter does, so declaring the
+        # attribute as None changes nothing for it and gives the tests something to assign to.
+        self.fuel_loadtype: Any = attributes.pop("fuel_loadtype", None)
         self.__dict__.update(attributes)
 
 
@@ -107,6 +112,7 @@ class FakeHeatPump:
     cost_relevance = CostRelevance.PRICED
 
     def __init__(self, component_name: str = "FakeHeatPump", asset_class=ComponentType.HEAT_PUMP) -> None:
+        """A priced component of the given asset class."""
         self.component_name = component_name
         self.config = _Config()
         self._asset_class = asset_class
@@ -125,6 +131,7 @@ class FakeController:
     """
 
     def __init__(self) -> None:
+        """A component with no cost declaration of any kind."""
         self.component_name = "FakeController"
         self.config = _Config()
 
@@ -139,8 +146,12 @@ class ElectricityMeter:
     """
 
     def __init__(self) -> None:
+        """A meter the adapter knows by class name, with no adopted flow hook yet."""
         self.component_name = "ElectricityMeter"
         self.config = _Config()
+        # The adapter probes with `getattr(..., None)`, so an unset hook is the compatibility
+        # path; a test that wants the adopted path assigns a callable here.
+        self.get_energy_flow_facts: Any = None
 
 
 class FuelMeter:
@@ -154,10 +165,12 @@ class FuelMeter:
     """
 
     def __init__(self) -> None:
+        """An oil meter with the legacy heating value its config still carries."""
         self.component_name = "FuelMeter"
         self.config = _Config(
             fuel_loadtype=lt.LoadTypes.OIL, heating_value_of_fuel_in_kwh_per_liter=10.0
         )
+        self.get_energy_flow_facts: Any = None
 
 
 class GenericBoiler:
@@ -171,6 +184,7 @@ class GenericBoiler:
     """
 
     def __init__(self, energy_carrier=lt.LoadTypes.OIL, component_name: str = "Boiler") -> None:
+        """A boiler the compatibility table knows, burning the given carrier."""
         self.component_name = component_name
         self.config = _Config(energy_carrier=energy_carrier, maximal_thermal_power_in_watt=12000.0)
 
@@ -226,7 +240,7 @@ def _results_frame(columns) -> pd.DataFrame:
     the index of the matching entry in the list of all outputs — so a test must keep this frame's
     column order aligned with the `_Output` list it passes alongside.
     """
-    return pd.DataFrame({name: values for name, values in columns})
+    return pd.DataFrame(dict(columns))
 
 
 class TestFactsExtraction:
@@ -443,7 +457,9 @@ class TestUnresolvedSubjects:
         for load_type, carrier in expected.items():
             meter = FuelMeter()
             meter.config.fuel_loadtype = load_type
-            assert adapter.get_meter_spec(meter).carrier is carrier
+            spec = adapter.get_meter_spec(meter)
+            assert spec is not None
+            assert spec.carrier is carrier
         meter = FuelMeter()
         meter.component_name = "WeirdMeter"
         meter.config.fuel_loadtype = lt.LoadTypes.ELECTRICITY

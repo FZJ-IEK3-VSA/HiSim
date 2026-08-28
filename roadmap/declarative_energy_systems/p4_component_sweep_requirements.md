@@ -3,7 +3,7 @@
 **Status:** draft · **Date:** 2026-08-27 (D-20 answered and implemented in P2)
 **Author(s):** Noah Pflugradt (owner; `[given]`) · assistant (`[proposed]`, survey)
 **Reviewers:** HiSim core team
-**Parent:** `roadmap/declarative_energy_systems/epic.md` (E1–E8 apply by reference) · **Plan:** `roadmap/declarative_energy_systems/plan.md` §P4 · **Depends on:** P1 accepted; P2 for fixtures; P3 recorded files where they exist (Q-P3.1)
+**Parent:** `roadmap/declarative_energy_systems/epic.md` (E1–E8 apply by reference) · **Plan:** `roadmap/declarative_energy_systems/plan.md` §P4 · **Depends on:** P1 accepted; P2 for fixtures; P3 recorded files where they exist (Q-P3.1 answered 2026-08-28: P3 records now, so a batch that lands after the first recording round has its fixtures)
 **Companions (the evidence):** `p4_class_survey.md` (every config class: factories, call sites, presets, laws, facts, behaviour, deletions, hazards, and the full five-part text of decisions D-1…D-32) · `preset_naming_supplement.md` (naming rules 1–5 + A1–A3, per-class proposals, conflicts 1–10) · `sizing_fact_inventory.md` (the math per sized field) · `p3_setup_inventory.md` §3 (class usage per setup)
 
 **Tags:** refactoring, migration, behavior-change, compatibility
@@ -192,7 +192,7 @@ Each batch PR contains: the R3 rows it implements (unchanged or with the amendme
 - C-P4.4 `[proposed; survey C]` `Car`, `SmartDevice` depend on a simulation result, not a catalogue; no constructor can express them (D-23, D-30).
 - C-P4.5 `[proposed]` Enum-typed sizable fields carry `value_type=` (P2 R3.7); free-text fields over closed sets (`gas_type`, `operating_mode`, `operation_mode`, `building_heat_capacity_class`, `electrolyzer_type`) become enums before P5 freezes them (D-27 for three of them).
 - C-P4.6 `[proposed]` Many-cardinality is not needed by any class in R3 (EQ2 confirmed by all three surveys); `Many` stays a raising hook.
-- A1 `[proposed]` Batches are reviewed against recorded-file diffs (P3 Q-P3.1 (a)). If P3 lands later, the Python setups' regenerated v1 fixtures serve instead.
+- A1 `[proposed]` Batches are reviewed against recorded-file diffs (P3 Q-P3.1 (a), decided 2026-08-28). A batch that lands before its classes have been recorded uses the Python setups' regenerated v1 fixtures instead, and re-records as soon as the file exists.
 - A2 `[proposed]` The obsolete repository (#590) is the destination for deletions that may still be wanted.
 
 ## 10. Acceptance Criteria

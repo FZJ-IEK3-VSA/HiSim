@@ -1,6 +1,6 @@
 # P3 — Recording and setup migration — requirements
 
-**Status:** draft · **Date:** 2026-08-27
+**Status:** in review · **Date:** 2026-08-28 (Q-P3.1 decided: record now) · drafted 2026-08-27
 **Author(s):** Noah Pflugradt (owner; `[given]`) · assistant (`[proposed]`, inventory)
 **Reviewers:** HiSim core team
 **Parent:** `roadmap/declarative_energy_systems/epic.md` (E1–E8 apply by reference) · **Plan:** `roadmap/declarative_energy_systems/plan.md` §P3 · **Depends on:** P2 accepted
@@ -10,7 +10,9 @@
 **Tags:** migration, compatibility, feature
 **Keywords:** recorder, setup_function, energy-system file, golden parity, KPI parity, freshness check, literal config, preset provenance, aggregator port names
 
-**What a reviewer must decide here:** (1) recorded files are *realized-style* — every class as a full `config` block unless the recorder can prove a preset — and P4 batches re-record them, instead of waiting for P4 (Q-P3.1); (2) the parity oracle is the existing KPI comparison at `rel_tol = 1e-9`, not byte-identical result CSVs, because the declarative path names aggregator ports differently (Q-P3.2); (3) the 12 building-sizer setups are recorded once each with the default module configuration, and the PV/battery/EMS fork becomes a group only where the recorded branch had it on (Q-P3.3); (4) where the files live and what happens to the v1 JSON twins (Q-P3.4); (5) which of the 24 setups are out of scope (Q-P3.5).
+**Decided (Q-P3.1, 2026-08-28):** recording starts now, on today's classes — recorded files are *realized-style*, every class a full `config` block unless the recorder can prove a preset, and each P4 batch re-records them so the shrinking diff is that batch's review artefact.
+
+**What a reviewer must still decide here:** (1) the parity oracle is the existing KPI comparison at `rel_tol = 1e-9`, not byte-identical result CSVs, because the declarative path names aggregator ports differently (Q-P3.2); (2) the 12 building-sizer setups are recorded once each with the default module configuration, and the PV/battery/EMS fork becomes a group only where the recorded branch had it on (Q-P3.3); (3) where the files live and what happens to the v1 JSON twins (Q-P3.4); (4) which of the 24 setups are out of scope (Q-P3.5).
 
 ---
 
@@ -63,9 +65,9 @@ The external representation is fixed by P2 (mockups + `energy_systems/gas_boiler
 - R1.2 `[proposed; from json_generator.py precedent]` Each setup is recorded in its own process (singletons, module imports, `HISIM_LOCAL_LPG_CALC_INDEX`), as `scripts/regenerate_scenario_jsons.py` does today.
 - R1.3 `[proposed]` The recorder is invoked as `hisim energy-system record <setup.py> <simulation.yaml|json> [--out <dir>]` (nested-noun CLI, Q-P2.4) and by a repository script that records every in-scope setup.
 
-### R2 — Content of a recorded file `[proposed; from inventory §5]`
+### R2 — Content of a recorded file `[proposed; from inventory §5]` `[Q-P3.1 answered 2026-08-28: record now]`
 - R2.1 Every component the simulator holds after `prepare_calculation()` + `connect_all_components()` appears once, keyed by its runtime `component_name`, in registration order; `class` is the component's importable path.
-- R2.2 A config built by a `@preset`/`@constructor` method (provenance present) is written as `preset:`/`constructor:` plus the sparse `config` diff against a fresh build of that preset; a config without provenance is written as a complete `config` block with the same codec as the P2 realized record (`${var}` paths, enums by name, `component_id` omitted). Rejected: guessing a preset by value-matching (an inference, E1).
+- R2.2 A config built by a `@preset`/`@constructor` method (provenance present) is written as `preset:`/`constructor:` plus the sparse `config` diff against a fresh build of that preset; a config without provenance is written as a complete `config` block with the same codec as the P2 realized record (`${var}` paths, enums by name, `component_id` omitted). Rejected: guessing a preset by value-matching (an inference, E1). Recording does not wait for P4 (Q-P3.1): at the start of P3 the 9 converted classes take the first branch and the other 32 the second, so the first recorded files are long and each P4 batch shortens them by re-recording alone — the recorder needs no change per batch.
 - R2.3 Every wire is written at the consumer: a source whose wires equal exactly the target's default connections for that source becomes a bare `inputs` item; every other wire an explicit `{input, from}`; aggregator feeds `{from, tags, weight}` with `dispatch` where a dispatch output was created; nothing is written at the source.
 - R2.4 A recorded file contains no `AUTO`, no `sizing_sources`, no `groups` (Q-P3.3 may add one exception) and no comments except the P2 header line and a generated-by line naming the setup module, the simulation-parameters file and the recorder version.
 - R2.5 Canonical style (P2 R11): `dump(load(recorded)) == recorded`.
@@ -123,17 +125,15 @@ The Python setups, their v1 JSON twins and their freshness workflow remain untou
 
 ## 11. Open Questions and Decisions
 
-**Answered** — none yet.
+**Answered**
+
+| ID | Question | Blocks | Status |
+|---|---|---|---|
+| Q-P3.1 | Record now with literal `config` blocks, or run P4 first? | R2.2, R2.4, G4, plan ordering | `[answered 2026-08-28]` (a) record now; P4 batches re-record and the shrinking diff is each batch's review artefact |
 
 `[proposed]` items not listed below (R1.1–R1.3, R2.1–R2.3, R2.5, R3.2–R3.3, R4, R7, R9, C-P3.3–C-P3.4, A1) are confirmed by silence at review.
 
 **Open**
-
-**Q-P3.1 — Record now, with 32 of 41 classes as literal `config` blocks, or run P4 first?** · blocks R2.2, R2.4, G4, plan ordering
-*Context.* Only 9 classes carry presets/constructors today (128 of ~250 instantiations); the other 32 produce full `config` blocks of 10–40 fields each (a recorded heat-pump base ≈ 300–400 lines vs. ≈ 70 for the hand-written UC1). The plan's dependency graph puts P3 before P4 (`P2 → P3 → P5`; P4 in parallel). `preset_provenance` is stamped by every `@preset`, so each P4 batch makes the recorder emit shorter files with no recorder change.
-*Options.* (a) **Record now** — golden gate on files immediately; P4 batches re-record and the shrinking diff is the batch's review artefact; files are ugly until P4 finishes. (b) **P4 first** — recorded files are readable from day one; the golden suites stay on Python for months; P4 has no file fixtures beyond the three mockups and no per-batch parity on real setups. (c) **Record now but keep recorded files out of the repo until P4 B5** — no ugly files checked in, but also no freshness gate and nothing for P5 to start on.
-*Recommendation.* (a): the recorded file is by definition a realized record, which is allowed to be verbose (P2 R8); readability is what the hand-written exemplar is for; and P4 gets a real parity fixture per batch.
-*Blocks.* R2.2, R2.4, AC-P3.5, plan §P3/§P4 ordering.
 
 **Q-P3.2 — Is KPI parity at `rel_tol = 1e-9` the oracle, or byte-identical result CSVs?** · blocks R3.1, C-P3.2, AC-P3.2
 *Context.* The existing Python-vs-v1-JSON gate compares `all_kpis.json` only (`golden_references/README.md`: never CSVs). Aggregator ports are named `Input_<src>_<field>_<n>` on the legacy path and `<aggregator_input_name>` on the declarative path (`hisim/dynamic_component.py:253-262` vs. `json_generator.py:184`), so CSV column names differ for the 13 setups with an EMS or meter feed while values are identical. Byte-identical CSVs would require renaming the legacy ports first — a result-column change touching every consumer of `all_results.csv`.

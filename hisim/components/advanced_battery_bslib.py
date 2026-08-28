@@ -4,7 +4,7 @@
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from typing import List, Tuple, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from bslib import bslib as bsl
 from dataclasses_json import dataclass_json
 
@@ -21,6 +21,8 @@ from hisim.component import (
 )
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
+from hisim.economics.facts import ComponentCostFacts, CostRelevance
+from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -55,8 +57,8 @@ class BatteryConfig(ConfigBase):
     system_id: str
     #: charging and discharging power in Watt
     custom_pv_inverter_power_generic_in_watt: float
-    #: battery capacity in in kWh
-    custom_battery_capacity_generic_in_kilowatt_hour: float
+    #: battery capacity in kWh; marked as the capacity field for the contract test (§9.4)
+    custom_battery_capacity_generic_in_kilowatt_hour: float = field(metadata={"capacity": True})
     #: amount of energy used to charge the battery
     charge_in_kwh: float
     #: amount of energy discharged from the battery
@@ -143,6 +145,9 @@ class Battery(Component):
     Components to connect to:
     (1) Energy Management System
     """
+
+    # Lifecycle cost engine declaration (cost_spec.md §9.2).
+    cost_relevance = CostRelevance.PRICED
 
     # Inputs
     LoadingPowerInput = "LoadingPowerInput"  # W
@@ -338,6 +343,9 @@ class Battery(Component):
     ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
 
+        # Note for the parity harness: the legacy computation below scales the kWh capacity by
+        # 1e-3 (latent unit bug, cost_module_issues.md #20a); get_cost_facts() declares the
+        # physically correct size, so the parity report shows an explained battery delta.
         component_type = ComponentType.BATTERY
         kpi_tag = KpiTagEnumClass.BATTERY
         unit = Units.KWH
@@ -372,6 +380,44 @@ class Battery(Component):
 
         config = CapexComputationHelperFunctions.overwrite_config_values_with_new_capex_values(config=config, capex_cost_data_class=capex_cost_data_class)
         return capex_cost_data_class
+
+    def get_cost_facts(self) -> ComponentCostFacts:
+        """Cost facts for the lifecycle cost engine (cost_spec.md §3.3, §9.1).
+
+        Declares the battery as one priced subject: a `BATTERY` entry of the cost database, sized
+        by its **capacity in kWh** — the unit batteries are quoted in (EUR/kWh), and the
+        unit the database row must therefore declare as its `per_unit`. The config field is
+        already in kilowatt-hours, so no conversion happens here; a factor slipped in at this line
+        would silently move the whole battery investment by three orders of magnitude.
+
+        Everything monetary comes from the database unless the config carries an explicit figure
+        (from the building sizer or a RenoVisor request), in which case it is passed through as a
+        per-field override together with the `override_source` the provenance ledger requires.
+        The legacy `get_cost_capex` above is deliberately left as it is; the parity report
+        compares the two.
+
+        Returns:
+            The facts for this battery; never None, since the class declares `PRICED`.
+        """
+        config = self.battery_config
+        return ComponentCostFacts(
+            asset_class=ComponentType.BATTERY,
+            size=config.custom_battery_capacity_generic_in_kilowatt_hour,
+            size_unit=Units.KWH,
+            kpi_tag=KpiTagEnumClass.BATTERY,
+            investment_cost_override_in_euro=(
+                UncertainValue.exact(config.investment_costs_in_euro)
+                if config.investment_costs_in_euro is not None
+                else None
+            ),
+            lifetime_override_in_years=config.lifetime_in_years,
+            embodied_co2_override_in_kg=config.device_co2_footprint_in_kg,
+            override_source=(
+                "component config (e.g. building_sizer / RenoVisor request)"
+                if config.investment_costs_in_euro is not None
+                else None
+            ),
+        )
 
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of maintenance costs."""

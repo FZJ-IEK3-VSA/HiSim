@@ -22,10 +22,8 @@
 # cannot be built).
 #
 # Note: this is heavier than the KPI checks because it builds every setup
-# (occupancy setups trigger LPG). The two weather setups
-# 'basic_household_with_weather_data_request' and 'simple_weather_data_import'
-# are excluded because they need the optional 'wetterdienst' package, which is
-# disabled in requirements.txt; they are therefore not required to ship a JSON.
+# (occupancy setups trigger LPG). There is no exclusion list: every setup in
+# 'system_setups/' must build and ship an up-to-date JSON.
 
 name: scenario-json-freshness
 
@@ -79,8 +77,7 @@ jobs:
           set +e
           python scripts/regenerate_scenario_jsons.py \
             -j "${jobs}" \
-            --all-py \
-            --exclude basic_household_with_weather_data_request simple_weather_data_import
+            --all-py
           rc=$?
           set -e
           echo "REGEN_RC=${rc}" >> "$GITHUB_ENV"

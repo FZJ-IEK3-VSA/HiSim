@@ -23,9 +23,11 @@ have written for the same configuration.
 
 from __future__ import annotations
 
+import copy
+import dataclasses
 from typing import Any, ClassVar, Dict
 
-from hisim.config import ConfigBuilder, preset_provenance, presets_of
+from hisim.config import AUTO, ConfigBuilder, SizingLaw, preset_provenance, presets_of
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordingError
 from hisim.energy_system.record import ConfigBlockWriter
 
@@ -127,6 +129,40 @@ class EntryConfigWriter:
                     "renamed preset has to keep its wire name or the recordings have to be redone."
                 ),
             )
-        baseline = self.writer.block(name, builder.build(name))
+        baseline = self.writer.block(name, self.unresolved(builder.build(name)))
         current = self.writer.block(name, config)
         return {key: value for key, value in current.items() if key not in baseline or baseline[key] != value}
+
+    @classmethod
+    def unresolved(cls, baseline: Any) -> Any:
+        """Renders a fresh preset's own sizing laws the way an unsized field is already rendered.
+
+        A preset may pin a field to a law of its own rather than leave it to the class rule — the
+        pellet boiler's "a twelfth of the maximum" is the standing example — and such a field
+        still holds the law object when the preset has only been built and not yet resolved. The
+        block writer refuses an object, and rightly so for a *recorded* configuration; but the
+        baseline is never written, only compared, and the honest reading of a field that has not
+        been computed yet is the same sentinel every other unsized field carries.
+
+        Substituting it keeps the comparison total and keeps it correct: a sentinel can never
+        equal the concrete number the run produced, so a field the preset sizes always lands in
+        the deviation block, which is exactly what a realized recording must state.
+
+        Args:
+            baseline: A freshly built, unresolved configuration.
+
+        Returns:
+            A shallow copy with every law-valued field replaced by the unsized sentinel; the
+            argument itself when it holds no laws.
+        """
+        laws = [
+            field.name
+            for field in dataclasses.fields(baseline)
+            if isinstance(getattr(baseline, field.name, None), SizingLaw)
+        ]
+        if not laws:
+            return baseline
+        substituted = copy.copy(baseline)
+        for field_name in laws:
+            setattr(substituted, field_name, AUTO)
+        return substituted

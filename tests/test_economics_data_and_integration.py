@@ -31,6 +31,7 @@ ADOPTED_COMPONENTS = [
      "get_electricity_meter_default_config", "config"),
 ]
 
+
 def _facts_from_default_config(module_name, class_name, config_class_name, default_factory, config_attr):
     """Builds a component's cost facts from its own default config, without constructing it.
 
@@ -78,8 +79,10 @@ class TestCostFactsContract:
         ids=lambda spec: spec[1],
     )
     def test_facts_respond_to_the_config(self, spec):
-        """Scaling the capacity config field x2 scales facts.size x2 (the 'uses the correct
-        configuration' property, now machine-checked)."""
+        """Doubling the capacity config field doubles the facts' size.
+
+        The "uses the correct configuration" property, now machine-checked.
+        """
         import importlib
 
         module_name, class_name, config_class_name, default_factory, config_attr = spec
@@ -126,7 +129,7 @@ class TestDataFiles:
         import json
         import shutil
 
-        from hisim.economics.database import CostDatabase, CostDataError
+        from hisim.economics.database import CostDataError
 
         clone = tmp_path / "cost_database"
         shutil.copytree(CostDatabase.DEFAULT_PATH, clone)
@@ -145,7 +148,6 @@ class TestResolvedEntries:
 
     def test_resolving_a_device_entry_records_its_provenance(self):
         """The database layer records; the caller only names the fields it prices from."""
-        from hisim.economics.database import CostDatabase
         from hisim.economics.provenance import ParameterOrigin, ProvenanceLedger
 
         database = CostDatabase()
@@ -164,7 +166,7 @@ class TestResolvedEntries:
 
     def test_unrequested_field_has_no_provenance(self):
         """Reading a field nobody declared is a coding error, not a silent gap."""
-        from hisim.economics.database import CostDatabase, CostDataError
+        from hisim.economics.database import CostDataError
         from hisim.economics.provenance import ProvenanceLedger
 
         database = CostDatabase()
@@ -176,7 +178,6 @@ class TestResolvedEntries:
 
     def test_resolving_an_energy_price_records_its_provenance(self):
         """Same contract on the energy side."""
-        from hisim.economics.database import CostDatabase
         from hisim.economics.provenance import ProvenanceLedger
 
         database = CostDatabase()
@@ -190,7 +191,7 @@ class TestResolvedEntries:
 
     def test_missing_entry_still_raises_before_anything_is_recorded(self):
         """A failed resolution leaves no half-written provenance behind."""
-        from hisim.economics.database import CostDatabase, CostDataError
+        from hisim.economics.database import CostDataError
         from hisim.economics.provenance import ProvenanceLedger
 
         database = CostDatabase()
@@ -259,7 +260,6 @@ class TestEuroPerKilowattHourBasis:
     @staticmethod
     def _shipped_entry(carrier):
         """The as-shipped 2026 DE row for a carrier, straight out of the loaded lists."""
-        from hisim.economics.database import CostDatabase
 
         database = CostDatabase()
         rows = [
@@ -278,12 +278,8 @@ class TestEuroPerKilowattHourBasis:
         resolution-time conversion path — kept for user-supplied files — can be exercised
         against real shipped numbers.
         """
-        import dataclasses as dataclasses_module
-
-        from hisim.economics.uncertainty import UncertainValue
-
         quote = cls.PELLET_QUOTE_2026_IN_EUR_PER_TON
-        return dataclasses_module.replace(
+        return dataclasses.replace(
             shipped,
             working_price_in_euro_per_kwh=UncertainValue(
                 best_estimate=quote["best_estimate"], minimum=quote["minimum"], maximum=quote["maximum"]
@@ -384,7 +380,6 @@ class TestEuroPerKilowattHourBasis:
 
     def test_a_kwh_quoted_carrier_records_no_conversion_detail(self):
         """Nothing was divided, so there is nothing to explain (and no misleading sentence)."""
-        from hisim.economics.database import CostDatabase
         from hisim.economics.provenance import ProvenanceLedger
 
         database = CostDatabase()
@@ -396,17 +391,16 @@ class TestEuroPerKilowattHourBasis:
 
     def test_an_unconvertible_quote_fails_instead_of_being_billed_against_kwh(self):
         """A unit with no known heating value is a data error, not a silent pass-through (D7)."""
-        import dataclasses as dataclasses_module
 
         from hisim.economics.database import CostDataError
 
         database, shipped = self._shipped_entry(EnergyCarrier.PELLETS)
         native = self._native_pellet_variant(shipped)
         with pytest.raises(CostDataError, match="cannot be converted to EUR/kWh"):
-            database.energy_content_of(dataclasses_module.replace(native, quantity_unit="cord"))
+            database.energy_content_of(dataclasses.replace(native, quantity_unit="cord"))
         with pytest.raises(CostDataError, match="no lower heating value is known"):
             database.energy_content_of(
-                dataclasses_module.replace(native, carrier=EnergyCarrier.HYDROGEN)
+                dataclasses.replace(native, carrier=EnergyCarrier.HYDROGEN)
             )
 
     def test_converted_plausibility_ranges_are_the_native_bands_divided_by_the_energy_content(self):
@@ -418,9 +412,7 @@ class TestEuroPerKilowattHourBasis:
         very energy content the pricing path divides by, allowing only the three-to-four
         significant figures the file deliberately rounds each bound to.
         """
-        import dataclasses as dataclasses_module
 
-        from hisim.economics.database import CostDatabase
         from hisim.economics.plausibility import PlausibilityConfig
 
         database = CostDatabase()
@@ -436,7 +428,7 @@ class TestEuroPerKilowattHourBasis:
             # The shipped row is kWh-quoted now; re-stamp its historical native unit only to
             # look up the same heating value the band conversion divided by.
             content = database.energy_content_of(
-                dataclasses_module.replace(shipped, quantity_unit=native_unit)
+                dataclasses.replace(shipped, quantity_unit=native_unit)
             )
             assert content is not None
             low, high = config.effective_price_ranges[carrier.value]
@@ -451,9 +443,7 @@ class TestEuroPerKilowattHourBasis:
         every correct run. Both directions are asserted, because a band widened until nothing
         fails is not a check.
         """
-        import types as types_module
 
-        from hisim.economics.database import CostDatabase
         from hisim.economics.plausibility import (
     # pylint: disable=protected-access
             PlausibilityConfig,
@@ -485,7 +475,7 @@ class TestEuroPerKilowattHourBasis:
                     )
                 ]
             )
-            return types_module.SimpleNamespace(
+            return types.SimpleNamespace(
                 annual_energy_quantities_by_carrier={
                     EnergyCarrier.PELLETS.value: AnnualEnergyQuantities(
                         bought_in_kwh=energy_bought_in_kwh
@@ -556,5 +546,3 @@ class TestLoaderErrorsAreLocated:
         self._price_file(tmp_path, EnergyCarrier.ELECTRICITY.value)
         database = CostDatabase(str(tmp_path))
         assert database.energy_prices["XX"][0].carrier is EnergyCarrier.ELECTRICITY
-
-

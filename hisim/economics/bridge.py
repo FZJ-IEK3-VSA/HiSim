@@ -524,7 +524,7 @@ def compute_lifecycle_costs(
     if parameters.subsidy_catalog_path:
         try:
             catalog = SubsidyCatalog.load(parameters.country, parameters.subsidy_catalog_path)
-        except Exception as err:  # pylint: disable=broad-except — engine must not break postprocessing
+        except Exception as err:  # pylint: disable=broad-except  # the engine must not break postprocessing
             log.error(f"Lifecycle cost engine: subsidy catalog failed to load: {err}")
     evaluator = EconomicEvaluator(database, parameters, catalog)
     # D7 (cost-spec-v2 §8): an unresolvable subject aborts the whole cost evaluation — no partial

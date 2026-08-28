@@ -7,6 +7,7 @@ resolution tests are in `test_economics_data_and_integration.py`; the CLI and th
 harness are in `test_economics_cli_and_parity.py`.
 """
 
+from typing import Any, Dict
 import os
 import pytest
 from hisim.economics.carriers import EnergyCarrier
@@ -21,7 +22,7 @@ from hisim.loadtypes import ComponentType, Units
 
 pytestmark = pytest.mark.base
 
-SCHEME_TEMPLATE = {
+SCHEME_TEMPLATE: Dict[str, Any] = {
     "id": "XX_ONE",
     "jurisdiction": {"country": "XX", "region": None},
     "valid_from": "2024-01-01",
@@ -39,6 +40,7 @@ SCHEME_TEMPLATE = {
     "source_ids": ["src_synthetic_validation_test"],
 }
 
+
 def write_subsidy_catalog(tmp_path, schemes) -> str:
     """Writes a country catalog `XX.json` from the given scheme dicts; returns the base path.
 
@@ -51,7 +53,11 @@ def write_subsidy_catalog(tmp_path, schemes) -> str:
     import copy
     import json
 
-    payload = {"catalog_snapshot_date": "2026-01-01", "overall_cap_share": None, "schemes": []}
+    payload: Dict[str, Any] = {
+        "catalog_snapshot_date": "2026-01-01",
+        "overall_cap_share": None,
+        "schemes": [],
+    }
     for overrides in schemes:
         scheme = copy.deepcopy(SCHEME_TEMPLATE)
         scheme.update(copy.deepcopy(overrides))
@@ -145,7 +151,7 @@ class TestValidationGaps:
         """A contract citing an unknown registry id is an error (§3.10)."""
         import json
 
-        from hisim.economics.database import CostDatabase, SourceRegistry
+        from hisim.economics.database import SourceRegistry
         from hisim.economics.validation import validate_tariff_contracts
 
         contract = {
@@ -206,7 +212,7 @@ class TestValidationGaps:
 
     def test_shipped_tariff_contracts_cite_the_registry(self):
         """The shipped dynamic contract now resolves against the cost database registry."""
-        from hisim.economics.database import CostDatabase, SourceRegistry
+        from hisim.economics.database import SourceRegistry
         from hisim.economics.validation import validate_tariff_contracts
 
         registry = SourceRegistry.load(os.path.join(CostDatabase.DEFAULT_PATH, "sources.json"))
@@ -375,6 +381,7 @@ class TestSerializationRoundtrip:
 
         original_asset = inputs.subsidy_context.building.existing_heating
         restored_asset = reloaded.subsidy_context.building.existing_heating
+        assert original_asset is not None
         assert restored_asset is not None
         assert restored_asset.asset_class is original_asset.asset_class
         assert restored_asset.size == pytest.approx(original_asset.size)
@@ -384,6 +391,7 @@ class TestSerializationRoundtrip:
         assert restored_asset.energy_carrier is original_asset.energy_carrier
         assert restored_asset.replaced_by_asset_classes == original_asset.replaced_by_asset_classes
         assert restored_asset.replacement_cost_override_in_euro is not None
+        assert original_asset.replacement_cost_override_in_euro is not None
         assert restored_asset.replacement_cost_override_in_euro.best_estimate == pytest.approx(
             original_asset.replacement_cost_override_in_euro.best_estimate
         )
@@ -518,7 +526,7 @@ class TestSerializationRoundtrip:
         by_id = contracts_from_json({"tariff_contract_ids": {"ELECTRICITY": "DE_DYNAMIC_SYNTHETIC_2024"}})
         assert by_id[EnergyCarrier.ELECTRICITY].id == "DE_DYNAMIC_SYNTHETIC_2024"
         # DEFAULT ids stay regenerated from the price entries.
-        assert contracts_from_json({"tariff_contract_ids": {"ELECTRICITY": "DE_DEFAULT_ELECTRICITY_2024"}}) == {}
+        assert not contracts_from_json({"tariff_contract_ids": {"ELECTRICITY": "DE_DEFAULT_ELECTRICITY_2024"}})
 
     def test_embedded_contract_is_a_valid_catalog_file(self, tmp_path):
         """contract_to_json emits the §8.2 catalog schema, so one parser serves both."""
@@ -637,5 +645,3 @@ class TestVariantComparison:
         comparison = compare(reference, variant)
         assert "Heater" in comparison.npv_delta_by_subject
         assert EnergyCarrier.ELECTRICITY.value in comparison.npv_delta_by_subject
-
-

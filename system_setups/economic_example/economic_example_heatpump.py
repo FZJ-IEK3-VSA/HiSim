@@ -38,6 +38,10 @@ from pathlib import Path
 # Make the script runnable directly from anywhere.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+# The script is meant to be runnable from anywhere, so the repository root goes on the path
+# before anything is imported from it; every import below is in that position on purpose.
+# pylint: disable=wrong-import-position
+
 from hisim.economics import (  # noqa: E402
     ComponentCostFacts,
     EconomicParameters,

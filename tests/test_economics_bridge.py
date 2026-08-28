@@ -78,7 +78,7 @@ def test_lifecycle_cost_engine_runs_in_shadow_mode() -> None:
         my_simulation_parameters=my_simulation_parameters,
     )
     my_building = building.Building(
-        config=building.BuildingConfig.get_default_german_single_family_home(),
+        config=building.BuildingConfig.preset_standard("Building"),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(

@@ -38,8 +38,13 @@ import json
 import sys
 import time
 from pathlib import Path
+from typing import Any, Dict
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+# The script is meant to be runnable from anywhere, so the repository root goes on the path
+# before anything is imported from it; every import below is in that position on purpose.
+# pylint: disable=wrong-import-position
 
 from hisim.economics import EconomicParameters, ExistingAsset, ExistingAssetRegister  # noqa: E402
 from hisim.economics.__main__ import main as economics_cli  # noqa: E402
@@ -57,14 +62,14 @@ PRICE_BASIS_YEAR = 2026  # economic "today": IE banded data, IE CO2 path
 SETUPS_DIR = Path(__file__).resolve().parents[1]
 
 #: The existing 20 kW gas boiler of the assumed house (installed 2012, still functional).
-OLD_GAS_BOILER = dict(
-    asset_class=ComponentType.GAS_HEATER,
-    size=20.0,
-    size_unit=Units.KILOWATT,
-    installation_year=2012,
-    is_functional=True,
-    energy_carrier=EnergyCarrier.NATURAL_GAS,
-)
+OLD_GAS_BOILER: Dict[str, Any] = {
+    "asset_class": ComponentType.GAS_HEATER,
+    "size": 20.0,
+    "size_unit": Units.KILOWATT,
+    "installation_year": 2012,
+    "is_functional": True,
+    "energy_carrier": EnergyCarrier.NATURAL_GAS,
+}
 
 
 def irish_parameters() -> EconomicParameters:
@@ -94,12 +99,13 @@ def shared_context_fields() -> dict:
     Returns:
         Keyword arguments to splat into an `EconomicContext`.
     """
-    return dict(
-        living_area_in_m2=140.0,
-        heated_floor_area_in_m2=140.0,
-        current_cold_rent_in_euro_per_m2_month=12.0,  # Irish rents, for the landlord/tenant view
-        annual_heat_demand_in_kwh=16000.0,
-    )
+    return {
+        "living_area_in_m2": 140.0,
+        "heated_floor_area_in_m2": 140.0,
+        # Irish rents, for the landlord/tenant view:
+        "current_cold_rent_in_euro_per_m2_month": 12.0,
+        "annual_heat_demand_in_kwh": 16000.0,
+    }
 
 
 def reference_context() -> EconomicContext:

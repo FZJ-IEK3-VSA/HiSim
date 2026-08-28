@@ -22,6 +22,7 @@ from hisim.component import (
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.economics.facts import ComponentCostFacts, CostRelevance
+from hisim.economics.uncertainty import UncertainValue
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -404,7 +405,11 @@ class Battery(Component):
             size=config.custom_battery_capacity_generic_in_kilowatt_hour,
             size_unit=Units.KWH,
             kpi_tag=KpiTagEnumClass.BATTERY,
-            investment_cost_override_in_euro=config.investment_costs_in_euro,
+            investment_cost_override_in_euro=(
+                UncertainValue.exact(config.investment_costs_in_euro)
+                if config.investment_costs_in_euro is not None
+                else None
+            ),
             lifetime_override_in_years=config.lifetime_in_years,
             embodied_co2_override_in_kg=config.device_co2_footprint_in_kg,
             override_source=(

@@ -27,6 +27,7 @@ from hisim.loadtypes import ComponentType, Units
 
 pytestmark = pytest.mark.base
 
+
 @pytest.fixture(name="database", scope="module")
 def fixture_database() -> CostDatabase:
     """The shipped cost database.
@@ -37,6 +38,7 @@ def fixture_database() -> CostDatabase:
     of this file.
     """
     return CostDatabase()
+
 
 def make_inputs(energy_kwh: float = 5000.0, investment: float = 16000.0) -> EvaluationInputs:
     """A small but complete evaluation input set.
@@ -64,6 +66,7 @@ def make_inputs(energy_kwh: float = 5000.0, investment: float = 16000.0) -> Eval
         living_area_in_m2=150.0,
     )
 
+
 def _audit(database, inputs, matrix):
     """The typed input audit the report's section 1 renders (W4.6).
 
@@ -80,6 +83,7 @@ def _audit(database, inputs, matrix):
         next(iter(matrix.results.values())),
     )
 
+
 @pytest.fixture(name="matrix", scope="module")
 def fixture_matrix(database) -> EvaluationMatrix:
     """Default-bundle evaluation of the test inputs.
@@ -94,6 +98,7 @@ def fixture_matrix(database) -> EvaluationMatrix:
     for perspective in select_applicable(load_default_bundle(), has_register=False):
         matrix.results[perspective.id] = evaluator.evaluate(make_inputs(), perspective)
     return matrix
+
 
 PANEL_BEFORE_W42 = [
     ("subjects sum to total (greenfield_gross)", "PASS", "delta 0.00 EUR", "0", ""),
@@ -215,7 +220,7 @@ class TestHtmlReport:
         ):
             assert marker in text, marker
         assert text.count("<svg") >= 5
-        assert "https://" not in text.split("sources used")[0]  # charts stay self-contained
+        assert "https://" not in text.split("sources used", maxsplit=1)[0]  # charts stay self-contained
         assert "prefers-color-scheme: dark" in text  # theme-aware
 
     def test_report_with_comparison_section(self, database, matrix):
@@ -438,5 +443,3 @@ class TestEconomicContextAndNewSections:
         chart = _annual_flow_svg(tenant)
         assert "Investment &amp; financing" not in chart
         assert "Energy" in chart  # tenant flows still render
-
-

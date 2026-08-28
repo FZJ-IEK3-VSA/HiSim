@@ -423,9 +423,10 @@ class EnergySystemCommands:
         directory = Path(arguments.out) if arguments.out else RecordingSession.default_output_directory(module)
         parameters = SimulationParametersReader.read(parameters_path)
         result = record_setup(module, parameters, directory, parameters_path=parameters_path)
+        origin = "wrote" if result.parameters.written else "referenced"
         print(
             f"Recorded {result.setup} as {result.path} "
-            f"({len(result.model.components)} components).",
+            f"({len(result.model.components)} components); {origin} {result.parameters.path}.",
             file=out,
         )
         return ExitCodes.OK

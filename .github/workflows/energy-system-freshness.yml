@@ -1,0 +1,89 @@
+# Energy-system freshness gate.
+#
+# The 'energy_systems/*.energy_system.yaml' files are generated artifacts: each
+# one is produced by running its 'system_setups/*.py' sibling and writing down
+# what the setup built. They are committed so that the declarative path has a
+# twin of every system the team runs, and they go stale exactly the way the v1
+# scenario JSONs do -- silently, whenever a setup or a component's configuration
+# changes without the twin being re-recorded.
+#
+# This job re-records *every* setup into a throwaway directory and fails unless
+# each fresh recording is byte-identical to the committed twin. It catches four
+# problems:
+#   - stale twins    -- committed content differs from a fresh recording;
+#   - missing twins  -- a '.py' with no committed '.energy_system.yaml' at all;
+#   - broken setups  -- a '.py' that cannot be recorded (the recorder refuses);
+#   - duplicate parameter files -- two 'energy_systems/*.simulation.yaml' that
+#     normalise to the same run, which would make two recordings of one run
+#     point at two different files.
+# There is no exclusion list. A setup that cannot be recorded is a defect in the
+# setup or a gap in the format, not an exception, so the script names every one
+# it could not record and exits non-zero.
+#
+# On failure the fix is: run 'python scripts/record_all_setups.py' locally,
+# resolve any recorder errors, and commit what it writes.
+#
+# Gate: BLOCKING (fails the build on drift, a missing twin, a setup that cannot
+# be recorded, or two parameter files describing the same run).
+#
+# Note: this is heavy, like the scenario-JSON gate, because it constructs every
+# setup (occupancy setups trigger LPG) and then builds each recorded file back
+# through the executor. The runs are sequential on purpose: two setups needing
+# the same new simulation-parameters file have to share one file, and that only
+# works when the second can see what the first wrote.
+
+name: energy-system-freshness
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: energy-system-freshness-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  freshness:
+    name: re-record every setup and check for drift
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install HiSim package
+        run: uv pip install --system -e .
+      - name: Re-record every setup and compare with the committed twins
+        run: |
+          # --check records into a throwaway directory inside the workspace and
+          # never writes into energy_systems/, so the job cannot mask drift by
+          # repairing it. It prints the diff of every twin that moved, names every
+          # setup it could not record, and asserts that no two committed
+          # simulation-parameters files describe the same run.
+          set +e
+          python scripts/record_all_setups.py --check | tee energy_system_drift.txt
+          rc=${PIPESTATUS[0]}
+          set -e
+          if [ "${rc}" -ne 0 ]; then
+            echo "::error title=Energy-system twins are stale or a setup cannot be recorded::Run 'python scripts/record_all_setups.py' locally, resolve any recorder errors, and commit what it writes."
+            exit 1
+          fi
+          echo "Every .py setup records to exactly its committed energy-system twin."
+      - name: Upload drift diff
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: energy-system-drift
+          path: energy_system_drift.txt
+          if-no-files-found: ignore

@@ -205,8 +205,8 @@ class Recorder:
             stem=setup.stem,
             ok=False,
             message=(
-                f"the recorder exited with {completed.returncode}; any partial file it left in "
-                f"{out_dir} is there for inspection and must not be committed"
+                f"the recorder exited with {completed.returncode}; the file it named below was "
+                "left behind for inspection and must not be committed"
             ),
             log=cls.tail(completed.stdout + completed.stderr),
         )

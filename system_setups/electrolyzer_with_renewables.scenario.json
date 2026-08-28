@@ -7,7 +7,7 @@
             "component_full_classname": "hisim.components.transformer_rectifier.Transformer",
             "configuration": {
                 "component_id": {
-                    "name": "Standard transformer and rectifier unit",
+                    "name": "StandardTransformerAndRectifier",
                     "building": null,
                     "unit": null
                 },
@@ -91,13 +91,13 @@
                 "field_name": "CSV Profile"
             },
             "target": {
-                "component_name": "Standard transformer and rectifier unit",
+                "component_name": "StandardTransformerAndRectifier",
                 "field_name": "Input1"
             }
         },
         {
             "source": {
-                "component_name": "Standard transformer and rectifier unit",
+                "component_name": "StandardTransformerAndRectifier",
                 "field_name": "MyTransformerOutput"
             },
             "target": {

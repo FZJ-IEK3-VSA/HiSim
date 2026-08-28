@@ -86,7 +86,7 @@ def test_get_default_template_component_no_args() -> None:
     """``get_default_template_component`` returns hardcoded defaults when called with no arguments."""
     config = example_template.ComponentNameConfig.get_default_template_component()
     assert config.component_id.building is None
-    assert config.component_id.name == "ComponentName default"
+    assert config.component_id.name == "ComponentNameDefault"
     assert config.loadtype == lt.LoadTypes.ELECTRICITY
     assert config.unit == lt.Units.WATT
 
@@ -95,10 +95,10 @@ def test_get_default_template_component_no_args() -> None:
 def test_get_default_template_component_custom_building() -> None:
     """Passing a component_id with a building only changes that; all other fields keep defaults."""
     config = example_template.ComponentNameConfig.get_default_template_component(
-        component_id=ComponentID(name="ComponentName default", building="MyHouse")
+        component_id=ComponentID(name="ComponentNameDefault", building="MyHouse")
     )
     assert config.component_id.building == "MyHouse"
-    assert config.component_id.name == "ComponentName default"
+    assert config.component_id.name == "ComponentNameDefault"
     assert config.loadtype == lt.LoadTypes.ELECTRICITY
     assert config.unit == lt.Units.WATT
 
@@ -107,10 +107,10 @@ def test_get_default_template_component_custom_building() -> None:
 def test_get_default_template_component_empty_building() -> None:
     """An empty building is passed through without validation."""
     config = example_template.ComponentNameConfig.get_default_template_component(
-        component_id=ComponentID(name="ComponentName default", building="")
+        component_id=ComponentID(name="ComponentNameDefault", building="")
     )
     assert config.component_id.building == ""
-    assert config.component_id.name == "ComponentName default"
+    assert config.component_id.name == "ComponentNameDefault"
     assert config.loadtype == lt.LoadTypes.ELECTRICITY
     assert config.unit == lt.Units.WATT
 

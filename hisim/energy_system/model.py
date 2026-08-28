@@ -25,11 +25,11 @@ relative and absolute references — and :class:`SourceReference` is the parsed 
 
 from __future__ import annotations
 
-import re
 from typing import Annotated, Any, ClassVar, Dict, Literal, Mapping, Optional, Pattern, Tuple, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from hisim.config import NameSyntax
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemFormatError
 
 
@@ -45,20 +45,28 @@ class NameRules:
     or absolute path syntax (``../pv``, ``/etc/x``) are deliberately not part of this format
     version: they are the vocabulary of a future preprocessor, and accepting them silently
     would make files written against that expectation resolve to something unintended.
+
+    The grammar itself is not defined here but in :class:`hisim.config.names.NameSyntax`,
+    because a component's runtime name obeys exactly the same rule and ``hisim/component.py``
+    enforces it there. This class keeps the constants as its own attributes so that the
+    format's vocabulary still reads locally, but they are aliases of the single definition,
+    not a second copy of it. What stays here is the format-specific half: the rejections are
+    raised as :class:`EnergySystemFormatError` with a location and an error identifier, which
+    a plain ``ValueError`` from the shared rule could not carry.
     """
 
     #: The one identifier syntax of the format, used for component names, group names,
-    #: fact names and port names alike.
-    IDENTIFIER_PATTERN: ClassVar[Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+    #: fact names and port names alike. Alias of the shared rule in ``hisim.config.names``.
+    IDENTIFIER_PATTERN: ClassVar[Pattern[str]] = NameSyntax.IDENTIFIER_PATTERN
 
     #: Characters that only appear in wildcard or glob syntax. Their presence is always a
     #: rejection rather than a name failing the identifier pattern: the author meant a
     #: pattern, and patterns are not part of this format version.
-    WILDCARD_CHARACTERS: ClassVar[str] = "*?[]"
+    WILDCARD_CHARACTERS: ClassVar[str] = NameSyntax.WILDCARD_CHARACTERS
 
     #: Characters that only appear in filesystem paths. A reference addresses a component
     #: by name, never by location, so any of them means a path was written instead.
-    PATH_CHARACTERS: ClassVar[str] = "/\\"
+    PATH_CHARACTERS: ClassVar[str] = NameSyntax.PATH_CHARACTERS
 
     #: The separator between the two halves of a reference.
     REFERENCE_SEPARATOR: ClassVar[str] = "."
@@ -84,7 +92,7 @@ class NameRules:
             EnergySystemFormatError: ``EF-08`` if the value is not a string or does not
                 match the identifier pattern.
         """
-        if not isinstance(value, str) or cls.IDENTIFIER_PATTERN.match(value) is None:
+        if not NameSyntax.is_identifier(value):
             raise EnergySystemFormatError(
                 EnergySystemErrorId.INVALID_NAME,
                 location,
@@ -130,7 +138,7 @@ class NameRules:
             expected = "'<component>.<fact>'" if require_member else "'<component>' or '<component>.<Output>'"
             raise cls._reference_error(location, value, f"a reference is written {expected}")
         for part in parts:
-            if cls.IDENTIFIER_PATTERN.match(part) is None:
+            if not NameSyntax.is_identifier(part):
                 raise cls._reference_error(location, value, f"'{part}' is not a usable name")
         return parts[0], parts[1] if len(parts) == 2 else None
 

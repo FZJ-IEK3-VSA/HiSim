@@ -207,7 +207,32 @@ class Component:
         my_config: cfg.ConfigBase,
         my_display_config: cfg.DisplayConfig,
     ) -> None:
-        """Initializes the component class."""
+        """Initializes the component class.
+
+        Args:
+            name: The unique runtime name of this component, normally
+                ``config.component_id.key``. It becomes the prefix of every output name and
+                therefore of every result column, and it is the key a declarative
+                energy-system file addresses this component by, so it has to be a plain
+                identifier.
+            my_simulation_parameters: The simulation-wide parameters (time range, resolution,
+                post-processing options) the component reads and is stepped with.
+            my_config: The component's own configuration; it must be a
+                :class:`~hisim.config.ConfigBase` and must no longer carry any unresolved
+                ``AUTO`` field.
+            my_display_config: How this component is presented in postprocessing, the report
+                and the webtool.
+
+        Raises:
+            ValueError: If ``name`` is not a usable identifier, if ``my_simulation_parameters``
+                is ``None``, or if ``my_config`` is not a ``ConfigBase``.
+            ConfigSizingError: If ``my_config`` still has fields awaiting sizing.
+        """
+        # The single choke point where a component's runtime name becomes real. Enforcing the
+        # identifier rule here catches a name typed in a setup and a name that arrived from a
+        # config class's own default alike, which a check on the declarative file's keys would
+        # never see: a defaulted identity is one nobody has to write down.
+        cfg.NameSyntax.require_identifier(name, "component")
         self.component_name: str = name
         self.inputs: List[ComponentInput] = []
         self.outputs: List[ComponentOutput] = []

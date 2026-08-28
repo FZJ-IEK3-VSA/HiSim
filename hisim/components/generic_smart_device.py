@@ -59,7 +59,7 @@ class SmartDeviceConfig(ConfigBase):
     ) -> "SmartDeviceConfig":
         """Gets a default config."""
         if component_id is None:
-            component_id = ComponentID(name="Smart Device")
+            component_id = ComponentID(name="SmartDevice")
         return SmartDeviceConfig(
             component_id=component_id,
             identifier="Identifier",

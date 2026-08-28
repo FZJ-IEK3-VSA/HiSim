@@ -82,7 +82,7 @@ class SimpleStorageConfig(ConfigBase):
     ) -> "SimpleStorageConfig":
         """Gets a default Simple Storage."""
         if component_id is None:
-            component_id = ComponentID(name="Simple Thermal Storage")
+            component_id = ComponentID(name="SimpleThermalStorage")
         return SimpleStorageConfig(
             component_id=component_id,
             loadtype=lt.LoadTypes.WARM_WATER,

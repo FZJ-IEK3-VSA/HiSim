@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=../hisim/energy_system_v3.schema.json
+# Recorded from system_setups/simple_air_conditioner_household_building_sizer.py with energy_systems/one_day_15min.simulation.yaml by the HiSim energy-system recorder v1.
+schema_version: 3
+name: simple_air_conditioner_household_building_sizer
+description: Simple air-conditioner household building-sizer system setup.
+components:
+  Building:
+    class: hisim.components.building.building.Building
+    preset: standard
+    config:
+      number_of_apartments: 1.0
+      enable_opening_windows: true
+    inputs:
+      - Weather
+      - input: ThermalPowerDelivered
+        from: SimpleAirConditioner.ThermalPowerDelivered
+  Weather:
+    class: hisim.components.weather.Weather
+    config:
+      location: Aachen
+      source_path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+      data_source: DWD_TRY
+      predictive_control: false
+  SimpleAirConditioner:
+    class: hisim.components.simple_air_conditioner.SimpleAirConditioner
+    config:
+      nominal_cooling_power_w: 2000.0
+      eta_carnot: 0.3
+      temperature_epsilon_k: 0.01
+    inputs:
+      - SimpleAirConditionerController
+      - Building
+      - Weather
+  SimpleAirConditionerController:
+    class: hisim.components.simple_air_conditioner.SimpleAirConditionerController
+    config:
+      setpoint_temperature_c: 24.0
+      deadband_k: 0.5
+    inputs:
+      - Building

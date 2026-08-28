@@ -45,14 +45,14 @@ class ExampleTransformerConfig(ConfigBase):
 
         Args:
             component_id: Structured identity (name, building, unit) of the transformer.
-                Defaults to a building-less identity named ``"Example Transformer default"``.
+                Defaults to a building-less identity named ``"ExampleTransformerDefault"``.
 
         Returns:
             A config with ``LoadTypes.ANY`` / ``Units.ANY`` and the name
-            ``"Example Transformer default"``.
+            ``"ExampleTransformerDefault"``.
         """
         if component_id is None:
-            component_id = ComponentID(name="Example Transformer default")
+            component_id = ComponentID(name="ExampleTransformerDefault")
         return ExampleTransformerConfig(
             component_id=component_id,
             loadtype=lt.LoadTypes.ANY,

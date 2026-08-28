@@ -68,17 +68,26 @@ def _normalize_stems(names: list[str]) -> set[str]:
     return {name[:-3] if name.endswith(".py") else name for name in names}
 
 
-def discover_setups(only: Optional[list[str]], only_existing: bool, exclude: Optional[list[str]] = None) -> list[Path]:
+def discover_setups(only: Optional[list[str]], only_existing: bool) -> list[Path]:
     """Return the setup ``.py`` paths to regenerate.
 
-    Default: every ``*.py`` except ``__init__.py`` -- including brand-new setups
-    that do not have a committed ``*.scenario.json`` sibling yet, so a freshly
-    added config gets its JSON generated on the first run.
-    ``only_existing``: restrict to ``*.py`` that already have a committed
-    ``*.scenario.json`` sibling.
-    ``only``: restrict to the given setup stems (with or without ``.py``).
-    ``exclude``: drop these setup stems (e.g. ones needing uninstalled optional
-    deps); applied after ``only``.
+    Every setup in ``system_setups/`` is regenerable, so the selection is purely
+    additive: there is no exclusion list and a setup that cannot be converted is
+    a defect rather than an exception.
+
+    Args:
+        only: Restrict the run to these setup stems (with or without ``.py``);
+            ``None`` selects every ``*.py`` except ``__init__.py``, including
+            brand-new setups that do not have a committed ``*.scenario.json``
+            sibling yet, so a freshly added config gets its JSON on the first run.
+        only_existing: Restrict the run to ``*.py`` files that already have a
+            committed ``*.scenario.json`` sibling.
+
+    Returns:
+        The selected setup paths, sorted by file name.
+
+    Raises:
+        SystemExit: If ``only`` names a stem that is not a setup.
     """
     candidates = sorted(p for p in SYSTEM_SETUPS_DIR.glob("*.py") if p.name != "__init__.py")
     if only_existing:
@@ -90,10 +99,6 @@ def discover_setups(only: Optional[list[str]], only_existing: bool, exclude: Opt
         missing = wanted - {p.stem for p in candidates}
         if missing:
             raise SystemExit(f"--only names not found as setups: {sorted(missing)}")
-
-    if exclude:
-        excluded = _normalize_stems(exclude)
-        candidates = [p for p in candidates if p.stem not in excluded]
 
     return candidates
 
@@ -162,7 +167,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-j", "--jobs", type=int, default=1, help="Number of setups to regenerate in parallel (default 1).")
     parser.add_argument("--only", nargs="+", metavar="SETUP", help="Regenerate only these setup stems.")
-    parser.add_argument("--exclude", nargs="+", metavar="SETUP", help="Skip these setup stems (e.g. ones needing uninstalled optional deps).")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--all-py", action="store_true", help="Regenerate every *.py setup (the default now; kept for compatibility).")
     mode.add_argument("--only-existing", action="store_true", help="Only regenerate *.py with an existing committed .scenario.json (skip new configs).")
@@ -175,7 +179,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.jobs < 1:
         parser.error("--jobs must be >= 1")
 
-    setups = discover_setups(args.only, args.only_existing, args.exclude)
+    setups = discover_setups(args.only, args.only_existing)
     if not setups:
         print("No setups matched.")
         return 1

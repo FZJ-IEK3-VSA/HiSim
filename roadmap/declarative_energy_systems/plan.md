@@ -75,7 +75,9 @@ files do, and it answers the RenoVisor requirement in code rather than on paper.
 - [ ] The five R15.5 rejections with their messages
 - [ ] Identity test extended to every (mockup, variant, option) triple; audit records the selection
 - [ ] `facts` reports groups and variants as one knob surface (R15.8)
-- [ ] UC2 mockup carries the `electricity_management` variant (done, 2026-08-28)
+- [ ] UC2 mockup: move the `battery_and_ems` group and the meter into an `electricity_management` variant. This
+      belongs to the code change, not to the requirements: a mockup is an executable fixture (AC-P2.1), so the
+      block may only enter it once the loader reads it. Until then the syntax lives in R15's example.
 
 ## P3 — Recording & setup migration
 

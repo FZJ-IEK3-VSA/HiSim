@@ -43,7 +43,7 @@ Format v3: a `components` mapping (name → `class`, `preset`, `config`, `inputs
 | | Mockup | Decides / demonstrates |
 |---|---|---|
 | UC1 | `energy_system_mockup_minimal.yaml` | canonical component block; bare `inputs`; aggregator feed; no `sizing_sources`, no `groups` |
-| UC2 | `energy_system_mockup.yaml` | explicit wire `{input, from}`; scalar and list `sizing_sources`; three groups incl. one disabled; **one variant with two options, the meter written out in both** (O2, resolved by R15); the cliff (a second provider forces three existing consumers to name theirs) |
+| UC2 | `energy_system_mockup.yaml` | explicit wire `{input, from}`; scalar and list `sizing_sources`; four groups incl. one disabled; the cliff (a second provider forces three existing consumers to name theirs); open point O2, resolved by R15 — the variant itself enters the mockup with P2.1, since a mockup must load |
 | UC3 | `energy_system_mockup_mfh.yaml` | 35 components; name-prefix convention; explicit per-apartment values (C2) |
 | UC4 | footer of UC2 | RenoVisor flow: base file per heating system, `building.config.building_code`, `groups.<x>.enabled`, `variants.electricity_management.selected` |
 | UC5 | footers | realized record content and re-execution |
@@ -118,6 +118,46 @@ Paths are `${var}/…` through the `PathResolver`; absolute paths in a file are 
 - R15.7 A realized record carries no `variants` key (the selection is resolved); the audit companion (R8.2) records each variant's selection and the components it contributed.
 - R15.8 `hisim energy-system facts <file>` reports groups and variants together as the consumer knob surface: a boolean per group, an option name per variant (P5, UC4).
 
+The shape, written out on the case that asked for it — a house with an EMS and a battery, or a bare meter:
+
+```yaml
+variants:
+  electricity_management:
+    selected: ems_and_battery
+    options:
+
+      ems_and_battery:
+        components:
+          battery:   { class: …, preset: sized_to_pv, sizing_sources: {…} }
+          ems:       { class: …, preset: optimize_own_consumption, inputs: [ … ] }
+          meter:
+            class: hisim.components.electricity_meter.ElectricityMeter
+            preset: standard
+            inputs:                      # one feed: the EMS has already netted everything
+              - from: ems.TotalElectricityToOrFromGrid
+                tags: [ELECTRICITY_PRODUCTION]
+                weight: 999
+
+      direct_metering:
+        components:
+          meter:
+            class: hisim.components.electricity_meter.ElectricityMeter
+            preset: standard
+            inputs:                      # no EMS to net them: every participant feeds the meter
+              - { from: pv_south,  tags: [ELECTRICITY_PRODUCTION],                weight: 999 }
+              - { from: occupancy, tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED],  weight: 999 }
+              - { from: heat_pump, tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED],  weight: 999 }
+```
+
+`meter` is written out in both options because the two worlds wire it differently, and repeating the name is
+legal precisely because only one option ever exists (R15.2). With `direct_metering` selected, the `- ems`
+items on the building, the heat-distribution controller and the two heat-pump controllers are dropped by
+R15.3, exactly as R14.3 drops references into a disabled group.
+
+**Not yet in the mockups.** `energy_system_mockup.yaml` is an executable fixture — AC-P2.1 requires every
+mockup to load and validate — so it gains this block in the same change that teaches the loader to read it
+(plan §P2.1), not before. Until then the syntax lives here.
+
 ### Quality
 - RQ2 `[proposed]` `schema_version: 3` is mandatory; other values are rejected with a message naming the supported version.
 - RQ3 `[dropped 2026-08-26, owner]` ~~Load + validate + resolve performs no filesystem I/O~~ — resolution folds the Building's contributions, which read the TABULA catalogue; the guarantee cannot hold and validation speed is not a hard requirement. AC-P2.9 is withdrawn.
@@ -153,9 +193,9 @@ Paths are `${var}/…` through the `PathResolver`; absolute paths in a file are 
 | AC-P2.15 | UC2's `weather`, `occupancy` and `building` build through their constructors; a wrong constructor name or argument fails at load listing the valid parameters; the realized record shows them as full `config` blocks; `dump(load())` preserves the constructor form for hand-written files. | R3.8, R1.4 |
 | AC-P2.14 | A file setting an enum-typed sizable field yields the enum member after load (`is` comparison), for every such field in the converted classes. | R3.7 |
 | AC-P2.16 | A PV + battery + EMS + meter file whose battery feed carries `dispatch: {target_input: LoadingPowerInput}` builds, wires `ems.DispatchTobattery_LoadingPowerInput -> battery.LoadingPowerInput`, runs one day and writes results; the same file with `dispatch: {}` is rejected for the unfed mandatory input, and with an explicit wire onto the derived port for naming a derived port. | R2.5, R2.2 |
-| AC-P2.17 | The identity test covers every (mockup, variant, option) triple byte for byte, UC2's `electricity_management` variant included: with `direct_metering` selected no EMS feed survives on the meter and the four `- ems` items are gone, with `ems_and_battery` selected no direct feed does. | R15.4, R15.3 |
+| AC-P2.17 | The identity test covers every (mockup, variant, option) triple byte for byte. P2.1 moves UC2's `battery_and_ems` group and its meter into an `electricity_management` variant and pins both directions: with `direct_metering` selected no EMS feed survives on the meter and the four `- ems` items are gone, with `ems_and_battery` selected no direct feed does. | R15.4, R15.3 |
 | AC-P2.18 | Each R15.5 rejection is raised at load naming the offending names; an unknown `selected` lists the options the variant has. | R15.5 |
-| AC-P2.19 | UC2's realized record has no `variants` key and its `meter` sits at the top level and its audit names the selection and the components it brought; re-running the record reproduces the run (R8.1) with the variant already resolved. | R15.7, R8.1 |
+| AC-P2.19 | Once P2.1 has moved it, UC2's realized record has no `variants` key and its `meter` sits at the top level and its audit names the selection and the components it brought; re-running the record reproduces the run (R8.1) with the variant already resolved. | R15.7, R8.1 |
 | AC-P2.13 | If Q8 is confirmed: every sized value in a realized record carries a provenance comment; stripping all comments and re-running yields the identical result (comments are not load-bearing). | R8.3 |
 
 ## 11. Open Questions and Decisions

@@ -328,7 +328,7 @@ class PIDController(cp.Component):
     """
 
     # Inputs
-    TemperatureMean: str = "Residence Temperature"  # uncontrolled temperature
+    TemperatureMean: str = "ResidenceTemperature"  # uncontrolled temperature
     TemperatureMeanPrevious: str = "TemperatureMeanPrevious"
     TemperatureAir: str = "TemperatureAir"
     HeatFluxWallNode: str = "HeatFluxWallNode"

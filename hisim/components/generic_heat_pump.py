@@ -625,7 +625,7 @@ class GenericHeatPumpController(cp.Component):
     """
 
     # Inputs
-    TemperatureMean = "Residence Temperature"
+    TemperatureMean = "ResidenceTemperature"
     ElectricityInput = "ElectricityInput"
 
     # Outputs

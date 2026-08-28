@@ -159,8 +159,8 @@ class SumBuilderForTwoInputs(Component):
     # buy and nothing to run. See Component.MODELS_NO_DEVICE.
     MODELS_NO_DEVICE: ClassVar[bool] = True
 
-    SumInput1: str = "Input 1"
-    SumInput2: str = "Input 2"
+    SumInput1: str = "Input1"
+    SumInput2: str = "Input2"
     SumOutput: str = "Sum"
 
     def __init__(
@@ -244,9 +244,9 @@ class SumBuilderForThreeInputs(Component):
     # buy and nothing to run. See Component.MODELS_NO_DEVICE.
     MODELS_NO_DEVICE: ClassVar[bool] = True
 
-    SumInput1: str = "Input 1"
-    SumInput2: str = "Input 2"
-    SumInput3: str = "Input 3"
+    SumInput1: str = "Input1"
+    SumInput2: str = "Input2"
+    SumInput3: str = "Input3"
     SumOutput: str = "Sum"
 
     def __init__(

@@ -292,14 +292,14 @@ class UtspLpgConnector(cp.Component):
     """
 
     # Inputs
-    WW_MassInput: str = "Warm Water Mass Input"  # kg/s
-    WW_TemperatureInput: str = "Warm Water Temperature Input"  # °C
+    WW_MassInput: str = "WarmWaterMassInput"  # kg/s
+    WW_TemperatureInput: str = "WarmWaterTemperatureInput"  # °C
 
     # Outputs
-    WW_MassOutput: str = "Mass Output"  # kg/s
-    WW_TemperatureOutput: str = "Temperature Output"  # °C
-    EnergyDischarged: str = "Energy Discharged"  # W
-    DemandSatisfied: str = "Demand Satisfied"  # 0 or 1
+    WW_MassOutput: str = "MassOutput"  # kg/s
+    WW_TemperatureOutput: str = "TemperatureOutput"  # °C
+    EnergyDischarged: str = "EnergyDischarged"  # W
+    DemandSatisfied: str = "DemandSatisfied"  # 0 or 1
 
     NumberOfResidents: str = "NumberOfResidents"
     HeatingByResidents: str = "HeatingByResidents"

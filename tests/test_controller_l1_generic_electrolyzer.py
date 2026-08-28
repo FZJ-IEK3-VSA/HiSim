@@ -46,7 +46,7 @@ def test_electrolyzer_controller() -> None:
     # Set Fake Inputs
     load_input = cp.ComponentOutput(
         "FakeProvidedLoad",
-        "Provided Load",
+        "ProvidedLoad",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.KILOWATT,
         component_id=ComponentID("FakeProvidedLoad"),

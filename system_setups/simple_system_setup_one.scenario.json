@@ -7,7 +7,7 @@
             "component_full_classname": "hisim.components.random_numbers.RandomNumbers",
             "configuration": {
                 "component_id": {
-                    "name": "Random numbers 100-200",
+                    "name": "RandomNumbers100To200",
                     "building": null,
                     "unit": null
                 },
@@ -24,7 +24,7 @@
             "component_full_classname": "hisim.components.random_numbers.RandomNumbers",
             "configuration": {
                 "component_id": {
-                    "name": "Random numbers 10-20",
+                    "name": "RandomNumbers10To20",
                     "building": null,
                     "unit": null
                 },
@@ -57,7 +57,7 @@
     "connections": [
         {
             "source": {
-                "component_name": "Random numbers 100-200",
+                "component_name": "RandomNumbers100To200",
                 "field_name": "Random Numbers"
             },
             "target": {
@@ -67,7 +67,7 @@
         },
         {
             "source": {
-                "component_name": "Random numbers 10-20",
+                "component_name": "RandomNumbers10To20",
                 "field_name": "Random Numbers"
             },
             "target": {

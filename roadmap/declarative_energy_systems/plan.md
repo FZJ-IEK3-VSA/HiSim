@@ -80,10 +80,12 @@ is a format decision and the format should be settled before hand-authored files
 
 Requirements: `p3_recording_requirements.md` (in review 2026-08-28; inventory in `p3_setup_inventory.md`).
 
-- [ ] Requirements document accepted (Q-P3.2–Q-P3.7 decided; **Q-P3.1 decided 2026-08-28: record now, P4 batches re-record**)
+- [ ] Requirements document accepted (Q-P3.4–Q-P3.7 decided; **2026-08-28: Q-P3.1 record now and re-record per P4 batch, Q-P3.2 KPI parity is the oracle, Q-P3.3 the semi-manual grouping pass R10**)
 - [ ] Recorder: run a `setup_function` under a recording simulator, emit an energy-system file in canonical style
-- [ ] Every setup recorded; recorded files checked in next to the setups
+- [ ] Every in-scope setup recorded flat; recorded files checked in (`energy_systems/`, pending Q-P3.4)
 - [ ] Golden suites run on recorded files; setups themselves kept until P5 confirms no consumer needs them
+- [ ] Grouping pass (R10), after the flat files exist: probe list per setup, prefilled workbook, `grouping import` to a committed `<stem>.grouping.yaml`, second recorder pass building groups and variants
+- [ ] Every probe column asserted byte for byte against its flat recording (R10.6) — the grouping pass needs no new golden runs
 
 ## P4 — Component sweep (batches; each a mechanical PR)
 

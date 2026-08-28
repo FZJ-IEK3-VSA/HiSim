@@ -1,6 +1,6 @@
 # P3 — Recording and setup migration — requirements
 
-**Status:** in review · **Date:** 2026-08-28 (Q-P3.1 decided: record now) · drafted 2026-08-27
+**Status:** in review · **Date:** 2026-08-28 (Q-P3.1 record now; Q-P3.2 KPI parity; Q-P3.3 the semi-manual grouping pass, R10) · drafted 2026-08-27
 **Author(s):** Noah Pflugradt (owner; `[given]`) · assistant (`[proposed]`, inventory)
 **Reviewers:** HiSim core team
 **Parent:** `roadmap/declarative_energy_systems/epic.md` (E1–E8 apply by reference) · **Plan:** `roadmap/declarative_energy_systems/plan.md` §P3 · **Depends on:** P2 accepted
@@ -12,7 +12,7 @@
 
 **Decided (Q-P3.1, 2026-08-28):** recording starts now, on today's classes — recorded files are *realized-style*, every class a full `config` block unless the recorder can prove a preset, and each P4 batch re-records them so the shrinking diff is that batch's review artefact.
 
-**What a reviewer must still decide here:** (1) the parity oracle is the existing KPI comparison at `rel_tol = 1e-9`, not byte-identical result CSVs, because the declarative path names aggregator ports differently (Q-P3.2); (2) the 12 building-sizer setups are recorded once each with the default module configuration, and the PV/battery/EMS fork becomes a group only where the recorded branch had it on (Q-P3.3); (3) where the files live and what happens to the v1 JSON twins (Q-P3.4); (4) which of the 24 setups are out of scope (Q-P3.5).
+**What a reviewer must still decide here:** (1) where the files live and what happens to the v1 JSON twins (Q-P3.4); (2) which of the 24 setups are out of scope (Q-P3.5).
 
 ---
 
@@ -42,8 +42,8 @@ Today a system exists twice: as Python and as a generated v1 `*.scenario.json` (
 
 ## 5. Goals and Non-Goals
 
-**Goals** — G1 every in-scope setup has a checked-in v3 twin produced by one command · G2 the eight golden setups pass the KPI gate as recorded files · G3 a setup change without a re-record fails CI · G4 the P1/P2 conversions show up as `preset:` + sparse `config` in recorded files, and each P4 batch shrinks the files by re-recording only.
-**Non-Goals** — converting classes to presets/laws (P4) · changing any setup's behaviour, wiring or numbers · deleting `system_setups/`, the Python setups or the v1 JSONs (Q-P2.5: later decision) · migrating `SimulationParameters` side effects into the energy-system file (they belong to the simulation-parameters file, P2 R6) · recording result-path/singleton bookkeeping (a harness concern, P5) · a Python→YAML source translator (the recorder observes a run; it does not parse code) · groups for forks the recorded run did not take.
+**Goals** — G1 every in-scope setup has a checked-in v3 twin produced by one command · G2 the eight golden setups pass the KPI gate as recorded files · G3 a setup change without a re-record fails CI · G4 the P1/P2 conversions show up as `preset:` + sparse `config` in recorded files, and each P4 batch shrinks the files by re-recording only · G5 the forks a module configuration takes become groups and variants through one human judgement per setup, recorded in a reviewable table, with every probed configuration proving the result byte for byte (R10).
+**Non-Goals** — inferring a group or a variant from observation alone (R10.3: the tool prefills, a person decides) · converting classes to presets/laws (P4) · changing any setup's behaviour, wiring or numbers · deleting `system_setups/`, the Python setups or the v1 JSONs (Q-P2.5: later decision) · migrating `SimulationParameters` side effects into the energy-system file (they belong to the simulation-parameters file, P2 R6) · recording result-path/singleton bookkeeping (a harness concern, P5) · a Python→YAML source translator (the recorder observes a run; it does not parse code) · groups for forks the recorded run did not take.
 
 ## 6. Use Cases and Mockups
 
@@ -55,6 +55,7 @@ The external representation is fixed by P2 (mockups + `energy_systems/gas_boiler
 | UC-P3.2 | same file after P4 batch B5 (PV, battery) re-recorded | the PV and battery blocks collapse to `preset:` + overrides; everything else byte-identical — the diff *is* the batch's review artefact |
 | UC-P3.3 | `household_heatpump_car_building_sizer.py` recorded with the default household | the N cars the occupancy produced (`Car_0`, `CarBattery_0`, `L1EVChargeControl_0`, …) as ordinary flat components; changing N means re-recording, not editing |
 | UC-P3.4 | CI on a PR that edits `household_oil_building_sizer.py` but not its twin | freshness job fails with the diff of the re-recorded file |
+| UC-P3.5 | `household_heatpump_building_sizer.py` probed under four module configurations, its table filled in once | the workbook prefills `meter` as `≠` in the no-EMS column (present, wired differently) and `battery`/`ems` as `—`; a person writes `variant:electricity_management/…` on all three rows and `override` on the PV-share row; the grouped file then reproduces all four flat recordings byte for byte (R10.6) |
 
 `energy_systems/gas_boiler_household.energy_system.yaml` (hand-written, P2) stays as the readable exemplar; UC-P3.1 is what a recorded file looks like *before* P4 and is deliberately less pretty.
 
@@ -85,7 +86,7 @@ A CI job re-records every in-scope setup and fails on any diff to the checked-in
 - R5.2 Out of scope, listed in the recording script with the reason: `simple_weather_data_import.py` (registers nothing), `basic_household_with_weather_data_request.py` (live DWD fetch feeds the weather config; `wetterdienst` optional), `air_conditioned_house.py` (wipes `inputs/cache` before building; a CSV read selects the location) — pending Q-P3.5.
 
 ### R6 — Module-config-driven setups `[proposed; Q-P3.3]`
-The 12 `ModularHouseholdConfig` setups are recorded with `my_module_config = None`, i.e. the class defaults; the recorded file is the **base file** of that heating system (P5's input). The `use_battery_and_ems`/PV fork is recorded as taken; expressing the off branch is a P5 authoring task on the recorded base, not a recorder feature. Since 2026-08-28 that authoring task has a form: P2 R15 gives the format an `electricity_management` variant whose two options carry the meter's two wirings, so the off branch no longer needs a second base file. The recorder still emits neither groups nor variants — it observes one run and can only record the branch that ran (R2.4).
+The 12 `ModularHouseholdConfig` setups are recorded with `my_module_config = None`, i.e. the class defaults; the recorded file is the **base file** of that heating system (P5's input). The `use_battery_and_ems`/PV fork is recorded as taken; expressing the off branch is a P5 authoring task on the recorded base, not a recorder feature. Since 2026-08-28 that authoring task has a form and a tool: P2 R15 gives the format an `electricity_management` variant whose two options carry the meter's two wirings, and R10 turns the fork into that variant from a table a person fills in once. The recorder proper still emits neither groups nor variants — it observes one run and can only record the branch that ran (R2.4); groups and variants come from the second pass, never from an inference about a single run.
 
 ### R7 — Data-dependent component counts `[proposed; inventory §2c]`
 Loops generating components (cars from the occupancy) are recorded as the flat set the run produced (UC-P3.3). No repeat syntax is introduced (E4 parking lot).
@@ -96,6 +97,42 @@ Setup-side mutations of `SimulationParameters` (post-processing options, `loggin
 ### R9 — Setups stay `[given; Q-P2.5]`
 The Python setups, their v1 JSON twins and their freshness workflow remain untouched by P3; recorded files are additional artefacts.
 
+### R10 — The grouping pass `[decided 2026-08-28; Q-P3.3]`
+Recording alone produces one flat file per setup and per module configuration; which of the differences between those
+files is a group, which an exclusive variant and which an ordinary override is a judgement no observation can make.
+R10 adds a second pass in which a person makes that judgement once per setup, in a table, and a tool applies it.
+
+- R10.1 **Probe runs.** The grouping pass takes a setup and a list of module configurations to record it under — the
+  *probe list*, an authored file, one entry per configuration with a column name. The first entry is the baseline and
+  must be the class defaults, so its recording is exactly the flat file of R6. Each probe is recorded in its own
+  process (R1.2); probes construct components but never simulate.
+- R10.2 **Prefilled table.** The tool writes a workbook with two sheets. `components`: one row per component name in
+  the union of all probe runs, carrying its class, one column per probe, and two empty columns for the person.
+  Each probe cell is filled from the diff against the baseline with one of three states — `—` absent, `=` present
+  and identical, `≠` present with a different config or different wiring. `configurations`: one row per probe,
+  naming the module-config fields that produced it and holding the group flags and variant selections the person
+  assigns to that column.
+- R10.3 **What the person decides.** In the `assignment` column of each row that is not `=` everywhere: empty (stays
+  an ordinary always-on component), `group:<name>`, `variant:<name>/<option>`, or `override` — the difference is a
+  config value a consumer sets rather than a question of membership (the PV share is the standing example, and
+  `override` is why the tool must not guess). A `≠` row inside a variant is written out in full in each option
+  (P2 R15.2); a `≠` row anywhere else is an error the tool reports, because a component cannot both stay ungrouped
+  and differ between configurations.
+- R10.4 **Committed form.** The workbook is the editing surface, not the checked-in artefact: `hisim energy-system
+  grouping import <workbook>` normalises it to `<stem>.grouping.yaml`, and that file is what is committed, reviewed
+  and read by the recorder. The workbook is regenerable from the probe runs and is not committed. `openpyxl` is
+  already a dependency.
+- R10.5 **Second pass.** `hisim energy-system record <setup.py> <simulation.yaml> --grouping <stem>.grouping.yaml`
+  writes the grouped file: components the table leaves alone at the top level, `groups` and `variants` built from the
+  assignments, `override` differences dropped from the file and listed in the report as consumer knobs.
+- R10.6 **Every column is a test.** For each probe C, `realize(grouped file, selections(C))` — the selections the `configurations`
+  sheet gives that column — must equal the flat recording of C byte for byte. The baseline column makes the grouped file provably equivalent to
+  the R6 base file, and the other columns extend that proof to the branches — no new golden runs are needed for any
+  of it (the flat recordings already exist from R10.1).
+- R10.7 **Independence is only what was probed.** A group asserts that its switch is independent of the others; the
+  assertion holds for the combinations the probe list contains and nowhere else. A probe list that toggles each fork
+  alone therefore proves nothing about two forks together, and the report says so, naming the untested combinations.
+
 ## 9. Constraints, Invariants and Assumptions
 
 - C-P3.1 `[given]` Golden parity (E7); `golden_references/` is not re-blessed by P3.
@@ -103,6 +140,8 @@ The Python setups, their v1 JSON twins and their freshness workflow remain untou
 - C-P3.3 `[proposed; inventory §2d]` Wiring conditional on constructed data (`parameters["Group"]`) is fully determined at record time; the recorded wire is the branch taken. Fine for P3; it becomes a class-side default connection when hplib is converted (P4 B1).
 - C-P3.4 `[proposed]` Recording runs constructors: UTSP-dependent setups record with the predefined/local LPG profile the tests use today; a live UTSP is never required for recording.
 - C-P3.5 `[proposed; inventory §2e]` Recorded files stay concrete (R2.4): the five residual setup-side arithmetic expressions and the `Information`-object threading appear as plain numbers. P4 turns them into laws, but a re-recorded file never shows `AUTO`; P4's only visible effect on a recorded file is that `config` blocks shrink to `preset:` + overrides.
+- C-P3.6 `[decided 2026-08-28; R10]` No group and no variant is ever inferred. Observation supplies the three-state matrix; the assignment of a difference to membership or to an override is a person's, recorded in the table, reviewed as a diff of `<stem>.grouping.yaml`.
+- C-P3.7 `[decided 2026-08-28; R10.7]` A grouped file's guarantees reach exactly as far as its probe list. Combinations never probed are untested, named as such in the report, and are not a claim the file makes.
 - A1 `[proposed]` Post-construction recording is acceptable (see §4).
 - A2 `[proposed]` The 4 non-golden sizers and 11 non-sizer setups need no new numeric oracle in P3; R3.2/R3.3 are their gate. Adding them to `golden_config.json` is a separate decision (Q-P3.7).
 
@@ -120,6 +159,10 @@ The Python setups, their v1 JSON twins and their freshness workflow remain untou
 | AC-P3.8 | The car setup records `3·N + 11` (or `+ 9`) components for the default household and re-executes byte-identically. | R7 |
 | AC-P3.9 | The 12 base files (R6) each run under `one_day_15min.simulation.yaml` from `energy_systems/`; the heat-pump base is the one P5 hands to RenoVisor. | R6 |
 | AC-P3.10 | `system_setups/`, the v1 JSONs and `scenario-json-freshness.yml` are unchanged by the P3 PRs (diff empty). | R9 |
+| AC-P3.13 | For every setup with a probe list, each probe column's flat recording equals the grouped file realized with that column's selections, byte for byte — the baseline column against the R6 base file. | R10.6, R10.1 |
+| AC-P3.14 | The prefilled workbook marks a component absent, identical or differing against the baseline, and the importer rejects a workbook with a differing component that carries no assignment, naming it. | R10.2, R10.3 |
+| AC-P3.15 | `<stem>.grouping.yaml` is committed and the workbook is not; regenerating the workbook from the probe runs and re-importing it yields the identical `.grouping.yaml`. | R10.4 |
+| AC-P3.16 | The grouping report lists the `override` differences as consumer knobs and names the fork combinations the probe list never exercised. | R10.5, R10.7 |
 | AC-P3.11 | The out-of-scope list is printed by the recording script with one reason each; no recorded file exists for them. | R5.2 |
 | AC-P3.12 | No recorded energy-system file contains a simulation-parameter key (duration, resolution, post-processing option, logging level, cache path); a schema-level test rejects them. | R8 |
 
@@ -130,22 +173,12 @@ The Python setups, their v1 JSON twins and their freshness workflow remain untou
 | ID | Question | Blocks | Status |
 |---|---|---|---|
 | Q-P3.1 | Record now with literal `config` blocks, or run P4 first? | R2.2, R2.4, G4, plan ordering | `[answered 2026-08-28]` (a) record now; P4 batches re-record and the shrinking diff is each batch's review artefact |
+| Q-P3.2 | KPI parity at `rel_tol = 1e-9`, or byte-identical result CSVs? | R3.1, C-P3.2, AC-P3.2 | `[answered 2026-08-28]` (a) KPI parity, the existing oracle. Renaming the legacy aggregator ports to make CSVs comparable stays a P4/P5 item, not a condition of the migration |
+| Q-P3.3 | Are the 12 module-config sizers recorded once with class defaults, and is the PV/battery/EMS fork flat or a group? | R6, R2.4, R10, AC-P3.9 | `[answered 2026-08-28]` **semi-manual, two passes** (R10): flat recordings of a probe list of configurations, a prefilled table where a person assigns each differing component to a group, a variant option or an override, and a second pass that builds the grouped file — with every probe column asserting the result byte for byte |
 
 `[proposed]` items not listed below (R1.1–R1.3, R2.1–R2.3, R2.5, R3.2–R3.3, R4, R7, R9, C-P3.3–C-P3.4, A1) are confirmed by silence at review.
 
 **Open**
-
-**Q-P3.2 — Is KPI parity at `rel_tol = 1e-9` the oracle, or byte-identical result CSVs?** · blocks R3.1, C-P3.2, AC-P3.2
-*Context.* The existing Python-vs-v1-JSON gate compares `all_kpis.json` only (`golden_references/README.md`: never CSVs). Aggregator ports are named `Input_<src>_<field>_<n>` on the legacy path and `<aggregator_input_name>` on the declarative path (`hisim/dynamic_component.py:253-262` vs. `json_generator.py:184`), so CSV column names differ for the 13 setups with an EMS or meter feed while values are identical. Byte-identical CSVs would require renaming the legacy ports first — a result-column change touching every consumer of `all_results.csv`.
-*Options.* (a) **KPI parity** (precedent) plus R3.2/R3.3 structural equality — no code change to the legacy path; column-name difference documented. (b) **Byte-identical CSVs** — rename legacy aggregator ports to the declarative names in an own commit before recording; stronger claim, one breaking result-column change, and the golden KPIs must be shown unaffected.
-*Recommendation.* (a); (b) is worth doing but belongs with the hplib/EMS conversions in P4, not in the migration of the oracle.
-*Blocks.* R3.1, C-P3.2, AC-P3.2.
-
-**Q-P3.3 — Are the 12 module-config sizers recorded once with class defaults, and is the PV/battery/EMS fork recorded flat or as a group?** · blocks R6, R2.4, AC-P3.9
-*Context.* With `my_module_config = None` the sizers fall back to `ModularHouseholdConfig` defaults (heat pump, `share_of_maximum_pv_potential = 1.0`, `use_battery_and_ems = True`), so the recorded branch always has PV + battery + EMS and the meter wired through the EMS. The golden runs use exactly these defaults, so R3.1 holds for that branch. The off branch differs in three components *and* in the meter's wiring (`household_heatpump_building_sizer.py:399-460`); expressing it as a group `battery_and_ems: {enabled: …}` is what UC4 in the P2 mockups showed RenoVisor doing. A recorder cannot observe a group; someone has to author it. **Amended 2026-08-28:** the meter rewiring, which is what made the group spelling impossible, is expressible since P2 R15 — the two wirings are the two options of a variant. This changes what P5 authors on top of the recorded base, not what P3 records.
-*Options.* (a) **Flat, defaults only** — one base file per heating system, PV/battery/EMS as ordinary components; P5 adds the group by hand-editing the recorded base (and the P2 identity test proves the edit is behaviour-neutral). (b) **Record both branches** (two runs with different module configs) and have the recorder diff them into a group — recorder grows a two-run mode; the diff also captures the meter rewiring, which the group syntax cannot express (wires are removed with the group, not rewired). (c) Record each fork as its own file — 24 base files, doubling the freshness matrix.
-*Recommendation.* (a); recording observes one run, so (b) would need a two-run recorder that diffs, and the diff is not a variant — which option a component belongs to is an authoring judgement. P2 C-P2.5 (re-decided 2026-08-28) puts exclusive alternatives in variants and keeps only the heating system as a file split; both are authored on top of the recorded base.
-*Blocks.* R6, R2.4, AC-P3.9.
 
 **Q-P3.4 — Where do recorded files live, and do the v1 JSON twins stay?** · blocks R9, R4, AC-P3.10
 *Context.* Plan §P3 (written before Q-P2.5) says "recorded files checked in next to the setups"; Q-P2.5 (decided 2026-08-26) says new v3 files live in `energy_systems/` and `system_setups/` is left alone for months. 23 v1 twins plus their freshness workflow exist; after P3 each system is described three times (Python, v1 JSON, v3 YAML). The v1 gate (`golden-json-check.yml`) is blocking today.

@@ -23,6 +23,7 @@ from typing import ClassVar, List, Sequence, Tuple
 
 import pytest
 
+from hisim.cli import build_parser
 from hisim.energy_system.executor import SimulationParametersReader
 from hisim.energy_system.recording.parameters import (
     ParameterFileLibrary,
@@ -279,7 +280,11 @@ def test_the_command_line_writes_into_energy_systems_by_default() -> None:
     happened to stand, and the freshness job would never see them.
     """
     setup = Fleet.SETUPS / f"{Fleet.CHEAPEST_SETUP}.py"
+    parsed = build_parser().parse_args(
+        ["energy-system", "record", str(setup), str(Fleet.ONE_DAY)]
+    )
 
+    assert parsed.out is None, "--out must fall through to the recorder's own default"
     assert RecordingSession.default_output_directory(setup) == Fleet.ENERGY_SYSTEMS
     assert Paths.ENERGY_SYSTEMS == Fleet.ENERGY_SYSTEMS
 

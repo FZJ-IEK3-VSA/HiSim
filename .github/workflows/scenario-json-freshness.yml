@@ -22,10 +22,7 @@
 # cannot be built).
 #
 # Note: this is heavier than the KPI checks because it builds every setup
-# (occupancy setups trigger LPG). The two weather setups
-# 'basic_household_with_weather_data_request' and 'simple_weather_data_import'
-# are excluded because they need the optional 'wetterdienst' package, which is
-# disabled in requirements.txt; they are therefore not required to ship a JSON.
+# (occupancy setups trigger LPG).
 
 name: scenario-json-freshness
 

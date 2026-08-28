@@ -67,7 +67,7 @@ class L1CHPControllerConfig(ConfigBase):
     ) -> "L1CHPControllerConfig":
         """Returns default configuration for the CHP controller."""
         if component_id is None:
-            component_id = ComponentID(name="CHP Controller")
+            component_id = ComponentID(name="CHPController")
         config = L1CHPControllerConfig(
             component_id=component_id,
             source_weight=1,
@@ -91,7 +91,7 @@ class L1CHPControllerConfig(ConfigBase):
     ) -> "L1CHPControllerConfig":
         """Returns default configuration for the fuel cell controller."""
         if component_id is None:
-            component_id = ComponentID(name="Fuel Cell Controller")
+            component_id = ComponentID(name="FuelCellController")
         config = L1CHPControllerConfig(
             component_id=component_id,
             source_weight=1,
@@ -116,7 +116,7 @@ class L1CHPControllerConfig(ConfigBase):
         """Returns default configuration for the CHP controller, when buffer storage for heating is available."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
         if component_id is None:
-            component_id = ComponentID(name="CHP Controller")
+            component_id = ComponentID(name="CHPController")
         config = L1CHPControllerConfig(
             component_id=component_id,
             source_weight=1,
@@ -141,7 +141,7 @@ class L1CHPControllerConfig(ConfigBase):
         """Returns default configuration for the fuel cell controller, when buffer storage for heating is available."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
         if component_id is None:
-            component_id = ComponentID(name="CHP Controller")
+            component_id = ComponentID(name="CHPController")
         config = L1CHPControllerConfig(
             component_id=component_id,
             source_weight=1,

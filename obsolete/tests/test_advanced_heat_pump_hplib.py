@@ -87,7 +87,7 @@ def test_heat_pump_hplib() -> None:
 
     # Initialize component
     heatpump_config: HeatPumpHplibConfig = HeatPumpHplibConfig(
-        component_id=ComponentID(name="Heat Pump"),
+        component_id=ComponentID(name="HeatPump"),
         model=model,
         group_id=group_id,
         heating_reference_temperature_in_celsius=t_in,
@@ -155,11 +155,11 @@ def test_get_heatpump_cycles_counts_off_to_on_transitions(time_off_series: list[
     instance = _make_heatpump_instance()
     postprocessing_results = pd.DataFrame({"other": [0] * len(time_off_series), "TimeOff": time_off_series})
     output = cp.ComponentOutput(
-        "Heat Pump",
+        "HeatPump",
         HeatPumpHplib.TimeOff,
         lt.LoadTypes.TIME,
         lt.Units.SECONDS,
-        component_id=ComponentID("Heat Pump"),
+        component_id=ComponentID("HeatPump"),
     )
     assert (
         instance.get_heatpump_cycles(output=output, index=1, postprocessing_results=postprocessing_results)
@@ -174,11 +174,11 @@ def test_get_heatpump_cycles_ignores_non_timeoff_output() -> None:
     # [5, 0, 5, 0] would yield 2 cycles for a TimeOff output; a non-TimeOff output must return 0.
     postprocessing_results = pd.DataFrame({"ThermalOutputPower": [5, 0, 5, 0]})
     output = cp.ComponentOutput(
-        "Heat Pump",
+        "HeatPump",
         HeatPumpHplib.ThermalOutputPower,
         lt.LoadTypes.HEATING,
         lt.Units.WATT,
-        component_id=ComponentID("Heat Pump"),
+        component_id=ComponentID("HeatPump"),
     )
     assert instance.get_heatpump_cycles(output=output, index=0, postprocessing_results=postprocessing_results) == 0
 
@@ -197,11 +197,11 @@ def test_get_heatpump_cycles_propagates_non_index_errors() -> None:
     # _RaisingValue, whose == raises TypeError (not IndexError).
     postprocessing_results = pd.DataFrame({"other": [0, 0, 0], "TimeOff": [5, _RaisingValue(), 0]})
     output = cp.ComponentOutput(
-        "Heat Pump",
+        "HeatPump",
         HeatPumpHplib.TimeOff,
         lt.LoadTypes.TIME,
         lt.Units.SECONDS,
-        component_id=ComponentID("Heat Pump"),
+        component_id=ComponentID("HeatPump"),
     )
     with pytest.raises(TypeError, match="comparison failure should propagate"):
         instance.get_heatpump_cycles(output=output, index=1, postprocessing_results=postprocessing_results)

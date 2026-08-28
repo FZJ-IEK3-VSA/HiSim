@@ -91,7 +91,7 @@ class RsocControllerConfig(ConfigBase):
         """
 
         if component_id is None:
-            component_id = ComponentID(name="rSCO l1 Controller")
+            component_id = ComponentID(name="RscoL1Controller")
         if config_json is None:
             config_json = cls.read_config(rsoc_name)
         config = RsocControllerConfig(

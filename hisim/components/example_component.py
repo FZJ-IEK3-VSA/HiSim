@@ -48,7 +48,7 @@ class ExampleComponentConfig(ConfigBase):
     ) -> "ExampleComponentConfig":
         """Gets a default Example Component."""
         if component_id is None:
-            component_id = ComponentID(name="Example Component")
+            component_id = ComponentID(name="ExampleComponent")
         return ExampleComponentConfig(
             component_id=component_id,
             electricity=-1e3,

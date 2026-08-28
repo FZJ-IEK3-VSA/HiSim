@@ -66,8 +66,9 @@ P1 sizing kernel ──► P2 file format & executor ──► P3 recording & se
 Requirements: `p2_file_format_requirements.md` R15, C-P2.5, AC-P2.17–AC-P2.19 (added 2026-08-28, re-answering Q-P2.2).
 Asked for by the RenoVisor backend: a house has either an EMS with a battery **or** a plain electricity meter, and the
 meter is wired differently in the two worlds — a group can add or remove components but cannot rewire one that survives.
-Nothing in P3 or P4 consumes variants (a recorded file is flat), so this does not block them; it is done now because it
-is a format decision and the format should be settled before hand-authored files multiply.
+Nothing in P3 or P4 consumes variants except P3's grouping pass (R10). `[decided 2026-08-28]` **P2.1 is built before P3
+starts** — the format is cheaper to settle while three mockups and one real file exist than after twenty-one recorded
+files do, and it answers the RenoVisor requirement in code rather than on paper.
 
 - [ ] `variants: {name: {selected, options: {name: {components}}}}` in the model, loader and JSON Schema
 - [ ] Selection folded into the existing group-expansion pre-pass; the selected option's components join the top level, so nothing downstream sees a variant
@@ -84,8 +85,11 @@ five open design questions in its §13).
 
 - [x] All requirements questions decided *(2026-08-28: Q-P3.1 record now and re-record per P4 batch · Q-P3.2 KPI parity is the oracle · Q-P3.3 the semi-manual grouping pass R10 · Q-P3.4 files live in `energy_systems/` · Q-P3.5 the three unrecordable setups are deleted, not excluded · Q-P3.6 parameters emitted only when new, never duplicated · Q-P3.7 the temporary parity rig R11)*
 - [ ] Requirements document accepted at review
-- [ ] Implementation spec accepted (DQ1–DQ5 decided)
-- [ ] Removal commit first (R5.2): delete `simple_weather_data_import.py`, `basic_household_with_weather_data_request.py` and `air_conditioned_house.py` with their v1 twins, their two tests and the freshness `--exclude` list — after this the recorder needs no skip list
+- [x] Implementation spec written; DQ1–DQ5 decided *(2026-08-28: subpackage · rename the illegal names and enforce the rule in `Component.__init__` · guard `component_id` now and decide in P5 · hand-authored renaming table · the rig compares every result column through it, R11.3 and C-P3.2 amended)*
+- [ ] Implementation spec accepted at review
+- [ ] P2.1 first (see above), then the removal commit (R5.2): delete `simple_weather_data_import.py`, `basic_household_with_weather_data_request.py` and `air_conditioned_house.py` with their v1 twins, their two tests and the freshness `--exclude` list — after this the recorder needs no skip list
+- [ ] Rename the five illegal component-name literals in three setups and the `ExampleTransformer` class default; regenerate the three v1 twins; then enforce the identifier rule in `Component.__init__` (own commit). No golden reference is affected
+- [ ] Port `json_v2:parity.py` (wiring snapshot, port renaming, result comparison) and the preset half of `json_v2:templating.py`
 - [ ] Recorder: run a `setup_function` under a recording simulator, emit an energy-system file in canonical style
 - [ ] Every setup recorded flat; recorded files checked in to `energy_systems/<stem>.energy_system.yaml`
 - [ ] Parameter files emitted only where the setup's parameters match nothing shipped, deduplicated by normalised content, named for what they are (R8)

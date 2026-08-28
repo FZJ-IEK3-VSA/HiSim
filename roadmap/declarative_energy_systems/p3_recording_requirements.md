@@ -154,10 +154,15 @@ extension of the golden gate and it blesses nothing.
   (`golden_ref_spec.md` §7); the `rel_tol = 1e-9` of the permanent gate exists to absorb cross-machine drift, which this
   rig does not have. So the comparison demands equality. A triple that only passes with a tolerance is a finding to
   investigate, not a threshold to widen.
-- R11.3 **Three comparisons, in this order:** the component set and the wire set (R3.3); then every column of
-  `all_results.csv` whose name exists on both paths, exactly; then `all_kpis.json`, exactly, where KPI computation
-  succeeds. The aggregator ports the two paths name differently (C-P3.2) are excluded from the column comparison by
-  name and are covered by the wire-set check instead.
+- R11.3 **Three comparisons, in this order:** the component set and the wire set (R3.3); then **every** column of
+  `all_results.csv`, exactly, after the legacy aggregator port names have been translated through a declared renaming
+  table; then `all_kpis.json`, exactly, where KPI computation succeeds. `[amended 2026-08-28]` The first spelling of
+  this rule compared only the columns whose names already agreed, because the two paths name aggregator ports
+  differently (C-P3.2). The `json_v2` spike solved that translation — a table keyed by `(component, port)` that
+  rewrites a wiring snapshot and a result frame alike — so the rule is the stronger one: every column is compared,
+  every column the table does not list must match literally, and a translation that would land on a column the frame
+  already has is an error rather than a silent overwrite. The table is authored per aggregator and reviewed as part of
+  the rig, which is what keeps "these two names mean the same wire" a claim someone made rather than an assumption.
 - R11.4 **The KPI-broken setups are still covered.** Seven in-scope setups crash inside KPI computation today, after
   the simulation itself has finished: `dynamic_components` and `electrolyzer_with_renewables` (a component with no KPI
   method), `simple_system_setup_one`/`_two` (likewise, and both are toy examples), `basic_household_only_heating`
@@ -184,7 +189,7 @@ extension of the golden gate and it blesses nothing.
 ## 9. Constraints, Invariants and Assumptions
 
 - C-P3.1 `[given]` Golden parity (E7); `golden_references/` is not re-blessed by P3.
-- C-P3.2 `[proposed; inventory §5c, refined 2026-08-28]` Aggregator port names differ between the two paths; anything that compares *all* result columns by name is not a valid P3 oracle. The columns whose names do agree are comparable, and R11.3 compares them exactly while leaving the aggregator ports to the wire-set check. If byte-identical CSVs are ever required, the legacy path must adopt the declarative port names first (a P4/P5 decision, own commit, result-column renames).
+- C-P3.2 `[proposed; inventory §5c, amended 2026-08-28]` Aggregator port names differ between the two paths, so comparing result columns by name is not valid **without a declared translation**. With one — the spike's port-renaming table, reviewed per aggregator — every column becomes comparable, and R11.3 compares all of them. The constraint that survives is the reason for the table: an undeclared name difference must still fail, never be absorbed. If byte-identical CSVs are ever required, the legacy path must adopt the declarative port names first (a P4/P5 decision, own commit, result-column renames).
 - C-P3.3 `[proposed; inventory §2d]` Wiring conditional on constructed data (`parameters["Group"]`) is fully determined at record time; the recorded wire is the branch taken. Fine for P3; it becomes a class-side default connection when hplib is converted (P4 B1).
 - C-P3.4 `[proposed]` Recording runs constructors: UTSP-dependent setups record with the predefined/local LPG profile the tests use today; a live UTSP is never required for recording.
 - C-P3.5 `[proposed; inventory §2e]` Recorded files stay concrete (R2.4): the five residual setup-side arithmetic expressions and the `Information`-object threading appear as plain numbers. P4 turns them into laws, but a re-recorded file never shows `AUTO`; P4's only visible effect on a recorded file is that `config` blocks shrink to `preset:` + overrides.

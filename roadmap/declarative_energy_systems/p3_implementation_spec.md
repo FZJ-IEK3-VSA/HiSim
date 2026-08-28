@@ -1,19 +1,19 @@
 # P3 — Recording and setup migration: implementation specification
 
-**Status:** draft · **Date:** 2026-08-28
+**Status:** draft, all design questions decided · **Date:** 2026-08-28 (DQ1–DQ5 answered by the owner the same day; §13)
 **Implements:** `roadmap/declarative_energy_systems/p3_recording_requirements.md` (revision 2026-08-28, all questions decided) under the epic `epic.md` (E1–E8) · **Plan:** `plan.md` §P3
 **Author(s):** assistant (every item `[proposed]` unless tagged) · **Reviewers:** HiSim core team
 **Branch / PRs:** new branch off `main` (P2 merged as #592); planned PR-1 … PR-7, §10
 **Base evidence:** `main` plus the merged P2, verified 2026-08-28 — `hisim/energy_system/` (28 modules), `hisim/config/presets.py` (`preset_provenance`, `presets_of`, `constructors_of`), `hisim/component.py` (`src_object_name`/`src_field_name` at :131, `get_default_connections` at :420), `hisim/json_generator.py` (519, the v1 recorder), `scripts/regenerate_scenario_jsons.py`, `scripts/golden_*.py`, 24 setups of which 3 are removed by R5.2
 **Solution-design input:** `json_v2:hisim/scenario_v2/templating.py` (222) and `json_v2:hisim/scenario_v2/parity.py` (500) — both deliberately **not** ported in P2 ("the recorder is P3", "the wiring-diff harness is a P3 golden tool", P2 spec §6) · `hisim/json_generator.py` for the bare-`inputs` decision and parameter filtering
 
-**What a reviewer must decide here:**
-1. §3.3 / §13 DQ2 — **four live component names are illegal in v3**; rename them at the source, or teach the recorder to sanitize (and accept that result-column names then differ between the two paths).
-2. §3.9 / §13 DQ5 — `PortRenaming` from the spike solves the port-naming divergence the requirements route around; the parity rig should compare **all** result columns through a declared table rather than only the ones whose names happen to agree. This upgrades R11.3 and C-P3.2.
-3. §6 / §13 DQ1 — a `hisim/energy_system/recording/` subpackage against the flat module layout P2 established.
-4. §3.4 — what ports from `templating.py`: the preset-provenance half, **not** the `AUTO` de-resolution half, which R2.4 forbids in a recorded file.
-5. §3.7 — parameter-file deduplication by normalised content, and the exclusion of `cache_dir_path` from both the comparison and the written file.
-6. §13 DQ3 — `component_id` is omitted from v3 and rebuilt from the key, and the key is lossy. Inert in P3, a silent behaviour change in P5.
+**Decided by the owner, 2026-08-28** (§13): the four illegal component names are renamed at the source **and** `Component.__init__` enforces the identifier rule afterwards (DQ2); the parity rig compares every result column through a hand-authored renaming table (DQ4, DQ5 — R11.3 and C-P3.2 amended accordingly); `component_id` is guarded by I-4/EF-R2 in P3 and answered in P5 (DQ3); recording lives in a subpackage (DQ1). Ordering decided with them: **P2.1 lands before P3 starts**, the two toy setups are renamed rather than deleted, and the KPI-layer repair list stays a separate workstream.
+
+**What a reviewer must still check here:**
+1. §3.4 — what ports from `templating.py`: the preset-provenance half, **not** the `AUTO` de-resolution half, which R2.4 forbids in a recorded file.
+2. §3.5 — the three-way `inputs` decision and its reuse of `json_generator.compare_automatic_connections`.
+3. §3.7 — parameter-file deduplication by normalised content, and the exclusion of `cache_dir_path` from both the comparison and the written file.
+4. §3.6 / §7 — the determinism rules R4 turns from aesthetics into requirements, and the six invariants.
 
 ---
 
@@ -86,9 +86,11 @@ v3 keys must match `NameRules.IDENTIFIER_PATTERN` = `^[A-Za-z_][A-Za-z0-9_]*$`. 
 | `Example Transformer default` | `simple_system_setup_two` | spaces |
 | `Standard transformer and rectifier unit` | `electrolyzer_with_renewables` | spaces |
 
-None of those setups is removed by R5.2, so the recorder meets them. **Recommendation: rename at the source** (PR-2), because the runtime component name is also the result-column prefix: sanitizing inside the recorder would make the recorded run's CSV columns differ from the Python run's, which is precisely what the parity rig compares (§3.9). Renaming keeps key, runtime name and column identical, which is the invariant everything else rests on.
+None of those setups is removed by R5.2, so the recorder meets them. `[decided 2026-08-28]` **They are renamed at the source** (PR-2), because the runtime component name is also the result-column prefix: sanitizing inside the recorder would make the recorded run's CSV columns differ from the Python run's, which is precisely what the parity rig compares (§3.9). Renaming keeps key, runtime name and column identical, and that is the invariant everything else rests on (I-3).
 
-The recorder additionally **refuses** a name it cannot write, naming the component and the rule (EF-R1). Whether `Component.__init__` should enforce the same pattern so it cannot recur is DQ2 — it is a behaviour change touching every component and belongs in its own commit if taken.
+What PR-2 touches, measured: five name literals across `simple_system_setup_one.py`, `_two.py` and `electrolyzer_with_renewables.py`; their three `.scenario.json` twins, regenerated by `scripts/regenerate_scenario_jsons.py` and gated by `scenario-json-freshness.yml`; and `hisim/components/example_transformer.py:55`, where `ComponentID(name="Example Transformer default")` is the component's **own class-level default**, plus two docstring mentions. No golden reference is affected — none of the three setups is in `golden_config.json`.
+
+That class-level default is the argument for the second half of the decision: the recorder refuses a name it cannot write (EF-R1), but a defaulted identity is one nobody has to type, so a recorder-side guard would never see it until something recorded that component. `[decided 2026-08-28]` `Component.__init__` therefore enforces `NameRules.IDENTIFIER_PATTERN` as well, in its own commit after PR-2, so an illegal name cannot be introduced at all.
 
 `component_id` is not written (P2 R1.3); the executor rebuilds it from the key. `ComponentID.key` joins `building`, `unit` and `name` with underscores and is never parsed back, so the rebuilt identity has `building=None` and a name equal to the old key. **In P3 this is exact** — no setup in `system_setups/` sets a building name, verified 2026-08-28 — but `electricity_meter.py:201` branches on `DistrictNames.is_district(config.component_id.building)`, and `kpi_preparation.py`, `postprocessing_main.py` and the opex/capex calculation read `building_label`. A district file recorded this way would change behaviour silently. Recorded as **I-4** and **DQ3**; the recorder asserts `building is None and unit is None` for every component and refuses otherwise, so the hazard cannot arrive unnoticed.
 
@@ -168,7 +170,7 @@ Port `json_v2:parity.py` nearly whole into `hisim/energy_system/parity.py`:
 | `WiringParityHarness.compare_simulators` | R3.3 |
 | `ResultComparison.between` | R11.3 second comparison |
 
-**The upgrade.** The requirements treat the aggregator port-naming divergence as a wall: R11.3 compares only the columns whose names exist on both paths, and Q-P3.2 keeps KPIs as the golden oracle because CSV columns cannot be matched. `PortRenaming` is a solved translation of exactly that divergence — v1's `Input_<source>_<field>_<n>` against the declarative derived names — and `apply_to_results` rewrites the columns of a result frame through the same table that rewrites a wiring snapshot. With a declared table the rig can compare **every** column, and anything the table does not list must still match literally, which is the property that keeps the table honest. This does not disturb Q-P3.2: the permanent golden gate stays on KPIs; only the temporary rig gets stricter. It needs an amendment to R11.3 and C-P3.2 before it is built (DQ5).
+**The upgrade** `[decided 2026-08-28; R11.3 and C-P3.2 amended]`. The requirements first treated the aggregator port-naming divergence as a wall: compare only the columns whose names exist on both paths. `PortRenaming` is a solved translation of exactly that divergence — v1's `Input_<source>_<field>_<n>` against the declarative derived names — and `apply_to_results` rewrites the columns of a result frame through the same table that rewrites a wiring snapshot. So the rig compares **every** column, anything the table does not list must still match literally, and a translation landing on a column the frame already carries raises rather than overwriting. This does not disturb Q-P3.2: the permanent golden gate stays on KPIs; only the temporary rig gets stricter. The table is **hand-authored per aggregator** (DQ4) and reviewed with the rig, so "these two names mean the same wire" stays a claim someone made rather than an assumption the tooling reached.
 
 The comparison runs at **exact equality**, not `rel_tol = 1e-9`: both runs happen in one container, where determinism is byte-exact (`golden_ref_spec.md` §7), and the tolerance in the permanent gate exists only to absorb cross-machine drift (R11.2).
 
@@ -223,9 +225,9 @@ apply_grouping(flat: EnergySystemFile, grouping: Grouping) -> EnergySystemFile
 | EF-R7 | `selected` in the `configurations` sheet names an option no assignment created |
 | EF-R8 | two parameter files normalise equal |
 
-## 6. Internal structure `[DQ1]`
+## 6. Internal structure
 
-New subpackage `hisim/energy_system/recording/`; ≤ 500 lines per module.
+`[decided 2026-08-28: DQ1]` New subpackage `hisim/energy_system/recording/`, with `parity.py` staying flat because the rig and the tests use it independently of the recorder; ≤ 500 lines per module.
 
 | Module | Responsibility | Origin | ~lines |
 |---|---|---|---|
@@ -284,17 +286,22 @@ Every failure is an exception carrying the setup, the component and the rule; no
 
 ## 10. Migration, compatibility and rollout
 
+`[ordering decided 2026-08-28]` **P2.1 lands before P3 starts.** Only PR-6 needs variants, but the format is cheaper to settle while three mockups and one real file exist than after twenty-one recorded files do, and it answers the RenoVisor requirement in code rather than on paper.
+
 | PR | Content | Depends on |
 |---|---|---|
+| **P2.1** | Exclusive variants: model, loader, schema, selection in the expander, the five rejections, identity test per option, `facts` | — |
 | PR-1 | **Removal** (R5.2): 3 setups, 2 v1 twins, 2 tests, the freshness `--exclude` | — |
-| PR-2 | **Names** (§3.3): rename the 4 illegal component names; recorder-side rule | — |
+| PR-2 | **Names** (§3.3): rename the 5 literals in 3 setups and the `ExampleTransformer` class default; regenerate 3 twins. Second commit: `Component.__init__` enforces the identifier rule | — |
 | PR-3 | Port `parity.py`; `observe` + `build` + `record` CLI; 3 setups recorded as fixtures | PR-2 |
 | PR-4 | All setups recorded; parameter deduplication (R8); freshness workflow | PR-3 |
-| PR-5 | `one_week_july`; the parity rig and its workflow (R11) | PR-4, DQ5 |
-| PR-6 | Grouping pass (R10) | PR-4, **P2.1** |
+| PR-5 | `one_week_july`; the parity rig with its renaming tables and workflow (R11) | PR-4 |
+| PR-6 | Grouping pass (R10) | PR-4, P2.1 |
 | PR-7 | Teardown: delete the rig, its config and its scripts (R11.8, AC-P3.20) | PR-6 |
 
-No component, no setup and no result changes in any of these except PR-1 and PR-2, both of which are their own commits with their diffs shown.
+PR-1 and PR-2 are the only ones that change a setup, a component or a result, and each is its own commit with its diff shown. PR-2's result change is confined to the column prefixes of three setups, none of them golden-gated. The two toy setups are renamed rather than deleted `[decided 2026-08-28]`: they stay as the documented example of legacy Python mode, and permanently outside the numeric oracle.
+
+Not part of P3 `[decided 2026-08-28]`: the KPI-layer repair list — four components with no KPI method and three bugs, including `household_gas_solar_thermal` reporting more grid import than total consumption. The rig covers those setups structurally (R11.4), so P3 needs none of it, and each setup joins the numeric oracle as it is fixed.
 
 ## 11. Risks and unknowns
 
@@ -308,17 +315,17 @@ No component, no setup and no result changes in any of these except PR-1 and PR-
 
 Read in this order: §3.3 (names — the one place a reviewer's decision changes the code), `recording/builder.py` against §3.2, `recording/inputs.py` against §3.5 and `json_generator.compare_automatic_connections`, then the ports (`configs.py` against `json_v2:templating.py`, `parity.py` against its original) checking what was **dropped** rather than what was kept. Finally §3.7's normalisation, where the omissions matter more than the inclusions.
 
-## 13. Open design questions
+## 13. Design questions — all answered 2026-08-28
 
-**DQ1 — subpackage or flat modules?** P2 put 28 flat modules in `hisim/energy_system/`; recording adds 8. *Recommendation:* subpackage `recording/`, with `parity.py` staying flat because the rig and the tests use it independently.
+**DQ1 — subpackage or flat modules?** `[answered]` Subpackage `hisim/energy_system/recording/`; `parity.py` stays flat, since the rig and the tests use it independently of the recorder.
 
-**DQ2 — enforce the identifier rule in `Component.__init__`?** It would make illegal names impossible rather than merely refused at recording time, but it is a behaviour change touching every component and would need its own commit. *Recommendation:* yes, after PR-2, as a separate commit.
+**DQ2 — enforce the identifier rule in `Component.__init__`?** `[answered]` Yes, in its own commit after PR-2. The deciding evidence is that one of the four illegal names is a component's own class default (`example_transformer.py:55`), which a recorder-side guard would not see until something recorded that component.
 
-**DQ3 — `component_id` and the lossy key.** Inert in P3 (no setup sets a building name) and guarded by I-4/EF-R2, but P5's district files need an answer: write `component_id` explicitly when `building`/`unit` are set, or make the key parseable. *Recommendation:* decide in P5's requirements; keep the guard until then.
+**DQ3 — `component_id` and the lossy key.** `[answered]` Guard in P3, decide in P5. The recorder refuses any component carrying a `building` or `unit` (I-4, EF-R2), so P3 is provably exact and P5 must answer the question before district files exist rather than discovering it in a meter branch.
 
-**DQ4 — where does the `PortRenaming` table come from?** Hand-authored per aggregator class (reviewable, drifts) or derived from the resolver's naming templates (exact, coupled). *Recommendation:* start hand-authored; the rig is temporary.
+**DQ4 — where does the `PortRenaming` table come from?** `[answered]` Hand-authored per aggregator and reviewed with the rig. Deriving it from the resolver's templates would couple the recorder to the legacy add-API's insertion order, which is what the migration is leaving behind, and the rig is temporary.
 
-**DQ5 — upgrade R11.3 and C-P3.2 to compare all result columns through `PortRenaming`?** *Recommendation:* yes; it is strictly more evidence for work the spike already did, and it leaves Q-P3.2's answer for the permanent gate untouched.
+**DQ5 — compare all result columns through the table?** `[answered]` Yes; R11.3 and C-P3.2 are amended. Every column is compared, anything the table does not list must match literally, and a translation landing on an existing column raises. Q-P3.2's answer for the permanent gate is untouched.
 
 ## 14. Glossary
 

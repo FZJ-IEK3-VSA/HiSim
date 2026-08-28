@@ -78,10 +78,13 @@ is a format decision and the format should be settled before hand-authored files
 
 ## P3 — Recording & setup migration
 
-Requirements: `p3_recording_requirements.md` (in review 2026-08-28; inventory in `p3_setup_inventory.md`).
+Requirements: `p3_recording_requirements.md` (in review 2026-08-28, all questions decided; inventory in
+`p3_setup_inventory.md`). Implementation: `p3_implementation_spec.md` (draft 2026-08-28; PR-1 … PR-7 in its §10,
+five open design questions in its §13).
 
 - [x] All requirements questions decided *(2026-08-28: Q-P3.1 record now and re-record per P4 batch · Q-P3.2 KPI parity is the oracle · Q-P3.3 the semi-manual grouping pass R10 · Q-P3.4 files live in `energy_systems/` · Q-P3.5 the three unrecordable setups are deleted, not excluded · Q-P3.6 parameters emitted only when new, never duplicated · Q-P3.7 the temporary parity rig R11)*
 - [ ] Requirements document accepted at review
+- [ ] Implementation spec accepted (DQ1–DQ5 decided)
 - [ ] Removal commit first (R5.2): delete `simple_weather_data_import.py`, `basic_household_with_weather_data_request.py` and `air_conditioned_house.py` with their v1 twins, their two tests and the freshness `--exclude` list — after this the recorder needs no skip list
 - [ ] Recorder: run a `setup_function` under a recording simulator, emit an energy-system file in canonical style
 - [ ] Every setup recorded flat; recorded files checked in to `energy_systems/<stem>.energy_system.yaml`

@@ -4,7 +4,7 @@
 **Author(s):** Noah Pflugradt (owner; `[given]`) · assistant (`[proposed]`, inventory)
 **Reviewers:** HiSim core team
 **Parent:** `roadmap/declarative_energy_systems/epic.md` (E1–E8 apply by reference) · **Plan:** `roadmap/declarative_energy_systems/plan.md` §P3 · **Depends on:** P2 accepted
-**Companion:** `roadmap/declarative_energy_systems/p3_setup_inventory.md` (counted survey of `system_setups/`, the golden suites and the recording hooks; every number below comes from it)
+**Implementation spec:** `roadmap/declarative_energy_systems/p3_implementation_spec.md` (2026-08-28) · **Companion:** `roadmap/declarative_energy_systems/p3_setup_inventory.md` (counted survey of `system_setups/`, the golden suites and the recording hooks; every number below comes from it)
 **Related:** `hisim/hisim_convert_to_json.py` + `hisim/json_generator.py` (the existing v1 recorder, precedent) · `.github/workflows/golden-json-check.yml` (the existing Python-vs-file parity gate, precedent) · `hisim/energy_system/record.py`, `emitter.py` (the P2 realized-record writer the recorder feeds)
 
 **Tags:** migration, compatibility, feature

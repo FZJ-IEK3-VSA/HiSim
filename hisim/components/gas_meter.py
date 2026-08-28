@@ -7,7 +7,7 @@ post-processing cost and emission computation.
 
 # clean
 from dataclasses import dataclass
-from typing import ClassVar, List, Optional
+from typing import ClassVar, List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -17,6 +17,7 @@ from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput, ComponentOutput, OpexCostDataClass, CapexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config.channels import DispatchRule, DynamicConnectionChannel
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -92,6 +93,41 @@ class GasMeter(DynamicComponent):
     GasProduction: ClassVar[str] = "GasProduction"
     CumulativeConsumption: ClassVar[str] = "CumulativeConsumption"
     CumulativeProduction: ClassVar[str] = "CumulativeProduction"
+
+    #: Stable key of the channel carrying gas a participant feeds into the system.
+    PRODUCTION_CHANNEL: ClassVar[str] = "production"
+
+    #: Stable key of the channel carrying gas a participant burned.
+    CONSUMPTION_UNCONTROLLED_CHANNEL: ClassVar[str] = "consumption_uncontrolled"
+
+    #: The two flows this meter understands, declared so that an energy-system file can address a
+    #: gas burner or a gas producer at it. The tags, units and monitored-only weight are the ones
+    #: :meth:`get_default_connections_from_generic_gas_heater` already builds and
+    #: :meth:`i_simulate` already queries; declaring them adds no wiring and changes none.
+    #:
+    #: The load type is the wildcard on both, because which gas this meter measures is the
+    #: meter's own ``gas_loadtype`` and the burner's own carrier — natural gas in one household,
+    #: green hydrogen in the next — and not a property of the flow the channel describes. The
+    #: unit stays strict: both sums are in watt-hours whichever gas it is.
+    #:
+    #: Dispatch is forbidden on both. A meter is a pure aggregator: it has no control authority
+    #: and no per-participant output to send a signal on.
+    CHANNELS: Tuple[DynamicConnectionChannel, ...] = (
+        DynamicConnectionChannel(
+            key=PRODUCTION_CHANNEL,
+            tags=frozenset({lt.InandOutputType.GAS_PRODUCTION}),
+            load_type=lt.LoadTypes.ANY,
+            unit=lt.Units.WATT_HOUR,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+        DynamicConnectionChannel(
+            key=CONSUMPTION_UNCONTROLLED_CHANNEL,
+            tags=frozenset({lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED}),
+            load_type=lt.LoadTypes.ANY,
+            unit=lt.Units.WATT_HOUR,
+            dispatch=DispatchRule.FORBIDDEN,
+        ),
+    )
 
     def __init__(
         self,

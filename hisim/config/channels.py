@@ -96,6 +96,17 @@ class DynamicConnectionChannel:
     declaration may be written with plain set or list literals.
     """
 
+    #: Load types a channel may declare to say "whatever the participant's port carries". A fuel
+    #: meter is the case that needs it: the boiler types its energy-demand outputs by carrier, so
+    #: the same channel sees oil, pellets or wood chips depending on the household, and district
+    #: heating feeds the same channel space-heating and hot-water energy in one system. The value
+    #: is the wildcard HiSim already uses between two ports, so a channel and a wire agree on what
+    #: "any" means.
+    WILDCARD_LOAD_TYPES: ClassVar[Tuple[lt.LoadTypes, ...]] = (lt.LoadTypes.ANY,)
+
+    #: Units a channel may declare with the same meaning, for the same reason.
+    WILDCARD_UNITS: ClassVar[Tuple[lt.Units, ...]] = (lt.Units.ANY,)
+
     key: str
     tags: FrozenSet[ConnectionTag]
     load_type: lt.LoadTypes
@@ -128,6 +139,41 @@ class DynamicConnectionChannel:
                 f"{sorted(tag.name for tag in self.dispatch_tags)}; drop the tags, or make the "
                 "rule OPTIONAL or REQUIRED."
             )
+
+    def accepts_load_type(self, load_type: lt.LoadTypes) -> bool:
+        """Reports whether a participant's port may carry this load type into the channel.
+
+        A channel naming a concrete load type accepts that one and nothing else, which is what
+        catches a temperature summed into an energy balance. A channel naming the wildcard accepts
+        every carrier, because the flows it aggregates are the same quantity under different
+        names and the aggregator's own configuration, not the channel, decides which.
+
+        Args:
+            load_type: Load type of the participant's output port.
+
+        Returns:
+            ``True`` when the two agree or either side is the wildcard.
+        """
+        return (
+            load_type == self.load_type
+            or self.load_type in self.WILDCARD_LOAD_TYPES
+            or load_type in self.WILDCARD_LOAD_TYPES
+        )
+
+    def accepts_unit(self, unit: lt.Units) -> bool:
+        """Reports whether a participant's port may carry this unit into the channel.
+
+        The unit is the half of the port description that stays strict in practice: a channel
+        summing watt-hours means watt-hours whatever the carrier is, so the wildcard exists here
+        for symmetry with the load type rather than because an aggregator needs it.
+
+        Args:
+            unit: Unit of the participant's output port.
+
+        Returns:
+            ``True`` when the two agree or either side is the wildcard.
+        """
+        return unit == self.unit or self.unit in self.WILDCARD_UNITS or unit in self.WILDCARD_UNITS
 
     def matches(self, feed_tags: Iterable[ConnectionTag]) -> bool:
         """Reports whether this channel's tags are a subset of a feed's effective tags.

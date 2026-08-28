@@ -66,8 +66,8 @@ class SimpleController(Component):
     (off) when it exceeds the high threshold.
     """
 
-    StorageFillLevel: str = "Fill Level Percent"
-    GasHeaterPowerPercent: str = "Gas Heater Power Level"
+    StorageFillLevel: str = "FillLevelPercent"
+    GasHeaterPowerPercent: str = "GasHeaterPowerLevel"
 
     FILL_LEVEL_LOW_THRESHOLD: float = 0.4
     FILL_LEVEL_HIGH_THRESHOLD: float = 0.99

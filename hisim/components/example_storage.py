@@ -94,11 +94,11 @@ class SimpleStorageConfig(ConfigBase):
 class SimpleStorage(Component):
     """A class to simulate the Simple Storage."""
 
-    ChargingAmount: str = "Charging Amount"
-    DischargingAmount: str = "Discharging Amount"
-    ActualStorageDelta: str = "Actual Storage Delta"
-    CurrentFillLevel: str = "Current Fill Level Absolute"
-    CurrentFillLevelPercent: str = "Current Fill Level Percent"
+    ChargingAmount: str = "ChargingAmount"
+    DischargingAmount: str = "DischargingAmount"
+    ActualStorageDelta: str = "ActualStorageDelta"
+    CurrentFillLevel: str = "CurrentFillLevelAbsolute"
+    CurrentFillLevelPercent: str = "CurrentFillLevelPercent"
 
     def __init__(
         self,

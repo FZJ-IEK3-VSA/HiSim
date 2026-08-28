@@ -255,16 +255,16 @@ class AdvancedElectrolyzer(Component):
     """Advanced Electrolyzer class."""
 
     # input
-    ElectricityInput = "Electricity Input"  # W
+    ElectricityInput = "ElectricityInput"  # W
     HydrogenNotStored = "HydrogenNotStored"  # kg/s
     # output
-    WaterDemand = "Water Demand"  # kg/s
-    HydrogenOutput = "Hydrogen Output"  # kg/s
-    OxygenOutput = "Oxygen Output"  # kg/s
-    EnergyLosses = "Energy Losses"  # W
-    UnusedPower = "Unused Power"  # W
-    ElectrolyzerEfficiency = "Electrolyzer Efficiency"  # -
-    PowerLevel = "Power Level"  # %
+    WaterDemand = "WaterDemand"  # kg/s
+    HydrogenOutput = "HydrogenOutput"  # kg/s
+    OxygenOutput = "OxygenOutput"  # kg/s
+    EnergyLosses = "EnergyLosses"  # W
+    UnusedPower = "UnusedPower"  # W
+    ElectrolyzerEfficiency = "ElectrolyzerEfficiency"  # -
+    PowerLevel = "PowerLevel"  # %
     ElectricityRealNeeded = "ElectricityRealNeeded"
 
     def __init__(
@@ -623,18 +623,18 @@ class HydrogenStorage(Component):
     """Hydrogen storage class."""
 
     # input
-    ChargingHydrogenAmount = "Charging Hydrogen Amount"  # kg/s
+    ChargingHydrogenAmount = "ChargingHydrogenAmount"  # kg/s
     DischargingHydrogenAmountTarget = "DischargingHydrogenAmountTarget"  # kg/s
     # output
-    CurrentHydrogenFillLevel = "Current Hydrogen Fill Level Absolute"  # kg
-    CurrentHydrogenFillLevelPercent = "Current Hydrogen Fill Level Percent"  # %
-    StorageDelta = "Storage Delta"  # kg
-    HydrogenNotStored = "Hydrogen Not Stored"  # kg
-    HydrogenNotReleased = "Hydrogen Not Released"  # kg
+    CurrentHydrogenFillLevel = "CurrentHydrogenFillLevelAbsolute"  # kg
+    CurrentHydrogenFillLevelPercent = "CurrentHydrogenFillLevelPercent"  # %
+    StorageDelta = "StorageDelta"  # kg
+    HydrogenNotStored = "HydrogenNotStored"  # kg
+    HydrogenNotReleased = "HydrogenNotReleased"  # kg
 
-    HydrogenStorageEnergyDemand = "Hydrogen Storage Energy Demand"  # W
-    HydrogenLosses = "Hydrogen Losses"  # kg
-    DischargingHydrogenAmountReal = "Discharging Hydrogen Amount Real"  # kg/s
+    HydrogenStorageEnergyDemand = "HydrogenStorageEnergyDemand"  # W
+    HydrogenLosses = "HydrogenLosses"  # kg
+    DischargingHydrogenAmountReal = "DischargingHydrogenAmountReal"  # kg/s
 
     def __init__(
         self,

@@ -89,7 +89,7 @@ class ExampleComponent(Component):
 
     # Outputs
     ElectricityOutput: str = "ElectricityOutput"
-    TemperatureMean: str = "Residence Temperature"
+    TemperatureMean: str = "ResidenceTemperature"
     StoredEnergy: str = "StoredEnergy"
 
     def __init__(

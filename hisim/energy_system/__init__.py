@@ -66,6 +66,12 @@ The stages that need the component classes live in their own modules and are del
       and what JSON Schema accepts the values one configuration field holds.
     - :mod:`hisim.energy_system.schema_export` — the generated JSON Schema of the format, which an
       editor binds to through the ``# yaml-language-server:`` line at the top of a file.
+    - :mod:`hisim.energy_system.parity` — the resolved wiring of an assembled system as plain,
+      comparable data, the table translating the port names two build paths give one connection,
+      and the comparison of two result frames. It is what proves that a system built from a file
+      and the same system built by Python are the same system.
+    - :mod:`hisim.energy_system.recording` — the only part of this package that runs the other way:
+      it observes a system a Python ``setup_function`` built and writes the file describing it.
 
 Two further modules sit outside both groups. :mod:`hisim.energy_system.channels` holds the
 declaration of an aggregator's accepted flows and :mod:`hisim.energy_system.resolution` the
@@ -97,6 +103,7 @@ from hisim.energy_system.errors import (
     EnergySystemErrorId,
     EnergySystemFormatError,
     EnergySystemRecordError,
+    EnergySystemRecordingError,
     EnergySystemSizingError,
     EnergySystemWiringError,
 )
@@ -147,6 +154,7 @@ __all__ = [
     "EnergySystemFormatError",
     "EnergySystemReader",
     "EnergySystemRecordError",
+    "EnergySystemRecordingError",
     "EnergySystemSizingError",
     "EnergySystemWiringError",
     "ExpansionRecord",

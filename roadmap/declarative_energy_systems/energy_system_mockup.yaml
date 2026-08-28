@@ -59,7 +59,7 @@ components:
       - weather
       - occupancy
       - hds
-      - ems                                 # lives in a group: dropped if that group is off (R14)
+      - ems                                 # lives in a variant option: dropped if another one is selected (R15.3)
     # provides facts: heating_load_in_watt, number_of_apartments,
     # conditioned_floor_area_in_m2, heating_reference_temperature_in_celsius
 
@@ -134,16 +134,8 @@ components:
       - occupancy
       - heat_pump
 
-  meter:
-    class: hisim.components.electricity_meter.ElectricityMeter
-    preset: standard
-    inputs:                                 # an aggregator lists its feeds (R2.3)
-      - from: ems.TotalElectricityToOrFromGrid
-        tags: [ELECTRICITY_PRODUCTION]
-        weight: 999
-      # see O2: with the ems group off, nothing feeds the meter. The direct feeds
-      # (heat_pump, pv_*, occupancy) would have to be listed here as well, but then
-      # they double-count while the ems is on. -> needs its own group, see footer.
+  # the meter is not here: it is wired differently with and without an EMS, so it
+  # lives in the `metering` variant at the bottom of the file (R15, was O2).
 
 # --- groups: sets of components with a flag (R14) ----------------------------
 # Not scopes: names are still global. Off = the group's components vanish, along
@@ -169,70 +161,6 @@ groups:
           power_in_watt: 3000               # concrete: this string is not law-sized
         inputs:
           - weather
-
-  battery_and_ems:
-    enabled: true
-    components:
-      battery:
-        class: hisim.components.advanced_battery_bslib.Battery
-        preset: sized_to_pv                 # capacity law reads ONE pv_peak_power_in_watt
-        # two PV systems provide pv_peak_power_in_watt -> ambiguous -> must be written (R4.3).
-        # Without this line the executor errors:
-        #   "pv_peak_power_in_watt needed by 'battery' is provided by pv_east, pv_south;
-        #    add sizing_sources: {pv_peak_power_in_watt: <one of them>}"
-        sizing_sources:
-          pv_peak_power_in_watt: pv_south.pv_peak_power_in_watt
-
-      ems:
-        class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
-        preset: optimize_own_consumption
-        inputs:                             # the aggregator's participants, with tags/weights (R2.3)
-          - from: occupancy
-            tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
-            weight: 999                     # measured, never ranked: the channel forbids dispatch
-          - from: pv_south
-            component_type: PV
-            tags: [ELECTRICITY_PRODUCTION]
-            weight: 999
-          - from: pv_east
-            component_type: PV
-            tags: [ELECTRICITY_PRODUCTION]
-            weight: 999
-          - from: heat_pump
-            component_type: HEAT_PUMP_BUILDING
-            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
-            weight: 2
-            dispatch: {}                    # recorded control signal, nothing consumes it
-          - from: heating_rod
-            component_type: ELECTRIC_HEATER
-            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
-            weight: 3
-            dispatch: {}
-          - from: battery.AcBatteryPowerUsed
-            component_type: BATTERY
-            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
-            weight: 6
-            dispatch: {target_input: LoadingPowerInput}   # back-channel: ems.DispatchTobattery_LoadingPowerInput -> battery.LoadingPowerInput
-        # --- many-facts example -----------------------------------------------
-        # The EMS class declares two MANY readers (shown by `hisim config describe`):
-        #   reads pv_peak_power_in_watt          (many)  -> production band
-        #   reads maximal_thermal_power_in_watt  (many)  -> controllable thermal load
-        # In the class (laws.py algebra, scalar laws unchanged):
-        #   Size.PV_PEAK_POWER_IN_WATT.many.sum()
-        #   Size.MAXIMAL_THERMAL_POWER_IN_WATT.many.sum()
-        # The file only says WHICH providers feed each list; the class aggregates.
-        # List order is not guaranteed to the law (aggregates are order-independent).
-        sizing_sources:
-          pv_peak_power_in_watt:                          # two providers of one class
-            - pv_south.pv_peak_power_in_watt
-            - pv_east.pv_peak_power_in_watt
-          maximal_thermal_power_in_watt:                  # mixed providers
-            - heat_pump.maximal_thermal_power_in_watt
-            - heating_rod.maximal_thermal_power_in_watt   # not group-qualified: names are global
-        # A MANY reader with zero providers must still be written, explicitly:
-        #   sizing_sources: {pv_peak_power_in_watt: []}
-        # With `pv` off the pv list shrinks to [] and the shrink is recorded (R14);
-        # with `backup_heater` off the thermal list shrinks to the heat pump alone.
 
   backup_heater:
     enabled: true
@@ -263,24 +191,142 @@ groups:
         preset: home_11kw
         inputs:
           - car
-      # its feed into the ems would be listed under ems.inputs — and because the
-      # ev group is off, that entry would be dropped. It is omitted here since
-      # the mockup shows the file as authored for the enabled set (see O3).
+      # its feed into the ems would be listed under ems.inputs, inside the
+      # ems_and_battery option — and because the ev group is off, that entry
+      # would be dropped. It is omitted here since the mockup shows the file as
+      # authored for the enabled set (see O3). A reference crossing from a group
+      # into a variant option is ordinary: names are global for both (R1.3, R15.1).
+
+
+# --- variants: exactly one option of each is live (R15) -----------------------
+# A variant is not a group with a negation: the options are alternative worlds and
+# the file can only ever name one of them, so there is no constraint to solve. An
+# option is complete in itself — `meter` is written out in both, because the two
+# worlds wire it differently, and repeating the name is legal precisely because
+# only one option exists (R15.2).
+variants:
+
+  electricity_management:
+    selected: ems_and_battery
+    options:
+
+      ems_and_battery:
+        components:
+          battery:
+            class: hisim.components.advanced_battery_bslib.Battery
+            preset: sized_to_pv                 # capacity law reads ONE pv_peak_power_in_watt
+            # two PV systems provide pv_peak_power_in_watt -> ambiguous -> must be written (R4.3).
+            # Without this line the executor errors:
+            #   "pv_peak_power_in_watt needed by 'battery' is provided by pv_east, pv_south;
+            #    add sizing_sources: {pv_peak_power_in_watt: <one of them>}"
+            sizing_sources:
+              pv_peak_power_in_watt: pv_south.pv_peak_power_in_watt
+
+          ems:
+            class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
+            preset: optimize_own_consumption
+            inputs:                             # the aggregator's participants, with tags/weights (R2.3)
+              - from: occupancy
+                tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+                weight: 999                     # measured, never ranked: the channel forbids dispatch
+              - from: pv_south
+                component_type: PV
+                tags: [ELECTRICITY_PRODUCTION]
+                weight: 999
+              - from: pv_east
+                component_type: PV
+                tags: [ELECTRICITY_PRODUCTION]
+                weight: 999
+              - from: heat_pump
+                component_type: HEAT_PUMP_BUILDING
+                tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+                weight: 2
+                dispatch: {}                    # recorded control signal, nothing consumes it
+              - from: heating_rod
+                component_type: ELECTRIC_HEATER
+                tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+                weight: 3
+                dispatch: {}
+              - from: battery.AcBatteryPowerUsed
+                component_type: BATTERY
+                tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+                weight: 6
+                dispatch: {target_input: LoadingPowerInput}   # back-channel: ems.DispatchTobattery_LoadingPowerInput -> battery.LoadingPowerInput
+            # --- many-facts example -----------------------------------------------
+            # The EMS class declares two MANY readers (shown by `hisim config describe`):
+            #   reads pv_peak_power_in_watt          (many)  -> production band
+            #   reads maximal_thermal_power_in_watt  (many)  -> controllable thermal load
+            # In the class (laws.py algebra, scalar laws unchanged):
+            #   Size.PV_PEAK_POWER_IN_WATT.many.sum()
+            #   Size.MAXIMAL_THERMAL_POWER_IN_WATT.many.sum()
+            # The file only says WHICH providers feed each list; the class aggregates.
+            # List order is not guaranteed to the law (aggregates are order-independent).
+            sizing_sources:
+              pv_peak_power_in_watt:                          # two providers of one class
+                - pv_south.pv_peak_power_in_watt
+                - pv_east.pv_peak_power_in_watt
+              maximal_thermal_power_in_watt:                  # mixed providers
+                - heat_pump.maximal_thermal_power_in_watt
+                - heating_rod.maximal_thermal_power_in_watt   # not group-qualified: names are global
+            # A MANY reader with zero providers must still be written, explicitly:
+            #   sizing_sources: {pv_peak_power_in_watt: []}
+            # With `pv` off the pv list shrinks to [] and the shrink is recorded (R14);
+            # with `backup_heater` off the thermal list shrinks to the heat pump alone.
+
+          meter:
+            class: hisim.components.electricity_meter.ElectricityMeter
+            preset: standard
+            inputs:                         # one feed: the EMS has already netted everything
+              - from: ems.TotalElectricityToOrFromGrid
+                tags: [ELECTRICITY_PRODUCTION]
+                weight: 999
+
+      direct_metering:
+        components:
+          meter:
+            class: hisim.components.electricity_meter.ElectricityMeter
+            preset: standard
+            inputs:                         # no EMS to net them: every participant feeds the meter
+              - from: pv_south
+                tags: [ELECTRICITY_PRODUCTION]
+                weight: 999
+              - from: pv_east
+                tags: [ELECTRICITY_PRODUCTION]
+                weight: 999
+              - from: occupancy
+                tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+                weight: 999
+              - from: heat_pump
+                tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+                weight: 999
+              - from: heating_rod
+                tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+                weight: 999
+        # With this option selected, the four `- ems` items on building, hds_controller
+        # and the two heat-pump controllers are dropped by R15.3, exactly as R14.3
+        # drops references into a disabled group; the `pv` group being off in turn
+        # shrinks the two pv feeds out of this list. Nothing here is conditional.
 
 # ---------------------------------------------------------------------------
 # How RenoVisor / the building sizer use this (Q6): one such base file per heating
-# system in system_setups/. Load, set building.config.building_code /
-# occupancy.preset / weather.preset, flip groups.<x>.enabled, dump.
+# system in system_setups/ — the heating system is the one alternative that stays a
+# file split (C-P2.5), because generator, controllers, storages and their wiring all
+# differ. Everything else is a knob in the file: load, set building.config.building_code
+# / occupancy.preset / weather.preset, flip groups.<x>.enabled, set
+# variants.<x>.selected, dump. `hisim energy-system facts <file>` lists exactly that
+# surface — a boolean per group, an option name per variant (R15.8).
 #
 # Open points:
 #  O1  RESOLVED by rev. 2: connections live at the consumer, always. No placement
 #      choice; an entry pointing at a disabled component is dropped wherever it is.
-#  O2  Metering with and without EMS: the meter's feeds differ (grid total from the
-#      EMS vs. direct feeds). Either the direct feeds form their own group
-#      (`direct_metering`, enabled iff battery_and_ems is off — a constraint the
-#      data cannot express, cf. R14) or the EMS-less variant is a separate base
-#      file. Recommendation: separate base file; the R14 identity test would fail
-#      loudly on the double-count otherwise, which is the test doing its job.
+#  O2  RESOLVED by rev. 3 (2026-08-28, R15): the two metering worlds are the two
+#      options of the `electricity_management` variant, and the meter is written
+#      out in each. What blocked this before was reading exclusivity as a
+#      constraint ("enabled iff the other is off"), which the data cannot express
+#      and E1 forbids the loader from solving. As a choice with named options it
+#      needs no constraint at all: the file can only ever name one of them. The
+#      R14/R15 identity test still catches the double-count if an author puts the
+#      direct feeds and the EMS feed in the same option.
 #  O3  Is fact uniqueness (R4.3) evaluated over the whole file or over the enabled
 #      set? Over the file: toggles never change what must be written, but a
 #      disabled backup_heater still forces three sizing_sources lines. Over the
@@ -304,6 +350,7 @@ groups:
 #  R8  realized record = this file, presets expanded, AUTO -> numbers, ev gone
 #  R9  recordable from Python: connect_input is target-centric already
 #  R10 RenoVisor pattern above; R11 one direction, no jumping between blocks
-#  R12 ${inputs}; R13 schema line at top; R14 four groups, one off
+#  R12 ${inputs}; R13 schema line at top; R14 three groups, one off;
+#     R15 one variant, two options, the meter written out in both
 #  N1/N2 nothing here is component-specific beyond names/presets/fields
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 # P2 — Energy-system file format and executor — requirements
 
-**Status:** in review · **Date:** 2026-08-27 (R2.5 dispatch rule added; 08-26: Q8, Q-P2.4–Q-P2.6 decided; AC-P2.1 amended; RQ3 dropped)
+**Status:** in review · **Date:** 2026-08-28 (R15 exclusive variants added, Q-P2.2 re-answered, C-P2.5 rewritten — an amendment to the merged P2; 08-27: R2.5 dispatch rule; 08-26: Q8, Q-P2.4–Q-P2.6 decided; AC-P2.1 amended; RQ3 dropped)
 **Author(s):** Noah Pflugradt (owner; `[given]`) · assistant (`[proposed]`, mockups)
 **Reviewers:** HiSim core team
 **Parent:** `roadmap/declarative_energy_systems/epic.md` (E1–E8 apply by reference) · **Plan:** `roadmap/declarative_energy_systems/plan.md` §P2 · **Depends on:** P1 accepted
@@ -10,7 +10,7 @@
 **Tags:** feature, behavior-change, migration, compatibility
 **Keywords:** energy-system file, YAML, schema_version, inputs, preset, sizing_sources, groups, realized record, audit, provenance, JSON Schema, path resolver
 
-**What a reviewer must decide here:** (1) consumer-side `inputs` replacing grouped-by-source connections — R2.1; (2) groups with the "off" rule and the identity test — R14; (3) YAML-comment provenance kept from `json_v2` A4 — Q8; (4) Q-P2.4 (describe/facts CLI in P2), Q-P2.5 (retiring the v1 JSON files and renaming `system_setups/`) and the proposed `constructor:` form (Q-P2.6, R3.8); metering variants as base files is already decided (Q-P2.2).
+**What a reviewer must decide here:** (1) consumer-side `inputs` replacing grouped-by-source connections — R2.1; (2) groups with the "off" rule and the identity test — R14, and exclusive variants with the same two rules — R15 (amendment, 2026-08-28); (3) YAML-comment provenance kept from `json_v2` A4 — Q8; (4) Q-P2.4 (describe/facts CLI in P2), Q-P2.5 (retiring the v1 JSON files and renaming `system_setups/`) and the proposed `constructor:` form (Q-P2.6, R3.8); metering variants are a variant, not base files (Q-P2.2, re-answered 2026-08-28).
 
 ---
 
@@ -43,9 +43,9 @@ Format v3: a `components` mapping (name → `class`, `preset`, `config`, `inputs
 | | Mockup | Decides / demonstrates |
 |---|---|---|
 | UC1 | `energy_system_mockup_minimal.yaml` | canonical component block; bare `inputs`; aggregator feed; no `sizing_sources`, no `groups` |
-| UC2 | `energy_system_mockup.yaml` | explicit wire `{input, from}`; scalar and list `sizing_sources`; four groups incl. one disabled; the cliff (a second provider forces three existing consumers to name theirs); open point O2 |
+| UC2 | `energy_system_mockup.yaml` | explicit wire `{input, from}`; scalar and list `sizing_sources`; three groups incl. one disabled; **one variant with two options, the meter written out in both** (O2, resolved by R15); the cliff (a second provider forces three existing consumers to name theirs) |
 | UC3 | `energy_system_mockup_mfh.yaml` | 35 components; name-prefix convention; explicit per-apartment values (C2) |
-| UC4 | footer of UC2 | RenoVisor flow: base file, `building.config.building_code`, `groups.battery_and_ems.enabled` |
+| UC4 | footer of UC2 | RenoVisor flow: base file per heating system, `building.config.building_code`, `groups.<x>.enabled`, `variants.electricity_management.selected` |
 | UC5 | footers | realized record content and re-execution |
 
 Changes to the format are made as diffs on the mockups first, then reflected here.
@@ -108,6 +108,16 @@ Paths are `${var}/…` through the `PathResolver`; absolute paths in a file are 
 - R14.3 `[decided 2026-08-25]` **Off rule:** a disabled group's components, every `inputs` item pointing at them (wherever written) and every `sizing_sources` reference to them are removed before resolution. A scalar reference left without target → error; a list shrinks (possibly to `[]`) and the shrink is recorded (R8.2). Uniqueness (R4.3) is evaluated over the enabled set.
 - R14.4 `[decided 2026-08-25]` **Identity:** for any file and group X, `realize(X disabled) == realize(X and all references to it deleted by hand)` byte for byte.
 
+### R15 — Exclusive variants `[decided 2026-08-28; re-answers Q-P2.2]`
+- R15.1 `variants: {name: {selected: <option>, options: {<option>: {components: {…}}}}}`; exactly one option of a variant is live. Flat: an option holds components only — no nested groups, no nested variants.
+- R15.2 **Alternative worlds, not overrides.** Every option is complete in itself: a component the variant touches is written out in full in each option that has it, and never at the top level as well. No merging, no partial override, no fallback definition. One component name may repeat across the options of one variant precisely because only one of them ever exists — which is what lets two options wire the same component differently (the meter fed by the EMS total, or fed directly).
+- R15.3 **Selection rule:** unselected options are removed exactly as a disabled group is (R14.3) — their components, every `inputs` item pointing at them and every `sizing_sources` reference to them go, with the same scalar-error/list-shrink treatment and the same record (R8.2). The selected option's components then join the top level, so nothing downstream of expansion sees a variant at all.
+- R15.4 **Identity:** for any file, variant X and option O, `realize(X.selected = O) == realize(the file with O's components written at the top level and the whole X block deleted)` byte for byte.
+- R15.5 Rejected at load, each message naming what it found: `selected` not among the options (the message lists them); an empty `options` mapping; one component name in two different variants; one component name in both the top level and a variant option; a variant name colliding with a group or a component.
+- R15.6 Groups and variants stay two constructs with one sentence each — a group is an independent on/off add-on, a variant an exclusive choice. Neither is expressed through the other, and there is no relation between them: no `requires`, no `enabled: not X`. Exclusivity lives in the shape of the file; the loader never solves a constraint (E1).
+- R15.7 A realized record carries no `variants` key (the selection is resolved); the audit companion (R8.2) records each variant's selection and the components it contributed.
+- R15.8 `hisim energy-system facts <file>` reports groups and variants together as the consumer knob surface: a boolean per group, an option name per variant (P5, UC4).
+
 ### Quality
 - RQ2 `[proposed]` `schema_version: 3` is mandatory; other values are rejected with a message naming the supported version.
 - RQ3 `[dropped 2026-08-26, owner]` ~~Load + validate + resolve performs no filesystem I/O~~ — resolution folds the Building's contributions, which read the TABULA catalogue; the guarantee cannot hold and validation speed is not a hard requirement. AC-P2.9 is withdrawn.
@@ -119,7 +129,7 @@ Paths are `${var}/…` through the `PathResolver`; absolute paths in a file are 
 - C-P2.2 `[proposed]` Single-zone Building (epic C2): UC3's per-apartment values stay explicit; the format needs no change when per-unit facts arrive.
 - C-P2.3 `[proposed]` Aggregator semantics (tags, weights, dispatch, derived port names v2 §4.6) are inherited unchanged from `json_v2`.
 - C-P2.4 `[proposed]` The v1 executor keeps working until P5 removes it; v3 does not read v1 or v2 files.
-- C-P2.5 `[decided 2026-08-25]` Groups express orthogonal add-ons only; mutually exclusive alternatives (heating system; metering with vs. without EMS) are separate base files, and there is no inter-group `requires` (Q-P2.2). Authoring guidance, enforced by review, not by the loader.
+- C-P2.5 `[re-decided 2026-08-28]` Groups express orthogonal add-ons only; mutually exclusive alternatives are **variants** (R15), and there is still no inter-group or inter-variant `requires`. One split stays at the level of whole files rather than becoming a variant: the **heating system**, where the generator, its controllers, its storages and their wiring differ throughout — one base file per heating system (P3 R6, P5). Inside such a file, exclusive sub-choices — metering with vs. without an EMS, battery wiring — are variants. Which of the two a given alternative deserves stays authoring guidance, enforced by review.
 - A1 `[proposed]` v2 fixtures are regenerated in v3 style rather than migrated.
 - C-P2.6 `[proposed; agenda C10]` The v2 fixtures spell the UTSP connector's nested `JsonReference`s in snake_case (`household: {name, guid: {str_val}}`) while the utspclient dataclass fields are `Name`/`Guid`/`StrVal`; they silently deserialise to empty references, invisible only because the fixtures run on the predefined profile. The v3 fixtures must spell them correctly and one local-LPG run must verify it (own commit, before/after evidence).
 - A2 `[proposed]` `yaml.safe_load` with a duplicate-key hook is an acceptable loader; `ruamel.yaml` write-only for comments (v2 A4) if Q8 confirms.
@@ -143,6 +153,9 @@ Paths are `${var}/…` through the `PathResolver`; absolute paths in a file are 
 | AC-P2.15 | UC2's `weather`, `occupancy` and `building` build through their constructors; a wrong constructor name or argument fails at load listing the valid parameters; the realized record shows them as full `config` blocks; `dump(load())` preserves the constructor form for hand-written files. | R3.8, R1.4 |
 | AC-P2.14 | A file setting an enum-typed sizable field yields the enum member after load (`is` comparison), for every such field in the converted classes. | R3.7 |
 | AC-P2.16 | A PV + battery + EMS + meter file whose battery feed carries `dispatch: {target_input: LoadingPowerInput}` builds, wires `ems.DispatchTobattery_LoadingPowerInput -> battery.LoadingPowerInput`, runs one day and writes results; the same file with `dispatch: {}` is rejected for the unfed mandatory input, and with an explicit wire onto the derived port for naming a derived port. | R2.5, R2.2 |
+| AC-P2.17 | The identity test covers every (mockup, variant, option) triple byte for byte, UC2's `electricity_management` variant included: with `direct_metering` selected no EMS feed survives on the meter and the four `- ems` items are gone, with `ems_and_battery` selected no direct feed does. | R15.4, R15.3 |
+| AC-P2.18 | Each R15.5 rejection is raised at load naming the offending names; an unknown `selected` lists the options the variant has. | R15.5 |
+| AC-P2.19 | UC2's realized record has no `variants` key and its `meter` sits at the top level and its audit names the selection and the components it brought; re-running the record reproduces the run (R8.1) with the variant already resolved. | R15.7, R8.1 |
 | AC-P2.13 | If Q8 is confirmed: every sized value in a realized record carries a provenance comment; stripping all comments and re-running yields the identical result (comments are not load-bearing). | R8.3 |
 
 ## 11. Open Questions and Decisions
@@ -152,7 +165,7 @@ Paths are `${var}/…` through the `PathResolver`; absolute paths in a file are 
 | ID | Question | Blocks | Status |
 |---|---|---|---|
 | Q-P2.1 | Where does a wire *into* a grouped component from an ungrouped source live? | — | `[answered 2026-08-25]` at the consumer, always (R2.1) |
-| Q-P2.2 | Metering with vs. without EMS (UC2 O2): separate base files or a group? | C-P2.5, UC4 | `[answered 2026-08-25]` separate base files; a group cannot express "enabled iff another is off" |
+| Q-P2.2 | Metering with vs. without EMS (UC2 O2): separate base files or a group? | C-P2.5, UC4, R15 | `[answered 2026-08-25]` separate base files; a group cannot express "enabled iff another is off" · `[re-answered 2026-08-28]` a **variant** (R15): exclusivity is carried by the shape of the file, not by a constraint the loader must solve. The base-file split survives for the heating system alone |
 | Q-P2.3 | Uniqueness over the whole file or the enabled set (UC2 O3)? | R4.3, R14.3 | `[answered 2026-08-25]` enabled set |
 
 `[proposed]` items not listed below (R1.1–1.2, R1.4, R2.2–2.4, R3.1–3.2, R3.6, R4.8, R6, R7, R8.1–8.2, R12, R13.2–13.4, RQ2–RQ4, C-P2.2–2.4) are confirmed by silence at review. EQ1/EQ2 in the epic also affect this document.

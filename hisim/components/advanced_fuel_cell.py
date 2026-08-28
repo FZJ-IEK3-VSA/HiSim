@@ -177,7 +177,7 @@ class CHP(Component):
     # OperatingModelSignal="OperatingModelSignal" #-->Wärme oder Stromgeführt. Nötig?
 
     # Output
-    MassflowOutput: ClassVar[str] = "Hot Water Energy Output"
+    MassflowOutput: ClassVar[str] = "HotWaterEnergyOutput"
     MassflowOutputTemperature: ClassVar[str] = "MassflowOutputTemperature"
     ElectricityOutput: ClassVar[str] = "ElectricityOutput"
     GasDemandTarget: ClassVar[str] = "GasDemandTarget"

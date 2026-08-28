@@ -74,7 +74,7 @@
         {
             "source": {
                 "component_name": "RandomNumbers10To20",
-                "field_name": "Random Numbers"
+                "field_name": "RandomNumbers"
             },
             "target": {
                 "component_name": "ExampleTransformerDefault",
@@ -84,11 +84,11 @@
         {
             "source": {
                 "component_name": "RandomNumbers100To200",
-                "field_name": "Random Numbers"
+                "field_name": "RandomNumbers"
             },
             "target": {
                 "component_name": "Sum",
-                "field_name": "Input 1"
+                "field_name": "Input1"
             }
         },
         {
@@ -98,7 +98,7 @@
             },
             "target": {
                 "component_name": "Sum",
-                "field_name": "Input 2"
+                "field_name": "Input2"
             }
         }
     ]

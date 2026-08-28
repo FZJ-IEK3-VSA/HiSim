@@ -99,7 +99,7 @@ class ExampleTransformer(Component):
     """
 
     TransformerInput1: str = "Input1"
-    TransformerInput2: str = "Optional Input1"
+    TransformerInput2: str = "OptionalInput1"
     TransformerOutput1: str = "MyTransformerOutput"
     TransformerOutput2: str = "MyTransformerOutput2"
 

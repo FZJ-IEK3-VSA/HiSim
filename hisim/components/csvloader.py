@@ -123,7 +123,7 @@ class CSVLoader(cp.Component):
 
     """
 
-    Output1: str = "CSV Profile"
+    Output1: str = "CSVProfile"
 
     def __init__(
         self,

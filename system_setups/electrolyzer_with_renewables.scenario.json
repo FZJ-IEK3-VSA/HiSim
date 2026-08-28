@@ -88,7 +88,7 @@
         {
             "source": {
                 "component_name": "CSV",
-                "field_name": "CSV Profile"
+                "field_name": "CSVProfile"
             },
             "target": {
                 "component_name": "StandardTransformerAndRectifier",

@@ -385,7 +385,7 @@ class PostProcessor:
         """Makes special plots for debugging if only a single day was calculated."""
         chart_single_day_class = _load_attribute("hisim.postprocessing.chart_singleday", "ChartSingleDay")
         for index, output in enumerate(ppdt.all_outputs):
-            if output.full_name == "Dummy # Residence Temperature":
+            if output.full_name == "Dummy # ResidenceTemperature":
                 my_days = chart_single_day_class(
                     output=output.full_name,
                     component_name=output.component_name,

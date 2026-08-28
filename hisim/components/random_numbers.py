@@ -57,7 +57,7 @@ class RandomNumbers(Component):
         - i_simulate: Outputs the pre-generated random value for the current timestep
     """
 
-    RandomOutput: ClassVar[str] = "Random Numbers"
+    RandomOutput: ClassVar[str] = "RandomNumbers"
 
     def __init__(
         self,

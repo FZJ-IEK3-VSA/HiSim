@@ -1,0 +1,212 @@
+# yaml-language-server: $schema=../hisim/energy_system_v3.schema.json
+# Recorded from system_setups/automatic_default_connections.py with energy_systems/one_day_15min.simulation.yaml by the HiSim energy-system recorder v1.
+schema_version: 3
+name: automatic_default_connections
+description: Household with automatic default connections.
+components:
+  UTSPConnector:
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    config:
+      data_acquisition_mode: USE_PREDEFINED_PROFILE
+      household:
+        Name: CHR01 Couple both at Work
+        Guid:
+          StrVal: 516a33ab-79e1-4221-853b-967fc11cc85a
+      energy_intensity: EnergySaving
+      travel_route_set:
+        Name: Travel Route Set for 10km Commuting Distance
+        Guid:
+          StrVal: ca46be86-9cc7-47b5-9769-abff78ceca7a
+      transportation_device_set:
+        Name: Bus and one 30 km/h Car
+        Guid:
+          StrVal: 6ac74bd0-bacd-4b39-b84a-dc7ae16702c9
+      charging_station_set:
+        Name: Charging At Home with 11 kW
+        Guid:
+          StrVal: 78dae308-24c4-45cc-8bdf-b001d61f45c2
+      profile_with_washing_machine_and_dishwasher: true
+      predictive_control: false
+      predictive: false
+      result_dir_path: ${utsp_results}
+      cache_dir_path: null
+      name_of_predefined_loadprofile: CHR01 Couple both at Work
+      predefined_loadprofile_filepaths: null
+      guid: ''
+      calculation_index_for_local_lpg: null
+      cars: null
+  Weather:
+    class: hisim.components.weather.Weather
+    config:
+      location: Aachen
+      source_path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+      data_source: DWD_TRY
+      predictive_control: false
+  PVSystem:
+    class: hisim.components.generic_pv_system.PVSystem
+    config:
+      time: 2019
+      location: Aachen
+      module_name: Trina Solar TSM-435NE09RC.05
+      integrate_inverter: true
+      inverter_name: 'Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]'
+      module_database: CEC_MODULE_DATABASE
+      inverter_database: CEC_INVERTER_DATABASE
+      power_in_watt: 22272.28
+      azimuth: 180.0
+      tilt: 30.0
+      share_of_maximum_pv_potential: 1.0
+      load_module_data: false
+      source_weight: 0
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
+      predictive: false
+      predictive_control: false
+      prediction_horizon: null
+    inputs:
+      - Weather
+  Building:
+    class: hisim.components.building.building.Building
+    preset: standard
+    inputs:
+      - Weather
+      - UTSPConnector
+      - HeatDistributionSystem
+  MoreAdvancedHeatPumpHPLib:
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+    config:
+      model: Generic
+      fluid_primary_side: air
+      group_id: 1
+      heating_reference_temperature_in_celsius: -7.0
+      flow_temperature_in_celsius: 52.0
+      set_thermal_output_power_in_watt: 7780.752200000001
+      cycling_mode: true
+      minimum_running_time_in_seconds: 3600
+      minimum_idle_time_in_seconds: 3600
+      minimum_thermal_output_power_in_watt: 1800.0
+      position_hot_water_storage_in_system: PARALLEL
+      with_domestic_hot_water_preparation: true
+      passive_cooling_with_brine: false
+      electrical_input_power_brine_pump_in_watt: null
+      massflow_nominal_secondary_side_in_kg_per_s: 0.333
+      specific_heat_capacity_of_primary_fluid: 0.0
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
+    inputs:
+      - HeatPumpControllerDHW
+      - MoreAdvancedHeatPumpHPLibControllerSH
+      - DHWStorage
+      - SimpleHotWaterStorage
+      - input: TemperatureAmbient
+        from: Weather.DailyAverageOutsideTemperatures
+      - input: TemperatureInputPrimary
+        from: Weather.DailyAverageOutsideTemperatures
+  HeatPumpControllerDHW:
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
+    config:
+      t_min_dhw_storage_in_celsius: 40.0
+      t_max_dhw_storage_in_celsius: 60.0
+      thermalpower_dhw_is_constant: false
+      p_th_max_dhw_in_watt: 5000.0
+    inputs:
+      - DHWStorage
+  MoreAdvancedHeatPumpHPLibControllerSH:
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+    config:
+      mode: 1
+      set_heating_threshold_outside_temperature_in_celsius: 16.0
+      set_cooling_threshold_outside_temperature_in_celsius: 20.0
+      upper_temperature_offset_for_state_conditions_in_celsius: 5.0
+      lower_temperature_offset_for_state_conditions_in_celsius: 5.0
+      heat_distribution_system_type: FLOORHEATING
+    inputs:
+      - Weather
+      - HeatDistributionController
+      - SimpleHotWaterStorage
+  HeatDistributionSystem:
+    class: hisim.components.heat_distribution_system.HeatDistribution
+    preset: standard
+    config:
+      heating_system: FLOORHEATING
+      water_mass_flow_rate_in_kg_per_second: 0.27
+      absolute_conditioned_floor_area_in_m2: 121.2
+    inputs:
+      - Building
+      - HeatDistributionController
+      - SimpleHotWaterStorage
+  HeatDistributionController:
+    class: hisim.components.heat_distribution_system.HeatDistributionController
+    config:
+      heating_system: FLOORHEATING
+      set_heating_threshold_outside_temperature_in_celsius: 16.0
+      heating_reference_temperature_in_celsius: -7.0
+      set_heating_temperature_for_building_in_celsius: 20.0
+      set_cooling_temperature_for_building_in_celsius: 25.0
+      heating_load_of_building_in_watt: 7780.75
+      specific_heating_load_of_building_in_watt_per_m2: null
+    inputs:
+      - Weather
+      - Building
+  SimpleHotWaterStorage:
+    class: hisim.components.simple_water_storage.SimpleHotWaterStorage
+    config:
+      volume_heating_water_storage_in_liter: 389.04
+      heat_transfer_coefficient_in_watt_per_m2_per_kelvin: 2.0
+      heat_exchanger_is_present: true
+      position_hot_water_storage_in_system: PARALLEL_TO_HEAT_SOURCE
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
+    inputs:
+      - HeatDistributionSystem
+      - MoreAdvancedHeatPumpHPLib
+  DHWStorage:
+    class: hisim.components.simple_water_storage.SimpleDHWStorage
+    config:
+      volume_heating_water_storage_in_liter: 250.0
+      heat_transfer_coefficient_in_watt_per_m2_per_kelvin: 0.36
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
+    inputs:
+      - UTSPConnector
+      - MoreAdvancedHeatPumpHPLib
+  ElectricityMeter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    config:
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
+    inputs:
+      - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW
+        component_type: HEAT_PUMP_DHW
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH
+        component_type: HEAT_PUMP_BUILDING
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: PVSystem.ElectricityOutput
+        component_type: PV
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+      - from: UTSPConnector.ElectricalPowerConsumption
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999

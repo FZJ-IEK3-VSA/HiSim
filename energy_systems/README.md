@@ -10,7 +10,10 @@ preset pins and every value the system computes for itself, follows from those d
 
 | File | What it is |
 |---|---|
-| `gas_boiler_household.energy_system.yaml` | A single-family house with a condensing gas boiler, floor heating and grid electricity. The reference system of this directory. |
+| `gas_boiler_household.energy_system.yaml` | A single-family house with a condensing gas boiler, floor heating and grid electricity. The reference system of this directory, hand-written. |
+| `basic_household.energy_system.yaml` | Recorded twin of `system_setups/basic_household.py`. |
+| `dynamic_components.energy_system.yaml` | Recorded twin of `system_setups/dynamic_components.py`: an energy management system ranking two batteries and two fuel cells. |
+| `automatic_default_connections.energy_system.yaml` | Recorded twin of `system_setups/automatic_default_connections.py`: a heat-pump household wired entirely by declared defaults. |
 | `one_day_15min.simulation.yaml` | One January day at a quarter-hour resolution. The pair to reach for when trying a file out; the test suite runs against this file too. |
 | `2021_minutely.simulation.yaml` | The whole of 2021 at a one-minute resolution with the standard plots. |
 
@@ -64,11 +67,34 @@ directory binds to with its first line. The schema is generated from the same de
 `describe` reads — regenerate it with `hisim energy-system schema` whenever a component gains a
 preset, a constructor or a field.
 
+## Recording a Python setup
+
+The files marked "recorded twin" above are not hand-written. They were produced by running the
+Python setup and writing down what it built:
+
+```bash
+hisim energy-system record system_setups/basic_household.py \
+    energy_systems/one_day_15min.simulation.yaml
+```
+
+The recorder observes a finished run — it never parses the setup's source — so a twin states what
+the setup actually constructed rather than what its code appears to say. Every value is concrete,
+a class that carries a preset is written as that preset plus whatever the setup changed, and the
+file names no sizing sources, no groups and no variants: those are judgements about intent, and one
+run cannot be asked about intent. Before the command returns, the file it wrote is loaded back
+through the executor and built, so a twin that does not work is reported as a failed recording
+rather than left behind.
+
+Recording is deterministic: the same setup and the same parameters produce the same bytes on any
+machine. A twin is therefore regenerated rather than edited — change the setup, re-record, and read
+the diff. A test in `tests/test_energy_system_recording.py` compares each committed twin against a
+fresh recording, so a setup that changes without its twin fails the suite.
+
 ## Relation to `system_setups/`
 
 `system_setups/` is untouched and still holds HiSim's Python setups and their JSON twins; those
 keep working exactly as before and are not going anywhere yet. This directory is where new,
-declarative systems are written.
+declarative systems are written, and where the recorded twins of the old ones land.
 
 `gas_boiler_household.energy_system.yaml` has a second life as a design document:
 `roadmap/declarative_energy_systems/energy_system_mockup_minimal.yaml` is the normative mockup of

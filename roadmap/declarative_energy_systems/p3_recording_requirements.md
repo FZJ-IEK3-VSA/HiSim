@@ -1,6 +1,6 @@
 # P3 — Recording and setup migration — requirements
 
-**Status:** in review · **Date:** 2026-08-28 (Q-P3.1 record now; Q-P3.2 KPI parity; Q-P3.3 the semi-manual grouping pass, R10; Q-P3.7 the temporary migration parity rig, R11) · drafted 2026-08-27
+**Status:** in review, all questions decided · **Date:** 2026-08-28 (Q-P3.1 record now; Q-P3.2 KPI parity; Q-P3.3 the grouping pass, R10; Q-P3.4 `energy_systems/`; Q-P3.5 delete the three unrecordable setups; Q-P3.6 emit parameters only when new, never duplicated; Q-P3.7 the temporary parity rig, R11) · drafted 2026-08-27
 **Author(s):** Noah Pflugradt (owner; `[given]`) · assistant (`[proposed]`, inventory)
 **Reviewers:** HiSim core team
 **Parent:** `roadmap/declarative_energy_systems/epic.md` (E1–E8 apply by reference) · **Plan:** `roadmap/declarative_energy_systems/plan.md` §P3 · **Depends on:** P2 accepted
@@ -12,7 +12,7 @@
 
 **Decided (Q-P3.1, 2026-08-28):** recording starts now, on today's classes — recorded files are *realized-style*, every class a full `config` block unless the recorder can prove a preset, and each P4 batch re-records them so the shrinking diff is that batch's review artefact.
 
-**What a reviewer must still decide here:** (1) where the files live and what happens to the v1 JSON twins (Q-P3.4); (2) which of the 24 setups are out of scope (Q-P3.5).
+**Every question of this document is decided** (Q-P3.1–Q-P3.7, all on 2026-08-28); §11 carries each with its answer. What is left for a reviewer is the requirements themselves — above all R10's grouping pass, R11's temporary parity rig, and R5's rule that a setup which cannot be recorded is deleted rather than excluded.
 
 ---
 
@@ -65,7 +65,7 @@ The external representation is fixed by P2 (mockups + `energy_systems/gas_boiler
 ### R1 — One command records one setup `[given; plan §P3]`
 - R1.1 `[proposed]` Given a setup module and a simulation-parameters file, the recorder runs `setup_function` and writes a v3 file that loads, validates and builds through the P2 executor with no error and no warning other than those the Python run also produces.
 - R1.2 `[proposed; from json_generator.py precedent]` Each setup is recorded in its own process (singletons, module imports, `HISIM_LOCAL_LPG_CALC_INDEX`), as `scripts/regenerate_scenario_jsons.py` does today.
-- R1.3 `[proposed]` The recorder is invoked as `hisim energy-system record <setup.py> <simulation.yaml|json> [--out <dir>]` (nested-noun CLI, Q-P2.4) and by a repository script that records every in-scope setup.
+- R1.3 `[proposed]` The recorder is invoked as `hisim energy-system record <setup.py> <simulation.yaml|json> [--out <dir>]` (nested-noun CLI, Q-P2.4) and by a repository script that records every in-scope setup. `--out` defaults to `energy_systems/` (Q-P3.4).
 
 ### R2 — Content of a recorded file `[proposed; from inventory §5]` `[Q-P3.1 answered 2026-08-28: record now]`
 - R2.1 Every component the simulator holds after `prepare_calculation()` + `connect_all_components()` appears once, keyed by its runtime `component_name`, in registration order; `class` is the component's importable path.
@@ -82,9 +82,11 @@ The external representation is fixed by P2 (mockups + `energy_systems/gas_boiler
 ### R4 — Freshness `[proposed; from scenario-json-freshness.yml]`
 A CI job re-records every in-scope setup and fails on any diff to the checked-in twin, printing the diff. Recording must therefore be deterministic: same setup + same parameters → byte-identical file across machines (no timestamps, no absolute paths, no dict-order dependence).
 
-### R5 — Scope of setups `[proposed; Q-P3.5]`
-- R5.1 In scope: every setup that registers ≥ 1 component and needs no network at setup time — 21 of 24.
-- R5.2 Out of scope, listed in the recording script with the reason: `simple_weather_data_import.py` (registers nothing), `basic_household_with_weather_data_request.py` (live DWD fetch feeds the weather config; `wetterdienst` optional), `air_conditioned_house.py` (wipes `inputs/cache` before building; a CSV read selects the location) — pending Q-P3.5.
+### R5 — Scope of setups `[decided 2026-08-28; Q-P3.5]`
+- R5.1 In scope: **every** setup in `system_setups/`. The three that cannot be recorded are removed from main rather than carried as exceptions, so the recording script has no skip list and the scope needs no wording.
+- R5.2 Removed in their own commit, before the first recording: `simple_weather_data_import.py` (registers no component) and `basic_household_with_weather_data_request.py` (fetches DWD data at setup time) — both need the optional `wetterdienst`, which `requirements.txt` currently comments out pending an API migration, and both are already on the `--exclude` list of `scenario-json-freshness.yml`; and `air_conditioned_house.py`, which deletes `inputs/cache` before building and has no test at all. What goes with them: the two v1 `.scenario.json` twins (`simple_weather_data_import` has none), the two `tests/test_system_setups_*` files, and the freshness workflow's `--exclude` list, which becomes empty and is deleted with them.
+- R5.3 What stays: `hisim/components/weather_data_import.py` is a component, not a setup, and keeps its coverage in `test_config_contracts.py` and `test_json_configs.py`; cooling stays represented by `simple_air_conditioner_household_building_sizer.py`, so the fleet loses no physics.
+- R5.4 **A setup that cannot be recorded is removed, not skipped.** If a later setup cannot be recorded, that is a defect in the setup or a gap in the format, and there is no skip list for it to hide in.
 
 ### R6 — Module-config-driven setups `[proposed; Q-P3.3]`
 The 12 `ModularHouseholdConfig` setups are recorded with `my_module_config = None`, i.e. the class defaults; the recorded file is the **base file** of that heating system (P5's input). The `use_battery_and_ems`/PV fork is recorded as taken; expressing the off branch is a P5 authoring task on the recorded base, not a recorder feature. Since 2026-08-28 that authoring task has a form and a tool: P2 R15 gives the format an `electricity_management` variant whose two options carry the meter's two wirings, and R10 turns the fork into that variant from a table a person fills in once. The recorder proper still emits neither groups nor variants — it observes one run and can only record the branch that ran (R2.4); groups and variants come from the second pass, never from an inference about a single run.
@@ -92,11 +94,16 @@ The 12 `ModularHouseholdConfig` setups are recorded with `my_module_config = Non
 ### R7 — Data-dependent component counts `[proposed; inventory §2c]`
 Loops generating components (cars from the occupancy) are recorded as the flat set the run produced (UC-P3.3). No repeat syntax is introduced (E4 parking lot).
 
-### R8 — Simulation parameters `[proposed; P2 R6]`
-Setup-side mutations of `SimulationParameters` (post-processing options, `logging_level`, `cache_dir_path`, `country`, `year`) are **not** recorded into the energy-system file. The recorder writes them to a companion `<stem>.simulation.yaml` only when Q-P3.6 says so; otherwise the golden parameter files are the source of truth and the mutations are listed as a known difference (they affect outputs, not results — inventory §2a).
+### R8 — Simulation parameters `[decided 2026-08-28; Q-P3.6]`
+- R8.1 Setup-side mutations of `SimulationParameters` (post-processing options, `logging_level`, `cache_dir_path`, `country`, `year`) are **not** recorded into the energy-system file; P2 R6 keeps the two documents apart.
+- R8.2 **Emit only what does not exist yet.** The recorder compares the setup's effective parameters against every `energy_systems/*.simulation.yaml`. If one matches, the recording references that file and writes nothing.
+- R8.3 **Never two files with the same content.** If nothing matches, one file is written, and the same comparison is applied to the files written earlier in the same run, so two setups needing identical parameters share one file instead of getting a twin each.
+- R8.4 The comparison is semantic and normalised, not textual: start, end, `seconds_per_timestep`, the post-processing options as a sorted set, `logging_level`, `country`, `year`. Machine-specific fields take no part in it and are never written — the cluster `cache_dir_path` that 11 setups set behind an `os.path.exists` probe above all, since it would defeat both the deduplication and R4's requirement that recording be byte-identical across machines.
+- R8.5 A newly written file is named for its content — horizon, resolution and what its option set is for — never for the setup that first needed it, because it is shared from the moment a second setup matches it.
+- R8.6 The freshness job asserts that no two `energy_systems/*.simulation.yaml` have equal normalised content, so a duplicate cannot be introduced by hand either.
 
-### R9 — Setups stay `[given; Q-P2.5]`
-The Python setups, their v1 JSON twins and their freshness workflow remain untouched by P3; recorded files are additional artefacts.
+### R9 — Where the files live, and what stays `[decided 2026-08-28; Q-P3.4, Q-P2.5]`
+Recorded files are written to `energy_systems/<stem>.energy_system.yaml`, beside the hand-written exemplar and the shared parameter files, as Q-P2.5 decided for every new v3 file. The Python setups that survive R5, their v1 JSON twins and `scenario-json-freshness.yml` are otherwise untouched by P3: recorded files are additional artefacts, and each system is described three times until v1 retires with `json_executor.py` in P5. `system_setups/` is not renamed and no v3 file is written into it.
 
 ### R10 — The grouping pass `[decided 2026-08-28; Q-P3.3]`
 Recording alone produces one flat file per setup and per module configuration; which of the differences between those
@@ -184,13 +191,13 @@ extension of the golden gate and it blesses nothing.
 - C-P3.6 `[decided 2026-08-28; R10]` No group and no variant is ever inferred. Observation supplies the three-state matrix; the assignment of a difference to membership or to an override is a person's, recorded in the table, reviewed as a diff of `<stem>.grouping.yaml`.
 - C-P3.7 `[decided 2026-08-28; R10.7]` A grouped file's guarantees reach exactly as far as its probe list. Combinations never probed are untested, named as such in the report, and are not a claim the file makes.
 - A1 `[proposed]` Post-construction recording is acceptable (see §4).
-- A2 `[decided 2026-08-28; Q-P3.7]` The 13 in-scope setups with no numeric oracle get one for the duration of the migration through R11, not by joining `golden_config.json`. A temporary A/B rig needs no references, covers the seven setups whose KPI layer crashes, and compares more strictly than the permanent gate can. Which of them join the permanent gate afterwards is decided at the end of P3 (R11.8).
+- A2 `[decided 2026-08-28; Q-P3.7]` The 13 setups with no numeric oracle get one for the duration of the migration through R11, not by joining `golden_config.json`. A temporary A/B rig needs no references, covers the seven setups whose KPI layer crashes, and compares more strictly than the permanent gate can. Which of them join the permanent gate afterwards is decided at the end of P3 (R11.8).
 
 ## 10. Acceptance Criteria
 
 | ID | Criterion | Verifies |
 |---|---|---|
-| AC-P3.1 | The recording script produces a file for each of the 21 in-scope setups; each loads, validates and builds through the executor without error. | R1, R5, R2.1 |
+| AC-P3.1 | After the removal commit, the recording script produces a file for each of the 21 remaining setups in `system_setups/` — all of them, with no skip list; each loads, validates and builds through the executor without error. | R1, R5, R2.1 |
 | AC-P3.2 | `golden_check.py` passes for all 8 golden setups × 2 parameter sets when the run comes from the recorded file; a new blocking workflow `golden-yaml-check.yml` runs it. | R3.1, C-P3.1 |
 | AC-P3.3 | For every in-scope setup: wire set, component count and input counts equal the Python run; the recorded file's realized record re-executes byte-identically. | R3.2, R3.3 |
 | AC-P3.4 | Recording twice on two machines yields byte-identical files; the freshness workflow fails on a one-field change to a setup and prints the diff. | R4 |
@@ -199,7 +206,7 @@ extension of the golden gate and it blesses nothing.
 | AC-P3.7 | `dump(load(f)) == f` for every recorded file. | R2.5 |
 | AC-P3.8 | The car setup records `3·N + 11` (or `+ 9`) components for the default household and re-executes byte-identically. | R7 |
 | AC-P3.9 | The 12 base files (R6) each run under `one_day_15min.simulation.yaml` from `energy_systems/`; the heat-pump base is the one P5 hands to RenoVisor. | R6 |
-| AC-P3.10 | `system_setups/`, the v1 JSONs and `scenario-json-freshness.yml` are unchanged by the P3 PRs (diff empty). | R9 |
+| AC-P3.10 | Apart from the removal commit of R5.2, `system_setups/`, the v1 JSONs and `scenario-json-freshness.yml` are unchanged by the P3 PRs, and every recorded file lands in `energy_systems/`; no v3 file is written into `system_setups/`. | R9, R5.2 |
 | AC-P3.13 | For every setup with a probe list, each probe column's flat recording equals the grouped file realized with that column's selections, byte for byte — the baseline column against the R6 base file. | R10.6, R10.1 |
 | AC-P3.14 | The prefilled workbook marks a component absent, identical or differing against the baseline, and the importer rejects a workbook with a differing component that carries no assignment, naming it. | R10.2, R10.3 |
 | AC-P3.15 | `<stem>.grouping.yaml` is committed and the workbook is not; regenerating the workbook from the probe runs and re-importing it yields the identical `.grouping.yaml`. | R10.4 |
@@ -208,7 +215,11 @@ extension of the golden gate and it blesses nothing.
 | AC-P3.18 | Changing one config value in a recorded file makes its triple fail and the report names the columns or KPIs that moved; the comparison is exact, so no threshold can hide it. | R11.2, R11.3 |
 | AC-P3.19 | The seven KPI-broken setups return a structural verdict — component set and wire set compared, KPI stage reported as unavailable — rather than an error. | R11.4, R11.3 |
 | AC-P3.20 | P3's final PR deletes the workflow, its configuration and its scripts, and the repository contains no reference to them afterwards. | R11.8 |
-| AC-P3.11 | The out-of-scope list is printed by the recording script with one reason each; no recorded file exists for them. | R5.2 |
+| AC-P3.21 | Recording a setup whose parameters equal a shipped `energy_systems/*.simulation.yaml` writes no parameter file and references that one; changing one option makes it write exactly one new file. | R8.2, R8.3 |
+| AC-P3.22 | Recording two setups with identical parameters that match nothing shipped produces one shared file, not two, and both recordings reference it. | R8.3, R8.5 |
+| AC-P3.23 | Two setups differing only in `cache_dir_path` produce the same parameter file, and no written file contains a machine-specific path. | R8.4 |
+| AC-P3.24 | The freshness job fails when two `energy_systems/*.simulation.yaml` have equal normalised content. | R8.6 |
+| AC-P3.11 | The recording script has no skip list: it records every file in `system_setups/` and fails if one cannot be recorded, naming it. After the removal commit, `wetterdienst` appears in no setup and the freshness workflow has no `--exclude`. | R5.1, R5.4, R5.2 |
 | AC-P3.12 | No recorded energy-system file contains a simulation-parameter key (duration, resolution, post-processing option, logging level, cache path); a schema-level test rejects them. | R8 |
 
 ## 11. Open Questions and Decisions
@@ -219,30 +230,15 @@ extension of the golden gate and it blesses nothing.
 |---|---|---|---|
 | Q-P3.1 | Record now with literal `config` blocks, or run P4 first? | R2.2, R2.4, G4, plan ordering | `[answered 2026-08-28]` (a) record now; P4 batches re-record and the shrinking diff is each batch's review artefact |
 | Q-P3.2 | KPI parity at `rel_tol = 1e-9`, or byte-identical result CSVs? | R3.1, C-P3.2, AC-P3.2 | `[answered 2026-08-28]` (a) KPI parity, the existing oracle. Renaming the legacy aggregator ports to make CSVs comparable stays a P4/P5 item, not a condition of the migration |
-| Q-P3.7 | Do the 13 setups without a numeric oracle get one in P3? | A2, AC-P3.3, R11 | `[answered 2026-08-28]` yes, but not by joining the permanent gate: a **temporary A/B parity rig** (R11), dispatched by hand, comparing the Python path against the recorded file inside one container at exact equality, over a January and a July week, deleted in P3's last PR |
 | Q-P3.3 | Are the 12 module-config sizers recorded once with class defaults, and is the PV/battery/EMS fork flat or a group? | R6, R2.4, R10, AC-P3.9 | `[answered 2026-08-28]` **semi-manual, two passes** (R10): flat recordings of a probe list of configurations, a prefilled table where a person assigns each differing component to a group, a variant option or an override, and a second pass that builds the grouped file — with every probe column asserting the result byte for byte |
+| Q-P3.4 | Where do recorded files live, and do the v1 JSON twins stay? | R9, R4, AC-P3.10 | `[answered 2026-08-28]` (a) `energy_systems/<stem>.energy_system.yaml`, v1 twins and their workflow untouched; v1 retires with `json_executor.py` in P5 |
+| Q-P3.5 | Which of the three problematic setups are out of scope? | R5, AC-P3.1, AC-P3.11 | `[answered 2026-08-28]` none — they are **removed from main** instead, with their twins, tests and the freshness `--exclude` list. A setup that cannot be recorded is a defect, not an exception (R5.4) |
+| Q-P3.6 | Does the recorder emit a `<stem>.simulation.yaml` too? | R8 | `[answered 2026-08-28]` only when the setup's parameters match no file in `energy_systems/`, and never twice with the same content — files are shared, named for their content, and the freshness job forbids duplicates |
+| Q-P3.7 | Do the 13 setups without a numeric oracle get one in P3? | A2, AC-P3.3, R11 | `[answered 2026-08-28]` yes, but not by joining the permanent gate: a **temporary A/B parity rig** (R11), dispatched by hand, comparing the Python path against the recorded file inside one container at exact equality, over a January and a July week, deleted in P3's last PR |
 
-`[proposed]` items not listed below (R1.1–R1.3, R2.1–R2.3, R2.5, R3.2–R3.3, R4, R7, R9, C-P3.3–C-P3.4, A1) are confirmed by silence at review.
+`[proposed]` items (R1.1–R1.3, R2.1–R2.3, R2.5, R3.2–R3.3, R4, R7, C-P3.3–C-P3.4, A1) are confirmed by silence at review; every `[decided]` item carries the date it was decided.
 
-**Open**
-
-**Q-P3.4 — Where do recorded files live, and do the v1 JSON twins stay?** · blocks R9, R4, AC-P3.10
-*Context.* Plan §P3 (written before Q-P2.5) says "recorded files checked in next to the setups"; Q-P2.5 (decided 2026-08-26) says new v3 files live in `energy_systems/` and `system_setups/` is left alone for months. 23 v1 twins plus their freshness workflow exist; after P3 each system is described three times (Python, v1 JSON, v3 YAML). The v1 gate (`golden-json-check.yml`) is blocking today.
-*Options.* (a) **`energy_systems/<stem>.energy_system.yaml`**, v1 twins untouched — consistent with Q-P2.5; three descriptions until a later retirement decision. (b) Next to the setups as `system_setups/<stem>.energy_system.yaml` — plan wording, but puts v3 files under a name the epic retires and mixes generated with hand-written. (c) (a) plus retiring the v1 twins and both v1 workflows in P3 once `golden-yaml-check.yml` is green — one description fewer, but reopens Q-P2.5 and removes the v1 executor's only gate before P5 deletes it.
-*Recommendation.* (a); retire v1 in P5 together with `json_executor.py`, as decided.
-*Blocks.* R9, R4, AC-P3.10.
-
-**Q-P3.5 — Which of the three problematic setups are out of scope?** · blocks R5.2, AC-P3.1, AC-P3.11
-*Context.* `simple_weather_data_import.py` registers no component (nothing to record). `basic_household_with_weather_data_request.py` fetches DWD data at setup time and feeds the resulting CSV path into `WeatherConfig` (`:61-70, :111-112`); recording works offline only if the fetch is cached, and the recorded path would be machine-specific unless re-symbolised. `air_conditioned_house.py` deletes `inputs/cache` before building (`:71-74`) and reads a location CSV (`:99-102`); the deletion is a side effect no file can express, the CSV read just yields numbers.
-*Options.* (a) Exclude all three, listed with reasons (R5.2 as written). (b) Exclude the first two, record `air_conditioned_house.py` (the cache wipe is irrelevant to the recorded content; the CSV values become literals) — 22 in scope. (c) Record the weather-request setup too, behind the same `wetterdienst` skip its test uses — 23 in scope, freshness job needs network or a cached fixture.
-*Recommendation.* (b); the cache wipe does not change what was built, and the air-conditioner setup is the only Seville/cooling case in the fleet.
-*Blocks.* R5.2, AC-P3.1, AC-P3.11.
-
-**Q-P3.6 — Does the recorder also emit a `<stem>.simulation.yaml` with the setup's parameter mutations?** · blocks R8
-*Context.* 23 setups mutate `SimulationParameters` when none is passed (post-processing options in 14, `logging_level` 3 in 11, `country` in 1, a cluster `cache_dir_path` behind an `os.path.exists` in 11). The golden runs pass their own parameters, so for parity these mutations are irrelevant; for a user running `hisim energy-system run <recorded> <params>` they decide which outputs exist. The v1 converter writes a `.simulation.json` twin but the repository deliberately does not commit it (`scripts/regenerate_scenario_jsons.py` docstring).
-*Options.* (a) **Do not emit**; the shared `energy_systems/*.simulation.yaml` files are used, mutations documented per setup in the recording script's out-of-band notes. (b) Emit but do not commit (v1 precedent). (c) Emit and commit one per setup — 21 more files, most identical except the option list.
-*Recommendation.* (b): useful for a developer comparing a run, no repository noise, consistent with v1.
-*Blocks.* R8.
+**Open** — none. Every question of this document is decided; the requirements are ready for acceptance.
 
 ## 12. Glossary
 

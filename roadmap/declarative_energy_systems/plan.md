@@ -80,9 +80,12 @@ is a format decision and the format should be settled before hand-authored files
 
 Requirements: `p3_recording_requirements.md` (in review 2026-08-28; inventory in `p3_setup_inventory.md`).
 
-- [ ] Requirements document accepted (Q-P3.4, Q-P3.5, Q-P3.6 decided; **2026-08-28: Q-P3.1 record now and re-record per P4 batch, Q-P3.2 KPI parity is the oracle, Q-P3.3 the semi-manual grouping pass R10, Q-P3.7 the temporary parity rig R11**)
+- [x] All requirements questions decided *(2026-08-28: Q-P3.1 record now and re-record per P4 batch · Q-P3.2 KPI parity is the oracle · Q-P3.3 the semi-manual grouping pass R10 · Q-P3.4 files live in `energy_systems/` · Q-P3.5 the three unrecordable setups are deleted, not excluded · Q-P3.6 parameters emitted only when new, never duplicated · Q-P3.7 the temporary parity rig R11)*
+- [ ] Requirements document accepted at review
+- [ ] Removal commit first (R5.2): delete `simple_weather_data_import.py`, `basic_household_with_weather_data_request.py` and `air_conditioned_house.py` with their v1 twins, their two tests and the freshness `--exclude` list — after this the recorder needs no skip list
 - [ ] Recorder: run a `setup_function` under a recording simulator, emit an energy-system file in canonical style
-- [ ] Every in-scope setup recorded flat; recorded files checked in (`energy_systems/`, pending Q-P3.4)
+- [ ] Every setup recorded flat; recorded files checked in to `energy_systems/<stem>.energy_system.yaml`
+- [ ] Parameter files emitted only where the setup's parameters match nothing shipped, deduplicated by normalised content, named for what they are (R8)
 - [ ] Golden suites run on recorded files; setups themselves kept until P5 confirms no consumer needs them
 - [ ] Grouping pass (R10), after the flat files exist: probe list per setup, prefilled workbook, `grouping import` to a committed `<stem>.grouping.yaml`, second recorder pass building groups and variants
 - [ ] Every probe column asserted byte for byte against its flat recording (R10.6) — the grouping pass needs no new golden runs

@@ -203,6 +203,11 @@ All of these assert artefact existence only — `finished.flag`, a non-empty res
 
 ### 4f. Oracle eligibility of every setup — measured 2026-08-28
 
+**Caveat added 2026-08-30 (see `roadmap/p3_random_findings.md` F-16):** a full `--scan-all` session is not
+reproducible — two setups that pass in isolation were reported non-deterministic inside one long scan, from
+cross-run LPG/cache interference. Read the verdicts below as indicative; a per-setup `--setup` run is the
+reliable form.
+
 `python scripts/golden_validate.py --scan-all` probes each `system_setups/*.py` with a one-day run, executed twice,
 UTSP unset, `COMPUTE_KPIS` + `WRITE_KPIS_TO_JSON` on, and reports offline-runnable / KPI-complete / deterministic.
 **14 of 24 pass, 10 fail.** Eight of the passing ones are the setups already in the gate, so six new setups could be

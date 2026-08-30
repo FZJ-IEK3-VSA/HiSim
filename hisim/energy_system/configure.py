@@ -14,6 +14,13 @@ decoded into the type its field holds, with the bare word ``AUTO`` re-opening a 
 preset had pinned. Then the *paths* are expanded, turning the portable ``${inputs}/…``
 spelling of the file into locations on this machine.
 
+An entry has overrides only when it named a builder. Its own complete block *is* the origin, and
+re-applying it field by field on top of itself would be worse than redundant: the field-by-field
+decoder writes a nested mapping onto a nested dataclass unchanged, so a configuration holding a
+``Coordinates`` — correctly rebuilt a moment earlier by the class's own deserializer, which is the
+only thing that knows how — would come back out as a plain ``dict`` and fail in the component that
+reads it. The two paths are therefore exclusive rather than sequential.
+
 What follows is one call into the sizing kernel for the whole system. The file's
 ``sizing_sources`` blocks are handed over as the kernel's per-consumer mapping — a plain
 translation, since the format was designed to carry exactly what the kernel asks for — and the
@@ -138,6 +145,11 @@ class EntryConfigurator:
     def build(self) -> Tuple[Any, Any]:
         """Builds the entry's configuration object, overrides and paths applied.
 
+        The overrides step is skipped for an entry configured by its own complete block, because
+        such a block is not an override of anything: it was already read, as a whole, by the
+        configuration class's own deserializer, and applying it a second time field by field would
+        flatten every nested dataclass that deserializer had rebuilt.
+
         Returns:
             A pair of the configuration as the origin produced it — the preset or constructor
             default a record compares an override against — and the finished configuration,
@@ -149,8 +161,41 @@ class EntryConfigurator:
                 builder that refused the arguments the entry passed.
         """
         origin = self._realize_origin()
-        config = self._apply_overrides(origin)
+        config = origin if self.origin_is_the_entrys_own_block else self._apply_overrides(origin)
         return origin, self._expand_paths(config)
+
+    @property
+    def origin_is_the_entrys_own_block(self) -> bool:
+        """Whether this entry's configuration comes from its own complete ``config`` block.
+
+        The format's three origins are exclusive and the block is the last of them, so an entry is
+        configured by its own block exactly when it selected neither a preset nor a named
+        constructor. The question is asked twice — once to realize the origin, once to decide
+        whether that block is also a set of overrides — and both readings go through
+        :meth:`_selected_builder`, so the two cannot drift apart.
+
+        Returns:
+            ``True`` when the entry names no builder and states its configuration in full.
+        """
+        return self._selected_builder()[0] is None
+
+    def _selected_builder(self) -> Tuple[Optional[ConfigBuilder], Mapping[str, Any]]:
+        """Returns the builder this entry selected and the arguments it passes, if it selected one.
+
+        A preset takes no arguments and a named constructor takes the entry's own, which is the
+        whole difference between the two; an entry that named neither is configured by its block.
+        The validator has already ruled out an entry naming both, so the order here is a reading
+        order rather than a precedence.
+
+        Returns:
+            The builder and its arguments, or ``None`` and an empty mapping.
+        """
+        entry = self.binding.entry
+        if self.binding.preset is not None:
+            return self.binding.preset, {}
+        if self.binding.constructor is not None and entry.constructor is not None:
+            return self.binding.constructor, dict(entry.constructor.arguments)
+        return None, {}
 
     def _realize_origin(self) -> Any:
         """Calls the preset or the constructor, or deserializes the entry's own block.
@@ -167,10 +212,9 @@ class EntryConfigurator:
                 raises, with the underlying message kept.
         """
         entry = self.binding.entry
-        if self.binding.preset is not None:
-            return self._call_builder(self.binding.preset, {})
-        if self.binding.constructor is not None and entry.constructor is not None:
-            return self._call_builder(self.binding.constructor, dict(entry.constructor.arguments))
+        builder, arguments = self._selected_builder()
+        if builder is not None:
+            return self._call_builder(builder, arguments)
         payload = self.codec.to_deserializer_payload(
             entry.config, f"components.{entry.name}.config", entry.name
         )
@@ -212,6 +256,11 @@ class EntryConfigurator:
 
     def _apply_overrides(self, config: Any) -> Any:
         """Writes the entry's sparse ``config`` block onto the configuration it built.
+
+        Reached only for an entry that named a preset or a constructor, so the block this writes is
+        always the sparse one the format calls an override. A complete block never arrives here:
+        it is the origin, the class's own deserializer has already read it whole, and a field-level
+        second pass would flatten the nested objects that deserializer built.
 
         The overrides are applied as one replacement rather than one assignment per field, so
         that a configuration class validating itself on construction sees the final values and

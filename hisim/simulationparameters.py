@@ -193,6 +193,31 @@ class SimulationParameters:
         )
 
     @classmethod
+    def one_week_july(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
+        """Generates a parameter set for the first week of July, the summer counterpart of one_week_only.
+
+        Every short-horizon parameter set of this class starts on the first of January, which puts
+        each of them in the coldest, darkest week of the year. That window measures a cooling
+        device, a solar-thermal collector or an air conditioner at its annual minimum, and a
+        component that does nothing for the whole run proves nothing about itself: the
+        air-conditioner setup divides by zero in the KPI layer for exactly that reason. This set
+        answers with the same seven days shifted into July, so a comparison that runs both windows
+        exercises the heating side once and the cooling side once.
+
+        Args:
+            year: Calendar year the week is taken from.
+            seconds_per_timestep: Resolution of the simulation in seconds.
+
+        Returns:
+            Parameters covering the 1st to the 8th of July of that year.
+        """
+        return cls(
+            datetime.datetime(year, 7, 1),
+            datetime.datetime(year, 7, 8),
+            seconds_per_timestep,
+        )
+
+    @classmethod
     def one_week_with_only_plots(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """Generates a parameter set for a single week, primarily for unit testing."""
         simulation_parameters = cls(

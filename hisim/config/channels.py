@@ -229,6 +229,13 @@ class ResolvedDynamicConnection:
     back-channel. The derived port names are properties rather than stored fields, so that they
     can never drift from the templates.
 
+    One of those names can be overruled, and only one. An aggregator may already publish the
+    control signal a feed's dispatch block asks for — component constructors routinely create one
+    per participant class they declare a default feed for — and in that case the connection adopts
+    the existing port instead of growing a second one that no tag-and-weight lookup could tell from
+    the first. :attr:`adopted_dispatch_output` records that decision, and it is the one place where
+    a port this record names was not named by a template.
+
     The participant's kind and the flow's semantics are stored in the two separate fields the
     file uses, and the combined :attr:`tags` list an aggregator stores on the created port is
     rebuilt from them as the component type followed by the flow tags. That makes the list
@@ -257,6 +264,7 @@ class ResolvedDynamicConnection:
     channel: DynamicConnectionChannel
     origin: str
     dispatch: Optional[ResolvedDispatch] = None
+    adopted_dispatch_output: Optional[str] = None
 
     @property
     def tags(self) -> Tuple[ConnectionTag, ...]:
@@ -284,18 +292,21 @@ class ResolvedDynamicConnection:
 
     @property
     def dispatch_output_name(self) -> Optional[str]:
-        """Name of the dispatch output, or ``None`` when there is no back-channel.
+        """Name of the port this connection's control signal is published on.
 
-        Two templates are in play. A dispatch block naming a target input produces
-        ``DispatchTo{source}_{input}``; one without a target input — the recorded but unread
-        signal — produces ``DispatchFor{source}_{output}``, which stays collision-free for the
-        same reason the input names do.
+        The port the aggregator already had when the connection adopted one, and otherwise the
+        derived name. Two templates are in play for the derived case: a dispatch block naming a
+        target input produces ``DispatchTo{source}_{input}``; one without a target input — the
+        recorded but unread signal — produces ``DispatchFor{source}_{output}``, which stays
+        collision-free for the same reason the input names do.
 
         Returns:
-            The derived output name, or ``None``.
+            The output name, or ``None`` when there is no back-channel.
         """
         if self.dispatch is None:
             return None
+        if self.adopted_dispatch_output is not None:
+            return self.adopted_dispatch_output
         if self.dispatch.target_input is not None:
             return self.DISPATCH_OUTPUT_TEMPLATE.format(
                 source_name=self.source_name, target_input=self.dispatch.target_input
@@ -303,6 +314,22 @@ class ResolvedDynamicConnection:
         return self.RECORDED_DISPATCH_OUTPUT_TEMPLATE.format(
             source_name=self.source_name, source_output=self.source_output
         )
+
+    @property
+    def created_dispatch_output_name(self) -> Optional[str]:
+        """Name of the dispatch output resolution has to create, if it has to create one at all.
+
+        Separate from :attr:`dispatch_output_name` because the two answer different questions: the
+        wiring asks which port the signal comes out of, while the aggregator and the port checks
+        ask which port they are responsible for bringing into existence. An adopted signal already
+        exists, so nobody creates it and no name-collision check may complain about it.
+
+        Returns:
+            The derived output name, or ``None`` when there is no back-channel or it was adopted.
+        """
+        if self.adopted_dispatch_output is not None:
+            return None
+        return self.dispatch_output_name
 
     def sort_key(self) -> Tuple[int, str, str]:
         """The deterministic ordering key of a target's connections.

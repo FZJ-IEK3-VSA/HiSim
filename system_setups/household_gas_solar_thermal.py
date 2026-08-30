@@ -24,7 +24,7 @@ from hisim.components import (
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import electricity_meter
-from hisim import loadtypes, log
+from hisim import log
 
 
 __authors__ = "Kristina Dabrock"
@@ -230,14 +230,9 @@ def setup_function(
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
-    my_electricity_meter.add_component_input_and_connect(
-        source_object_name=my_occupancy.component_name,
-        source_component_output=my_occupancy.ElectricalPowerConsumption,
-        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
-        source_unit=loadtypes.Units.WATT,
-        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-        source_weight=999,
-    )
+    # The occupancy's electricity reaches the meter through the meter's own default connection,
+    # which is applied because the meter is added with connect_automatically=True below. Feeding it
+    # explicitly here as well would register the same flow twice and double-count it.
 
     my_dhw_storage.connect_input(
         my_dhw_storage.WaterConsumption,

@@ -1,6 +1,6 @@
 # P3 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-08-28 · **Last entry:** 2026-08-30 (23 findings)
+**Status:** living document · **Opened:** 2026-08-28 · **Last entry:** 2026-08-31 (32 findings)
 **Context:** things that surfaced while implementing `roadmap/declarative_energy_systems/p3_implementation_spec.md`
 and were **not** what the work set out to do. Kept separately so the requirements and the spec stay about the
 design, and so nothing found on the way is lost when the branch merges.
@@ -175,6 +175,96 @@ sequential. A full fleet recording takes about 15 minutes. Parallelising would n
 second pass over the whole run.
 
 ---
+
+---
+
+## 7. What the parity rig found when it first ran
+
+The rig (R11) compares a setup's Python run against its recorded twin, in one process, at exact equality.
+Its first full matrix was **14 of 40 triples passing**. After the fixes below it is **36 of 40**. Everything
+in this section was found by that first run and by nothing else.
+
+### F-24 — the executor paired dispatch signals positionally, and the battery stopped charging **[verified]**
+Sixteen triples — every EMS building sizer. `sort_source_weights_and_components` finds a participant's
+control signal with `get_all_dynamic_outputs(tags, weight)` and **zips the result against the sorted inputs
+positionally**. `L2GenericEnergyManagementSystem.__init__` creates one control output per participant *class*
+it declares a default feed for, and `ComponentWrapper.register_component_outputs` prunes the ones whose class
+is absent — but `add_resolved_dispatch_output` set `source_component_class=None`, so a file-created dispatch
+output was **never** pruned. Two outputs answering one search made the list one entry too long, and the
+battery's input at weight 6 was paired with the heat-pump-DHW output. Names cannot catch this: they differ.
+Measured on `household_heatpump_building_sizer/january` before the fix: battery charging **32.09 → 0.0 kWh**,
+discharging 24.06 → 0.0, grid cost 59.83 → 62.09 €, **62 of 108 KPIs moved**.
+Fixed by making a dispatch block ask the aggregator for a *signal* at `(tags, weight)` rather than for a
+port: it adopts the port the aggregator already publishes and grows a derived one only when there is none.
+New guard `EF-2B` (ambiguous dispatch signal), following the `EF-25` precedent.
+
+**A diagnosis that was wrong, recorded because the wrong version is instructive.** The first reading blamed
+the recorder for writing `dispatch: {}` on a feed whose dispatch output nothing reads, and concluded the
+committed twins were wrong. Implementing that fix made 11 of 21 setups **unrecordable** with `EF-29`: the
+`consumption_controlled` channel declares `dispatch=DispatchRule.REQUIRED`, so a feed on it *must* carry a
+dispatch block. The twins were faithful all along; the defect was entirely on the replay side, and no twin
+needed re-recording.
+
+### F-25 — a latent twin of F-24, deliberately left alone **[reported]**
+`L2GenericEnergyManagementSystem.__init__` already creates **two** `HEAT_PUMP_BUILDING` + `ELECTRICITY_TARGET`
+weight-2 outputs, one for `HeatPumpHplib` and one for `MoreAdvancedHeatPumpHPLib`. It is harmless today only
+because pruning removes whichever class is absent. A symmetric guard on the imperative path would fail every
+EMS setup at construction, so it was left visible rather than hidden. **Open.**
+
+### F-26 — an entry's own `config:` block was applied twice **[verified]**
+Six triples, the solar-thermal setups. `configure.py::_realize_origin` deserializes a complete block with the
+class's `from_dict`, correctly rebuilding nested dataclasses; `_apply_overrides` then re-applies **the same
+block** field by field through `ConfigValueCodec.decode`, which passes a nested mapping through untouched.
+`config.coordinates` ended up a plain `dict`. This is merged P2 code and it breaks **any hand-written file**
+with a full `config:` block containing a nested dataclass, not only recordings. The crash surfaces in
+`i_simulate` (`flat_plate_precalc` reads `config.coordinates.latitude_in_degrees` per timestep), not in
+`i_prepare_simulation`. Fixed by making the two paths exclusive.
+
+### F-27 — verifying that a recorded file *builds* does not prove it *runs* **[verified]**
+The recorder's EF-R5 check stopped at `build_energy_system`, so F-26 sailed through it. The check now also
+calls `prepare_calculation()`, which costs nothing measurable (fleet `--check`: **36.5 s** with, **37.0 s**
+without, since the recording run has already filled the caches). Honest caveat, stated in the commit: this
+extension would **not** have caught F-26, which needs a timestep to fail. Closing that class of defect means
+simulating.
+
+### F-28 — KPI keys carry aggregator port names **[verified]**
+After F-24 was fixed, every EMS household still failed on four KPI keys **whose values were identical**:
+`Priority for Input_Battery_AcBatteryPowerUsed_6` against `Priority for AcBatteryPowerUsedFromBattery`. The
+EMS builds `KpiEntry(name=f"Priority for {input_sorted.field_name}")`, so a port name is embedded in a KPI
+key. The rig now translates KPI keys through the same declared table, matching whole words only and refusing
+a table that maps one legacy name onto two declarative ones.
+*This is a second argument for renaming the legacy aggregator ports in P4/P5: as long as they differ, the
+difference leaks into KPI keys, not just result columns.*
+
+### F-29 — a simulation parameter leaked into a component config **[reported]**
+`RandomNumbers.timesteps` is recorded literally — `96`, the length of the one-day 15-minute window it was
+recorded under — so the twin only runs at that horizon and raises `IndexError` at any other. This is exactly
+what AC-P3.12 forbids, showing up at the *value* level rather than as a parameter key. Worse, `RandomNumbers`
+seeds `random.Random()` with **no seed**, so the two runs draw different numbers by construction and those
+two setups can never reach exact parity without seeding the component from its configuration. **Open — owner
+decision pending.** These are the only 4 of 40 triples still failing.
+
+### F-30 — correction to F-8's rationale **[verified]**
+R11.5's second window was argued partly from the air conditioner's `ZeroDivisionError`, on the reading that a
+January window gives a cooling system nothing to divide by. The rig shows that setup divides by zero **in
+July as well**, so the window is not the cause of that particular crash. The second window keeps its
+justification — a January-only fleet measures cooling and solar-thermal setups at their annual minimum, and
+running both windows is what proved this — but the air conditioner is a KPI-layer defect, not a seasonal one.
+
+### F-31 — the near-zero golden KPI reproduces differently on different branches **[verified]**
+F-21's failing pair passed in isolation on the documents branch and fails in isolation on the implementation
+branch, bit-identically at `1.2167721052946946e-09`. Independently proven unrelated to any change here: with
+the only two golden-path files reverted (`dynamic_component.py`, `config/channels.py` — everything else
+touched lives in `hisim/energy_system/`, which the Python path never executes) the failure is unchanged.
+It is one ULP against `abs_tol = 0`, and which way it falls depends on cache state, not on code. Reinforces
+F-21: the fix is an absolute floor, not a re-bless.
+
+### F-32 — two runs must not share a cache directory **[reported]**
+Giving both sides of a parity comparison one cache directory let the second run read the first run's PV
+output back out of a CSV. That masks a real configuration difference *and*, because the round trip is not
+bit-exact, invents a fake one. Each side now gets its own empty cache, and both run the same post-processing
+option set regardless of what the setup appended.
+*Generalises beyond the rig: any A/B comparison of two HiSim runs on one machine has this hazard.*
 
 ## 6. Process
 

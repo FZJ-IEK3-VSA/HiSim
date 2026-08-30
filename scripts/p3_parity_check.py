@@ -278,6 +278,13 @@ class ParityChecker:
     def compare_kpis(self, expected: RunOutcome, actual: RunOutcome, verdict: TripleVerdict) -> None:
         """Makes the third comparison: ``all_kpis.json``, where KPI computation succeeded (R11.4).
 
+        The Python side's keys go through the same declared renaming table the first two
+        comparisons use, because a handful of indicators are named after a port rather than after a
+        quantity — an energy management system publishes one "Priority for <port>" per participant.
+        Without the translation those keys would be reported as two disjoint indicator sets even
+        though every value on both sides is identical, which is a difference the table has already
+        accounted for rather than one this rig exists to find.
+
         Args:
             expected: The Python side.
             actual: The declarative side.
@@ -292,7 +299,8 @@ class ParityChecker:
             verdict.kpis = Verdict.UNAVAILABLE
             verdict.notes.append("KPI stage unavailable (" + "; ".join(unavailable) + ")")
             return
-        left, right = expected.kpis or {}, actual.kpis or {}
+        left = self.renaming.apply_to_kpis(expected.kpis or {})
+        right = actual.kpis or {}
         only_python = sorted(set(left) - set(right))
         only_declarative = sorted(set(right) - set(left))
         if only_python or only_declarative:

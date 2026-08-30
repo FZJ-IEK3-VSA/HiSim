@@ -1,9 +1,11 @@
 """One recording, end to end: run a Python setup, observe it, write it down, prove it works.
 
 The recorder's promise is not that it produces a file but that it produces a file that reproduces
-the setup, so the last step of every recording is to load the file back through the executor and
-build the system it describes. A recorded file that does not build is a failure of the recording,
-not a file somebody has to fix afterwards, and it is reported as one.
+the setup, so the last step of every recording is to load the file back through the executor, build
+the system it describes and prepare that system for a run. A recorded file that does not get that
+far is a failure of the recording, not a file somebody has to fix afterwards, and it is reported as
+one. Preparing rather than merely building is what lets the check reach the configurations
+themselves, since a component first reads what it was configured with when it prepares.
 
 Everything before that step is the pipeline the other modules of this package implement — import
 the setup, let it construct its components, let the simulator resolve the declared defaults,
@@ -26,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar, Optional, Tuple
 
-from hisim.energy_system.errors import EnergySystemError, EnergySystemErrorId, EnergySystemRecordingError
+from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordingError
 from hisim.energy_system.loader import dump_energy_system
 from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.recording.builder import build
@@ -294,12 +296,27 @@ class RecordingSession:
         return text
 
     def verify(self, written: int, parameters_path: Path, result_directory: str) -> None:
-        """Loads the file back through the executor and builds the system it describes.
+        """Loads the file back through the executor, builds it and prepares it for a run.
 
         This is the recorder's whole claim, so it is checked on every recording rather than in a
-        test: a file that cannot be loaded, validated, configured or wired does not describe the
-        setup it was recorded from, whatever it looks like. The build stops short of simulating,
-        which is enough — every decision the format makes has been made by then.
+        test: a file that cannot be loaded, validated, configured, wired or prepared does not
+        describe the setup it was recorded from, whatever it looks like.
+
+        Preparing is the step past building, and it is here because building alone stops before
+        any component has looked at the configuration it was handed. ``i_prepare_simulation`` is
+        where a weather source becomes a directory to read, where a photovoltaic array runs its
+        year and where a cache key is computed, so a configuration that is wrong in a way only its
+        own component can tell is wrong is refused here rather than in somebody's simulation. The
+        step costs one more pass over the components with every cache already warm — the run that
+        was just recorded filled them, in this same process — so it is measurably free.
+
+        What it does not reach is worth stating, because the defect that prompted it lived there:
+        a component that only reads a configuration field inside ``i_simulate`` still gets away
+        with a wrong value, and a solar-thermal collector reading its coordinates per timestep is
+        exactly that case. Closing that would mean simulating, which the recorder deliberately
+        does not do: it verifies that the file describes a system that can start, not that the
+        system produces the same numbers, and the second question is the parity rig's and needs
+        two runs to answer.
 
         Args:
             written: Length of the file just written, quoted in the message so that a failure says
@@ -311,15 +328,16 @@ class RecordingSession:
                 the run that was just recorded so that a caller's temporary directory is honoured.
 
         Raises:
-            EnergySystemRecordingError: ``EF-R5`` carrying the executor's own refusal verbatim.
+            EnergySystemRecordingError: ``EF-R5`` carrying the refusal verbatim, whether it came
+                from the executor or from a component preparing itself.
         """
         from hisim.energy_system.executor import build_energy_system  # noqa: PLC0415
 
         parameters = self.read_parameters(parameters_path)
         parameters.result_directory = result_directory
         try:
-            build_energy_system(self.path, parameters)
-        except EnergySystemError as refusal:
+            build_energy_system(self.path, parameters).simulator.prepare_calculation()
+        except Exception as refusal:  # pylint: disable=broad-except
             raise EnergySystemRecordingError(
                 EnergySystemErrorId.RECORDED_FILE_REJECTED,
                 f"{self.setup_label}:{self.path}",

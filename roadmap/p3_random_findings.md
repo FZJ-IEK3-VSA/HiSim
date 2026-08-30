@@ -1,6 +1,6 @@
 # P3 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-08-28 · **Last entry:** 2026-08-30
+**Status:** living document · **Opened:** 2026-08-28 · **Last entry:** 2026-08-30 (23 findings)
 **Context:** things that surfaced while implementing `roadmap/declarative_energy_systems/p3_implementation_spec.md`
 and were **not** what the work set out to do. Kept separately so the requirements and the spec stay about the
 design, and so nothing found on the way is lost when the branch merges.
@@ -127,6 +127,42 @@ reported **non-deterministic** (12 and 16 differing KPIs), yet both PASS when re
 **Consequence:** `--scan-all` is unusable as a gate, and the eligibility table in
 `declarative_energy_systems/p3_setup_inventory.md` §4f — which came from one such scan — should be read as
 indicative, not authoritative. Per-setup runs are the reliable form. **Open.**
+
+### F-21 — the golden gate cannot compare a KPI that is numerically zero **[verified]**
+A full-fleet `golden_check.py` run fails one pair of sixteen:
+`household_electric_heating_building_sizer / one_week_60s`, on the KPI
+*"Temperature deviation … below set temperature 20.0 Celsius"* — `ref = 1.216772342142273e-09`,
+`got = 1.2167721052946946e-09`. The absolute difference is **2.4e-16**, but the *relative* difference is
+**1.95e-7**, which exceeds `rel_tol = 1e-9` by a factor of ~195. The gate's report prints `rel diff=0.000%`,
+which rounds the number that decides the verdict out of view.
+
+The cause is the tolerance regime, not the code: `golden_ref_spec.md` §7 fixes `rel_tol = 1e-9, abs_tol = 0`
+on the reasoning that it "absorbs sub-ULP platform noise". That holds for KPIs of ordinary magnitude and
+fails exactly for KPIs that are **physically zero** — here a temperature deviation of 1.2e-9 °C·h — where a
+relative comparison has nothing to be relative to and one last-bit difference is an infinite relative error.
+
+The pair **passes in isolation** on the implementation branch *and* on a branch containing no code changes
+at all, and fails only inside a full-fleet run, so it is order- or cache-dependent and unrelated to P3.
+Nothing was re-blessed. **Open**, and worth fixing properly: an `abs_tol` floor (even 1e-12) would make
+near-zero KPIs comparable, and is a smaller change than it sounds because no KPI of real magnitude is
+affected by it.
+*Read together with F-16, the pattern is the same: this fleet's tooling is reliable per-setup and flaky
+in bulk.*
+
+### F-22 — a hand-built test port was the last illegal name **[verified]**
+`tests/test_example_component.py:38` constructed a fake `ComponentOutput` with
+`field_name="thermal energy delivered"`. The identifier rule reaches every `ComponentOutput`, including ones
+a test builds to stand in for a source, so this failed under the `system_setups` marker — which neither the
+`base` nor the `extendedbase` gate covers, so it went unnoticed for two rounds of verification. Fixed.
+*Process note: `-m base` and `-m extendedbase` are not the whole suite. `system_setups`, `buildingtest`,
+`jsonconfig`, `utsp` and `postprocessingoptions` exist too, and CI runs them.*
+The two production strings reading `"Total thermal energy delivered"` name a `KpiEntry`, not a port, and are
+correctly untouched — prose belongs in a KPI label.
+
+### F-23 — `/tmp` is a shared 7.4 GB tmpfs and worktrees fill it **[verified]**
+A verification run was aborted mid-flight by the disk quota, corrupting a cache file; six merged worktrees
+from earlier work were holding 3.2 GB. Removing them took usage from 71 % to 23 %. Worth knowing when a
+long run fails for no visible reason: check `df -h /tmp` before believing the error.
 
 ### F-17 — recording must happen inside the repository **[reported]**
 A recorded file's schema comment is `os.path.relpath(schema, out_dir)`, so recording into `/tmp` changes line

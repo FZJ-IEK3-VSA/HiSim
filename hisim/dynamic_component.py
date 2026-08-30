@@ -4,6 +4,7 @@
 from dataclasses import dataclass
 from typing import ClassVar, List, Union, Dict, Tuple, cast, Optional
 import dataclasses as dc
+import enum
 import hisim.loadtypes as lt
 from hisim import log
 from hisim.component import Component, ComponentInput, ComponentOutput
@@ -14,6 +15,48 @@ from hisim.config.channels import (
     ResolvedDynamicConnection,
 )
 from hisim.simulationparameters import SimulationParameters
+
+
+@enum.unique
+class DynamicFeedSite(str, enum.Enum):
+
+    """Where a feed into an aggregator was registered, in words a message can quote.
+
+    A dynamic feed can enter an aggregator from three places, and when the same flow arrives from
+    two of them the aggregator silently sums it twice. Whoever has to repair such a duplicate needs
+    to know which two places registered it, because the repair is always to delete one of them, and
+    the two are deleted in very different ways. Holding the wording here rather than at the raise
+    site keeps the phrasing of the three sites identical everywhere they are named.
+
+    The values are the sentence fragments themselves so that a message can read "... was registered
+    explicitly in the system setup and again through the default connections", which names both
+    registration sites in the order they happened.
+    """
+
+    #: A setup called the add-API on the aggregator by hand.
+    EXPLICIT = "explicitly in the system setup"
+
+    #: ``connect_automatically=True`` applied one of the aggregator's own default connections.
+    DEFAULT_CONNECTIONS = "through the default connections"
+
+    #: An energy-system file addressed a feed at the aggregator.
+    ENERGY_SYSTEM_FILE = "through an energy-system file"
+
+
+class DuplicateDynamicFeedError(Exception):
+
+    """The same source output was fed into one aggregator twice.
+
+    A defect of a *system setup* or an energy-system file, never of a component class, and never
+    something a simulation should be allowed to run with: an aggregator sums one input per feed, so
+    two feeds carrying the same physical flow count that flow twice and every energy balance built
+    on the aggregator's total is wrong by exactly that flow. The failure is silent otherwise — the
+    numbers stay plausible — which is why this is raised at wiring time rather than checked later.
+
+    Kept separate from :class:`~hisim.config.channels.ChannelDeclarationError`, which reports the
+    other direction: a component class that declared something impossible. The two are repaired by
+    different people in different files and a caller may well want to catch one and not the other.
+    """
 
 
 @dataclass
@@ -131,6 +174,7 @@ class DynamicComponent(Component):
         self.my_component_inputs = my_component_inputs
         self.my_component_outputs = my_component_outputs
         self.dynamic_default_connections: Dict[str, List[DynamicComponentConnection]] = {}
+        self.dynamic_feed_sites: Dict[Tuple[str, str], DynamicFeedSite] = {}
 
     def add_component_output(
         self,
@@ -251,7 +295,16 @@ class DynamicComponent(Component):
 
         Returns:
             The created input port.
+
+        Raises:
+            DuplicateDynamicFeedError: If that source output already feeds this aggregator, whether
+                a file wrote the first feed or a setup did.
         """
+        self.record_dynamic_feed(
+            source_object_name=connection.source_name,
+            source_component_output=connection.source_output,
+            site=DynamicFeedSite.ENERGY_SYSTEM_FILE,
+        )
         label = connection.aggregator_input_name
         created_input = ComponentInput(
             self.component_name,
@@ -327,6 +380,63 @@ class DynamicComponent(Component):
         log.trace(f"Resolved dispatch output {label} on {self.component_name}")
         return created_output
 
+    def record_dynamic_feed(
+        self,
+        source_object_name: str,
+        source_component_output: str,
+        site: DynamicFeedSite,
+    ) -> None:
+        """Books one feed into this aggregator, and refuses a second feed of the same output.
+
+        Every path that creates a dynamic input passes through here first, which is what makes a
+        duplicate impossible rather than merely unlikely: the imperative add-API a Python setup
+        calls, the default connections ``connect_automatically=True`` applies, and the feeds an
+        energy-system file resolves all book their feed here before any port exists. Because the
+        booking happens before the port is created, a refusal leaves the aggregator exactly as it
+        was rather than half-wired.
+
+        The identity of a feed is the pair (source component, source output) and deliberately
+        nothing else. Two feeds of *different* outputs of one source are perfectly ordinary — a
+        heat pump reports its space-heating and its domestic-hot-water electricity separately and a
+        meter wants both — so the source alone is not the key. Two feeds of the *same* output are
+        refused even when their tags or their weights differ, which is the conservative reading:
+        the tags say how the aggregator should classify a flow and the weight says how it should
+        rank it, but neither changes the fact that the flow itself is one flow measured once, so
+        summing it twice is wrong however the two copies are labelled. An aggregator that genuinely
+        needs one flow to appear under two classifications has to gain a way of saying so, rather
+        than getting it as a side effect of being wired twice.
+
+        That is deliberately the same rule, on the same key, that the energy-system format has
+        always enforced on the feeds of one file --
+        :meth:`~hisim.energy_system.aggregator_ports.AggregatorPortChecker.check_participant_ports_are_unique`,
+        reported as ``EF-25`` with the remedy "a participant's output feeds one aggregator at most
+        once". Only the imperative path was missing it, which is why a hand-wired duplicate could
+        survive while the very same wiring written in a file was refused.
+
+        Args:
+            source_object_name: Instance name of the component the flow comes from.
+            source_component_output: Field name of the output on that component.
+            site: Where this registration comes from, used to name both sites in the message.
+
+        Raises:
+            DuplicateDynamicFeedError: If that source output has already been fed into this
+                aggregator, naming the aggregator, the source, the output and both sites.
+        """
+        feed = (source_object_name, source_component_output)
+        first_site = self.dynamic_feed_sites.get(feed)
+        if first_site is not None:
+            raise DuplicateDynamicFeedError(
+                f"The aggregator '{self.component_name}' is fed twice from the same output: "
+                f"'{source_object_name}' output '{source_component_output}' was registered "
+                f"{first_site.value} and again {site.value}. The aggregator adds up one input per "
+                f"feed, so this counts that flow twice and every total built on it is wrong by "
+                f"exactly that amount. Delete one of the two registrations: either the explicit "
+                f"add_component_input_and_connect(...) call in the setup, or the automatic one by "
+                f"adding '{self.component_name}' with connect_automatically=False -- but then wire "
+                f"its other default connections by hand."
+            )
+        self.dynamic_feed_sites[feed] = site
+
     def add_component_input_and_connect(
         self,
         source_component_output: str,
@@ -336,8 +446,34 @@ class DynamicComponent(Component):
         source_tags: List[Union[lt.ComponentType, lt.InandOutputType]],
         source_weight: int,
         allow_unconnected_mandatory: bool = False,
+        site: DynamicFeedSite = DynamicFeedSite.EXPLICIT,
     ) -> None:
-        """Adds a component input and connects it at once."""
+        """Adds a component input and connects it at once.
+
+        The imperative half of the add-API: a setup hands one participant's output over and gets a
+        port named after it. The feed is booked with :meth:`record_dynamic_feed` before anything is
+        created, so handing the same output over twice fails here instead of quietly doubling that
+        flow in every total the aggregator produces.
+
+        Args:
+            source_component_output: Field name of the output to draw from.
+            source_object_name: Instance name of the component that output belongs to.
+            source_load_type: Load type of the flow, from the loadtypes registry.
+            source_unit: Unit of the flow, from the loadtypes registry.
+            source_tags: Tags classifying the participant and the flow for the runtime lookups.
+            source_weight: Rank of this feed among the aggregator's inputs.
+            allow_unconnected_mandatory: Whether the created port may stay unconnected.
+            site: Where this registration comes from; the default says a setup asked for it by
+                hand, and the default-connection path overrides it so a duplicate can name both.
+
+        Raises:
+            DuplicateDynamicFeedError: If this source output already feeds this aggregator.
+        """
+        self.record_dynamic_feed(
+            source_object_name=source_object_name,
+            source_component_output=source_component_output,
+            site=site,
+        )
         # Label Input and generate variable
         num_inputs = len(self.inputs)
         label = f"Input_{source_object_name}_{source_component_output}_{num_inputs}"
@@ -394,6 +530,11 @@ class DynamicComponent(Component):
             for output_var in component.outputs:
                 if source_component_field_name in output_var.display_name:
                     source_component_output = output_var.display_name
+                    self.record_dynamic_feed(
+                        source_object_name=component.component_name,
+                        source_component_output=source_component_output,
+                        site=DynamicFeedSite.EXPLICIT,
+                    )
 
                     label = label = f"Input_{component.component_name}_{source_component_output}_{num_inputs}"
                     vars(self)[label] = label
@@ -421,7 +562,19 @@ class DynamicComponent(Component):
     def connect_with_dynamic_connections_list(
         self, dynamic_component_connections: List[DynamicComponentConnection]
     ) -> None:
-        """Connect all inputs based on a dynamic component connections list."""
+        """Connects all inputs of one default-connection list into this aggregator.
+
+        The path ``connect_automatically=True`` takes: the simulator looks this aggregator's
+        default connections up for each registered source and hands the matching list here. Every
+        feed is marked as coming from the default connections, so that a setup which also wired one
+        of them by hand gets a message naming both sites rather than a silently doubled flow.
+
+        Args:
+            dynamic_component_connections: The default connections resolved for one source.
+
+        Raises:
+            DuplicateDynamicFeedError: If one of these feeds was already registered by hand.
+        """
         for connection in dynamic_component_connections:
             src_name: str = cast(str, connection.source_instance_name)
 
@@ -433,6 +586,7 @@ class DynamicComponent(Component):
                 source_weight=connection.source_weight,
                 source_object_name=src_name,
                 allow_unconnected_mandatory=connection.allow_unconnected_mandatory,
+                site=DynamicFeedSite.DEFAULT_CONNECTIONS,
             )
 
     def add_dynamic_default_connections(self, connections: List[DynamicComponentConnection]) -> None:

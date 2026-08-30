@@ -151,6 +151,57 @@ def test_the_renaming_table_declares_one_meaning_per_legacy_port() -> None:
 
 
 @pytest.mark.base
+def test_an_indicator_named_after_a_port_is_translated_too() -> None:
+    """Catches the third comparison reporting a name the first two have already accounted for.
+
+    A handful of key-performance indicators are named after a port rather than after a quantity —
+    an energy management system publishes one "Priority for <port>" per participant — so their keys
+    carry the very names the table exists to translate. Untranslated they read as two disjoint
+    indicator sets with identical values, which hides whatever real difference might be in the same
+    report. Everything else in a key has to survive untouched, or the translation would be
+    inventing differences instead of removing them.
+    """
+    renaming = DeclaredPortRenamings.port_renaming()
+
+    translated = renaming.apply_to_kpis(
+        {
+            "BUI1.Energy Management System.Priority for Input_Battery_AcBatteryPowerUsed_6": 3,
+            "BUI1.Energy Management System.Priority for Input_PVSystem_ElectricityOutput_2": 1,
+            "BUI1.Building.Total heating demand": 42.0,
+        }
+    )
+
+    assert translated == {
+        "BUI1.Energy Management System.Priority for AcBatteryPowerUsedFromBattery": 3,
+        "BUI1.Energy Management System.Priority for ElectricityOutputFromPVSystem": 1,
+        "BUI1.Building.Total heating demand": 42.0,
+    }
+
+
+@pytest.mark.base
+def test_an_indicator_quoting_an_undeclared_port_still_fails_literally() -> None:
+    """Catches a translation that guesses, which would absorb exactly the differences it must find.
+
+    The table is a list of claims somebody made, and a port nobody declared has to keep comparing
+    literally (C-P3.2). A name spelled inside a longer one must not be rewritten either, because
+    the aggregator input names differ only by their trailing index.
+    """
+    renaming = DeclaredPortRenamings.port_renaming()
+
+    translated = renaming.apply_to_kpis(
+        {
+            "BUI1.Energy Management System.Priority for Input_Nobody_Declared_This_3": 0,
+            "BUI1.Energy Management System.Priority for Input_Battery_AcBatteryPowerUsed_60": 1,
+        }
+    )
+
+    assert set(translated) == {
+        "BUI1.Energy Management System.Priority for Input_Nobody_Declared_This_3",
+        "BUI1.Energy Management System.Priority for Input_Battery_AcBatteryPowerUsed_60",
+    }
+
+
+@pytest.mark.base
 def test_a_kpi_broken_setup_gets_a_structural_verdict(tmp_path: Path) -> None:
     """Catches a rig that turns a broken KPI layer into a parity failure or an exception (T-21).
 

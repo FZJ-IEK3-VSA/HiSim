@@ -23,8 +23,9 @@ component references at the end of a run.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
-from typing import ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import pandas as pd
 
@@ -146,7 +147,8 @@ class PortRenaming:
     comparison would hide a real one. This class makes the translation explicit and reviewable: a
     change states, port by port, which legacy name it claims corresponds to which declarative name,
     and everything it does not list must still match literally. :meth:`apply_to` rewrites a
-    snapshot and :meth:`apply_to_results` a result frame, so one table governs both halves.
+    snapshot, :meth:`apply_to_results` a result frame and :meth:`apply_to_kpis` the indicator keys
+    that quote a port name, so one table governs all three.
 
     Keys are ``(component name, port name in the source build)``; the component name is part of the
     key because port names are only unique per component.
@@ -240,6 +242,81 @@ class PortRenaming:
                 f"{clashes}. Two different outputs cannot be renamed onto one column."
             )
         return frame.rename(columns=mapping)
+
+    def apply_to_kpis(self, kpis: Mapping[str, Any]) -> Dict[str, Any]:
+        """Rewrites the renamed port names where a key-performance-indicator name quotes one.
+
+        Some indicators are named after a port rather than after a quantity: an energy management
+        system publishes one "Priority for <port>" per participant, so its indicator keys carry the
+        aggregator input names verbatim. Those are the very names this table exists to translate,
+        and leaving them alone would report a difference in the third comparison that the first two
+        have already accounted for — with identical values on both sides.
+
+        The substitution is by port name alone, because an indicator key carries the component's
+        display tag rather than its runtime name and there is nothing to match the other half of
+        the table's key against. That is only safe while one legacy port name means one declarative
+        name across the whole table, so a table that disagrees with itself is refused rather than
+        applied to whichever entry came first. Matching is on whole words, so a name is never
+        rewritten inside a longer one.
+
+        Args:
+            kpis: The flattened indicators to translate, typically the legacy run's.
+
+        Returns:
+            A new mapping with the renamed keys, values untouched.
+
+        Raises:
+            ValueError: If one legacy port name is declared to mean two different declarative
+                names, or if a rename would land on a key the mapping already carries.
+        """
+        by_port = self._renamings_by_port()
+        translated: Dict[str, Any] = {}
+        for name, value in kpis.items():
+            renamed = self._rename_within(name, by_port)
+            if renamed in translated:
+                raise ValueError(
+                    f"The port renaming would map two indicators onto the key '{renamed}'; two "
+                    "different ports cannot be renamed onto one indicator."
+                )
+            translated[renamed] = value
+        return translated
+
+    def _renamings_by_port(self) -> List[Tuple[str, str]]:
+        """Flattens the table to port names alone, longest first, refusing an ambiguous one.
+
+        Returns:
+            The pairs of legacy and declarative port name, longest legacy name first so that a
+            name is never rewritten by a shorter one that happens to be spelled inside it.
+
+        Raises:
+            ValueError: If one legacy port name is declared to mean two different things.
+        """
+        flattened: Dict[str, str] = {}
+        for (component_name, port_name), new_name in self.renamings.items():
+            previous = flattened.get(port_name)
+            if previous is not None and previous != new_name:
+                raise ValueError(
+                    f"The port name '{port_name}' is declared to mean both '{previous}' and "
+                    f"'{new_name}' (on '{component_name}'), so an indicator key quoting it cannot "
+                    "be translated."
+                )
+            flattened[port_name] = new_name
+        return sorted(flattened.items(), key=lambda pair: (-len(pair[0]), pair[0]))
+
+    @classmethod
+    def _rename_within(cls, text: str, by_port: Sequence[Tuple[str, str]]) -> str:
+        """Replaces every whole-word occurrence of a renamed port inside one string.
+
+        Args:
+            text: The indicator key to translate.
+            by_port: The flattened table, longest legacy name first.
+
+        Returns:
+            The key with every renamed port rewritten.
+        """
+        for legacy, declarative in by_port:
+            text = re.sub(rf"\b{re.escape(legacy)}\b", declarative, text)
+        return text
 
 
 @dataclass

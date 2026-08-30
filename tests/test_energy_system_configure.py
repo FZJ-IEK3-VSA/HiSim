@@ -32,6 +32,7 @@ from typing import Any, ClassVar, Iterator, List, Tuple, Type
 import pytest
 from dataclasses_json import dataclass_json
 
+from hisim.component import Coordinates
 from hisim.config import ComponentID, ConfigBase, Many, Self, Sizable, Size, sized_field
 from hisim.config.contributions import FactContribution
 from hisim.config.engine import resolve_all
@@ -660,3 +661,50 @@ def test_a_many_cardinality_read_is_reported_as_the_unimplemented_condition() ->
         )
 
     assert raised.value.error_id is EnergySystemErrorId.SIZING_MANY_UNSUPPORTED
+
+
+@pytest.mark.base
+def test_a_complete_config_block_keeps_the_nested_objects_its_class_rebuilt() -> None:
+    """Catches a full ``config`` block being applied a second time on top of itself.
+
+    A complete block is read as a whole by the configuration class's own deserializer, which is
+    the only thing that knows how to turn a nested mapping back into the dataclass a field holds.
+    Applying that same block again field by field — the path a *sparse* override takes — hands a
+    nested mapping straight through, so the rebuilt object is replaced by the plain ``dict`` it
+    came from. Nothing notices until the component reads an attribute off it, which happens once
+    the simulation is already being prepared, so the failure surfaces as far from its cause as it
+    can get.
+
+    The solar-thermal collector is the case that has one: its coordinates are a dataclass, and it
+    only reads them when it prepares a run.
+    """
+    entries = """  collector:
+    class: hisim.components.solar_thermal_system.SolarThermalSystem
+    config:
+      coordinates:
+        latitude_in_degrees: 50.78
+        longitude_in_degrees: 6.08
+      azimuth: 180.0
+      tilt: 30.0
+      area_m2: 4.0
+      eta_0: 0.78
+      a_1_w_m2_k: 3.2
+      a_2_w_m2_k: 0.015
+      old_solar_pump: false
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
+      source_weight: 1
+      delta_temperature_n_k: 10.0
+"""
+
+    configured = Systems.configure(entries)
+
+    coordinates = configured.config_of("collector").coordinates
+    assert isinstance(coordinates, Coordinates), (
+        f"the nested dataclass was flattened to {type(coordinates).__name__}"
+    )
+    assert coordinates.latitude_in_degrees == 50.78
+    assert coordinates.longitude_in_degrees == 6.08

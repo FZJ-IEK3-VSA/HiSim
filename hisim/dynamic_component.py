@@ -267,18 +267,20 @@ class DynamicComponent(Component):
     def resolve_dynamic_connections(self, connections: List[ResolvedDynamicConnection]) -> None:
         """Creates the ports of the feeds an energy-system file addressed at this aggregator.
 
-        One input per resolved feed and one output per dispatch block, named by the format's
-        derived templates and registered through exactly the bookkeeping the imperative add-API
-        fills. No wire is made here: the wiring stage connects the ports afterwards, so that a
-        wire born from a feed passes through the same final checks as one an author wrote.
+        One input per resolved feed and one output per dispatch block that did not adopt a port
+        this component already publishes, named by the format's derived templates and registered
+        through exactly the bookkeeping the imperative add-API fills. No wire is made here: the
+        wiring stage connects the ports afterwards, so that a wire born from a feed passes through
+        the same final checks as one an author wrote.
 
         Args:
             connections: The resolved feeds, already validated against this component's
-                channels and sorted deterministically by the resolver.
+                channels, sorted deterministically and assigned their control ports by the
+                resolver.
         """
         for connection in connections:
             self.add_resolved_dynamic_input(connection)
-            if connection.dispatch is not None:
+            if connection.created_dispatch_output_name is not None:
                 self.add_resolved_dispatch_output(connection)
 
     def add_resolved_dynamic_input(self, connection: ResolvedDynamicConnection) -> ComponentInput:
@@ -343,15 +345,16 @@ class DynamicComponent(Component):
             The created output port.
 
         Raises:
-            ValueError: If the feed carries no dispatch block, which the resolver never allows.
+            ValueError: If the feed carries no dispatch block of its own to create, which the
+                resolver never allows: it calls this only for a block that adopted no port.
         """
-        if connection.dispatch is None:
+        label = connection.created_dispatch_output_name
+        if connection.dispatch is None or label is None:
             raise ValueError(
-                f"The resolved connection {connection.describe()} carries no dispatch block, "
-                "so no dispatch output can be created for it."
+                f"The resolved connection {connection.describe()} has no dispatch output to "
+                "create, either because it carries no dispatch block or because its block "
+                "adopted a port this aggregator already publishes."
             )
-        label = connection.dispatch_output_name
-        assert label is not None  # nosec - a dispatch block always derives a name
         created_output = ComponentOutput(
             object_name=self.component_name,
             field_name=label,

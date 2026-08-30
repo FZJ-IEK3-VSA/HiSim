@@ -22,12 +22,13 @@ Each test states the failure mode it catches.
 # clean
 
 from pathlib import Path
-from typing import ClassVar, Tuple
+from typing import ClassVar, Tuple, cast
 
 import pytest
 
 from hisim import loadtypes as lt
 from hisim.components.electricity_meter import ElectricityMeter, ElectricityMeterConfig
+from hisim.dynamic_component import DynamicComponent
 from hisim.components.loadprofilegenerator_utsp_connector import (
     UtspLpgConnector,
     UtspLpgConnectorConfig,
@@ -211,13 +212,20 @@ def test_a_feed_grows_a_derived_input_on_the_aggregator(tmp_path: Path) -> None:
 
 
 @pytest.mark.base
-def test_a_dispatch_block_grows_the_back_channel_output(tmp_path: Path) -> None:
-    """Catches a controlled participant getting an input but no signal back.
+def test_a_dispatch_block_adopts_a_signal_the_aggregator_already_publishes(tmp_path: Path) -> None:
+    """Catches a second control output being grown beside the one the aggregator already has.
 
-    A participant on a channel the aggregator dispatches to is ranked and served, which only
-    works if the aggregator has somewhere to publish the power it wants that participant to
-    draw. Without the derived output the participant would be ranked and then never told
-    anything, which reads at runtime as a controller that simply never activates.
+    An aggregator finds the output it steers a participant through by tags and weight, never by
+    name, so two outputs carrying the same tags at the same weight are not a name collision that
+    anything would refuse — they are one extra entry in the list the aggregator zips against its
+    participants, and every participant after it is steered through somebody else's port. The
+    energy management system publishes a residents' target from its own constructor, so a feed
+    describing that participant has to adopt it rather than ask for a second one; if it did not,
+    the household would run with the battery ranked last and never charged.
+
+    The dispatch block is still required — the channel dispatches to every participant on it — so
+    what the test pins is that the block is *served* by the existing port and that the resolved
+    tags are the ones the runtime lookup searches for.
     """
     entries = (
         Systems.OCCUPANCY
@@ -237,13 +245,24 @@ def test_a_dispatch_block_grows_the_back_channel_output(tmp_path: Path) -> None:
 
     ems = wired.component_of("ems")
     assert "ElectricalPowerConsumptionFromoccupancy" in {port.field_name for port in ems.inputs}
-    assert "DispatchForoccupancy_ElectricalPowerConsumption" in {
+    assert "DispatchForoccupancy_ElectricalPowerConsumption" not in {
         port.field_name for port in ems.outputs
     }
     resolved = wired.resolved_feeds[0][1][0]
     assert resolved.dispatch is not None
     assert lt.InandOutputType.ELECTRICITY_TARGET in resolved.dispatch.tags
     assert lt.ComponentType.RESIDENTS in resolved.dispatch.tags
+    assert resolved.adopted_dispatch_output == "ElectricityToOrFromGridOfUtspLpgConnector_Output8"
+    assert resolved.dispatch_output_name == resolved.adopted_dispatch_output
+    assert resolved.created_dispatch_output_name is None
+    served = [
+        entry
+        for entry in cast(DynamicComponent, ems).my_component_outputs
+        if entry.source_weight == 1
+        and lt.InandOutputType.ELECTRICITY_TARGET in entry.source_tags
+        and lt.ComponentType.RESIDENTS in entry.source_tags
+    ]
+    assert len(served) == 1, "the aggregator must publish exactly one signal per participant"
 
 
 @pytest.mark.base

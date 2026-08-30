@@ -44,7 +44,6 @@ is documented via autodoc.
 
 * **Weather & environment** —
   :py:mod:`~hisim.components.weather`,
-  :py:mod:`~hisim.components.weather_data_import`
 
 * **Building physics** —
   :py:mod:`~hisim.components.building`

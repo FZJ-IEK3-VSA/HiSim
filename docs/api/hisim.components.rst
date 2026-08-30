@@ -76,4 +76,3 @@ Submodules
    hisim.components.sumbuilder
    hisim.components.transformer_rectifier
    hisim.components.weather
-   hisim.components.weather_data_import

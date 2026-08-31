@@ -178,12 +178,21 @@ def test_the_large_mockups_fail_only_on_entries_the_class_pin_lists(validator: A
 def test_every_converted_class_rejects_an_unknown_preset(
     validator: Any, converted: Tuple[Tuple[str, Dict[str, Any]], ...]
 ) -> None:
-    """Catches a class whose branch forgot to close the preset list (AC-P2.6)."""
-    for class_path, properties in converted:
-        known = list(properties["preset"]["enum"])
-        document = Documents.with_entry({"class": class_path, "preset": "no_such_preset"})
+    """Catches a class whose branch forgot to close the preset list (AC-P2.6).
 
+    A converted class may legitimately have no preset at all — ``CarConfig`` has none, because
+    every one of its builders needs the name of the LoadProfileGenerator profile the car drives
+    by. The schema then spells its ``preset`` member as ``false``, forbidding the key outright,
+    and the closed-list promise still has to hold: *every* preset name must be refused, not
+    merely the unknown ones.
+    """
+    for class_path, properties in converted:
+        document = Documents.with_entry({"class": class_path, "preset": "no_such_preset"})
         assert errors_of(validator, document), f"{class_path} accepts an unknown preset"
+
+        if properties["preset"] is False:
+            continue
+        known = list(properties["preset"]["enum"])
         assert errors_of(
             validator, Documents.with_entry({"class": class_path, "preset": known[0]})
         ) == [], f"{class_path} rejects its own preset {known[0]}"
@@ -193,10 +202,15 @@ def test_every_converted_class_rejects_an_unknown_preset(
 def test_every_converted_class_rejects_an_unknown_config_field(
     validator: Any, converted: Tuple[Tuple[str, Dict[str, Any]], ...]
 ) -> None:
-    """Catches a class whose branch left the ``config`` block open (AC-P2.6)."""
+    """Catches a class whose branch left the ``config`` block open (AC-P2.6).
+
+    A class without presets is checked with a bare ``config`` block, since naming a preset it
+    does not have would make the entry fail for the wrong reason.
+    """
     for class_path, properties in converted:
-        preset = list(properties["preset"]["enum"])[0]
-        entry = {"class": class_path, "preset": preset, "config": {"no_such_field": 1}}
+        entry: Dict[str, Any] = {"class": class_path, "config": {"no_such_field": 1}}
+        if properties["preset"] is not False:
+            entry["preset"] = list(properties["preset"]["enum"])[0]
 
         assert errors_of(validator, Documents.with_entry(entry)), (
             f"{class_path} accepts a config key that is not one of its fields"

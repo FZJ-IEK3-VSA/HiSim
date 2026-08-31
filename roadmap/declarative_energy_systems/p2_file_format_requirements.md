@@ -1,6 +1,6 @@
 # P2 — Energy-system file format and executor — requirements
 
-**Status:** in review · **Date:** 2026-08-28 (R15 exclusive variants added, Q-P2.2 re-answered, C-P2.5 rewritten — an amendment to the merged P2; 08-27: R2.5 dispatch rule; 08-26: Q8, Q-P2.4–Q-P2.6 decided; AC-P2.1 amended; RQ3 dropped)
+**Status:** in review · **Date:** 2026-08-31 (R15.9–R15.11 added while implementing R15; 08-28: R15 exclusive variants added, Q-P2.2 re-answered, C-P2.5 rewritten — an amendment to the merged P2; 08-27: R2.5 dispatch rule; 08-26: Q8, Q-P2.4–Q-P2.6 decided; AC-P2.1 amended; RQ3 dropped)
 **Author(s):** Noah Pflugradt (owner; `[given]`) · assistant (`[proposed]`, mockups)
 **Reviewers:** HiSim core team
 **Parent:** `roadmap/declarative_energy_systems/epic.md` (E1–E8 apply by reference) · **Plan:** `roadmap/declarative_energy_systems/plan.md` §P2 · **Depends on:** P1 accepted
@@ -117,6 +117,9 @@ Paths are `${var}/…` through the `PathResolver`; absolute paths in a file are 
 - R15.6 Groups and variants stay two constructs with one sentence each — a group is an independent on/off add-on, a variant an exclusive choice. Neither is expressed through the other, and there is no relation between them: no `requires`, no `enabled: not X`. Exclusivity lives in the shape of the file; the loader never solves a constraint (E1).
 - R15.7 A realized record carries no `variants` key (the selection is resolved); the audit companion (R8.2) records each variant's selection and the components it contributed.
 - R15.8 `hisim energy-system facts <file>` reports groups and variants together as the consumer knob surface: a boolean per group, an option name per variant (P5, UC4).
+- R15.9 `[added 2026-08-31, from implementing R15]` **Two namespaces, deliberately.** *Validation* works over the **declared** set — every entry of every option, selected or not — so an entry in a losing option must still be well formed. *Resolution* works over the **selected** set. The distinction is forced: with `direct_metering` selected, the four bare `- ems` items name a component that exists only in the losing option, and a selection-aware namespace at load time would **reject** them where R15.3 requires them to be **dropped**. Where one name carries an entry in two options, both are validated.
+- R15.10 `[added 2026-08-31, from implementing R15]` **Where the selected components land.** R15.4's byte-for-byte identity needs a position: the selected option's components are appended after the ungrouped components, variants in document order, each option's components in their own order, and the expanded file carries `variants: {}`. Without a stated convention the identity claim is not testable.
+- R15.11 `[open 2026-08-31]` A variant with exactly one option is currently accepted — it decides nothing, and R15.1 says "exactly one is live", not "at least two exist", while the empty-`options` refusal text says "at least two". Either R15.1 gains the minimum or the refusal text drops the phrase; the implementation follows R15.1 as written.
 
 The shape, written out on the case that asked for it — a house with an EMS and a battery, or a bare meter:
 

@@ -140,8 +140,25 @@ class EnergySystemEmitter:
         Returns:
             The YAML document, ending in a newline.
         """
+        return cls.render(cls.to_document(model))
+
+    @classmethod
+    def render(cls, document: Dict[str, Any]) -> str:
+        """Renders an already-built document in the canonical style.
+
+        The two steps are separable because more than one producer builds the document itself: the
+        run record annotates it, and the grouping pass assembles one column's realization out of a
+        grouped file and the knobs that column sets. All of them have to come out in the same
+        bytes as an ordinary dump, which they only do if there is one renderer.
+
+        Args:
+            document: The plain nested mapping mirroring the file, keys already in canonical order.
+
+        Returns:
+            The YAML document, ending in a newline.
+        """
         rendered = yaml.dump(
-            cls.to_document(model),
+            document,
             Dumper=CanonicalDumper,
             sort_keys=False,
             default_flow_style=False,
@@ -164,7 +181,7 @@ class EnergySystemEmitter:
         document: Dict[str, Any] = {"schema_version": model.schema_version, "name": model.name}
         if model.description is not None:
             document["description"] = model.description
-        document["components"] = {name: cls._entry(entry) for name, entry in model.components.items()}
+        document["components"] = {name: cls.entry(entry) for name, entry in model.components.items()}
         if model.groups:
             document["groups"] = {name: cls._group(group) for name, group in model.groups.items()}
         if model.variants:
@@ -182,7 +199,7 @@ class EnergySystemEmitter:
         """
         return {
             "enabled": group.enabled,
-            "components": {name: cls._entry(entry) for name, entry in group.components.items()},
+            "components": {name: cls.entry(entry) for name, entry in group.components.items()},
         }
 
     @classmethod
@@ -200,13 +217,13 @@ class EnergySystemEmitter:
         return {
             "selected": variant.selected,
             "options": {
-                name: {"components": {member: cls._entry(entry) for member, entry in option.components.items()}}
+                name: {"components": {member: cls.entry(entry) for member, entry in option.components.items()}}
                 for name, option in variant.options.items()
             },
         }
 
     @classmethod
-    def _entry(cls, entry: ComponentEntry) -> Dict[str, Any]:
+    def entry(cls, entry: ComponentEntry) -> Dict[str, Any]:
         """Renders one component entry with its keys in the canonical order.
 
         The order — what it is, how it is configured, where its inputs come from, where its

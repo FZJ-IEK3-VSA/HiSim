@@ -9,7 +9,7 @@ import datetime as dt
 from dataclasses import dataclass
 
 # -*- coding: utf-8 -*-
-from typing import Optional, List, Any, Tuple, Dict
+from typing import Any, ClassVar, Dict, List, Tuple
 import numpy as np
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -19,14 +19,14 @@ from hisim import loadtypes as lt
 from hisim import utils, log
 from hisim.caching import atomic_cache_write
 from hisim.component import OpexCostDataClass, CapexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.loadtypes import Units, ComponentType
 
 from hisim.postprocessing.cost_and_emission_computation.capex_computation import CapexComputationHelperFunctions
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
-from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
+from hisim.components.lpg_car_information import CarProfileHandover
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -40,115 +40,35 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class GenericCarInformation:
-    """Class for collecting important generic car parameters from occupancy."""
-
-    def __init__(self, my_occupancy_instance: UtspLpgConnector):
-        """Initialize the class."""
-
-        self.my_occupancy_instance = my_occupancy_instance
-        self.build(my_occupancy_instance=my_occupancy_instance)
-        self.data_dict_for_car_component = self.prepare_data_dict_for_car_component(
-            car_names=self.car_names,
-            household_names=self.household_names,
-            time_resolutions=self.time_resolutions,
-            car_locations=self.car_location_value_list,
-            driven_meters=self.driven_meters,
-        )
-
-    def build(self, my_occupancy_instance: UtspLpgConnector) -> None:
-        """Get important values from occupancy instance."""
-        # get names of all available cars
-        car_data_dict = my_occupancy_instance.car_data_dict
-        if all(
-            isinstance(value_list, list) and all(not bool(car_info_dict) for car_info_dict in value_list)
-            for value_list in car_data_dict.values()
-        ):
-            raise ValueError(
-                "The car data from occupancy contains only empty dictionaries in its value lists. "
-                "This is likely caused by one of the following reasons: "
-                "(1) You are using the predefined occupancy profile, no car data is currently available. "
-                "(2) The UTSP request failed (e.g., due to missing or incorrect UTSP configuration). "
-                "(3) USE_LOCAL_LPG is currently not supported on macOS (darwin). "
-                "Please switch to USE_UTSP with a reachable UTSP endpoint with correct UTSP configuration."
-            )
-
-        # get car names and household names
-        (
-            self.car_names,
-            self.household_names,
-            self.time_resolutions,
-            self.car_location_value_list,
-        ) = self.get_important_parameters_from_occupancy_car_data(car_data_dict=car_data_dict)
-
-        # get driven meters
-        self.driven_meters = self.get_meters_driven_from_occupancy_car_data(car_data_dict=car_data_dict)
-
-    def get_important_parameters_from_occupancy_car_data(self, car_data_dict: Dict) -> Tuple[List, List, List, List]:
-        """Get car names and household names from occupancy car data."""
-        car_location_list = car_data_dict["car_locations"]
-
-        car_names = []
-        household_names = []
-        time_resolutions = []
-        car_location_value_list = []
-        for car_location in car_location_list:
-            # get car names
-            car_name = (
-                car_location["LoadTypeName"]
-                .split(" - ")[1]
-                .translate(str.maketrans({" ": "_", ",": "", "/": "", ".": ""}))
-            )
-            car_names.append(car_name)
-
-            # get household names
-            household_key_dict = car_location["HouseKey"]
-            household_name = household_key_dict["HouseholdName"].translate(
-                str.maketrans({" ": "_", ",": "", "/": "", ".": ""})
-            )
-            household_names.append(household_name)
-
-            # get time resolutions
-            time_resolution = car_location["TimeResolution"]
-            time_resolutions.append(time_resolution)
-
-            # get car location values
-            car_location_values = car_location["Values"]
-            car_location_value_list.append(car_location_values)
-
-        return car_names, household_names, time_resolutions, car_location_value_list
-
-    def get_meters_driven_from_occupancy_car_data(self, car_data_dict: Dict) -> List:
-        """Get meters driven from occupancy car data."""
-        driven_distances_list = car_data_dict["driving_distances"]
-        return [driven_distance_data["Values"] for driven_distance_data in driven_distances_list]
-
-    def prepare_data_dict_for_car_component(
-        self, car_names: List, household_names: List, time_resolutions: List, car_locations: List, driven_meters: List
-    ) -> Dict:
-        """Prepare data for car component."""
-        data_dict_for_car_component: Dict = {}
-        for index, household_name in enumerate(household_names):
-            data_dict_for_car_component.update(
-                {
-                    household_name: {
-                        "car_name": car_names[index],
-                        "household_name": household_name,
-                        "time_resolution": time_resolutions[index],
-                        "car_location": car_locations[index],
-                        "driven_meters": driven_meters[index],
-                    }
-                }
-            )
-        return data_dict_for_car_component
-
-
-@dataclass_json
-@dataclass
 class CarConfig(ConfigBase):
-    """Definition of configuration of Car."""
+    """Definition of configuration of Car, including the identity of the driving profile it uses.
+
+    Everything the car needs that a file can state lives here; the two time series it also needs —
+    where the car is and how far it moved in each minute — cannot, because they are a
+    LoadProfileGenerator result rather than a catalogue value. What the configuration carries
+    instead is the *identity* of that result: ``household_name`` and ``car_name`` are what the car
+    looks its profile up under in the simulation repository, once the occupancy has published it.
+    """
+
+    #: Consumption per kilometre in kWh/km, CO2 footprint of manufacture in kg and investment cost
+    #: in Euro of the electric vehicle :meth:`for_household` configures for an electric car.
+    ELECTRIC_VEHICLE: ClassVar[Tuple[float, float, float]] = (0.15, 8899.4, 44498.0)
+
+    #: The same three numbers for a diesel car, where the consumption is litres per kilometre.
+    DIESEL_VEHICLE: ClassVar[Tuple[float, float, float]] = (0.06, 9139.3, 32035.0)
+
+    #: Share of the investment cost assumed to be spent on maintenance every year.
+    MAINTENANCE_SHARE_OF_INVESTMENT: ClassVar[float] = 0.02
+
+    #: Assumed service life of a car in years, the same for both fuels.
+    SERVICE_LIFE_IN_YEARS: ClassVar[float] = 18.0
 
     component_id: ComponentID
+    #: name of the LoadProfileGenerator household the car belongs to; half of the identity under
+    #: which the occupancy publishes this car's driving profile
+    household_name: str
+    #: name of the car within its household; the other half of that identity
+    car_name: str
     #: priority of the component in hierachy: the higher the number the lower the priority
     source_weight: int
     #: type of fuel, either Electricity or Diesel
@@ -171,48 +91,67 @@ class CarConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return Car.get_full_classname()
 
+    @constructor(note="the two vehicles the HiSim cost database carries, an EV and a diesel car")
     @classmethod
-    def get_default_diesel_config(
+    def for_household(
         cls,
-        name: str = "Car",
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Defines default configuration for diesel vehicle."""
-        if component_id is None:
-            component_id = ComponentID(name=name)
-        config = CarConfig(
-            component_id=component_id,
-            source_weight=1,
-            fuel=lt.LoadTypes.DIESEL,
-            consumption_per_km=0.06,
-            device_co2_footprint_in_kg=9139.3,
-            investment_costs_in_euro=32035.0,
-            lifetime_in_years=18,
-            maintenance_costs_in_euro_per_year=0.02 * 32035.0,
-            subsidy_as_percentage_of_investment_costs=0,
-        )
-        return config
+        name: str,
+        household_name: str,
+        car_name: str,
+        fuel: lt.LoadTypes = lt.LoadTypes.ELECTRICITY,
+        source_weight: int = 1,
+    ) -> "CarConfig":
+        """Builds the configuration of one car of one LoadProfileGenerator household.
 
-    @classmethod
-    def get_default_ev_config(
-        cls,
-        component_id: Optional[ComponentID] = None,
-    ) -> Any:
-        """Defines default configuration for electric vehicle."""
-        if component_id is None:
-            component_id = ComponentID(name="Car")
-        config = CarConfig(
-            component_id=component_id,
-            source_weight=1,
-            fuel=lt.LoadTypes.ELECTRICITY,
-            consumption_per_km=0.15,
-            device_co2_footprint_in_kg=8899.4,
-            investment_costs_in_euro=44498.0,
-            maintenance_costs_in_euro_per_year=0.02 * 44498.0,
-            lifetime_in_years=18,
+        This is a named constructor rather than a preset because the household and the car it
+        names are an open identifier space — whatever the LoadProfileGenerator happened to produce
+        for the occupancy of this system — and no fixed set of wire names could enumerate it. The
+        fuel, by contrast, is a genuine two-way choice, so it is a parameter with the electric car
+        as the default rather than two nearly identical constructors.
+
+        The cost and emission figures are the ones the two former ``get_default_*`` factories
+        carried, unchanged; maintenance is derived from the investment cost rather than restated,
+        because the two numbers were always a fixed ratio apart and restating them invited them to
+        drift.
+
+        Args:
+            name: Instance name of the car being configured; it becomes its identity.
+            household_name: Normalised name of the LPG household whose profile this car drives by.
+            car_name: Normalised name of the car within that household.
+            fuel: Whether the car burns diesel or draws electricity.
+            source_weight: Priority of the car among several; the higher the number the lower the
+                priority. It is what a charging station and a car battery bind to, so several cars
+                in one system must not share it.
+
+        Returns:
+            A configuration naming that car's profile and costed for the requested fuel.
+
+        Raises:
+            ValueError: If the fuel is neither electricity nor diesel, since no other car is
+                costed.
+        """
+        if fuel == lt.LoadTypes.ELECTRICITY:
+            consumption_per_km, device_co2_footprint_in_kg, investment_costs_in_euro = cls.ELECTRIC_VEHICLE
+        elif fuel == lt.LoadTypes.DIESEL:
+            consumption_per_km, device_co2_footprint_in_kg, investment_costs_in_euro = cls.DIESEL_VEHICLE
+        else:
+            raise ValueError(
+                f"A car can run on {lt.LoadTypes.ELECTRICITY} or on {lt.LoadTypes.DIESEL}, "
+                f"but '{fuel}' was requested; no other vehicle is costed."
+            )
+        return cls(
+            component_id=ComponentID(name=name),
+            household_name=household_name,
+            car_name=car_name,
+            source_weight=source_weight,
+            fuel=fuel,
+            consumption_per_km=consumption_per_km,
+            device_co2_footprint_in_kg=device_co2_footprint_in_kg,
+            investment_costs_in_euro=investment_costs_in_euro,
+            lifetime_in_years=cls.SERVICE_LIFE_IN_YEARS,
+            maintenance_costs_in_euro_per_year=cls.MAINTENANCE_SHARE_OF_INVESTMENT * investment_costs_in_euro,
             subsidy_as_percentage_of_investment_costs=0,
         )
-        return config
 
 
 def most_frequent(input_list: List) -> Any:
@@ -229,7 +168,19 @@ def most_frequent(input_list: List) -> Any:
 
 
 class Car(cp.Component):
-    """Simulates car with constant consumption. Car usage (driven kilometers and state) orginate from LPG."""
+    """Simulates car with constant consumption. Car usage (driven kilometers and state) orginate from LPG.
+
+    The car is built from its configuration alone, like every other HiSim component. The driving
+    profile it needs is not in that configuration and cannot be — it is a full-year time series the
+    LoadProfileGenerator produced for the occupancy — so the configuration carries the *identity*
+    of the profile and the car fetches the profile itself from the simulation repository in
+    :meth:`i_prepare_simulation`, after the occupancy has published it there.
+
+    That makes component order load-bearing: preparation runs in registration order, so the
+    occupancy must be registered before any car. When it was not, or when no occupancy has car data
+    at all, the lookup raises and names the household and the car rather than letting the run
+    continue with a vehicle that never moves.
+    """
 
     # Outputs
     FuelConsumption = "FuelConsumption"
@@ -241,10 +192,16 @@ class Car(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: CarConfig,
-        data_dict_with_car_information: Dict,
         my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
     ) -> None:
-        """Initializes Car."""
+        """Initializes Car.
+
+        Args:
+            my_simulation_parameters: Parameters of the run.
+            config: The car's configuration, naming the household and car whose driving profile it
+                drives by.
+            my_display_config: What the webtool and the report show of this component.
+        """
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()
@@ -254,7 +211,14 @@ class Car(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.build(config=config, car_information_dict=data_dict_with_car_information)
+        #: The payload the occupancy published, filled in :meth:`i_prepare_simulation`.
+        self.car_information_dict: Dict[str, Any] = {}
+        #: Location of the car per timestep, as the integers of the location translator.
+        self.car_location: List[Any] = []
+        #: Metres driven per timestep.
+        self.meters_driven: Any = []
+        #: Time resolution of the published profile, as an ``%H:%M:%S`` string.
+        self.time_resolution: str = ""
 
         if self.config.fuel == lt.LoadTypes.ELECTRICITY:
             self.electricity_output: cp.ComponentOutput = self.add_output(
@@ -307,8 +271,23 @@ class Car(cp.Component):
         pass
 
     def i_prepare_simulation(self) -> None:
-        """Prepares the simulation."""
-        pass
+        """Fetches the car's driving profile from the repository and resamples it for the run.
+
+        This is where the hand-off is completed: the occupancy published every profile it produced
+        during its own preparation, and the car takes the one its configuration names. Doing it
+        here rather than in the constructor is what lets the executor build the car from
+        ``(my_simulation_parameters, config)`` like every other component.
+
+        Raises:
+            CarProfileNotPublishedError: If no occupancy published a profile for this car — either
+                because none has car data, or because the car was prepared before its occupancy.
+        """
+        car_information_dict = CarProfileHandover.lookup(
+            repository=getattr(self, "simulation_repository", None),
+            household_name=self.config.household_name,
+            car_name=self.config.car_name,
+        )
+        self.build(car_information_dict=car_information_dict)
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Returns consumption and location of car in each timestep."""
@@ -485,8 +464,18 @@ class Car(cp.Component):
         )
         return capex_cost_data_class
 
-    def build(self, config: CarConfig, car_information_dict: Dict) -> None:
-        """Loads necesary data and saves config to class."""
+    def build(self, car_information_dict: Dict) -> None:
+        """Turns the published minute-resolution profile into the series this run's timesteps need.
+
+        The LoadProfileGenerator always reports per minute and in local time, so the profile has to
+        be converted to UTC and then aggregated — summed for distances, most-frequent for the
+        location — down to the run's own resolution. The result is cached under the car's
+        configuration, because the conversion is the expensive part of preparing a car and nothing
+        about it changes between two runs of the same car under the same parameters.
+
+        Args:
+            car_information_dict: The payload the occupancy published for this car.
+        """
         self.car_information_dict = car_information_dict
         self.car_location = car_information_dict["car_location"]
         self.meters_driven = car_information_dict["driven_meters"]
@@ -504,7 +493,7 @@ class Car(cp.Component):
         # check if caching is possible
         file_exists, cache_filepath = utils.get_cache_file(
             component_key=self.config.component_id.name,
-            parameter_class=config,
+            parameter_class=self.config,
             my_simulation_parameters=self.my_simulation_parameters,
         )
         if file_exists:

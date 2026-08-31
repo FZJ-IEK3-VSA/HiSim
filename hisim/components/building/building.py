@@ -751,7 +751,10 @@ class Building(cp.Component):
                     self.cache,
                     columns=["solar_gain_through_windows"],
                 )
-                with atomic_cache_write(self.cache_file_path) as temporary_cache_filepath:
+                with atomic_cache_write(
+                    self.cache_file_path,
+                    utils.build_cache_key_string(self.buildingconfig, self.my_simulation_parameters),
+                ) as temporary_cache_filepath:
                     database.to_csv(
                         temporary_cache_filepath,
                         sep=",",

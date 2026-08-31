@@ -4,11 +4,28 @@ This module implements a thread-safe singleton metaclass (`SingletonMeta`),
 a singleton simulation repository (`SingletonSimRepository`) for sharing data
 across HiSim components during a simulation, and an enum
 (`SingletonDictKeyEnum`) defining the well-known keys used in the repository.
+
+**Deprecated: `SingletonSimRepository` and `SingletonDictKeyEnum`.** Use the per-simulation
+:class:`hisim.sim_repository.SimRepository` instead, reached from any component as
+``self.simulation_repository``. A process-wide singleton holds one entry per key for the whole
+program, which is exactly wrong for the simulations HiSim is growing into: in a district run, or a
+building with several units, two households write the same well-known key and the second silently
+overwrites the first. The per-simulation repository is scoped to the run that owns it, so the same
+key means one thing per simulation and the collision cannot occur.
+
+`SingletonMeta` is **not** deprecated — `hisim.result_path_provider.ResultPathProviderSingleton`
+uses it legitimately, for a value that really is process-wide.
+
+Migration: new code must not use the singleton repository at all. Existing call sites (82 in
+`hisim/` across 30 files at the time of writing) move as the components around them are touched;
+publish with ``self.simulation_repository.set_entry`` and read with ``get_entry``, guarding with
+``entry_exists`` so a missing entry fails with a message naming what was expected.
 """
 # clean
+import enum
+import warnings
 from typing import Any, Dict
 from threading import Lock
-import enum
 from hisim import loadtypes as lt
 
 
@@ -63,10 +80,37 @@ class SingletonMeta(type):
 
 class SingletonSimRepository(metaclass=SingletonMeta):
 
-    """Class for exchanging information across all components."""
+    """Class for exchanging information across all components.
+
+    .. deprecated::
+        Use the per-simulation :class:`hisim.sim_repository.SimRepository`, available on every
+        component as ``self.simulation_repository``. This class keeps one entry per key for the
+        whole process, so two households in a district or multi-unit simulation collide on every
+        well-known key and the later writer silently wins. Nothing warns, and the result is a
+        plausible number computed from another building's data.
+
+        The replacement has the same shape — ``set_entry``, ``get_entry``, ``entry_exists``,
+        ``delete_entry`` and the dynamic variants — so a migration is usually a change of receiver
+        rather than of logic. Keys become plain strings instead of :class:`SingletonDictKeyEnum`
+        members, which is the moment to make a key carry the identity that distinguishes one
+        household's entry from another's.
+    """
 
     def __init__(self) -> None:
-        """Initializes the SimRepository."""
+        """Initializes the SimRepository, warning that this class is on its way out.
+
+        The warning fires once per process rather than per call, because the singleton metaclass
+        builds the instance only once. It is a ``DeprecationWarning``, which Python hides by
+        default and `pytest.ini` filters, so it costs nothing in a normal run and appears for
+        anyone who asks for it with ``-W default``.
+        """
+        warnings.warn(
+            "SingletonSimRepository is deprecated: it holds one entry per key for the whole "
+            "process, so district and multi-unit simulations collide on every key. Use the "
+            "per-simulation SimRepository via self.simulation_repository instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.my_dict: Dict[Any, Any] = {}
         self.my_dynamic_dict: Dict[lt.ComponentType, Dict[int, Any]] = {component_type: {} for component_type in lt.ComponentType}
 
@@ -135,7 +179,14 @@ class SingletonSimRepository(metaclass=SingletonMeta):
 
 class SingletonDictKeyEnum(enum.Enum):
 
-    """Class for setting dictionary keys in the singleton sim repository."""
+    """Class for setting dictionary keys in the singleton sim repository.
+
+    .. deprecated::
+        These are the well-known keys of the deprecated :class:`SingletonSimRepository`.
+        The per-simulation :class:`hisim.sim_repository.SimRepository` takes plain string
+        keys, which is the point at which a key should be given the identity that tells one
+        household's entry from another's.
+    """
 
     NUMBEROFAPARTMENTS = 1
     WATERMASSFLOWRATEOFHEATGENERATOR = 2

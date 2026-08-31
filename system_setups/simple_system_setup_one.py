@@ -35,9 +35,9 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_rn1 = RandomNumbers(
         config=RandomNumbersConfig(
             component_id=ComponentID(name="RandomNumbers100To200"),
-            timesteps=my_simulation_parameters.timesteps,
             minimum=100,
             maximum=200,
+            seed=1,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -47,9 +47,9 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_rn2 = RandomNumbers(
         config=RandomNumbersConfig(
             component_id=ComponentID(name="RandomNumbers10To20"),
-            timesteps=my_simulation_parameters.timesteps,
             minimum=10,
             maximum=20,
+            seed=2,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

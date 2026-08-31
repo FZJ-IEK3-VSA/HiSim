@@ -1,11 +1,11 @@
 """Structural validation: every rule an energy-system file must obey without its classes.
 
 Validation of an energy system happens on two levels, and this module is the first of
-them. It checks everything decidable from the document alone — that names are unique and
-each component belongs to at most one group, that every reference resolves to a component
-the file declares, that each entry says where its configuration comes from, that the input
-items of one consumer do not contradict each other, and that no value smuggles in an
-absolute filesystem path. The second level, which needs the component classes imported,
+them. It checks everything decidable from the document alone — that names are unique and each
+component belongs to at most one group and at most one variant, that every reference resolves
+to a component the file declares, that each entry says where its configuration comes from,
+that the input items of one consumer do not contradict each other, and that no value smuggles
+in an absolute filesystem path. The second level, which needs the component classes imported,
 decides whether a preset exists, whether a config field is real and whether two ports can
 be wired; nothing here reaches for it.
 
@@ -14,6 +14,13 @@ batch-authoring tool can check a file it is writing without importing HiSim's co
 tree, and a file whose classes have not been written yet can still be verified for shape.
 It also keeps the failure modes apart: a message from this module is always about the file,
 never about the code.
+
+Everything here is checked over the *declared* set rather than over the selected one. A
+component in a group nobody enabled and a component in a variant option nobody selected are
+both written down, so both have to be well formed — tomorrow's file enables the group and
+selects the option — and a reference into either is legal, because the expansion drops such a
+reference rather than failing on it. Which components actually run is a question for the
+expansion, one stage later.
 
 Validation stops at the first problem. The format's contract is that a file is taken as
 written or rejected, and the first violation is the one the author has to fix before the
@@ -47,6 +54,11 @@ class StructuralValidator:
     references between entries, then the shape agreements inside an input list, and finally
     the values of the configuration blocks.
 
+    The namespace is a mapping and the entries are a sequence, because the two answer
+    different questions. One name can carry two entries — the same component wired
+    differently in two options of one variant — and both of those entries have to obey every
+    per-entry rule, while a reference resolves against the name and cannot tell them apart.
+
     An instance is single-use and holds no state beyond the file and the derived name
     lookups. Callers normally use :func:`validate_structure` instead of building one.
     """
@@ -55,6 +67,11 @@ class StructuralValidator:
     #: after an underscore. A path written in an energy-system file is symbolic —
     #: ``${inputs}/weather/...`` — so that the file resolves on another machine.
     PATH_KEY_NOUNS: ClassVar[Tuple[str, ...]] = ("path", "paths", "directory", "file", "filename")
+
+    #: The owner recorded for a component written outside every group and every variant.
+    #: It is the ``components`` block's own key, so a message can name where the collision
+    #: it reports came from.
+    TOP_LEVEL_OWNER: ClassVar[str] = "components"
 
     #: Matches a Windows drive prefix, which is absolute even though it starts with a
     #: letter rather than with a separator.
@@ -67,17 +84,19 @@ class StructuralValidator:
             model: The parsed energy system to check.
         """
         self.model = model
-        self.components: Dict[str, ComponentEntry] = model.all_components()
+        self.components: Dict[str, ComponentEntry] = model.declared_components()
+        self.entries: Tuple[ComponentEntry, ...] = model.declared_entries()
         self.names: Tuple[str, ...] = tuple(self.components)
 
     def validate(self) -> None:
         """Runs every structural check, raising on the first violation.
 
         Raises:
-            EnergySystemFormatError: Naming the offending component, group or key path,
-                and listing the valid alternatives wherever the set of them is closed.
+            EnergySystemFormatError: Naming the offending component, group, variant or key
+                path, and listing the valid alternatives wherever the set of them is closed.
         """
         self._check_names()
+        self._check_variants()
         self._check_configuration_origin()
         self._check_reference_closure()
         self._check_input_shapes()
@@ -95,11 +114,11 @@ class StructuralValidator:
             EnergySystemFormatError: ``EF-51`` when two groups list the same component,
                 ``EF-52`` when a name collides with another component or with a group.
         """
-        owner: Dict[str, str] = {name: "components" for name in self.model.components}
+        owner: Dict[str, str] = self._component_owners()
         for group_name, group in self.model.groups.items():
             for member in group.components:
                 previous = owner.get(member)
-                if previous is not None and previous != "components":
+                if previous is not None and previous != self.TOP_LEVEL_OWNER:
                     raise EnergySystemFormatError(
                         EnergySystemErrorId.COMPONENT_IN_TWO_GROUPS,
                         f"groups.{group_name}.components.{member}",
@@ -123,6 +142,97 @@ class StructuralValidator:
                     remedy="A reference is a bare name, so a group and a component may not share one.",
                 )
 
+    def _component_owners(self) -> Dict[str, str]:
+        """Returns the block each top-level component name belongs to, as a starting point.
+
+        The two name checks below both walk the file building the same mapping of name to
+        owner, and both report the collision they find against what the mapping already
+        holds, so the seed is shared rather than written twice.
+
+        Returns:
+            One entry per ungrouped component, mapped to the literal block name.
+        """
+        return {name: self.TOP_LEVEL_OWNER for name in self.model.components}
+
+    def _check_variants(self) -> None:
+        """Rejects the ways a variant can claim a name that is not its to claim.
+
+        Three collisions are possible and each is a different mistake. One component name in
+        two variants means two exclusive choices both decide the same component, which no
+        selection can resolve. The same name at the top level, or in a group, and inside an
+        option means the file has both a permanent component and an alternative version of
+        it, which is the override R15.2 rules out: an option states its components in full.
+        And a variant sharing a name with a group or a component would make a bare reference
+        ambiguous, exactly as a group sharing one would.
+
+        A name repeated across the options of *one* variant is not a collision but the point
+        of the construct: only one of those options ever exists, which is what lets two worlds
+        wire the same component differently.
+
+        Raises:
+            EnergySystemFormatError: ``EF-57`` when two variants declare one component,
+                ``EF-52`` when a variant's component name or the variant's own name collides
+                with something outside it.
+        """
+        owner = self._component_owners()
+        for group_name, group in self.model.groups.items():
+            for member in group.components:
+                owner[member] = group_name
+        for variant_name, variant in self.model.variants.items():
+            if variant_name in self.components or variant_name in self.model.groups:
+                collided = "component" if variant_name in self.components else "group"
+                raise EnergySystemFormatError(
+                    EnergySystemErrorId.DUPLICATE_NAME,
+                    f"variants.{variant_name}",
+                    f"variant '{variant_name}' has the same name as a {collided}.",
+                    remedy="A reference is a bare name, so a variant, a group and a component may not share one.",
+                )
+            for option_name, option in variant.options.items():
+                for member in option.components:
+                    self._check_option_member(owner, variant_name, option_name, member)
+                    owner[member] = variant_name
+
+    def _check_option_member(
+        self, owner: Dict[str, str], variant_name: str, option_name: str, member: str
+    ) -> None:
+        """Rejects one option member whose name is already claimed outside this variant.
+
+        Args:
+            owner: Name to the block that claimed it, top-level components first, then the
+                groups, then the variants seen so far.
+            variant_name: The variant the option belongs to.
+            option_name: The option the member is written in.
+            member: The component name to check.
+
+        Raises:
+            EnergySystemFormatError: ``EF-57`` when another variant already declares the
+                name, ``EF-52`` when the top level or a group does.
+        """
+        previous = owner.get(member)
+        if previous is None or previous == variant_name:
+            return
+        location = f"variants.{variant_name}.options.{option_name}.components.{member}"
+        if previous in self.model.variants:
+            raise EnergySystemFormatError(
+                EnergySystemErrorId.COMPONENT_IN_TWO_VARIANTS,
+                location,
+                f"component '{member}' is already declared by the variant '{previous}'.",
+                remedy=(
+                    "A component belongs to at most one variant; two exclusive choices cannot "
+                    "both decide the same component."
+                ),
+            )
+        where = "an ungrouped component" if previous == self.TOP_LEVEL_OWNER else f"the group '{previous}'"
+        raise EnergySystemFormatError(
+            EnergySystemErrorId.DUPLICATE_NAME,
+            location,
+            f"component '{member}' has the same name as {where}.",
+            remedy=(
+                "An option states its components in full and never overrides one written "
+                "elsewhere; move the component into every option, or out of the variant."
+            ),
+        )
+
     def _check_configuration_origin(self) -> None:
         """Rejects an entry that names both a preset and a constructor, or neither.
 
@@ -136,7 +246,8 @@ class StructuralValidator:
             EnergySystemFormatError: ``EF-11`` when both are present, ``EF-12`` when
                 neither is and ``config`` is empty as well.
         """
-        for name, entry in self.components.items():
+        for entry in self.entries:
+            name = entry.name
             location = f"components.{name}"
             if entry.preset is not None and entry.constructor is not None:
                 raise EnergySystemFormatError(
@@ -167,7 +278,8 @@ class StructuralValidator:
                 an unknown sizing provider, ``EF-41`` when the reference's fact half
                 differs from the key it is written under.
         """
-        for name, entry in self.components.items():
+        for entry in self.entries:
+            name = entry.name
             for index, item in enumerate(entry.inputs):
                 if item.source not in self.components:
                     raise EnergySystemFormatError(
@@ -215,7 +327,8 @@ class StructuralValidator:
                 ``EF-25`` for a repeated aggregator feed, ``EF-26`` for two wires into one
                 input.
         """
-        for name, entry in self.components.items():
+        for entry in self.entries:
+            name = entry.name
             spellings: Dict[str, Set[str]] = {}
             wired_inputs: Set[str] = set()
             fed_outputs: Set[Tuple[str, str]] = set()
@@ -289,7 +402,8 @@ class StructuralValidator:
         Raises:
             EnergySystemFormatError: ``EF-05`` naming the key path of the value.
         """
-        for name, entry in self.components.items():
+        for entry in self.entries:
+            name = entry.name
             self._scan_for_absolute_paths(entry.config, f"components.{name}.config")
             if entry.constructor is not None:
                 self._scan_for_absolute_paths(

@@ -44,7 +44,8 @@ class EnergySystemErrorId(enum.Enum):
     The identifiers are grouped by the lifecycle stage that can first decide the
     condition: ``EF-0x`` for reading the document, ``EF-1x`` and ``EF-2x`` for the
     shape and the cross-references of component entries, ``EF-4x`` for sizing sources
-    and ``EF-5x`` for groups. A stage never re-checks what an earlier stage already
+    and ``EF-5x`` for the two constructs that switch components on and off, groups and
+    variants. A stage never re-checks what an earlier stage already
     decided, and each identifier is raised from exactly one place in the code so that
     a message cannot drift between two implementations of the same rule.
 
@@ -119,6 +120,9 @@ class EnergySystemErrorId(enum.Enum):
     DUPLICATE_NAME = "EF-52"
     GROUP_ENABLED_FLAG = "EF-53"
     EMPTY_GROUP = "EF-54"
+    UNKNOWN_VARIANT_OPTION = "EF-55"
+    EMPTY_VARIANT = "EF-56"
+    COMPONENT_IN_TWO_VARIANTS = "EF-57"
     RECORD_NOT_CONCRETE = "EF-60"
     RERUN_NOT_REPRODUCED = "EF-61"
 

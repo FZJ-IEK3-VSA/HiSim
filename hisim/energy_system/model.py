@@ -1,4 +1,4 @@
-"""The in-memory model of an energy-system file: components, groups and their inputs.
+"""The in-memory model of an energy-system file: components, groups, variants and inputs.
 
 An energy-system file is a YAML document describing one simulated household in a single
 direction: every component entry states what the component is, how it is configured, where
@@ -15,147 +15,21 @@ and whether the field names are real can only be decided by importing the class,
 happens much later; keeping this module free of that knowledge is what lets an editor, a
 schema exporter or a batch tool inspect a file cheaply and without side effects.
 
-Two helpers accompany the models. :class:`NameRules` holds the identifier and reference
-grammar of the format — the character set a name may use and the rejection of wildcards,
-relative and absolute references — and :class:`SourceReference` is the parsed form of the
-``<component>.<fact>`` strings a ``sizing_sources`` block is made of.
+:class:`SourceReference` accompanies the models as the parsed form of the
+``<component>.<fact>`` strings a ``sizing_sources`` block is made of; the identifier and
+reference grammar both of them obey lives one module below, in
+:mod:`hisim.energy_system.names`.
 """
 
 # clean
 
 from __future__ import annotations
 
-import re
-from typing import Annotated, Any, ClassVar, Dict, Literal, Mapping, Optional, Pattern, Tuple, Union
+from typing import Annotated, Any, ClassVar, Dict, Literal, Mapping, Optional, Tuple, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemFormatError
-
-
-class NameRules:
-    """The identifier and reference grammar shared by every part of the format.
-
-    Component names, group names, fact names and port names all use one identifier syntax
-    — a letter or underscore followed by letters, digits or underscores — so a reader never
-    has to remember which allows what. A reference joining two of them with a dot, such as
-    ``pv_south.pv_peak_power_in_watt``, is the only compound form the format has.
-
-    The class exists mainly for what it forbids. Wildcards (``pv_*``, ``[*]``) and relative
-    or absolute path syntax (``../pv``, ``/etc/x``) are deliberately not part of this format
-    version: they are the vocabulary of a future preprocessor, and accepting them silently
-    would make files written against that expectation resolve to something unintended.
-    """
-
-    #: The one identifier syntax of the format, used for component names, group names,
-    #: fact names and port names alike.
-    IDENTIFIER_PATTERN: ClassVar[Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-    #: Characters that only appear in wildcard or glob syntax. Their presence is always a
-    #: rejection rather than a name failing the identifier pattern: the author meant a
-    #: pattern, and patterns are not part of this format version.
-    WILDCARD_CHARACTERS: ClassVar[str] = "*?[]"
-
-    #: Characters that only appear in filesystem paths. A reference addresses a component
-    #: by name, never by location, so any of them means a path was written instead.
-    PATH_CHARACTERS: ClassVar[str] = "/\\"
-
-    #: The separator between the two halves of a reference.
-    REFERENCE_SEPARATOR: ClassVar[str] = "."
-
-    @classmethod
-    def check_identifier(cls, value: Any, location: str, role: str) -> str:
-        """Returns ``value`` unchanged if it is a well-formed name, and raises otherwise.
-
-        A name has to be a string matching the one identifier pattern of the format.
-        Numbers, booleans and nested blocks reach this check whenever an author writes an
-        unquoted YAML value the parser typed differently, so the type is verified here.
-
-        Args:
-            value: The raw YAML value that should be a name.
-            location: Dotted key path of the value, used in the message.
-            role: What the name stands for ("component", "group", "fact"), used in the
-                message so the author knows which rule was applied.
-
-        Returns:
-            The validated name.
-
-        Raises:
-            EnergySystemFormatError: ``EF-08`` if the value is not a string or does not
-                match the identifier pattern.
-        """
-        if not isinstance(value, str) or cls.IDENTIFIER_PATTERN.match(value) is None:
-            raise EnergySystemFormatError(
-                EnergySystemErrorId.INVALID_NAME,
-                location,
-                f"'{value}' is not a usable {role} name.",
-                remedy=(
-                    "A name starts with a letter or underscore and continues with "
-                    "letters, digits or underscores."
-                ),
-            )
-        return value
-
-    @classmethod
-    def split_reference(cls, value: Any, location: str, *, require_member: bool) -> Tuple[str, Optional[str]]:
-        """Splits ``component`` or ``component.member`` into its two halves.
-
-        This is the single place the reference grammar is enforced, for the ``from`` key of
-        an input item as well as for every value of a ``sizing_sources`` block. Both use the
-        same syntax and differ only in whether the second half is required: a sizing source
-        always names a fact, while an input may name a component alone and let the target's
-        declared defaults pick the ports.
-
-        Args:
-            value: The raw YAML value that should be a reference.
-            location: Dotted key path of the value, used in the message.
-            require_member: Whether the dotted second half must be present.
-
-        Returns:
-            A pair of the component name and either the member name or ``None``.
-
-        Raises:
-            EnergySystemFormatError: ``EF-06`` if the value is not a string, contains
-                wildcard or path characters, has the wrong number of dotted parts, or
-                has a part that is not a well-formed identifier.
-        """
-        if not isinstance(value, str) or not value:
-            raise cls._reference_error(location, value, "a reference must be a non-empty string")
-        if any(character in value for character in cls.WILDCARD_CHARACTERS):
-            raise cls._reference_error(location, value, "wildcards are not part of this format version")
-        if any(character in value for character in cls.PATH_CHARACTERS):
-            raise cls._reference_error(location, value, "a reference names a component, never a path")
-        parts = value.split(cls.REFERENCE_SEPARATOR)
-        if len(parts) > 2 or (require_member and len(parts) != 2):
-            expected = "'<component>.<fact>'" if require_member else "'<component>' or '<component>.<Output>'"
-            raise cls._reference_error(location, value, f"a reference is written {expected}")
-        for part in parts:
-            if cls.IDENTIFIER_PATTERN.match(part) is None:
-                raise cls._reference_error(location, value, f"'{part}' is not a usable name")
-        return parts[0], parts[1] if len(parts) == 2 else None
-
-    @classmethod
-    def _reference_error(cls, location: str, value: Any, problem: str) -> EnergySystemFormatError:
-        """Builds the single rejection used for every malformed reference.
-
-        All reference problems share one identifier because they share one cause: the author
-        wrote something that is not a plain name or dotted name. Funnelling them through one
-        builder keeps the wording identical whichever rule tripped, and keeps the reason
-        visible in the message rather than only in the identifier.
-
-        Args:
-            location: Dotted key path of the value.
-            value: The reference the author wrote.
-            problem: The specific rule that was broken.
-
-        Returns:
-            The exception to raise; the caller raises it so the traceback starts there.
-        """
-        return EnergySystemFormatError(
-            EnergySystemErrorId.WILDCARD_OR_RELATIVE_REFERENCE,
-            location,
-            f"'{value}' is not a valid reference: {problem}.",
-        )
+from hisim.energy_system.names import NameRules
 
 
 class SourceReference(BaseModel):
@@ -426,19 +300,87 @@ class Group(BaseModel):
     components: Mapping[str, ComponentEntry] = Field(default_factory=dict)
 
 
+class VariantOption(BaseModel):
+    """One complete alternative world a variant can be resolved to.
+
+    An option is not an override and not a patch: it is one of the shapes the system may
+    have, written out in full. Whatever component the surrounding variant touches, every
+    option that has that component spells the whole entry — its class, its configuration and
+    its wiring — because the two worlds may wire the same component differently and there is
+    nothing for a partial statement to be merged into.
+
+    An option holds components and nothing else. Nesting a group or another variant inside
+    one would make the exclusivity of the choice depend on a second switch, and the format's
+    exclusivity is carried by the shape of the document rather than by a rule a loader solves.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    #: The only key an option may carry. An option with an empty components block is legal
+    #: and meaningful: it is how a file spells the world in which the variant adds nothing.
+    OPTION_KEYS: ClassVar[Tuple[str, ...]] = ("components",)
+
+    name: str
+    components: Mapping[str, ComponentEntry] = Field(default_factory=dict)
+
+
+class Variant(BaseModel):
+    """An exclusive choice between named options, exactly one of which is live.
+
+    Where a group is an independent on/off switch, a variant is a decision: a house has an
+    energy management system with a battery, *or* a bare electricity meter wired straight to
+    every participant. The two cases cannot be groups, because a group can add and remove
+    components but cannot rewire one that survives, and they cannot be two flags either,
+    since nothing in the format expresses "on exactly when the other is off".
+
+    The exclusivity needs no constraint solver because the document can only ever name one
+    option: ``selected`` holds a single name. That is also why one component name may repeat
+    across the options of one variant — only one of them ever exists — while the same name
+    appearing outside the variant, or in a second variant, is rejected at load.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    #: The keys a variant may carry, in canonical order. Both are required: a variant
+    #: without a selection decides nothing and one without options offers nothing.
+    VARIANT_KEYS: ClassVar[Tuple[str, ...]] = ("selected", "options")
+
+    name: str
+    selected: str
+    options: Mapping[str, VariantOption] = Field(default_factory=dict)
+
+    def selected_components(self) -> Mapping[str, ComponentEntry]:
+        """Returns the components of the option this variant is resolved to.
+
+        Every stage that works with the running system asks for this rather than walking the
+        options itself, so that "the live world" has one definition. A selection naming no
+        option is rejected at load, which is what makes the lookup safe here.
+
+        Returns:
+            The selected option's components, or an empty mapping for the — already
+            rejected — case of a selection that names no option.
+        """
+        option = self.options.get(self.selected)
+        return option.components if option is not None else {}
+
+
 class EnergySystemFile(BaseModel):
     """A whole energy-system document as loaded from YAML.
 
     The document has a fixed, small top level: the schema version that pins the format, a
-    name and description, the ungrouped components, the groups, and a metadata block only
-    generated files carry. Simulation parameters — time range, resolution, post-processing —
-    are deliberately not part of it: the same energy system is run over different periods,
-    and mixing the two would force a copy of the system per run.
+    name and description, the ungrouped components, the groups, the variants, and a metadata
+    block only generated files carry. Simulation parameters — time range, resolution,
+    post-processing — are deliberately not part of it: the same energy system is run over
+    different periods, and mixing the two would force a copy of the system per run.
 
-    Components live in two places, at the top level and inside groups, and both are equally
-    components of the system; the split says only whether they can be switched off together.
-    Checks that reason about the whole system therefore use :meth:`all_components`, which
-    merges the two in document order, while the emitter keeps them apart so files round-trip.
+    Components live in three places — at the top level, inside groups and inside the options
+    of variants — and all of them are equally components of the system; the place says only
+    how the component can be switched. Two readings of the document follow from that and must
+    not be confused. :meth:`all_components` is the *selected* world: what actually runs, and
+    the set every reference resolves against. :meth:`declared_components` is everything the
+    document writes down, the options nobody selected included, which is what the loader
+    checks and what a reference into an unselected option is allowed to name — the reference
+    is dropped when the option loses, exactly as a reference into a disabled group is.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -454,6 +396,7 @@ class EnergySystemFile(BaseModel):
         "description",
         "components",
         "groups",
+        "variants",
         "metadata",
     )
 
@@ -462,14 +405,18 @@ class EnergySystemFile(BaseModel):
     description: Optional[str] = None
     components: Mapping[str, ComponentEntry] = Field(default_factory=dict)
     groups: Mapping[str, Group] = Field(default_factory=dict)
+    variants: Mapping[str, Variant] = Field(default_factory=dict)
     metadata: Optional[Mapping[str, Any]] = None
 
     def all_components(self) -> Dict[str, ComponentEntry]:
-        """Returns every component of the system, grouped or not, by name.
+        """Returns every component of the selected system, wherever it is written, by name.
 
         Names are global across the whole document, so this mapping is the file's namespace
-        and the set every reference resolves against. Ungrouped entries come first and groups
-        follow in document order, which makes the result stable enough to list in a message.
+        and the set every reference resolves against. It is selection-aware: a variant
+        contributes the components of the option it selects and nothing from the options it
+        does not, because those describe worlds this file is not. Ungrouped entries come
+        first, then the groups and then the variants in document order, which makes the
+        result stable enough to list in a message.
 
         Returns:
             A fresh mapping from component name to entry; mutating it does not affect
@@ -478,7 +425,53 @@ class EnergySystemFile(BaseModel):
         merged: Dict[str, ComponentEntry] = dict(self.components)
         for group in self.groups.values():
             merged.update(group.components)
+        for variant in self.variants.values():
+            merged.update(variant.selected_components())
         return merged
+
+    def declared_components(self) -> Dict[str, ComponentEntry]:
+        """Returns every component the document writes down, unselected options included.
+
+        The loader needs the wider set that :meth:`all_components` deliberately narrows. A
+        reference from a surviving component into a variant option is legal whichever option
+        wins — that is what lets a building list ``- ems`` while the metering variant may
+        resolve to a world without one — so a reference is checked against what the document
+        declares and dropped later if its target's option lost.
+
+        Where one name occurs in several options of one variant, the last of them wins; the
+        entries themselves are reached through :meth:`declared_entries`, which keeps all of
+        them, so no option escapes the per-entry checks.
+
+        Returns:
+            A fresh mapping from component name to entry.
+        """
+        merged: Dict[str, ComponentEntry] = dict(self.components)
+        for group in self.groups.values():
+            merged.update(group.components)
+        for variant in self.variants.values():
+            for option in variant.options.values():
+                merged.update(option.components)
+        return merged
+
+    def declared_entries(self) -> Tuple[ComponentEntry, ...]:
+        """Returns every entry the document holds, including two options' takes on one name.
+
+        The one place a component name can carry two different entries is two options of the
+        same variant, and both of them have to obey the rules a single entry obeys: a file is
+        wrong if the option nobody selected today is malformed, because tomorrow's file
+        selects it. So the per-entry checks walk this sequence rather than a mapping.
+
+        Returns:
+            The entries in document order: the ungrouped ones, then the groups', then every
+            option's, each entry carrying its own name.
+        """
+        entries = list(self.components.values())
+        for group in self.groups.values():
+            entries.extend(group.components.values())
+        for variant in self.variants.values():
+            for option in variant.options.values():
+                entries.extend(option.components.values())
+        return tuple(entries)
 
     def group_of(self, component_name: str) -> Optional[str]:
         """Returns the name of the group a component sits in, if any.

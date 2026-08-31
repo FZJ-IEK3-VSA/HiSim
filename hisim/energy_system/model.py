@@ -1,4 +1,4 @@
-"""The in-memory model of an energy-system file: components, groups and their inputs.
+"""The in-memory model of an energy-system file: components, groups, variants and inputs.
 
 An energy-system file is a YAML document describing one simulated household in a single
 direction: every component entry states what the component is, how it is configured, where
@@ -300,19 +300,87 @@ class Group(BaseModel):
     components: Mapping[str, ComponentEntry] = Field(default_factory=dict)
 
 
+class VariantOption(BaseModel):
+    """One complete alternative world a variant can be resolved to.
+
+    An option is not an override and not a patch: it is one of the shapes the system may
+    have, written out in full. Whatever component the surrounding variant touches, every
+    option that has that component spells the whole entry — its class, its configuration and
+    its wiring — because the two worlds may wire the same component differently and there is
+    nothing for a partial statement to be merged into.
+
+    An option holds components and nothing else. Nesting a group or another variant inside
+    one would make the exclusivity of the choice depend on a second switch, and the format's
+    exclusivity is carried by the shape of the document rather than by a rule a loader solves.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    #: The only key an option may carry. An option with an empty components block is legal
+    #: and meaningful: it is how a file spells the world in which the variant adds nothing.
+    OPTION_KEYS: ClassVar[Tuple[str, ...]] = ("components",)
+
+    name: str
+    components: Mapping[str, ComponentEntry] = Field(default_factory=dict)
+
+
+class Variant(BaseModel):
+    """An exclusive choice between named options, exactly one of which is live.
+
+    Where a group is an independent on/off switch, a variant is a decision: a house has an
+    energy management system with a battery, *or* a bare electricity meter wired straight to
+    every participant. The two cases cannot be groups, because a group can add and remove
+    components but cannot rewire one that survives, and they cannot be two flags either,
+    since nothing in the format expresses "on exactly when the other is off".
+
+    The exclusivity needs no constraint solver because the document can only ever name one
+    option: ``selected`` holds a single name. That is also why one component name may repeat
+    across the options of one variant — only one of them ever exists — while the same name
+    appearing outside the variant, or in a second variant, is rejected at load.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    #: The keys a variant may carry, in canonical order. Both are required: a variant
+    #: without a selection decides nothing and one without options offers nothing.
+    VARIANT_KEYS: ClassVar[Tuple[str, ...]] = ("selected", "options")
+
+    name: str
+    selected: str
+    options: Mapping[str, VariantOption] = Field(default_factory=dict)
+
+    def selected_components(self) -> Mapping[str, ComponentEntry]:
+        """Returns the components of the option this variant is resolved to.
+
+        Every stage that works with the running system asks for this rather than walking the
+        options itself, so that "the live world" has one definition. A selection naming no
+        option is rejected at load, which is what makes the lookup safe here.
+
+        Returns:
+            The selected option's components, or an empty mapping for the — already
+            rejected — case of a selection that names no option.
+        """
+        option = self.options.get(self.selected)
+        return option.components if option is not None else {}
+
+
 class EnergySystemFile(BaseModel):
     """A whole energy-system document as loaded from YAML.
 
     The document has a fixed, small top level: the schema version that pins the format, a
-    name and description, the ungrouped components, the groups, and a metadata block only
-    generated files carry. Simulation parameters — time range, resolution, post-processing —
-    are deliberately not part of it: the same energy system is run over different periods,
-    and mixing the two would force a copy of the system per run.
+    name and description, the ungrouped components, the groups, the variants, and a metadata
+    block only generated files carry. Simulation parameters — time range, resolution,
+    post-processing — are deliberately not part of it: the same energy system is run over
+    different periods, and mixing the two would force a copy of the system per run.
 
-    Components live in two places, at the top level and inside groups, and both are equally
-    components of the system; the split says only whether they can be switched off together.
-    Checks that reason about the whole system therefore use :meth:`all_components`, which
-    merges the two in document order, while the emitter keeps them apart so files round-trip.
+    Components live in three places — at the top level, inside groups and inside the options
+    of variants — and all of them are equally components of the system; the place says only
+    how the component can be switched. Two readings of the document follow from that and must
+    not be confused. :meth:`all_components` is the *selected* world: what actually runs, and
+    the set every reference resolves against. :meth:`declared_components` is everything the
+    document writes down, the options nobody selected included, which is what the loader
+    checks and what a reference into an unselected option is allowed to name — the reference
+    is dropped when the option loses, exactly as a reference into a disabled group is.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -328,6 +396,7 @@ class EnergySystemFile(BaseModel):
         "description",
         "components",
         "groups",
+        "variants",
         "metadata",
     )
 
@@ -336,14 +405,18 @@ class EnergySystemFile(BaseModel):
     description: Optional[str] = None
     components: Mapping[str, ComponentEntry] = Field(default_factory=dict)
     groups: Mapping[str, Group] = Field(default_factory=dict)
+    variants: Mapping[str, Variant] = Field(default_factory=dict)
     metadata: Optional[Mapping[str, Any]] = None
 
     def all_components(self) -> Dict[str, ComponentEntry]:
-        """Returns every component of the system, grouped or not, by name.
+        """Returns every component of the selected system, wherever it is written, by name.
 
         Names are global across the whole document, so this mapping is the file's namespace
-        and the set every reference resolves against. Ungrouped entries come first and groups
-        follow in document order, which makes the result stable enough to list in a message.
+        and the set every reference resolves against. It is selection-aware: a variant
+        contributes the components of the option it selects and nothing from the options it
+        does not, because those describe worlds this file is not. Ungrouped entries come
+        first, then the groups and then the variants in document order, which makes the
+        result stable enough to list in a message.
 
         Returns:
             A fresh mapping from component name to entry; mutating it does not affect
@@ -352,7 +425,53 @@ class EnergySystemFile(BaseModel):
         merged: Dict[str, ComponentEntry] = dict(self.components)
         for group in self.groups.values():
             merged.update(group.components)
+        for variant in self.variants.values():
+            merged.update(variant.selected_components())
         return merged
+
+    def declared_components(self) -> Dict[str, ComponentEntry]:
+        """Returns every component the document writes down, unselected options included.
+
+        The loader needs the wider set that :meth:`all_components` deliberately narrows. A
+        reference from a surviving component into a variant option is legal whichever option
+        wins — that is what lets a building list ``- ems`` while the metering variant may
+        resolve to a world without one — so a reference is checked against what the document
+        declares and dropped later if its target's option lost.
+
+        Where one name occurs in several options of one variant, the last of them wins; the
+        entries themselves are reached through :meth:`declared_entries`, which keeps all of
+        them, so no option escapes the per-entry checks.
+
+        Returns:
+            A fresh mapping from component name to entry.
+        """
+        merged: Dict[str, ComponentEntry] = dict(self.components)
+        for group in self.groups.values():
+            merged.update(group.components)
+        for variant in self.variants.values():
+            for option in variant.options.values():
+                merged.update(option.components)
+        return merged
+
+    def declared_entries(self) -> Tuple[ComponentEntry, ...]:
+        """Returns every entry the document holds, including two options' takes on one name.
+
+        The one place a component name can carry two different entries is two options of the
+        same variant, and both of them have to obey the rules a single entry obeys: a file is
+        wrong if the option nobody selected today is malformed, because tomorrow's file
+        selects it. So the per-entry checks walk this sequence rather than a mapping.
+
+        Returns:
+            The entries in document order: the ungrouped ones, then the groups', then every
+            option's, each entry carrying its own name.
+        """
+        entries = list(self.components.values())
+        for group in self.groups.values():
+            entries.extend(group.components.values())
+        for variant in self.variants.values():
+            for option in variant.options.values():
+                entries.extend(option.components.values())
+        return tuple(entries)
 
     def group_of(self, component_name: str) -> Optional[str]:
         """Returns the name of the group a component sits in, if any.

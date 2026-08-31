@@ -116,6 +116,8 @@ from hisim.energy_system.model import (
     Group,
     InputItem,
     SourceReference,
+    Variant,
+    VariantOption,
 )
 from hisim.energy_system.emitter import EnergySystemEmitter
 from hisim.energy_system.groups import (
@@ -165,6 +167,8 @@ __all__ = [
     "ShrunkSizingList",
     "SourceReference",
     "StructuralValidator",
+    "Variant",
+    "VariantOption",
     "dump_energy_system",
     "enabled_component_names",
     "expand_groups",

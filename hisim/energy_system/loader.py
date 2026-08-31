@@ -20,13 +20,13 @@ a component class, so nothing is decided yet about presets, fields or ports.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Mapping, Union
+from typing import Any, ClassVar, Dict, Mapping, Tuple, Union
 
 from hisim.energy_system.document import RawDocument
 from hisim.energy_system.emitter import EnergySystemEmitter
 from hisim.energy_system.entries import EntryReader
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemFormatError
-from hisim.energy_system.model import EnergySystemFile, Group
+from hisim.energy_system.model import EnergySystemFile, Group, Variant, VariantOption
 from hisim.energy_system.names import NameRules
 from hisim.energy_system.validation import validate_structure
 
@@ -44,6 +44,10 @@ class EnergySystemReader:
     component class and never repairs, defaults or skips anything: a file is taken as
     written or rejected with a message naming the offending element and the valid values.
     """
+
+    #: The top-level blocks a component may be written in. A document naming none of them
+    #: describes nothing, which is reported as such rather than as an empty run.
+    COMPONENT_BLOCKS: ClassVar[Tuple[str, ...]] = ("components", "groups", "variants")
 
     @classmethod
     def read(cls, source: Union[str, Path]) -> EnergySystemFile:
@@ -88,11 +92,13 @@ class EnergySystemReader:
                 alternatives_label="top-level keys",
                 offending_value=str(unknown[0]),
             )
-        if "components" not in document and "groups" not in document:
+        if not any(key in document for key in cls.COMPONENT_BLOCKS):
             raise EnergySystemFormatError(
                 EnergySystemErrorId.TOP_LEVEL_SHAPE,
                 origin,
-                "the document declares neither 'components' nor 'groups'.",
+                "the document declares no components at all.",
+                alternatives=cls.COMPONENT_BLOCKS,
+                alternatives_label="blocks that hold components",
             )
         metadata = RawDocument.mapping(document["metadata"], f"{origin}.metadata") if "metadata" in document else None
         return EnergySystemFile(
@@ -101,6 +107,7 @@ class EnergySystemReader:
             description=RawDocument.string(document.get("description"), f"{origin}.description", required=False),
             components=EntryReader.components(document.get("components"), f"{origin}.components"),
             groups=cls._build_groups(document.get("groups"), f"{origin}.groups"),
+            variants=cls._build_variants(document.get("variants"), f"{origin}.variants"),
             metadata=metadata,
         )
 
@@ -132,7 +139,8 @@ class EnergySystemReader:
         """Builds the groups block: named sets of components, each with an on/off flag.
 
         Both keys of a group are required: a group without a flag cannot be switched and a
-        group without components cannot switch anything.
+        group without components cannot switch anything. An option of a variant is the one
+        components block that may legally be empty, which is why that check lives there.
 
         Raises:
             EnergySystemFormatError: ``EF-08`` for an unusable group name, ``EF-18`` for a
@@ -145,16 +153,7 @@ class EnergySystemReader:
             NameRules.check_identifier(name, location, "group")
             group_location = f"{location}.{name}"
             body = RawDocument.mapping(value, group_location)
-            for key in body:
-                if key not in Group.GROUP_KEYS:
-                    raise EnergySystemFormatError(
-                        EnergySystemErrorId.UNKNOWN_ENTRY_KEY,
-                        f"{group_location}.{key}",
-                        f"'{key}' is not a key of a group.",
-                        alternatives=Group.GROUP_KEYS,
-                        alternatives_label="group keys",
-                        offending_value=str(key),
-                    )
+            cls._check_block_keys(body, group_location, Group.GROUP_KEYS, "group")
             if not isinstance(body.get("enabled"), bool):
                 raise EnergySystemFormatError(
                     EnergySystemErrorId.GROUP_ENABLED_FLAG,
@@ -173,6 +172,97 @@ class EnergySystemReader:
                 )
             groups[name] = Group(name=name, enabled=bool(body["enabled"]), components=members)
         return groups
+
+    @classmethod
+    def _build_variants(cls, raw: Any, location: str) -> Dict[str, Variant]:
+        """Builds the variants block: named exclusive choices, each resolved to one option.
+
+        Both keys of a variant are required, and the selection is checked against the options
+        right here rather than left to the validator, because the message that makes the
+        mistake trivial to fix is the one that lists the options the variant actually has.
+
+        Raises:
+            EnergySystemFormatError: ``EF-08`` for an unusable variant name, ``EF-18`` for a
+                key a variant does not have, ``EF-55`` for a selection naming no option of
+                this variant, ``EF-56`` for a variant offering no option at all.
+        """
+        block = RawDocument.mapping(raw, location)
+        variants: Dict[str, Variant] = {}
+        for name, value in block.items():
+            NameRules.check_identifier(name, location, "variant")
+            variant_location = f"{location}.{name}"
+            body = RawDocument.mapping(value, variant_location)
+            cls._check_block_keys(body, variant_location, Variant.VARIANT_KEYS, "variant")
+            options = cls._build_options(body.get("options"), f"{variant_location}.options", name)
+            selected = RawDocument.string(body.get("selected"), f"{variant_location}.selected", required=True)
+            if selected not in options:
+                raise EnergySystemFormatError(
+                    EnergySystemErrorId.UNKNOWN_VARIANT_OPTION,
+                    f"{variant_location}.selected",
+                    f"variant '{name}' selects '{selected}', which is none of its options.",
+                    alternatives=tuple(options),
+                    alternatives_label=f"options of '{name}'",
+                    offending_value=str(selected),
+                )
+            variants[name] = Variant(name=name, selected=selected or "", options=options)
+        return variants
+
+    @classmethod
+    def _build_options(cls, raw: Any, location: str, variant_name: str) -> Dict[str, VariantOption]:
+        """Builds the options of one variant, each a complete alternative world of its own.
+
+        An option with an empty ``components`` block is accepted, unlike an empty group: it is
+        how a file spells the world in which the variant contributes nothing, which is a real
+        alternative and not a mistake. A variant with no option at all is a mistake, since
+        there is then nothing for its selection to name.
+
+        Raises:
+            EnergySystemFormatError: ``EF-56`` for an empty options mapping, ``EF-08`` for an
+                unusable option name, ``EF-18`` for a key an option does not have.
+        """
+        block = RawDocument.mapping(raw, location)
+        if not block:
+            raise EnergySystemFormatError(
+                EnergySystemErrorId.EMPTY_VARIANT,
+                location,
+                f"variant '{variant_name}' offers no options.",
+                remedy="A variant is a choice between at least two alternative worlds; write them under 'options'.",
+            )
+        options: Dict[str, VariantOption] = {}
+        for name, value in block.items():
+            NameRules.check_identifier(name, location, "variant option")
+            option_location = f"{location}.{name}"
+            body = RawDocument.mapping(value, option_location)
+            cls._check_block_keys(body, option_location, VariantOption.OPTION_KEYS, "variant option")
+            options[name] = VariantOption(
+                name=name,
+                components=EntryReader.components(body.get("components"), f"{option_location}.components"),
+            )
+        return options
+
+    @classmethod
+    def _check_block_keys(cls, body: Mapping[str, Any], location: str, allowed: Tuple[str, ...], role: str) -> None:
+        """Rejects a key one of the document's named blocks does not know.
+
+        Groups, variants and options all have a small closed set of keys, and an author who
+        writes a fifth one has almost always reached for another block's vocabulary — an
+        ``enabled`` flag on a variant, an ``options`` mapping on a group. Naming the role in
+        the message is what turns that into one obvious edit.
+
+        Raises:
+            EnergySystemFormatError: ``EF-18`` naming the key and listing the ones the block
+                does accept.
+        """
+        for key in body:
+            if key not in allowed:
+                raise EnergySystemFormatError(
+                    EnergySystemErrorId.UNKNOWN_ENTRY_KEY,
+                    f"{location}.{key}",
+                    f"'{key}' is not a key of a {role}.",
+                    alternatives=allowed,
+                    alternatives_label=f"{role} keys",
+                    offending_value=str(key),
+                )
 
 
 def load_energy_system(source: Union[str, Path]) -> EnergySystemFile:

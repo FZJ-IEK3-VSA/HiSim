@@ -35,6 +35,7 @@ from hisim.energy_system.model import (
     ExplicitWire,
     Group,
     InputItem,
+    Variant,
 )
 
 
@@ -166,6 +167,8 @@ class EnergySystemEmitter:
         document["components"] = {name: cls._entry(entry) for name, entry in model.components.items()}
         if model.groups:
             document["groups"] = {name: cls._group(group) for name, group in model.groups.items()}
+        if model.variants:
+            document["variants"] = {name: cls._variant(variant) for name, variant in model.variants.items()}
         if model.metadata is not None:
             document["metadata"] = dict(model.metadata)
         return document
@@ -180,6 +183,26 @@ class EnergySystemEmitter:
         return {
             "enabled": group.enabled,
             "components": {name: cls._entry(entry) for name, entry in group.components.items()},
+        }
+
+    @classmethod
+    def _variant(cls, variant: Variant) -> Dict[str, Any]:
+        """Renders one variant: the option it selects first, then the options themselves.
+
+        The selection comes first because it is the one line a consumer of the file edits,
+        and the options follow in the order they were written; an option's mapping keeps its
+        ``components`` key even when empty, so that the world in which the variant adds
+        nothing is written down rather than implied by an absent block.
+
+        Returns:
+            The variant's mapping in canonical key order.
+        """
+        return {
+            "selected": variant.selected,
+            "options": {
+                name: {"components": {member: cls._entry(entry) for member, entry in option.components.items()}}
+                for name, option in variant.options.items()
+            },
         }
 
     @classmethod

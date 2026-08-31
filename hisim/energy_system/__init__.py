@@ -22,8 +22,8 @@ The modules, in dependency order:
       round trip and by the annotated writer of a run record.
     - :mod:`hisim.energy_system.entries` — reading one component entry, which is the same
       block wherever it is written: at the top level, in a group or in a variant option.
-    - :mod:`hisim.energy_system.groups` — the off rule: what a switched-off group removes from
-      a file, and the record of what it removed.
+    - :mod:`hisim.energy_system.groups` — the two switches: what a switched-off group and an
+      unselected variant option remove from a file, and the record of what they removed.
     - :mod:`hisim.energy_system.validation` — the class-independent rules: names, groups,
       a closed reference graph, configuration origin, input consistency, portable paths.
     - :mod:`hisim.energy_system.loader` — the public read and write entry points that put
@@ -125,6 +125,7 @@ from hisim.energy_system.groups import (
     ExpansionRecord,
     GroupExpander,
     ShrunkSizingList,
+    VariantSelection,
     enabled_component_names,
     expand_groups,
 )
@@ -169,6 +170,7 @@ __all__ = [
     "StructuralValidator",
     "Variant",
     "VariantOption",
+    "VariantSelection",
     "dump_energy_system",
     "enabled_component_names",
     "expand_groups",

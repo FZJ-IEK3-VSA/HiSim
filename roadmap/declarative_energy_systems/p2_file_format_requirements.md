@@ -154,9 +154,11 @@ legal precisely because only one option ever exists (R15.2). With `direct_meteri
 items on the building, the heat-distribution controller and the two heat-pump controllers are dropped by
 R15.3, exactly as R14.3 drops references into a disabled group.
 
-**Not yet in the mockups.** `energy_system_mockup.yaml` is an executable fixture — AC-P2.1 requires every
-mockup to load and validate — so it gains this block in the same change that teaches the loader to read it
-(plan §P2.1), not before. Until then the syntax lives here.
+**In the mockups since 2026-08-31 (P2.1).** `energy_system_mockup.yaml` is an executable fixture — AC-P2.1
+requires every mockup to load and validate — so it gained this block in the same change that taught the loader
+to read it (plan §P2.1). Its `battery_and_ems` group and its top-level `meter` are now the
+`electricity_management` variant with the two options above; the example here is the abbreviated form of what
+the mockup carries.
 
 ### Quality
 - RQ2 `[proposed]` `schema_version: 3` is mandatory; other values are rejected with a message naming the supported version.

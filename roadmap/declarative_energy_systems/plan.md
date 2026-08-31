@@ -70,14 +70,15 @@ Nothing in P3 or P4 consumes variants except P3's grouping pass (R10). `[decided
 starts** — the format is cheaper to settle while three mockups and one real file exist than after twenty-one recorded
 files do, and it answers the RenoVisor requirement in code rather than on paper.
 
-- [ ] `variants: {name: {selected, options: {name: {components}}}}` in the model, loader and JSON Schema
-- [ ] Selection folded into the existing group-expansion pre-pass; the selected option's components join the top level, so nothing downstream sees a variant
-- [ ] The five R15.5 rejections with their messages
+- [x] `variants: {name: {selected, options: {name: {components}}}}` in the model, loader and JSON Schema *(2026-08-31)*
+- [x] Selection folded into the existing group-expansion pre-pass; the selected option's components join the top level, so nothing downstream sees a variant *(2026-08-31)*
+- [x] The five R15.5 rejections with their messages *(2026-08-31: EF-55 unknown selection, EF-56 empty options, EF-57 two variants, EF-52 for the two name collisions)*
 - [ ] Identity test extended to every (mockup, variant, option) triple; audit records the selection
-- [ ] `facts` reports groups and variants as one knob surface (R15.8)
-- [ ] UC2 mockup: move the `battery_and_ems` group and the meter into an `electricity_management` variant. This
+- [x] `facts` reports groups and variants as one knob surface (R15.8) *(2026-08-31)*
+- [x] UC2 mockup: move the `battery_and_ems` group and the meter into an `electricity_management` variant. This
       belongs to the code change, not to the requirements: a mockup is an executable fixture (AC-P2.1), so the
       block may only enter it once the loader reads it. Until then the syntax lives in R15's example.
+      *(2026-08-31: `meter` written out in both options, O2 resolved in the mockup's footer)*
 
 ## P3 — Recording & setup migration
 

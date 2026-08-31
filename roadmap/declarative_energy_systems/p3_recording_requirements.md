@@ -209,7 +209,7 @@ extension of the golden gate and it blesses nothing.
 | AC-P3.5 | In UC-P3.1 every component of the 9 converted classes appears with `preset:`/`constructor:` and a sparse override block equal to the fields the setup mutated; every unconverted class appears as a full `config` block; the file contains no `AUTO`, `sizing_sources` or `groups`. | R2.2, R2.4 |
 | AC-P3.6 | For every recorded file, each bare `inputs` item corresponds to a source whose wires equal the default connections exactly; removing one default wire from a setup turns that item into explicit wires on re-record. | R2.3 |
 | AC-P3.7 | `dump(load(f)) == f` for every recorded file. | R2.5 |
-| AC-P3.8 | The car setup records `3·N + 11` (or `+ 9`) components for the default household and re-executes byte-identically. | R7 |
+| AC-P3.8 | The car setup records `3·N + 14` components for the default household and re-executes byte-identically. *(Measured 2026-08-31 with D-23: 17 components for the default CHR01 household, which yields `N = 1`. The `+ 11` and `+ 9` of the original wording undercounted the car-free part of the setup by three.)* | R7 |
 | AC-P3.9 | The 12 base files (R6) each run under `one_day_15min.simulation.yaml` from `energy_systems/`; the heat-pump base is the one P5 hands to RenoVisor. | R6 |
 | AC-P3.10 | Apart from the removal commit of R5.2, `system_setups/`, the v1 JSONs and `scenario-json-freshness.yml` are unchanged by the P3 PRs, and every recorded file lands in `energy_systems/`; no v3 file is written into `system_setups/`. | R9, R5.2 |
 | AC-P3.13 | For every setup with a probe list, each probe column's flat recording equals the grouped file realized with that column's selections, byte for byte — the baseline column against the R6 base file. | R10.6, R10.1 |

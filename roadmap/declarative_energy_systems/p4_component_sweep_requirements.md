@@ -40,7 +40,7 @@ Surveyed: **88 config classes** in 65 modules; **9 converted** (4 of them still 
 ## 5. Goals and Non-Goals
 
 **Goals** — G1 every component config has presets/constructors and no legacy factory · G2 every sized value is computed by a class-side law from declared facts; no arithmetic in setups · G3 every name that becomes wire format is listed in this document before it is minted · G4 every result-changing conversion is a separate, diffed commit · G5 dead classes are removed before anyone mints a name for them.
-**Non-Goals** — many-cardinality laws (EQ2: no first consumer found in any group) · climate facts beyond D-21 · the runtime half of `SingletonSimRepository` (forecasts, 5R1C coefficients) · template/repeat layer (cars: D-23) · renaming legacy aggregator port names (P3 Q-P3.2) · retiring `system_setups/` or the v1 JSONs.
+**Non-Goals** — many-cardinality laws (EQ2: no first consumer found in any group) · climate facts beyond D-21 · the runtime half of `SingletonSimRepository` (forecasts, 5R1C coefficients) · template/repeat layer (the car setup's N-car loop stays Python even after D-23) · renaming legacy aggregator port names (P3 Q-P3.2) · retiring `system_setups/` or the v1 JSONs.
 
 ## 6. Use Cases
 
@@ -146,7 +146,7 @@ Legend: **conv** convert · **del** delete · **done** converted (remaining work
 
 | Class | Act | Presets / constructors | Notes | Beh. | Dec. |
 |---|---|---|---|---|---|
-| `CarConfig` | ? | `electric`, `diesel` | `Car` needs a third constructor argument the executor cannot pass | N | D-23 |
+| `CarConfig` | done | `for_household` | `Car` built from `(parameters, config)`; the driving profile is handed over through the per-simulation `SimRepository` and the config carries its identity (`household_name`, `car_name`) | N | ~~D-23~~ |
 | `CarBatteryConfig` | conv | `standard` | runtime accumulators in the config | N | |
 | `ChargingStationConfig` | conv | `for_charging_station_set` (+ `standard`?) | `lower_threshold…` ← `Self(charging_station_set)` × 0.1 | N/? | D-24 |
 | `ElectrolyzerConfig`, `ElectrolyzerControllerConfig` | conv | `standard`, `for_device(electrolyzer_name)` | `read_config` folded in; raise on unknown name | N | D-26 |
@@ -189,7 +189,7 @@ Each batch PR contains: the R3 rows it implements (unchanged or with the amendme
 - C-P4.1 `[given]` Golden parity (E7) for every non-R5 commit; R5 commits re-bless with the diff table in the PR.
 - C-P4.2 `[proposed; survey]` A field that shapes a component's I/O surface (`with_domestic_hot_water_preparation`, `position_hot_water_storage_in_system`, `fuel`) stays a plain field; setting it in `config:` is legal, but the wiring then depends on a config value — the executor must build before wiring (it does).
 - C-P4.3 `[proposed; survey B]` `Self(field)` laws must not read a rounded sibling where the legacy code used the unrounded value (battery inverter); laws read facts.
-- C-P4.4 `[proposed; survey C]` `Car`, `SmartDevice` depend on a simulation result, not a catalogue; no constructor can express them (D-23, D-30).
+- C-P4.4 `[proposed; survey C]` `Car` and `SmartDevice` depend on a simulation result, not a catalogue, so no constructor can carry their *payload* (D-23, D-30). D-23 (answered 2026-08-31) shows what a constructor can still do for such a class: carry the payload's **identity** and leave the payload itself to a repository hand-off between the producing component and the consuming one.
 - C-P4.5 `[proposed]` Enum-typed sizable fields carry `value_type=` (P2 R3.7); free-text fields over closed sets (`gas_type`, `operating_mode`, `operation_mode`, `building_heat_capacity_class`, `electrolyzer_type`) become enums before P5 freezes them (D-27 for three of them).
 - C-P4.6 `[proposed]` Many-cardinality is not needed by any class in R3 (EQ2 confirmed by all three surveys); `Many` stays a raising hook.
 - A1 `[proposed]` Batches are reviewed against recorded-file diffs (P3 Q-P3.1 (a), decided 2026-08-28). A batch that lands before its classes have been recorded uses the Python setups' regenerated v1 fixtures instead, and re-records as soon as the file exists.
@@ -222,7 +222,7 @@ The 32 questions below are owner decisions surfaced by the survey. **Each five-p
 | D-2 | `controller_l1_heatpump` (0 call sites): delete or convert? | (a) delete | R3, R6 |
 | D-8 | `advanced_fuel_cell_controller` + 3 legacy `configuration.py` configs (unrunnable): obsolete together? | (a) yes, one commit | R6 |
 | D-16 | Storage controller, MPC, PID, wind, price signal, dead factories, 5 `configuration.py` classes | (a) delete storage controller, `configuration.py` five and dead factories now; defer MPC/PID/wind/price to the runtime-SimRepository redesign | R3, R6 |
-| D-23 | Car chain not expressible in a file: convert configs anyway, move the profile into `CarConfig`, or defer? | (c) defer to P5/R5; fix the shared-config aliasing bug only | R3 mobility |
+| D-23 | ~~Car chain not expressible in a file~~ | `[answered 2026-08-31]` **(d), none of the three offered:** convert now by *routing around* `SizingContext` rather than through it. The occupancy publishes its per-car profiles into the per-simulation `SimRepository` in `i_prepare_simulation`; `Car` reads its own there in the same phase and loses its third constructor argument; `CarConfig` gains `household_name`, `car_name` and a `for_household` constructor. The survey's objection stands unamended — a time series can never be a fact — but a config can name one. The N-car loop stays Python. The shared-config aliasing bug is fixed on the way, since each car now builds its own config. | R3 mobility |
 | D-25 | Two manufacturer JSONs absent; six H₂/RSOC classes unbuildable | (b) obsolete the RSOC trio and the fuel-cell table path; keep `pem` presets | R3 H₂, R6 |
 | D-29 | Two electrolyzer + two H₂-storage classes for two devices | (a) keep `generic_*`, obsolete `generic_electrolyzer_and_h2_storage` + `AdvElectrolyzerConfig` | R3 H₂ |
 | D-30 | `generic_smart_device` defective: delete or fix? | (a) delete | R6 |

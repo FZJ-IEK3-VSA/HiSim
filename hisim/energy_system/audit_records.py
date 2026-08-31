@@ -206,11 +206,17 @@ class AuditRecord:
     read it: the writer that serializes it next to the record, and the comment renderer that
     turns the same facts into the end-of-line annotations of the record itself. Both must say the
     same thing, which they do by construction when there is one source for both.
+
+    The selections are the one part of the audit without a counterpart in the record. A realized
+    record carries no variants — the selection is resolved into the top level — so a reader
+    comparing it with the authored file would find components that appear out of nowhere unless
+    something states which option each variant chose and what it contributed.
     """
 
     system: str
     components: Tuple[ComponentAudit, ...]
     disabled_groups: Tuple[str, ...]
+    variant_selections: Tuple[Dict[str, Any], ...]
     dropped_components: Tuple[str, ...]
     dropped_input_items: Tuple[Dict[str, Any], ...]
     shrunk_sizing_lists: Tuple[Dict[str, Any], ...]
@@ -244,6 +250,7 @@ class AuditRecord:
             "components": {entry.name: entry.to_document() for entry in self.components},
             "expansion": {
                 "disabled_groups": list(self.disabled_groups),
+                "variant_selections": [dict(selection) for selection in self.variant_selections],
                 "dropped_components": list(self.dropped_components),
                 "dropped_input_items": [dict(item) for item in self.dropped_input_items],
                 "shrunk_sizing_lists": [dict(item) for item in self.shrunk_sizing_lists],

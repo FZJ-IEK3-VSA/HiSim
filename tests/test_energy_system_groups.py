@@ -9,7 +9,11 @@ had they deleted the add-on instead of switching it off.
 
 The identity property is checked mechanically over every group of every mockup, against a
 deletion written independently in this module. That independence is the point of the test: a
-hand-deletion that called the expander would only prove the expander equals itself.
+hand-deletion that called the expander would only prove the expander equals itself. The same
+hand-written equivalent resolves the variants of a file, because a mockup carrying one is
+expanded with its selection applied and the comparison would otherwise be against a file the
+author could not have written; the variants' own tests live in
+``tests/test_energy_system_variants.py``.
 
 Each test states the failure mode it catches, and the error tests assert the identifier and
 the names in the message, because a rejection that does not say which line to edit only moves
@@ -18,7 +22,7 @@ the guessing to the author.
 
 # clean
 
-from typing import ClassVar, Dict, List, Set, Tuple
+from typing import AbstractSet, ClassVar, Dict, List, Mapping, Optional, Tuple
 
 import pytest
 
@@ -129,32 +133,49 @@ def disable_group(model: EnergySystemFile, group_name: str) -> EnergySystemFile:
     return model.model_copy(update={"groups": groups})
 
 
-def delete_groups_by_hand(model: EnergySystemFile, group_names: Set[str]) -> EnergySystemFile:
-    """Deletes whole groups and every reference to them the way an author editing would.
+def hand_written_equivalent(
+    model: EnergySystemFile,
+    *,
+    deleted_groups: AbstractSet[str] = frozenset(),
+    selections: Optional[Mapping[str, str]] = None,
+) -> EnergySystemFile:
+    """Writes out the file an author would have written with the switches already decided.
 
-    This is the independent reference implementation the expander is compared against, so it
-    is written straight from the rule rather than from the expander's code: drop the groups,
-    drop every input item naming one of their components, drop those components from every
-    sizing list, and refuse when a scalar sizing source would be left without a provider.
+    This is the independent reference implementation both identity properties are compared
+    against, so it is written straight from the two rules rather than from the expander's
+    code: delete the named groups, resolve every variant to one option, drop every input item
+    naming a component that neither survives, drop those components from every sizing list,
+    and refuse when a scalar sizing source would be left without a provider.
 
-    Several groups are deleted at once because a file may already carry a switched-off add-on
-    of its own, and the comparison is only meaningful when both sides removed the same set.
+    Both switches are applied at once because a file carries both, and a comparison is only
+    meaningful when the two sides removed the same set: the mockup already has a group
+    switched off and a variant selected, so leaving either alone here would make the expander
+    look wrong for doing its job.
 
     Args:
         model: The parsed file.
-        group_names: The groups to delete.
+        deleted_groups: The groups to delete outright, as an author deleting the add-on would.
+        selections: The option each named variant resolves to; a variant that is not named
+            keeps the selection the file itself makes.
 
     Returns:
-        The file as it would read with those add-ons never written.
+        The file as it would read with those add-ons never written and each variant's chosen
+        option spelled out at the top level, in document order after the ungrouped components.
 
     Raises:
         DanglingScalarReference: When a surviving entry takes a fact from a component the
             deletion removes and named that component in a scalar source line.
     """
-    removed = {member for name in group_names for member in model.groups[name].components}
+    chosen = {name: (selections or {}).get(name, variant.selected) for name, variant in model.variants.items()}
+    removed = {member for name in deleted_groups for member in model.groups[name].components}
+    for name, variant in model.variants.items():
+        surviving_members = set(variant.options[chosen[name]].components)
+        for option_name, option in variant.options.items():
+            if option_name != chosen[name]:
+                removed.update(set(option.components) - surviving_members)
 
     def rewrite(entry: ComponentEntry) -> ComponentEntry:
-        """Returns one surviving entry with every reference into the deleted group gone."""
+        """Returns one surviving entry with every reference into the deleted parts gone."""
         inputs = tuple(item for item in entry.inputs if item.source not in removed)
         sources: Dict[str, object] = {}
         for fact, value in entry.sizing_sources.items():
@@ -167,13 +188,16 @@ def delete_groups_by_hand(model: EnergySystemFile, group_names: Set[str]) -> Ene
         return entry.model_copy(update={"inputs": inputs, "sizing_sources": sources})
 
     components = {name: rewrite(entry) for name, entry in model.components.items()}
+    for name, variant in model.variants.items():
+        for member, entry in variant.options[chosen[name]].components.items():
+            components[member] = rewrite(entry)
     groups: Dict[str, Group] = {}
     for name, group in model.groups.items():
-        if name in group_names:
+        if name in deleted_groups:
             continue
         members = {member: rewrite(entry) for member, entry in group.components.items()}
         groups[name] = group.model_copy(update={"components": members})
-    return model.model_copy(update={"components": components, "groups": groups})
+    return model.model_copy(update={"components": components, "groups": groups, "variants": {}})
 
 
 def mockup_group_pairs() -> List[Tuple[str, str]]:
@@ -360,7 +384,7 @@ def test_disabling_a_group_equals_deleting_it_by_hand(mockup: str, group: str) -
     model = parse_energy_system(Mockups.path(mockup))
     already_off = {name for name, other in model.groups.items() if not other.enabled}
     try:
-        expected = delete_groups_by_hand(model, already_off | {group})
+        expected = hand_written_equivalent(model, deleted_groups=already_off | {group})
     except DanglingScalarReference:
         with pytest.raises(EnergySystemFormatError) as raised:
             expand_groups(disable_group(model, group))

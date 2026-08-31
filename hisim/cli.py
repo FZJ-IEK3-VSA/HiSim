@@ -287,12 +287,21 @@ class FactsRenderer(Report):
     a given consumer actually read it from. Both halves are printed even when resolution fails,
     with the kernel's own refusal underneath, so that a file which does not resolve still shows
     how far it got.
+
+    The report opens with the file's knobs, which is what a consumer of a checked-in energy
+    system edits: one boolean per group and one option name per variant. The two are listed
+    together because they are one surface to whoever is configuring a run, even though they are
+    two constructs — an independent add-on and an exclusive choice — to whoever authored it.
     """
 
     #: Width the fact column is padded to before the list of components, and the wider width the
     #: resolution section needs because its left column carries a component name as well.
     FACT_WIDTH: int = 46
     CONSUMER_WIDTH: int = 54
+
+    #: Width the knob names are padded to before their value, wide enough for the dotted
+    #: ``variants.<name>`` spelling a caller edits.
+    KNOB_WIDTH: int = 46
 
     @classmethod
     def render(cls, path: Path, stream: TextIO) -> int:
@@ -306,10 +315,12 @@ class FactsRenderer(Report):
             The exit code: zero when the file resolves, and the file-rejected code when it does
             not, the refusal having been written to the report itself.
         """
-        expanded, _ = expand_groups(parse_energy_system(path))
+        authored = parse_energy_system(path)
+        expanded, _ = expand_groups(authored)
         validate_structure(expanded)
-        bindings = validate_classes(expanded)
         print(f"{expanded.name} ({path})", file=stream)
+        cls._knobs(authored, stream)
+        bindings = validate_classes(expanded)
         cls._provided(bindings, stream)
         cls._consumed(bindings, stream)
         try:
@@ -322,6 +333,29 @@ class FactsRenderer(Report):
         cls._resolved(configured, stream)
         cls._warnings(configured.warnings, stream)
         return ExitCodes.OK
+
+    @classmethod
+    def _knobs(cls, authored: Any, stream: TextIO) -> None:
+        """Writes the switches of the authored file: a flag per group, an option per variant.
+
+        The authored file is read rather than the expanded one, because expansion is exactly
+        what removes the knobs: a switched-off group is gone from it and a variant is resolved
+        into the top level. Every option a variant offers is listed after the selected one, so
+        the line says both what is set and what may be set instead.
+
+        Args:
+            authored: The parsed file, before expansion.
+            stream: Where to write the section.
+        """
+        cls._heading("knobs", stream)
+        if not authored.groups and not authored.variants:
+            cls._item("(none)", stream)
+        for name, group in authored.groups.items():
+            cls._item(f"{f'groups.{name}'.ljust(cls.KNOB_WIDTH)}{str(group.enabled).lower()}", stream)
+        for name, variant in authored.variants.items():
+            alternatives = ", ".join(option for option in variant.options if option != variant.selected)
+            knob = f"variants.{name}".ljust(cls.KNOB_WIDTH)
+            cls._item(f"{knob}{variant.selected}  (or {alternatives or '<nothing else>'})", stream)
 
     @classmethod
     def _provided(cls, bindings: Any, stream: TextIO) -> None:

@@ -56,8 +56,9 @@ hisim energy-system facts energy_systems/gas_boiler_household.energy_system.yaml
 `describe` prints one class in full: its fields, its named presets and what each of them leaves to
 be sized, its named constructors and their parameters, how each sizable field is computed and from
 which facts, and which facts it contributes to the rest of a system. `facts` prints, for a whole
-file and without running it, every fact somebody provides, every fact somebody reads, and which
-provider each read resolved to.
+file and without running it, the file's knobs — a flag per group and a selected option per variant,
+which is everything a consumer of a checked-in system edits — and then every fact somebody
+provides, every fact somebody reads, and which provider each read resolved to.
 
 Editors get the same knowledge from `hisim/energy_system_v3.schema.json`, which every file in this
 directory binds to with its first line. The schema is generated from the same declarations

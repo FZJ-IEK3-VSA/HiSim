@@ -12,14 +12,18 @@ The modules, in dependency order:
 
     - :mod:`hisim.energy_system.errors` — the ``EF-`` catalogue of hard errors and the
       exception classes every rejection is raised through, one per lifecycle stage.
+    - :mod:`hisim.energy_system.names` — the identifier and reference grammar every name in
+      the format obeys, and the wildcard and path syntax it refuses.
     - :mod:`hisim.energy_system.model` — the frozen models of a file: components, groups,
-      the three input shapes, sizing source references, plus the format's name grammar.
+      variants with their options, the three input shapes and sizing source references.
     - :mod:`hisim.energy_system.document` — the YAML layer: which suffixes are read, the
       duplicate-key rule, the restricted boolean resolver, and typed value accessors.
     - :mod:`hisim.energy_system.emitter` — the canonical writer, shared by the plain
       round trip and by the annotated writer of a run record.
-    - :mod:`hisim.energy_system.groups` — the off rule: what a switched-off group removes from
-      a file, and the record of what it removed.
+    - :mod:`hisim.energy_system.entries` — reading one component entry, which is the same
+      block wherever it is written: at the top level, in a group or in a variant option.
+    - :mod:`hisim.energy_system.groups` — the two switches: what a switched-off group and an
+      unselected variant option remove from a file, and the record of what they removed.
     - :mod:`hisim.energy_system.validation` — the class-independent rules: names, groups,
       a closed reference graph, configuration origin, input consistency, portable paths.
     - :mod:`hisim.energy_system.loader` — the public read and write entry points that put
@@ -100,6 +104,7 @@ from hisim.energy_system.errors import (
     EnergySystemSizingError,
     EnergySystemWiringError,
 )
+from hisim.energy_system.names import NameRules
 from hisim.energy_system.model import (
     AggregatorFeed,
     ComponentEntry,
@@ -110,8 +115,9 @@ from hisim.energy_system.model import (
     ExplicitWire,
     Group,
     InputItem,
-    NameRules,
     SourceReference,
+    Variant,
+    VariantOption,
 )
 from hisim.energy_system.emitter import EnergySystemEmitter
 from hisim.energy_system.groups import (
@@ -119,6 +125,7 @@ from hisim.energy_system.groups import (
     ExpansionRecord,
     GroupExpander,
     ShrunkSizingList,
+    VariantSelection,
     enabled_component_names,
     expand_groups,
 )
@@ -161,6 +168,9 @@ __all__ = [
     "ShrunkSizingList",
     "SourceReference",
     "StructuralValidator",
+    "Variant",
+    "VariantOption",
+    "VariantSelection",
     "dump_energy_system",
     "enabled_component_names",
     "expand_groups",

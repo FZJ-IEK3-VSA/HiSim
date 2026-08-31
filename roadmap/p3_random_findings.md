@@ -1,6 +1,6 @@
 # P3 — random findings and defects
 
-**Status:** living document · **Opened:** 2026-08-28 · **Last entry:** 2026-08-31 (32 findings)
+**Status:** living document · **Opened:** 2026-08-28 · **Last entry:** 2026-08-31 (34 findings)
 **Context:** things that surfaced while implementing `roadmap/declarative_energy_systems/p3_implementation_spec.md`
 and were **not** what the work set out to do. Kept separately so the requirements and the spec stay about the
 design, and so nothing found on the way is lost when the branch merges.
@@ -181,7 +181,7 @@ second pass over the whole run.
 ## 7. What the parity rig found when it first ran
 
 The rig (R11) compares a setup's Python run against its recorded twin, in one process, at exact equality.
-Its first full matrix was **14 of 40 triples passing**. After the fixes below it is **36 of 40**. Everything
+Its first full matrix was **14 of 40 triples passing**. After the fixes below it is **40 of 40**. Everything
 in this section was found by that first run and by nothing else.
 
 ### F-24 — the executor paired dispatch signals positionally, and the battery stopped charging **[verified]**
@@ -241,8 +241,26 @@ difference leaks into KPI keys, not just result columns.*
 recorded under — so the twin only runs at that horizon and raises `IndexError` at any other. This is exactly
 what AC-P3.12 forbids, showing up at the *value* level rather than as a parameter key. Worse, `RandomNumbers`
 seeds `random.Random()` with **no seed**, so the two runs draw different numbers by construction and those
-two setups can never reach exact parity without seeding the component from its configuration. **Open — owner
-decision pending.** These are the only 4 of 40 triples still failing.
+two setups could never reach exact parity. **Both fixed 2026-08-31** (owner decision): the seed is now a
+configuration field, because a system description has to be able to say what a run will do, and the count
+comes from the simulation parameters, where the length of a run belongs. The injected-generator argument
+stays for tests. Both setups now pass in both windows, taking the matrix to **40 of 40**.
+*The count was the more interesting of the two: every setup wrote `timesteps=my_simulation_parameters.timesteps`
+into a component config by hand, so the leak was authored, not accidental, and completely invisible while the
+only description of the system was the Python that built it.*
+
+### F-33 — a setup was changed without regenerating its v1 twin **[verified]**
+Removing the duplicate occupancy feed from `household_gas_solar_thermal.py` (F-4) changed the setup but left
+22 lines describing the now-nonexistent connection in `household_gas_solar_thermal.scenario.json`.
+`scenario-json-freshness` would have failed on it in CI; it surfaced here only because an unrelated
+regeneration ran. Regenerated. *The gates exist for exactly this: a setup and its twins move together, and a
+human will forget.*
+
+### F-34 — a failed recording leaves an unbuildable file in the tree **[verified]**
+`record_all_setups.py` writes the file and then verifies it builds, and on failure leaves it "in place for
+inspection" — so after a failed run an untracked `energy_systems/<stem>.energy_system.yaml` sits there that
+must never be committed. Sensible for debugging, hazardous next to `git add -A`. Should either be written to
+a scratch path or named so `.gitignore` catches it. **Open.**
 
 ### F-30 — correction to F-8's rationale **[verified]**
 R11.5's second window was argued partly from the air conditioner's `ZeroDivisionError`, on the reading that a

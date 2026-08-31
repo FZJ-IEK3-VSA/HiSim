@@ -8,6 +8,11 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  # Runnable by hand as well, because the two automatic triggers above only fire for pull
+  # requests that target main. A stacked pull request — one whose base is the branch below it
+  # in a chain — therefore gets no run at all, and a whole stack can reach main having never
+  # been tested. Dispatching this workflow against such a branch is how that is avoided.
+  workflow_dispatch:
 
 permissions:
   contents: read

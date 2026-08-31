@@ -19,6 +19,7 @@ from hisim.component import (
 )
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import loadtypes, log, utils
+from hisim.caching import atomic_cache_write
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, PhysicsConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.weather import Weather
@@ -739,8 +740,10 @@ class SolarThermalSystem(Component):
             # Combine all into one large DataFrame
             full_df = pd.concat(self.precalc_data_for_all_timesteps_data, ignore_index=True)
 
-            # Save directly as flat CSV
-            full_df.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)
+            # Save as a flat CSV, landed atomically so a concurrent reader never sees it half written.
+            assert self.cache_filepath is not None
+            with atomic_cache_write(self.cache_filepath) as temporary_cache_filepath:
+                full_df.to_csv(temporary_cache_filepath, sep=",", decimal=".", index=False)
 
 
 @dataclass

@@ -16,6 +16,7 @@ import pandas as pd
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log, utils
+from hisim.caching import atomic_cache_write
 from hisim.components.building.config import BuildingConfig
 from hisim.components.building.information import BuildingInformation
 from hisim.components.building.window import Window
@@ -750,12 +751,13 @@ class Building(cp.Component):
                     self.cache,
                     columns=["solar_gain_through_windows"],
                 )
-                database.to_csv(
-                    self.cache_file_path,
-                    sep=",",
-                    decimal=".",
-                    index=False,
-                )
+                with atomic_cache_write(self.cache_file_path) as temporary_cache_filepath:
+                    database.to_csv(
+                        temporary_cache_filepath,
+                        sep=",",
+                        decimal=".",
+                        index=False,
+                    )
 
     # =================================================================================================================================
 

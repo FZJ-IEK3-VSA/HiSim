@@ -16,6 +16,7 @@ import pvlib
 
 from hisim import loadtypes as lt
 from hisim import log, utils
+from hisim.caching import atomic_cache_write
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor, preset
 from hisim.component import Component, ComponentOutput, SingleTimeStepValues, OpexCostDataClass, CapexCostDataClass
 from hisim.simulationparameters import SimulationParameters
@@ -870,7 +871,8 @@ class Weather(Component):
                     "t_out_daily_average",
                 ],
             )
-            database.to_csv(cache_filepath)
+            with atomic_cache_write(cache_filepath) as temporary_cache_filepath:
+                database.to_csv(temporary_cache_filepath)
 
         # Publish the full-year weather series to the singleton repository unconditionally.
         # The PV system precomputes its whole-year output from these arrays in its

@@ -49,6 +49,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor, preset
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.components.lpg_car_information import CarProfileHandover, GenericCarInformation
 
 # Constants for warm water fallback values used in i_simulate
 DEFAULT_WW_TEMPERATURE_INPUT: float = 40.45  # °C - default warm water temperature fallback
@@ -419,8 +420,24 @@ class UtspLpgConnector(cp.Component):
         pass
 
     def i_prepare_simulation(self) -> None:
-        """Prepares the simulation."""
-        pass
+        """Publishes the driving profile of every car the LoadProfileGenerator reported.
+
+        The car components are built from their configurations alone and therefore cannot be
+        handed a time series through their constructors; they look their own profile up in the
+        simulation repository instead, and this is where those profiles get there. Publishing in
+        the preparation phase rather than in ``__init__`` is necessary because the repository only
+        reaches a component once it has been registered with a simulator.
+
+        An occupancy reading a predefined profile carries no car data at all, which is a perfectly
+        ordinary household that simply owns no simulated car; it publishes nothing and stays
+        silent. The complaint belongs to the car that cannot find itself, not to the occupancy.
+        """
+        if not GenericCarInformation.has_car_data(self.car_data_dict):
+            return
+        CarProfileHandover.publish(
+            repository=self.simulation_repository,
+            profiles=GenericCarInformation(my_occupancy_instance=self).data_dict_for_car_component,
+        )
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         """Gets called after the iterations are finished at each time step for potential debugging purposes."""
@@ -822,7 +839,7 @@ class UtspLpgConnector(cp.Component):
             "heating_by_residents": [],
             "number_of_residents": [],
         }
-        self.car_data_dict: Dict = {
+        self.car_data_dict: Dict[str, Any] = {
             "car_states": [],
             "car_locations": [],
             "driving_distances": [],

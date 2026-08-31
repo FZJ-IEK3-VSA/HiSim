@@ -13,11 +13,14 @@ restrict the run to setups that already have a committed ``.scenario.json``.
 
 Parallelism
 -----------
-``--jobs/-j N`` runs up to ``N`` setups at once. Local-LPG occupancy setups use
-a shared ``pylpg/C<index>`` working directory that defaults to ``C1`` and would
-collide under concurrency, so every worker slot is handed a distinct index via
-the ``HISIM_LOCAL_LPG_CALC_INDEX`` environment variable (honoured by
-``UtspLpgConnector``). With ``--jobs 1`` (the default) behaviour is unchanged.
+``--jobs/-j N`` runs up to ``N`` setups at once. Local-LPG occupancy setups
+compute in a ``pylpg/C<index>`` working directory derived from a base index, so
+every worker slot is handed a distinct one via the ``HISIM_LOCAL_LPG_CALC_INDEX``
+environment variable (honoured by ``UtspLpgConnector``). The connector now
+derives that base index from the process when nothing sets it, so the variable
+is no longer what stands between the workers and a shared ``C1``; it is kept
+because small, allocated indices are easier to follow in a log than process ids.
+With ``--jobs 1`` (the default) behaviour is unchanged.
 
 The converter also emits a per-setup ``<setup>.simulation.json``; the repo only
 tracks grouped ``2021_*.simulation.json`` files, so these strays are removed

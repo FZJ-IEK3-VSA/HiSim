@@ -45,7 +45,8 @@ from typing import Any, Dict, Sequence
 from hisim.config.introspection import ConfigDescription, describe_config
 from hisim.config.presets import constructors_of
 from hisim.energy_system.bindings import facts_read_by
-from hisim.energy_system.model import ComponentEntry, EnergySystemFile, Group, NameRules
+from hisim.energy_system.model import ComponentEntry, EnergySystemFile, Group
+from hisim.energy_system.names import NameRules
 from hisim.energy_system.schema_classes import ComponentClassScan, JsonTypes
 
 

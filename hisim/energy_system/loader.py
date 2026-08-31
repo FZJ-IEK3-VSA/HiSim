@@ -5,11 +5,14 @@ path or a piece of YAML text into a fully checked :class:`EnergySystemFile`, and
 :func:`dump_energy_system` writes such a file back in the one canonical style the format
 has, so a program that loads a file, edits it and rewrites it changes only what it edited.
 
-The reader raises the shape errors: an unusable suffix, a wrong schema version, an unknown
-key, an input item matching none of the three accepted forms. Rules that span more than
-one entry — unique names, group membership, a closed reference graph — belong to the
-structural validator, which :func:`load_energy_system` runs afterwards. Neither step
-imports a component class, so nothing is decided yet about presets, fields or ports.
+The reader raises the document's own shape errors: an unusable suffix, a wrong schema
+version, an unknown top-level key, a group without a flag, a variant whose selection names
+no option. What a single component entry looks like is read one module below, in
+:mod:`hisim.energy_system.entries`, so that this module is about the document and that one
+about the block every container of components repeats. Rules that span more than one entry —
+unique names, group and variant membership, a closed reference graph — belong to the
+structural validator, which :func:`load_energy_system` runs afterwards. No step here imports
+a component class, so nothing is decided yet about presets, fields or ports.
 """
 
 # clean
@@ -17,24 +20,14 @@ imports a component class, so nothing is decided yet about presets, fields or po
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, ClassVar, Dict, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Mapping, Union
 
 from hisim.energy_system.document import RawDocument
 from hisim.energy_system.emitter import EnergySystemEmitter
+from hisim.energy_system.entries import EntryReader
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemFormatError
-from hisim.energy_system.model import (
-    AggregatorFeed,
-    AnyInputItem,
-    ComponentEntry,
-    ConstructorCall,
-    DefaultInputs,
-    DispatchSpec,
-    EnergySystemFile,
-    ExplicitWire,
-    Group,
-    NameRules,
-    SourceReference,
-)
+from hisim.energy_system.model import EnergySystemFile, Group
+from hisim.energy_system.names import NameRules
 from hisim.energy_system.validation import validate_structure
 
 
@@ -43,27 +36,14 @@ class EnergySystemReader:
 
     The reader descends the document once, checking the schema version before anything
     else is interpreted — a file written for another version may use the same keys for
-    different things — and then walking the components and the groups, raising on the
-    first shape problem it meets.
+    different things — and then walking the three places components are written: the top
+    level, the groups and the options of the variants. Every entry it meets is handed to
+    :class:`hisim.energy_system.entries.EntryReader`, and the first shape problem raises.
 
     Everything the reader decides is decidable from the document alone. It never imports a
     component class and never repairs, defaults or skips anything: a file is taken as
     written or rejected with a message naming the offending element and the valid values.
     """
-
-    #: The keys that classify an input item as an aggregator feed. Any one of them is
-    #: enough, so a feed missing its tags is reported as an incomplete feed rather than
-    #: as an item of no recognisable kind.
-    FEED_KEYS: ClassVar[Tuple[str, ...]] = ("tags", "weight", "dispatch", "component_type")
-
-    #: The keys an explicit wire may carry, in canonical order.
-    WIRE_KEYS: ClassVar[Tuple[str, ...]] = ("input", "from")
-
-    #: The keys an aggregator feed may carry, in canonical order.
-    FEED_ITEM_KEYS: ClassVar[Tuple[str, ...]] = ("from", "component_type", "tags", "weight", "dispatch")
-
-    #: The keys a dispatch back-channel may carry.
-    DISPATCH_KEYS: ClassVar[Tuple[str, ...]] = ("target_input", "tags")
 
     @classmethod
     def read(cls, source: Union[str, Path]) -> EnergySystemFile:
@@ -119,7 +99,7 @@ class EnergySystemReader:
             schema_version=EnergySystemFile.SUPPORTED_SCHEMA_VERSION,
             name=RawDocument.string(document.get("name"), f"{origin}.name", required=True) or "",
             description=RawDocument.string(document.get("description"), f"{origin}.description", required=False),
-            components=cls._build_components(document.get("components"), f"{origin}.components"),
+            components=EntryReader.components(document.get("components"), f"{origin}.components"),
             groups=cls._build_groups(document.get("groups"), f"{origin}.groups"),
             metadata=metadata,
         )
@@ -146,205 +126,6 @@ class EnergySystemReader:
                 alternatives=[str(EnergySystemFile.SUPPORTED_SCHEMA_VERSION)],
                 alternatives_label="schema versions",
             )
-
-    @classmethod
-    def _build_components(cls, raw: Any, location: str) -> Dict[str, ComponentEntry]:
-        """Builds the entries of one components mapping, at the top level or in a group.
-
-        Both places hold the same kind of block, because a group is a set of components
-        and not a different way of declaring one. The key of each entry is the component's
-        name and its whole identity, so it is checked against the identifier rule first.
-
-        Raises:
-            EnergySystemFormatError: ``EF-07`` for a non-mapping block, ``EF-08`` for an
-                unusable component name, plus whatever an entry raises.
-        """
-        block = RawDocument.mapping(raw, location)
-        entries: Dict[str, ComponentEntry] = {}
-        for name, value in block.items():
-            NameRules.check_identifier(name, location, "component")
-            entries[name] = cls._build_entry(name, value, f"{location}.{name}")
-        return entries
-
-    @classmethod
-    def _build_entry(cls, name: str, raw: Any, location: str) -> ComponentEntry:
-        """Builds one component entry from its mapping.
-
-        An entry carrying a group's keys is reported as an attempted nested group rather
-        than as two unknown keys, because that is what the author meant and groups do not
-        nest.
-
-        Raises:
-            EnergySystemFormatError: ``EF-50`` if the entry looks like a group, ``EF-18``
-                for a key that is not an entry key, ``EF-07`` for a bad ``class``.
-        """
-        entry = RawDocument.mapping(raw, location)
-        if set(entry) & set(Group.GROUP_KEYS):
-            raise EnergySystemFormatError(
-                EnergySystemErrorId.NESTED_GROUP,
-                location,
-                f"'{name}' carries group keys, but groups do not nest and a component is not a group.",
-                alternatives=ComponentEntry.ENTRY_KEYS,
-                alternatives_label="entry keys",
-            )
-        for key in entry:
-            if key not in ComponentEntry.ENTRY_KEYS:
-                raise EnergySystemFormatError(
-                    EnergySystemErrorId.UNKNOWN_ENTRY_KEY,
-                    f"{location}.{key}",
-                    f"'{key}' is not a key of a component entry.",
-                    alternatives=ComponentEntry.ENTRY_KEYS,
-                    alternatives_label="entry keys",
-                    offending_value=str(key),
-                )
-        class_path = RawDocument.string(entry.get(ComponentEntry.CLASS_KEY), f"{location}.class", required=True)
-        return ComponentEntry(
-            name=name,
-            class_path=class_path or "",
-            preset=RawDocument.string(entry.get("preset"), f"{location}.preset", required=False),
-            constructor=cls._build_constructor(entry.get("constructor"), f"{location}.constructor"),
-            config=RawDocument.mapping(entry.get("config"), f"{location}.config"),
-            inputs=cls._build_inputs(entry.get("inputs"), f"{location}.inputs"),
-            sizing_sources=cls._build_sizing_sources(entry.get("sizing_sources"), f"{location}.sizing_sources"),
-        )
-
-    @classmethod
-    def _build_constructor(cls, raw: Any, location: str) -> Optional[ConstructorCall]:
-        """Builds the named-constructor call of an entry, if it has one.
-
-        The block maps exactly one constructor name to its arguments. Two names leave it
-        open which one runs and zero says nothing, so both are hard errors rather than a
-        choice the executor makes for the author.
-
-        Raises:
-            EnergySystemFormatError: ``EF-14`` if the block does not name exactly one
-                constructor, ``EF-07`` if its arguments are not a mapping.
-        """
-        if raw is None:
-            return None
-        block = RawDocument.mapping(raw, location)
-        if len(block) != 1:
-            raise EnergySystemFormatError(
-                EnergySystemErrorId.MALFORMED_CONSTRUCTOR,
-                location,
-                f"a constructor block names exactly one constructor, but {len(block)} are written.",
-                remedy="Write 'constructor: {<name>: {<argument>: <value>}}'.",
-            )
-        constructor_name = next(iter(block))
-        NameRules.check_identifier(constructor_name, location, "constructor")
-        return ConstructorCall(
-            name=constructor_name,
-            arguments=RawDocument.mapping(block[constructor_name], f"{location}.{constructor_name}"),
-        )
-
-    @classmethod
-    def _build_inputs(cls, raw: Any, location: str) -> Tuple[AnyInputItem, ...]:
-        """Builds the input list of an entry, classifying each item by the keys it carries.
-
-        The list keeps the order the file gives it, because that is what an author reads
-        and what a re-emitted file must reproduce; no meaning depends on it.
-
-        Raises:
-            EnergySystemFormatError: ``EF-07`` if the value is not a list, and whatever an
-                individual item raises.
-        """
-        if raw is None:
-            return ()
-        if not isinstance(raw, list):
-            raise RawDocument.malformed(location, raw, "a list of input items")
-        return tuple(cls._build_input_item(item, f"{location}[{index}]") for index, item in enumerate(raw))
-
-    @classmethod
-    def _build_input_item(cls, raw: Any, location: str) -> AnyInputItem:
-        """Classifies and builds one input item.
-
-        Classification is total and depends only on which keys are present: an ``input``
-        key makes it an explicit wire, any aggregator-feed key makes it a feed, and a bare
-        string asks for the target's declared defaults. Anything else, a bare string naming
-        a port included, is rejected rather than guessed at.
-
-        Raises:
-            EnergySystemFormatError: ``EF-19`` for an item of no recognisable shape or
-                with a foreign key, ``EF-06`` for a bad reference, ``EF-07`` for a bad value.
-        """
-        if isinstance(raw, str):
-            source, member = NameRules.split_reference(raw, location, require_member=False)
-            if member is not None:
-                raise cls._unclassifiable(location, "a bare input item names a component, not one of its outputs")
-            return DefaultInputs(source=source)
-        if not isinstance(raw, dict):
-            raise cls._unclassifiable(location, "an input item is a component name or a mapping")
-        if "input" in raw:
-            cls._check_item_keys(raw, location, cls.WIRE_KEYS)
-            source, member = NameRules.split_reference(raw.get("from"), f"{location}.from", require_member=True)
-            return ExplicitWire(
-                source=source,
-                input=RawDocument.string(raw.get("input"), f"{location}.input", required=True) or "",
-                output=member or "",
-            )
-        if set(raw) & set(cls.FEED_KEYS):
-            cls._check_item_keys(raw, location, cls.FEED_ITEM_KEYS)
-            source, member = NameRules.split_reference(raw.get("from"), f"{location}.from", require_member=False)
-            return AggregatorFeed(
-                source=source,
-                output=member,
-                component_type=RawDocument.string(
-                    raw.get("component_type"), f"{location}.component_type", required=False
-                ),
-                tags=RawDocument.string_tuple(raw.get("tags"), f"{location}.tags", required=True),
-                weight=RawDocument.integer(raw.get("weight"), f"{location}.weight"),
-                dispatch=cls._build_dispatch(raw.get("dispatch"), f"{location}.dispatch", "dispatch" in raw),
-            )
-        raise cls._unclassifiable(location, "the item has neither 'input' nor any aggregator-feed key")
-
-    @classmethod
-    def _build_dispatch(cls, raw: Any, location: str, present: bool) -> Optional[DispatchSpec]:
-        """Builds the optional dispatch back-channel of an aggregator feed.
-
-        Writing ``dispatch: {}`` and leaving the key out mean different things — the first
-        asks the aggregator to publish a control signal for this participant, the second
-        does not — so the caller passes whether the key was written at all.
-
-        Raises:
-            EnergySystemFormatError: ``EF-19`` for a key the block does not know, ``EF-07``
-                for a value of the wrong kind.
-        """
-        if not present:
-            return None
-        block = RawDocument.mapping(raw, location)
-        cls._check_item_keys(block, location, cls.DISPATCH_KEYS)
-        return DispatchSpec(
-            target_input=RawDocument.string(block.get("target_input"), f"{location}.target_input", required=False),
-            tags=RawDocument.string_tuple(block.get("tags"), f"{location}.tags", required=False),
-        )
-
-    @classmethod
-    def _build_sizing_sources(cls, raw: Any, location: str) -> Dict[str, Any]:
-        """Builds the ``sizing_sources`` block, parsing every reference it contains.
-
-        A value is either one reference or a list of them; the list form is how a field
-        whose law sums over many providers names all of them, and an empty list says
-        explicitly that no component feeds that fact. The two forms stay apart in the model
-        because a re-emitted file has to spell them the way they were written.
-
-        Raises:
-            EnergySystemFormatError: ``EF-07`` for a value that is neither a string nor a
-                list, ``EF-08`` for an unusable fact name, ``EF-06`` for a malformed
-                reference.
-        """
-        block = RawDocument.mapping(raw, location)
-        sources: Dict[str, Any] = {}
-        for fact, value in block.items():
-            NameRules.check_identifier(fact, location, "fact")
-            if isinstance(value, list):
-                sources[fact] = tuple(
-                    SourceReference.parse(item, f"{location}.{fact}[{index}]") for index, item in enumerate(value)
-                )
-            elif isinstance(value, str):
-                sources[fact] = SourceReference.parse(value, f"{location}.{fact}")
-            else:
-                raise RawDocument.malformed(f"{location}.{fact}", value, "a reference or a list of references")
-        return sources
 
     @classmethod
     def _build_groups(cls, raw: Any, location: str) -> Dict[str, Group]:
@@ -382,7 +163,7 @@ class EnergySystemReader:
                     alternatives=["false", "true"],
                     alternatives_label="flags",
                 )
-            members = cls._build_components(body.get("components"), f"{group_location}.components")
+            members = EntryReader.components(body.get("components"), f"{group_location}.components")
             if not members:
                 raise EnergySystemFormatError(
                     EnergySystemErrorId.EMPTY_GROUP,
@@ -392,49 +173,6 @@ class EnergySystemReader:
                 )
             groups[name] = Group(name=name, enabled=bool(body["enabled"]), components=members)
         return groups
-
-    @classmethod
-    def _check_item_keys(cls, raw: Mapping[str, Any], location: str, allowed: Sequence[str]) -> None:
-        """Rejects a key that the classified input-item shape does not know.
-
-        The check runs after classification, so the message lists the keys of the shape the
-        item was recognised as rather than the union of all three, which is what tells an
-        author that ``weight`` on an explicit wire is a shape mix-up and not a typo.
-
-        Raises:
-            EnergySystemFormatError: ``EF-19`` naming the unknown key and listing the keys
-                the shape does accept.
-        """
-        for key in raw:
-            if key not in allowed:
-                raise EnergySystemFormatError(
-                    EnergySystemErrorId.UNCLASSIFIABLE_INPUT_ITEM,
-                    f"{location}.{key}",
-                    f"'{key}' does not belong to this kind of input item.",
-                    alternatives=allowed,
-                    alternatives_label="keys",
-                    offending_value=str(key),
-                )
-
-    @classmethod
-    def _unclassifiable(cls, location: str, problem: str) -> EnergySystemFormatError:
-        """Builds the rejection for an input item that matches none of the three shapes.
-
-        The three spellings are repeated in the message because an item of no recognisable
-        kind usually means the author reached for one of them and mis-remembered it.
-
-        Returns:
-            The exception, which the caller raises so the traceback starts at the check.
-        """
-        return EnergySystemFormatError(
-            EnergySystemErrorId.UNCLASSIFIABLE_INPUT_ITEM,
-            location,
-            f"{problem}.",
-            remedy=(
-                "An input item is 'name', or '{input: Port, from: source.Output}', "
-                "or '{from: source, tags: [...], weight: N}'."
-            ),
-        )
 
 
 def load_energy_system(source: Union[str, Path]) -> EnergySystemFile:

@@ -5,11 +5,14 @@ path or a piece of YAML text into a fully checked :class:`EnergySystemFile`, and
 :func:`dump_energy_system` writes such a file back in the one canonical style the format
 has, so a program that loads a file, edits it and rewrites it changes only what it edited.
 
-The reader raises the shape errors: an unusable suffix, a wrong schema version, an unknown
-key, an input item matching none of the three accepted forms. Rules that span more than
-one entry — unique names, group membership, a closed reference graph — belong to the
-structural validator, which :func:`load_energy_system` runs afterwards. Neither step
-imports a component class, so nothing is decided yet about presets, fields or ports.
+The reader raises the document's own shape errors: an unusable suffix, a wrong schema
+version, an unknown top-level key, a group without a flag, a variant whose selection names
+no option. What a single component entry looks like is read one module below, in
+:mod:`hisim.energy_system.entries`, so that this module is about the document and that one
+about the block every container of components repeats. Rules that span more than one entry —
+unique names, group and variant membership, a closed reference graph — belong to the
+structural validator, which :func:`load_energy_system` runs afterwards. No step here imports
+a component class, so nothing is decided yet about presets, fields or ports.
 """
 
 # clean
@@ -17,24 +20,14 @@ imports a component class, so nothing is decided yet about presets, fields or po
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, ClassVar, Dict, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, ClassVar, Dict, Mapping, Tuple, Union
 
 from hisim.energy_system.document import RawDocument
 from hisim.energy_system.emitter import EnergySystemEmitter
+from hisim.energy_system.entries import EntryReader
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemFormatError
-from hisim.energy_system.model import (
-    AggregatorFeed,
-    AnyInputItem,
-    ComponentEntry,
-    ConstructorCall,
-    DefaultInputs,
-    DispatchSpec,
-    EnergySystemFile,
-    ExplicitWire,
-    Group,
-    NameRules,
-    SourceReference,
-)
+from hisim.energy_system.model import EnergySystemFile, Group, Variant, VariantOption
+from hisim.energy_system.names import NameRules
 from hisim.energy_system.validation import validate_structure
 
 
@@ -43,27 +36,18 @@ class EnergySystemReader:
 
     The reader descends the document once, checking the schema version before anything
     else is interpreted — a file written for another version may use the same keys for
-    different things — and then walking the components and the groups, raising on the
-    first shape problem it meets.
+    different things — and then walking the three places components are written: the top
+    level, the groups and the options of the variants. Every entry it meets is handed to
+    :class:`hisim.energy_system.entries.EntryReader`, and the first shape problem raises.
 
     Everything the reader decides is decidable from the document alone. It never imports a
     component class and never repairs, defaults or skips anything: a file is taken as
     written or rejected with a message naming the offending element and the valid values.
     """
 
-    #: The keys that classify an input item as an aggregator feed. Any one of them is
-    #: enough, so a feed missing its tags is reported as an incomplete feed rather than
-    #: as an item of no recognisable kind.
-    FEED_KEYS: ClassVar[Tuple[str, ...]] = ("tags", "weight", "dispatch", "component_type")
-
-    #: The keys an explicit wire may carry, in canonical order.
-    WIRE_KEYS: ClassVar[Tuple[str, ...]] = ("input", "from")
-
-    #: The keys an aggregator feed may carry, in canonical order.
-    FEED_ITEM_KEYS: ClassVar[Tuple[str, ...]] = ("from", "component_type", "tags", "weight", "dispatch")
-
-    #: The keys a dispatch back-channel may carry.
-    DISPATCH_KEYS: ClassVar[Tuple[str, ...]] = ("target_input", "tags")
+    #: The top-level blocks a component may be written in. A document naming none of them
+    #: describes nothing, which is reported as such rather than as an empty run.
+    COMPONENT_BLOCKS: ClassVar[Tuple[str, ...]] = ("components", "groups", "variants")
 
     @classmethod
     def read(cls, source: Union[str, Path]) -> EnergySystemFile:
@@ -108,19 +92,22 @@ class EnergySystemReader:
                 alternatives_label="top-level keys",
                 offending_value=str(unknown[0]),
             )
-        if "components" not in document and "groups" not in document:
+        if not any(key in document for key in cls.COMPONENT_BLOCKS):
             raise EnergySystemFormatError(
                 EnergySystemErrorId.TOP_LEVEL_SHAPE,
                 origin,
-                "the document declares neither 'components' nor 'groups'.",
+                "the document declares no components at all.",
+                alternatives=cls.COMPONENT_BLOCKS,
+                alternatives_label="blocks that hold components",
             )
         metadata = RawDocument.mapping(document["metadata"], f"{origin}.metadata") if "metadata" in document else None
         return EnergySystemFile(
             schema_version=EnergySystemFile.SUPPORTED_SCHEMA_VERSION,
             name=RawDocument.string(document.get("name"), f"{origin}.name", required=True) or "",
             description=RawDocument.string(document.get("description"), f"{origin}.description", required=False),
-            components=cls._build_components(document.get("components"), f"{origin}.components"),
+            components=EntryReader.components(document.get("components"), f"{origin}.components"),
             groups=cls._build_groups(document.get("groups"), f"{origin}.groups"),
+            variants=cls._build_variants(document.get("variants"), f"{origin}.variants"),
             metadata=metadata,
         )
 
@@ -148,210 +135,12 @@ class EnergySystemReader:
             )
 
     @classmethod
-    def _build_components(cls, raw: Any, location: str) -> Dict[str, ComponentEntry]:
-        """Builds the entries of one components mapping, at the top level or in a group.
-
-        Both places hold the same kind of block, because a group is a set of components
-        and not a different way of declaring one. The key of each entry is the component's
-        name and its whole identity, so it is checked against the identifier rule first.
-
-        Raises:
-            EnergySystemFormatError: ``EF-07`` for a non-mapping block, ``EF-08`` for an
-                unusable component name, plus whatever an entry raises.
-        """
-        block = RawDocument.mapping(raw, location)
-        entries: Dict[str, ComponentEntry] = {}
-        for name, value in block.items():
-            NameRules.check_identifier(name, location, "component")
-            entries[name] = cls._build_entry(name, value, f"{location}.{name}")
-        return entries
-
-    @classmethod
-    def _build_entry(cls, name: str, raw: Any, location: str) -> ComponentEntry:
-        """Builds one component entry from its mapping.
-
-        An entry carrying a group's keys is reported as an attempted nested group rather
-        than as two unknown keys, because that is what the author meant and groups do not
-        nest.
-
-        Raises:
-            EnergySystemFormatError: ``EF-50`` if the entry looks like a group, ``EF-18``
-                for a key that is not an entry key, ``EF-07`` for a bad ``class``.
-        """
-        entry = RawDocument.mapping(raw, location)
-        if set(entry) & set(Group.GROUP_KEYS):
-            raise EnergySystemFormatError(
-                EnergySystemErrorId.NESTED_GROUP,
-                location,
-                f"'{name}' carries group keys, but groups do not nest and a component is not a group.",
-                alternatives=ComponentEntry.ENTRY_KEYS,
-                alternatives_label="entry keys",
-            )
-        for key in entry:
-            if key not in ComponentEntry.ENTRY_KEYS:
-                raise EnergySystemFormatError(
-                    EnergySystemErrorId.UNKNOWN_ENTRY_KEY,
-                    f"{location}.{key}",
-                    f"'{key}' is not a key of a component entry.",
-                    alternatives=ComponentEntry.ENTRY_KEYS,
-                    alternatives_label="entry keys",
-                    offending_value=str(key),
-                )
-        class_path = RawDocument.string(entry.get(ComponentEntry.CLASS_KEY), f"{location}.class", required=True)
-        return ComponentEntry(
-            name=name,
-            class_path=class_path or "",
-            preset=RawDocument.string(entry.get("preset"), f"{location}.preset", required=False),
-            constructor=cls._build_constructor(entry.get("constructor"), f"{location}.constructor"),
-            config=RawDocument.mapping(entry.get("config"), f"{location}.config"),
-            inputs=cls._build_inputs(entry.get("inputs"), f"{location}.inputs"),
-            sizing_sources=cls._build_sizing_sources(entry.get("sizing_sources"), f"{location}.sizing_sources"),
-        )
-
-    @classmethod
-    def _build_constructor(cls, raw: Any, location: str) -> Optional[ConstructorCall]:
-        """Builds the named-constructor call of an entry, if it has one.
-
-        The block maps exactly one constructor name to its arguments. Two names leave it
-        open which one runs and zero says nothing, so both are hard errors rather than a
-        choice the executor makes for the author.
-
-        Raises:
-            EnergySystemFormatError: ``EF-14`` if the block does not name exactly one
-                constructor, ``EF-07`` if its arguments are not a mapping.
-        """
-        if raw is None:
-            return None
-        block = RawDocument.mapping(raw, location)
-        if len(block) != 1:
-            raise EnergySystemFormatError(
-                EnergySystemErrorId.MALFORMED_CONSTRUCTOR,
-                location,
-                f"a constructor block names exactly one constructor, but {len(block)} are written.",
-                remedy="Write 'constructor: {<name>: {<argument>: <value>}}'.",
-            )
-        constructor_name = next(iter(block))
-        NameRules.check_identifier(constructor_name, location, "constructor")
-        return ConstructorCall(
-            name=constructor_name,
-            arguments=RawDocument.mapping(block[constructor_name], f"{location}.{constructor_name}"),
-        )
-
-    @classmethod
-    def _build_inputs(cls, raw: Any, location: str) -> Tuple[AnyInputItem, ...]:
-        """Builds the input list of an entry, classifying each item by the keys it carries.
-
-        The list keeps the order the file gives it, because that is what an author reads
-        and what a re-emitted file must reproduce; no meaning depends on it.
-
-        Raises:
-            EnergySystemFormatError: ``EF-07`` if the value is not a list, and whatever an
-                individual item raises.
-        """
-        if raw is None:
-            return ()
-        if not isinstance(raw, list):
-            raise RawDocument.malformed(location, raw, "a list of input items")
-        return tuple(cls._build_input_item(item, f"{location}[{index}]") for index, item in enumerate(raw))
-
-    @classmethod
-    def _build_input_item(cls, raw: Any, location: str) -> AnyInputItem:
-        """Classifies and builds one input item.
-
-        Classification is total and depends only on which keys are present: an ``input``
-        key makes it an explicit wire, any aggregator-feed key makes it a feed, and a bare
-        string asks for the target's declared defaults. Anything else, a bare string naming
-        a port included, is rejected rather than guessed at.
-
-        Raises:
-            EnergySystemFormatError: ``EF-19`` for an item of no recognisable shape or
-                with a foreign key, ``EF-06`` for a bad reference, ``EF-07`` for a bad value.
-        """
-        if isinstance(raw, str):
-            source, member = NameRules.split_reference(raw, location, require_member=False)
-            if member is not None:
-                raise cls._unclassifiable(location, "a bare input item names a component, not one of its outputs")
-            return DefaultInputs(source=source)
-        if not isinstance(raw, dict):
-            raise cls._unclassifiable(location, "an input item is a component name or a mapping")
-        if "input" in raw:
-            cls._check_item_keys(raw, location, cls.WIRE_KEYS)
-            source, member = NameRules.split_reference(raw.get("from"), f"{location}.from", require_member=True)
-            return ExplicitWire(
-                source=source,
-                input=RawDocument.string(raw.get("input"), f"{location}.input", required=True) or "",
-                output=member or "",
-            )
-        if set(raw) & set(cls.FEED_KEYS):
-            cls._check_item_keys(raw, location, cls.FEED_ITEM_KEYS)
-            source, member = NameRules.split_reference(raw.get("from"), f"{location}.from", require_member=False)
-            return AggregatorFeed(
-                source=source,
-                output=member,
-                component_type=RawDocument.string(
-                    raw.get("component_type"), f"{location}.component_type", required=False
-                ),
-                tags=RawDocument.string_tuple(raw.get("tags"), f"{location}.tags", required=True),
-                weight=RawDocument.integer(raw.get("weight"), f"{location}.weight"),
-                dispatch=cls._build_dispatch(raw.get("dispatch"), f"{location}.dispatch", "dispatch" in raw),
-            )
-        raise cls._unclassifiable(location, "the item has neither 'input' nor any aggregator-feed key")
-
-    @classmethod
-    def _build_dispatch(cls, raw: Any, location: str, present: bool) -> Optional[DispatchSpec]:
-        """Builds the optional dispatch back-channel of an aggregator feed.
-
-        Writing ``dispatch: {}`` and leaving the key out mean different things — the first
-        asks the aggregator to publish a control signal for this participant, the second
-        does not — so the caller passes whether the key was written at all.
-
-        Raises:
-            EnergySystemFormatError: ``EF-19`` for a key the block does not know, ``EF-07``
-                for a value of the wrong kind.
-        """
-        if not present:
-            return None
-        block = RawDocument.mapping(raw, location)
-        cls._check_item_keys(block, location, cls.DISPATCH_KEYS)
-        return DispatchSpec(
-            target_input=RawDocument.string(block.get("target_input"), f"{location}.target_input", required=False),
-            tags=RawDocument.string_tuple(block.get("tags"), f"{location}.tags", required=False),
-        )
-
-    @classmethod
-    def _build_sizing_sources(cls, raw: Any, location: str) -> Dict[str, Any]:
-        """Builds the ``sizing_sources`` block, parsing every reference it contains.
-
-        A value is either one reference or a list of them; the list form is how a field
-        whose law sums over many providers names all of them, and an empty list says
-        explicitly that no component feeds that fact. The two forms stay apart in the model
-        because a re-emitted file has to spell them the way they were written.
-
-        Raises:
-            EnergySystemFormatError: ``EF-07`` for a value that is neither a string nor a
-                list, ``EF-08`` for an unusable fact name, ``EF-06`` for a malformed
-                reference.
-        """
-        block = RawDocument.mapping(raw, location)
-        sources: Dict[str, Any] = {}
-        for fact, value in block.items():
-            NameRules.check_identifier(fact, location, "fact")
-            if isinstance(value, list):
-                sources[fact] = tuple(
-                    SourceReference.parse(item, f"{location}.{fact}[{index}]") for index, item in enumerate(value)
-                )
-            elif isinstance(value, str):
-                sources[fact] = SourceReference.parse(value, f"{location}.{fact}")
-            else:
-                raise RawDocument.malformed(f"{location}.{fact}", value, "a reference or a list of references")
-        return sources
-
-    @classmethod
     def _build_groups(cls, raw: Any, location: str) -> Dict[str, Group]:
         """Builds the groups block: named sets of components, each with an on/off flag.
 
         Both keys of a group are required: a group without a flag cannot be switched and a
-        group without components cannot switch anything.
+        group without components cannot switch anything. An option of a variant is the one
+        components block that may legally be empty, which is why that check lives there.
 
         Raises:
             EnergySystemFormatError: ``EF-08`` for an unusable group name, ``EF-18`` for a
@@ -364,16 +153,7 @@ class EnergySystemReader:
             NameRules.check_identifier(name, location, "group")
             group_location = f"{location}.{name}"
             body = RawDocument.mapping(value, group_location)
-            for key in body:
-                if key not in Group.GROUP_KEYS:
-                    raise EnergySystemFormatError(
-                        EnergySystemErrorId.UNKNOWN_ENTRY_KEY,
-                        f"{group_location}.{key}",
-                        f"'{key}' is not a key of a group.",
-                        alternatives=Group.GROUP_KEYS,
-                        alternatives_label="group keys",
-                        offending_value=str(key),
-                    )
+            cls._check_block_keys(body, group_location, Group.GROUP_KEYS, "group")
             if not isinstance(body.get("enabled"), bool):
                 raise EnergySystemFormatError(
                     EnergySystemErrorId.GROUP_ENABLED_FLAG,
@@ -382,7 +162,7 @@ class EnergySystemReader:
                     alternatives=["false", "true"],
                     alternatives_label="flags",
                 )
-            members = cls._build_components(body.get("components"), f"{group_location}.components")
+            members = EntryReader.components(body.get("components"), f"{group_location}.components")
             if not members:
                 raise EnergySystemFormatError(
                     EnergySystemErrorId.EMPTY_GROUP,
@@ -394,47 +174,95 @@ class EnergySystemReader:
         return groups
 
     @classmethod
-    def _check_item_keys(cls, raw: Mapping[str, Any], location: str, allowed: Sequence[str]) -> None:
-        """Rejects a key that the classified input-item shape does not know.
+    def _build_variants(cls, raw: Any, location: str) -> Dict[str, Variant]:
+        """Builds the variants block: named exclusive choices, each resolved to one option.
 
-        The check runs after classification, so the message lists the keys of the shape the
-        item was recognised as rather than the union of all three, which is what tells an
-        author that ``weight`` on an explicit wire is a shape mix-up and not a typo.
+        Both keys of a variant are required, and the selection is checked against the options
+        right here rather than left to the validator, because the message that makes the
+        mistake trivial to fix is the one that lists the options the variant actually has.
 
         Raises:
-            EnergySystemFormatError: ``EF-19`` naming the unknown key and listing the keys
-                the shape does accept.
+            EnergySystemFormatError: ``EF-08`` for an unusable variant name, ``EF-18`` for a
+                key a variant does not have, ``EF-55`` for a selection naming no option of
+                this variant, ``EF-56`` for a variant offering no option at all.
         """
-        for key in raw:
-            if key not in allowed:
+        block = RawDocument.mapping(raw, location)
+        variants: Dict[str, Variant] = {}
+        for name, value in block.items():
+            NameRules.check_identifier(name, location, "variant")
+            variant_location = f"{location}.{name}"
+            body = RawDocument.mapping(value, variant_location)
+            cls._check_block_keys(body, variant_location, Variant.VARIANT_KEYS, "variant")
+            options = cls._build_options(body.get("options"), f"{variant_location}.options", name)
+            selected = RawDocument.string(body.get("selected"), f"{variant_location}.selected", required=True)
+            if selected not in options:
                 raise EnergySystemFormatError(
-                    EnergySystemErrorId.UNCLASSIFIABLE_INPUT_ITEM,
-                    f"{location}.{key}",
-                    f"'{key}' does not belong to this kind of input item.",
-                    alternatives=allowed,
-                    alternatives_label="keys",
-                    offending_value=str(key),
+                    EnergySystemErrorId.UNKNOWN_VARIANT_OPTION,
+                    f"{variant_location}.selected",
+                    f"variant '{name}' selects '{selected}', which is none of its options.",
+                    alternatives=tuple(options),
+                    alternatives_label=f"options of '{name}'",
+                    offending_value=str(selected),
                 )
+            variants[name] = Variant(name=name, selected=selected or "", options=options)
+        return variants
 
     @classmethod
-    def _unclassifiable(cls, location: str, problem: str) -> EnergySystemFormatError:
-        """Builds the rejection for an input item that matches none of the three shapes.
+    def _build_options(cls, raw: Any, location: str, variant_name: str) -> Dict[str, VariantOption]:
+        """Builds the options of one variant, each a complete alternative world of its own.
 
-        The three spellings are repeated in the message because an item of no recognisable
-        kind usually means the author reached for one of them and mis-remembered it.
+        An option with an empty ``components`` block is accepted, unlike an empty group: it is
+        how a file spells the world in which the variant contributes nothing, which is a real
+        alternative and not a mistake. A variant with no option at all is a mistake, since
+        there is then nothing for its selection to name.
 
-        Returns:
-            The exception, which the caller raises so the traceback starts at the check.
+        Raises:
+            EnergySystemFormatError: ``EF-56`` for an empty options mapping, ``EF-08`` for an
+                unusable option name, ``EF-18`` for a key an option does not have.
         """
-        return EnergySystemFormatError(
-            EnergySystemErrorId.UNCLASSIFIABLE_INPUT_ITEM,
-            location,
-            f"{problem}.",
-            remedy=(
-                "An input item is 'name', or '{input: Port, from: source.Output}', "
-                "or '{from: source, tags: [...], weight: N}'."
-            ),
-        )
+        block = RawDocument.mapping(raw, location)
+        if not block:
+            raise EnergySystemFormatError(
+                EnergySystemErrorId.EMPTY_VARIANT,
+                location,
+                f"variant '{variant_name}' offers no options.",
+                remedy="A variant is a choice between at least two alternative worlds; write them under 'options'.",
+            )
+        options: Dict[str, VariantOption] = {}
+        for name, value in block.items():
+            NameRules.check_identifier(name, location, "variant option")
+            option_location = f"{location}.{name}"
+            body = RawDocument.mapping(value, option_location)
+            cls._check_block_keys(body, option_location, VariantOption.OPTION_KEYS, "variant option")
+            options[name] = VariantOption(
+                name=name,
+                components=EntryReader.components(body.get("components"), f"{option_location}.components"),
+            )
+        return options
+
+    @classmethod
+    def _check_block_keys(cls, body: Mapping[str, Any], location: str, allowed: Tuple[str, ...], role: str) -> None:
+        """Rejects a key one of the document's named blocks does not know.
+
+        Groups, variants and options all have a small closed set of keys, and an author who
+        writes a fifth one has almost always reached for another block's vocabulary — an
+        ``enabled`` flag on a variant, an ``options`` mapping on a group. Naming the role in
+        the message is what turns that into one obvious edit.
+
+        Raises:
+            EnergySystemFormatError: ``EF-18`` naming the key and listing the ones the block
+                does accept.
+        """
+        for key in body:
+            if key not in allowed:
+                raise EnergySystemFormatError(
+                    EnergySystemErrorId.UNKNOWN_ENTRY_KEY,
+                    f"{location}.{key}",
+                    f"'{key}' is not a key of a {role}.",
+                    alternatives=allowed,
+                    alternatives_label=f"{role} keys",
+                    offending_value=str(key),
+                )
 
 
 def load_energy_system(source: Union[str, Path]) -> EnergySystemFile:

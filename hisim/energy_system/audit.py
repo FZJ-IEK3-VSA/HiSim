@@ -9,10 +9,12 @@ What a reader wants to know about a run divides into four questions, and the aud
 in that order. Where did each component's configuration come from — which preset, which named
 constructor with which arguments, or a block the file wrote out in full — and which of its
 fields did the file override, against what default. Which fields did a law compute, from which
-law, reading which value from which component, and what did it produce. What did the off switches
-remove: which groups, which components with them, which input items and which sizing lists that
-shrank rather than vanished. And what did the aggregators end up with: one entry per resolved
+law, reading which value from which component, and what did it produce. What did the switches
+remove: which groups were off, which option each variant chose, which components went with them,
+which input items and which sizing lists that shrank rather than vanished. And what did the aggregators end up with: one entry per resolved
 feed, with the weight, the tags and the port names resolution derived rather than any file wrote.
+The switches are two, so that section answers for both: which groups were off, and which option
+each variant selected together with the components that selection brought into the system.
 
 A third artifact travels with the two: the flat wire log, one entry per connection in the same
 ``From``/``To`` shape the older machinery appends when connection logging is switched on. It is
@@ -96,6 +98,15 @@ class AuditBuilder:
                 self.component(name) for name in self.built.model.all_components()
             ),
             disabled_groups=expansion.disabled_groups,
+            variant_selections=tuple(
+                {
+                    "variant": selection.variant,
+                    "selected": selection.selected,
+                    "components": list(selection.components),
+                    "rejected": list(selection.rejected),
+                }
+                for selection in expansion.selections
+            ),
             dropped_components=expansion.dropped_components,
             dropped_input_items=tuple(
                 {

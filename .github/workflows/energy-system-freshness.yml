@@ -71,10 +71,14 @@ jobs:
           # repairing it. It prints the diff of every twin that moved, names every
           # setup it could not record, and asserts that no two committed
           # simulation-parameters files describe the same run.
+          # No pipeline here: GitHub runs this step with 'sh' inside the test container,
+          # where the bash-only PIPESTATUS array expands to "Bad substitution".
+          # Redirect, then show the file, so the exit code is the recorder's own.
           set +e
-          python scripts/record_all_setups.py --check | tee energy_system_drift.txt
-          rc=${PIPESTATUS[0]}
+          python scripts/record_all_setups.py --check > energy_system_drift.txt 2>&1
+          rc=$?
           set -e
+          cat energy_system_drift.txt
           if [ "${rc}" -ne 0 ]; then
             echo "::error title=Energy-system twins are stale or a setup cannot be recorded::Run 'python scripts/record_all_setups.py' locally, resolve any recorder errors, and commit what it writes."
             exit 1

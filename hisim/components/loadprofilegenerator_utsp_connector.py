@@ -7,7 +7,6 @@ import errno
 import io
 import json
 import os
-import shutil
 import contextlib
 from ast import literal_eval
 from dataclasses import dataclass
@@ -339,6 +338,10 @@ class UtspLpgConnector(cp.Component):
         self.calculation_index_for_local_lpg: int = (
             config.calculation_index_for_local_lpg or PylpgWorkspace.default_base_index()
         )
+        # Every index this run has claimed a pylpg working directory for. The cleanup is driven from
+        # here rather than from the result folder, because a run that fails before producing one
+        # still has a directory to remove -- see PylpgWorkspace.release.
+        self.claimed_pylpg_calculation_indices: List[int] = []
 
         self.build()
         # dummy value as long as there is no way to consider multiple households in one house
@@ -910,7 +913,6 @@ class UtspLpgConnector(cp.Component):
                 # invitation to substitute a different household. See roadmap/pylpg_flakiness.md F1.
                 if (self.utsp_config.data_acquisition_mode in
                         (LpgDataAcquisitionMode.USE_UTSP, LpgDataAcquisitionMode.USE_LOCAL_LPG)):
-                    result_folder: Optional[Union[str, List[str]]] = None
                     try:
                         if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
                             # These raise when the .env is missing, and that is the intent: an
@@ -938,7 +940,7 @@ class UtspLpgConnector(cp.Component):
                             )
                         elif self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG:
                             (
-                                result_folder,
+                                _result_folder,
                                 electricity_file,
                                 warm_water_file,
                                 inner_device_heat_gains_file,
@@ -1095,27 +1097,12 @@ class UtspLpgConnector(cp.Component):
                         raise
 
                     finally:
-                        if result_folder is not None:
-                            folders_to_process: List[str] = []
-                            if isinstance(result_folder, list):
-                                folders_to_process = result_folder
-                            elif isinstance(result_folder, str):
-                                folders_to_process = [result_folder]
-
-                            for folder in folders_to_process:
-                                folder_to_delete = os.path.dirname(folder)
-                                try:
-                                    if folder_to_delete and os.path.exists(folder_to_delete):
-                                        shutil.rmtree(folder_to_delete)
-                                        log.information(
-                                            f"Folder with local lpg result '{os.path.basename(folder_to_delete)}' deleted.")
-                                    else:
-                                        log.warning(
-                                            f"Error: Folder '{folder_to_delete}' does not exist and cannot be deleted.")
-                                except (OSError, TypeError) as e:
-                                    log.warning(f"Error during folder cleanup: {e}")
-                        else:
-                            log.warning("LPG result folder was None; cleanup skipped.")
+                        # Runs whether the attempt succeeded, raised or was interrupted. The
+                        # directories are resolved from the indices claimed above, which are known
+                        # before the calculation starts, so a failure cannot leave debris for the
+                        # next run to trip over.
+                        PylpgWorkspace.release(self.claimed_pylpg_calculation_indices)
+                        self.claimed_pylpg_calculation_indices.clear()
 
                 if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
                     log.information(
@@ -1321,6 +1308,7 @@ class UtspLpgConnector(cp.Component):
                 # using it or to one that died, and both deserve a named failure rather than a shared
                 # folder.
                 PylpgWorkspace.claim(calculation_index)
+                self.claimed_pylpg_calculation_indices.append(calculation_index)
                 lpe: lpg_execution.LPGExecutor = lpg_execution.LPGExecutor(calculation_index, True)
 
                 request = lpe.make_default_lpg_settings(self.my_simulation_parameters.year)

@@ -10,18 +10,22 @@ first deleted the directory the other was still using.
 
 This module owns the index arithmetic and the directory lifecycle instead, so the connector does not
 have to. The default index comes from the process, which removes the shared constant; the directory
-is claimed before it is created, and claiming one that already exists fails immediately with a message
-naming the index, because the alternative is two runs silently interleaving in one folder. See
-``roadmap/pylpg_flakiness.md`` F3.
+is claimed before it is created and released once the attempt ends, whether it succeeded or not; and
+claiming one that already exists fails immediately with a message naming the index, because the
+alternative is two runs silently interleaving in one folder. See ``roadmap/pylpg_flakiness.md`` F3
+and F4.
 """
 
 # clean
 
 import os
 import pathlib
-from typing import ClassVar
+import shutil
+from typing import ClassVar, List
 
 from pylpg import lpg_execution
+
+from hisim import log
 
 __authors__ = "Noah Pflugradt"
 __copyright__ = "Copyright 2021-2026, FZJ-IEK-3 "
@@ -161,3 +165,31 @@ class PylpgWorkspace:
                 f"{cls.INDEX_ENVIRONMENT_VARIABLE} to a free index for this process."
             )
         return directory
+
+    @classmethod
+    def release(cls, calculation_indices: List[int]) -> None:
+        """Deletes the working directories of the given calculation indices, ignoring what is gone.
+
+        Cleanup used to be driven by the result folder the calculation returned, which only exists
+        once the calculation has produced one. A run that failed earlier than that -- an unavailable
+        binary, a killed process, a collision -- logged that the result folder was ``None``, skipped
+        the cleanup and left its directory on disk, so the next run failed on ``Directory not empty``
+        before it started and one failure poisoned the next. The calculation index is known before the
+        attempt begins, so resolving the path from it lets the cleanup run either way.
+
+        Failures to delete are logged rather than raised. This runs in a ``finally`` block, where an
+        exception would replace whatever the run was already failing with, and a directory that could
+        not be removed is reported by the next :meth:`claim` anyway.
+
+        Args:
+            calculation_indices: the indices this run claimed; ones whose directory is already gone
+                are skipped silently.
+        """
+        for calculation_index in calculation_indices:
+            directory = cls.working_directory(calculation_index)
+            try:
+                if directory.exists():
+                    shutil.rmtree(directory)
+                    log.information(f"Local LPG working directory '{directory.name}' deleted.")
+            except OSError as error:
+                log.warning(f"Could not delete the local LPG working directory '{directory}': {error}")

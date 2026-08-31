@@ -39,6 +39,7 @@ from pylpg import lpg_execution
 
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
+from hisim.components.pylpg_workspace import PylpgWorkspace
 # Owned
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -332,12 +333,12 @@ class UtspLpgConnector(cp.Component):
         self.name_of_predefined_loadprofile: Optional[str] = config.name_of_predefined_loadprofile
         self.predefined_loadprofile_filepaths: Optional[str] = config.predefined_loadprofile_filepaths
 
-        self.calculation_index_for_local_lpg: Optional[int] = config.calculation_index_for_local_lpg
-        if not self.calculation_index_for_local_lpg:
-            # Fall back to 1, but allow an override via env var so that several local-LPG
-            # runs in parallel (e.g. batch scenario-JSON regeneration) use distinct
-            # pylpg working directories (C<index>) instead of colliding on C1.
-            self.calculation_index_for_local_lpg = int(os.environ.get("HISIM_LOCAL_LPG_CALC_INDEX", "1"))
+        # The base index decides which pylpg/C<index> directories this process computes in. It used
+        # to default to the constant 1, so every local-LPG run in one virtual environment shared one
+        # directory; the default is now derived from the process instead. See PylpgWorkspace.
+        self.calculation_index_for_local_lpg: int = (
+            config.calculation_index_for_local_lpg or PylpgWorkspace.default_base_index()
+        )
 
         self.build()
         # dummy value as long as there is no way to consider multiple households in one house
@@ -1315,6 +1316,11 @@ class UtspLpgConnector(cp.Component):
                     CalcOption.FlexibilityEvents,
                 ]
 
+                # Claimed before the executor is built, because LPGExecutor clears whatever it finds
+                # and starts writing: a directory that already exists belongs either to a run still
+                # using it or to one that died, and both deserve a named failure rather than a shared
+                # folder.
+                PylpgWorkspace.claim(calculation_index)
                 lpe: lpg_execution.LPGExecutor = lpg_execution.LPGExecutor(calculation_index, True)
 
                 request = lpe.make_default_lpg_settings(self.my_simulation_parameters.year)
@@ -1384,7 +1390,8 @@ class UtspLpgConnector(cp.Component):
 
         log.information("Requesting LPG profiles from local lpg for one household.")
 
-        result_folder = self.execute_local_lpg_single_household(calculation_index=self.calculation_index_for_local_lpg,
+        calculation_index = PylpgWorkspace.calculation_index(self.calculation_index_for_local_lpg, 0)
+        result_folder = self.execute_local_lpg_single_household(calculation_index=calculation_index,
                                                                 household=household,
                                                                 random_seed=None)
 
@@ -1451,12 +1458,17 @@ class UtspLpgConnector(cp.Component):
 
         log.information("Requesting LPG profiles from local lpg for multiple household.")
         result_folder_list = []
-        calculation_index = 1
-        for household in households:
+        # The households of one request are computed one after another but read together at the end,
+        # so each needs a directory of its own that outlives its calculation. They come out of this
+        # run's base index rather than restarting at 1, which is what used to make two concurrent
+        # multi-household requests compute in the same folders.
+        for household_ordinal, household in enumerate(households):
+            calculation_index = PylpgWorkspace.calculation_index(
+                self.calculation_index_for_local_lpg, household_ordinal
+            )
             result_folder = self.execute_local_lpg_single_household(calculation_index=calculation_index,
                                                                     household=household,
                                                                     random_seed=None)
-            calculation_index = calculation_index + 1
             result_folder_list.append(result_folder)
 
         # append all results in lists

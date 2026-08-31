@@ -7,15 +7,15 @@ components:
   RandomNumbers100To200:
     class: hisim.components.random_numbers.RandomNumbers
     config:
-      timesteps: 96
       minimum: 100.0
       maximum: 200.0
+      seed: 1
   RandomNumbers10To20:
     class: hisim.components.random_numbers.RandomNumbers
     config:
-      timesteps: 96
       minimum: 10.0
       maximum: 20.0
+      seed: 2
   ExampleTransformerDefault:
     class: hisim.components.example_transformer.ExampleTransformer
     config:

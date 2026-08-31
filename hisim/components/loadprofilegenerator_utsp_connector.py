@@ -998,6 +998,7 @@ class UtspLpgConnector(cp.Component):
                             # cache results for each household individually
                             self.cache_results(
                                 cache_filepath=cache_filepath,
+                                effective_household_config=new_unique_config,
                                 number_of_residents=number_of_residents,
                                 electricity_consumption=electricity_consumption,
                                 heating_by_residents=heating_by_residents,
@@ -1077,6 +1078,7 @@ class UtspLpgConnector(cp.Component):
                             # cache for multiple results at a time
                             self.cache_results(
                                 cache_filepath=cache_filepath,
+                                effective_household_config=new_unique_config,
                                 number_of_residents=self.number_of_residents,
                                 heating_by_residents=self.heating_by_residents,
                                 water_consumption=self.water_consumption,
@@ -1958,6 +1960,7 @@ class UtspLpgConnector(cp.Component):
     def cache_results(
         self,
         cache_filepath: str,
+        effective_household_config: "UtspLpgConnectorConfig",
         number_of_residents: List,
         heating_by_residents: List,
         electricity_consumption: List,
@@ -1969,7 +1972,29 @@ class UtspLpgConnector(cp.Component):
         driving_distances: Any,
         # saved_files: List,
     ) -> None:
-        """Make caching file for the results."""
+        """Writes the profiles of one household into the cache, with the configuration that produced them.
+
+        The configuration passed here is the effective one -- the single-household config the request
+        was actually made with -- and its hash has to equal the digest in ``cache_filepath``. That is
+        what the companion metadata file records, so that a later lookup can prove the contents belong
+        to the key rather than assuming it. See ``roadmap/pylpg_flakiness.md`` F5.
+
+        Args:
+            cache_filepath: the entry to write, from ``get_cache_file``.
+            effective_household_config: the configuration the profiles were actually produced from.
+            number_of_residents: per-timestep resident count.
+            heating_by_residents: per-timestep heat gain from the residents.
+            electricity_consumption: per-timestep electricity demand.
+            water_consumption: per-timestep warm-water draw.
+            heating_by_devices: per-timestep heat gain from the devices.
+            flexibility: the flexibility events of this household.
+            car_states: the car state series of this household.
+            car_locations: the car location series of this household.
+            driving_distances: the driving distance series of this household.
+
+        Raises:
+            portalocker.exceptions.LockException: if the entry's lock cannot be acquired in time.
+        """
 
         lock_filepath = cache_filepath + ".lock"
         try:
@@ -2008,7 +2033,10 @@ class UtspLpgConnector(cp.Component):
                     d_f_str = cache_file.getvalue()
                     cache_content.update({key: d_f_str})
 
-                with atomic_cache_write(cache_filepath) as temporary_cache_filepath:
+                with atomic_cache_write(
+                    cache_filepath,
+                    utils.build_cache_key_string(effective_household_config, self.my_simulation_parameters),
+                ) as temporary_cache_filepath:
                     with open(temporary_cache_filepath, "w", encoding="utf-8") as file:
                         json.dump(cache_content, file)
 

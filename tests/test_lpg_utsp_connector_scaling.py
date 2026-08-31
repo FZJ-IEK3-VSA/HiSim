@@ -95,6 +95,7 @@ def test_occupancy_scaling_with_utsp():
     )
     np.testing.assert_allclose(water_consumption_two, len(household_list) * water_consumption_one, rtol=0.01)
 
+
 def build_lpg_utsp_connector(
     households: JsonReference | List[JsonReference]
 ) -> Tuple[

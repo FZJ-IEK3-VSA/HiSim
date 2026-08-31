@@ -742,7 +742,9 @@ class SolarThermalSystem(Component):
 
             # Save as a flat CSV, landed atomically so a concurrent reader never sees it half written.
             assert self.cache_filepath is not None
-            with atomic_cache_write(self.cache_filepath) as temporary_cache_filepath:
+            with atomic_cache_write(
+                self.cache_filepath, utils.build_cache_key_string(self.config, self.my_simulation_parameters)
+            ) as temporary_cache_filepath:
                 full_df.to_csv(temporary_cache_filepath, sep=",", decimal=".", index=False)
 
 

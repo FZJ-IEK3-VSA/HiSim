@@ -3,7 +3,7 @@
 **Status:** draft, all design questions decided · **Date:** 2026-08-28 (DQ1–DQ5 answered by the owner the same day; §13)
 **Implements:** `roadmap/declarative_energy_systems/p3_recording_requirements.md` (revision 2026-08-28, all questions decided) under the epic `epic.md` (E1–E8) · **Plan:** `plan.md` §P3
 **Author(s):** assistant (every item `[proposed]` unless tagged) · **Reviewers:** HiSim core team
-**Branch / PRs:** new branch off `main` (P2 merged as #592); planned PR-1 … PR-7, §10
+**Branch / PRs:** new branch off `main` (P2 merged as #592); planned PR-1 … PR-6, §10 — the teardown once listed as PR-7 is phase P6
 **Base evidence:** `main` plus the merged P2, verified 2026-08-28 — `hisim/energy_system/` (28 modules), `hisim/config/presets.py` (`preset_provenance`, `presets_of`, `constructors_of`), `hisim/component.py` (`src_object_name`/`src_field_name` at :131, `get_default_connections` at :420), `hisim/json_generator.py` (519, the v1 recorder), `scripts/regenerate_scenario_jsons.py`, `scripts/golden_*.py`, 24 setups of which 3 are removed by R5.2
 **Solution-design input:** `json_v2:hisim/scenario_v2/templating.py` (222) and `json_v2:hisim/scenario_v2/parity.py` (500) — both deliberately **not** ported in P2 ("the recorder is P3", "the wiring-diff harness is a P3 golden tool", P2 spec §6) · `hisim/json_generator.py` for the bare-`inputs` decision and parameter filtering
 
@@ -297,7 +297,7 @@ Every failure is an exception carrying the setup, the component and the rule; no
 | PR-4 | All setups recorded; parameter deduplication (R8); freshness workflow | PR-3 |
 | PR-5 | `one_week_july`; the parity rig with its renaming tables and workflow (R11) | PR-4 |
 | PR-6 | Grouping pass (R10) | PR-4, P2.1 |
-| PR-7 | Teardown: delete the rig, its config and its scripts (R11.8, AC-P3.20) | PR-6 |
+| ~~PR-7~~ | **Moved to phase P6** `[2026-08-31]`. The teardown is not P3's: P4 re-records the fleet on every batch, so the rig is what proves a re-recorded file still reproduces its setup. It comes down when the whole stack is merged — plan §P6, R11.8 amended. | P1–P5 merged |
 
 PR-1 and PR-2 are the only ones that change a setup, a component or a result, and each is its own commit with its diff shown. PR-2's result change is confined to the column prefixes of three setups, none of them golden-gated. The two toy setups are renamed rather than deleted `[decided 2026-08-28]`: they stay as the documented example of legacy Python mode, and permanently outside the numeric oracle.
 

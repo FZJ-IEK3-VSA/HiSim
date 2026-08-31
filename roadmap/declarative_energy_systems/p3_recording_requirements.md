@@ -179,12 +179,23 @@ extension of the golden gate and it blesses nothing.
 - R11.7 **Manual, aggregated and loud.** `workflow_dispatch` only, with filters for setup, window and configuration; a
   summary job prints one table covering every triple; a failing triple uploads both KPI sets, both result CSVs and the
   wire diff.
-- R11.8 **Removal is part of P3.** The workflow, its configuration and its scripts are deleted in P3's last PR — a
-  checkbox in the plan, not an intention. What survives is whatever earned a place in the permanent gate: the six
-  setups the scan already clears (`household_heatpump_solar_thermal_building_sizer`,
-  `household_heatpump_car_building_sizer`, `household_gas_solar_thermal_building_sizer`,
-  `automatic_default_connections`, `basic_household`, `default_connections`) are the candidates, decided at the end of
-  P3 on the rig's evidence rather than before it.
+- R11.8 **Removal is its own phase, P6** `[amended 2026-08-31]`. The workflow, its configuration and its scripts are
+  deleted once the whole energy-systems stack is merged — a checkbox in the plan, not an intention. The first spelling
+  of this rule put the teardown in P3's last PR, which was written before P4's shape was clear and is wrong: **P4
+  re-records the fleet on every batch** (Q-P3.1, and P4's own assumption A1 reviews each batch against the recorded
+  file diff), so the rig is the only thing proving a re-recorded file still reproduces its setup while 88 config
+  classes change how those files are written. The permanent golden gate cannot stand in for it — it watches 8 setups
+  against blessed references, the rig watches 20 across two windows and needs none, and 8 of those setups have no KPI
+  oracle at all. Deleting the rig at the end of P3 would retire the migration's safety net exactly as the migration
+  reached its largest change.
+  What survives the teardown is whatever earned a place in the permanent gate: the six setups the scan already clears
+  (`household_heatpump_solar_thermal_building_sizer`, `household_heatpump_car_building_sizer`,
+  `household_gas_solar_thermal_building_sizer`, `automatic_default_connections`, `basic_household`,
+  `default_connections`) are the candidates, decided in P6 on the evidence the rig accumulated rather than before it.
+- R11.9 `[added 2026-08-31]` **The cost of keeping it** is stated so the phase is not deferred by inertia: the rig is
+  `workflow_dispatch` only, so it costs nothing per pull request, but every batch that re-records should dispatch it,
+  and its hand-authored renaming tables (R11.3) must be kept current as P4 renames the legacy aggregator ports. That
+  maintenance is itself an argument for finishing P4 rather than for keeping the rig indefinitely.
 
 ## 9. Constraints, Invariants and Assumptions
 
@@ -196,7 +207,7 @@ extension of the golden gate and it blesses nothing.
 - C-P3.6 `[decided 2026-08-28; R10]` No group and no variant is ever inferred. Observation supplies the three-state matrix; the assignment of a difference to membership or to an override is a person's, recorded in the table, reviewed as a diff of `<stem>.grouping.yaml`.
 - C-P3.7 `[decided 2026-08-28; R10.7]` A grouped file's guarantees reach exactly as far as its probe list. Combinations never probed are untested, named as such in the report, and are not a claim the file makes.
 - A1 `[proposed]` Post-construction recording is acceptable (see §4).
-- A2 `[decided 2026-08-28; Q-P3.7]` The 13 setups with no numeric oracle get one for the duration of the migration through R11, not by joining `golden_config.json`. A temporary A/B rig needs no references, covers the seven setups whose KPI layer crashes, and compares more strictly than the permanent gate can. Which of them join the permanent gate afterwards is decided at the end of P3 (R11.8).
+- A2 `[decided 2026-08-28; Q-P3.7]` The 13 setups with no numeric oracle get one for the duration of the migration through R11, not by joining `golden_config.json`. A temporary A/B rig needs no references, covers the seven setups whose KPI layer crashes, and compares more strictly than the permanent gate can. Which of them join the permanent gate afterwards is decided in P6, when the rig is retired (R11.8).
 
 ## 10. Acceptance Criteria
 
@@ -219,7 +230,7 @@ extension of the golden gate and it blesses nothing.
 | AC-P3.17 | One dispatch of the rig covers every in-scope (setup, configuration, window) triple and prints them as one table; the January and July windows both appear for every triple. | R11.1, R11.5, R11.7 |
 | AC-P3.18 | Changing one config value in a recorded file makes its triple fail and the report names the columns or KPIs that moved; the comparison is exact, so no threshold can hide it. | R11.2, R11.3 |
 | AC-P3.19 | The seven KPI-broken setups return a structural verdict — component set and wire set compared, KPI stage reported as unavailable — rather than an error. | R11.4, R11.3 |
-| AC-P3.20 | P3's final PR deletes the workflow, its configuration and its scripts, and the repository contains no reference to them afterwards. | R11.8 |
+| AC-P3.20 `[deferred to P6, 2026-08-31]` | The phase-6 teardown deletes the workflow, its configuration and its scripts, and the repository contains no reference to them afterwards. It is an acceptance criterion of P6, not of P3 — P3 ships the rig, P6 removes it. | R11.8 |
 | AC-P3.21 | Recording a setup whose parameters equal a shipped `energy_systems/*.simulation.yaml` writes no parameter file and references that one; changing one option makes it write exactly one new file. | R8.2, R8.3 |
 | AC-P3.22 | Recording two setups with identical parameters that match nothing shipped produces one shared file, not two, and both recordings reference it. | R8.3, R8.5 |
 | AC-P3.23 | Two setups differing only in `cache_dir_path` produce the same parameter file, and no written file contains a machine-specific path. | R8.4 |

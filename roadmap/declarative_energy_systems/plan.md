@@ -17,11 +17,14 @@ is accepted, so it cites decisions instead of re-arguing them.
 ## Phases, dependencies, gates
 
 ```
-P1 sizing kernel ──► P2 file format & executor ──► P3 recording & setup migration ──► P5 consumers
-        │                       │                                                          ▲
-        │                       └──► P2.1 exclusive variants ───────────────────────────────┘
-        │                            (format amendment; nothing before P5 consumes it)
-        └──► P4 component sweep (batches; each batch needs P1, later batches use P2 fixtures)
+P1 sizing kernel ──► P2 file format & executor ──► P3 recording & setup migration ──► P5 consumers ──► P6
+        │                       │                                                          ▲                 ▲
+        │                       └──► P2.1 exclusive variants ───────────────────────────────┘                 │
+        │                            (format amendment; P3's grouping pass emits it)                          │
+        └──► P4 component sweep (batches; each batch needs P1, later batches use P2 fixtures) ─────────────────┘
+
+P6 takes the parity rig down once everything above it is merged: P4 re-records the fleet on every batch,
+so the rig is the migration's safety net for as long as the migration is running.
 ```
 
 | Phase | Delivers | Depends on | Review gate | Requirements |
@@ -32,6 +35,7 @@ P1 sizing kernel ──► P2 file format & executor ──► P3 recording & se
 | **P3 Recording & setup migration** | recorder (`setup_function` → energy-system file), every in-scope setup recorded and checked in, the grouping pass (R10), the temporary parity rig (R11) | P2 | golden suites green on recorded files; every rig triple identical | `p3_recording_requirements.md` |
 | **P4 Component sweep** | ~85 factories → presets + laws; setup-side sizing moved into classes; dead SimRepository sizing keys deleted | P1 (P2 for fixtures) | per batch: contract test, golden parity | `p4_component_sweep_requirements.md` (per-class registry; survey in `p4_class_survey.md`) |
 | **P5 Consumer integration** | RenoVisor, building sizer and HPC harness on energy-system files; `ModularHouseholdConfig` deleted | P2, P2.1, P3 | consumers' own tests | written after P2 acceptance |
+| **P6 Retire the scaffolding** | the temporary parity rig (workflow, config, scripts) deleted; whichever setups earned it join the permanent golden gate | **P1–P5 all merged** | the stack is green without the rig | `p3_recording_requirements.md` R11.8 (amended) |
 
 ## P1 — Sizing kernel
 
@@ -83,7 +87,7 @@ files do, and it answers the RenoVisor requirement in code rather than on paper.
 ## P3 — Recording & setup migration
 
 Requirements: `p3_recording_requirements.md` (in review 2026-08-28, all questions decided; inventory in
-`p3_setup_inventory.md`). Implementation: `p3_implementation_spec.md` (draft 2026-08-28; PR-1 … PR-7 in its §10,
+`p3_setup_inventory.md`). Implementation: `p3_implementation_spec.md` (draft 2026-08-28; PR-1 … PR-6 in its §10, the teardown moved to P6,
 five open design questions in its §13).
 
 - [x] All requirements questions decided *(2026-08-28: Q-P3.1 record now and re-record per P4 batch · Q-P3.2 KPI parity is the oracle · Q-P3.3 the semi-manual grouping pass R10 · Q-P3.4 files live in `energy_systems/` · Q-P3.5 the three unrecordable setups are deleted, not excluded — **amended 2026-09-02**, see the removal item below: two were retired independently and the third became recordable · Q-P3.6 parameters emitted only when new, never duplicated · Q-P3.7 the temporary parity rig R11)*
@@ -106,7 +110,7 @@ Migration parity rig (R11) — temporary, `workflow_dispatch` only, exists to ma
 - [ ] Rig: run each (setup, probe configuration, window) triple twice in one container — Python path and recorded file — and compare component set, wire set, shared result columns and KPIs at **exact equality** (same machine, so no tolerance is needed)
 - [ ] Structural verdict for the seven setups whose KPI layer crashes today, so they are covered without waiting for repairs
 - [ ] One dispatch prints one table of every triple; failures upload both KPI sets, both CSVs and the wire diff
-- [ ] **P3's last PR deletes the workflow, its config and its scripts** (R11.8, AC-P3.20); the six setups the scan clears are then candidates for the permanent gate, decided on the rig's evidence
+- [ ] The rig stays until **P6** (R11.8, amended 2026-08-31): P4 re-records the fleet on every batch, so the rig is what proves a re-recorded file still reproduces its setup
 
 Not blocking P3 — the KPI-layer repair list found by `golden_validate.py --scan-all` (2026-08-28):
 
@@ -151,6 +155,28 @@ declared; call sites moved; regenerated fixtures; golden parity.
 - [ ] RenoVisor: base file per heating system; `mapping.py` → overrides + group flags; post-processing selection moves to the simulation-parameters file
 - [ ] Building sizer: same path; `ModularHouseholdConfig`, `EnergySystemConfig`, `ArcheTypeConfig` deleted
 - [ ] HPC harness: payload = energy-system string + simulation parameters; worker loads from string
+
+## P6 — Retire the migration scaffolding
+
+Requirements: `p3_recording_requirements.md` R11.8 and R11.9 (amended 2026-08-31), AC-P3.20.
+
+The parity rig is scaffolding, and scaffolding comes down when the building stands — not when the floor that
+needed it is finished. Its first spelling had P3 delete it, which was decided before P4's shape was clear:
+P4 re-records the fleet on **every batch**, and its own assumption A1 reviews each batch against the recorded
+file diff, so the rig is the only thing proving a re-recorded file still reproduces its setup while 88 config
+classes change how those files are written. The permanent golden gate is not a substitute — it watches eight
+setups against blessed references; the rig watches twenty across two windows, needs no references, and covers
+eight setups that have no KPI oracle at all.
+
+**Entry condition: P1, P2, P2.1, P3, P4 and P5 are all merged.** Until then the rig is dispatched by every
+batch that re-records, and its renaming tables are kept current as P4 renames the legacy aggregator ports.
+
+- [ ] Confirm the whole stack is green with the rig still in place, over both windows
+- [ ] Decide which setups earned a place in the permanent gate, on the rig's accumulated evidence — the six the
+      2026-08-28 scan cleared are the candidates, not the answer
+- [ ] Add those to `scripts/golden_config.json` and bless their references
+- [ ] Delete `.github/workflows/p3-parity.yml`, `scripts/p3_parity_*.py` and the renaming tables
+- [ ] Confirm the repository contains no reference to any of it (AC-P3.20)
 
 ## Parking lot (deferred; trigger named)
 

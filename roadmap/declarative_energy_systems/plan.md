@@ -18,7 +18,9 @@ is accepted, so it cites decisions instead of re-arguing them.
 
 ```
 P1 sizing kernel ──► P2 file format & executor ──► P3 recording & setup migration ──► P5 consumers
-        │                       │
+        │                       │                                                          ▲
+        │                       └──► P2.1 exclusive variants ───────────────────────────────┘
+        │                            (format amendment; nothing before P5 consumes it)
         └──► P4 component sweep (batches; each batch needs P1, later batches use P2 fixtures)
 ```
 
@@ -26,9 +28,10 @@ P1 sizing kernel ──► P2 file format & executor ──► P3 recording & se
 |---|---|---|---|---|
 | **P1 Sizing kernel** | `hisim/config` reworked: `Catalog` without `component_id`; `AUTO`/`sized_field`/laws unchanged; the fact binding rule as a Python API (`resolve_all(configs, sources=…)`); scalar cardinality only; contract tests; introspection API | PR #582 (`config_base_move`) | pure code + tests; inventory; pilots pass | `p1_sizing_kernel_requirements.md` |
 | **P2 File format & executor** | schema v3 (components / `inputs` / `preset` / `config` / `sizing_sources` / groups), YAML + JSON loading with duplicate-key detection, hard-error catalogue, `${var}` paths, JSON Schema export, realized record + audit companion, `describe`/`facts` CLI | P1 | the three mockups load, resolve, build and run; identity test | `p2_file_format_requirements.md` |
-| **P3 Recording & setup migration** | recorder (`setup_function` → energy-system file), all ~50 setups recorded and checked in, golden parity | P2 | golden suites green on recorded files | written after P1 acceptance |
-| **P4 Component sweep** | ~85 factories → presets + laws; setup-side sizing moved into classes; dead SimRepository sizing keys deleted | P1 (P2 for fixtures) | per batch: contract test, golden parity | batch checklist below; no requirements document |
-| **P5 Consumer integration** | RenoVisor, building sizer and HPC harness on energy-system files; `ModularHouseholdConfig` deleted | P2, P3 | consumers' own tests | written after P2 acceptance |
+| **P2.1 Exclusive variants** | `variants: {selected, options}` — exactly one option live, options are complete alternative worlds so two of them may wire the same component differently; the case is the RenoVisor backend's "EMS with battery, or a bare meter" | P2 | the UC2 mockup's variant loads and resolves; identity test per (variant, option) | `p2_file_format_requirements.md` R15 (amendment) |
+| **P3 Recording & setup migration** | recorder (`setup_function` → energy-system file), every in-scope setup recorded and checked in, the grouping pass (R10), the temporary parity rig (R11) | P2 | golden suites green on recorded files; every rig triple identical | `p3_recording_requirements.md` |
+| **P4 Component sweep** | ~85 factories → presets + laws; setup-side sizing moved into classes; dead SimRepository sizing keys deleted | P1 (P2 for fixtures) | per batch: contract test, golden parity | `p4_component_sweep_requirements.md` (per-class registry; survey in `p4_class_survey.md`) |
+| **P5 Consumer integration** | RenoVisor, building sizer and HPC harness on energy-system files; `ModularHouseholdConfig` deleted | P2, P2.1, P3 | consumers' own tests | written after P2 acceptance |
 
 ## P1 — Sizing kernel
 
@@ -58,13 +61,67 @@ P1 sizing kernel ──► P2 file format & executor ──► P3 recording & se
 - [x] `${var}` path resolver carried over from `json_v2` *(PR-1, 2026-08-26)*
 - [x] C10 — v3 fixtures spell UTSP `JsonReference`s as `Name`/`Guid`/`StrVal`; one local-LPG run verifies (own commit, before/after) *(PR-6: the record round-trips the references with their real spelling; a live UTSP run needs `UTSP_URL`/`UTSP_API_KEY`, left to P5, 2026-08-26)*
 
-## P3 — Recording & setup migration (outline; document later)
+## P2.1 — Exclusive variants (amendment to the merged P2)
 
+Requirements: `p2_file_format_requirements.md` R15, C-P2.5, AC-P2.17–AC-P2.19 (added 2026-08-28, re-answering Q-P2.2).
+Asked for by the RenoVisor backend: a house has either an EMS with a battery **or** a plain electricity meter, and the
+meter is wired differently in the two worlds — a group can add or remove components but cannot rewire one that survives.
+Nothing in P3 or P4 consumes variants except P3's grouping pass (R10). `[decided 2026-08-28]` **P2.1 is built before P3
+starts** — the format is cheaper to settle while three mockups and one real file exist than after twenty-one recorded
+files do, and it answers the RenoVisor requirement in code rather than on paper.
+
+- [ ] `variants: {name: {selected, options: {name: {components}}}}` in the model, loader and JSON Schema
+- [ ] Selection folded into the existing group-expansion pre-pass; the selected option's components join the top level, so nothing downstream sees a variant
+- [ ] The five R15.5 rejections with their messages
+- [ ] Identity test extended to every (mockup, variant, option) triple; audit records the selection
+- [ ] `facts` reports groups and variants as one knob surface (R15.8)
+- [ ] UC2 mockup: move the `battery_and_ems` group and the meter into an `electricity_management` variant. This
+      belongs to the code change, not to the requirements: a mockup is an executable fixture (AC-P2.1), so the
+      block may only enter it once the loader reads it. Until then the syntax lives in R15's example.
+
+## P3 — Recording & setup migration
+
+Requirements: `p3_recording_requirements.md` (in review 2026-08-28, all questions decided; inventory in
+`p3_setup_inventory.md`). Implementation: `p3_implementation_spec.md` (draft 2026-08-28; PR-1 … PR-7 in its §10,
+five open design questions in its §13).
+
+- [x] All requirements questions decided *(2026-08-28: Q-P3.1 record now and re-record per P4 batch · Q-P3.2 KPI parity is the oracle · Q-P3.3 the semi-manual grouping pass R10 · Q-P3.4 files live in `energy_systems/` · Q-P3.5 the three unrecordable setups are deleted, not excluded · Q-P3.6 parameters emitted only when new, never duplicated · Q-P3.7 the temporary parity rig R11)*
+- [ ] Requirements document accepted at review
+- [x] Implementation spec written; DQ1–DQ5 decided *(2026-08-28: subpackage · rename the illegal names and enforce the rule in `Component.__init__` · guard `component_id` now and decide in P5 · hand-authored renaming table · the rig compares every result column through it, R11.3 and C-P3.2 amended)*
+- [ ] Implementation spec accepted at review
+- [ ] P2.1 first (see above), then the removal commit (R5.2): delete `simple_weather_data_import.py`, `basic_household_with_weather_data_request.py` and `air_conditioned_house.py` with their v1 twins, their two tests and the freshness `--exclude` list — after this the recorder needs no skip list
+- [ ] Rename the five illegal component-name literals in three setups and the `ExampleTransformer` class default; regenerate the three v1 twins; then enforce the identifier rule in `Component.__init__` (own commit). No golden reference is affected
+- [ ] Port `json_v2:parity.py` (wiring snapshot, port renaming, result comparison) and the preset half of `json_v2:templating.py`
 - [ ] Recorder: run a `setup_function` under a recording simulator, emit an energy-system file in canonical style
-- [ ] Every setup recorded; recorded files checked in next to the setups
+- [ ] Every setup recorded flat; recorded files checked in to `energy_systems/<stem>.energy_system.yaml`
+- [ ] Parameter files emitted only where the setup's parameters match nothing shipped, deduplicated by normalised content, named for what they are (R8)
 - [ ] Golden suites run on recorded files; setups themselves kept until P5 confirms no consumer needs them
+- [ ] Grouping pass (R10), after the flat files exist: probe list per setup, prefilled workbook, `grouping import` to a committed `<stem>.grouping.yaml`, second recorder pass building groups and variants
+- [ ] Every probe column asserted byte for byte against its flat recording (R10.6) — the grouping pass needs no new golden runs
+
+Migration parity rig (R11) — temporary, `workflow_dispatch` only, exists to make the migration safe and is removed with it:
+
+- [ ] `one_week_july` parameter set next to `one_week_only`, so cooling and solar-thermal setups are measured somewhere other than their annual minimum
+- [ ] Rig: run each (setup, probe configuration, window) triple twice in one container — Python path and recorded file — and compare component set, wire set, shared result columns and KPIs at **exact equality** (same machine, so no tolerance is needed)
+- [ ] Structural verdict for the seven setups whose KPI layer crashes today, so they are covered without waiting for repairs
+- [ ] One dispatch prints one table of every triple; failures upload both KPI sets, both CSVs and the wire diff
+- [ ] **P3's last PR deletes the workflow, its config and its scripts** (R11.8, AC-P3.20); the six setups the scan clears are then candidates for the permanent gate, decided on the rig's evidence
+
+Not blocking P3 — the KPI-layer repair list found by `golden_validate.py --scan-all` (2026-08-28):
+
+- [ ] `dynamic_components` (CHP1) and `electrolyzer_with_renewables` (transformer/rectifier): components with no KPI method
+- [ ] `basic_household_only_heating`: `NoneType * float` inside KPI computation
+- [ ] `simple_air_conditioner_household_building_sizer`: division by zero on a January window
+- [ ] `household_gas_solar_thermal`: grid import 21.72 kWh above total consumption 10.9 kWh — an energy-balance inconsistency, worth fixing on its own merits
+- [ ] `simple_system_setup_one`/`_two`: toy examples whose components will never carry meaningful KPIs — exclude rather than implement
 
 ## P4 — Component sweep (batches; each a mechanical PR)
+
+Requirements: `p4_component_sweep_requirements.md` (draft 2026-08-27; per-class table R3, gates R2, physics changes R5,
+decisions D-1…D-32 with full text in `p4_class_survey.md`). Its R7 reorders the batches below by recorded-setup impact;
+the list here is kept until the document is accepted.
+
+- [ ] Requirements document accepted (D-1…D-32 decided)
 
 Gates before the first batch (inherited from the branch agenda; each is its own commit,
 never bundled with a conversion because each changes results or deletes code):

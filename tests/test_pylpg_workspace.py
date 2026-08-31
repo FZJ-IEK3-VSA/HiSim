@@ -5,7 +5,8 @@ index, so the index is the only isolation available. HiSim defaulted it to ``1``
 multi-household request restarted its own counter at ``1``, which put every concurrent run in
 ``pylpg/C1``: sqlite files corrupted each other and a finishing run deleted the folder a running one
 was still using. These tests pin the replacement rule -- distinct base indices give disjoint blocks
-of directories, and an occupied directory stops the run by name.
+of directories, an occupied directory stops the run by name, and a run releases what it claimed
+whether it succeeded or failed.
 
 None of them touch pylpg or start a calculation; they exercise arithmetic and one filesystem check,
 which is why they are ``base`` rather than ``utsp``.
@@ -119,3 +120,29 @@ def test_claiming_an_occupied_directory_fails_and_names_the_index(monkeypatch: p
 
     assert str(occupied_index) in str(failure.value)
     assert PylpgWorkspace.INDEX_ENVIRONMENT_VARIABLE in str(failure.value)
+
+
+@pytest.mark.base
+def test_release_removes_the_directories_a_run_claimed(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    """Cleanup is driven by the claimed indices, so it works for a run that never got a result folder.
+
+    The old cleanup deleted the parent of the result folder the calculation returned, and skipped
+    itself entirely when the run failed before producing one. That left the directory on disk and the
+    next run failed on ``Directory not empty`` before it started, which is how one failure poisoned
+    the next. Indices are known before the attempt begins, so releasing by index covers both
+    outcomes; an index whose directory is already gone is skipped rather than raising, because this
+    runs in a ``finally`` where an exception would mask the real failure.
+    """
+
+    def working_directory_in_tmp(calculation_index: int) -> pathlib.Path:
+        return pathlib.Path(tmp_path) / f"C{calculation_index}"
+
+    monkeypatch.setattr(PylpgWorkspace, "working_directory", staticmethod(working_directory_in_tmp))
+    claimed = [PylpgWorkspace.calculation_index(31, ordinal) for ordinal in range(2)]
+    working_directory_in_tmp(claimed[0]).mkdir()
+    (working_directory_in_tmp(claimed[0]) / "results").mkdir()
+
+    PylpgWorkspace.release(claimed)
+
+    assert not working_directory_in_tmp(claimed[0]).exists()
+    assert not working_directory_in_tmp(claimed[1]).exists()

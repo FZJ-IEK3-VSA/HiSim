@@ -1,0 +1,37 @@
+# The module configurations household_heatpump_building_sizer is recorded under.
+# One probe per knob its ModularHouseholdConfig really has, plus the baseline: that is the
+# smallest list from which the three-state table can say anything, and it deliberately toggles
+# each knob on its own, so the grouping report names every pair of them as untested.
+setup: system_setups/household_heatpump_building_sizer.py
+defaults: hisim.building_sizer_utils.interface_configs.modular_household_config.ModularHouseholdConfig.get_default_config_for_household_heatpump
+probes:
+  - column: baseline
+    description: >-
+      The class defaults, recorded with no module configuration at all, which is what makes this
+      column's flat file the committed twin: full rooftop photovoltaics, battery and energy
+      manager on, floor heating.
+
+  - column: no_battery_ems
+    description: >-
+      The one structural fork this setup has. Without the battery and the energy manager the
+      electricity meter is wired straight to every participant instead of through the manager, so
+      the meter is present in both worlds and says something different in each — the case a group
+      cannot express and a variant can.
+    module_config:
+      energy_system_config_.use_battery_and_ems: false
+
+  - column: half_pv
+    description: >-
+      Half the rooftop potential. The array and the battery that is sized from it both change,
+      and nothing appears or disappears: the standing example of a difference that looks
+      structural in a diff and is a number a consumer picks.
+    module_config:
+      energy_system_config_.share_of_maximum_pv_potential: 0.5
+
+  - column: radiator
+    description: >-
+      Radiators instead of floor heating. A second difference that reads as hardware and is not:
+      it moves the distribution system's and its controller's numbers and adds no component, so
+      it belongs in the same category as the photovoltaic share.
+    module_config:
+      energy_system_config_.heat_distribution_system: Conventional Radiator

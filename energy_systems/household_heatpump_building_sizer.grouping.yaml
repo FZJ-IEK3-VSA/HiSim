@@ -1,0 +1,51 @@
+# The grouping decision for system_setups/household_heatpump_building_sizer.py: what each difference between its probe
+# configurations means. Edited through the workbook, committed in this form.
+setup: system_setups/household_heatpump_building_sizer.py
+probes: energy_systems/household_heatpump_building_sizer.probes.yaml
+assignments:
+  PVSystem:
+    assign: override
+    note: Only the installed peak power moves, and only with the rooftop share. Nothing
+      appears or disappears, so this is a number a consumer picks, not a part of the
+      household.
+  HeatDistributionController:
+    assign: override
+    note: Radiators change the flow temperature curve this controller is built from.
+      Same component, same wiring, different numbers - a knob, not a switch.
+  MoreAdvancedHeatPumpHPLibControllerSH:
+    assign: override
+    note: Follows the distribution system's temperatures for the same reason as the
+      controller above.
+  HeatDistributionSystem:
+    assign: override
+    note: Radiator or floor heating is one enum plus the mass flow and area derived
+      from it. The emitter is present either way.
+  ElectricityMeter:
+    assign: variant:electricity_management
+    note: 'Present in every configuration and wired differently: fed by the energy
+      manager''s grid balance when there is one, and by every participant directly
+      when there is not. A group can add and remove a component but cannot rewire
+      one that survives, so this is the row that forces a variant. Written out in
+      full in both options.'
+  Battery:
+    assign: variant:electricity_management/ems_with_battery
+    note: Exists only in the world that has an energy manager; the setup builds the
+      two together and there is no battery-without-manager mode. Its capacity also
+      follows the rooftop share, which stays a knob on top of the membership.
+  L2EMSElectricityController:
+    assign: variant:electricity_management/ems_with_battery
+    note: The other half of that world, and the component the meter's two wirings
+      are about.
+configurations:
+  baseline:
+    variants:
+      electricity_management: ems_with_battery
+  no_battery_ems:
+    variants:
+      electricity_management: metered_directly
+  half_pv:
+    variants:
+      electricity_management: ems_with_battery
+  radiator:
+    variants:
+      electricity_management: ems_with_battery

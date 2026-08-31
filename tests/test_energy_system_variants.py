@@ -37,6 +37,7 @@ from hisim.energy_system import (
 )
 from hisim.cli import ExitCodes, main
 from hisim.energy_system.audit import build_audit
+from hisim.energy_system.comments import AnnotatedEmitter
 from hisim.energy_system.model import Variant, VariantOption
 from hisim.energy_system.record import realize
 from tests.test_energy_system_groups import (
@@ -488,6 +489,29 @@ def test_a_record_of_a_run_with_a_variant_carries_no_variants(tmp_path: Path) ->
         },
     )
     assert audit.to_document()["expansion"]["variant_selections"][0]["selected"] == MinimalWithAVariant.METERED
+
+
+@pytest.mark.base
+def test_re_running_that_record_reproduces_it_with_nothing_left_to_select(tmp_path: Path) -> None:
+    """Catches a resolved selection being decided a second time by the run that re-executes it.
+
+    A record is the run written back as a file, and re-running it has to reproduce the run rather
+    than make any choice again. The variant is the newest way that promise could break, so the
+    record is written, re-executed and realized once more: the second record equals the first, and
+    the re-run's own audit names no selection at all, because there is no variant left to resolve.
+    """
+    built = Fixtures.build(MinimalWithAVariant.write(tmp_path / "system"), tmp_path / "first")
+    first = realize(built)
+    written = tmp_path / "record.energy_system.yaml"
+    written.write_text(AnnotatedEmitter.render(first, build_audit(built)), encoding="utf-8")
+
+    again = Fixtures.build(written, tmp_path / "second", rerun=True)
+    second = realize(again)
+
+    assert Fixtures.without_sources(dump_energy_system(second)) == Fixtures.without_sources(
+        dump_energy_system(first)
+    )
+    assert not build_audit(again).variant_selections
 
 
 @pytest.mark.base

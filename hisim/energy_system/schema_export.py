@@ -45,7 +45,7 @@ from typing import Any, Dict, Sequence
 from hisim.config.introspection import ConfigDescription, describe_config
 from hisim.config.presets import constructors_of
 from hisim.energy_system.bindings import facts_read_by
-from hisim.energy_system.model import ComponentEntry, EnergySystemFile, Group
+from hisim.energy_system.model import ComponentEntry, EnergySystemFile, Group, Variant, VariantOption
 from hisim.energy_system.names import NameRules
 from hisim.energy_system.schema_classes import ComponentClassScan, JsonTypes
 
@@ -54,9 +54,10 @@ class SchemaBuilder:
     """Assembles the whole JSON Schema of one schema version from a set of component classes.
 
     Built for one export and used once. The document it produces has two halves: a fixed part
-    describing the format itself — the top level, the group block, the three input shapes, the
-    sizing-source references — which changes only when the format does, and a generated part
-    describing what the classes of this repository allow, which changes with every conversion.
+    describing the format itself — the top level, the group and variant blocks, the three input
+    shapes, the sizing-source references — which changes only when the format does, and a
+    generated part describing what the classes of this repository allow, which changes with
+    every conversion.
 
     The generated half is one conditional branch per component class. Branches are additive and
     independent: an entry naming a class matches exactly one of them, and an entry naming a class
@@ -126,6 +127,11 @@ class SchemaBuilder:
                 "propertyNames": {"$ref": "#/$defs/name"},
                 "additionalProperties": {"$ref": "#/$defs/group"},
             },
+            "variants": {
+                "type": "object",
+                "propertyNames": {"$ref": "#/$defs/name"},
+                "additionalProperties": {"$ref": "#/$defs/variant"},
+            },
             "metadata": {
                 "type": "object",
                 "description": (
@@ -139,8 +145,8 @@ class SchemaBuilder:
         """Builds the reusable definitions the top level refers to.
 
         Returns:
-            The ``$defs`` block: names, references, the component map, the entry, the group and
-            the three input shapes.
+            The ``$defs`` block: names, references, the component map, the entry, the group,
+            the variant with its options and the three input shapes.
         """
         return {
             "name": {"type": "string", "pattern": self.NAME_PATTERN},
@@ -158,6 +164,25 @@ class SchemaBuilder:
                 "properties": {
                     "enabled": {"type": "boolean"},
                     "components": {"$ref": "#/$defs/components"},
+                },
+            },
+            "variant": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": list(Variant.VARIANT_KEYS),
+                "properties": {
+                    "selected": {"$ref": "#/$defs/name"},
+                    "options": {
+                        "type": "object",
+                        "minProperties": 1,
+                        "propertyNames": {"$ref": "#/$defs/name"},
+                        "additionalProperties": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": list(VariantOption.OPTION_KEYS),
+                            "properties": {"components": {"$ref": "#/$defs/components"}},
+                        },
+                    },
                 },
             },
             "entry": self._entry(),

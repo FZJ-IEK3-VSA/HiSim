@@ -33,6 +33,15 @@
         "$ref": "#/$defs/group"
       }
     },
+    "variants": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/variant"
+      }
+    },
     "metadata": {
       "type": "object",
       "description": "Written by a generated run record and never by hand; a file carrying it is re-run explicitly rather than run as an authored energy system."
@@ -73,6 +82,38 @@
         },
         "components": {
           "$ref": "#/$defs/components"
+        }
+      }
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selected",
+        "options"
+      ],
+      "properties": {
+        "selected": {
+          "$ref": "#/$defs/name"
+        },
+        "options": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "components"
+            ],
+            "properties": {
+              "components": {
+                "$ref": "#/$defs/components"
+              }
+            }
+          }
         }
       }
     },

@@ -7,9 +7,7 @@ import typing
 from pathlib import Path
 from typing import Any, cast
 from hisim import log, utils, loadtypes as lt
-from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim import simulator
-from hisim.components.generic_car import GenericCarInformation
 try:
     import humps
 except ModuleNotFoundError:
@@ -188,31 +186,10 @@ def setup_components_and_connections(scenario_data: dict[str, Any], sim: simulat
                 # Use the dataclasses_json from_dict method to get the ConfigBase instance
                 config = config_class.from_dict(config_dict)
 
-            if component_def["component_full_classname"] == "hisim.components.generic_car.Car":
-                # We have to generate the car_info_dict
-                car_info: Any | None = None
-                utsp_connector_found = False
-                for wrapped_component in sim.wrapped_components:
-                    if wrapped_component.my_component.get_full_classname() == "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector":
-                        if config_dict["component_id"]["name"] in wrapped_component.my_component.config.cars:
-                            utsp_connector_found = True
-                            car_info = GenericCarInformation(
-                                cast(UtspLpgConnector, wrapped_component.my_component),
-                            ).data_dict_for_car_component[config_dict["household_name"]]
-                if not utsp_connector_found:
-                    raise ValueError(
-                        f"The car '{config_dict['component_id']['name']}' was not associated with any UTSP connector."
-                    )
-                component = component_class(
-                    config=config,
-                    my_simulation_parameters=sim_params,
-                    data_dict_with_car_information=car_info,
-                )
-            else:
-                component = component_class(
-                    config=config,
-                    my_simulation_parameters=sim_params,
-                )
+            component = component_class(
+                config=config,
+                my_simulation_parameters=sim_params,
+            )
         except TypeError as e:
             raise ValueError(
                 f"Failed to initialize component {component_class.__name__}: {e}"

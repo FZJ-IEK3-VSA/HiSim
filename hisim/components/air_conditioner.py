@@ -22,7 +22,7 @@ from hisim.postprocessing.kpi_computation.kpi_structure import (
     KpiTagEnumClass,
 )
 from hisim.simulationparameters import SimulationParameters
-from hisim.loadtypes import LoadTypes, Units
+from hisim.loadtypes import InandOutputType, LoadTypes, Units
 from hisim.components.weather import Weather
 from hisim.components.building import Building
 from hisim import utils
@@ -338,6 +338,10 @@ class AirConditioner(cp.Component):
             self.ElectricalPowerConsumption,
             LoadTypes.ELECTRICITY,
             Units.WATT,
+            # Without this flag the KPI layer never counts the air conditioner: it gathers total
+            # electricity consumption from the postprocessing flags, not from the load type, so an
+            # untagged consumer makes grid import exceed total consumption and the KPI run refuses.
+            postprocessing_flag=[InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description="Electrical power consumption",
         )
         self.electrical_energy_consumption_channel = self.add_output(

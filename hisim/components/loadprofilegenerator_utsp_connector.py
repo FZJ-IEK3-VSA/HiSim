@@ -43,6 +43,7 @@ from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log, utils
+from hisim.caching import atomic_cache_write
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
@@ -2009,8 +2010,9 @@ class UtspLpgConnector(cp.Component):
                     d_f_str = cache_file.getvalue()
                     cache_content.update({key: d_f_str})
 
-                with open(cache_filepath, "w", encoding="utf-8") as file:
-                    json.dump(cache_content, file)
+                with atomic_cache_write(cache_filepath) as temporary_cache_filepath:
+                    with open(temporary_cache_filepath, "w", encoding="utf-8") as file:
+                        json.dump(cache_content, file)
 
                 del loadprofile_dataframe
                 del car_dataframe

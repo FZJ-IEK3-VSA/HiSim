@@ -350,6 +350,15 @@ def get_cache_file(
     It works by turning the class into a json string, hashing the string and then using that as filename.
     The idea is to have a unique file path for every possible configuration.
 
+    The ``exists`` flag is advisory and nothing more. It is a plain ``os.path.isfile`` check, so two
+    processes that miss the same key concurrently will both compute the entry and both write it; that
+    wastes work but is harmless, because the contents are a pure function of the key. What is *not*
+    harmless is writing the entry straight to the returned path, which lets a concurrent reader see it
+    half written -- so every writer must land its entry through
+    :func:`hisim.caching.atomic_cache_write`. This function keeps its own hashing for now and becomes
+    a thin delegating wrapper over ``hisim/caching/`` in a later phase of
+    ``roadmap/cache_service_spec.md`` §4.
+
     Args:
         component_key: filename prefix for the component type.
         parameter_class: dataclass with a ``to_json`` method; the building of its
@@ -358,7 +367,7 @@ def get_cache_file(
         cache_dir_path: optional override; defaults to ``my_simulation_parameters.cache_dir_path``.
 
     Returns:
-        Tuple[bool, str]: ``(exists, absolute_path)``.
+        Tuple[bool, str]: ``(exists, absolute_path)``. ``exists`` is advisory, see above.
 
     Raises:
         ValueError: if ``my_simulation_parameters`` is None or the JSON string is too short.

@@ -17,6 +17,7 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils, log
+from hisim.caching import atomic_cache_write
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
@@ -567,7 +568,8 @@ class Car(cp.Component):
 
             # save data in cache
             car_cache_dataframe = pd.DataFrame({"car_location": self.car_location, "meters_driven": self.meters_driven})
-            car_cache_dataframe.to_csv(cache_filepath)
+            with atomic_cache_write(cache_filepath) as temporary_cache_filepath:
+                car_cache_dataframe.to_csv(temporary_cache_filepath)
             del car_cache_dataframe
 
     def resample_meters_driven(self, meters_driven: List, seconds_per_timestep: int) -> Any:

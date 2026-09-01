@@ -87,9 +87,7 @@
                 "predefined_loadprofile_filepaths": null,
                 "guid": "",
                 "calculation_index_for_local_lpg": null,
-                "cars": [
-                    "Car_2_22kW_Charging_Power_avg_Speed_30_kmh_0"
-                ]
+                "cars": null
             },
             "config_full_classname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig",
             "inputs": [],
@@ -318,15 +316,16 @@
                     "building": null,
                     "unit": null
                 },
+                "household_name": "CHR01_Couple_both_at_Work_HH1",
+                "car_name": "Car_2_22kW_Charging_Power_avg_Speed_30_kmh",
                 "source_weight": 1,
                 "fuel": "Electricity",
                 "consumption_per_km": 0.15,
                 "device_co2_footprint_in_kg": 8899.4,
                 "investment_costs_in_euro": 44498.0,
-                "lifetime_in_years": 18,
+                "lifetime_in_years": 18.0,
                 "maintenance_costs_in_euro_per_year": 889.96,
-                "subsidy_as_percentage_of_investment_costs": 0,
-                "household_name": "CHR01_Couple_both_at_Work_HH1"
+                "subsidy_as_percentage_of_investment_costs": 0
             },
             "config_full_classname": "hisim.components.generic_car.CarConfig",
             "inputs": [],

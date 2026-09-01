@@ -1316,6 +1316,10 @@ class UtspLpgConnector(cp.Component):
                 PylpgWorkspace.claim(calculation_index)
                 self.claimed_pylpg_calculation_indices.append(calculation_index)
                 lpe: lpg_execution.LPGExecutor = lpg_execution.LPGExecutor(calculation_index, True)
+                # The executor has just copied the whole toolchain into this calculation's own
+                # directory and would then run the shared original regardless, next to the one
+                # sqlite database every other calculation is also using. Run the copy.
+                PylpgWorkspace.run_the_copy_not_the_original(lpe)
 
                 request = lpe.make_default_lpg_settings(self.my_simulation_parameters.year)
                 if random_seed is not None and request.CalcSpec is not None:

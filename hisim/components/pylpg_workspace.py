@@ -84,6 +84,36 @@ class PylpgWorkspace:
     INDEX_ENVIRONMENT_VARIABLE: ClassVar[str] = "HISIM_LOCAL_LPG_CALC_INDEX"
     HOUSEHOLDS_PER_BASE_INDEX: ClassVar[int] = 100
 
+    @classmethod
+    def run_the_copy_not_the_original(cls, executor: "lpg_execution.LPGExecutor") -> None:
+        """Points a constructed executor at the binary in its own directory instead of the shared one.
+
+        ``LPGExecutor.__init__`` copies the whole of ``LPG_linux`` into the calculation's ``C<index>``
+        directory -- the executable, the dlls and the 51 MB ``profilegenerator.db3`` -- and then
+        ``lpg_simengine_filepath`` returns the path in the *source* directory anyway, so every
+        calculation runs the one shared binary with only its working directory to itself. .NET
+        resolves the sqlite database beside the executable, which means concurrent calculations all
+        open the same ``LPG_linux/profilegenerator.db3`` and the loser dies with
+        ``SQLiteException ... database is locked``. It also means the shared executable is running
+        whenever any calculation is, which is what makes a concurrent install fail with ``ETXTBSY``.
+
+        The isolation pylpg needs is therefore already on disk and simply not used. Redirecting the
+        source directory to the calculation directory makes ``lpg_simengine_filepath`` resolve to the
+        copy, so each calculation runs its own binary next to its own database. ``copytree`` preserves
+        the executable bit, so the copy is runnable as it stands.
+
+        Args:
+            executor: a freshly constructed executor, after its copy has been made.
+        """
+        copied_binary = pathlib.Path(executor.calculation_directory, executor.simengine_src_filename)
+        if not copied_binary.is_file():
+            log.warning(
+                f"pylpg did not leave a binary at '{copied_binary}', so this calculation has to run the "
+                f"shared one and may contend with any other running at the same time."
+            )
+            return
+        executor.calculation_src_directory = pathlib.Path(executor.calculation_directory)
+
     BINARY_INSTALL_LOCK_NAME: ClassVar[str] = ".hisim-lpg-install.lock"
 
     @classmethod

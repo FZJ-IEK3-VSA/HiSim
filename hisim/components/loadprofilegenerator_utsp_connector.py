@@ -1243,6 +1243,22 @@ class UtspLpgConnector(cp.Component):
                                            household: JsonReference,
                                            random_seed: Optional[int] = None
                                            ) -> str:
+        """Runs one local LPG calculation, serialised against every other in this installation.
+
+        The LoadProfileGenerator cannot have two calculations running at once inside one
+        installation: separate working directories were not enough and separate copies of the
+        executable and its database were not either, so the lock is held for the whole calculation
+        and they take turns. See PylpgWorkspace.exclusive_generator_access for why, and for why this
+        is expected to be deleted rather than maintained.
+        """
+        with PylpgWorkspace.exclusive_generator_access():
+            return self._execute_local_lpg_single_household(calculation_index, household, random_seed)
+
+    def _execute_local_lpg_single_household(self,
+                                            calculation_index,
+                                            household: JsonReference,
+                                            random_seed: Optional[int] = None
+                                            ) -> str:
         """Using local (offline) LPG to calculate the profiles for one household."""
 
         mobility_set: Set[Optional[str]] = set()
@@ -1312,7 +1328,7 @@ class UtspLpgConnector(cp.Component):
                 # Before the executor exists, because LPGExecutor.__init__ is what installs the
                 # binaries when they are missing, and doing that in several processes at once is
                 # how one of them ends up writing the executable another is running (ETXTBSY).
-                PylpgWorkspace.ensure_binaries_installed()
+                PylpgWorkspace.install_binaries_if_missing()
                 PylpgWorkspace.claim(calculation_index)
                 self.claimed_pylpg_calculation_indices.append(calculation_index)
                 lpe: lpg_execution.LPGExecutor = lpg_execution.LPGExecutor(calculation_index, True)

@@ -118,13 +118,37 @@ class PylpgWorkspace:
 
     @classmethod
     @contextlib.contextmanager
-    def _binary_install_lock(cls) -> Iterator[None]:
-        """Holds an exclusive lock over the shared LoadProfileGenerator installation.
+    def exclusive_generator_access(cls) -> Iterator[None]:
+        """Holds an exclusive lock over the whole shared LoadProfileGenerator installation.
+
+        The generator does not support two calculations running at once inside one installation.
+        Giving each its own working directory was not enough, and neither was giving each its own
+        copy of the executable and the database beside it: a cold parallel regeneration still lost a
+        calculation to ``SQLiteException ... database is locked``, so the generator reaches a shared
+        database by some route other than its own directory. Rather than keep hunting for that route
+        through a closed-source binary, the lock is held for the length of a calculation and the
+        calculations serialise.
+
+        The cost is bounded and known: of the twenty-two system setups, four run local profiles, so
+        eighteen keep their parallelism and four take turns -- and those four were contending with
+        each other in any case. The install shares this lock rather than having one of its own,
+        because installing while another calculation runs is precisely the write-a-running-executable
+        case that fails with ``ETXTBSY``.
+
+        This is a workaround for a defect in the generator, and it is expected to be deleted rather
+        than maintained: the cache service (PR #584) removes the need to generate the same profile
+        repeatedly at all, which is the real answer.
+
 
         The lock file sits in the pylpg package directory, beside the installation it guards, so
         every process in one virtual environment contends for the same one. On a platform without
         ``fcntl`` the lock is skipped rather than emulated: the race needs concurrent processes in
         one environment, which is what CI and the parallel regenerator do on Linux.
+
+        The lock is not reentrant. ``flock`` associates a lock with an open file description, so a
+        second acquisition from the same process on a new descriptor blocks against the first and
+        deadlocks. Nothing may take this lock while already holding it, which is why
+        :meth:`install_binaries_if_missing` does no locking of its own.
         """
         package_directory = pathlib.Path(lpg_execution.__file__).parent.absolute()
         try:
@@ -153,7 +177,7 @@ class PylpgWorkspace:
         return package_directory / "LPG_linux" / "simengine2"
 
     @classmethod
-    def ensure_binaries_installed(cls) -> None:
+    def install_binaries_if_missing(cls) -> None:
         """Installs the LoadProfileGenerator binaries once, under a lock, before any run needs them.
 
         The binaries are not shipped with pylpg. ``LPGExecutor.__init__`` checks whether the
@@ -166,11 +190,11 @@ class PylpgWorkspace:
         results, and is then reported as a missing json file, because pylpg does not check the
         return code of the binary it ran.
 
-        Doing the check and the install under an exclusive lock makes them atomic. The first process
-        installs while the others wait; by the time they look, the executable is there and pylpg's
-        own check inside ``LPGExecutor`` short-circuits without writing anything. Concurrent
-        *execution* of the installed file needs no lock and does not get one -- many processes may
-        run one binary, and only writing to it while it runs is refused.
+        Doing the check and the install inside :meth:`exclusive_generator_access` makes them atomic
+        with respect to every other process. The first installs while the others wait; by the time
+        they look, the executable is there and pylpg's own check inside ``LPGExecutor``
+        short-circuits without writing anything. **The caller must already hold that lock**; this
+        method takes none, because it runs inside a calculation that holds it for its whole length.
 
         This is the half of Fault B that F3 did not address. F3 gave each process its own ``C<index>``
         working directory; the installation those directories are copied from is still one shared
@@ -178,12 +202,9 @@ class PylpgWorkspace:
         """
         if cls.binary_path().is_file():
             return
-        with cls._binary_install_lock():
-            if cls.binary_path().is_file():
-                return
-            log.information("Installing the LoadProfileGenerator binaries under an exclusive lock.")
-            package_directory = pathlib.Path(lpg_execution.__file__).parent.absolute()
-            lpg_execution.LPGExecutor.retrieve_lpg_binaries(package_directory)
+        log.information("Installing the LoadProfileGenerator binaries under an exclusive lock.")
+        package_directory = pathlib.Path(lpg_execution.__file__).parent.absolute()
+        lpg_execution.LPGExecutor.retrieve_lpg_binaries(package_directory)
 
     LOG_FILE_NAME: ClassVar[str] = "Log.CommandlineCalculation.txt"
     LOG_LINES_TO_QUOTE: ClassVar[int] = 30

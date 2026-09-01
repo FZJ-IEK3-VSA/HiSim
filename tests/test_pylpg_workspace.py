@@ -200,7 +200,7 @@ def test_results_that_are_present_pass_silently(tmp_path: Any) -> None:
 
 
 @pytest.mark.base
-def test_the_install_lock_admits_one_process_at_a_time() -> None:
+def test_the_generator_lock_admits_one_process_at_a_time() -> None:
     """Concurrent installs are what write an executable another process is running.
 
     ``LPGExecutor.__init__`` checks whether the binaries are on disk and extracts them if not, and
@@ -215,7 +215,7 @@ def test_the_install_lock_admits_one_process_at_a_time() -> None:
     import time  # pylint: disable=import-outside-toplevel
 
     def hold(events: Any) -> None:
-        with PylpgWorkspace._binary_install_lock():  # pylint: disable=protected-access
+        with PylpgWorkspace.exclusive_generator_access():
             events.append(("enter", os.getpid()))
             time.sleep(0.4)
             events.append(("leave", os.getpid()))

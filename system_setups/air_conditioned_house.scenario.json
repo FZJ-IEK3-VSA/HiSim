@@ -217,6 +217,60 @@
             "inputs": [],
             "outputs": [],
             "connect_automatically": true
+        },
+        {
+            "component_full_classname": "hisim.components.electricity_meter.ElectricityMeter",
+            "configuration": {
+                "component_id": {
+                    "name": "ElectricityMeter",
+                    "building": null,
+                    "unit": null
+                },
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.electricity_meter.ElectricityMeterConfig",
+            "inputs": [
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricityOutput",
+                    "source_object_name": "PVSystem",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "PV",
+                        "ElectricityProduction"
+                    ],
+                    "source_weight": 999
+                },
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricalPowerConsumption",
+                    "source_object_name": "UTSPConnector",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "Consumption without any EMS control"
+                    ],
+                    "source_weight": 999
+                },
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricalPowerConsumption",
+                    "source_object_name": "AirConditioner",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "Consumption without any EMS control"
+                    ],
+                    "source_weight": 999
+                }
+            ],
+            "outputs": [],
+            "connect_automatically": false
         }
     ],
     "connections": [
@@ -228,6 +282,36 @@
             "target": {
                 "component_name": "Building",
                 "field_name": "ThermalPowerDelivered"
+            }
+        },
+        {
+            "source": {
+                "component_name": "PVSystem",
+                "field_name": "ElectricityOutput"
+            },
+            "target": {
+                "component_name": "ElectricityMeter",
+                "field_name": "Input_PVSystem_ElectricityOutput_0"
+            }
+        },
+        {
+            "source": {
+                "component_name": "UTSPConnector",
+                "field_name": "ElectricalPowerConsumption"
+            },
+            "target": {
+                "component_name": "ElectricityMeter",
+                "field_name": "Input_UTSPConnector_ElectricalPowerConsumption_1"
+            }
+        },
+        {
+            "source": {
+                "component_name": "AirConditioner",
+                "field_name": "ElectricalPowerConsumption"
+            },
+            "target": {
+                "component_name": "ElectricityMeter",
+                "field_name": "Input_AirConditioner_ElectricalPowerConsumption_2"
             }
         }
     ]

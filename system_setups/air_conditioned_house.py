@@ -1,7 +1,6 @@
 """Air-conditioned household."""
 
 # clean
-from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -15,6 +14,8 @@ from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import air_conditioner
+from hisim.components import electricity_meter
+from hisim import loadtypes
 from hisim.config import ComponentID
 
 
@@ -35,16 +36,16 @@ def setup_function(
     """Household Model.
 
     This setup function emulates an air-conditioned house.
-    Here the residents have their electricity covered by a photovoltaic system, a battery, and the electric grid.
+    Here the residents have their electricity covered by a photovoltaic system and the electric grid.
     Thermal load of the building is covered with an air conditioner.
 
     Connected components are:
         - Occupancy (Residents' Demands)
         - Weather
-        - Price signal
         - Photovoltaic System
         - Building
         - Air conditioner and controller
+        - Electricity meter
 
     Analyzed region: Southern Europe.
 
@@ -66,12 +67,6 @@ def setup_function(
         7. Cyprus: CY.N.SFH.03.Gen.ReEx.001.003, , construction year: 2007 - 2013
 
     """
-
-    # Delete all files in cache:
-    dir_cache = Path("..") / "hisim" / "inputs" / "cache"
-    if dir_cache.is_dir():
-        for file in dir_cache.iterdir():
-            file.unlink()
 
     # Set general simulation parameters
     year = 2021
@@ -219,3 +214,41 @@ def setup_function(
     )
 
     my_sim.add_component(my_air_conditioner_controller, connect_automatically=True)
+
+    """Electricity Meter"""
+    # Every electricity-balance KPI is derived from a meter: without one, the grid exchange is unknown
+    # and the self-sufficiency chain in kpi_preparation.py has nothing to work from.
+    my_electricity_meter = electricity_meter.ElectricityMeter(
+        config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    my_electricity_meter.add_component_input_and_connect(
+        source_object_name=my_photovoltaic_system.component_name,
+        source_component_output=my_photovoltaic_system.ElectricityOutput,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[
+            loadtypes.ComponentType.PV,
+            loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,
+        ],
+        source_weight=999,
+    )
+    my_electricity_meter.add_component_input_and_connect(
+        source_object_name=my_occupancy.component_name,
+        source_component_output=my_occupancy.ElectricalPowerConsumption,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
+    # The air conditioner has no ComponentType of its own, so it is tagged only as uncontrolled
+    # consumption -- which is what it is: nothing dispatches it but its own on-off controller.
+    my_electricity_meter.add_component_input_and_connect(
+        source_object_name=my_air_conditioner.component_name,
+        source_component_output=my_air_conditioner.ElectricalPowerConsumption,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
+    my_sim.add_component(my_electricity_meter)

@@ -54,7 +54,9 @@ ignore=CVS
 # which .match()ed every path starting with one of " o b s l e t -- so tests/,
 # system_setups/, scripts/ and setup.py were silently never linted. Write bare
 # regexes, no brackets and no quotes.
-ignore-paths=
+# obsolete/ holds code nothing uses any more, kept for reference and not maintained;
+# linting it would demand upkeep on exactly the files that were retired to avoid it.
+ignore-paths=^obsolete/.*$
 
 # Files or directories matching the regular expression patterns are skipped.
 # The regex matches against base names, not paths. The default value ignores

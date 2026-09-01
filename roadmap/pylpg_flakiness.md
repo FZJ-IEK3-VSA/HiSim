@@ -23,7 +23,10 @@ The split matters for ownership: E and F belong to the cache service and should 
 
 ## 1. The short version
 
-Two separate faults, often mistaken for one:
+Two separate faults, often mistaken for one — and, since this was written, a third group behind the second
+(§4a, fixes F10–F13): the generator executes one shared binary next to one shared database, does not report
+when it dies, and races itself during its own installation.
+
 
 1. **Any exception in the profile path silently swaps the household.** A transient error — sqlite, IO,
    timeout, a missing `.env` — makes the connector rewrite its own `data_acquisition_mode` and continue with
@@ -173,10 +176,62 @@ but **the default is a constant**, and nothing in the test suite, the scripts or
 every concurrent run in one virtual environment shares `C1`:
 
 - both write `C1/results/Results.HH1.sqlite`, in WAL mode → "database is locked", "disk I/O error", and the
-  other sqlite failures reported;
+  other sqlite failures reported;  *(**partly wrong** — see §4a: the sqlite contention outlived this fix, and
+  the database it was really about is a different one)*
 - the cleanup at `:1097-1116` does `shutil.rmtree(os.path.dirname(result_folder))`, so a finishing run
   **deletes the directory a running one is still using**;
 - whichever loses the race fails, and fails differently every time.
+
+## 4a. Fault B was only half of it *(added 2026-09-01, after F3 shipped)*
+
+F3 gave every process its own `C<index>` directory, and the sqlite failures **continued**. A cold parallel
+regeneration on a runner with four cores still lost calculations to
+
+```
+System.Data.SQLite.SQLiteException occured in CalcStarter.Start
+Unhandled exception. code = Busy (5), message = SQLiteException (0x87AF00AA): database is locked
+```
+
+so the diagnosis above was incomplete. The directory was shared, and separating it was right, but it was not
+the thing the calculations were fighting over.
+
+**The generator runs from the shared directory, not from the copy made for it.** `LPGExecutor.__init__`
+copies the whole of `LPG_linux` into `C<index>` — the executable, the dlls and a 51 MB
+`profilegenerator.db3` — and then `lpg_simengine_filepath` returns the path in the **source** directory
+anyway. Only the working directory is per-calculation; the binary every calculation executes is one file,
+and .NET resolves the database beside the executable. So every concurrent calculation opened one
+`LPG_linux/profilegenerator.db3`. The isolation was made and discarded in the same constructor.
+
+**And the failure arrived disguised.** `pylpg` runs the binary with `subprocess.run`, passes no
+`check=True`, and discards the return value (`lpg_execution.py:511`), so a calculation that died returns
+looking exactly like one that worked. HiSim then read the results it expected and failed on whichever file
+it opened first:
+
+```
+FileNotFoundError: .../pylpg/C200/results/Results/BodilyActivityLevel.High.HH1.json
+```
+
+which names neither the calculation nor the generator, and sent three separate investigations after the
+wrong thing.
+
+**The same shared directory breaks the install, too.** The binaries are not shipped with `pylpg`;
+`LPGExecutor.__init__` checks whether the executable is on disk and, if not, downloads a zip and extracts it
+over `LPG_linux`. Check and write are not atomic, so several processes starting together in a fresh
+environment — four regenerator workers on a clean CI container — all find it missing and all extract into
+the same directory. The first to finish begins executing `simengine2` while the others are still writing it,
+and the kernel refuses to write a running executable:
+
+```
+OSError: [Errno 26] Text file busy: '.../pylpg/LPG_linux/simengine2'
+```
+
+*"Text" is the old Unix name for a program's code segment; the error is about the file being executed, not
+about its contents.*
+
+**What remains unexplained.** Running the copy instead of the original took a cold parallel regeneration from
+two failures to one — and the survivor still died with `database is locked`. So the generator reaches a
+shared database by some route other than its own directory, and that route was never found. F13 works around
+it rather than fixing it, which is the honest description and should stay in the document.
 
 ## 5. Fault C — cleanup only after success
 
@@ -566,6 +621,42 @@ atomic — whereas locking to prevent it would add a failure mode of its own.
 This is independent of F1 and of everything pylpg. It should ship on its own merits, because it is the only
 fault here that corrupts data for components that have nothing to do with load profiles.
 
+### F10 — install the binaries once, under a lock *(fixes the ETXTBSY, shipped in #611)*
+
+`PylpgWorkspace.ensure_binaries_installed` — since renamed `install_binaries_if_missing` — makes the check
+and the install atomic with respect to every other process, using an exclusive `flock` on a file beside the
+installation. The first process installs while the others wait; by the time they look the executable is
+there and `pylpg`'s own check short-circuits without writing. Concurrent *execution* is not locked and needs
+no lock: many processes may run one binary, and only writing to a running one is refused.
+
+### F11 — say so when a calculation leaves nothing *(shipped in #611)*
+
+`PylpgWorkspace.verify_results_were_produced` runs the moment the binary returns, while the failure can
+still be attributed to the calculation, and raises `LocalLpgCalculationFailedError` naming the index with
+the tail of the generator's own `Log.CommandlineCalculation.txt` quoted into the message. Quoting rather
+than naming the file is the point: `release` deletes it moments later, and on a runner it goes with the
+workspace. That log is what finally identified the sqlite contention, after three investigations had missed
+it.
+
+### F12 — run the copy, not the original *(shipped in #611)*
+
+Redirect `calculation_src_directory` to `calculation_directory` after the executor is constructed, so
+`lpg_simengine_filepath` resolves to the copy `pylpg` already made. Each calculation then runs its own
+binary beside its own database. An improvement, not a cure — see §4a.
+
+### F13 — hold the lock for the whole calculation *(shipped in #611, and meant to be deleted)*
+
+Since F12 did not end the contention and the remaining route was never found, the lock F10 introduced is
+held for the length of a calculation and local runs serialise. Of the twenty-two system setups four run
+local profiles, so eighteen keep their parallelism and four take turns — and those four were contending
+with each other in any case, which is what the failures were. A cold parallel regeneration that had failed
+twice, and once with F12 alone, then reported 22 OK with no sqlite error in any log.
+
+**This is a workaround for a defect in a third-party binary, and it should be deleted rather than
+maintained.** The cache service (PR #584) removes the need to generate the same profile repeatedly at all,
+which is the real answer; when it lands, the serialisation goes with the need for it. The lock's docstring
+says so too, so that whoever finds it does not mistake it for design.
+
 ## 10. How to verify a fix
 
 **This protocol applies to every cached component, not only to load profiles — see §13.** It is what
@@ -660,10 +751,19 @@ different hat.
 
 1. ~~Does the LPG cache key include the effective acquisition mode?~~ **Answered: it includes the requested
    mode, and the contents come from the effective one — promoted to Fault D, §6.**
-2. Do the CI runners hit Fault A through an unavailable UTSP, or through something else? The warning text is
-   in the job logs and would say which.
+2. ~~Do the CI runners hit Fault A through an unavailable UTSP, or through something else?~~ **Answered:
+   both.** The UTSP really was unavailable — `tests/test_lpg_utsp_connector_scaling.py` called the live
+   service and got `Received error code: <Response [504]>` on several runs, which after F1 fails the build
+   instead of quietly swapping the household. That test now generates locally and nothing in the suite
+   reaches the network. The *other* CI failures, on the scenario-JSON gate, were the shared binary and
+   database of §4a, which is a different fault that looked the same from a distance.
 3. ~~Should `USE_UTSP` → `USE_LOCAL_LPG` remain automatic?~~ **Answered: no.** It looks safer than the
    second hop because the household is nominally the same, but the two paths run different LPG builds and
    there is no evidence they agree bit for bit — so it is still a silent change of results. If that
    equivalence is ever demonstrated, the hop could be reconsidered on the evidence; until then it is the
    same defect wearing a friendlier face.
+4. **By what route do two calculations still reach one sqlite database?** With F12 in place each runs its own
+   executable beside its own `profilegenerator.db3`, and one still died with `database is locked`. Some path
+   — an absolute location compiled in, a temp directory, a user-profile location — is shared and was not
+   found. F13 serialises around it. The question only matters if the serialisation ever has to be lifted
+   before the cache service makes it moot, so it is recorded rather than pursued.

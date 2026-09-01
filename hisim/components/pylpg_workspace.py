@@ -18,10 +18,12 @@ and F4.
 
 # clean
 
+import contextlib
 import os
 import pathlib
 import shutil
-from typing import ClassVar, List
+import sys
+from typing import ClassVar, Iterator, List
 
 from pylpg import lpg_execution
 
@@ -46,6 +48,20 @@ class PylpgWorkingDirectoryInUseError(RuntimeError):
     """
 
 
+class LocalLpgCalculationFailedError(RuntimeError):
+    """Raised when a local LoadProfileGenerator run left none of the results it was asked for.
+
+    ``pylpg`` runs the LoadProfileGenerator binary with ``subprocess.run`` and neither passes
+    ``check=True`` nor looks at the return code (``lpg_execution.LPGExecutor.execute_lpg_binaries``),
+    so a calculation that dies -- the sqlite errors this generator is known for, a crash, a killed
+    process -- returns to its caller looking exactly like one that worked. HiSim then reads the
+    result files it expects and fails on whichever one it happens to open first, which is how a
+    failed calculation used to be reported as ``FileNotFoundError`` on an arbitrary json file with
+    no mention of the LoadProfileGenerator at all. This error is raised instead, at the point the
+    absence is first detectable, and it carries what the binary itself printed.
+    """
+
+
 class PylpgWorkspace:
     """Turns a base index into per-household ``pylpg`` working directories and hands them back.
 
@@ -67,6 +83,124 @@ class PylpgWorkspace:
 
     INDEX_ENVIRONMENT_VARIABLE: ClassVar[str] = "HISIM_LOCAL_LPG_CALC_INDEX"
     HOUSEHOLDS_PER_BASE_INDEX: ClassVar[int] = 100
+
+    BINARY_INSTALL_LOCK_NAME: ClassVar[str] = ".hisim-lpg-install.lock"
+
+    @classmethod
+    @contextlib.contextmanager
+    def _binary_install_lock(cls) -> Iterator[None]:
+        """Holds an exclusive lock over the shared LoadProfileGenerator installation.
+
+        The lock file sits in the pylpg package directory, beside the installation it guards, so
+        every process in one virtual environment contends for the same one. On a platform without
+        ``fcntl`` the lock is skipped rather than emulated: the race needs concurrent processes in
+        one environment, which is what CI and the parallel regenerator do on Linux.
+        """
+        package_directory = pathlib.Path(lpg_execution.__file__).parent.absolute()
+        try:
+            import fcntl  # pylint: disable=import-outside-toplevel
+        except ImportError:
+            yield
+            return
+        with open(package_directory / cls.BINARY_INSTALL_LOCK_NAME, "w", encoding="utf-8") as lock_file:
+            fcntl.flock(lock_file, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+    @classmethod
+    def binary_path(cls) -> pathlib.Path:
+        """Returns the LoadProfileGenerator executable's path, the way ``LPGExecutor`` derives it.
+
+        Duplicating the derivation is unwelcome and unavoidable: ``LPGExecutor`` computes it in
+        ``__init__`` and exposes it nowhere a caller can reach before constructing one, and
+        constructing one is the very thing that must not happen before the lock is held.
+        """
+        package_directory = pathlib.Path(lpg_execution.__file__).parent.absolute()
+        if sys.platform.startswith("win"):
+            return package_directory / "LPG_win" / "simengine2.exe"
+        return package_directory / "LPG_linux" / "simengine2"
+
+    @classmethod
+    def ensure_binaries_installed(cls) -> None:
+        """Installs the LoadProfileGenerator binaries once, under a lock, before any run needs them.
+
+        The binaries are not shipped with pylpg. ``LPGExecutor.__init__`` checks whether the
+        executable is on disk and, if it is not, downloads a zip and extracts it over the shared
+        package directory. That check and that write are not atomic with respect to each other, so
+        several processes starting together in a fresh environment -- four regenerator workers on a
+        clean CI container, say -- all see it missing and all extract into the same directory. The
+        first to finish begins executing the file the others are still writing, and the kernel
+        refuses that with ``ETXTBSY``: "Text file busy". The loser's calculation dies, produces no
+        results, and is then reported as a missing json file, because pylpg does not check the
+        return code of the binary it ran.
+
+        Doing the check and the install under an exclusive lock makes them atomic. The first process
+        installs while the others wait; by the time they look, the executable is there and pylpg's
+        own check inside ``LPGExecutor`` short-circuits without writing anything. Concurrent
+        *execution* of the installed file needs no lock and does not get one -- many processes may
+        run one binary, and only writing to it while it runs is refused.
+
+        This is the half of Fault B that F3 did not address. F3 gave each process its own ``C<index>``
+        working directory; the installation those directories are copied from is still one shared
+        thing, and this is the guard for it. See roadmap/pylpg_flakiness.md.
+        """
+        if cls.binary_path().is_file():
+            return
+        with cls._binary_install_lock():
+            if cls.binary_path().is_file():
+                return
+            log.information("Installing the LoadProfileGenerator binaries under an exclusive lock.")
+            package_directory = pathlib.Path(lpg_execution.__file__).parent.absolute()
+            lpg_execution.LPGExecutor.retrieve_lpg_binaries(package_directory)
+
+    LOG_FILE_NAME: ClassVar[str] = "Log.CommandlineCalculation.txt"
+    LOG_LINES_TO_QUOTE: ClassVar[int] = 30
+
+    @classmethod
+    def verify_results_were_produced(cls, calculation_index: int, result_folder: str) -> None:
+        """Checks that a finished calculation actually left results, and explains it if not.
+
+        Called immediately after the binary returns, because that is the last moment at which the
+        failure can still be attributed to the calculation. Everything downstream reads individual
+        result files, and a missing one there says only that a path does not exist.
+
+        The LoadProfileGenerator writes its own log beside the results directory, and that log is
+        where the real cause -- an sqlite error, a bad household reference -- is stated. Its tail is
+        quoted into the exception rather than left on a disk the reader may not have: on a CI runner
+        the directory is deleted with the workspace, and on a developer box it is deleted by the
+        cleanup in :meth:`release` moments later.
+
+        Args:
+            calculation_index: the index the calculation ran under, for the message.
+            result_folder: the directory the caller is about to read results from.
+
+        Raises:
+            LocalLpgCalculationFailedError: if the directory is missing or holds no files.
+        """
+        results = pathlib.Path(result_folder)
+        if results.is_dir() and any(results.iterdir()):
+            return
+
+        reason = "did not exist" if not results.is_dir() else "was empty"
+        message = [
+            f"The local LoadProfileGenerator calculation for index {calculation_index} produced no "
+            f"results: '{results}' {reason}.",
+            "pylpg does not check the return code of the LoadProfileGenerator binary, so a "
+            "calculation that failed returns as though it had worked; this is that case.",
+        ]
+        log_file = results.parent / cls.LOG_FILE_NAME
+        try:
+            lines = log_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            lines = []
+        if lines:
+            message.append(f"The last lines of {log_file}:")
+            message.extend("    " + line for line in lines[-cls.LOG_LINES_TO_QUOTE:])
+        else:
+            message.append(f"No log was found at {log_file} either, so the binary failed early.")
+        raise LocalLpgCalculationFailedError("\n".join(message))
 
     @classmethod
     def default_base_index(cls) -> int:

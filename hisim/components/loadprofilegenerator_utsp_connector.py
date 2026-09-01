@@ -1309,6 +1309,10 @@ class UtspLpgConnector(cp.Component):
                 # and starts writing: a directory that already exists belongs either to a run still
                 # using it or to one that died, and both deserve a named failure rather than a shared
                 # folder.
+                # Before the executor exists, because LPGExecutor.__init__ is what installs the
+                # binaries when they are missing, and doing that in several processes at once is
+                # how one of them ends up writing the executable another is running (ETXTBSY).
+                PylpgWorkspace.ensure_binaries_installed()
                 PylpgWorkspace.claim(calculation_index)
                 self.claimed_pylpg_calculation_indices.append(calculation_index)
                 lpe: lpg_execution.LPGExecutor = lpg_execution.LPGExecutor(calculation_index, True)
@@ -1357,6 +1361,11 @@ class UtspLpgConnector(cp.Component):
                 lpe.execute_lpg_binaries()
 
                 path_to_result_folder = os.path.join(lpe.calculation_directory, request.CalcSpec.OutputDirectory)
+                # Checked here, not by the readers downstream. pylpg discards the binary's return
+                # code, so a failed calculation is indistinguishable from a successful one until
+                # somebody opens a file that was never written -- and the FileNotFoundError that
+                # results names one arbitrary json and never mentions the LoadProfileGenerator.
+                PylpgWorkspace.verify_results_were_produced(calculation_index, str(path_to_result_folder))
 
         return str(path_to_result_folder)
 

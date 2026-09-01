@@ -5,6 +5,8 @@ from typing import Optional, Any
 from hisim.simulator import SimulationParameters
 from hisim.config import SizingContext
 from hisim.components import (
+    electricity_meter,
+    gas_meter,
     heat_distribution_system,
     loadprofilegenerator_utsp_connector,
     simple_water_storage,
@@ -36,9 +38,11 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     - Components
         - Occupancy (Residents' Demands)
         - Weather
-        - GasHeater
+        - GasHeater and its controller
         - HeatingStorage
-        - Controller2EMS
+        - Heat distribution system and its controller
+        - Electricity meter
+        - Gas meter
     """
 
     # =================================================================================================================================
@@ -137,6 +141,20 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         my_simulation_parameters=my_simulation_parameters,
     )
 
+    # Build Meters
+    # Both meters exist for the sake of the KPI layer, which derives every energy-balance
+    # figure from a meter rather than from the components themselves. Without the electricity
+    # meter the grid exchange is unknown, the self-sufficiency chain in kpi_preparation.py has
+    # nothing to work from, and the run dies in post-processing.
+    my_electricity_meter = electricity_meter.ElectricityMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+    )
+    my_gas_meter = gas_meter.GasMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=gas_meter.GasMeterConfig.get_gas_meter_default_config(),
+    )
+
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
@@ -153,3 +171,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_sim.add_component(my_building)
     my_sim.add_component(my_weather)
     my_sim.add_component(my_occupancy)
+    # Both meters are wired by their own default connections and nothing else. Feeding a meter
+    # explicitly *and* registering it automatically is how household_gas_solar_thermal came to
+    # count the occupancy's electricity twice (P3 finding F-4): the simulator does not
+    # de-duplicate two feeds of one source, so the sum is genuinely taken twice.
+    my_sim.add_component(my_electricity_meter, connect_automatically=True)
+    my_sim.add_component(my_gas_meter, connect_automatically=True)

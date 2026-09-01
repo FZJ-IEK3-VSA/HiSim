@@ -229,6 +229,81 @@
             "inputs": [],
             "outputs": [],
             "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.electricity_meter.ElectricityMeter",
+            "configuration": {
+                "component_id": {
+                    "name": "ElectricityMeter",
+                    "building": null,
+                    "unit": null
+                },
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.electricity_meter.ElectricityMeterConfig",
+            "inputs": [
+                {
+                    "dynamic": true,
+                    "source_component_output": "ElectricalPowerConsumption",
+                    "source_object_name": "UTSPConnector",
+                    "source_load_type": "Electricity",
+                    "source_unit": "W",
+                    "source_tags": [
+                        "Consumption without any EMS control"
+                    ],
+                    "source_weight": 999
+                }
+            ],
+            "outputs": [],
+            "connect_automatically": false
+        },
+        {
+            "component_full_classname": "hisim.components.gas_meter.GasMeter",
+            "configuration": {
+                "component_id": {
+                    "name": "GasMeter",
+                    "building": null,
+                    "unit": null
+                },
+                "total_energy_from_grid_in_kwh": 0.0,
+                "gas_loadtype": "Gas",
+                "device_co2_footprint_in_kg": null,
+                "investment_costs_in_euro": null,
+                "lifetime_in_years": null,
+                "maintenance_costs_in_euro_per_year": null,
+                "subsidy_as_percentage_of_investment_costs": null
+            },
+            "config_full_classname": "hisim.components.gas_meter.GasMeterConfig",
+            "inputs": [
+                {
+                    "dynamic": true,
+                    "source_component_output": "EnergyDemandSh",
+                    "source_object_name": "CondensingGasBoiler",
+                    "source_load_type": "Gas",
+                    "source_unit": "Wh",
+                    "source_tags": [
+                        "Gas consumption without any control"
+                    ],
+                    "source_weight": 999
+                },
+                {
+                    "dynamic": true,
+                    "source_component_output": "EnergyDemandDhw",
+                    "source_object_name": "CondensingGasBoiler",
+                    "source_load_type": "Gas",
+                    "source_unit": "Wh",
+                    "source_tags": [
+                        "Gas consumption without any control"
+                    ],
+                    "source_weight": 999
+                }
+            ],
+            "outputs": [],
+            "connect_automatically": false
         }
     ],
     "connections": [
@@ -330,6 +405,36 @@
             "target": {
                 "component_name": "Building",
                 "field_name": "HeatingByDevices"
+            }
+        },
+        {
+            "source": {
+                "component_name": "UTSPConnector",
+                "field_name": "ElectricalPowerConsumption"
+            },
+            "target": {
+                "component_name": "ElectricityMeter",
+                "field_name": "Input_UTSPConnector_ElectricalPowerConsumption_0"
+            }
+        },
+        {
+            "source": {
+                "component_name": "CondensingGasBoiler",
+                "field_name": "EnergyDemandSh"
+            },
+            "target": {
+                "component_name": "GasMeter",
+                "field_name": "Input_CondensingGasBoiler_EnergyDemandSh_0"
+            }
+        },
+        {
+            "source": {
+                "component_name": "CondensingGasBoiler",
+                "field_name": "EnergyDemandDhw"
+            },
+            "target": {
+                "component_name": "GasMeter",
+                "field_name": "Input_CondensingGasBoiler_EnergyDemandDhw_1"
             }
         }
     ]

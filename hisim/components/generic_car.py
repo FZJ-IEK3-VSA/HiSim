@@ -558,7 +558,7 @@ class Car(cp.Component):
             # save data in cache
             car_cache_dataframe = pd.DataFrame({"car_location": self.car_location, "meters_driven": self.meters_driven})
             with atomic_cache_write(
-                cache_filepath, utils.build_cache_key_string(config, self.my_simulation_parameters)
+                cache_filepath, utils.build_cache_key_string(self.config, self.my_simulation_parameters)
             ) as temporary_cache_filepath:
                 car_cache_dataframe.to_csv(temporary_cache_filepath)
             del car_cache_dataframe

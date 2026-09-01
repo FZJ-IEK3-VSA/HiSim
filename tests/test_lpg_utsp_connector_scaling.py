@@ -41,60 +41,59 @@ def test_occupancy_scaling_with_utsp():
         water_consumption_one,
     ) = simulate_and_read_occupancy_outputs(my_occupancy)
 
-    if (
+    # The connector no longer rewrites its own acquisition mode when a source is unreachable
+    # (roadmap/pylpg_flakiness.md F1), so reaching this line at all means UTSP answered. The
+    # assertion pins that: a mode other than the configured one would mean the profiles above
+    # came from a different household and every scaling ratio below would be meaningless.
+    assert (
         data_acquisition_mode_after_initialization
-        == loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
-    ):
-        pytest.skip(
-            "UTSP not available for data acquisition; scaling test requires UTSP"
-        )
+        == loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP
+    ), "the connector must run the configured mode, never substitute another profile source"
 
-    else:
+    # Guard against a vacuously-satisfied scaling test: if any
+    # single-household baseline were zero, every assert_allclose(N * 0, 0)
+    # below would pass even if the connector ignored the household count
+    # entirely, giving false confidence that scaling works (issue #1788).
+    # The baselines are summed over the first 24 hours (see
+    # simulate_and_read_occupancy_outputs) to avoid timestep-0 zeros, but
+    # these guards provide an explicit fail-loud check. They run before the
+    # second UTSP call so a zero baseline short-circuits without wasting a
+    # network round-trip.
+    assert number_of_residents_one > 0, "baseline residents must be non-zero for scaling test to be meaningful"
+    assert heating_by_residents_one > 0, "baseline heating-by-residents must be non-zero"
+    assert heating_by_devices_one > 0, "baseline heating-by-devices must be non-zero"
+    assert electricity_consumption_one > 0, "baseline electricity must be non-zero"
+    assert water_consumption_one > 0, "baseline water must be non-zero"
 
-        # Guard against a vacuously-satisfied scaling test: if any
-        # single-household baseline were zero, every assert_allclose(N * 0, 0)
-        # below would pass even if the connector ignored the household count
-        # entirely, giving false confidence that scaling works (issue #1788).
-        # The baselines are summed over the first 24 hours (see
-        # simulate_and_read_occupancy_outputs) to avoid timestep-0 zeros, but
-        # these guards provide an explicit fail-loud check. They run before the
-        # second UTSP call so a zero baseline short-circuits without wasting a
-        # network round-trip.
-        assert number_of_residents_one > 0, "baseline residents must be non-zero for scaling test to be meaningful"
-        assert heating_by_residents_one > 0, "baseline heating-by-residents must be non-zero"
-        assert heating_by_devices_one > 0, "baseline heating-by-devices must be non-zero"
-        assert electricity_consumption_one > 0, "baseline electricity must be non-zero"
-        assert water_consumption_one > 0, "baseline water must be non-zero"
+    log.information(f"number of residents in 1 household {number_of_residents_one}")
 
-        log.information(f"number of residents in 1 household {number_of_residents_one}")
+    # run occupancy for two identical households
+    household_list = [
+        Households.CHR02_Couple_30_64_age_with_work,
+        Households.CHR02_Couple_30_64_age_with_work,
+        # Households.CHR02_Couple_30_64_age_with_work,
+        # Households.CHR02_Couple_30_64_age_with_work,
+    ]
+    my_occupancy, _ = build_lpg_utsp_connector(households=household_list)
+    fft.add_global_index_of_components([my_occupancy])
+    (
+        number_of_residents_two,
+        heating_by_residents_two,
+        heating_by_devices_two,
+        electricity_consumption_two,
+        water_consumption_two,
+    ) = simulate_and_read_occupancy_outputs(my_occupancy)
 
-        # run occupancy for two identical households
-        household_list = [
-            Households.CHR02_Couple_30_64_age_with_work,
-            Households.CHR02_Couple_30_64_age_with_work,
-            # Households.CHR02_Couple_30_64_age_with_work,
-            # Households.CHR02_Couple_30_64_age_with_work,
-        ]
-        my_occupancy, _ = build_lpg_utsp_connector(households=household_list)
-        fft.add_global_index_of_components([my_occupancy])
-        (
-            number_of_residents_two,
-            heating_by_residents_two,
-            heating_by_devices_two,
-            electricity_consumption_two,
-            water_consumption_two,
-        ) = simulate_and_read_occupancy_outputs(my_occupancy)
+    log.information(f"number of residents in {len(household_list)} households {number_of_residents_two}")
 
-        log.information(f"number of residents in {len(household_list)} households {number_of_residents_two}")
-
-        # now test if results are doubled when occupancy is initialzed with 2 households
-        np.testing.assert_allclose(number_of_residents_two, len(household_list) * number_of_residents_one, rtol=0.01)
-        np.testing.assert_allclose(heating_by_residents_two, len(household_list) * heating_by_residents_one, rtol=0.01)
-        np.testing.assert_allclose(heating_by_devices_two, len(household_list) * heating_by_devices_one, rtol=0.01)
-        np.testing.assert_allclose(
-            electricity_consumption_two, len(household_list) * electricity_consumption_one, rtol=0.01
-        )
-        np.testing.assert_allclose(water_consumption_two, len(household_list) * water_consumption_one, rtol=0.01)
+    # now test if results are doubled when occupancy is initialzed with 2 households
+    np.testing.assert_allclose(number_of_residents_two, len(household_list) * number_of_residents_one, rtol=0.01)
+    np.testing.assert_allclose(heating_by_residents_two, len(household_list) * heating_by_residents_one, rtol=0.01)
+    np.testing.assert_allclose(heating_by_devices_two, len(household_list) * heating_by_devices_one, rtol=0.01)
+    np.testing.assert_allclose(
+        electricity_consumption_two, len(household_list) * electricity_consumption_one, rtol=0.01
+    )
+    np.testing.assert_allclose(water_consumption_two, len(household_list) * water_consumption_one, rtol=0.01)
 
 
 def build_lpg_utsp_connector(
@@ -120,9 +119,10 @@ def build_lpg_utsp_connector(
         - The constructed ``UtspLpgConnector`` instance (outputs not yet
           globally indexed).
         - data_acquisition_mode_after_initialization: The
-          ``LpgDataAcquisitionMode`` resolved after initialization (may differ
-          from the requested mode when UTSP is unavailable, e.g. falling back
-          to ``USE_PREDEFINED_PROFILE``).
+          ``LpgDataAcquisitionMode`` the connector holds after initialization.
+          It is always the configured mode: an unreachable source now fails the
+          run instead of substituting another one, so the caller asserts on it
+          rather than branching on it.
     """
     # Set Simu Params
     year = 2021

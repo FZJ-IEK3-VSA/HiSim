@@ -3,7 +3,6 @@
 # clean
 import datetime as dt
 import gc
-import hashlib
 import inspect
 import itertools
 import json
@@ -22,6 +21,7 @@ import psutil
 import pytz
 
 from hisim import log
+from hisim.caching import CacheEntryMetadata
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago"
@@ -355,9 +355,14 @@ def get_cache_file(
     wastes work but is harmless, because the contents are a pure function of the key. What is *not*
     harmless is writing the entry straight to the returned path, which lets a concurrent reader see it
     half written -- so every writer must land its entry through
-    :func:`hisim.caching.atomic_cache_write`. This function keeps its own hashing for now and becomes
-    a thin delegating wrapper over ``hisim/caching/`` in a later phase of
-    ``roadmap/cache_service_spec.md`` §4.
+    :func:`hisim.caching.atomic_cache_write`. This function becomes a thin delegating wrapper over
+    ``hisim/caching/`` in a later phase of ``roadmap/cache_service_spec.md`` §4.
+
+    An existing entry only counts as a hit if its companion metadata is present and hashes to the
+    name the entry is filed under. One that fails that check is deleted here and reported as a miss:
+    either it was written before the metadata scheme existed, or its contents came from something
+    other than what its key describes, and there is no way to tell those apart from the file alone.
+    That is also what removes the need for a one-off purge whenever the key scheme changes.
 
     Args:
         component_key: filename prefix for the component type.
@@ -372,34 +377,65 @@ def get_cache_file(
     Raises:
         ValueError: if ``my_simulation_parameters`` is None or the JSON string is too short.
     """
-    parameter_class_copy = copy.deepcopy(parameter_class)
-    component_id = getattr(parameter_class_copy, "component_id", None)
-    if component_id is not None:
-        # The cached data depends on what the component is and how it is parameterized, not on
-        # which building it happens to sit in, so the building is removed from the identity
-        # before the configuration is hashed. The identity is frozen, hence the replacement.
-        setattr(parameter_class_copy, "component_id", dataclasses.replace(component_id, building=None))
-    json_str = parameter_class_copy.to_json()
-    if my_simulation_parameters is None:
-        raise ValueError("Simulation parameters was none.")
+    json_str = build_cache_key_string(parameter_class, my_simulation_parameters)
     if cache_dir_path is None:
         cache_dir_path = my_simulation_parameters.cache_dir_path
-    simulation_parameter_str = my_simulation_parameters.get_unique_key()
-    json_str = json_str + simulation_parameter_str
-    if len(json_str) < 5:
-        raise ValueError("Empty json detected for caching. This is a bug.")
-    json_str_encoded = json_str.encode("utf-8")
-    # Johanna Ganglbauer: python told me "TypeError: openssl_sha256() takes at most 1 argument (2 given)",
-    # I removed the second input argument "usedforsecurity=False" and it works - maybe I need to update the hashlib package?
-    sha_key = hashlib.sha256(json_str_encoded).hexdigest()
+    sha_key = CacheEntryMetadata.hash_of(json_str)
     filename = f"{component_key}_{sha_key}.cache"
 
     cache_absolute_filepath = os.path.join(cache_dir_path, filename)
     if not os.path.isdir(cache_dir_path):
         os.mkdir(cache_dir_path)
     if os.path.isfile(cache_absolute_filepath):
-        return True, cache_absolute_filepath
+        if CacheEntryMetadata.describes(cache_absolute_filepath):
+            return True, cache_absolute_filepath
+        # An entry whose metadata is missing or disagrees with its own filename cannot be shown to
+        # belong to this key: either it predates the metadata scheme, or something other than what
+        # the key describes produced it. Deleting it turns both cases into an ordinary miss, which
+        # is what makes the migration self-executing and a poisoning self-repairing.
+        log.warning(
+            f"Discarding the cache entry {cache_absolute_filepath}: its metadata is missing or does "
+            f"not hash to the name it is filed under, so its contents cannot be shown to belong to "
+            f"this key. It will be recomputed."
+        )
+        CacheEntryMetadata.discard(cache_absolute_filepath)
     return False, cache_absolute_filepath
+
+
+def build_cache_key_string(parameter_class: Any, my_simulation_parameters: SimulationParameters) -> str:
+    """Builds the raw string a cache entry's name is hashed from, and its metadata records verbatim.
+
+    The string is shared by three callers that must agree exactly: the lookup that turns it into a
+    filename, the writer that stores it beside the entry, and the validation that recomputes the hash
+    from the stored copy. Splitting it out of ``get_cache_file`` is what lets a writer record the
+    inputs that actually produced its bytes rather than re-deriving what was asked for.
+
+    The component's building is removed from its identity first. The cached data depends on what the
+    component is and how it is parameterized, not on which building it happens to sit in, and leaving
+    the building in would file the same computation under a different name for every house.
+
+    Args:
+        parameter_class: the configuration dataclass, which must provide ``to_json``.
+        my_simulation_parameters: contributes start, end, resolution, year, timesteps and country.
+
+    Returns:
+        str: the configuration JSON followed by the simulation parameters' unique key.
+
+    Raises:
+        ValueError: if ``my_simulation_parameters`` is None, or the resulting string is too short to
+            be a real configuration, which would mean the caller passed something empty.
+    """
+    if my_simulation_parameters is None:
+        raise ValueError("Simulation parameters was none.")
+    parameter_class_copy = copy.deepcopy(parameter_class)
+    component_id = getattr(parameter_class_copy, "component_id", None)
+    if component_id is not None:
+        # The identity is frozen, hence the replacement rather than an assignment.
+        setattr(parameter_class_copy, "component_id", dataclasses.replace(component_id, building=None))
+    json_str = parameter_class_copy.to_json() + my_simulation_parameters.get_unique_key()
+    if len(json_str) < 5:
+        raise ValueError("Empty json detected for caching. This is a bug.")
+    return str(json_str)
 
 
 def load_export_load_profile_generator(target: str) -> Dict[str, List[str]]:  # noqa

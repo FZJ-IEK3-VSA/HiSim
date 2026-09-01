@@ -31,6 +31,9 @@ from hisim.components.simple_air_conditioner import (
     SimpleAirConditioner,
     SimpleAirConditionerController,
 )
+from hisim import hisim_main
+from hisim import utils
+from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 from tests.functions_for_testing import add_global_index_of_components, get_number_of_outputs
 
@@ -134,8 +137,6 @@ def test_setup_function_builds_correct_component_graph(tmp_path: Any) -> None:
     - ``prepare_calculation`` and ``connect_all_components`` succeed (all
       mandatory inputs resolve).
     """
-    from hisim import hisim_main
-
     # Use a one-day simulation so prepare_calculation (weather data loading) is
     # fast.  Set a concrete result_directory so the setup function does not try
     # to configure the ResultPathProviderSingleton and so connect_input can write
@@ -267,3 +268,75 @@ def test_scenario_json_structure() -> None:
     )
     assert ctrl_config["setpoint_temperature_c"] == 24.0
     assert ctrl_config["deadband_k"] == 0.5
+
+
+class UndefinedForThisHousehold:
+    """The KPIs that cannot exist for a household with no electricity at all.
+
+    This setup builds a weather, a building and an air conditioner: no occupancy, no generation, no
+    meter. Its total electricity consumption is genuinely zero, so every figure expressed as a
+    proportion of it has no value -- not zero, which would be a measurement, but nothing. The KPI
+    layer used to divide by that total and end the run with ``ZeroDivisionError``; it now emits the
+    entries without values, the way it already did for a self-consumption rate with no production.
+
+    Pinning the names keeps the distinction from being quietly "fixed" into zeros later, which would
+    make a household that consumes nothing indistinguishable from one that consumes plenty and
+    self-supplies none of it.
+    """
+
+    NAMES = (
+        "Ratio between total production and total consumption",
+        "Ratio between PV production and total consumption",
+        "Relative electricity demand from grid",
+        "Self-sufficiency rate according to solar htw berlin",
+        "Total energy self-suffiency rate",
+    )
+
+
+@pytest.mark.system_setups
+@utils.measure_execution_time
+def test_the_setup_completes_a_kpi_run_with_its_undefined_ratios_empty() -> None:
+    """Run the setup for one day with KPI and cost post-processing on.
+
+    The three tests above build the component graph and inspect it; none of them runs the setup to
+    completion, and none asks for KPIs -- the default post-processing options leave them off. So the
+    setup could pass this suite while dying in post-processing, which is exactly what it did.
+
+    Asserting that the undefined ratios carry no value, rather than only that the run finished,
+    is what makes this a test of the convention instead of a test that nothing raised.
+    """
+    path = Path("../system_setups/simple_air_conditioner_household_building_sizer.py")
+
+    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    sim_params.post_processing_options = [
+        PostProcessingOptions.COMPUTE_KPIS,
+        PostProcessingOptions.WRITE_KPIS_TO_JSON,
+        PostProcessingOptions.COMPUTE_CAPEX,
+        PostProcessingOptions.COMPUTE_OPEX,
+    ]
+    result_directory = hisim_main.main(str(path), sim_params)
+
+    result_path = Path(result_directory)
+    assert (result_path / "finished.flag").is_file(), f"the run did not finish: {result_directory}"
+    kpi_path = result_path / "all_kpis.json"
+    assert kpi_path.is_file(), f"all_kpis.json not found in {result_directory}"
+
+    values_by_name: dict = {}
+
+    def collect(node: object) -> None:
+        if not isinstance(node, dict):
+            return
+        for key, value in node.items():
+            if isinstance(value, dict) and "value" in value and "unit" in value:
+                values_by_name[key] = value["value"]
+            else:
+                collect(value)
+
+    collect(json.loads(kpi_path.read_text(encoding="utf-8")))
+
+    for name in UndefinedForThisHousehold.NAMES:
+        assert name in values_by_name, f"KPI '{name}' is missing from {kpi_path}"
+        assert values_by_name[name] is None, (
+            f"KPI '{name}' carries {values_by_name[name]!r}, but this household consumes no "
+            "electricity at all, so a proportion of its consumption is undefined rather than zero."
+        )

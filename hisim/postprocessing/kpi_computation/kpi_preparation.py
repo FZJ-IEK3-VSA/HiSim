@@ -556,8 +556,21 @@ class KpiPreparation:
         """Compute the ratio of two values.
 
         ratio = denominator / numerator * 100 [%].
+
+        Every caller divides by a total consumption, and a system can legitimately consume nothing:
+        the simple air-conditioner household has no occupancy and no generation at all, so it
+        reported a total of zero and the division ended the KPI run with ZeroDivisionError. The ratio
+        there is not zero, it is undefined -- there is nothing for the numerator to be a proportion
+        of -- and the entry is emitted with no value, which is what this module already does for a
+        self-consumption rate when there is no production
+        (:meth:`compute_self_consumption_rate_according_to_solar_htw_berlin`). Substituting zero
+        would state a measurement nobody made.
         """
-        ratio_in_percent = denominator_value / numerator_value * 100
+        ratio_in_percent: Optional[float]
+        if numerator_value == 0:
+            ratio_in_percent = None
+        else:
+            ratio_in_percent = denominator_value / numerator_value * 100
         # make kpi entry
         ratio_in_percent_entry = KpiEntry(
             name=kpi_name,
@@ -573,16 +586,29 @@ class KpiPreparation:
 
     def get_total_energy_self_sufficiency(
         self,
-        self_sufficency_rate_for_electricity_in_percent: float,
+        self_sufficency_rate_for_electricity_in_percent: Optional[float],
         total_electricity_consumption_in_kwh: float,
         gas_demand_from_grid_in_kwh: float,
         total_gas_consumption_in_kwh: float,
         other_fuel_consumption_in_kwh: float,
-    ):
+    ) -> Optional[float]:
         """Calculate self-sufficiency including all energy consumptions for all loadtypes.
 
         Please note that the fuel meter has a self-sufficiency of 0% (all energy is pruchased).
+
+        Two of the three inputs can legitimately be absent, and this used to assume neither was.
+        The electricity rate is ``None`` for a system with no electricity meter, because the grid
+        exchange is then unknown -- the two functions that produce it say so deliberately -- and
+        multiplying that ``None`` was the TypeError that stopped every meterless setup in
+        post-processing. The total consumption is zero for a system that consumes no energy at all,
+        and dividing by it is the ZeroDivisionError beside it.
+
+        Both cases mean the same thing: the figure is undefined rather than zero, and the entry is
+        emitted without a value. A system whose electricity balance is unknown does not have a
+        known total-energy self-sufficiency, and reporting one would be inventing it.
         """
+        if self_sufficency_rate_for_electricity_in_percent is None:
+            return None
         total_energy_consumption_in_kwh = (
             total_electricity_consumption_in_kwh + total_gas_consumption_in_kwh + other_fuel_consumption_in_kwh
         )
@@ -597,6 +623,8 @@ class KpiPreparation:
             + self_sufficiency_gas_in_percent * total_gas_consumption_in_kwh
             + self_suffciency_other_fuels_in_percent * other_fuel_consumption_in_kwh
         )
+        if total_energy_consumption_in_kwh == 0:
+            return None
         total_energy_self_sufficiency_in_percent = (
             total_self_sufficient_energy_consumption_in_kwh / total_energy_consumption_in_kwh
         )

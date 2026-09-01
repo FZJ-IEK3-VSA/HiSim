@@ -114,3 +114,16 @@ jobs:
           name: scenario-json-drift
           path: scenario_json_drift.txt
           if-no-files-found: ignore
+      # The per-setup converter logs are the only record of *why* a setup failed to build, and
+      # they live in the workspace, which the runner destroys. Without this the job's own advice
+      # -- "see the log" -- names a path that no longer exists, and an intermittent converter
+      # failure cannot be diagnosed from a red build at all. The summary now also prints the tail
+      # of each failing log inline; this keeps the whole of every log for the cases where the
+      # tail is not enough.
+      - name: Upload converter logs
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: scenario-json-converter-logs
+          path: results/regenerate_scenario_jsons/
+          if-no-files-found: ignore

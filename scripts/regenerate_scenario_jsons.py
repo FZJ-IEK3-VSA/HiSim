@@ -144,6 +144,19 @@ def regenerate_one(
     return SetupResult(stem, True, proc.returncode, log_path)
 
 
+class FailureReport:
+    """How much of a failing converter's log the summary reproduces inline.
+
+    A converter failure is usually a Python traceback of a few dozen lines, and the interesting
+    part is the end of it. Forty lines covers the exception, its traceback and the last of the
+    run's own logging without burying the summary above it; the whole file is still on disk for
+    anyone who has the workspace, and is uploaded as an artifact by the freshness workflow for
+    anyone who does not.
+    """
+
+    LINES_TO_PRINT: int = 40
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     """Parse arguments, regenerate the selected setups, print a summary."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -205,6 +218,23 @@ def main(argv: Optional[list[str]] = None) -> int:
     print(f"DONE: {len(results) - len(failed)} OK, {len(failed)} FAILED")
     for r in failed:
         print(f"  FAILED {r.stem} (rc={r.returncode}): {r.message} -> {r.log_path}")
+    # Print each failing converter's own output, not just the path to it. On a CI runner the
+    # log file is deleted with the workspace, so naming it is the same as saying nothing: a
+    # regeneration that fails intermittently there cannot be diagnosed at all from the job
+    # output. Printing the tail inline puts the traceback where whoever reads the red build
+    # will actually find it.
+    for r in failed:
+        print(f"\n----- {r.log_path} (last {FailureReport.LINES_TO_PRINT} lines) -----")
+        try:
+            lines = r.log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError as error:
+            print(f"  (could not be read: {error})")
+            continue
+        if not lines:
+            print("  (empty)")
+            continue
+        for line in lines[-FailureReport.LINES_TO_PRINT:]:
+            print(f"  {line}")
     return 0 if not failed else 1
 
 

@@ -38,14 +38,15 @@ def test_occupancy_scaling_with_utsp() -> None:
         data_acquisition_mode_after_initialization,
     ) = initialize_lpg_utsp_connector_and_return_results(households=household)
 
-    if (
+    # An unusable local LPG now fails the run instead of quietly becoming the predefined profile
+    # (roadmap/pylpg_flakiness.md F1), so this test can no longer be skipped into passing on a box
+    # where pylpg is broken -- it would already have raised above. The assertion states the
+    # invariant that replaces the skip: the profiles just measured came from the configured mode,
+    # which is the only reason the doubling comparison below means anything.
+    assert (
         data_acquisition_mode_after_initialization
-        == loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
-    ):
-        pytest.skip(
-            "This test makes only sense if the local LPG can be used for data acquisition. "
-            "Here the use of the Local LPG was not possible. Therefore this test will be ignored."
-        )
+        == loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG
+    ), "the connector must run the configured mode, never substitute another profile source"
 
     log.information("number of residents in 1 household " + str(number_of_residents_one))
 
@@ -99,8 +100,9 @@ def initialize_lpg_utsp_connector_and_return_results(
             electricity_consumption: Total electricity consumption.
             water_consumption: Total water consumption.
             data_acquisition_mode_after_initialization: The `LpgDataAcquisitionMode`
-                after connector initialization (may differ from the requested mode
-                if the local LPG was unavailable).
+                the connector holds after initialization. It is always the configured
+                mode, because an unreachable profile source raises rather than
+                substituting a different one.
     """
     # Set Simu Params
     year = 2021

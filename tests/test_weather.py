@@ -12,6 +12,7 @@ import pytest
 from hisim import sim_repository
 from hisim import component
 from hisim import utils
+from hisim.caching import atomic_cache_write
 from hisim.components import weather
 from hisim.simulationparameters import SimulationParameters
 from hisim.config import DisplayConfig
@@ -135,6 +136,13 @@ def _build_weather_with_cache(
     ``i_prepare_simulation`` takes the cached-file branch instead of
     re-processing the raw weather data.  When *include_pressure* is ``True``
     a ``Pressure`` column is added; otherwise it is omitted.
+
+    The entry goes in through ``atomic_cache_write`` rather than straight to the
+    path, because ``get_cache_file`` only counts an entry as present when the
+    companion metadata beside it hashes to the name it is filed under.  Writing
+    the CSV alone would leave an entry nothing describes, which the lookup
+    deletes on sight, and the cached-file branch this fixture exists to reach
+    would never be taken.
     """
     mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=3600)
     mysim.cache_dir_path = str(tmp_path)
@@ -153,7 +161,10 @@ def _build_weather_with_cache(
     if include_pressure:
         columns.append("Pressure")
     data = {col: [float(i) * 10 for i in range(5)] for col in columns}
-    pd.DataFrame(data).to_csv(cache_filepath, index=False)
+    with atomic_cache_write(
+        cache_filepath, utils.build_cache_key_string(my_config, mysim)
+    ) as temporary_cache_filepath:
+        pd.DataFrame(data).to_csv(temporary_cache_filepath, index=False)
     return my_weather
 
 

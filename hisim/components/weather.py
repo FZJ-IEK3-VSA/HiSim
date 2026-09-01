@@ -871,7 +871,9 @@ class Weather(Component):
                     "t_out_daily_average",
                 ],
             )
-            with atomic_cache_write(cache_filepath) as temporary_cache_filepath:
+            with atomic_cache_write(
+                cache_filepath, utils.build_cache_key_string(self.weather_config, self.my_simulation_parameters)
+            ) as temporary_cache_filepath:
                 database.to_csv(temporary_cache_filepath)
 
         # Publish the full-year weather series to the singleton repository unconditionally.

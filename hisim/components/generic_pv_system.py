@@ -788,7 +788,9 @@ class PVSystem(cp.Component):
                 {"output_power": self.ac_power_ratios_for_all_timesteps_output},
                 columns=["output_power"],
             )
-            with atomic_cache_write(self.cache_filepath) as temporary_cache_filepath:
+            with atomic_cache_write(
+                self.cache_filepath, utils.build_cache_key_string(self.pvconfig, self.my_simulation_parameters)
+            ) as temporary_cache_filepath:
                 database.to_csv(temporary_cache_filepath, sep=",", decimal=".", index=False)
 
         if self.pvconfig.predictive:

@@ -229,17 +229,6 @@
                 },
                 {
                     "dynamic": true,
-                    "source_component_output": "ElectricalPowerConsumption",
-                    "source_object_name": "UTSPConnector",
-                    "source_load_type": "Electricity",
-                    "source_unit": "W",
-                    "source_tags": [
-                        "Consumption without any EMS control"
-                    ],
-                    "source_weight": 999
-                },
-                {
-                    "dynamic": true,
                     "source_component_output": "ElectricityConsumptionOutput",
                     "source_object_name": "SolarThermalSystem",
                     "source_load_type": "Electricity",
@@ -460,22 +449,12 @@
         },
         {
             "source": {
-                "component_name": "UTSPConnector",
-                "field_name": "ElectricalPowerConsumption"
-            },
-            "target": {
-                "component_name": "ElectricityMeter",
-                "field_name": "Input_UTSPConnector_ElectricalPowerConsumption_1"
-            }
-        },
-        {
-            "source": {
                 "component_name": "SolarThermalSystem",
                 "field_name": "ElectricityConsumptionOutput"
             },
             "target": {
                 "component_name": "ElectricityMeter",
-                "field_name": "Input_SolarThermalSystem_ElectricityConsumptionOutput_2"
+                "field_name": "Input_SolarThermalSystem_ElectricityConsumptionOutput_1"
             }
         },
         {

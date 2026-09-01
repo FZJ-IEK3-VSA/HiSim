@@ -19,7 +19,11 @@ from typing import Any
 
 import pytest
 
-from hisim.components.pylpg_workspace import PylpgWorkingDirectoryInUseError, PylpgWorkspace
+from hisim.components.pylpg_workspace import (
+    LocalLpgCalculationFailedError,
+    PylpgWorkingDirectoryInUseError,
+    PylpgWorkspace,
+)
 
 __authors__ = "Noah Pflugradt"
 __copyright__ = "Copyright 2021-2026, FZJ-IEK-3 "
@@ -146,3 +150,87 @@ def test_release_removes_the_directories_a_run_claimed(monkeypatch: pytest.Monke
 
     assert not working_directory_in_tmp(claimed[0]).exists()
     assert not working_directory_in_tmp(claimed[1]).exists()
+
+
+@pytest.mark.base
+def test_a_calculation_that_left_no_results_is_reported_as_a_calculation_failure(tmp_path: Any) -> None:
+    """A missing result directory names the calculation, not an arbitrary json file.
+
+    ``pylpg`` runs the LoadProfileGenerator with ``subprocess.run`` and neither passes
+    ``check=True`` nor reads the return code, so a calculation that died returns looking like one
+    that worked. Reading its outputs then fails on whichever file is opened first, which is how a
+    dead calculation used to be reported as ``FileNotFoundError`` on
+    ``.../BodilyActivityLevel.High.HH1.json`` with no mention of the generator.
+    """
+    with pytest.raises(LocalLpgCalculationFailedError) as failure:
+        PylpgWorkspace.verify_results_were_produced(200, str(tmp_path / "never_created"))
+
+    assert "200" in str(failure.value), "the message must name the calculation index"
+    assert "produced no results" in str(failure.value)
+
+
+@pytest.mark.base
+def test_the_generators_own_log_is_quoted_into_the_failure(tmp_path: Any) -> None:
+    """The reason a calculation failed is in the generator's log, so the error carries it.
+
+    The log is deleted moments later by :meth:`PylpgWorkspace.release`, and on a CI runner the whole
+    directory goes with the workspace, so a message that merely names the file is a message that
+    tells a later reader nothing.
+    """
+    results = tmp_path / "results" / "Results"
+    results.mkdir(parents=True)
+    (results.parent / PylpgWorkspace.LOG_FILE_NAME).write_text(
+        "Error: database is locked\n", encoding="utf-8"
+    )
+
+    with pytest.raises(LocalLpgCalculationFailedError) as failure:
+        PylpgWorkspace.verify_results_were_produced(300, str(results))
+
+    assert "database is locked" in str(failure.value), "the generator's own reason must be quoted"
+
+
+@pytest.mark.base
+def test_results_that_are_present_pass_silently(tmp_path: Any) -> None:
+    """The check has to be invisible when the calculation worked, which is nearly always."""
+    results = tmp_path / "results" / "Results"
+    results.mkdir(parents=True)
+    (results / "SumProfiles.HH1.Electricity.csv").write_text("x", encoding="utf-8")
+
+    PylpgWorkspace.verify_results_were_produced(400, str(results))
+
+
+@pytest.mark.base
+def test_the_generator_lock_admits_one_process_at_a_time() -> None:
+    """Concurrent installs are what write an executable another process is running.
+
+    ``LPGExecutor.__init__`` checks whether the binaries are on disk and extracts them if not, and
+    those two steps are not atomic with respect to each other. Several processes starting together
+    in a fresh environment all see them missing and all extract into the same directory; the first
+    to finish executes the file the others are still writing, and the kernel refuses that with
+    ``ETXTBSY``. The lock is what makes check-and-install atomic, so this asserts the only property
+    that matters: two holders are never inside it at once.
+    """
+    import multiprocessing  # pylint: disable=import-outside-toplevel
+    import os  # pylint: disable=import-outside-toplevel
+    import time  # pylint: disable=import-outside-toplevel
+
+    def hold(events: Any) -> None:
+        with PylpgWorkspace.exclusive_generator_access():
+            events.append(("enter", os.getpid()))
+            time.sleep(0.4)
+            events.append(("leave", os.getpid()))
+
+    with multiprocessing.Manager() as manager:
+        events = manager.list()
+        processes = [multiprocessing.Process(target=hold, args=(events,)) for _ in range(3)]
+        for process in processes:
+            process.start()
+        for process in processes:
+            process.join()
+        recorded = list(events)
+
+    assert len(recorded) == 6, f"every process must record an enter and a leave, got {recorded}"
+    for first, second in zip(recorded, recorded[1:]):
+        assert not (first[0] == "enter" and second[0] == "enter"), (
+            f"two processes were inside the install lock at once: {recorded}"
+        )

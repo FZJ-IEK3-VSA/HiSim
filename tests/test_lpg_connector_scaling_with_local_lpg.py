@@ -1,4 +1,16 @@
-"""Test for running multiple requests with lpg utsp connector and scaling up the results."""
+"""Test that the lpg utsp connector scales its profiles with the number of households.
+
+The profiles come from the **local pylpg install**, not from the remote UTSP. This test used
+to run against the live service, which meant a gateway timeout at the far end failed the build
+for reasons that had nothing to do with HiSim -- and, before the fallback chain was deleted
+(roadmap/pylpg_flakiness.md F1), meant something worse: an unreachable service quietly
+substituted a shipped profile for a *different* household, so the ratios below were computed
+from two unrelated profiles and then asserted to be exactly 2x. Generating locally makes the
+test depend on nothing but this machine.
+
+The connector class is still UtspLpgConnector and the utsp marker still selects it: both name
+the component, not the remote service.
+"""
 
 from typing import List, Tuple
 import pytest
@@ -11,7 +23,6 @@ from utspclient.helpers.lpgdata import (
     EnergyIntensityType,
 )
 from utspclient.helpers.lpgpythonbindings import JsonReference
-from dotenv import load_dotenv
 from tests import functions_for_testing as fft
 from hisim import component
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -20,12 +31,9 @@ from hisim import log
 from hisim.config import ComponentID
 
 
-load_dotenv()
-
-
 @pytest.mark.utsp
-def test_occupancy_scaling_with_utsp():
-    """Test for testing if the scaling with the lpg utsp connector works when calculating several households."""
+def test_occupancy_scaling_with_local_lpg():
+    """Test that the connector scales its profiles with the household count, using local pylpg."""
 
     # run occupancy for one household only
     household = Households.CHR02_Couple_30_64_age_with_work
@@ -42,12 +50,12 @@ def test_occupancy_scaling_with_utsp():
     ) = simulate_and_read_occupancy_outputs(my_occupancy)
 
     # The connector no longer rewrites its own acquisition mode when a source is unreachable
-    # (roadmap/pylpg_flakiness.md F1), so reaching this line at all means UTSP answered. The
-    # assertion pins that: a mode other than the configured one would mean the profiles above
+    # (roadmap/pylpg_flakiness.md F1), so reaching this line at all means local pylpg delivered.
+    # The assertion pins that: a mode other than the configured one would mean the profiles above
     # came from a different household and every scaling ratio below would be meaningless.
     assert (
         data_acquisition_mode_after_initialization
-        == loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP
+        == loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG
     ), "the connector must run the configured mode, never substitute another profile source"
 
     # Guard against a vacuously-satisfied scaling test: if any
@@ -57,8 +65,8 @@ def test_occupancy_scaling_with_utsp():
     # The baselines are summed over the first 24 hours (see
     # simulate_and_read_occupancy_outputs) to avoid timestep-0 zeros, but
     # these guards provide an explicit fail-loud check. They run before the
-    # second UTSP call so a zero baseline short-circuits without wasting a
-    # network round-trip.
+    # second profile generation so a zero baseline short-circuits without
+    # spending minutes on an LPG run whose result cannot mean anything.
     assert number_of_residents_one > 0, "baseline residents must be non-zero for scaling test to be meaningful"
     assert heating_by_residents_one > 0, "baseline heating-by-residents must be non-zero"
     assert heating_by_devices_one > 0, "baseline heating-by-devices must be non-zero"
@@ -112,7 +120,7 @@ def build_lpg_utsp_connector(
 
     Args:
         households: A single household reference or a list of household
-            references to simulate with the LPG UTSP connector.
+            references to simulate with the LPG connector, generated locally by pylpg.
 
     Returns:
         A tuple of:
@@ -129,13 +137,13 @@ def build_lpg_utsp_connector(
     seconds_per_timestep = 60
 
     # Set Occupancy
-    result_path = "lpg_utsp_scaling_test"
+    result_path = "lpg_local_scaling_test"
     travel_route_set = TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
     transportation_device_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car
     charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
     energy_intensity = EnergyIntensityType.EnergySaving
     guid = "guid should not be varied automatically"
-    data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP
+    data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG
 
     # Build Simu Params
     my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)

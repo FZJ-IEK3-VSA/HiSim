@@ -1243,6 +1243,22 @@ class UtspLpgConnector(cp.Component):
                                            household: JsonReference,
                                            random_seed: Optional[int] = None
                                            ) -> str:
+        """Runs one local LPG calculation, serialised against every other in this installation.
+
+        The LoadProfileGenerator cannot have two calculations running at once inside one
+        installation: separate working directories were not enough and separate copies of the
+        executable and its database were not either, so the lock is held for the whole calculation
+        and they take turns. See PylpgWorkspace.exclusive_generator_access for why, and for why this
+        is expected to be deleted rather than maintained.
+        """
+        with PylpgWorkspace.exclusive_generator_access():
+            return self._execute_local_lpg_single_household(calculation_index, household, random_seed)
+
+    def _execute_local_lpg_single_household(self,
+                                            calculation_index,
+                                            household: JsonReference,
+                                            random_seed: Optional[int] = None
+                                            ) -> str:
         """Using local (offline) LPG to calculate the profiles for one household."""
 
         mobility_set: Set[Optional[str]] = set()
@@ -1309,9 +1325,17 @@ class UtspLpgConnector(cp.Component):
                 # and starts writing: a directory that already exists belongs either to a run still
                 # using it or to one that died, and both deserve a named failure rather than a shared
                 # folder.
+                # Before the executor exists, because LPGExecutor.__init__ is what installs the
+                # binaries when they are missing, and doing that in several processes at once is
+                # how one of them ends up writing the executable another is running (ETXTBSY).
+                PylpgWorkspace.install_binaries_if_missing()
                 PylpgWorkspace.claim(calculation_index)
                 self.claimed_pylpg_calculation_indices.append(calculation_index)
                 lpe: lpg_execution.LPGExecutor = lpg_execution.LPGExecutor(calculation_index, True)
+                # The executor has just copied the whole toolchain into this calculation's own
+                # directory and would then run the shared original regardless, next to the one
+                # sqlite database every other calculation is also using. Run the copy.
+                PylpgWorkspace.run_the_copy_not_the_original(lpe)
 
                 request = lpe.make_default_lpg_settings(self.my_simulation_parameters.year)
                 if random_seed is not None and request.CalcSpec is not None:
@@ -1357,6 +1381,11 @@ class UtspLpgConnector(cp.Component):
                 lpe.execute_lpg_binaries()
 
                 path_to_result_folder = os.path.join(lpe.calculation_directory, request.CalcSpec.OutputDirectory)
+                # Checked here, not by the readers downstream. pylpg discards the binary's return
+                # code, so a failed calculation is indistinguishable from a successful one until
+                # somebody opens a file that was never written -- and the FileNotFoundError that
+                # results names one arbitrary json and never mentions the LoadProfileGenerator.
+                PylpgWorkspace.verify_results_were_produced(calculation_index, str(path_to_result_folder))
 
         return str(path_to_result_folder)
 

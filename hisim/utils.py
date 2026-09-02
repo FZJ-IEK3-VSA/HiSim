@@ -21,7 +21,7 @@ import psutil
 import pytz
 
 from hisim import log
-from hisim.caching import CacheEntryMetadata
+from hisim.caching import CacheClient, default_client
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago"
@@ -346,30 +346,30 @@ def get_cache_file(
 ) -> Tuple[bool, str]:  # noqa
     """Gets a cache path for a given parameter set.
 
-    This will generate a file path based on any dataclass_json.
-    It works by turning the class into a json string, hashing the string and then using that as filename.
-    The idea is to have a unique file path for every possible configuration.
+    This is the thin delegating wrapper ``roadmap/cache_service_spec.md`` §4 asked for: the key material
+    is built here, because building it needs the configuration's ``to_json`` and the simulation
+    parameters' unique key and the cache package deliberately knows nothing about either; everything
+    after that -- the filename, the directory, the validation of an existing entry and the discarding of
+    one that cannot be trusted -- is :meth:`hisim.caching.CacheClient.lookup`. The signature and the
+    ``(exists, absolute_path)`` return are unchanged so that no component has to move.
 
-    The ``exists`` flag is advisory and nothing more. It is a plain ``os.path.isfile`` check, so two
-    processes that miss the same key concurrently will both compute the entry and both write it; that
-    wastes work but is harmless, because the contents are a pure function of the key. What is *not*
-    harmless is writing the entry straight to the returned path, which lets a concurrent reader see it
-    half written -- so every writer must land its entry through
-    :func:`hisim.caching.atomic_cache_write`. This function becomes a thin delegating wrapper over
-    ``hisim/caching/`` in a later phase of ``roadmap/cache_service_spec.md`` §4.
+    The ``exists`` flag is advisory and nothing more. Two processes that miss the same key concurrently
+    will both compute the entry and both write it; that wastes work but is harmless, because the
+    contents are a pure function of the key. What is *not* harmless is writing the entry straight to the
+    returned path, which lets a concurrent reader see it half written -- so every writer must land its
+    entry through :func:`hisim.caching.atomic_cache_write`.
 
-    An existing entry only counts as a hit if its companion metadata is present and hashes to the
-    name the entry is filed under. One that fails that check is deleted here and reported as a miss:
-    either it was written before the metadata scheme existed, or its contents came from something
-    other than what its key describes, and there is no way to tell those apart from the file alone.
-    That is also what removes the need for a one-off purge whenever the key scheme changes.
+    Which directory is used is decided in this order: an explicit ``cache_dir_path`` argument, then the
+    ``HISIM_CACHE_DIR`` environment variable, then ``my_simulation_parameters.cache_dir_path``. The
+    explicit argument wins over the environment so that a test which points at its own directory keeps
+    doing so on a machine where a developer has set the override.
 
     Args:
         component_key: filename prefix for the component type.
         parameter_class: dataclass with a ``to_json`` method; the building of its
             ``component_id`` is nulled before hashing.
         my_simulation_parameters: provides the cache directory and a unique key appended before hashing.
-        cache_dir_path: optional override; defaults to ``my_simulation_parameters.cache_dir_path``.
+        cache_dir_path: optional override; see the order above.
 
     Returns:
         Tuple[bool, str]: ``(exists, absolute_path)``. ``exists`` is advisory, see above.
@@ -377,29 +377,17 @@ def get_cache_file(
     Raises:
         ValueError: if ``my_simulation_parameters`` is None or the JSON string is too short.
     """
-    json_str = build_cache_key_string(parameter_class, my_simulation_parameters)
-    if cache_dir_path is None:
-        cache_dir_path = my_simulation_parameters.cache_dir_path
-    sha_key = CacheEntryMetadata.hash_of(json_str)
-    filename = f"{component_key}_{sha_key}.cache"
-
-    cache_absolute_filepath = os.path.join(cache_dir_path, filename)
-    if not os.path.isdir(cache_dir_path):
-        os.mkdir(cache_dir_path)
-    if os.path.isfile(cache_absolute_filepath):
-        if CacheEntryMetadata.describes(cache_absolute_filepath):
-            return True, cache_absolute_filepath
-        # An entry whose metadata is missing or disagrees with its own filename cannot be shown to
-        # belong to this key: either it predates the metadata scheme, or something other than what
-        # the key describes produced it. Deleting it turns both cases into an ordinary miss, which
-        # is what makes the migration self-executing and a poisoning self-repairing.
-        log.warning(
-            f"Discarding the cache entry {cache_absolute_filepath}: its metadata is missing or does "
-            f"not hash to the name it is filed under, so its contents cannot be shown to belong to "
-            f"this key. It will be recomputed."
-        )
-        CacheEntryMetadata.discard(cache_absolute_filepath)
-    return False, cache_absolute_filepath
+    key_material = build_cache_key_string(parameter_class, my_simulation_parameters)
+    client = default_client()
+    if cache_dir_path is not None:
+        # The explicit argument outranks the environment: bypass the override by handing the
+        # argument in as both the default and, effectively, the only option.
+        client = CacheClient(dataclasses.replace(client.settings, local_directory=None))
+        default_directory = cache_dir_path
+    else:
+        default_directory = my_simulation_parameters.cache_dir_path
+    entry = client.lookup(component_key, key_material, default_directory)
+    return entry.exists, entry.path
 
 
 def build_cache_key_string(parameter_class: Any, my_simulation_parameters: SimulationParameters) -> str:

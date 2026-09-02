@@ -856,7 +856,16 @@ class UtspLpgConnector(cp.Component):
                 for cache_key in cache_content.keys():
                     # get dataframe from cache content
                     cached_data = io.StringIO(cache_content[cache_key])
-                    dataframe = pd.read_csv(cached_data, sep=",", decimal=".", encoding="cp1252", index_col=0)
+                    # float_precision="round_trip" for the same reason as the other caches: the
+                    # default reader loses the last bit of a sixth of the values.
+                    dataframe = pd.read_csv(
+                        cached_data,
+                        sep=",",
+                        decimal=".",
+                        encoding="cp1252",
+                        index_col=0,
+                        float_precision="round_trip",
+                    )
 
                     if cache_key == "data":
 

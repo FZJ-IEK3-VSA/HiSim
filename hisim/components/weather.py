@@ -745,7 +745,12 @@ class Weather(Component):
         )
         if cachefound:
             # read cached files
-            my_weather = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding="cp1252")
+            # float_precision="round_trip": pandas' default CSV reader uses a fast, inexact float
+            # parser, so without this a cached run and an uncached one are not the same run. See the
+            # measurement in the commit that introduced this across the caches.
+            my_weather = pd.read_csv(
+                cache_filepath, sep=",", decimal=".", encoding="cp1252", float_precision="round_trip"
+            )
             self.temperature_list = my_weather["t_out"].tolist()
             self.daily_average_outside_temperature_list_in_celsius = my_weather["t_out_daily_average"].tolist()
             self.dry_bulb_list = self.temperature_list

@@ -1385,7 +1385,20 @@ class UtspLpgConnector(cp.Component):
                 # code, so a failed calculation is indistinguishable from a successful one until
                 # somebody opens a file that was never written -- and the FileNotFoundError that
                 # results names one arbitrary json and never mentions the LoadProfileGenerator.
-                PylpgWorkspace.verify_results_were_produced(calculation_index, str(path_to_result_folder))
+                # The names, not merely the count: a calculation that dies partway leaves some of
+                # its outputs behind, and a directory that is non-empty tells the reader nothing
+                # about whether what it needs is in it. Which files are indispensable is already
+                # recorded against each name, so it is read from there rather than from a position
+                # in the returned tuple, which would go wrong silently if that tuple ever changed.
+                declared_result_files = self.define_required_result_files()[0]
+                required_result_files = [
+                    file_name
+                    for file_name, requirement in declared_result_files.items()
+                    if requirement == datastructures.ResultFileRequirement.REQUIRED
+                ]
+                PylpgWorkspace.verify_results_were_produced(
+                    calculation_index, str(path_to_result_folder), required_files=required_result_files
+                )
 
         return str(path_to_result_folder)
 

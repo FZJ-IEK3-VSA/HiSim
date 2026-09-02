@@ -234,3 +234,57 @@ def test_the_generator_lock_admits_one_process_at_a_time() -> None:
         assert not (first[0] == "enter" and second[0] == "enter"), (
             f"two processes were inside the install lock at once: {recorded}"
         )
+
+
+@pytest.mark.base
+def test_a_partial_result_set_is_a_calculation_failure(tmp_path: Any) -> None:
+    """Some of the outputs is not enough, and the first version of this check thought it was.
+
+    A calculation can die partway and leave part of its work behind. The directory then exists and
+    holds files, which satisfied the emptiness test, and the absence surfaced much later as
+    ``FileNotFoundError`` on whichever file the reader opened first -- three layers from the cause
+    and naming neither the calculation nor the generator. This is the case that got past it: eleven
+    files present, one missing, reported as a missing CSV rather than as a dead calculation.
+    """
+    results = tmp_path / "results" / "Results"
+    results.mkdir(parents=True)
+    (results / "SumProfiles.HH1.Electricity.csv").write_text("x", encoding="utf-8")
+
+    with pytest.raises(LocalLpgCalculationFailedError) as failure:
+        PylpgWorkspace.verify_results_were_produced(
+            500,
+            str(results),
+            required_files=["SumProfiles.HH1.Electricity.csv", "SumProfiles.HH1.Warm Water.csv"],
+        )
+
+    message = str(failure.value)
+    assert "Warm Water" in message, "the message must name the file that is missing"
+    assert "SumProfiles.HH1.Electricity.csv" not in message.rsplit("needs:", maxsplit=1)[-1], (
+        "only the missing files belong in the list, not the ones that are there"
+    )
+
+
+@pytest.mark.base
+def test_a_complete_result_set_passes(tmp_path: Any) -> None:
+    """Every required file present is the ordinary case and must stay silent."""
+    results = tmp_path / "results" / "Results"
+    results.mkdir(parents=True)
+    for name in ("a.csv", "b.csv"):
+        (results / name).write_text("x", encoding="utf-8")
+
+    PylpgWorkspace.verify_results_were_produced(600, str(results), required_files=["a.csv", "b.csv"])
+
+
+@pytest.mark.base
+def test_optional_files_are_not_required(tmp_path: Any) -> None:
+    """Only the files the run declared indispensable are checked.
+
+    The generator emits flexibility events and per-car series only for systems that have them, and
+    the connector marks those OPTIONAL. Treating them as required would turn every household
+    without a car into a failed calculation.
+    """
+    results = tmp_path / "results" / "Results"
+    results.mkdir(parents=True)
+    (results / "required.csv").write_text("x", encoding="utf-8")
+
+    PylpgWorkspace.verify_results_were_produced(700, str(results), required_files=["required.csv"])

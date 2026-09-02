@@ -23,7 +23,7 @@ import os
 import pathlib
 import shutil
 import sys
-from typing import ClassVar, Iterator, List
+from typing import ClassVar, Iterator, List, Optional, Sequence
 
 from pylpg import lpg_execution
 
@@ -210,7 +210,9 @@ class PylpgWorkspace:
     LOG_LINES_TO_QUOTE: ClassVar[int] = 30
 
     @classmethod
-    def verify_results_were_produced(cls, calculation_index: int, result_folder: str) -> None:
+    def verify_results_were_produced(
+        cls, calculation_index: int, result_folder: str, required_files: Optional[Sequence[str]] = None
+    ) -> None:
         """Checks that a finished calculation actually left results, and explains it if not.
 
         Called immediately after the binary returns, because that is the last moment at which the
@@ -223,18 +225,39 @@ class PylpgWorkspace:
         the directory is deleted with the workspace, and on a developer box it is deleted by the
         cleanup in :meth:`release` moments later.
 
+        Checking that the directory merely holds *something* is not enough, and the first version of
+        this check made that mistake. A calculation can die partway and leave some of its outputs
+        behind: a run that produced eleven of the fourteen files it was asked for satisfied the
+        emptiness test, and the absence resurfaced later as ``FileNotFoundError`` on whichever file
+        the reader happened to open first -- ``SumProfiles.HH1.Warm Water.csv``, in the case that
+        prompted this -- naming neither the calculation nor the generator, three layers from the
+        cause. The caller knows which files it is about to read, so it says so and they are checked
+        by name.
+
         Args:
             calculation_index: the index the calculation ran under, for the message.
             result_folder: the directory the caller is about to read results from.
+            required_files: the result files this run must have produced. When omitted, only the
+                presence of any output at all is checked, which is the weaker test described above.
 
         Raises:
-            LocalLpgCalculationFailedError: if the directory is missing or holds no files.
+            LocalLpgCalculationFailedError: if the directory is missing, holds no files, or is
+                missing any of ``required_files``.
         """
         results = pathlib.Path(result_folder)
-        if results.is_dir() and any(results.iterdir()):
+        missing = [name for name in (required_files or []) if not (results / name).is_file()]
+        if results.is_dir() and any(results.iterdir()) and not missing:
             return
 
-        reason = "did not exist" if not results.is_dir() else "was empty"
+        if not results.is_dir():
+            reason = "did not exist"
+        elif not any(results.iterdir()):
+            reason = "was empty"
+        else:
+            reason = (
+                f"is missing {len(missing)} of the {len(required_files or [])} files the run needs: "
+                + ", ".join(f"'{name}'" for name in missing)
+            )
         message = [
             f"The local LoadProfileGenerator calculation for index {calculation_index} produced no "
             f"results: '{results}' {reason}.",

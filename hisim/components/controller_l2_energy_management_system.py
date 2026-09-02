@@ -925,6 +925,35 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         elif self.temperature_residence>self.min_comfortable_temperature_residence and self.temperature_residence<self.max_comfortable_temperature_residence:
         """
 
+    def dispatches_to_component_type(self, field_name: str, component_type: lt.ComponentType) -> bool:
+        """Reports whether one of this controller's outputs is the dispatch target of a given kind.
+
+        The controller's own monitoring outputs are named after the participant's class, so a KPI
+        can find them by looking for that class name in the field name. A *dispatch* target is
+        different: it is created by whoever wired the participant in, and the two wiring paths name
+        it differently — a Python setup passes a prefix it builds from the class name, while an
+        energy-system file derives ``DispatchTo<instance>_<input>`` from the participant's instance
+        name. Sniffing for a class name therefore finds the target on one path and misses it on the
+        other, which would make the same system report one KPI fewer depending on how it was built.
+
+        What both paths do agree on is the tags the dispatch output carries, because those come
+        from the channel and the participant's component type rather than from any name. Matching
+        on them is what makes this KPI independent of the wiring path.
+
+        Args:
+            field_name: Name of the output being classified.
+            component_type: The participant kind the dispatch would be steering.
+
+        Returns:
+            True if that output is this controller's electricity target for such a participant.
+        """
+        for dynamic_output in self.my_component_outputs:
+            if dynamic_output.source_output_field_name != field_name:
+                continue
+            tags = dynamic_output.source_tags
+            return component_type in tags and lt.InandOutputType.ELECTRICITY_TARGET in tags
+        return False
+
     def get_component_kpi_entries(
         self,
         all_outputs: List,
@@ -1070,7 +1099,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     )
                     list_of_kpi_entries.append(dhw_st_electricity_from_grid_entry)
 
-                elif "L1Controller" in output.field_name and output.unit == lt.Units.WATT:
+                elif (
+                    self.dispatches_to_component_type(output.field_name, lt.ComponentType.CAR_BATTERY)
+                    and output.unit == lt.Units.WATT
+                ):
                     electric_car_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
                         postprocessing_results.iloc[:, index] < 0.0
                     ]

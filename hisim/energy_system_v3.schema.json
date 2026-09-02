@@ -132,6 +132,7 @@
             "hisim.components.electricity_meter.ElectricityMeter",
             "hisim.components.generic_boiler.GenericBoiler",
             "hisim.components.generic_boiler.GenericBoilerController",
+            "hisim.components.generic_car.Car",
             "hisim.components.heat_distribution_system.HeatDistribution",
             "hisim.components.heat_distribution_system.HeatDistributionController",
             "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
@@ -916,6 +917,150 @@
                     "maximal_thermal_power_in_watt",
                     "minimal_thermal_power_in_watt"
                   ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "hisim.components.generic_car.Car"
+                ]
+              }
+            },
+            "required": [
+              "class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "preset": false,
+              "constructor": {
+                "type": "object",
+                "minProperties": 1,
+                "maxProperties": 1,
+                "propertyNames": {
+                  "enum": [
+                    "for_household"
+                  ]
+                },
+                "properties": {
+                  "for_household": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "household_name",
+                      "car_name"
+                    ],
+                    "properties": {
+                      "household_name": {
+                        "type": "string"
+                      },
+                      "car_name": {
+                        "type": "string"
+                      },
+                      "fuel": {
+                        "enum": [
+                          "ANY",
+                          "ELECTRICITY",
+                          "IRRADIANCE",
+                          "SPEED",
+                          "HEATING",
+                          "COOLING",
+                          "TEMPERATURE",
+                          "PRESSURE",
+                          "TIME",
+                          "PRICE",
+                          "GAS",
+                          "AIR",
+                          "GREEN_HYDROGEN",
+                          "OXYGEN",
+                          "WATER",
+                          "WARM_WATER",
+                          "DIESEL",
+                          "OIL",
+                          "PELLETS",
+                          "WOOD_CHIPS",
+                          "DISTRICTHEATING",
+                          "ON_OFF",
+                          "ACTIVATION"
+                        ]
+                      },
+                      "source_weight": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              },
+              "config": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "component_id": {},
+                  "household_name": {
+                    "type": "string"
+                  },
+                  "car_name": {
+                    "type": "string"
+                  },
+                  "source_weight": {
+                    "type": "integer"
+                  },
+                  "fuel": {
+                    "enum": [
+                      "ANY",
+                      "ELECTRICITY",
+                      "IRRADIANCE",
+                      "SPEED",
+                      "HEATING",
+                      "COOLING",
+                      "TEMPERATURE",
+                      "PRESSURE",
+                      "TIME",
+                      "PRICE",
+                      "GAS",
+                      "AIR",
+                      "GREEN_HYDROGEN",
+                      "OXYGEN",
+                      "WATER",
+                      "WARM_WATER",
+                      "DIESEL",
+                      "OIL",
+                      "PELLETS",
+                      "WOOD_CHIPS",
+                      "DISTRICTHEATING",
+                      "ON_OFF",
+                      "ACTIVATION"
+                    ]
+                  },
+                  "consumption_per_km": {
+                    "type": "number"
+                  },
+                  "device_co2_footprint_in_kg": {
+                    "type": "number"
+                  },
+                  "investment_costs_in_euro": {
+                    "type": "number"
+                  },
+                  "lifetime_in_years": {
+                    "type": "number"
+                  },
+                  "maintenance_costs_in_euro_per_year": {
+                    "type": "number"
+                  },
+                  "subsidy_as_percentage_of_investment_costs": {
+                    "type": "number"
+                  }
+                }
+              },
+              "sizing_sources": {
+                "$ref": "#/$defs/sizing_sources",
+                "propertyNames": {
+                  "enum": []
                 }
               }
             }

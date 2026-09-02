@@ -28,6 +28,7 @@ from hisim.components import (
     generic_car,
     controller_l1_generic_ev_charge,
 )
+from hisim.components.lpg_car_information import GenericCarInformation
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -391,21 +392,24 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
 
     # Build Electric Car(s)
-    # get all available cars from occupancy
-    my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
-    my_car_config = generic_car.CarConfig.get_default_ev_config()
-    my_car_config.component_id = ComponentID("ElectricCar")
+    # How many cars there are is a property of the LPG result, not of any configuration, so the
+    # occupancy is still what decides the count. Each car is then built from (parameters, config)
+    # like every other component and finds its own driving profile through the repository.
+    my_car_information = GenericCarInformation(my_occupancy_instance=my_occupancy)
     charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
 
-    # create all cars
+    # create all cars, each with a configuration of its own naming the profile it drives by
     my_cars: List[generic_car.Car] = []
     for idx, car_information_dict in enumerate(my_car_information.data_dict_for_car_component.values()):
-        my_car_config.component_id = ComponentID(car_information_dict["car_name"] + f"_{idx}")
+        my_car_config = generic_car.CarConfig.for_household(
+            name=car_information_dict["car_name"] + f"_{idx}",
+            household_name=car_information_dict["household_name"],
+            car_name=car_information_dict["car_name"],
+        )
         my_cars.append(
             generic_car.Car(
                 my_simulation_parameters=my_simulation_parameters,
                 config=my_car_config,
-                data_dict_with_car_information=car_information_dict,
             )
         )
 

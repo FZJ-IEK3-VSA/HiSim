@@ -4,7 +4,7 @@ from __future__ import annotations
 import dataclasses
 import re
 import json
-from typing import List, Any, Dict, Tuple, cast, overload, TYPE_CHECKING
+from typing import List, Any, Dict, Tuple, overload, TYPE_CHECKING
 from pathlib import Path
 # 3rd party imports
 from pydantic import BaseModel, Field
@@ -13,8 +13,6 @@ import humps
 from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
-from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
-from hisim.components.generic_car import Car, GenericCarInformation
 from hisim.config import ConfigBase, ComponentID
 import hisim.component as cp
 import hisim.dynamic_component as dcp
@@ -103,10 +101,6 @@ def convert_component_to_json(config: ConfigBase, component: cp.Component) -> Tu
             config_json_str["source_path"] = f"<<utils.get_input_directory()>>/{relative_input_path}"
         else:
             log.warning(f"Could not find 'inputs' in absolute weather source path {config_json_str['source_path']}, leaving it unchanged in JSON output...")
-    # Car information can be generated using Occupancy (see class GenericCarInformation)
-    # However, then each car must be assigned to an occupancy
-    elif config.get_main_classname() == "hisim.components.generic_car.Car":
-        config_json_str["household_name"] = cast(Car, component).car_information_dict["household_name"]
 
     outs = []
     ins = []
@@ -250,27 +244,16 @@ def write_standalone_simulation_json(my_sim: "Simulator", path="recent_simulatio
         f.close()
 
 
-def add_component_to_scenario(scenario: Scenario, config: ConfigBase, component: cp.Component, my_sim: "Simulator") -> None:
-    """Add a simulator component to the scenario JSON object."""
+def add_component_to_scenario(scenario: Scenario, config: ConfigBase, component: cp.Component) -> None:
+    """Add a simulator component to the scenario JSON object.
+
+    Args:
+        scenario: The scenario being assembled.
+        config: The component's configuration, which is what gets written down.
+        component: The live component, read for its inputs and outputs.
+    """
 
     component_entry, ins, outs = convert_component_to_json(config, component)
-    if config.get_main_classname() == "hisim.components.generic_car.Car":
-        # Handle special case for Car component, link to LPG connector
-        for idx, comp in enumerate(scenario.components):
-            if comp.component_full_classname == "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector":
-                car_info = cast(Car, component).car_information_dict
-                lpg_connector = cast(UtspLpgConnector, my_sim.wrapped_components[idx].my_component)  # For mypy, we know that this is an UtspLpgConnector
-                new_car_info = GenericCarInformation(my_occupancy_instance=lpg_connector).data_dict_for_car_component[car_info["household_name"]]
-
-                if new_car_info["time_resolution"] == car_info["time_resolution"] and \
-                new_car_info["car_location"] == car_info["car_location"] and new_car_info["driven_meters"] == car_info["driven_meters"]:
-                    # Cannot include car inside LPG connector, then not found for connections/inputs/outputs etc.
-                    comp.configuration["cars"] = (
-                        (comp.configuration.get("cars") or []) + [component_entry.configuration["component_id"]["name"]]
-                    )
-                    log.information(f"Added car information to LPG connector config for car {component.component_name}")
-
-    # Always do:
     scenario.components.append(component_entry)
     log.debug(
         "Added component " + config.component_id.name + " with " + str(len(ins))
@@ -498,7 +481,7 @@ def write_standalone_scenario_json(module_filename: str, my_sim: "Simulator", de
     log.information(f"Writing component configurations to JSON file {path}.")
     component_connections = []
     for component in my_sim.wrapped_components:
-        add_component_to_scenario(scenario=scenario, config=component.my_component.config, component=component.my_component, my_sim=my_sim)
+        add_component_to_scenario(scenario=scenario, config=component.my_component.config, component=component.my_component)
 
         for connection in component.my_component.log_connections:
             component_connections += [Connection(

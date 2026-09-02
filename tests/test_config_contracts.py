@@ -164,6 +164,7 @@ class PilotWireFormat:
         "WeatherConfig": ("standard",),
         "UtspLpgConnectorConfig": ("standard",),
         "ElectricityMeterConfig": ("standard",),
+        "CarConfig": (),
     }
 
     #: Config class name → its named constructors, in declaration order. A constructor's
@@ -179,13 +180,16 @@ class PilotWireFormat:
         "WeatherConfig": ("for_location",),
         "UtspLpgConnectorConfig": ("for_household",),
         "ElectricityMeterConfig": (),
+        "CarConfig": ("for_household",),
     }
 
-    #: The scanned classes that legitimately ship no preset at all. Every class converted so
-    #: far has one, so the tuple is empty; it stays here because zero presets is a legal state
-    #: — a pure fact provider, or a class whose every instance is spelled out — and the day one
-    #: arrives it should be a decision recorded here rather than an oversight.
-    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = ()
+    #: The scanned classes that legitimately ship no preset at all. Zero presets is a legal
+    #: state and this tuple is where that decision is recorded rather than discovered.
+    #: ``CarConfig`` is the first and so far only one: a preset takes nothing but the instance
+    #: name, and a car cannot be configured without naming the household and the car whose
+    #: LoadProfileGenerator driving profile it drives by, so every one of its builders has to
+    #: be a constructor (D-23, 2026-08-31).
+    CLASSES_WITHOUT_PRESETS: Tuple[str, ...] = ("CarConfig",)
 
     #: Config class name → the facts it contributes, in declaration order.
     FACT_NAMES: Dict[str, Tuple[str, ...]] = {
@@ -438,6 +442,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
     from hisim.components.controller_l2_energy_management_system import EMSConfig
     from hisim.components.electricity_meter import ElectricityMeterConfig
     from hisim.components.generic_boiler import GenericBoilerConfig, GenericBoilerControllerConfig
+    from hisim.components.generic_car import CarConfig
     from hisim.components.heat_distribution_system import (
         HeatDistributionConfig,
         HeatDistributionControllerConfig,
@@ -455,6 +460,7 @@ def test_the_preset_and_fact_names_are_the_stored_wire_format():
         "WeatherConfig": WeatherConfig,
         "UtspLpgConnectorConfig": UtspLpgConnectorConfig,
         "ElectricityMeterConfig": ElectricityMeterConfig,
+        "CarConfig": CarConfig,
     }
     for class_name, expected in PilotWireFormat.PRESET_NAMES.items():
         assert tuple(presets_of(by_name[class_name])) == expected

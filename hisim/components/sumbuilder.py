@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any, ClassVar, List
 
 from dataclasses_json import dataclass_json
 
@@ -45,6 +45,10 @@ class SumBuilderConfig(ConfigBase):
 
 class CalculateOperation(cp.Component):
     """Arbitrary mathematical operations."""
+
+    # Arithmetic over other components' outputs: it owns no device, so there is nothing to
+    # buy and nothing to run. See Component.MODELS_NO_DEVICE.
+    MODELS_NO_DEVICE: ClassVar[bool] = True
 
     operations_available: List[str] = ["Sum", "Subtract", "Multiply", "Divide"]
     Output: str = "Output"
@@ -151,6 +155,10 @@ class SumBuilderForTwoInputs(Component):
     time step, and writes the result to one output channel.
     """
 
+    # Arithmetic over other components' outputs: it owns no device, so there is nothing to
+    # buy and nothing to run. See Component.MODELS_NO_DEVICE.
+    MODELS_NO_DEVICE: ClassVar[bool] = True
+
     SumInput1: str = "Input 1"
     SumInput2: str = "Input 2"
     SumOutput: str = "Sum"
@@ -231,6 +239,10 @@ class SumBuilderForTwoInputs(Component):
 
 class SumBuilderForThreeInputs(Component):
     """Sum builder for three inputs."""
+
+    # Arithmetic over other components' outputs: it owns no device, so there is nothing to
+    # buy and nothing to run. See Component.MODELS_NO_DEVICE.
+    MODELS_NO_DEVICE: ClassVar[bool] = True
 
     SumInput1: str = "Input 1"
     SumInput2: str = "Input 2"

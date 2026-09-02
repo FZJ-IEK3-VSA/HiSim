@@ -331,8 +331,8 @@ def capex_calculation(
             # The building a component belongs to is read from its structured identity instead of
             # being guessed from a substring of its runtime name.
             if building_object == component_unwrapped.component_id.building_label:
-                capex: CapexCostDataClass = component_unwrapped.get_cost_capex(
-                    config=component_unwrapped.config, simulation_parameters=simulation_parameters
+                capex: CapexCostDataClass = component_unwrapped.capital_cost_data(
+                    simulation_parameters=simulation_parameters
                 )
                 # filter out none type values
                 if any(v is None for v in asdict(capex).values()):

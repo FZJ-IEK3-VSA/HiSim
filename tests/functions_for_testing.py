@@ -1,6 +1,46 @@
 """Helper functions for testing."""
 # clean
+from typing import ClassVar, Tuple
+
 from hisim.component import ComponentOutput
+from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.simulationparameters import SimulationParameters
+
+
+class SetupTestParameters:
+    """Simulation parameters for a system-setup test, with the KPI machinery switched on.
+
+    ``SimulationParameters.one_day_only`` enables no post-processing at all, and every setup test
+    in this suite used it as-is. A setup could therefore run every timestep, write finished.flag,
+    satisfy its test, and still fail the instant anyone asked it for KPIs -- which is precisely
+    what four of them did, each discovered only when something else went looking. The failures
+    lived entirely in post-processing and nothing in the tests reached it.
+
+    Building the parameters here rather than in each test means a new setup test exercises that
+    path by default instead of by remembering to.
+    """
+
+    OPTIONS: ClassVar[Tuple[PostProcessingOptions, ...]] = (
+        PostProcessingOptions.COMPUTE_KPIS,
+        PostProcessingOptions.WRITE_KPIS_TO_JSON,
+        PostProcessingOptions.COMPUTE_CAPEX,
+        PostProcessingOptions.COMPUTE_OPEX,
+    )
+
+    @classmethod
+    def one_day_with_kpis(cls, year: int = 2021, seconds_per_timestep: int = 60) -> SimulationParameters:
+        """Return one-day parameters that compute KPIs and costs.
+
+        Args:
+            year: the simulation year.
+            seconds_per_timestep: the resolution.
+
+        Returns:
+            SimulationParameters: one day, with the KPI and cost options enabled.
+        """
+        parameters = SimulationParameters.one_day_only(year=year, seconds_per_timestep=seconds_per_timestep)
+        parameters.post_processing_options.extend(cls.OPTIONS)
+        return parameters
 
 
 def get_number_of_outputs(list_of_components: list) -> int:

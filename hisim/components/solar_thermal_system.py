@@ -6,7 +6,8 @@ from typing import ClassVar, List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
-from oemof.thermal.solar_thermal_collector import flat_plate_precalc
+import pvlib
+from oemof.thermal.solar_thermal_collector import calc_eta_c_flate_plate
 from hisim.component import (
     CapexCostDataClass,
     Component,
@@ -228,8 +229,9 @@ class SolarThermalSystem(Component):
         self.previous_state: SolarThermalSystemState = deepcopy(self.state)
         # Initialized variables
         self.factor: float = 1.0
-        self.precalc_data_for_all_timesteps_data: List[Optional[pd.DataFrame]] = []
-        self.precalc_data_for_all_timesteps_output: List[pd.DataFrame] = []
+        # Where the sun will be at every timestep, filled in i_prepare_simulation from the cache or
+        # from pvlib. Nothing downstream of the sun is stored: see i_prepare_simulation.
+        self.solar_position: pd.DataFrame = pd.DataFrame()
         self.cache_filepath: Optional[str] = None
 
         # Add inputs
@@ -611,29 +613,74 @@ class SolarThermalSystem(Component):
         """Doublechecks."""
         pass
 
+    def timestamps_of_the_run(self) -> pd.DatetimeIndex:
+        """Return the instant of every timestep of this simulation.
+
+        The sun's position is a function of these and of the coordinates, and of nothing else, which
+        is what makes it the only part of the collector calculation that can be worked out before
+        the run and cached. They come from ``start_date`` and ``seconds_per_timestep``, both of which
+        are already in the cache key.
+
+        Returns:
+            pd.DatetimeIndex: one instant per timestep, in simulation order.
+        """
+        return pd.DatetimeIndex(
+            [
+                self.my_simulation_parameters.start_date
+                + datetime.timedelta(0, self.my_simulation_parameters.seconds_per_timestep * timestep)
+                for timestep in range(self.my_simulation_parameters.timesteps)
+            ]
+        )
+
     def i_prepare_simulation(self) -> None:
-        """Prepare the simulation."""
+        """Prepare the simulation by working out where the sun will be.
+
+        Only the sun's position is precomputed, and only it is cached. The collector calculation has
+        three stages and just the first qualifies: the solar position depends on the timestamps and
+        the coordinates, both already in the cache key; the plane-of-array irradiance depends on the
+        weather, which arrives through wired inputs; and the collector efficiency depends on the
+        storage's inlet temperature, which is the simulation's own state feeding back.
+
+        This component used to cache the output of all three. That value could not be keyed by
+        anything -- it was a function of a trajectory the run had not taken yet -- so any hit
+        replayed one system's storage behaviour into another's. Restricting what is cached is what
+        makes the existing key exactly correct, with nothing to widen. See roadmap/pylpg_flakiness.md
+        F8.
+        """
         file_exists, self.cache_filepath = utils.get_cache_file(
             self.config.component_id.name, self.config, self.my_simulation_parameters
         )
+        timestamps = self.timestamps_of_the_run()
 
         if file_exists:
-            log.information("Get solar thermal results from cache.")
-            df = pd.read_csv(self.cache_filepath, sep=",", decimal=".")
-            # Reconstruct list of DataFrames per timestep (if needed)
-            self.precalc_data_for_all_timesteps_output = [
-                group_df.drop(columns="timestep") for _, group_df in df.groupby("timestep", sort=True)
-            ]
+            log.information("Get solar position from cache.")
+            # float_precision="round_trip" is what makes a cached run and an uncached one the same
+            # run. pandas' default CSV reader uses a fast, inexact float parser, and it loses the
+            # last bit of roughly a sixth of the values here whatever precision they were written
+            # with -- measured: 317 of 2000 with the default write format, 358 with "%.17g", 542
+            # with "%.20g", and zero with this argument. The loss is in the reader, not in the
+            # digits on disk, which is worth knowing because the obvious remedies make it worse.
+            cached = pd.read_csv(self.cache_filepath, sep=",", decimal=".", float_precision="round_trip")
+            # No length check here on purpose. The old one accepted any file with the right number
+            # of rows, which is exactly how a cache entry belonging to a different system passed
+            # unnoticed. With a key that genuinely determines the contents, a mismatched length
+            # means the file is corrupt, so it is left to raise rather than warned about.
+            self.solar_position = cached.set_index(timestamps)
+        else:
+            self.solar_position = pvlib.solarposition.get_solarposition(
+                time=timestamps,
+                latitude=self.config.coordinates.latitude_in_degrees,
+                longitude=self.config.coordinates.longitude_in_degrees,
+            )[["apparent_zenith", "azimuth"]]
 
-            if len(self.precalc_data_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:
-                raise ValueError(
-                    f"Reading the cached solar thermal precalc values seems to have failed. "
-                    f"Expected {self.my_simulation_parameters.timesteps} values, but got "
-                    f"{len(self.precalc_data_for_all_timesteps_output)}"
-                )
-
-        # create placeholder list for per-timestep precalc DataFrames, filled in i_simulate
-        self.precalc_data_for_all_timesteps_data = [None] * self.my_simulation_parameters.timesteps
+            assert self.cache_filepath is not None
+            with atomic_cache_write(
+                self.cache_filepath, utils.build_cache_key_string(self.config, self.my_simulation_parameters)
+            ) as temporary_cache_filepath:
+                # The default float format already writes a shortest round-trip representation;
+                # forcing more digits does not help, because what loses precision is the read. See
+                # the note beside the read above.
+                self.solar_position.to_csv(temporary_cache_filepath, sep=",", decimal=".", index=False)
 
     def i_simulate(
         self,
@@ -648,41 +695,45 @@ class SolarThermalSystem(Component):
         diffuse_horizontal_irradiance_w_m2 = stsv.get_input_value(self.dhi_channel)
         ambient_air_temperature_deg_c = stsv.get_input_value(self.t_out_channel)
         temperature_collector_inlet_deg_c = stsv.get_input_value(self.water_temperature_input_channel)
-        # check if results could be found in cache and if the list has
-        # the right length
-        if (
-            hasattr(self, "precalc_data_for_all_timesteps_output")
-            and len(self.precalc_data_for_all_timesteps_output) == self.my_simulation_parameters.timesteps
-        ):
-            precalc_data = self.precalc_data_for_all_timesteps_output[timestep]  # use precalculated data from cache
+        # The collector is calculated every timestep, from this timestep's weather and this
+        # timestep's storage temperature. Only the sun's position comes from the precomputation, and
+        # the three lines below are the body of oemof.thermal's flat_plate_precalc with its first
+        # stage lifted out -- see i_prepare_simulation for why that stage and no other.
+        # Some more info on the equation:
+        # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters #noqa
+        time_ind = self.my_simulation_parameters.start_date + datetime.timedelta(
+            0,
+            self.my_simulation_parameters.seconds_per_timestep * timestep,
+        )
+        apparent_zenith = pd.Series(self.solar_position["apparent_zenith"].iloc[timestep], index=[time_ind])
+        azimuth = pd.Series(self.solar_position["azimuth"].iloc[timestep], index=[time_ind])
+        global_horizontal_irradiance = pd.Series(global_horizontal_irradiance_w_m2, index=[time_ind])
+        diffuse_horizontal_irradiance = pd.Series(diffuse_horizontal_irradiance_w_m2, index=[time_ind])
 
-        # calculate outputs
-        else:
+        direct_normal_irradiance = pvlib.irradiance.dni(
+            ghi=global_horizontal_irradiance, dhi=diffuse_horizontal_irradiance, zenith=apparent_zenith
+        )
+        total_irradiation = pvlib.irradiance.get_total_irradiance(
+            surface_tilt=self.config.tilt,
+            surface_azimuth=self.config.azimuth,
+            solar_zenith=apparent_zenith,
+            solar_azimuth=azimuth,
+            dni=direct_normal_irradiance.fillna(0),  # fill NaN values with '0'
+            ghi=global_horizontal_irradiance,
+            dhi=diffuse_horizontal_irradiance,
+        )
+        collector_efficiency = calc_eta_c_flate_plate(
+            self.config.eta_0,  # optical efficiency of the collector
+            self.config.a_1_w_m2_k,  # thermal loss parameter 1
+            self.config.a_2_w_m2_k,  # thermal loss parameter 2
+            temperature_collector_inlet_deg_c,  # collectors inlet temperature
+            self.config.delta_temperature_n_k,  # difference between collector inlet and mean temperature
+            pd.Series(ambient_air_temperature_deg_c, index=[time_ind]),
+            total_irradiation["poa_global"],
+        )
+        collectors_heat = collector_efficiency * total_irradiation["poa_global"]
 
-            # calculate collectors heat
-            # Some more info on equation:
-            # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters #noqa
-            time_ind = self.my_simulation_parameters.start_date + datetime.timedelta(
-                0,
-                self.my_simulation_parameters.seconds_per_timestep * timestep,
-            )
-
-            precalc_data = flat_plate_precalc(
-                lat=self.config.coordinates.latitude_in_degrees,
-                long=self.config.coordinates.longitude_in_degrees,
-                collector_tilt=self.config.tilt,
-                collector_azimuth=self.config.azimuth,
-                eta_0=self.config.eta_0,  # optical efficiency of the collector
-                a_1=self.config.a_1_w_m2_k,  # thermal loss parameter 1
-                a_2=self.config.a_2_w_m2_k,  # thermal loss parameter 2
-                temp_collector_inlet=temperature_collector_inlet_deg_c,  # collectors inlet temperature
-                delta_temp_n=self.config.delta_temperature_n_k,  # temperature difference between collector inlet and mean temperature
-                irradiance_global=pd.Series(global_horizontal_irradiance_w_m2, index=[time_ind]),
-                irradiance_diffuse=pd.Series(diffuse_horizontal_irradiance_w_m2, index=[time_ind]),
-                temp_amb=pd.Series(ambient_air_temperature_deg_c, index=[time_ind]),
-            )
-
-        thermal_power_output_w = precalc_data["collectors_heat"].iloc[0] * self.config.area_m2
+        thermal_power_output_w = collectors_heat.iloc[0] * self.config.area_m2
 
         thermal_energy_output_wh = thermal_power_output_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         required_mass_flow_output_kg_s = thermal_power_output_w / (
@@ -729,23 +780,6 @@ class SolarThermalSystem(Component):
             self.electricity_consumption_output_channel,
             electric_power_demand_solar_pump_w,
         )
-        # cache results at the end of the simulation
-        self.precalc_data_for_all_timesteps_data[timestep] = precalc_data
-
-        if timestep + 1 == self.my_simulation_parameters.timesteps:
-            for i, df in enumerate(self.precalc_data_for_all_timesteps_data):
-                assert df is not None
-                df["timestep"] = i  # Add timestep column to each
-
-            # Combine all into one large DataFrame
-            full_df = pd.concat(self.precalc_data_for_all_timesteps_data, ignore_index=True)
-
-            # Save as a flat CSV, landed atomically so a concurrent reader never sees it half written.
-            assert self.cache_filepath is not None
-            with atomic_cache_write(
-                self.cache_filepath, utils.build_cache_key_string(self.config, self.my_simulation_parameters)
-            ) as temporary_cache_filepath:
-                full_df.to_csv(temporary_cache_filepath, sep=",", decimal=".", index=False)
 
 
 @dataclass

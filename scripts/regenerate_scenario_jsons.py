@@ -109,6 +109,17 @@ def regenerate_one(
 
     Borrows a unique local-LPG calc index from ``index_pool`` for the duration
     of the run so concurrent workers never share a ``pylpg/C<index>`` dir.
+
+    The child is handed an explicit ``PYTHONPATH`` naming this checkout, because
+    the converter is started as a script path rather than with ``-m``. For a
+    script invocation Python puts the *script's own directory* on ``sys.path``,
+    which is ``scripts/`` and holds no ``hisim`` package, so ``cwd`` never gets a
+    say; the editable install's finder then answers the import from whichever
+    checkout was installed. In a second checkout -- a git worktree, a release
+    clone -- that silently regenerates every setup with the *other* tree's HiSim
+    and reports no drift, which is a false all-clear rather than a failure. The
+    variable is prepended to any inherited value so a caller's own entries still
+    apply.
     """
     stem = setup_path.stem
     log_path = log_dir / f"{stem}.log"
@@ -116,6 +127,9 @@ def regenerate_one(
     try:
         env = dict(os.environ)
         env["HISIM_LOCAL_LPG_CALC_INDEX"] = str(calc_index)
+        env["PYTHONPATH"] = os.pathsep.join(
+            [str(REPO_ROOT), *([env["PYTHONPATH"]] if env.get("PYTHONPATH") else [])]
+        )
         rel = setup_path.relative_to(REPO_ROOT).as_posix()
         with open(log_path, "w", encoding="utf-8") as logf:
             proc = subprocess.run(

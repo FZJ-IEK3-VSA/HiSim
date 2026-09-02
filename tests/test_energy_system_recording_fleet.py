@@ -1,7 +1,7 @@
 """Tests for recording the whole fleet: the parameter files, the defaults, and the driver.
 
 The recorder itself is tested next door in ``test_energy_system_recording.py``, one setup at a
-time. What this module tests is what happens when twenty-one of them are recorded in one run: that
+time. What this module tests is what happens when twenty-two of them are recorded in one run: that
 a setup whose parameters are already described by a shipped file adds nothing, that two setups
 needing the same new parameters share one file rather than getting a twin each, that recording is
 reproducible to the byte, and that the driver covers every setup with no way to leave one out.
@@ -204,8 +204,8 @@ def test_options_compare_as_a_sorted_set() -> None:
 def test_shipped_parameters_emit_nothing_and_one_change_emits_one_file(tmp_path: Path) -> None:
     """T-11: catches a recorder that would write a parameter file describing a shipped one.
 
-    The first half is the common case — twenty-one setups all running the shipped one-day pair —
-    and a regression there would add twenty-one near-identical files. The second half proves the
+    The first half is the common case — twenty-two setups all running the shipped one-day pair —
+    and a regression there would add twenty-two near-identical files. The second half proves the
     comparison is not simply answering yes: one added option and exactly one file appears.
     """
     library = Fleet.library(tmp_path)

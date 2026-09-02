@@ -47,7 +47,7 @@ from hisim.caching import atomic_cache_write
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor, preset
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, FactContribution, constructor, preset
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.lpg_car_information import CarProfileHandover, GenericCarInformation
 
@@ -86,6 +86,64 @@ class UtspLpgConnectorConfig(ConfigBase):
     guid: str = ""
     calculation_index_for_local_lpg: Optional[int] = None
     cars: Optional[List[str]] = None
+
+    def identity(self) -> str:
+        """The readable string that says which occupancy this is, for every component computed from its profiles.
+
+        A car's driving profile is one output of this connector's LoadProfileGenerator run, and that
+        run is decided by everything here -- the household templates, the energy intensity, the travel
+        routes, the transportation and charging device sets, the seed -- not by the household name
+        alone, which is all the car's configuration used to carry. So the car declares a field sized
+        from this string, this config contributes it (see :attr:`SIZING_CONTRIBUTIONS`), and the car's
+        cache key becomes complete without it ever reaching for the connector at run time.
+
+        It is readable rather than hashed because it is written into every recorded energy system
+        beside the car, where a reader should see which occupancy that was. Reference objects are
+        named by their ``Name``; their GUIDs add nothing a person can read and the names are unique
+        within the generator's catalogue.
+
+        Returns:
+            str: the mode, then the household names, then the sets and the seed, slash-separated.
+        """
+        households = self.household if isinstance(self.household, list) else [self.household]
+        parts = [
+            str(self.data_acquisition_mode.value),
+            "+".join(str(getattr(household, "Name", household)) for household in households),
+            str(self.energy_intensity.value),
+            self._reference_name(self.travel_route_set),
+            self._reference_name(self.transportation_device_set),
+            self._reference_name(self.charging_station_set),
+            "with-appliances" if self.profile_with_washing_machine_and_dishwasher else "no-appliances",
+            str(self.name_of_predefined_loadprofile) if self.name_of_predefined_loadprofile else "-",
+            self.guid or "-",
+        ]
+        return "/".join(parts)
+
+    @staticmethod
+    def _reference_name(reference: Any) -> str:
+        """Names one optional catalogue reference for :meth:`identity`.
+
+        Args:
+            reference: a ``JsonReference`` or ``None``.
+
+        Returns:
+            str: its ``Name``, or ``-`` when absent.
+        """
+        return "-" if reference is None else str(getattr(reference, "Name", reference))
+
+    @staticmethod
+    def identity_facts(config: "UtspLpgConnectorConfig", ctx: Any) -> Dict[str, Any]:
+        """Contributes this occupancy's identity to the sizing engine.
+
+        Args:
+            config: the connector configuration, fully resolved.
+            ctx: the sizing context; unused, the identity depends on this config alone.
+
+        Returns:
+            Dict[str, Any]: exactly the one fact :attr:`SIZING_CONTRIBUTIONS` declares.
+        """
+        del ctx
+        return {"occupancy_identity": config.identity()}
 
     @classmethod
     def get_main_classname(cls) -> str:
@@ -279,6 +337,15 @@ class UtspLpgConnectorConfig(ConfigBase):
             guid="",
             calculation_index_for_local_lpg=None,
         )
+
+
+# Declared after the class because it refers to it. A scenario normally has one occupancy, so the bare
+# fact ``occupancy_identity`` binds without the car naming a source; a scenario with several names the
+# one its car belongs to in the car's ``sizing_sources``, which is exactly the case the engine refuses
+# to guess.
+UtspLpgConnectorConfig.SIZING_CONTRIBUTIONS = (
+    FactContribution(facts=("occupancy_identity",), compute=UtspLpgConnectorConfig.identity_facts),
+)
 
 
 class UtspLpgConnector(cp.Component):

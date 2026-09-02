@@ -57,6 +57,26 @@ class _SizableFixtureConfig(ConfigBase):
 
 @dataclass_json
 @dataclass
+class _StringSizedFixtureConfig(ConfigBase):
+    """A config with one string-typed sizable field, for the wire-format tests.
+
+    Identity facts such as the weather a component is computed against are strings, not
+    numbers, and a string is the one type whose constructor accepts the ``AUTO`` sentinel
+    without complaint -- ``str(AUTO)`` is the wire spelling -- which is what made the decoder
+    defect this fixture guards against silent.
+    """
+
+    component_id: ComponentID
+    upstream_identity: Sizable[str] = sized_field(rule=Size.WEATHER_IDENTITY, value_type=str)
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns the class name, as every config does."""
+        return cls.__name__
+
+
+@dataclass_json
+@dataclass
 class _UnsizableFixtureConfig(ConfigBase):
     """A config declaring no sizable field at all — the NothingToSizeError case."""
 
@@ -312,3 +332,28 @@ def test_ems_preset_has_nothing_to_size():
     assert config.strategy == "optimize_own_consumption"
     with pytest.raises(NothingToSizeError):
         config.resolve(SizingContext(heating_load_in_watt=10_000.0))
+
+
+@pytest.mark.base
+def test_a_string_typed_sizable_field_left_out_of_a_dict_is_still_auto():
+    """A missing sized field means "size me", whatever its type; it must never decode to the text "AUTO".
+
+    ``dataclasses_json`` runs the field decoder over a missing key's *default* as well as over a
+    present value, and the decoder used to coerce whatever it was handed through ``value_type``.
+    For an enum that raises; for ``str`` it silently produces the wire spelling as a real string,
+    which the engine then treats as a concrete value and leaves alone -- so a config block that
+    omitted the field was never sized and the run record caught it only afterwards.
+
+    Failure mode caught: an omitted string-typed sizable field arriving as ``"AUTO"`` instead of
+    ``AUTO``, on the config-block path of the energy-system format.
+    """
+    absent = _StringSizedFixtureConfig.from_dict({"component_id": {"name": "Fixture"}})
+    spelled = _StringSizedFixtureConfig.from_dict({"component_id": {"name": "Fixture"}, "upstream_identity": "AUTO"})
+    concrete = _StringSizedFixtureConfig.from_dict(
+        {"component_id": {"name": "Fixture"}, "upstream_identity": "Aachen/DWD_TRY/aachen_center"}
+    )
+
+    assert absent.upstream_identity is AUTO
+    assert spelled.upstream_identity is AUTO
+    assert concrete.upstream_identity == "Aachen/DWD_TRY/aachen_center"
+    assert sizing.auto_fields(absent) == ("upstream_identity",)

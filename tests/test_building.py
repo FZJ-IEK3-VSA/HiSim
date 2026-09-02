@@ -74,6 +74,7 @@ def test_building() -> None:
     # Set Residence
     my_residence_config = building.BuildingConfig.preset_standard("Building")
 
+    my_residence_config.weather_identity = my_weather_config.identity()
     my_residence = building.Building(
         config=my_residence_config,
         my_simulation_parameters=my_simulation_parameters,

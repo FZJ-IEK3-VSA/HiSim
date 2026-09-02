@@ -307,6 +307,9 @@ class OneDaySnapshot:
         third simulation run.
         """
         config: BuildingConfig = BuildingConfig.preset_standard("Building")
+        # The snapshot drives the building with synthetic inputs and no weather component, so the
+        # identity is a description rather than a station; it has to be set for the building to build.
+        config.weather_identity = "synthetic winter day, no weather component"
         if variant_name == cls.SCALED_VARIANT_NAME:
             config = dataclasses.replace(
                 config,

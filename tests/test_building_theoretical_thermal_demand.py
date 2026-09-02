@@ -67,6 +67,7 @@ def _build_components(
     # Build Building
     my_building_config = building.BuildingConfig.preset_standard("Building")
 
+    my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )

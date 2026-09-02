@@ -7,7 +7,7 @@ import math
 import os
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Any, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from dataclasses_json import dataclass_json
 import numpy as np
@@ -17,7 +17,7 @@ import pvlib
 from hisim import loadtypes as lt
 from hisim import log, utils
 from hisim.caching import atomic_cache_write
-from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor, preset
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, FactContribution, constructor, preset
 from hisim.component import Component, ComponentOutput, SingleTimeStepValues, OpexCostDataClass, CapexCostDataClass
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
@@ -464,6 +464,41 @@ class WeatherConfig(ConfigBase):
         )
         return config
 
+    def identity(self) -> str:
+        """The readable string that says which weather this is, for every component computed against it.
+
+        A PV system's power series or a building's solar gains depend on the weather they were run
+        with, so their cache keys must too -- but their configs know nothing about the weather, and
+        looking the weather component up at run time is what the deprecated singleton did. Instead
+        the weather contributes this string as a sizing fact (see :attr:`SIZING_CONTRIBUTIONS`), the
+        downstream configs declare a field sized from it, and the key -- a hash over the whole config
+        -- becomes complete before the simulator exists.
+
+        The string is readable rather than a hash because it is written into every recorded energy
+        system beside the component that depends on it, where a reader should be able to see at a
+        glance which weather that was. It names the station, the data set and the file stem: the
+        three things that decide what the weather component reads. The absolute directory is left
+        out on purpose, since it differs between machines and says nothing about the data.
+
+        Returns:
+            str: e.g. ``"Aachen/DWD_TRY_2015/TRY2015_507931060546_Jahr"``.
+        """
+        return f"{self.location}/{self.data_source.value}/{os.path.basename(str(self.source_path))}"
+
+    @staticmethod
+    def identity_facts(config: "WeatherConfig", ctx: Any) -> Dict[str, Any]:
+        """Contributes this weather's identity to the sizing engine.
+
+        Args:
+            config: the weather configuration, fully resolved (it has no sized fields of its own).
+            ctx: the sizing context; unused, the identity depends on this config alone.
+
+        Returns:
+            Dict[str, Any]: exactly the one fact :attr:`SIZING_CONTRIBUTIONS` declares.
+        """
+        del ctx
+        return {"weather_identity": config.identity()}
+
     @preset(note="the repository's reference climate")
     @classmethod
     def preset_standard(cls, name: str) -> "WeatherConfig":
@@ -513,6 +548,13 @@ class WeatherConfig(ConfigBase):
             data_source=data_source if data_source is not None else catalogue_source,
             predictive_control=False,
         )
+
+
+# Declared after the class because it refers to it. Every scenario has exactly one weather, so the
+# bare fact ``weather_identity`` binds to this contribution without any consumer naming a source.
+WeatherConfig.SIZING_CONTRIBUTIONS = (
+    FactContribution(facts=("weather_identity",), compute=WeatherConfig.identity_facts),
+)
 
 
 class Weather(Component):

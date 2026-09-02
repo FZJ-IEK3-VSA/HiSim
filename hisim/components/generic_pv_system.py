@@ -31,7 +31,7 @@ from hisim import log
 from hisim import utils
 from hisim.caching import atomic_cache_write
 from hisim.component import OpexCostDataClass, CapexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, Sizable, Size, sized_field
 from hisim.components.weather import Weather
 from hisim.sim_repository_singleton import (
     SingletonSimRepository,
@@ -132,6 +132,11 @@ class PVSystemConfig(ConfigBase):
     predictive: bool
     predictive_control: bool
     prediction_horizon: Optional[int]
+    #: Which weather this system's cached power series was computed against, as the weather's own
+    #: readable identity (see ``WeatherConfig.identity``). Sized from the weather rather than copied,
+    #: so the cache key -- which hashes this whole config -- cannot describe a different weather than
+    #: the one the run uses. ``roadmap/pylpg_flakiness.md`` F7.
+    weather_identity: Sizable[str] = sized_field(rule=Size.WEATHER_IDENTITY, value_type=str)
 
     @classmethod
     def get_default_pv_system(

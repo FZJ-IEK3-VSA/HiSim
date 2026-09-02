@@ -71,10 +71,13 @@ components:
       lifetime_in_years: null
       maintenance_costs_in_euro_per_year: null
       subsidy_as_percentage_of_investment_costs: null
+      weather_identity: Aachen/DWD_TRY/aachen_center # sized from weather.weather_identity=Aachen/DWD_TRY/aachen_center
     inputs:
       - weather
       - occupancy
       - hds
+    sizing_sources:
+      weather_identity: weather.weather_identity # unique provider, written for re-execution
   hds_controller:
     class: hisim.components.heat_distribution_system.HeatDistributionController
     config: # built from preset: standard

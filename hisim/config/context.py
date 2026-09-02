@@ -55,6 +55,16 @@ class SizingContext:
     set_heating_temperature_in_celsius: Optional[float] = None
     set_cooling_temperature_in_celsius: Optional[float] = None
 
+    # The two identity facts. They are not sizes, and that is deliberate: the engine is the typed
+    # successor of the singleton repository for *every* fact one component needs from another, and
+    # "which weather am I computed against" is such a fact. A component whose cached result depends
+    # on an upstream artifact declares that artifact's identity as a sized field, the upstream
+    # config contributes it, and the cache key -- which hashes the whole config -- becomes complete
+    # without the component ever reaching for the upstream component at run time. See
+    # ``roadmap/pylpg_flakiness.md`` F7.
+    weather_identity: Optional[str] = None
+    occupancy_identity: Optional[str] = None
+
     def with_facts(self, **facts: Any) -> "SizingContext":
         """Returns a copy of this context with the given facts added or replaced.
 
@@ -118,3 +128,5 @@ class Size:
     MINIMAL_THERMAL_POWER_IN_WATT: ClassVar[_FactTerm] = _FactTerm("minimal_thermal_power_in_watt")
     SET_HEATING_TEMPERATURE_IN_CELSIUS: ClassVar[_FactTerm] = _FactTerm("set_heating_temperature_in_celsius")
     SET_COOLING_TEMPERATURE_IN_CELSIUS: ClassVar[_FactTerm] = _FactTerm("set_cooling_temperature_in_celsius")
+    WEATHER_IDENTITY: ClassVar[_FactTerm] = _FactTerm("weather_identity")
+    OCCUPANCY_IDENTITY: ClassVar[_FactTerm] = _FactTerm("occupancy_identity")

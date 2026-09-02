@@ -25,17 +25,27 @@ Each test states the failure mode it catches.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import re
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Tuple
 
+import numpy as np
 import pytest
+import yaml
+from ruamel.yaml import YAML
 
 from hisim.energy_system.audit import AuditWriter, build_audit
 from hisim.energy_system.classes import validate_classes
-from hisim.energy_system.comments import AnnotatedEmitter, ProvenanceComments, strip_comments
+from hisim.energy_system.comments import (
+    AnnotatedEmitter,
+    CanonicalRepresenter,
+    ProvenanceComments,
+    strip_comments,
+)
+from hisim.energy_system.emitter import EnergySystemEmitter
 from hisim.energy_system.errors import EnergySystemFormatError, EnergySystemRecordError
 from hisim.energy_system.executor import (
     SimulationParametersReader,
@@ -564,6 +574,59 @@ def test_the_annotated_writer_agrees_with_the_canonical_writer_on_a_record(chain
     model = load_energy_system(chain[0] / AnnotatedEmitter.RECORD_FILENAME)
 
     assert AnnotatedEmitter.render(model) == dump_energy_system(model)
+
+
+@pytest.mark.base
+def test_both_writers_spell_a_numpy_number_as_a_plain_one() -> None:
+    """Catches a setup becoming unrecordable because one of its numbers is in a numpy box.
+
+    A field annotated ``float`` does not have to hold one. Anything a setup derives from a sized
+    building, a pandas table or a pvlib call arrives as a numpy scalar, and a YAML writer with no
+    representer for that type refuses the whole document -- so the setup cannot be written down at
+    all, which reads as the format being unable to express it when it is only the writer being
+    unable to spell the number. ``air_conditioned_house`` is the setup this really happened to: its
+    scaled air-conditioner config takes a scale factor from the building's thermal demand, and the
+    recorder died on the value below rather than on anything about the setup.
+
+    Both writers are covered, because the record writer runs on a second YAML library: teaching one
+    and not the other would trade a crash for the two of them disagreeing about the same document,
+    which is the drift the tests above exist to prevent. What each must produce is a *plain* number,
+    so that the file stays ordinary YAML rather than something only a numpy-aware reader can load.
+
+    Catches: a recording run that dies on a number it could have written, and one writer learning
+    to spell it while the other does not.
+    """
+    document = {
+        "single": np.float32(0.5),
+        "double": np.float64(0.5364243908677532),
+        "integer": np.int64(7),
+        "boolean": np.bool_(True),
+        "array": np.array([1.5, 2.5]),
+    }
+    expected = {
+        "single": 0.5,
+        "double": 0.5364243908677532,
+        "integer": 7,
+        "boolean": True,
+        "array": [1.5, 2.5],
+    }
+
+    canonical = EnergySystemEmitter.render(dict(document))
+
+    annotated_stream = io.StringIO()
+    annotated_writer = YAML()
+    annotated_writer.Representer = CanonicalRepresenter.configured()
+    annotated_writer.dump(dict(document), annotated_stream)
+
+    for written, writer in ((canonical, "canonical"), (annotated_stream.getvalue(), "annotated")):
+        loaded = yaml.safe_load(written)
+        assert loaded == expected, f"the {writer} writer changed the values: {loaded}"
+        assert [type(loaded[key]) for key in ("single", "double", "integer", "boolean")] == [
+            float,
+            float,
+            int,
+            bool,
+        ], f"the {writer} writer left a value in a type a plain YAML reader would not produce"
 
 
 @pytest.mark.base

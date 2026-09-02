@@ -24,7 +24,7 @@ from hisim.components import (
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import electricity_meter
-from hisim import loadtypes, log
+from hisim import log
 
 
 __authors__ = "Kristina Dabrock"
@@ -230,14 +230,11 @@ def setup_function(
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
-    my_electricity_meter.add_component_input_and_connect(
-        source_object_name=my_occupancy.component_name,
-        source_component_output=my_occupancy.ElectricalPowerConsumption,
-        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
-        source_unit=loadtypes.Units.WATT,
-        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-        source_weight=999,
-    )
+    # The occupancy is not fed to the electricity meter here. The meter declares that exact
+    # connection itself (electricity_meter.py, get_default_connections_from_utsp_occupancy) and is
+    # registered with connect_automatically below, so wiring it by hand as well fed one source into
+    # one meter twice -- and hisim/simulator.py does not de-duplicate, so the sum really was taken
+    # twice. That is what made the relative electricity demand exceed 100 % and stopped the KPI run.
 
     my_dhw_storage.connect_input(
         my_dhw_storage.WaterConsumption,

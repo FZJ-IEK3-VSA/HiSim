@@ -1,7 +1,7 @@
 """Which simulation-parameters file a recording points at, and when a new one is written.
 
 A recorded energy-system file says what a household *is*; a simulation-parameters file says what
-to do with it. Twenty-one setups would otherwise produce twenty-one near-identical parameter
+to do with it. Twenty-two setups would otherwise produce twenty-two near-identical parameter
 files, so this module answers the question the recorder asks once per setup: does a file that
 already exists say the same thing? If one does, the recording references it and nothing is
 written. Only when nothing matches is a file written, and the same comparison covers the files

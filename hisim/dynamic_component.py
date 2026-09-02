@@ -88,6 +88,23 @@ def tags_search_and_compare(
     return True
 
 
+class DuplicateComponentFeedError(ValueError):
+    """Raised when one source output is wired into one dynamic component more than once.
+
+    A dynamic component sums the inputs that carry a given tag, so feeding it the same output twice
+    makes it count that flow twice. Nothing about the result looks wrong: the simulation completes
+    and every series is plausible. ``household_gas_solar_thermal`` did exactly this -- the occupancy
+    was wired to the electricity meter by hand *and* by the meter's own default connection -- and
+    reported a grid import of 21.72 kWh against a total consumption of 10.9. The only thing that
+    ever noticed was a derived percentage going above 100, and the setup sat broken for months
+    filed as a bug in the KPI layer.
+
+    It is a distinct type rather than a bare ``ValueError`` so a caller that genuinely wants to
+    detect and skip the second feed can tell it from the other ways a connection can be rejected.
+    Nothing in HiSim does that today.
+    """
+
+
 class DynamicComponent(Component):
 
     """Class for components with a dynamic number of inputs and outputs.
@@ -337,7 +354,32 @@ class DynamicComponent(Component):
         source_weight: int,
         allow_unconnected_mandatory: bool = False,
     ) -> None:
-        """Adds a component input and connects it at once."""
+        """Adds a component input and connects it at once.
+
+        Raises:
+            DuplicateComponentFeedError: if this component is already fed by that source output.
+        """
+        # Refuse a second feed of the same source output before creating anything. The two ways of
+        # wiring a dynamic component -- by hand here, and through the default connections that
+        # connect_automatically applies -- do not know about each other, so a setup that uses both
+        # for one source silently doubles it. Checking the inputs rather than my_component_inputs is
+        # deliberate: these are the objects connection resolution actually reads.
+        for existing_input in self.inputs:
+            if (
+                existing_input.src_object_name == source_object_name
+                and existing_input.src_field_name == str(source_component_output)
+            ):
+                raise DuplicateComponentFeedError(
+                    f"'{self.component_name}' is already fed by "
+                    f"'{source_object_name}.{source_component_output}' through input "
+                    f"'{existing_input.field_name}', and something is adding it a second time. A "
+                    f"dynamic component sums what it is given, so the second feed would count that "
+                    f"flow twice and every total derived from it would be wrong without looking "
+                    f"wrong. The usual cause is a setup wiring a source by hand and also passing "
+                    f"connect_automatically=True, which applies the component's own default "
+                    f"connection for the same source: do one or the other, not both."
+                )
+
         # Label Input and generate variable
         num_inputs = len(self.inputs)
         label = f"Input_{source_object_name}_{source_component_output}_{num_inputs}"

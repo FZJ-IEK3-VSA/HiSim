@@ -11,11 +11,10 @@ import numpy as np
 from hisim.components import (
     building,
     generic_pv_system,
-    advanced_heat_pump_hplib,
     advanced_battery_bslib,
+    more_advanced_heat_pump_hplib,
     simple_water_storage,
 )
-from hisim.units import Quantity, Watt
 
 from hisim import log
 from hisim import utils
@@ -149,13 +148,13 @@ def simulation_for_one_timestep(
     )
 
     # Set hplib
-    my_hplib_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=Quantity(my_residence_information.max_thermal_building_demand_in_watt, Watt)
+    my_hplib_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
+        heating_load_of_building_in_watt=my_residence_information.max_thermal_building_demand_in_watt
     )
 
     # Set Hot Water Storage
     my_simple_hot_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_hplib_config.set_thermal_output_power_in_watt.value,
+        max_thermal_power_in_watt_of_heating_system=my_hplib_config.set_thermal_output_power_in_watt,
         sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
     )
 
@@ -183,7 +182,7 @@ def simulation_for_one_timestep(
     return {
         "number_of_apartments": my_residence_information.number_of_apartments,
         "pv": pv_power_in_watt,
-        "hplib": hplib_thermal_power_in_watt.value,
+        "hplib": hplib_thermal_power_in_watt,
         "sh_storage": simple_hot_water_storage_size_in_liter,
         "battery": battery_capacity_in_kilowatt_hours,
         "dhw_storage": water_storage_size_for_dhw_in_liter,

@@ -577,7 +577,7 @@
         {
             "source": {
                 "component_name": "L2EMSElectricityController",
-                "field_name": "ElectricityToOrFromGridOfL1Controller_Output15"
+                "field_name": "ElectricityToOrFromGridOfL1Controller_Output14"
             },
             "target": {
                 "component_name": "L1EVChargeControl_1",
@@ -597,7 +597,7 @@
         {
             "source": {
                 "component_name": "L2EMSElectricityController",
-                "field_name": "ChargingPowerForBattery_Output16"
+                "field_name": "ChargingPowerForBattery_Output15"
             },
             "target": {
                 "component_name": "Battery",

@@ -321,7 +321,6 @@ class ElectricityMeter(DynamicComponent):
         )
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
-        self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_electric_heater())
         self.add_dynamic_default_connections(self.get_default_connections_from_solar_thermal_system())
@@ -370,31 +369,6 @@ class ElectricityMeter(DynamicComponent):
                 source_tags=[
                     lt.ComponentType.PV,
                     lt.InandOutputType.ELECTRICITY_PRODUCTION,
-                ],
-                source_weight=999,
-            )
-        )
-        return dynamic_connections
-
-    def get_default_connections_from_advanced_heat_pump(
-        self,
-    ) -> List[DynamicComponentConnection]:
-        """Get advanced heat pump default connections."""
-
-        from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib  # pylint: disable=import-outside-toplevel
-
-        dynamic_connections: List[DynamicComponentConnection] = []
-        advanced_heat_pump_class_name = HeatPumpHplib.get_classname()
-        dynamic_connections.append(
-            DynamicComponentConnection(
-                source_component_class=HeatPumpHplib,
-                source_class_name=advanced_heat_pump_class_name,
-                source_component_field_name=HeatPumpHplib.ElectricalInputPower,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[
-                    lt.ComponentType.HEAT_PUMP_BUILDING,
-                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 ],
                 source_weight=999,
             )

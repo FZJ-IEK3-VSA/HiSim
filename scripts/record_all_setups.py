@@ -168,13 +168,14 @@ class Recorder:
     #: The command that records one setup, completed with the three paths.
     COMMAND = ("-m", "hisim.cli", "energy-system", "record")
 
-    #: Environment variable naming the local load-profile-generator working directory. The runs
-    #: are sequential, so one index serves all of them; it is set explicitly rather than left to
-    #: the default so that a machine with a stale setting records the same thing as a clean one.
+    #: Environment variable naming the local load-profile-generator working directory. It is
+    #: cleared from every child's environment rather than set, so a machine with a stale setting
+    #: records the same thing as a clean one and no recording run is pinned to a fixed directory.
+    #: Cleared, PylpgWorkspace.default_base_index() derives the index from the child's own process,
+    #: which is what keeps a recording run out of the way of anything else using local profiles on
+    #: the same machine -- the collisions #611 exists to prevent. Pinning it to a constant would
+    #: reintroduce them for the length of a fleet-wide run, which is the better part of an hour.
     LPG_INDEX_VARIABLE = "HISIM_LOCAL_LPG_CALC_INDEX"
-
-    #: The index handed to every child.
-    LPG_INDEX = "1"
 
     @classmethod
     def record(cls, setup: Path, parameters: Path, out_dir: Path, python: str) -> SetupOutcome:
@@ -190,7 +191,7 @@ class Recorder:
             The outcome, carrying the child's output when it failed.
         """
         environment = dict(os.environ)
-        environment[cls.LPG_INDEX_VARIABLE] = cls.LPG_INDEX
+        environment.pop(cls.LPG_INDEX_VARIABLE, None)
         completed = subprocess.run(  # nosec B603 - fixed argument vector, no shell
             [python, *cls.COMMAND, str(setup), str(parameters), "--out", str(out_dir)],
             cwd=str(Paths.REPO_ROOT),

@@ -17,7 +17,7 @@ import os
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 import json
 import pandas as pd
 
@@ -449,13 +449,34 @@ class Component:
             raise ValueError("Error: Component " + self.component_name + " has no outputs defined")
         return self.outputs
 
+    #: Set on a component that models no physical device -- a signal generator, a summation
+    #: node, a demonstration transformer. Such a component has nothing to buy, nothing to run
+    #: and no indicators of its own, so the three methods below answer for it instead of
+    #: refusing. Never set it on a component whose cost or KPI model has simply not been
+    #: written: the default is to refuse, so a real device that nobody has modelled stops the
+    #: run rather than being summed into the totals as zero and read as an answer.
+    #: That distinction is the whole point of the flag. The default below still raises, so a device
+    #: with real costs that nobody has modelled fails the run loudly instead of being summed into
+    #: the system total as zero, which would understate it silently and look like an answer.
+    MODELS_NO_DEVICE: ClassVar[bool] = False
+
     def get_cost_opex(
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
-        """Calculates operational cost, operational co2 footprint and consumption in kWh (for Diesel in l) during simulation time frame."""
+        """Calculates operational cost, operational co2 footprint and consumption in kWh (for Diesel in l) during simulation time frame.
+
+        Raises unless the component has declared :attr:`MODELS_NO_DEVICE`. Half the component
+        library does not implement this method, so enabling COMPUTE_OPEX used to be safe only for a
+        system built entirely from the half that does -- and the failure named the component without
+        saying whether its costs were nil or merely unwritten. A component that has none now says so
+        and returns zeros; everything else still stops the run, which is the right outcome for a
+        cost that exists and is missing.
+        """
+        if self.MODELS_NO_DEVICE:
+            return OpexCostDataClass.get_default_opex_cost_data_class()
         raise NotImplementedError(f"{self.component_name} has no opex costs implemented.")
 
     @staticmethod
@@ -469,16 +490,49 @@ class Component:
         all_outputs: List,  # pylint: disable=unused-argument
         postprocessing_results: pd.DataFrame,  # pylint: disable=unused-argument
     ) -> List[KpiEntry]:
-        """Calculates KPIs for the respective component and return all KPI entries as list."""
-        # if the method is not implemented in the component return an empty list
+        """Calculates KPIs for the respective component and return all KPI entries as list.
+
+        Refuses unless the component has declared :attr:`MODELS_NO_DEVICE`, in which case it has no
+        indicators of its own and contributes none. The comment this replaces said the empty list
+        was the intent for an unimplemented method, and the code beneath it raised -- the two had
+        disagreed long enough that setups built from indicator-less components could not compute
+        KPIs at all.
+        """
+        if self.MODELS_NO_DEVICE:
+            return []
         raise NotImplementedError(f"{self.component_name} has no kpis implemented.")
+
+    def capital_cost_data(
+        self, simulation_parameters: Optional[SimulationParameters] = None
+    ) -> CapexCostDataClass:
+        """Return this component's capital cost, or zeros when it models no device.
+
+        Callers use this rather than :meth:`get_cost_capex` directly, because the flag that says a
+        component has no costs cannot be read from inside that method: it is a ``staticmethod`` that
+        receives only the configuration, and some thirty components override it as one. Changing
+        that signature to let the base class see the class attribute would mean touching every one
+        of those overrides for the sake of the handful that declare no costs, so the check lives
+        here, on the instance, where the flag is in scope.
+
+        Args:
+            simulation_parameters: the parameters to cost against; the component's own when omitted.
+
+        Returns:
+            CapexCostDataClass: the component's capital cost, or a zeroed instance.
+        """
+        if self.MODELS_NO_DEVICE:
+            return CapexCostDataClass.get_default_capex_cost_data_class()
+        return self.get_cost_capex(
+            config=self.config,
+            simulation_parameters=simulation_parameters or self.my_simulation_parameters,
+        )
 
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""
 
-        maintenance_cost_per_simulated_period_in_euro = self.get_cost_capex(
-            config=self.config, simulation_parameters=self.my_simulation_parameters
-        ).maintenance_cost_per_simulated_period_in_euro
+        maintenance_cost_per_simulated_period_in_euro = (
+            self.capital_cost_data().maintenance_cost_per_simulated_period_in_euro
+        )
 
         return maintenance_cost_per_simulated_period_in_euro
 

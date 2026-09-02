@@ -9,6 +9,13 @@ from hisim import utils
 from hisim.result_path_provider import ResultPathProviderSingleton
 
 
+# This setup cannot yet be run with the KPI and cost options that
+# tests.functions_for_testing.SetupTestParameters switches on, and the omission is recorded here
+# rather than left as an absence. The CHP refuses to report operating costs, and refusing is
+# correct: the cost exists and has not been modelled, so answering zero would understate the system
+# total silently. Component.MODELS_NO_DEVICE is only for components that genuinely have none.
+# Switch this test over once that cost model is written -- see the family-A entry in the setup
+# sweep.
 @pytest.mark.extendedbase
 @utils.measure_execution_time
 def test_dynamic_components_system_setup() -> None:

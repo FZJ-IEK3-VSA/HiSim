@@ -12,7 +12,7 @@ from __future__ import annotations
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
-from typing import Optional
+from typing import ClassVar, Optional
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
@@ -97,6 +97,11 @@ class ExampleTransformer(Component):
         Defaults to an empty :py:class:`~hisim.config.DisplayConfig`.
 
     """
+
+    # A demonstration component that scales one signal by a constant. It models no device, so
+    # it has no operating cost -- as opposed to one whose cost model is merely unwritten.
+    # See Component.MODELS_NO_DEVICE.
+    MODELS_NO_DEVICE: ClassVar[bool] = True
 
     TransformerInput1: str = "Input1"
     TransformerInput2: str = "Optional Input1"

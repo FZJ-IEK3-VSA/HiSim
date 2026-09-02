@@ -4,8 +4,8 @@ import os
 from pathlib import Path
 
 import pytest
+from tests import functions_for_testing as fft
 from hisim import hisim_main
-from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
 
@@ -24,7 +24,7 @@ def test_basic_household_with_default_connections() -> None:
     """
     path = "../system_setups/automatic_default_connections.py"
 
-    simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    simulation_parameters = fft.SetupTestParameters.one_day_with_kpis()
     hisim_main.main(path, simulation_parameters)
     log.information(os.getcwd())
 

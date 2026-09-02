@@ -55,6 +55,13 @@ def fixture_isolated_result_directory() -> Iterator[str]:
             shutil.rmtree(directory)
 
 
+# This setup cannot yet be run with the KPI and cost options that
+# tests.functions_for_testing.SetupTestParameters switches on, and the omission is recorded here
+# rather than left as an absence. The transformer and rectifier unit refuses to report operating costs, and refusing is
+# correct: the cost exists and has not been modelled, so answering zero would understate the system
+# total silently. Component.MODELS_NO_DEVICE is only for components that genuinely have none.
+# Switch this test over once that cost model is written -- see the family-A entry in the setup
+# sweep.
 @pytest.mark.system_setups
 @utils.measure_execution_time
 def test_electrolyzer_with_renewables(isolated_result_directory: str) -> None:

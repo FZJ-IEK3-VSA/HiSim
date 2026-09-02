@@ -57,6 +57,11 @@ class RandomNumbers(Component):
         - i_simulate: Outputs the pre-generated random value for the current timestep
     """
 
+    # A generator of random values is not a device: it has nothing to buy and nothing to run.
+    # Declaring that is what lets a setup built from it ask for costs at all;
+    # see Component.MODELS_NO_DEVICE.
+    MODELS_NO_DEVICE: ClassVar[bool] = True
+
     RandomOutput: ClassVar[str] = "Random Numbers"
 
     def __init__(

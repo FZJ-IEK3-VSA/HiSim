@@ -18,6 +18,7 @@ from typing import ClassVar, Dict, List
 
 import pytest
 
+from hisim.components.pylpg_workspace import LpgBaseIndexPool
 from scripts.regenerate_scenario_jsons import REPO_ROOT, regenerate_one
 
 
@@ -134,15 +135,11 @@ def test_the_child_is_told_to_import_hisim_from_this_checkout(tmp_path: Path, mo
     recorded = RecordedChild()
     monkeypatch.setattr("scripts.regenerate_scenario_jsons.subprocess.run", recorded)
     monkeypatch.setenv("PYTHONPATH", "/somewhere/the/caller/cares/about")
-    import queue
-
-    indices: "queue.Queue[int]" = queue.Queue()
-    indices.put(1)
 
     regenerate_one(
         setup_path=REPO_ROOT / "system_setups" / "simple_system_setup_one.py",
         python=sys.executable,
-        index_pool=indices,
+        index_pool=LpgBaseIndexPool(slots=1),
         log_dir=tmp_path,
         keep_simulation_json=True,
     )

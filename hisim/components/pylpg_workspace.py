@@ -14,6 +14,12 @@ is claimed before it is created and released once the attempt ends, whether it s
 claiming one that already exists fails immediately with a message naming the index, because the
 alternative is two runs silently interleaving in one folder. See ``roadmap/pylpg_flakiness.md`` F3
 and F4.
+
+A driver that runs several HiSim processes at once needs one more thing: a way to give each of its
+worker slots an index of its own and take it back when the slot is reused. That is
+:class:`LpgBaseIndexPool`, which lives here rather than in any one driver so that the two scripts
+which need it -- the scenario-JSON regenerator and the energy-system recorder -- cannot drift apart
+on how indices are handed out or on what the environment variable is called.
 """
 
 # clean
@@ -21,10 +27,11 @@ and F4.
 import contextlib
 import os
 import pathlib
+import queue
 import shutil
 import sys
 import time
-from typing import ClassVar, Iterator, List, Optional, Sequence, Tuple
+from typing import ClassVar, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 from pylpg import lpg_execution
 
@@ -471,3 +478,80 @@ class PylpgWorkspace:
                     log.information(f"Local LPG working directory '{directory.name}' deleted.")
             except OSError as error:
                 log.warning(f"Could not delete the local LPG working directory '{directory}': {error}")
+
+
+class LpgBaseIndexPool:
+    """Hands out distinct local-LoadProfileGenerator base indices to the slots of a parallel driver.
+
+    A driver that runs several HiSim processes at once has to give each of them a base index of its
+    own, or their calculation directories collide in the way this module's header describes. It
+    cannot simply number the processes, because there are usually far more setups to run than slots
+    to run them in, and a slot is reused as soon as the process occupying it finishes. What it needs
+    is a pool the size of the slot count, borrowed from for the length of one child and returned
+    afterwards, which is what this class is.
+
+    Small allocated indices are preferred over the process-derived default of
+    :meth:`PylpgWorkspace.default_base_index` for exactly one reason: they are readable. A log line
+    naming ``C1`` through ``C4`` can be followed by eye, and one naming the pids of four children
+    cannot. Correctness comes from the indices being distinct while they are lent out, not from
+    their being small.
+
+    The pool is safe to share between threads because it is a queue and nothing more; it is not safe
+    to share between processes, and a driver that forks rather than threads should build one pool per
+    process instead.
+    """
+
+    def __init__(self, slots: int) -> None:
+        """Fills the pool with one index per slot, counting from one.
+
+        Args:
+            slots: how many children the driver will run at once.
+
+        Raises:
+            ValueError: if asked for fewer than one slot, which would produce a pool that no
+                borrower can ever be served from and so a driver that hangs on its first child.
+        """
+        if slots < 1:
+            raise ValueError(f"A pool needs at least one slot to lend from; {slots} were asked for.")
+        self.slots = slots
+        self._available: "queue.Queue[int]" = queue.Queue()
+        for index in range(1, slots + 1):
+            self._available.put(index)
+
+    @contextlib.contextmanager
+    def borrowed(self) -> Iterator[int]:
+        """Lends one base index for the duration of the block, and takes it back afterwards.
+
+        The index is returned in a ``finally``, so a child that raised, timed out or was killed
+        still frees its slot. Without that, one failed setup would shrink the pool for the rest of
+        the run and a run with as many failures as slots would stop making progress altogether.
+
+        Yields:
+            int: a base index no other borrower holds while this block runs.
+        """
+        base_index = self._available.get()
+        try:
+            yield base_index
+        finally:
+            self._available.put(base_index)
+
+    @staticmethod
+    def announced_in(environment: Mapping[str, str], base_index: int) -> Dict[str, str]:
+        """Returns a copy of an environment that tells a child which base index to use.
+
+        Kept here rather than at each call site so that the drivers and
+        :meth:`PylpgWorkspace.default_base_index` cannot disagree about the variable's name, which
+        is a disagreement nothing would report: a child reading a name nobody sets falls back to its
+        process id and works, right up to the point where two children fall back to indices that
+        happen to collide.
+
+        Args:
+            environment: the environment to base the child's on; not modified.
+            base_index: the index to announce, normally from :meth:`borrowed`.
+
+        Returns:
+            Dict[str, str]: the child's environment.
+        """
+        announced = dict(environment)
+        announced[PylpgWorkspace.INDEX_ENVIRONMENT_VARIABLE] = str(base_index)
+        return announced

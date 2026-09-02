@@ -38,7 +38,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import queue
 import subprocess
 import sys
 import threading
@@ -50,6 +49,19 @@ from typing import Optional
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SYSTEM_SETUPS_DIR = REPO_ROOT / "system_setups"
 CONVERTER = REPO_ROOT / "hisim" / "hisim_convert_to_json.py"
+
+# Put this checkout on sys.path before importing from it. Run as a script path, this file's own
+# directory is what Python seeds sys.path with, and scripts/ holds no hisim package -- so without
+# this the import below is answered by the editable install, from whichever checkout was installed
+# rather than from the one being regenerated. That is the same defect as the child's PYTHONPATH in
+# regenerate_one(), one process further up. Imported as scripts.regenerate_scenario_jsons instead,
+# the root is already there and this is a no-op.
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+# The import has to follow that repair, so it cannot sit with the others at the top.
+# pylint: disable=wrong-import-position
+from hisim.components.pylpg_workspace import LpgBaseIndexPool  # noqa: E402
 
 
 @dataclass
@@ -101,7 +113,7 @@ def discover_setups(only: Optional[list[str]], only_existing: bool, exclude: Opt
 def regenerate_one(
     setup_path: Path,
     python: str,
-    index_pool: "queue.Queue[int]",
+    index_pool: LpgBaseIndexPool,
     log_dir: Path,
     keep_simulation_json: bool,
 ) -> SetupResult:
@@ -120,10 +132,8 @@ def regenerate_one(
     """
     stem = setup_path.stem
     log_path = log_dir / f"{stem}.log"
-    calc_index = index_pool.get()
-    try:
-        env = dict(os.environ)
-        env["HISIM_LOCAL_LPG_CALC_INDEX"] = str(calc_index)
+    with index_pool.borrowed() as calc_index:
+        env = LpgBaseIndexPool.announced_in(os.environ, calc_index)
         env["PYTHONPATH"] = os.pathsep.join(
             [str(REPO_ROOT), *([env["PYTHONPATH"]] if env.get("PYTHONPATH") else [])]
         )
@@ -137,8 +147,6 @@ def regenerate_one(
                 stderr=subprocess.STDOUT,
                 check=False,
             )
-    finally:
-        index_pool.put(calc_index)
 
     scenario_path = setup_path.with_suffix(".scenario.json")
     if not keep_simulation_json:
@@ -202,10 +210,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     print(f"\nUsing interpreter: {args.python}")
     print(f"Parallel jobs: {jobs}   Logs: {args.log_dir}\n")
 
-    # Pool of distinct local-LPG calc indices, one per concurrent worker slot.
-    index_pool: "queue.Queue[int]" = queue.Queue()
-    for i in range(1, jobs + 1):
-        index_pool.put(i)
+    # Pool of distinct local-LPG base indices, one per concurrent worker slot.
+    index_pool = LpgBaseIndexPool(jobs)
 
     results: list[SetupResult] = []
     print_lock = threading.Lock()

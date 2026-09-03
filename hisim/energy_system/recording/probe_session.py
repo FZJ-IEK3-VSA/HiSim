@@ -64,9 +64,8 @@ class ProbeRunner:
     COMMAND: ClassVar[Tuple[str, ...]] = ("-m", "hisim.cli", "energy-system", "record")
 
     #: Environment variable naming the local load-profile-generator working directory. It is
-    #: cleared from the child's environment rather than set: cleared, each probe derives its index
-    #: from its own process and so stays out of the way of anything else using local profiles,
-    #: while an inherited setting cannot make one machine's probes differ from another's.
+    #: removed from the child's environment: each probe then derives its index from its own process
+    #: id and cannot collide with other runs, and an exported value on the parent cannot leak in.
     LPG_INDEX_VARIABLE: ClassVar[str] = "HISIM_LOCAL_LPG_CALC_INDEX"
 
     #: Prefix of the throwaway directory the probes are recorded into.

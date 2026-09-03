@@ -578,23 +578,12 @@ def test_the_annotated_writer_agrees_with_the_canonical_writer_on_a_record(chain
 
 @pytest.mark.base
 def test_both_writers_spell_a_numpy_number_as_a_plain_one() -> None:
-    """Catches a setup becoming unrecordable because one of its numbers is in a numpy box.
+    """Both YAML writers render numpy scalars and arrays as plain values that load back as ``float``, ``int``, ``bool``, ``list``.
 
-    A field annotated ``float`` does not have to hold one. Anything a setup derives from a sized
-    building, a pandas table or a pvlib call arrives as a numpy scalar, and a YAML writer with no
-    representer for that type refuses the whole document -- so the setup cannot be written down at
-    all, which reads as the format being unable to express it when it is only the writer being
-    unable to spell the number. ``air_conditioned_house`` is the setup this really happened to: its
-    scaled air-conditioner config takes a scale factor from the building's thermal demand, and the
-    recorder died on the value below rather than on anything about the setup.
-
-    Both writers are covered, because the record writer runs on a second YAML library: teaching one
-    and not the other would trade a crash for the two of them disagreeing about the same document,
-    which is the drift the tests above exist to prevent. What each must produce is a *plain* number,
-    so that the file stays ordinary YAML rather than something only a numpy-aware reader can load.
-
-    Catches: a recording run that dies on a number it could have written, and one writer learning
-    to spell it while the other does not.
+    A config field may hold a numpy scalar (for example a scale factor computed from the sized building),
+    and a writer without a representer for it refuses the whole document; ``air_conditioned_house`` could
+    not be recorded for this reason. Both writers are checked because the record writer runs on a second
+    YAML library, and the two must produce the same bytes.
     """
     document = {
         "single": np.float32(0.5),

@@ -73,24 +73,17 @@ class CanonicalDumper(yaml.SafeDumper):
 
     @classmethod
     def configured(cls) -> Type["CanonicalDumper"]:
-        """Registers the numeric overrides on this class and returns it.
+        """Register representers for numpy scalars and arrays on this dumper class, and return the class.
 
-        A component configuration is not guaranteed to hold the plain Python numbers its field
-        annotations promise. Anything a setup derives from a sized building, a pandas table or a
-        pvlib call arrives as a numpy scalar instead, and the safe dumper refuses a type it has no
-        representer for -- so a setup that computes one number that way cannot be written down at
-        all, which reads as the format being unable to express the setup when it is only the writer
-        being unable to spell the number. Registering the numpy scalar kinds by their abstract base
-        classes covers every width of each, and an array is written as the list it would have been
-        had nobody put it in an array.
-
-        The values are converted rather than tagged, so the file stays ordinary YAML that any
-        reader can load: what comes back is a Python ``float``, ``int`` or ``bool``, which is what
-        the field annotation said in the first place. Registration happens here rather than at
-        import time so that importing this module has no side effect, and it is idempotent.
+        A config field annotated ``float`` may hold a ``numpy.float64`` -- anything computed from a sized
+        building, a pandas table or pvlib arrives that way -- and the safe dumper refuses a type it has no
+        representer for, which made such a setup unrecordable. The representers convert the value (``int``,
+        ``float``, ``bool``, ``list``) rather than tagging it, so the file stays plain YAML. Registration is
+        done here instead of at import time so importing this module has no side effect; calling it twice is
+        harmless.
 
         Returns:
-            This class, ready to be handed to a YAML dump.
+            The dumper class, ready to pass to ``yaml.dump``.
         """
         cls.add_multi_representer(np.integer, cls.represent_numpy_integer)
         cls.add_multi_representer(np.floating, cls.represent_numpy_float)

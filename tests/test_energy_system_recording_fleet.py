@@ -416,26 +416,25 @@ def test_a_generated_name_describes_horizon_resolution_and_purpose(
 
 
 class RecordedChildEnvironment:
-    """A stand-in for :func:`subprocess.run` that keeps the environment each child was handed.
+    """Replaces :func:`subprocess.run` and keeps the environment each child was given.
 
-    The recording driver's only channel to its children is the environment it builds for them, so
-    capturing it is the whole test; nothing has to be simulated, which is what keeps this test in
-    the fast set alongside the rest of the module.
+    The driver's only channel to its children is that environment, so capturing it is enough; nothing
+    is simulated.
     """
 
     def __init__(self) -> None:
-        """Start out having seen nothing."""
+        """Start with no recorded environments."""
         self.environments: List[dict] = []
 
     def __call__(self, *args, **kwargs) -> subprocess.CompletedProcess:
-        """Record the environment and report a successful, silent child.
+        """Record the environment and return a successful, silent process.
 
         Args:
-            *args: The argument vector the driver built; ignored.
-            **kwargs: The keyword arguments, of which ``env`` is what this test reads.
+            *args: the argument vector; ignored.
+            **kwargs: the keyword arguments; ``env`` is recorded.
 
         Returns:
-            A finished process with return code zero and no output.
+            A completed process with return code zero.
         """
         self.environments.append(dict(kwargs["env"]))
         return subprocess.CompletedProcess(args=args[0] if args else [], returncode=0, stdout="", stderr="")
@@ -443,15 +442,11 @@ class RecordedChildEnvironment:
 
 @pytest.mark.base
 def test_a_recording_child_picks_its_own_profile_directory(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """No child is pinned to a fixed local-profile directory, and none inherits one either.
+    """The recorder does not set ``HISIM_LOCAL_LPG_CALC_INDEX`` for its children, and clears an inherited value.
 
-    A recording run takes the better part of an hour, and pinning it to one calculation index would
-    put it in the same ``pylpg/C<index>`` directory as anything else on the machine using local
-    profiles for all of that time -- the collisions the index scheme was introduced to end. Cleared
-    instead, each child derives its index from its own process, and an operator with the variable
-    exported cannot make one machine record something another would not.
-
-    Catches: a driver that pins the index, and a driver that lets a stale exported setting through.
+    With the variable unset, each child derives its index from its own process id and cannot collide with
+    another run on the same machine. A fixed index would put an hour-long recording in the same
+    ``pylpg/C<index>`` directory as anything else using local profiles.
     """
     recorded = RecordedChildEnvironment()
     monkeypatch.setattr("scripts.record_all_setups.subprocess.run", recorded)

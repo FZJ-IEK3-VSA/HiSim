@@ -410,9 +410,13 @@ def build_cache_key_string(parameter_class: Any, my_simulation_parameters: Simul
     from the stored copy. Splitting it out of ``get_cache_file`` is what lets a writer record the
     inputs that actually produced its bytes rather than re-deriving what was asked for.
 
-    The component's building is removed from its identity first. The cached data depends on what the
-    component is and how it is parameterized, not on which building it happens to sit in, and leaving
-    the building in would file the same computation under a different name for every house.
+    What is hashed is the configuration's *cache key view* -- ``ConfigBase.cache_key_view`` -- not the
+    configuration itself. The base view clears the component's building, because the cached data
+    depends on what the component is and how it is parameterized, not on which house it sits in. A
+    config class whose fields include things that do not decide the result, or paths that would spell
+    differently on another machine, overrides the view to clear or normalise them; that is what makes
+    an entry computed on a workstation findable on a CI runner. A parameter class that is not a
+    ``ConfigBase`` -- tests pass minimal stand-ins -- is hashed as it is, building cleared if it has one.
 
     Args:
         parameter_class: the configuration dataclass, which must provide ``to_json``.
@@ -427,11 +431,15 @@ def build_cache_key_string(parameter_class: Any, my_simulation_parameters: Simul
     """
     if my_simulation_parameters is None:
         raise ValueError("Simulation parameters was none.")
-    parameter_class_copy = copy.deepcopy(parameter_class)
-    component_id = getattr(parameter_class_copy, "component_id", None)
-    if component_id is not None:
-        # The identity is frozen, hence the replacement rather than an assignment.
-        setattr(parameter_class_copy, "component_id", dataclasses.replace(component_id, building=None))
+    view_method = getattr(parameter_class, "cache_key_view", None)
+    if callable(view_method):
+        parameter_class_copy = view_method()
+    else:
+        parameter_class_copy = copy.deepcopy(parameter_class)
+        component_id = getattr(parameter_class_copy, "component_id", None)
+        if component_id is not None:
+            # The identity is frozen, hence the replacement rather than an assignment.
+            setattr(parameter_class_copy, "component_id", dataclasses.replace(component_id, building=None))
     json_str = parameter_class_copy.to_json() + my_simulation_parameters.get_unique_key()
     if len(json_str) < 5:
         raise ValueError("Empty json detected for caching. This is a bug.")

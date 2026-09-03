@@ -464,6 +464,29 @@ class WeatherConfig(ConfigBase):
         )
         return config
 
+    def cache_key_view(self) -> "WeatherConfig":
+        """The configuration as hashed into the weather cache key, with the data file spelled portably.
+
+        ``source_path`` decides which file is read, so it belongs in the key -- but it is an absolute
+        path, and the same catalogue file lives under ``/home/noah/.../hisim/inputs`` on one machine
+        and ``/home/runner/work/.../hisim/inputs`` on another. Hashed as it stands, every weather
+        entry is private to the checkout that wrote it, and the cache every other component depends
+        on can never be shared. Under the inputs directory the path is therefore spelled relative to
+        it, which is the same string everywhere the repository is checked out; a file from anywhere
+        else keeps its name only, since its directory says nothing about its contents either.
+
+        Returns:
+            WeatherConfig: a deep copy with ``source_path`` made portable.
+        """
+        view = super().cache_key_view()
+        inputs_directory = os.path.abspath(utils.get_input_directory())
+        source = os.path.abspath(str(self.source_path))
+        if os.path.commonpath([inputs_directory, source]) == inputs_directory:
+            view.source_path = os.path.relpath(source, inputs_directory).replace(os.sep, "/")
+        else:
+            view.source_path = os.path.basename(source)
+        return view
+
     @preset(note="the repository's reference climate")
     @classmethod
     def preset_standard(cls, name: str) -> "WeatherConfig":

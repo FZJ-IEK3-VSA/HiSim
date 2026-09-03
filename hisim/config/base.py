@@ -18,6 +18,7 @@ delegate to :mod:`hisim.config.sizing`) without closing an import cycle through
 
 from __future__ import annotations
 
+import copy
 import dataclasses as dc
 import enum
 import sys
@@ -318,6 +319,35 @@ class ConfigBase:
     def get_config_classname(cls):
         """Gets the class name. Helper function for default connections."""
         return cls.__module__ + "." + cls.__name__
+
+    def cache_key_view(self: ConfigBaseT) -> ConfigBaseT:
+        """Returns the copy of this configuration whose JSON is hashed into a cache key.
+
+        A cache entry belongs to a calculation, and a calculation is decided by some of a
+        configuration's fields and not by others. The base rule, applied to every config, is
+        that the building a component sits in is not one of them: the same PV system computes
+        the same series in every house, so ``component_id.building`` is cleared before hashing
+        or the same work would be filed under a different name per house.
+
+        Subclasses override this to remove what else does not decide the result -- where a
+        result file is written, which worker index a run was scheduled on -- and to make what
+        does decide it portable, such as a data-file path spelled relative to the inputs
+        directory rather than to one machine's checkout. Those are the two things that stop a
+        cache entry computed on one machine from being found on another, and they were what
+        kept the LoadProfileGenerator and weather caches from ever being shared between a
+        workstation and a CI runner (``roadmap/cache_service_spec.md`` §3.1, "only
+        result-relevant fields"). An override calls this method first and adjusts the copy it
+        gets back; the copy is deep, so nothing here can touch the live configuration.
+
+        Returns:
+            A deep copy of this configuration with the fields that are not key material cleared.
+        """
+        view = copy.deepcopy(self)
+        component_id = getattr(view, "component_id", None)
+        if component_id is not None:
+            # The identity is frozen, hence the replacement rather than an assignment.
+            setattr(view, "component_id", dc.replace(component_id, building=None))
+        return view
 
     def to_dict(self) -> Dict[str, Any]:
         """Dumps this configuration as a plain dict of its dataclass fields.

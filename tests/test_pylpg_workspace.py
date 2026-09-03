@@ -15,7 +15,7 @@ which is why they are ``base`` rather than ``utsp``.
 # clean
 
 import pathlib
-from typing import Any
+from typing import Any, ClassVar, List, Optional
 
 import pytest
 
@@ -288,3 +288,121 @@ def test_optional_files_are_not_required(tmp_path: Any) -> None:
     (results / "required.csv").write_text("x", encoding="utf-8")
 
     PylpgWorkspace.verify_results_were_produced(700, str(results), required_files=["required.csv"])
+
+
+class ScriptedGenerator:
+    """A stand-in for the executor and the result check together, playing back a scripted run.
+
+    Each entry of ``outcomes`` is what one attempt's verification does: ``None`` for success, or the
+    message of the ``LocalLpgCalculationFailedError`` it raises. The class counts how often the binary
+    was run and records every pause the retry asked for, which is all the retry tests need to see;
+    nothing here touches the filesystem or the generator.
+    """
+
+    def __init__(self, outcomes: List[Optional[str]]) -> None:
+        """Prepares the script.
+
+        Args:
+            outcomes: one entry per attempt, in order.
+        """
+        self.outcomes = list(outcomes)
+        self.runs = 0
+        self.sleeps: List[float] = []
+
+    def execute_lpg_binaries(self) -> None:
+        """Counts a run of the binary; the outcome is decided at verification, as in the real flow."""
+        self.runs += 1
+
+    def verify(self, calculation_index: int, result_folder: str, required_files: Any = None) -> None:
+        """Plays back the next scripted outcome.
+
+        Args:
+            calculation_index: ignored.
+            result_folder: ignored.
+            required_files: ignored.
+
+        Raises:
+            LocalLpgCalculationFailedError: when the next scripted outcome is a message.
+        """
+        del calculation_index, result_folder, required_files
+        outcome = self.outcomes.pop(0)
+        if outcome is not None:
+            raise LocalLpgCalculationFailedError(outcome)
+
+    def sleep(self, seconds: float) -> None:
+        """Records a pause instead of taking it."""
+        self.sleeps.append(seconds)
+
+    def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Points the workspace's check and pause at this script.
+
+        Args:
+            monkeypatch: the test's monkeypatch.
+        """
+        monkeypatch.setattr(PylpgWorkspace, "verify_results_were_produced", self.verify)
+        monkeypatch.setattr("hisim.components.pylpg_workspace.time.sleep", self.sleep)
+
+
+class LockedLog:
+    """The one line of a generator log that marks the failure worth retrying, as the generator writes it."""
+
+    TEXT: ClassVar[str] = (
+        "Unhandled exception. code = Busy (5), message = SQLiteException (0x87AF00AA): database is locked"
+    )
+
+
+@pytest.mark.base
+def test_a_calculation_that_died_on_a_locked_database_is_run_again_after_a_pause(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The transient failure is retried, with the first configured delay, and a success ends it.
+
+    Catches: the lock being treated as final -- which is how every golden-year job on a slow runner
+    was failing -- or a retry that does not wait, which would meet the same busy file again.
+    """
+    script = ScriptedGenerator([LockedLog.TEXT, None])
+    script.install(monkeypatch)
+
+    PylpgWorkspace.execute_and_verify(script, 7, "/results", required_files=["a.json"])  # type: ignore[arg-type]
+
+    assert script.runs == 2
+    assert script.sleeps == [PylpgWorkspace.RETRY_DELAYS_IN_SECONDS[0]]
+
+
+@pytest.mark.base
+def test_a_database_that_stays_locked_is_given_up_on_after_the_configured_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every delay is used once and then the failure is raised, saying how many attempts were made.
+
+    Catches: an unbounded retry on a calculation that is genuinely stuck, which would hang a job
+    instead of failing it.
+    """
+    attempts = len(PylpgWorkspace.RETRY_DELAYS_IN_SECONDS) + 1
+    script = ScriptedGenerator([LockedLog.TEXT] * attempts)
+    script.install(monkeypatch)
+
+    with pytest.raises(LocalLpgCalculationFailedError) as raised:
+        PylpgWorkspace.execute_and_verify(script, 7, "/results", required_files=["a.json"])  # type: ignore[arg-type]
+
+    assert script.runs == attempts
+    assert script.sleeps == list(PylpgWorkspace.RETRY_DELAYS_IN_SECONDS)
+    assert f"attempted {attempts} times" in str(raised.value)
+    assert "database is locked" in str(raised.value), "the generator's own message must survive"
+
+
+@pytest.mark.base
+def test_any_other_failure_is_raised_at_once_without_a_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A missing result file, a bad request: waiting would not help, so nothing is retried.
+
+    Catches: the retry widening into a blanket "try everything three times", which would hide every
+    real failure behind twenty seconds of delay and two more copies of the same message.
+    """
+    script = ScriptedGenerator(["the results directory is missing 2 of the 9 files the run needs"])
+    script.install(monkeypatch)
+
+    with pytest.raises(LocalLpgCalculationFailedError, match="missing 2 of the 9"):
+        PylpgWorkspace.execute_and_verify(script, 7, "/results", required_files=["a.json"])  # type: ignore[arg-type]
+
+    assert script.runs == 1
+    assert not script.sleeps

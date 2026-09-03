@@ -23,7 +23,8 @@ import os
 import pathlib
 import shutil
 import sys
-from typing import ClassVar, Iterator, List, Optional, Sequence
+import time
+from typing import ClassVar, Iterator, List, Optional, Sequence, Tuple
 
 from pylpg import lpg_execution
 
@@ -205,6 +206,70 @@ class PylpgWorkspace:
         log.information("Installing the LoadProfileGenerator binaries under an exclusive lock.")
         package_directory = pathlib.Path(lpg_execution.__file__).parent.absolute()
         lpg_execution.LPGExecutor.retrieve_lpg_binaries(package_directory)
+
+    #: The fragments of a generator log that mark a failure worth trying again. Only sqlite's busy
+    #: error qualifies: it is the one failure that is about timing rather than about the request.
+    RETRY_SIGNATURES: ClassVar[Tuple[str, ...]] = ("database is locked",)
+
+    #: How long to wait before each retry, in seconds; the length of the tuple is the number of
+    #: retries. Two of them, backing off, bound the extra cost of a genuinely stuck calculation to
+    #: under half a minute while giving a merely slow disk time to catch up.
+    RETRY_DELAYS_IN_SECONDS: ClassVar[Tuple[float, ...]] = (5.0, 15.0)
+
+    @classmethod
+    def execute_and_verify(
+        cls,
+        executor: "lpg_execution.LPGExecutor",
+        calculation_index: int,
+        result_folder: str,
+        required_files: Sequence[str],
+    ) -> None:
+        """Runs the generator and checks its results, trying again when it died on a locked database.
+
+        The generator writes its results into sqlite files in WAL mode from several of its own
+        threads, and on a slow disk -- a two-core CI runner, typically -- one of them can find the
+        file busy and the whole run dies with ``SQLiteException: database is locked``. Nothing about
+        the request is wrong when that happens; the same calculation a moment later succeeds. So that
+        one failure, recognised by its text in the generator's log, is retried after a pause, while
+        every other failure is raised at once: a missing household or a bad calcspec will not get
+        better by waiting, and re-running it would only hide the real message under a delay.
+
+        Each attempt reruns the binary in the same calculation directory; the generator deletes and
+        recreates its results folder itself, so a partial result from the failed attempt cannot
+        survive into the verification of the next one.
+
+        Args:
+            executor: the executor whose ``execute_lpg_binaries`` runs the calculation.
+            calculation_index: the calculation's index, named in the failure.
+            result_folder: where the generator writes its results.
+            required_files: the result files the caller cannot do without.
+
+        Raises:
+            LocalLpgCalculationFailedError: when the calculation failed for a reason that is not a
+                locked database, or kept failing on a locked database after every retry; in the
+                second case the message says how many attempts were made.
+        """
+        attempts = len(cls.RETRY_DELAYS_IN_SECONDS) + 1
+        for attempt in range(1, attempts + 1):
+            executor.execute_lpg_binaries()
+            try:
+                cls.verify_results_were_produced(calculation_index, result_folder, required_files=required_files)
+                return
+            except LocalLpgCalculationFailedError as error:
+                locked = any(signature in str(error) for signature in cls.RETRY_SIGNATURES)
+                if not locked or attempt == attempts:
+                    if locked:
+                        raise LocalLpgCalculationFailedError(
+                            f"{error}\nThe calculation was attempted {attempts} times and died on a locked "
+                            f"database every time, so this is not the transient contention a retry is for."
+                        ) from error
+                    raise
+                delay = cls.RETRY_DELAYS_IN_SECONDS[attempt - 1]
+                log.warning(
+                    f"Local LoadProfileGenerator calculation {calculation_index} died on a locked database "
+                    f"(attempt {attempt} of {attempts}); trying again in {delay:g} s."
+                )
+                time.sleep(delay)
 
     LOG_FILE_NAME: ClassVar[str] = "Log.CommandlineCalculation.txt"
     LOG_LINES_TO_QUOTE: ClassVar[int] = 30

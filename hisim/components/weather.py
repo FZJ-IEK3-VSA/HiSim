@@ -465,36 +465,33 @@ class WeatherConfig(ConfigBase):
         return config
 
     def identity(self) -> str:
-        """The readable string that says which weather this is, for every component computed against it.
+        """Return a short string that says which weather this configuration reads: station, data set, file stem.
 
-        A PV system's power series or a building's solar gains depend on the weather they were run
-        with, so their cache keys must too -- but their configs know nothing about the weather, and
-        looking the weather component up at run time is what the deprecated singleton did. Instead
-        the weather contributes this string as a sizing fact (see :attr:`SIZING_CONTRIBUTIONS`), the
-        downstream configs declare a field sized from it, and the key -- a hash over the whole config
-        -- becomes complete before the simulator exists.
+        Example: ``"Aachen/DWD_TRY/aachen_center"``. Components whose cached results depend on the weather
+        (PV, building) store this string in their own configuration, sized from the weather through the
+        sizing engine, so that their cache keys include which weather they were computed with. See
+        ``roadmap/pylpg_flakiness.md`` F7.
 
-        The string is readable rather than a hash because it is written into every recorded energy
-        system beside the component that depends on it, where a reader should be able to see at a
-        glance which weather that was. It names the station, the data set and the file stem: the
-        three things that decide what the weather component reads. The absolute directory is left
-        out on purpose, since it differs between machines and says nothing about the data.
+        It is a readable string rather than a hash because it is written into every recorded energy-system
+        file. The directory of ``source_path`` is left out because it differs between machines.
 
         Returns:
-            str: e.g. ``"Aachen/DWD_TRY_2015/TRY2015_507931060546_Jahr"``.
+            str: ``<location>/<data source>/<file stem>``.
         """
         return f"{self.location}/{self.data_source.value}/{os.path.basename(str(self.source_path))}"
 
     @staticmethod
     def identity_facts(config: "WeatherConfig", ctx: Any) -> Dict[str, Any]:
-        """Contributes this weather's identity to the sizing engine.
+        """Provide :meth:`identity` as the sizing fact ``weather_identity``.
+
+        Registered in ``SIZING_CONTRIBUTIONS`` below; the sizing engine calls it with the resolved config.
 
         Args:
-            config: the weather configuration, fully resolved (it has no sized fields of its own).
-            ctx: the sizing context; unused, the identity depends on this config alone.
+            config: this weather configuration.
+            ctx: the sizing context; unused.
 
         Returns:
-            Dict[str, Any]: exactly the one fact :attr:`SIZING_CONTRIBUTIONS` declares.
+            Dict[str, Any]: ``{"weather_identity": config.identity()}``.
         """
         del ctx
         return {"weather_identity": config.identity()}

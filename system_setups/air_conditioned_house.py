@@ -95,9 +95,8 @@ def setup_function(
     heating_reference_temperature = heating_reference_temperatures.set_index("Location").loc[
         "ES", "HeatingReferenceTemperature"
     ]
-    # The weather configuration is created before the building, because the building records which weather
-    # it is computed against (its weather_identity) and that has to be set before it is built. The weather
-    # component itself is added below, where it always was.
+    # The weather config is created first: the building config copies its identity (weather_identity)
+    # and must have it before the building is built. The weather component is still added below.
     my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.SEVILLE)
 
     my_building_config = building.BuildingConfig(

@@ -88,22 +88,19 @@ class UtspLpgConnectorConfig(ConfigBase):
     cars: Optional[List[str]] = None
 
     def identity(self) -> str:
-        """The readable string that says which occupancy this is, for every component computed from its profiles.
+        """Return a string that says which occupancy this is: everything that decides the LoadProfileGenerator run.
 
-        A car's driving profile is one output of this connector's LoadProfileGenerator run, and that
-        run is decided by everything here -- the household templates, the energy intensity, the travel
-        routes, the transportation and charging device sets, the seed -- not by the household name
-        alone, which is all the car's configuration used to carry. So the car declares a field sized
-        from this string, this config contributes it (see :attr:`SIZING_CONTRIBUTIONS`), and the car's
-        cache key becomes complete without it ever reaching for the connector at run time.
+        The car component stores this string in its configuration, sized from the occupancy through the
+        sizing engine, so that its cache key includes which occupancy produced its driving profile. The
+        household name alone is not enough: the energy intensity, the travel-route and device sets, the
+        appliance flag and the seed all change the profile. See ``roadmap/pylpg_flakiness.md`` F7.
 
-        It is readable rather than hashed because it is written into every recorded energy system
-        beside the car, where a reader should see which occupancy that was. Reference objects are
-        named by their ``Name``; their GUIDs add nothing a person can read and the names are unique
-        within the generator's catalogue.
+        Catalogue references are named by their ``Name``, which is unique within the generator's catalogue
+        and readable; the string is written into every recorded energy-system file.
 
         Returns:
-            str: the mode, then the household names, then the sets and the seed, slash-separated.
+            str: the acquisition mode, household names, energy intensity, the three sets, the appliance flag,
+            the predefined profile name and the seed, separated by ``/``.
         """
         households = self.household if isinstance(self.household, list) else [self.household]
         parts = [
@@ -121,26 +118,28 @@ class UtspLpgConnectorConfig(ConfigBase):
 
     @staticmethod
     def _reference_name(reference: Any) -> str:
-        """Names one optional catalogue reference for :meth:`identity`.
+        """Return the ``Name`` of a catalogue reference, or ``-`` if the reference is ``None``.
 
         Args:
             reference: a ``JsonReference`` or ``None``.
 
         Returns:
-            str: its ``Name``, or ``-`` when absent.
+            str: the name.
         """
         return "-" if reference is None else str(getattr(reference, "Name", reference))
 
     @staticmethod
     def identity_facts(config: "UtspLpgConnectorConfig", ctx: Any) -> Dict[str, Any]:
-        """Contributes this occupancy's identity to the sizing engine.
+        """Provide :meth:`identity` as the sizing fact ``occupancy_identity``.
+
+        Registered in ``SIZING_CONTRIBUTIONS`` below; the sizing engine calls it with the resolved config.
 
         Args:
-            config: the connector configuration, fully resolved.
-            ctx: the sizing context; unused, the identity depends on this config alone.
+            config: this connector configuration.
+            ctx: the sizing context; unused.
 
         Returns:
-            Dict[str, Any]: exactly the one fact :attr:`SIZING_CONTRIBUTIONS` declares.
+            Dict[str, Any]: ``{"occupancy_identity": config.identity()}``.
         """
         del ctx
         return {"occupancy_identity": config.identity()}

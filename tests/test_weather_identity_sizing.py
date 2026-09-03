@@ -1,18 +1,11 @@
-"""Tests for the identity facts: how a cached result's key comes to describe the upstream it depends on.
+"""Tests for the identity facts (``roadmap/pylpg_flakiness.md`` F7).
 
-``roadmap/pylpg_flakiness.md`` F7 is the finding that a PV system's, a building's and a car's cache
-keys described their *owner* and not their *inputs*: the PV key hashed the PV config, which knows
-nothing about the weather it was run with, so two runs against two weathers shared one entry. The fix
-is not to widen the key by hand but to make the configuration complete -- the upstream config
-contributes its readable identity as a sizing fact, the downstream config declares a field sized from
-it, and the key, which hashes the whole config, is complete by construction.
-
-These tests pin the four things that make that work: the identity strings are readable and say what
-decides the data; the sizing engine binds them with nothing declared in the file; every key moves when
-its upstream changes; and a downstream component cannot be built without the fact, because the whole
-point is that no run can ever produce an entry under an incomplete key again.
-
-Each test states the failure mode it catches.
+PV, building and car results are computed from an upstream component -- the weather or the occupancy --
+but their cache keys used to hash only their own configuration, so two runs with different weathers
+could share one entry. Now the upstream config contributes a readable identity string as a sizing fact,
+the downstream config declares a field sized from it, and the key (a hash of the whole config) includes
+it. These tests pin the identity strings, the key sensitivity, the engine binding on the file path, and
+the refusal to build a component whose identity was never set.
 """
 
 # clean
@@ -44,16 +37,16 @@ __status__ = "development"
 
 
 class Keys:
-    """Computes cache keys the way the components do, so the tests assert on the real material."""
+    """Computes cache key material the way the components do."""
 
     PARAMETERS = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900)
 
     @classmethod
     def of(cls, config: Any) -> str:
-        """The legacy key material of a config: its JSON plus the simulation key, as every writer hashes it.
+        """Return the key material of a config under the shared simulation parameters.
 
         Args:
-            config: A configuration with every sized field resolved.
+            config: a configuration with all sized fields resolved.
 
         Returns:
             str: the key material.
@@ -62,11 +55,11 @@ class Keys:
 
     @staticmethod
     def sized_from(config: Any, **facts: Any) -> Any:
-        """Resolves a config against just the given facts.
+        """Resolve a config against the given facts only.
 
         Args:
-            config: The configuration to resolve.
-            **facts: The facts the surrounding system would provide.
+            config: the configuration.
+            **facts: the sizing facts to provide.
 
         Returns:
             The resolved copy.
@@ -76,14 +69,10 @@ class Keys:
 
 @pytest.mark.base
 def test_the_weather_identity_names_the_station_the_data_set_and_the_file_and_not_the_machine() -> None:
-    """The identity is readable and decided by the data, not by where the repository is checked out.
+    """The weather identity contains station, data set and file stem, and no directory.
 
-    Two weather configs that read the same station from two different directories are the same
-    weather, and they must produce the same downstream keys or a cache could never be shared between
-    two machines.
-
-    Catches: an absolute path leaking into the identity, or the identity dropping one of the three
-    things that decide what the weather component reads.
+    Two configs reading the same station from different checkouts must give the same identity, otherwise
+    a cache could never be shared between machines.
     """
     aachen = WeatherConfig.get_default(location_entry=LocationEnum.AACHEN)
     elsewhere = dataclasses.replace(aachen, source_path=str(pathlib.Path("/another/checkout") / pathlib.Path(aachen.source_path).name))
@@ -99,11 +88,7 @@ def test_the_weather_identity_names_the_station_the_data_set_and_the_file_and_no
 
 @pytest.mark.base
 def test_the_occupancy_identity_says_more_than_the_household_name() -> None:
-    """The car's key used to carry the household name alone; the identity carries what decides the profile.
-
-    Catches: two occupancies with the same household but different travel routes producing the same
-    identity, which is the collision the car's key used to have.
-    """
+    """The occupancy identity changes with the seed, not only with the household name."""
     baseline = UtspLpgConnectorConfig.get_default_utsp_connector_config()
     with_other_routes = dataclasses.replace(baseline, guid="another-seed")
 
@@ -115,12 +100,9 @@ def test_the_occupancy_identity_says_more_than_the_household_name() -> None:
 
 @pytest.mark.base
 def test_a_pv_key_moves_when_the_weather_does_and_a_building_key_too() -> None:
-    """L1 of the cache-testing spec: perturb the upstream, the downstream key changes.
+    """Changing the weather changes the PV key and the building key.
 
-    This is the whole of F7 for these two components. Before, the PV key was identical for Aachen and
-    Seville; now the weather's identity is part of the PV configuration and therefore of the key.
-
-    Catches: the sized field falling out of the key -- a ``to_json`` that skips it, say.
+    Before F7 the PV key was identical for Aachen and Seville.
     """
     aachen = WeatherConfig.get_default(location_entry=LocationEnum.AACHEN).identity()
     seville = WeatherConfig.get_default(location_entry=LocationEnum.SEVILLE).identity()
@@ -136,10 +118,7 @@ def test_a_pv_key_moves_when_the_weather_does_and_a_building_key_too() -> None:
 
 @pytest.mark.base
 def test_a_car_key_moves_when_the_occupancy_does() -> None:
-    """The same for the car and its occupancy: the household name is no longer all the key knows.
-
-    Catches: two cars of the same household name under different occupancies sharing a cache entry.
-    """
+    """Changing the occupancy changes the car key."""
     baseline = UtspLpgConnectorConfig.get_default_utsp_connector_config()
     other = dataclasses.replace(baseline, guid="another-seed")
     car = CarConfig.for_household(name="Car", household_name="CHR01", car_name="Small_Car")
@@ -151,13 +130,9 @@ def test_a_car_key_moves_when_the_occupancy_does() -> None:
 
 @pytest.mark.base
 def test_the_engine_binds_the_weather_identity_with_nothing_declared_in_the_file() -> None:
-    """On the file path the fact needs no ``sizing_sources`` line: one weather, one provider, it binds.
+    """On the file path the fact binds without a ``sizing_sources`` line: one weather, one provider.
 
-    Uses the repository's own hand-written example, so this is the real loader, the real engine and a
-    real file rather than a fixture shaped to pass.
-
-    Catches: the contribution not being registered, or the field not being sized on the declarative
-    path -- either of which would leave every recorded energy system with an incomplete key.
+    Uses the repository's own example file, so this exercises the real loader and engine.
     """
     repository_root = pathlib.Path(__file__).resolve().parents[1]
     model = load_energy_system(repository_root / "energy_systems" / "gas_boiler_household.energy_system.yaml")
@@ -176,10 +151,9 @@ def test_the_engine_binds_the_weather_identity_with_nothing_declared_in_the_file
 
 @pytest.mark.base
 def test_a_building_cannot_be_built_without_knowing_its_weather() -> None:
-    """The construction-time check is what makes the fix hold: no run can produce an entry under an incomplete key.
+    """A building whose ``weather_identity`` is still ``AUTO`` is refused at construction.
 
-    Catches: the sized field being given a concrete default that lets an unsized building through,
-    which would quietly restore the old incomplete key for every setup that forgot the assignment.
+    This is what makes the fix hold: no run can write a cache entry under an incomplete key.
     """
     from hisim.components.building.building import Building  # pylint: disable=import-outside-toplevel
 

@@ -51,8 +51,8 @@ def test_building_scalability() -> None:
     # for building_code in d_f["Code_BuildingVariant"]:
     #     if isinstance(building_code, str):
     # Set Residence
-    # The weather configuration comes first, because the building records which weather it is computed
-    # against (its weather_identity); the weather component itself is added further down, as before.
+    # The weather config comes first because the building config copies its identity (weather_identity);
+    # the weather component itself is added further down, as before.
     my_weather_config = weather.WeatherConfig.get_default(
         location_entry=weather.LocationEnum.AACHEN
     )

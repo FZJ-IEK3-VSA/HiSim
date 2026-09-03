@@ -55,13 +55,10 @@ class SizingContext:
     set_heating_temperature_in_celsius: Optional[float] = None
     set_cooling_temperature_in_celsius: Optional[float] = None
 
-    # The two identity facts. They are not sizes, and that is deliberate: the engine is the typed
-    # successor of the singleton repository for *every* fact one component needs from another, and
-    # "which weather am I computed against" is such a fact. A component whose cached result depends
-    # on an upstream artifact declares that artifact's identity as a sized field, the upstream
-    # config contributes it, and the cache key -- which hashes the whole config -- becomes complete
-    # without the component ever reaching for the upstream component at run time. See
-    # ``roadmap/pylpg_flakiness.md`` F7.
+    # Identity facts. A component whose cached result depends on another component (PV on the
+    # weather, the car on the occupancy) declares that component's identity as a sized field; the
+    # other component contributes it here. The cache key hashes the whole config, so it then
+    # includes which upstream the result was computed with. See ``roadmap/pylpg_flakiness.md`` F7.
     weather_identity: Optional[str] = None
     occupancy_identity: Optional[str] = None
 

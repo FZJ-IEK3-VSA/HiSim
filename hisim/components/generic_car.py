@@ -85,11 +85,9 @@ class CarConfig(ConfigBase):
     maintenance_costs_in_euro_per_year: float
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: float
-    #: Which occupancy produced the driving profile this car's cached location and distance series
-    #: come from, as the occupancy config's own readable identity (see
-    #: ``UtspLpgConnectorConfig.identity``). The household name alone does not determine the
-    #: profile -- the travel routes, the device set, the energy intensity and the seed all do -- and
-    #: only this field puts them into the cache key. ``roadmap/pylpg_flakiness.md`` F7.
+    #: The occupancy whose driving profile this car uses, as ``UtspLpgConnectorConfig.identity()``
+    #: spells it. Sized from the occupancy by the sizing engine, so the cache key includes it; the
+    #: household name alone does not determine the profile. See ``roadmap/pylpg_flakiness.md`` F7.
     occupancy_identity: Sizable[str] = sized_field(rule=Size.OCCUPANCY_IDENTITY, value_type=str)
 
     @classmethod

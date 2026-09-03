@@ -140,12 +140,10 @@ def _sizable_decoder(value_type: Optional[type]) -> Callable[[Any], Any]:
     """
 
     def decode(raw: Any) -> Any:
-        # The sentinel itself can arrive here, not only its wire spelling: dataclasses_json runs the
-        # field decoder over a *missing* key's default as well as over a present value. Coercing the
-        # sentinel through ``value_type`` is wrong for every type and silent for one -- ``str(AUTO)`` is
-        # the wire spelling, so a string-typed sized field left out of a config block quietly turned
-        # from "size me" into the literal text "AUTO", and the engine, seeing a concrete value, left
-        # it alone. The sentinel passes through untouched, whatever the field's type.
+        # dataclasses_json also runs this decoder on the *default* of a missing key, so ``raw`` can be
+        # the AUTO sentinel itself. It must pass through unchanged: coercing it with ``value_type``
+        # would turn it into the string "AUTO" for str-typed fields (silently -- ``str(AUTO)`` is the
+        # wire spelling), and the engine would then treat the field as already set.
         if raw is AUTO or (isinstance(raw, str) and raw == _AutoSize.WIRE_SPELLING):
             return AUTO
         if value_type is not None and raw is not None and not isinstance(raw, value_type):

@@ -132,10 +132,9 @@ class PVSystemConfig(ConfigBase):
     predictive: bool
     predictive_control: bool
     prediction_horizon: Optional[int]
-    #: Which weather this system's cached power series was computed against, as the weather's own
-    #: readable identity (see ``WeatherConfig.identity``). Sized from the weather rather than copied,
-    #: so the cache key -- which hashes this whole config -- cannot describe a different weather than
-    #: the one the run uses. ``roadmap/pylpg_flakiness.md`` F7.
+    #: The weather this system is computed with, as ``WeatherConfig.identity()`` spells it. Sized from
+    #: the weather by the sizing engine, so the cache key (a hash of this config) includes it.
+    #: See ``roadmap/pylpg_flakiness.md`` F7.
     weather_identity: Sizable[str] = sized_field(rule=Size.WEATHER_IDENTITY, value_type=str)
 
     @classmethod

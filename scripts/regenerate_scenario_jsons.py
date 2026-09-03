@@ -105,21 +105,16 @@ def regenerate_one(
     log_dir: Path,
     keep_simulation_json: bool,
 ) -> SetupResult:
-    """Regenerate a single setup's scenario JSON in a subprocess.
+    """Regenerate one setup's scenario JSON in a subprocess.
 
-    Borrows a unique local-LPG calc index from ``index_pool`` for the duration
-    of the run so concurrent workers never share a ``pylpg/C<index>`` dir.
+    Borrows a unique local-LPG calculation index from ``index_pool`` for the duration of the run, so
+    concurrent workers never share a ``pylpg/C<index>`` directory.
 
-    The child is handed an explicit ``PYTHONPATH`` naming this checkout, because
-    the converter is started as a script path rather than with ``-m``. For a
-    script invocation Python puts the *script's own directory* on ``sys.path``,
-    which is ``scripts/`` and holds no ``hisim`` package, so ``cwd`` never gets a
-    say; the editable install's finder then answers the import from whichever
-    checkout was installed. In a second checkout -- a git worktree, a release
-    clone -- that silently regenerates every setup with the *other* tree's HiSim
-    and reports no drift, which is a false all-clear rather than a failure. The
-    variable is prepended to any inherited value so a caller's own entries still
-    apply.
+    The child gets ``PYTHONPATH`` set to this checkout. The converter is started as a script path, and for
+    a script Python puts the *script's* directory on ``sys.path``, not the working directory; without the
+    variable, ``import hisim`` in the child resolves to the installed package, which in a git worktree is a
+    different checkout, and the regeneration silently reports no drift against the wrong code. The
+    variable is prepended, so a caller's own ``PYTHONPATH`` entries still apply.
     """
     stem = setup_path.stem
     log_path = log_dir / f"{stem}.log"

@@ -1,17 +1,9 @@
-"""Tests for the environment the scenario-JSON regeneration hands its children.
+"""Tests for the environment the scenario-JSON regeneration passes to its subprocesses.
 
-The regeneration driver rebuilds every ``system_setups/*.py`` in a subprocess and then reports
-whether the committed ``.scenario.json`` files still match. That report is only worth having if
-each child ran *this* checkout's HiSim, and nothing about the way the child is started makes that
-true by itself: the converter is invoked as a script path, so Python seeds ``sys.path`` with the
-script's own directory (``scripts/``) rather than with the working directory, and the editable
-install's finder is then free to answer ``import hisim`` from whichever checkout happens to be
-installed. In a second checkout the driver would regenerate everything against the wrong tree and
-announce no drift -- a false all-clear, which is worse than a failure because nobody investigates
-it.
-
-The first test pins the mechanism, so that the reasoning above stays checkable rather than being a
-comment nobody can verify. The second pins the fix. Each test states the failure mode it catches.
+The converter runs as a script, and for a script Python puts the script's directory on ``sys.path``,
+not the working directory. So ``import hisim`` in the child resolves to the installed package unless
+``PYTHONPATH`` names this checkout; in a git worktree that is a different checkout, and the regeneration
+then reports no drift against the wrong code. The first test pins the mechanism, the second the fix.
 """
 
 # clean
@@ -30,13 +22,10 @@ from scripts.regenerate_scenario_jsons import REPO_ROOT, regenerate_one
 
 
 class PathProbe:
-    """A throwaway two-directory tree used to observe how Python seeds ``sys.path``.
+    """A throwaway package plus a throwaway script, used to observe what Python puts on ``sys.path``.
 
-    The tree mimics the shape the driver runs in: a root holding an importable package and a
-    ``scripts/`` subdirectory holding the program that imports it. The package name is deliberate
-    nonsense so that the probe can never accidentally succeed by finding something real, which
-    makes a successful import proof that the root was on the path and an ``ImportError`` proof that
-    it was not.
+    The package name is nonsense so the probe cannot succeed by finding something real: a successful
+    import proves the package's directory was on the path, an ``ImportError`` proves it was not.
     """
 
     #: The package the probe tries to import. Nothing by this name exists on any real path.
@@ -68,15 +57,15 @@ class PathProbe:
 
     @classmethod
     def run(cls, probe: Path, root: Path, on_the_path: bool) -> subprocess.CompletedProcess:
-        """Run the probe the way the driver runs the converter, with or without the fix.
+        """Run the probe the way the driver runs the converter, with or without ``PYTHONPATH``.
 
         Args:
-            probe: The probe script, as returned by :meth:`build`.
-            root: The directory that is both the working directory and the package's home.
-            on_the_path: Whether to name ``root`` in ``PYTHONPATH``.
+            probe: the probe script from :meth:`build`.
+            root: the working directory, which is also the package's parent.
+            on_the_path: whether to set ``PYTHONPATH`` to ``root``.
 
         Returns:
-            The finished process, whose return code says whether the import succeeded.
+            subprocess.CompletedProcess: the finished process; its return code says whether the import worked.
         """
         environment = dict(os.environ)
         environment.pop("PYTHONPATH", None)
@@ -94,14 +83,10 @@ class PathProbe:
 
 @pytest.mark.base
 def test_a_script_started_by_path_cannot_import_from_its_working_directory(tmp_path: Path) -> None:
-    """The premise: ``cwd`` is not what a script invocation puts on ``sys.path``.
+    """A script run by path cannot import a package from its working directory unless ``PYTHONPATH`` names it.
 
-    This is the whole reason the driver has to name ``PYTHONPATH`` explicitly. If a future Python
-    ever did seed ``sys.path`` with the working directory for a script path, this test fails, the
-    argument above stops applying, and the extra variable can go.
-
-    Catches: somebody deleting the ``PYTHONPATH`` line on the grounds that ``cwd=REPO_ROOT``
-    already covers it.
+    This is the reason the driver sets the variable. If a future Python put the working directory on
+    ``sys.path`` for scripts, this test would fail and the variable could go.
     """
     probe = PathProbe.build(tmp_path)
 
@@ -144,14 +129,7 @@ class RecordedChild:
 
 @pytest.mark.base
 def test_the_child_is_told_to_import_hisim_from_this_checkout(tmp_path: Path, monkeypatch) -> None:
-    """Every child's ``PYTHONPATH`` must begin with the checkout the driver was started from.
-
-    Prepending rather than replacing matters too: a caller who set ``PYTHONPATH`` for reasons of
-    their own keeps it, they just stop outranking this checkout.
-
-    Catches: a regeneration run in a git worktree quietly rebuilding every setup against the
-    installed checkout instead, and reporting that nothing drifted.
-    """
+    """Every child's ``PYTHONPATH`` starts with this checkout and keeps the caller's own entries after it."""
     recorded = RecordedChild()
     monkeypatch.setattr("scripts.regenerate_scenario_jsons.subprocess.run", recorded)
     monkeypatch.setenv("PYTHONPATH", "/somewhere/the/caller/cares/about")

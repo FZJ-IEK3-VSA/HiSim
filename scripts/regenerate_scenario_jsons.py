@@ -50,16 +50,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SYSTEM_SETUPS_DIR = REPO_ROOT / "system_setups"
 CONVERTER = REPO_ROOT / "hisim" / "hisim_convert_to_json.py"
 
-# Put this checkout on sys.path before importing from it. Run as a script path, this file's own
-# directory is what Python seeds sys.path with, and scripts/ holds no hisim package -- so without
-# this the import below is answered by the editable install, from whichever checkout was installed
-# rather than from the one being regenerated. That is the same defect as the child's PYTHONPATH in
-# regenerate_one(), one process further up. Imported as scripts.regenerate_scenario_jsons instead,
-# the root is already there and this is a no-op.
+# When this file runs as a script, Python puts scripts/ on sys.path, not the repository root, so
+# "import hisim" would resolve to the installed package instead of this checkout. Add the root
+# first. When the module is imported as scripts.regenerate_scenario_jsons the root is already on
+# the path and this does nothing.
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-# The import has to follow that repair, so it cannot sit with the others at the top.
+# This import must come after the sys.path change above.
 # pylint: disable=wrong-import-position
 from hisim.components.pylpg_workspace import LpgBaseIndexPool  # noqa: E402
 
@@ -133,7 +131,7 @@ def regenerate_one(
     stem = setup_path.stem
     log_path = log_dir / f"{stem}.log"
     with index_pool.borrowed() as calc_index:
-        env = LpgBaseIndexPool.announced_in(os.environ, calc_index)
+        env = LpgBaseIndexPool.child_environment(calc_index)
         env["PYTHONPATH"] = os.pathsep.join(
             [str(REPO_ROOT), *([env["PYTHONPATH"]] if env.get("PYTHONPATH") else [])]
         )

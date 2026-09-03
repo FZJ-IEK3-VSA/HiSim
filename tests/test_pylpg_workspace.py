@@ -473,11 +473,9 @@ def test_the_real_check_recognises_the_locked_database_in_the_log_and_the_retry_
 
 @pytest.mark.base
 def test_two_slots_borrowing_at_once_get_different_base_indices() -> None:
-    """The pool's whole purpose: no two live borrowers hold the same index.
+    """Two concurrent borrowers never hold the same index.
 
-    Catches: a pool that lends the same index twice, which puts two concurrent HiSim processes back
-    into one ``pylpg/C<index>`` directory and restores the corruption the index scheme exists to
-    prevent.
+    If they did, two HiSim processes would compute in the same ``pylpg/C<index>`` directory.
     """
     pool = LpgBaseIndexPool(slots=2)
 
@@ -488,12 +486,9 @@ def test_two_slots_borrowing_at_once_get_different_base_indices() -> None:
 
 @pytest.mark.base
 def test_an_index_is_lent_again_once_its_slot_is_free() -> None:
-    """A slot is reused as soon as the child occupying it finishes.
+    """A returned index can be borrowed again.
 
-    A driver runs far more setups than it has slots, so the pool has to be reusable; a pool that
-    only ever lent each index once would serve the first ``slots`` children and then hang.
-
-    Catches: an index that is taken out of circulation after one use.
+    A script runs more subprocesses than it has workers, so each index is used many times.
     """
     pool = LpgBaseIndexPool(slots=1)
 
@@ -505,10 +500,10 @@ def test_an_index_is_lent_again_once_its_slot_is_free() -> None:
 
 @pytest.mark.base
 def test_a_borrower_that_raises_still_returns_its_index() -> None:
-    """A failed child must not shrink the pool.
+    """An exception inside the ``with`` block does not lose the index.
 
-    Catches: a run in which as many setups fail as there are slots quietly stopping dead, with no
-    error of its own, because every index has been lost to an exception.
+    Otherwise every failed subprocess would shrink the pool, and after ``slots`` failures the script
+    would block forever.
     """
     pool = LpgBaseIndexPool(slots=1)
 
@@ -522,45 +517,33 @@ def test_a_borrower_that_raises_still_returns_its_index() -> None:
 
 @pytest.mark.base
 def test_a_pool_with_no_slots_is_refused() -> None:
-    """A pool nothing can be borrowed from is a driver that hangs, so it is rejected on sight.
-
-    Catches: a caller computing its slot count and passing zero, which would block on the first
-    child forever rather than reporting anything.
-    """
+    """``slots=0`` is rejected at construction instead of blocking on the first borrow."""
     with pytest.raises(ValueError, match="at least one slot"):
         LpgBaseIndexPool(slots=0)
 
 
 @pytest.mark.base
-def test_the_announced_environment_is_read_back_as_the_default_base_index(
+def test_the_child_environment_is_read_back_as_the_default_base_index(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """What the pool writes is what a child reads, with no name agreed twice.
+    """The variable the pool writes is the one the child reads.
 
-    The two halves of this contract live apart -- the driver announces the index, the connector in
-    the child asks for it -- so the test puts them together and checks the round trip rather than
-    checking either against a literal.
-
-    Catches: a driver setting a variable the connector does not read, in which case every child
-    falls back to its process id and the collisions come back without anything reporting them.
+    Checked as a round trip through ``PylpgWorkspace.default_base_index`` rather than against the
+    variable's literal name, so the two sides cannot drift apart unnoticed.
     """
-    announced = LpgBaseIndexPool.announced_in({"UNRELATED": "kept"}, base_index=7)
+    child = LpgBaseIndexPool.child_environment(7, {"UNRELATED": "kept"})
 
-    assert announced["UNRELATED"] == "kept"
-    for name, value in announced.items():
+    assert child["UNRELATED"] == "kept"
+    for name, value in child.items():
         monkeypatch.setenv(name, value)
     assert PylpgWorkspace.default_base_index() == 7
 
 
 @pytest.mark.base
-def test_announcing_does_not_change_the_environment_it_was_given() -> None:
-    """The caller's environment is a template, not something to write through.
-
-    Catches: a driver whose first child mutates ``os.environ`` for the whole process, so that a
-    later child inheriting it computes under an index the pool believes is free.
-    """
+def test_the_child_environment_is_a_copy() -> None:
+    """The environment passed in is not modified."""
     original = {"HOME": "/somewhere"}
 
-    LpgBaseIndexPool.announced_in(original, base_index=3)
+    LpgBaseIndexPool.child_environment(3, original)
 
     assert original == {"HOME": "/somewhere"}

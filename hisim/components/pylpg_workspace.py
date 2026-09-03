@@ -224,30 +224,28 @@ class PylpgWorkspace:
         result_folder: str,
         required_files: Sequence[str],
     ) -> None:
-        """Runs the generator and checks its results, trying again when it died on a locked database.
+        """Run the generator and check its results; if it died on a locked database, wait and try again.
 
-        The generator writes its results into sqlite files in WAL mode from several of its own
-        threads, and on a slow disk -- a two-core CI runner, typically -- one of them can find the
-        file busy and the whole run dies with ``SQLiteException: database is locked``. Nothing about
-        the request is wrong when that happens; the same calculation a moment later succeeds. So that
-        one failure, recognised by its text in the generator's log, is retried after a pause, while
-        every other failure is raised at once: a missing household or a bad calcspec will not get
-        better by waiting, and re-running it would only hide the real message under a delay.
+        The LoadProfileGenerator writes its results into sqlite files from several threads, and on a slow disk
+        (a CI runner, typically) one of them can find the file busy; the run then dies with
+        ``SQLiteException: database is locked`` although nothing about the request is wrong. That failure is
+        recognised by its text in the generator's log and retried after each delay in
+        :attr:`RETRY_DELAYS_IN_SECONDS`. Any other failure is raised immediately, because waiting would not
+        help and a retry would only delay the real message.
 
-        Each attempt reruns the binary in the same calculation directory; the generator deletes and
-        recreates its results folder itself, so a partial result from the failed attempt cannot
-        survive into the verification of the next one.
+        Each attempt reruns the binary in the same directory. The generator deletes and recreates its results
+        folder itself, so a partial result from a failed attempt cannot pass the next check.
 
         Args:
-            executor: the executor whose ``execute_lpg_binaries`` runs the calculation.
-            calculation_index: the calculation's index, named in the failure.
+            executor: the pylpg executor whose ``execute_lpg_binaries`` runs the calculation.
+            calculation_index: the calculation's index, named in the failure message.
             result_folder: where the generator writes its results.
-            required_files: the result files the caller cannot do without.
+            required_files: the result files that must exist for the run to count as successful.
 
         Raises:
-            LocalLpgCalculationFailedError: when the calculation failed for a reason that is not a
-                locked database, or kept failing on a locked database after every retry; in the
-                second case the message says how many attempts were made.
+            LocalLpgCalculationFailedError: for any failure other than a locked database, or for a database
+                that stayed locked through every retry; in that case the message says how many attempts
+                were made.
         """
         attempts = len(cls.RETRY_DELAYS_IN_SECONDS) + 1
         for attempt in range(1, attempts + 1):

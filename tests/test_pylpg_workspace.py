@@ -291,12 +291,11 @@ def test_optional_files_are_not_required(tmp_path: Any) -> None:
 
 
 class ScriptedGenerator:
-    """A stand-in for the executor and the result check together, playing back a scripted run.
+    """Replaces the executor and the result check with a scripted sequence of outcomes.
 
-    Each entry of ``outcomes`` is what one attempt's verification does: ``None`` for success, or the
-    message of the ``LocalLpgCalculationFailedError`` it raises. The class counts how often the binary
-    was run and records every pause the retry asked for, which is all the retry tests need to see;
-    nothing here touches the filesystem or the generator.
+    Each entry of ``outcomes`` is what one attempt's check does: ``None`` for success, or the message of the
+    ``LocalLpgCalculationFailedError`` to raise. The class counts binary runs and records requested pauses
+    instead of sleeping. Nothing touches the filesystem or the generator.
     """
 
     def __init__(self, outcomes: List[Optional[str]]) -> None:
@@ -310,7 +309,7 @@ class ScriptedGenerator:
         self.sleeps: List[float] = []
 
     def execute_lpg_binaries(self) -> None:
-        """Counts a run of the binary; the outcome is decided at verification, as in the real flow."""
+        """Count one run of the binary. The outcome is decided by :meth:`verify`, as in the real flow."""
         self.runs += 1
 
     def verify(self, calculation_index: int, result_folder: str, required_files: Any = None) -> None:
@@ -344,7 +343,7 @@ class ScriptedGenerator:
 
 
 class LockedLog:
-    """The one line of a generator log that marks the failure worth retrying, as the generator writes it."""
+    """The generator log line that marks a locked database, spelled as the generator writes it."""
 
     TEXT: ClassVar[str] = (
         "Unhandled exception. code = Busy (5), message = SQLiteException (0x87AF00AA): database is locked"
@@ -355,11 +354,7 @@ class LockedLog:
 def test_a_calculation_that_died_on_a_locked_database_is_run_again_after_a_pause(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The transient failure is retried, with the first configured delay, and a success ends it.
-
-    Catches: the lock being treated as final -- which is how every golden-year job on a slow runner
-    was failing -- or a retry that does not wait, which would meet the same busy file again.
-    """
+    """A locked-database failure followed by success: two runs, one pause of the first configured delay."""
     script = ScriptedGenerator([LockedLog.TEXT, None])
     script.install(monkeypatch)
 
@@ -373,11 +368,7 @@ def test_a_calculation_that_died_on_a_locked_database_is_run_again_after_a_pause
 def test_a_database_that_stays_locked_is_given_up_on_after_the_configured_retries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Every delay is used once and then the failure is raised, saying how many attempts were made.
-
-    Catches: an unbounded retry on a calculation that is genuinely stuck, which would hang a job
-    instead of failing it.
-    """
+    """A database locked on every attempt: every delay is used once, then the error names the attempt count."""
     attempts = len(PylpgWorkspace.RETRY_DELAYS_IN_SECONDS) + 1
     script = ScriptedGenerator([LockedLog.TEXT] * attempts)
     script.install(monkeypatch)
@@ -393,11 +384,7 @@ def test_a_database_that_stays_locked_is_given_up_on_after_the_configured_retrie
 
 @pytest.mark.base
 def test_any_other_failure_is_raised_at_once_without_a_retry(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A missing result file, a bad request: waiting would not help, so nothing is retried.
-
-    Catches: the retry widening into a blanket "try everything three times", which would hide every
-    real failure behind twenty seconds of delay and two more copies of the same message.
-    """
+    """A failure that is not a locked database is raised after one run, with no pause."""
     script = ScriptedGenerator(["the results directory is missing 2 of the 9 files the run needs"])
     script.install(monkeypatch)
 

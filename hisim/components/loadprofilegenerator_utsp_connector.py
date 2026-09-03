@@ -1414,9 +1414,8 @@ class UtspLpgConnector(cp.Component):
                 # about whether what it needs is in it. Which files are indispensable is already
                 # recorded against each name, so it is read from there rather than from a position
                 # in the returned tuple, which would go wrong silently if that tuple ever changed.
-                # Running and checking are one call because the one failure that is worth a second
-                # attempt -- the generator dying on its own locked sqlite file -- is only known after
-                # the check; see PylpgWorkspace.execute_and_verify.
+                # Run and check are one call, because whether to retry (only for a locked database)
+                # is known only after the check. See PylpgWorkspace.execute_and_verify.
                 declared_result_files = self.define_required_result_files()[0]
                 required_result_files = [
                     file_name

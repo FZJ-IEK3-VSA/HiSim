@@ -1,16 +1,13 @@
-"""Public API of the HiSim cache service client.
+"""Public API of the HiSim cache client (``roadmap/cache_service_spec.md`` §4).
 
-The package is the home of everything the simulation knows about caching, as laid out in
-``roadmap/cache_service_spec.md`` §4: local paths and atomic writes, key construction, the remote
-HTTP tier, curated-dataset retrieval and the client that orchestrates them. Phase 1 of §10 is what
-exists: the local tier, the settings, the key scheme and a client with one tier behind it. The remote
-and shared-directory tiers and the dataset retrieval arrive with the later phases and are re-exported
-from here when they do.
+Phase 1 of §10 is implemented: the local tier (``local``), the settings (``settings``), the key scheme
+(``keys``) and a client with one tier behind it (``client``). The remote and shared-directory tiers and
+the dataset retrieval come with later phases and will be re-exported from here.
 
-Importing this package must stay cheap and free of side effects, because it sits at the same layer as
-``hisim/config/`` and is imported by both components and ``hisim/utils.py``. It therefore imports the
-standard library and ``hisim.log`` only -- never a component, the simulator, the simulation parameters
-or the singleton repository. A test pins that rule.
+This package sits at the same layer as ``hisim/config/`` and is imported by components and by
+``hisim/utils.py``. It therefore imports only the standard library and ``hisim.log`` -- never a component,
+the simulator, the simulation parameters or the singleton repository. A test checks this in a fresh
+interpreter.
 """
 
 # clean

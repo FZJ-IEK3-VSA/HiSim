@@ -1,9 +1,7 @@
-"""Tests for :mod:`hisim.caching.settings`: the six variables, and the guarantee that none of them is needed.
+"""Tests for :mod:`hisim.caching.settings`.
 
-The property the whole cache service rests on is the standalone guarantee of spec §5 -- with no
-variables set, HiSim behaves exactly as before. The first test pins it. The rest pin each variable's
-reading and the one validation the settings make, because a misspelled network mode should fail the
-day it is typed rather than the day the remote tier ships. Each test states the failure mode it catches.
+The first test pins the standalone guarantee of spec §5: with no variables set, HiSim is local-only.
+The others pin how each variable is read and the one validation the settings perform.
 """
 
 # clean

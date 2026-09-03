@@ -1,28 +1,23 @@
-"""What goes into a cache key, and how it is derived from a producer and its inputs without anyone declaring it.
+"""Cache keys under the cache-service scheme: what goes into one and how it is derived.
 
-``roadmap/cache_service_spec.md`` §3 extends the key from ``sha256(config_json + simulation_key)`` to
+``roadmap/cache_service_spec.md`` §3 defines the key as
 
     sha256( artifact_kind : code_fingerprint : third_party_fingerprint : dto_json )
 
-so that a key describes the *inputs* of a calculation rather than the *owner* of its result. The
-first part names the producer. The second changes whenever code that can influence the calculation
-changes and stays put when only component plumbing does. The third pins the third-party packages
-the calculation runs on, by version. The last is the canonical JSON of the calculation's own inputs,
-the DTO of §3.1. Two calculations with the same key are the same calculation, on the same code, on
-the same libraries, from the same inputs -- which is what lets a cache be shared between a laptop,
-a cluster and a container without anyone worrying about whose entry they are reading.
+``artifact_kind`` names the producer (for example ``pv_series``). ``code_fingerprint`` is a hash of the
+producer module's source and of every HiSim module it imports, so a change to code that can affect the
+result changes the key. ``third_party_fingerprint`` pins the third-party packages the producer imports,
+by version. ``dto_json`` is the canonical JSON of the calculation's inputs (the DTO). Two calculations with
+the same key ran the same code on the same libraries with the same inputs, which is what allows one
+cache to be shared between a laptop, a cluster and a container.
 
-The two fingerprints are **fully automatic**: nothing is declared, they are read off the producer
-module's import statements. That is only sound because producer modules live under the layering rule
-:class:`ProducerLayering` enforces -- no dynamic imports, which an AST walk cannot see, and no imports
-of the component or simulator machinery, which would drag most of the package into the closure and turn
-the fingerprint into a commit hash. The rule and the fingerprint are two uses of the same
-:class:`ImportClosure`, so they cannot disagree about what a producer depends on.
+The fingerprints need no declarations: they are read from the module's ``import`` statements
+(:class:`ImportClosure`). That works only if producer modules follow :class:`ProducerLayering` -- no
+dynamic imports, and no imports of the component or simulator machinery, which would pull most of the
+package into the closure.
 
-The legacy key scheme is not here. ``hisim.utils.build_cache_key_string`` keeps producing it for
-components that have not yet been given a producer, and the two coexist until the last extraction lands.
-This module imports the standard library only, so that it stays importable from anywhere in HiSim
-without pulling in the simulation.
+No component uses this scheme yet. ``hisim.utils.build_cache_key_string`` produces the legacy key until
+each producer is extracted. This module imports the standard library only.
 """
 
 # clean
@@ -50,36 +45,27 @@ __status__ = "development"
 
 
 class CacheKeyError(ValueError):
-    """Raised when a cache key cannot be built from what was given.
-
-    Every message names the thing that was wrong -- the artifact kind, the DTO field, the module -- so
-    the producer author can fix it without reading this module.
-    """
+    """Raised when a cache key cannot be built. The message names the offending kind, field or module."""
 
 
 class ProducerLayeringError(CacheKeyError):
-    """Raised when a producer module imports something the producer layer bans.
+    """Raised when a producer module imports something the producer layer forbids.
 
-    A producer is meant to be a pure calculation callable without a ``Simulator``. Importing the
-    component machinery is how it stops being one, and it is also what would make its fingerprint
-    swallow the package, so the two concerns share one refusal.
+    See :class:`ProducerLayering` for the rule and the reason.
     """
 
 
 class KeyMaterial:
-    """The marker that says whether a DTO field is part of the key or merely travels with it.
+    """Marks a DTO field as a payload that travels with the key but is not part of it.
 
-    Spec §3.1: a producer that needs an upstream artifact gets its *key* as a plain string field and
-    the loaded payload in a second field that is excluded from hashing. Both are ordinary dataclass
-    fields; the only difference is this marker in the field's metadata, which :class:`CanonicalJson`
-    reads. A payload field is declared exactly as the spec writes it::
+    A producer that needs an upstream artifact takes its key as a string field and the loaded data as a
+    second field excluded from hashing (spec §3.1). Declare the second field like this::
 
         weather_artifact_key: str
         weather_frame: pd.DataFrame = dataclasses.field(default=None, metadata=KeyMaterial.PAYLOAD)
 
-    The invariant that every payload field is paired with a key field identifying it is the producer
-    author's to keep; nothing here can check that the pairing is right, only that a payload stays out
-    of the key.
+    :class:`CanonicalJson` skips fields marked this way. Pairing every payload field with a key field is
+    the author's responsibility.
     """
 
     #: The metadata key under which a field says whether it is key material.
@@ -91,25 +77,23 @@ class KeyMaterial:
 
     @classmethod
     def is_key_material(cls, field: "dataclasses.Field[Any]") -> bool:
-        """Says whether a field participates in the key. Unmarked fields do, by default.
+        """Return True unless the field is marked as payload.
 
         Args:
-            field: the dataclass field to inspect.
+            field: the dataclass field.
 
         Returns:
-            bool: False only for fields declared with :attr:`PAYLOAD` in their metadata.
+            bool: False only for fields declared with :attr:`PAYLOAD`.
         """
         return bool(field.metadata.get(cls.FLAG, True))
 
 
 class CanonicalJson:
-    """Turns a DTO into the one JSON string that stands for it, so equal inputs give equal keys.
+    """Renders a DTO as the one JSON string that represents it, so equal inputs give equal keys.
 
-    The rules are the spec's: sorted keys, enums by value, and payload fields left out. Two things are
-    added because they were needed to make real DTOs serialisable at all: nested dataclasses are
-    rendered recursively under the same rules, and paths are rendered as strings. Anything else that
-    ``json`` cannot render is refused by name, because silently stringifying an unknown object would
-    let two different inputs share a key.
+    Rules: keys sorted, enums by value, payload fields omitted, nested dataclasses rendered recursively,
+    paths as strings. Any other value is refused with the field's name, because stringifying an unknown
+    object could give two different inputs the same key.
     """
 
     #: The ``json.dumps`` separators, spelled out so that the canonical form is fixed rather than
@@ -118,17 +102,16 @@ class CanonicalJson:
 
     @classmethod
     def dumps(cls, dto: Any) -> str:
-        """Renders a DTO canonically.
+        """Render a DTO canonically.
 
         Args:
-            dto: a dataclass instance -- the single parameter of a producer function.
+            dto: a dataclass instance, the single argument of a producer function.
 
         Returns:
             str: the canonical JSON.
 
         Raises:
-            CacheKeyError: if the DTO is not a dataclass instance, or a field holds a value that has
-                no canonical rendering.
+            CacheKeyError: if ``dto`` is not a dataclass instance, or a field holds a value with no canonical form.
         """
         if not dataclasses.is_dataclass(dto) or isinstance(dto, type):
             raise CacheKeyError(
@@ -139,11 +122,11 @@ class CanonicalJson:
 
     @classmethod
     def _render_dataclass(cls, dto: Any, path: str) -> Dict[str, Any]:
-        """Renders one dataclass instance, skipping payload fields.
+        """Render one dataclass instance, skipping payload fields.
 
         Args:
             dto: the instance.
-            path: the dotted path to it, for error messages.
+            path: dotted path to it, for error messages.
 
         Returns:
             Dict[str, Any]: the rendered mapping.
@@ -157,17 +140,17 @@ class CanonicalJson:
 
     @classmethod
     def _render(cls, value: Any, path: str) -> Any:
-        """Renders one value under the canonical rules.
+        """Render one value under the canonical rules.
 
         Args:
             value: the value.
-            path: the dotted path to it, for error messages.
+            path: dotted path to it, for error messages.
 
         Returns:
-            Any: something ``json.dumps`` can render deterministically.
+            Any: a value ``json.dumps`` renders deterministically.
 
         Raises:
-            CacheKeyError: for a value with no canonical rendering.
+            CacheKeyError: for a value with no canonical form.
         """
         if value is None or isinstance(value, (bool, int, float, str)):
             return value
@@ -190,16 +173,12 @@ class CanonicalJson:
 
 @dataclasses.dataclass(frozen=True)
 class ImportClosure:
-    """Everything a module imports, transitively within one package, found by reading source, not running it.
+    """Everything a module imports, followed transitively within one package, found by reading source.
 
-    This is the object both fingerprints and the layering rule are computed from. It is built by
-    parsing each module's ``import`` statements and following the ones that stay inside the root
-    package; imports of anything else are recorded by their top-level name and not followed, because
-    a third-party package is identified by its version, not its source.
-
-    Modules are *located* with :func:`importlib.util.find_spec`, which imports parent packages to find
-    a child but never executes the child itself. That is as close to a purely static walk as Python
-    allows, and it is why the root package's ``__init__`` must stay cheap.
+    Both fingerprints and the layering check are computed from this. Modules of the root package are
+    followed and their files recorded; imports of anything else are recorded by top-level name only,
+    since a third-party package is identified by its version, not its source. Modules are located with
+    :func:`importlib.util.find_spec`, which imports parent packages but not the module itself.
     """
 
     #: The package whose modules are followed, e.g. ``"hisim"``.
@@ -218,24 +197,24 @@ class ImportClosure:
     dynamic_import_sites: Tuple[str, ...]
 
     class Calls:
-        """The dynamic-import spellings the walk looks for, which a static analysis cannot see through."""
+        """Function names that import a module at run time. A static walk cannot see through them."""
 
         NAMES: ClassVar[FrozenSet[str]] = frozenset({"__import__", "import_module"})
 
     @classmethod
     def of(cls, module: ModuleType, root_package: Optional[str] = None) -> "ImportClosure":
-        """Computes the closure of a module.
+        """Compute the closure of a module.
 
         Args:
-            module: the starting module; it must have been loaded from a file.
-            root_package: the package whose modules are followed. Defaults to the top-level package of
-                ``module`` itself, which is ``hisim`` for every real producer; tests pass their own.
+            module: the starting module; it must have been loaded from a ``.py`` file.
+            root_package: the package whose modules are followed. Defaults to the module's top-level package
+                (``hisim`` for every real producer); tests pass their own.
 
         Returns:
             ImportClosure: the closure.
 
         Raises:
-            CacheKeyError: if the module has no source file to read.
+            CacheKeyError: if a module in the closure has no source file.
         """
         name = module.__name__
         root = root_package if root_package is not None else name.split(".")[0]
@@ -268,7 +247,7 @@ class ImportClosure:
 
     @staticmethod
     def _source_file(module_name: str) -> str:
-        """Locates a module's source file without executing the module.
+        """Locate a module's source file without executing the module.
 
         Args:
             module_name: the fully qualified name.
@@ -292,10 +271,10 @@ class ImportClosure:
 
     @classmethod
     def _module_or_owner(cls, imported: str) -> str:
-        """Resolves ``from pkg import name`` where ``name`` may be a submodule or an attribute.
+        """Resolve ``from pkg import name``, where ``name`` may be a submodule or an attribute.
 
         Args:
-            imported: the fully qualified name as the import statement spells it.
+            imported: the fully qualified name as written in the import.
 
         Returns:
             str: ``imported`` if it is a module, otherwise the package it is an attribute of.
@@ -309,17 +288,14 @@ class ImportClosure:
 
     @staticmethod
     def _imported_names(tree: ast.AST, module_name: str) -> Iterator[str]:
-        """Yields the fully qualified name of every import statement in a module.
-
-        Relative imports are resolved against the importing module's package, so a producer may use
-        ``from . import helpers`` and still be followed.
+        """Yield the fully qualified name of every import in a module, relative imports resolved.
 
         Args:
             tree: the parsed module.
-            module_name: the importing module, for resolving relative imports.
+            module_name: the importing module, used to resolve relative imports.
 
         Yields:
-            str: one fully qualified name per imported module or attribute.
+            str: one name per imported module or attribute.
         """
         package_parts = module_name.split(".")[:-1]
         for node in ast.walk(tree):
@@ -338,14 +314,14 @@ class ImportClosure:
 
     @classmethod
     def _dynamic_import_sites(cls, tree: ast.AST, module_name: str) -> Iterator[str]:
-        """Yields a description of every call that imports by name at run time.
+        """Yield ``module:line`` for every ``__import__`` or ``import_module`` call.
 
         Args:
             tree: the parsed module.
-            module_name: the module, for the description.
+            module_name: the module name, for the description.
 
         Yields:
-            str: ``module:line`` for each ``__import__`` or ``import_module`` call.
+            str: one entry per call site.
         """
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
@@ -357,14 +333,13 @@ class ImportClosure:
 
 
 class ProducerLayering:
-    """The rule a producer module and its closure must obey, and the check that enforces it.
+    """The import rule for producer modules, and the check that enforces it.
 
-    A producer is a pure calculation: callable without a ``Simulator``, importing numpy, pandas,
-    pvlib and config dataclasses, never the component base class, the simulator or a repository. The
-    rule has a cache cost as well as a design reason -- every module in the closure is fingerprinted, so
-    importing a frequently edited module invalidates all of a producer's artifacts on every edit to it.
-    Dynamic imports are banned outright because the closure walk cannot see through them, and a
-    dependency it cannot see is a stale entry it cannot prevent.
+    A producer is a pure calculation. It may import numpy, pandas, pvlib and config dataclasses; it may
+    not import the component base class, the simulator or a repository, and it may not import dynamically.
+    Two reasons: a producer must stay callable without a ``Simulator``, and every module in its closure is
+    fingerprinted, so importing a frequently edited module would invalidate all of its cache entries on
+    every edit. Dynamic imports are forbidden because the closure walk cannot see them.
     """
 
     #: Module prefixes a producer's closure may not contain.
@@ -379,13 +354,13 @@ class ProducerLayering:
 
     @classmethod
     def violations(cls, closure: ImportClosure) -> Tuple[str, ...]:
-        """Lists every way a closure breaks the rule, empty for a compliant producer.
+        """Return one sentence per rule violation; empty for a compliant producer.
 
         Args:
             closure: the producer's import closure.
 
         Returns:
-            Tuple[str, ...]: one sentence per violation.
+            Tuple[str, ...]: the violations.
         """
         found: List[str] = []
         for module_name in closure.package_modules:
@@ -397,13 +372,13 @@ class ProducerLayering:
 
     @classmethod
     def check(cls, closure: ImportClosure) -> None:
-        """Raises if the closure breaks the rule.
+        """Raise if the closure violates the rule.
 
         Args:
             closure: the producer's import closure.
 
         Raises:
-            ProducerLayeringError: naming every violation at once, so they are fixed in one pass.
+            ProducerLayeringError: listing every violation at once.
         """
         violations = cls.violations(closure)
         if violations:
@@ -417,9 +392,8 @@ class ProducerLayering:
 class Fingerprints:
     """The two automatic fingerprints of spec §3, computed from an :class:`ImportClosure`.
 
-    Both are deterministic functions of the closure alone. Neither includes the repository commit,
-    deliberately: a commit changes on every edit anywhere, and keying on it would make every cache
-    entry disposable on every push. The commit travels as metadata beside the entry instead.
+    Neither includes the repository commit: a commit changes on every edit anywhere and would make every
+    entry disposable on every push. The commit is stored as metadata beside the entry instead.
     """
 
     #: What the standard library contributes to the third-party fingerprint: the interpreter's
@@ -428,7 +402,7 @@ class Fingerprints:
 
     @staticmethod
     def code(closure: ImportClosure) -> str:
-        """Hashes the source of every package module in the closure.
+        """Hash the source of every package module in the closure.
 
         Args:
             closure: the producer's import closure.
@@ -446,17 +420,17 @@ class Fingerprints:
 
     @classmethod
     def third_party(cls, closure: ImportClosure) -> str:
-        """Lists ``name==version`` for every third-party distribution the closure imports.
+        """List ``name==version`` for every third-party distribution in the closure, plus the Python version.
 
-        Deliberately not a hash of the whole installed environment: the cluster, the CI container and
-        the RenoVisor image never have identical dependency sets, and hashing all of them would reduce
-        cross-environment cache hits to zero. Only what the calculation imports counts.
+        Only what the producer imports is pinned, not the whole environment: the cluster, the CI container and
+        the RenoVisor image never have identical dependency sets, and pinning everything would prevent any
+        cross-environment cache hit.
 
         Args:
             closure: the producer's import closure.
 
         Returns:
-            str: the sorted, semicolon-separated pins, led by the interpreter version.
+            str: the sorted pins, separated by semicolons.
         """
         distributions = importlib.metadata.packages_distributions()
         pins: Set[str] = {f"{cls.PYTHON_LABEL}=={sys.version_info.major}.{sys.version_info.minor}"}
@@ -471,11 +445,10 @@ class Fingerprints:
 
 @dataclasses.dataclass(frozen=True)
 class CacheKey:
-    """A cache key under the spec §3 scheme: four parts, one digest.
+    """A cache key under spec §3: four parts and their digest.
 
-    The parts are kept rather than only the digest because the metadata file beside each entry
-    records the raw material, and a person reading it should be able to see which producer, which
-    code, which libraries and which inputs an entry came from.
+    The parts are kept, not only the digest, because the ``.meta`` file beside an entry records the raw
+    material and a reader should be able to see which producer, code, libraries and inputs it came from.
     """
 
     #: A short name for the producer, e.g. ``"pv_series"``. Also the filename prefix.
@@ -497,10 +470,10 @@ class CacheKey:
     SEPARATOR: ClassVar[str] = ":"
 
     def __post_init__(self) -> None:
-        """Refuses an artifact kind that could not serve as a path segment.
+        """Refuse an artifact kind that cannot serve as a filename and URL segment.
 
         Raises:
-            CacheKeyError: if the kind is empty or contains characters outside the pattern.
+            CacheKeyError: if the kind is empty or contains other characters than letters, digits, ``_`` and ``-``.
         """
         if not self.KIND_PATTERN.match(self.artifact_kind):
             raise CacheKeyError(
@@ -510,10 +483,10 @@ class CacheKey:
 
     @classmethod
     def for_producer(cls, artifact_kind: str, producer_module: ModuleType, dto: Any) -> "CacheKey":
-        """Builds the key for one calculation, checking the producer's layering on the way.
+        """Build the key for one calculation, checking the producer's layering first.
 
         Args:
-            artifact_kind: the producer's short name.
+            artifact_kind: the producer's short name, for example ``pv_series``.
             producer_module: the module holding the producer function and its DTO class.
             dto: the calculation's inputs.
 
@@ -521,8 +494,8 @@ class CacheKey:
             CacheKey: the key.
 
         Raises:
-            ProducerLayeringError: if the producer module imports what a producer may not.
-            CacheKeyError: if the DTO or the kind cannot be rendered.
+            ProducerLayeringError: if the producer module violates the layering rule.
+            CacheKeyError: if the kind or the DTO cannot be rendered.
         """
         closure = ImportClosure.of(producer_module)
         ProducerLayering.check(closure)
@@ -535,7 +508,7 @@ class CacheKey:
 
     @property
     def material(self) -> str:
-        """The string the digest is taken from, and what the entry's metadata file records verbatim.
+        """The string the digest is computed from; also what the entry's ``.meta`` file records.
 
         Returns:
             str: the four parts joined by :attr:`SEPARATOR`.
@@ -546,7 +519,7 @@ class CacheKey:
 
     @property
     def digest(self) -> str:
-        """The sha256 hex digest of :attr:`material`; the ``{sha}`` of the remote key and the local filename.
+        """The sha256 hex digest of :attr:`material`: the ``{sha}`` in the remote key and the local filename.
 
         Returns:
             str: the digest.

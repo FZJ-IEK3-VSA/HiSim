@@ -1,13 +1,8 @@
 """Tests for :mod:`hisim.caching.client` and for ``hisim.utils.get_cache_file`` delegating to it.
 
-Two things are pinned. First, the client's local tier does exactly what ``get_cache_file`` used to do
-inline -- the same filename, the same directory handling, the same validation and discarding -- because
-the delegation is only safe if nothing moved but the code. Second, the layering rule of spec §4:
-importing the cache package pulls in neither a component, nor the simulator, nor the simulation
-parameters, which is checked in a fresh interpreter so that nothing imported earlier by the test
-session can hide a violation.
-
-Each test states the failure mode it catches.
+Two things are pinned: the client's local tier does exactly what ``get_cache_file`` did inline (same
+filename, directory handling, validation and discarding), and importing the cache package pulls in no
+component, simulator or simulation-parameters module. The second is checked in a fresh interpreter.
 """
 
 # clean
@@ -160,14 +155,10 @@ def test_the_environment_override_moves_the_directory(tmp_path: pathlib.Path) ->
 
 @pytest.mark.base
 def test_get_cache_file_returns_exactly_the_path_it_always_did(tmp_path: pathlib.Path) -> None:
-    """The delegation is invisible: same filename, same directory, same validation, from the same inputs.
+    """The delegation to the client changes no cache filename.
 
-    The expected path is computed by hand from the published rule -- the digest of the legacy key
-    material under the component key -- rather than from the client, so this test would notice the
-    client changing the rule.
-
-    Catches: the move to the client changing a single byte of any cache filename, which would orphan
-    every existing entry on every machine.
+    The expected path is computed here from the published rule (digest of the legacy key material under the
+    component key), not asked of the client, so this test would notice the client changing the rule.
     """
 
     @dataclasses.dataclass
@@ -244,13 +235,9 @@ def test_default_client_reads_the_environment_or_takes_settings() -> None:
 
 @pytest.mark.base
 def test_importing_the_cache_package_imports_no_component_or_simulation_module() -> None:
-    """Spec §4: the package sits at the layer of ``hisim/config/`` and imports nothing above it.
+    """Importing ``hisim.caching`` imports no component, simulator or simulation-parameters module.
 
-    Run in a fresh interpreter, because in the test process those modules are long since imported and
-    ``sys.modules`` would say nothing about who imported them.
-
-    Catches: a convenience import in the package -- ``SimulationParameters`` for a type hint, say --
-    that would make every component import the simulation to reach its cache.
+    Run in a fresh interpreter, because in the test process those modules are already imported.
     """
     forbidden = (
         "hisim.component",

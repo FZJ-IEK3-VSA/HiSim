@@ -1,20 +1,12 @@
-"""Where the cache client learns how it is configured, and the one place that reads those variables.
+"""Cache settings: the six environment variables the cache client reads, read in one place.
 
-``roadmap/cache_service_spec.md`` §5 configures the cache through six environment variables, following
-the ``UTSP_URL`` / ``UTSP_API_KEY`` precedent of a ``.env`` file at the repository root. All six are
-optional, and that is the load-bearing property: with none of them set the library is local-only and
-HiSim behaves exactly as it did before the library existed. The shared-directory and server tiers are
-strictly additive opt-ins, so a plain ``pip install hisim`` involves no institute infrastructure and a
-user outside it loses nothing by not having any.
+The variables are described in ``roadmap/cache_service_spec.md`` §5 and follow the ``UTSP_URL`` /
+``UTSP_API_KEY`` precedent of a ``.env`` file in the repository root. All of them are optional. With none
+set, HiSim uses only its local cache directory and behaves exactly as it did before the cache client
+existed; the shared-directory and server tiers are opt-ins on top of that.
 
-The spec asks that ``CacheSettings`` read all of this once, in one place, and that nothing else in HiSim
-touch the variables. That is why the class exists at all rather than each tier calling ``os.getenv``
-where it needs a value: a variable read in six places is documented in none of them, and a typo in one
-is a tier that silently stays off.
-
-Only the local half of the settings is acted on in this phase. The network mode and the two endpoint
-URLs are parsed and validated here already, so that a misspelled value fails now rather than the day the
-remote tier arrives, but nothing in this phase opens a connection.
+Only the local settings are used in this phase. The network mode and the endpoint URLs are already
+parsed and validated so that a typo fails now, but no connection is opened yet.
 """
 
 # clean
@@ -34,12 +26,11 @@ __status__ = "development"
 
 
 class CacheNetworkMode(enum.Enum):
-    """How the client chooses between the two server endpoints, or declines to use either.
+    """Which server endpoint the client may use.
 
-    ``AUTO`` probes the internal endpoint once per process and falls back to the external one, then to
-    local-only; ``INTERNAL`` and ``EXTERNAL`` pin one endpoint and skip the probe; ``OFF`` disables all
-    networking and makes the library bit-identical to the pre-service behaviour. The values are the
-    exact spellings accepted in the environment variable, so the enum is also the validation.
+    ``AUTO`` probes the internal endpoint once and falls back to the external one, then to local-only.
+    ``INTERNAL`` and ``EXTERNAL`` pin one endpoint. ``OFF`` disables all network access. The enum values
+    are the exact spellings accepted in ``HISIM_CACHE_NETWORK``.
     """
 
     AUTO = "auto"
@@ -49,29 +40,22 @@ class CacheNetworkMode(enum.Enum):
 
 
 class CacheSettingsError(ValueError):
-    """Raised when an environment variable holds a value the cache cannot act on.
+    """Raised when an environment variable holds a value the cache client cannot use.
 
-    The message names the variable and lists the accepted spellings, because the person who sees it
-    has usually just edited a ``.env`` file and wants to know which line to fix.
+    The message names the variable and lists the accepted values, so the ``.env`` line to fix is clear.
     """
 
 
 @dataclass(frozen=True)
 class CacheSettings:
-    """The cache configuration read from the environment, held as plain typed values.
+    """The cache configuration, read from the environment into plain typed fields.
 
-    Instances are cheap to build and immutable, so there is no process-wide singleton to keep in step
-    with the environment: a caller that wants current settings asks for them. The one thing the spec
-    wants remembered per process -- the result of the network probe -- belongs to the remote tier, not
-    here, because it is an observation and not a setting.
+    Create one with :meth:`from_environment`. Instances are immutable and cheap, so there is no
+    process-wide singleton; code that wants the current settings asks for them.
     """
 
     class Variables:
-        """The names of the six environment variables, stated once so no other module spells them.
-
-        Kept as a nested namespace rather than loose constants so that the variable names are visibly
-        part of the settings contract and a reader can find all six in one screen.
-        """
+        """The names of the six environment variables. No other module spells them."""
 
         URL_INTERNAL: ClassVar[str] = "HISIM_CACHE_URL_INTERNAL"
         URL_EXTERNAL: ClassVar[str] = "HISIM_CACHE_URL_EXTERNAL"
@@ -100,20 +84,19 @@ class CacheSettings:
 
     @classmethod
     def from_environment(cls, environment: Optional[Mapping[str, str]] = None) -> "CacheSettings":
-        """Reads the six variables and returns them as settings, validating what can be validated.
+        """Read the six variables and return them as settings.
 
-        An empty string is treated the same as an unset variable, because that is what a ``.env`` line
-        with nothing after the equals sign produces and nobody means "the URL is the empty string".
+        An empty string counts as unset, because that is what a ``.env`` line with nothing after the
+        equals sign produces.
 
         Args:
-            environment: the mapping to read from; defaults to ``os.environ``. Tests pass their own so
-                that they neither depend on nor disturb the real process environment.
+            environment: the mapping to read; ``os.environ`` when omitted. Tests pass their own.
 
         Returns:
             CacheSettings: the parsed settings.
 
         Raises:
-            CacheSettingsError: if the network mode is not one of the four accepted spellings.
+            CacheSettingsError: if ``HISIM_CACHE_NETWORK`` is not one of the four accepted values.
         """
         source: Mapping[str, str] = os.environ if environment is None else environment
         return cls(
@@ -127,14 +110,13 @@ class CacheSettings:
 
     @property
     def is_standalone(self) -> bool:
-        """Says whether these settings describe the pre-service behaviour: local directory only.
+        """Whether only the local cache directory is in use.
 
-        This is the property the spec's standalone guarantee rests on, so it is spelled out rather than
-        left for callers to infer from three fields. A local-directory override alone does not make the
-        configuration non-standalone; it only moves the directory.
+        True when no server endpoint can be reached (mode ``OFF``, or no URL set) and no shared directory is
+        configured. A local-directory override alone does not change this; it only moves the directory.
 
         Returns:
-            bool: True if no network endpoint can be used and no shared directory is configured.
+            bool: True for local-only operation.
         """
         network_possible = self.network is not CacheNetworkMode.OFF and (
             self.internal_url is not None or self.external_url is not None
@@ -142,24 +124,23 @@ class CacheSettings:
         return not network_possible and self.shared_directory is None
 
     def resolve_local_directory(self, default_directory: str) -> str:
-        """Returns the directory local entries live in, honouring the override if one is set.
+        """Return the local cache directory: the ``HISIM_CACHE_DIR`` override if set, else the default.
 
         Args:
-            default_directory: the directory the simulation would use on its own, normally
-                ``SimulationParameters.cache_dir_path``.
+            default_directory: normally ``SimulationParameters.cache_dir_path``.
 
         Returns:
-            str: the override from the environment if set, otherwise the default.
+            str: the directory to use.
         """
         return self.local_directory if self.local_directory is not None else default_directory
 
     @staticmethod
     def _optional(source: Mapping[str, str], name: str) -> Optional[str]:
-        """Reads one variable, mapping absent and empty to ``None``.
+        """Read one variable; absent and empty both become ``None``.
 
         Args:
             source: the environment mapping.
-            name: the variable to read.
+            name: the variable name.
 
         Returns:
             Optional[str]: the stripped value, or ``None``.
@@ -169,16 +150,16 @@ class CacheSettings:
 
     @classmethod
     def _network_mode(cls, source: Mapping[str, str]) -> CacheNetworkMode:
-        """Parses the network mode, defaulting to ``AUTO`` and refusing anything unrecognised.
+        """Parse ``HISIM_CACHE_NETWORK``; unset means ``AUTO``.
 
         Args:
             source: the environment mapping.
 
         Returns:
-            CacheNetworkMode: the parsed mode.
+            CacheNetworkMode: the mode.
 
         Raises:
-            CacheSettingsError: if the value is set but is not one of the accepted spellings.
+            CacheSettingsError: if the value is set but not one of the accepted spellings.
         """
         raw = cls._optional(source, cls.Variables.NETWORK)
         if raw is None:

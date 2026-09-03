@@ -1,13 +1,8 @@
-"""Tests for :mod:`hisim.caching.keys`: the key scheme of spec §3 and the closure walk both fingerprints rest on.
+"""Tests for :mod:`hisim.caching.keys`: the key scheme of spec §3 and the import-closure walk behind it.
 
-The claims under test are the ones the shared cache depends on. A key must change when anything that
-can change the result changes -- the inputs, the producer's code, a module it imports, a library
-version -- and must *not* change for anything else, or a plumbing edit invalidates every artifact and
-the cache is a cache in name only. The closure walk is exercised against a synthetic package written
-into a temporary directory, so the tests can edit "source" and add "imports" freely without touching
-HiSim; the walk takes the root package as a parameter for exactly this reason.
-
-Each test states the failure mode it catches.
+A key must change when anything that can change the result changes -- inputs, producer code, an imported
+module, a library version -- and must not change for anything else. The closure walk is tested against a
+small package written into a temporary directory, so the tests can edit source and add imports freely.
 """
 
 # clean
@@ -69,12 +64,10 @@ class PvInputs:
 
 
 class SyntheticPackage:
-    """Writes a small package into a directory and imports modules from it.
+    """Writes a small package named ``acme`` into a directory and imports modules from it.
 
-    The package is named ``acme`` and the walk is told so, which keeps every test independent of what
-    HiSim itself imports. ``rebuild`` re-imports after editing a file, because the walk reads source
-    from disk but ``find_spec`` consults the import system, and a stale ``sys.modules`` entry would
-    otherwise hide the edit from a test that re-imports.
+    Using a synthetic package keeps the tests independent of what HiSim itself imports. :meth:`load`
+    drops any cached ``acme`` modules first, so a test can edit a file and re-import it.
     """
 
     ROOT: ClassVar[str] = "acme"
@@ -175,13 +168,10 @@ def test_canonical_json_is_sorted_renders_enums_by_value_and_recurses() -> None:
 
 @pytest.mark.base
 def test_a_payload_field_never_reaches_the_key() -> None:
-    """Two DTOs differing only in their payload are the same calculation.
+    """Two DTOs that differ only in a payload field have the same key.
 
-    This is the invariant that lets an upstream frame travel with its key: the frame is identified by
-    the key field beside it, so hashing the frame too would be redundant at best and, for a frame that
-    does not serialise canonically, impossible.
-
-    Catches: the payload marker being ignored, so every producer with a frame field fails to key.
+    A payload field is identified by the key field beside it (for example ``weather_artifact_key``), so
+    hashing the payload too would be redundant, and for a DataFrame impossible.
     """
     with_frame = inputs(weather_frame={"huge": list(range(1000))})
     without_frame = inputs(weather_frame=None)
@@ -206,12 +196,9 @@ def test_every_key_field_moves_the_key() -> None:
 
 @pytest.mark.base
 def test_a_value_with_no_canonical_form_is_refused_by_field_name() -> None:
-    """An object the scheme cannot render is an error naming the field, not a ``str()`` of the object.
+    """A value the scheme cannot render raises an error naming the field, instead of being stringified.
 
-    Silently stringifying would let two different inputs share a key whenever their ``str`` agrees,
-    which for most objects is their type and address.
-
-    Catches: a producer author putting an arbitrary object in a key field and getting a key anyway.
+    Stringifying would let two different inputs share a key whenever their ``str`` is the same.
     """
 
     @dataclasses.dataclass(frozen=True)
@@ -238,14 +225,10 @@ def test_a_non_dataclass_is_not_a_dto() -> None:
 def test_the_closure_follows_package_imports_and_records_third_parties(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The walk finds every module of the package the producer reaches, and names what it reaches outside it.
+    """The walk finds every package module the producer reaches and records third-party imports by name.
 
-    Covers the four import spellings a producer may use: ``import a.b``, ``from a import b`` where
-    ``b`` is a module, ``from a.b import name`` where ``name`` is an attribute, and a relative import.
-    Standard-library imports are neither followed nor recorded.
-
-    Catches: an import spelling the walk does not understand, which would leave a dependency out of
-    the fingerprint and make its edits invisible to the cache.
+    Covers the four spellings: ``import a.b``, ``from a import b`` (module), ``from a.b import name``
+    (attribute) and a relative import. Standard-library imports are neither followed nor recorded.
     """
     package = SyntheticPackage(tmp_path, monkeypatch)
     package.write("sub.helper", "import math\nVALUE = 1\n")
@@ -273,14 +256,10 @@ def test_the_closure_follows_package_imports_and_records_third_parties(
 def test_the_code_fingerprint_moves_with_a_dependency_and_not_with_a_stranger(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Editing a module the producer imports changes the fingerprint; editing one it does not, does not.
+    """Editing an imported module changes the fingerprint; editing an unrelated module does not.
 
-    This is the whole point of fingerprinting the closure rather than the commit: a KPI edit in a
-    component invalidates nothing, a change to the physics the producer imports invalidates exactly
-    the artifacts that depend on it.
-
-    Catches: a fingerprint that is either insensitive to a real dependency or sensitive to the
-    whole package.
+    This is the reason the closure is fingerprinted instead of the commit: a KPI edit in a component
+    invalidates nothing, a change to physics the producer imports invalidates exactly its entries.
     """
     package = SyntheticPackage(tmp_path, monkeypatch)
     package.write("physics", "COEFFICIENT = 0.6\n")
@@ -322,14 +301,9 @@ def test_the_third_party_fingerprint_pins_versions_and_the_interpreter(
 def test_component_machinery_in_the_closure_is_a_layering_violation(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A producer that imports the component base class is refused, naming the module.
+    """A closure containing ``hisim.component`` is reported as a violation naming that module.
 
-    The check runs on the closure, not the producer alone, so an import two hops away is caught too.
-    The forbidden names are HiSim's, so the synthetic package is asked about a closure whose module
-    names are spelled the HiSim way.
-
-    Catches: a producer quietly growing a dependency on the simulator and dragging the package into
-    its fingerprint.
+    The check runs on the whole closure, so an import two hops away is caught as well.
     """
     del tmp_path, monkeypatch
     closure = ImportClosure(

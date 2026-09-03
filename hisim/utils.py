@@ -344,38 +344,31 @@ def get_cache_file(
     my_simulation_parameters: SimulationParameters,
     cache_dir_path: Optional[str] = None
 ) -> Tuple[bool, str]:  # noqa
-    """Gets a cache path for a given parameter set.
+    """Return ``(exists, path)`` for the cache entry of a configuration under the given simulation parameters.
 
-    This is the thin delegating wrapper ``roadmap/cache_service_spec.md`` §4 asked for: the key material
-    is built here, because building it needs the configuration's ``to_json`` and the simulation
-    parameters' unique key and the cache package deliberately knows nothing about either; everything
-    after that -- the filename, the directory, the validation of an existing entry and the discarding of
-    one that cannot be trusted -- is :meth:`hisim.caching.CacheClient.lookup`. The signature and the
-    ``(exists, absolute_path)`` return are unchanged so that no component has to move.
+    The key material is built here with :func:`build_cache_key_string`; the lookup itself -- filename,
+    directory, validation of an existing entry -- is :meth:`hisim.caching.CacheClient.lookup`. The
+    signature and return value are unchanged, so no component had to change when the client was introduced.
 
-    The ``exists`` flag is advisory and nothing more. Two processes that miss the same key concurrently
-    will both compute the entry and both write it; that wastes work but is harmless, because the
-    contents are a pure function of the key. What is *not* harmless is writing the entry straight to the
-    returned path, which lets a concurrent reader see it half written -- so every writer must land its
-    entry through :func:`hisim.caching.atomic_cache_write`.
+    ``exists`` is advisory: two processes may both miss the same key and both compute the entry, which
+    wastes work but is harmless. Never write to the returned path directly; use
+    :func:`hisim.caching.atomic_cache_write`, otherwise a concurrent reader can see a half-written file.
 
-    Which directory is used is decided in this order: an explicit ``cache_dir_path`` argument, then the
-    ``HISIM_CACHE_DIR`` environment variable, then ``my_simulation_parameters.cache_dir_path``. The
-    explicit argument wins over the environment so that a test which points at its own directory keeps
-    doing so on a machine where a developer has set the override.
+    The directory is chosen in this order: the ``cache_dir_path`` argument, then ``HISIM_CACHE_DIR``, then
+    ``my_simulation_parameters.cache_dir_path``. The argument wins over the environment so that a test
+    pointing at its own directory keeps working on a machine where the override is set.
 
     Args:
-        component_key: filename prefix for the component type.
-        parameter_class: dataclass with a ``to_json`` method; the building of its
-            ``component_id`` is nulled before hashing.
-        my_simulation_parameters: provides the cache directory and a unique key appended before hashing.
-        cache_dir_path: optional override; see the order above.
+        component_key: filename prefix, today the component's instance name.
+        parameter_class: a dataclass with ``to_json``; its ``component_id.building`` is cleared before hashing.
+        my_simulation_parameters: provides the default directory and the simulation part of the key.
+        cache_dir_path: optional directory override; see the order above.
 
     Returns:
-        Tuple[bool, str]: ``(exists, absolute_path)``. ``exists`` is advisory, see above.
+        Tuple[bool, str]: ``(exists, absolute_path)``.
 
     Raises:
-        ValueError: if ``my_simulation_parameters`` is None or the JSON string is too short.
+        ValueError: if ``my_simulation_parameters`` is None or the key material is implausibly short.
     """
     key_material = build_cache_key_string(parameter_class, my_simulation_parameters)
     client = default_client()

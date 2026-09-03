@@ -1355,7 +1355,13 @@ def calculate_direct_normal_radiation(
     """
 
     solar_pos = pvlib.solarposition.get_solarposition(direct_horizontal_irradation.index, lat, lon)
-    solar_pos["apparent_zenith"][solar_pos.apparent_zenith > zenith_tol] = zenith_tol
+    # The clamp used to be written as a chained assignment -- ``solar_pos["apparent_zenith"][mask] = tol``
+    # -- which under pandas' copy-on-write sets a value on a temporary and discards it. pandas says so at
+    # run time (ChainedAssignmentError, visible in every golden log), and the effect was that the clamp
+    # never applied: near the horizon the division below ran on the true zenith, so a small horizontal
+    # irradiance at 89 degrees became a very large normal one, and past 90 degrees a negative one. A
+    # single ``.loc`` assignment is the form that actually writes.
+    solar_pos.loc[solar_pos["apparent_zenith"] > zenith_tol, "apparent_zenith"] = zenith_tol
     dni = direct_horizontal_irradation.div(solar_pos["apparent_zenith"].apply(math.radians).apply(math.cos))
     if sum(dni.isnull()) > 0:
         raise ValueError("Something went wrong...")

@@ -5,9 +5,11 @@ configuration consistency, direct-filepath configuration including
 validation that a data source is required when a direct filepath is given,
 and the cached-file pressure-column fallback in ``i_prepare_simulation``.
 """
+import math
 import pathlib
 
 import pandas as pd
+import pvlib
 import pytest
 from hisim import sim_repository
 from hisim import component
@@ -259,3 +261,31 @@ def test_weather_default_display_config_is_not_shared() -> None:
     # Mutation must not propagate across instances.
     first.my_display_config.pretty_name = "first"
     assert second.my_display_config.pretty_name is None
+
+
+@pytest.mark.base
+def test_the_zenith_clamp_bounds_the_direct_normal_irradiance_near_the_horizon() -> None:
+    """The clamp at ``zenith_tol`` must actually apply, so DNI is bounded and never negative.
+
+    The direct normal irradiance is the horizontal one divided by the cosine of the zenith angle, which
+    explodes toward the horizon and turns negative past it. ``zenith_tol`` exists to cap the angle before
+    the division. It used to be written as a chained assignment, which under copy-on-write writes into a
+    temporary and is discarded -- pandas reports it, and every golden log carried the report -- so the cap
+    never applied and low-sun timesteps went out unbounded. A constant, deliberately non-zero horizontal
+    irradiance over a full day makes the failure unmistakable: night timesteps come out negative and the
+    dusk ones enormous.
+
+    Catches: the clamp regressing to a form that does not write, which nothing else in the suite notices.
+    """
+    index = pd.date_range("2021-06-21", periods=24 * 12, freq="5min", tz="UTC")
+    horizontal = pd.Series(50.0, index=index)
+    zenith_tol = 87.0
+
+    dni = weather.calculate_direct_normal_radiation(horizontal, lon=6.08, lat=50.78, zenith_tol=zenith_tol)
+
+    bound = 50.0 / math.cos(math.radians(zenith_tol))
+    zenith = pvlib.solarposition.get_solarposition(index, 50.78, 6.08)["apparent_zenith"]
+    assert (zenith > zenith_tol).any(), "the day must contain low-sun timesteps for the clamp to matter"
+    assert (dni >= 0).all(), "past the horizon the divisor went negative, so the clamp did not apply"
+    assert dni.max() <= bound + 1e-9, f"DNI {dni.max():.1f} exceeds the clamped bound {bound:.1f}"
+    assert dni[zenith > zenith_tol].round(6).nunique() == 1, "every clamped timestep must divide by the same cosine"

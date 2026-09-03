@@ -403,31 +403,26 @@ def get_cache_file(
 
 
 def build_cache_key_string(parameter_class: Any, my_simulation_parameters: SimulationParameters) -> str:
-    """Builds the raw string a cache entry's name is hashed from, and its metadata records verbatim.
+    """Return the string a cache entry's filename is hashed from and its ``.meta`` file records.
 
-    The string is shared by three callers that must agree exactly: the lookup that turns it into a
-    filename, the writer that stores it beside the entry, and the validation that recomputes the hash
-    from the stored copy. Splitting it out of ``get_cache_file`` is what lets a writer record the
-    inputs that actually produced its bytes rather than re-deriving what was asked for.
+    The same string is used by the lookup (hashed into the filename), by the writer (stored beside the
+    entry) and by the validation (re-hashed and compared with the filename), so it is built in one place.
 
-    What is hashed is the configuration's *cache key view* -- ``ConfigBase.cache_key_view`` -- not the
-    configuration itself. The base view clears the component's building, because the cached data
-    depends on what the component is and how it is parameterized, not on which house it sits in. A
-    config class whose fields include things that do not decide the result, or paths that would spell
-    differently on another machine, overrides the view to clear or normalise them; that is what makes
-    an entry computed on a workstation findable on a CI runner. A parameter class that is not a
-    ``ConfigBase`` -- tests pass minimal stand-ins -- is hashed as it is, building cleared if it has one.
+    What is hashed is ``parameter_class.cache_key_view()`` when the class provides it (every
+    ``ConfigBase`` does): a copy with the fields that do not affect the result cleared and any paths made
+    portable. A parameter class without that method -- tests pass minimal stand-ins -- is hashed as it is,
+    with ``component_id.building`` cleared if it has one.
 
     Args:
-        parameter_class: the configuration dataclass, which must provide ``to_json``.
+        parameter_class: the configuration; must provide ``to_json``.
         my_simulation_parameters: contributes start, end, resolution, year, timesteps and country.
 
     Returns:
         str: the configuration JSON followed by the simulation parameters' unique key.
 
     Raises:
-        ValueError: if ``my_simulation_parameters`` is None, or the resulting string is too short to
-            be a real configuration, which would mean the caller passed something empty.
+        ValueError: if ``my_simulation_parameters`` is None, or the result is too short to be a real
+            configuration.
     """
     if my_simulation_parameters is None:
         raise ValueError("Simulation parameters was none.")

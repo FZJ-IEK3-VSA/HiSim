@@ -321,26 +321,20 @@ class ConfigBase:
         return cls.__module__ + "." + cls.__name__
 
     def cache_key_view(self: ConfigBaseT) -> ConfigBaseT:
-        """Returns the copy of this configuration whose JSON is hashed into a cache key.
+        """Return the copy of this configuration that is hashed into its cache key.
 
-        A cache entry belongs to a calculation, and a calculation is decided by some of a
-        configuration's fields and not by others. The base rule, applied to every config, is
-        that the building a component sits in is not one of them: the same PV system computes
-        the same series in every house, so ``component_id.building`` is cleared before hashing
-        or the same work would be filed under a different name per house.
+        Not every field of a configuration affects the cached result. The base rule, applied to every config,
+        clears ``component_id.building``: the same PV system computes the same series in every house, so the
+        house must not be part of the key.
 
-        Subclasses override this to remove what else does not decide the result -- where a
-        result file is written, which worker index a run was scheduled on -- and to make what
-        does decide it portable, such as a data-file path spelled relative to the inputs
-        directory rather than to one machine's checkout. Those are the two things that stop a
-        cache entry computed on one machine from being found on another, and they were what
-        kept the LoadProfileGenerator and weather caches from ever being shared between a
-        workstation and a CI runner (``roadmap/cache_service_spec.md`` §3.1, "only
-        result-relevant fields"). An override calls this method first and adjusts the copy it
-        gets back; the copy is deep, so nothing here can touch the live configuration.
+        Subclasses override this to clear fields that do not affect the result (where a result file is
+        written, which worker index a run used) and to make file paths portable (relative to the inputs
+        directory instead of absolute), so that an entry computed on one machine can be found on another.
+        An override calls ``super().cache_key_view()`` first and adjusts the copy it gets back; the copy is
+        deep, so the live configuration is never modified. See ``roadmap/cache_service_spec.md`` §3.1.
 
         Returns:
-            A deep copy of this configuration with the fields that are not key material cleared.
+            A deep copy of this configuration with the non-key fields cleared or normalised.
         """
         view = copy.deepcopy(self)
         component_id = getattr(view, "component_id", None)

@@ -1,19 +1,9 @@
-"""Tests for the cache key view: what a configuration hashes, and what it deliberately leaves out.
+"""Tests for ``ConfigBase.cache_key_view``: what a configuration hashes into its cache key and what it leaves out.
 
-A cache entry computed on one machine is worth having on another only if both derive the same key from
-the same calculation. Two of HiSim's six caches never could. The LoadProfileGenerator connector hashed
-``result_dir_path``, an absolute path that says where a result file is written and differs on every
-machine; the weather hashed ``source_path``, which does select the file but is spelled from the root of
-one checkout. So the two most expensive artifacts HiSim caches were private to whichever machine wrote
-them, and a CI runner recomputed both from cold on every run.
-
-``ConfigBase.cache_key_view`` is the one place a config says what is not key material and how a path is
-made portable; ``hisim.utils.build_cache_key_string`` hashes the view. These tests pin the view for the
-two classes that override it and the base rule for every class that does not. They are the L1 layer of
-``roadmap/cache_protocol_testing.md`` for the two upstream caches: a field that decides the result moves
-the key, a field that does not leaves it alone, and no key contains a path that names a machine.
-
-Each test states the failure mode it catches.
+Two caches used to hash machine-specific paths -- the LoadProfileGenerator connector its
+``result_dir_path``, the weather its absolute ``source_path`` -- so their entries could never be shared
+between machines. These tests pin the two overrides and the base rule: fields that decide the result
+move the key, fields that only place the run do not, and no key contains an absolute path.
 """
 
 # clean

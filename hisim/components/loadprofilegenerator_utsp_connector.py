@@ -205,19 +205,16 @@ class UtspLpgConnectorConfig(ConfigBase):
         return household.Name
 
     def cache_key_view(self) -> "UtspLpgConnectorConfig":
-        """The configuration as hashed into the occupancy cache key, without what does not decide the profile.
+        """Return the copy hashed into the occupancy cache key, without the fields that only place the run.
 
-        Three fields describe how and where a run happens rather than what it computes.
-        ``result_dir_path`` says where the request's result file is written; ``cache_dir_path`` says
-        where the entry itself goes; ``calculation_index_for_local_lpg`` says which working directory
-        the generator was scheduled into. None of them changes a single value of the profile, and the
-        first is an absolute path that differs on every machine -- which is why a LoadProfileGenerator
-        result computed here has never once been found by a CI runner, or vice versa. They are cleared
-        from the view, so the key is decided by the household, the energy intensity, the catalogue
-        sets, the seed and the simulation parameters, and by nothing else.
+        ``result_dir_path`` (where the result file is written), ``cache_dir_path`` (where the entry goes) and
+        ``calculation_index_for_local_lpg`` (which working directory the generator used) do not change the
+        profile. The first is an absolute path that differs between machines, which is why an occupancy entry
+        computed on one machine was never found on another. The three are cleared; the key is then decided by
+        the household, the energy intensity, the catalogue sets, the seed and the simulation parameters.
 
         Returns:
-            UtspLpgConnectorConfig: a deep copy with the three run-placement fields cleared.
+            UtspLpgConnectorConfig: a deep copy with the three fields cleared.
         """
         view = super().cache_key_view()
         view.result_dir_path = ""

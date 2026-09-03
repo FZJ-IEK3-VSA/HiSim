@@ -265,17 +265,11 @@ def test_weather_default_display_config_is_not_shared() -> None:
 
 @pytest.mark.base
 def test_the_zenith_clamp_bounds_the_direct_normal_irradiance_near_the_horizon() -> None:
-    """The clamp at ``zenith_tol`` must actually apply, so DNI is bounded and never negative.
+    """With the clamp applied, DNI is never negative and never exceeds ``dhi / cos(zenith_tol)``.
 
-    The direct normal irradiance is the horizontal one divided by the cosine of the zenith angle, which
-    explodes toward the horizon and turns negative past it. ``zenith_tol`` exists to cap the angle before
-    the division. It used to be written as a chained assignment, which under copy-on-write writes into a
-    temporary and is discarded -- pandas reports it, and every golden log carried the report -- so the cap
-    never applied and low-sun timesteps went out unbounded. A constant, deliberately non-zero horizontal
-    irradiance over a full day makes the failure unmistakable: night timesteps come out negative and the
-    dusk ones enormous.
-
-    Catches: the clamp regressing to a form that does not write, which nothing else in the suite notices.
+    DNI is the horizontal irradiance divided by the cosine of the zenith angle; the clamp caps the angle
+    at ``zenith_tol`` so the divisor cannot approach zero or go negative. A constant non-zero horizontal
+    irradiance over a full day makes a missing clamp obvious: the night timesteps come out negative.
     """
     index = pd.date_range("2021-06-21", periods=24 * 12, freq="5min", tz="UTC")
     horizontal = pd.Series(50.0, index=index)

@@ -1,0 +1,57 @@
+name: HiSim inputs cache
+description: >
+  Restores or saves hisim/inputs/cache between workflow runs, so a job finds the weather series and
+  LoadProfileGenerator profiles the previous run of the same job computed instead of recomputing them
+  from cold. Every entry in that directory is self-validating -- its name is the hash of the inputs
+  that produced it and a companion .meta file records them -- so a restored directory can never serve a
+  wrong result; a key that does not match is simply a miss. That is what makes it safe to always
+  restore the most recent cache and always save a new one.
+
+  The LoadProfileGenerator is the reason this exists. Eleven of the twenty-two system setups run it
+  locally, six workflows run those setups, and the generator's own sqlite writes are flaky on a slow
+  runner. A profile it computed once does not have to be computed again, and a profile that is not
+  computed cannot fail.
+
+inputs:
+  mode:
+    description: "'restore' before the simulations run, 'save' after them (use if: always() on the save)."
+    required: true
+  scope:
+    description: >
+      What distinguishes this job from its siblings -- its matrix cell, typically. Each scope restores
+      its own most recent cache and saves under its own key, so a cell's entries are exactly the ones
+      it needs and no cell overwrites another's.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Derive the cache key
+      id: key
+      shell: bash
+      run: |
+        # Three parts, from coarsest to finest. The scheme hash covers the files that decide how an
+        # entry is named and validated; when they change, a fresh lineage of caches starts rather than
+        # a growing archive of entries under names nothing will ask for again. The scope is the
+        # caller's matrix cell. The run id makes every save unique, so a save never collides with an
+        # existing key and the restore's prefix match always finds the most recent one.
+        scheme="$(cat hisim/utils.py hisim/caching/*.py | sha256sum | cut -c1-12)"
+        scope="$(printf '%s' "${{ inputs.scope }}" | tr -c 'A-Za-z0-9_.-' '_')"
+        prefix="hisim-inputs-cache-1-${RUNNER_OS}-${scheme}-${scope}-"
+        echo "prefix=${prefix}" >> "$GITHUB_OUTPUT"
+        echo "key=${prefix}${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the most recent cache for this scope
+      if: inputs.mode == 'restore'
+      uses: actions/cache/restore@v4
+      with:
+        path: hisim/inputs/cache
+        key: ${{ steps.key.outputs.key }}
+        restore-keys: ${{ steps.key.outputs.prefix }}
+
+    - name: Save this run's cache for the next one
+      if: inputs.mode == 'save'
+      uses: actions/cache/save@v4
+      with:
+        path: hisim/inputs/cache
+        key: ${{ steps.key.outputs.key }}

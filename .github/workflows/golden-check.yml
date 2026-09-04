@@ -54,9 +54,7 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
         run: uv pip install --system -e .
-      # Weather series and LoadProfileGenerator profiles computed by the previous run of this job are
-      # restored here, so the simulations below find them instead of recomputing them from cold. Every
-      # entry validates itself against its own name, so a stale cache is a miss, never a wrong answer.
+      # The previous run's weather series and LoadProfileGenerator profiles; see the action.
       - name: Restore the HiSim inputs cache
         uses: ./.github/actions/hisim-cache
         with:
@@ -71,9 +69,7 @@ jobs:
           name: golden-report-${{ matrix.setup }}-${{ matrix.param }}
           path: results/golden-ref-check/report.*
           if-no-files-found: warn
-      # Saved even when the job failed: a run that failed on a KPI comparison still computed valid
-      # entries, and a run that failed inside the LoadProfileGenerator produced none, so there is
-      # nothing wrong to keep either way.
+      # Kept even when the job failed; see the action for why that is safe.
       - name: Save the HiSim inputs cache
         if: always()
         uses: ./.github/actions/hisim-cache

@@ -2,19 +2,27 @@ name: HiSim inputs cache
 description: >
   Restores or saves hisim/inputs/cache between workflow runs, so a job finds the weather series and
   LoadProfileGenerator profiles the previous run of the same job computed instead of recomputing them
-  from cold. Every entry in that directory is self-validating -- its name is the hash of the inputs
-  that produced it and a companion .meta file records them -- so a restored directory can never serve a
-  wrong result; a key that does not match is simply a miss. That is what makes it safe to always
-  restore the most recent cache and always save a new one.
+  from cold. Every entry in that directory is named by the hash of the configuration that produced it
+  and carries a .meta file recording that configuration, so a restored entry is only ever used for the
+  configuration it was computed for, and an entry nothing asks for is simply ignored. That is what
+  makes it safe to always restore the most recent cache of a job.
+
+  What the name does not cover is the code that computed the entry. A job that finds its weather
+  series and profiles already computed does not exercise the reader or the generator that would
+  have computed them, so an edit to those is first exercised by a run whose entries are missing.
+  Deleting the repository's caches (Actions > Caches) forces that run.
 
   The LoadProfileGenerator is the reason this exists. Eleven of the twenty-two system setups run it
-  locally, six workflows run those setups, and the generator's own sqlite writes are flaky on a slow
+  locally, seven workflows run those setups, and the generator's own sqlite writes are flaky on a slow
   runner. A profile it computed once does not have to be computed again, and a profile that is not
   computed cannot fail.
 
 inputs:
   mode:
-    description: "'restore' before the simulations run, 'save' after them (use if: always() on the save)."
+    description: >
+      'restore' before the simulations run, 'save' after them. Put if: always() on the save, so a
+      run that failed after computing entries still keeps them; a run that failed inside the
+      generator produced none, so there is nothing wrong to keep either way.
     required: true
   scope:
     description: >
@@ -26,32 +34,57 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Check the mode
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+      run: |
+        case "$MODE" in
+          restore|save) ;;
+          *) echo "::error::hisim-cache: mode must be 'restore' or 'save', got '$MODE'"; exit 1 ;;
+        esac
+
     - name: Derive the cache key
       id: key
       shell: bash
+      env:
+        SCOPE: ${{ inputs.scope }}
       run: |
-        # Three parts, from coarsest to finest. The scheme hash covers the files that decide how an
-        # entry is named and validated; when they change, a fresh lineage of caches starts rather than
-        # a growing archive of entries under names nothing will ask for again. The scope is the
-        # caller's matrix cell. The run id makes every save unique, so a save never collides with an
-        # existing key and the restore's prefix match always finds the most recent one.
+        # A key names one state of the directory: the layout version (bump it to abandon every
+        # existing cache), the runner OS, the scheme (a hash of the files that decide how an entry is
+        # named and validated; when they change, a fresh lineage of caches starts rather than a
+        # growing archive of entries under names nothing will ask for again), the caller's scope, and
+        # a hash of the directory's content. On save, unchanged content gives a key that already
+        # exists and the save is skipped; new content gives a new key. The restore asks for a key no
+        # save ever writes, so it always falls through to the prefix and gets the most recent cache of
+        # this scope. An empty or missing directory is not saved: it would become the most recent
+        # cache and hide the full one before it.
+        layout=1
         scheme="$(cat hisim/utils.py hisim/caching/*.py | sha256sum | cut -c1-12)"
-        scope="$(printf '%s' "${{ inputs.scope }}" | tr -c 'A-Za-z0-9_.-' '_')"
-        prefix="hisim-inputs-cache-1-${RUNNER_OS}-${scheme}-${scope}-"
+        scope="$(printf '%s' "$SCOPE" | tr -c 'A-Za-z0-9_.-' '_')"
+        prefix="hisim-inputs-cache-${layout}-${RUNNER_OS}-${scheme}-${scope}-"
+        if [ -n "$(find hisim/inputs/cache -type f -print -quit 2>/dev/null)" ]; then
+          content="$(find hisim/inputs/cache -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)"
+          echo "has_content=true" >> "$GITHUB_OUTPUT"
+        else
+          content="none"
+          echo "has_content=false" >> "$GITHUB_OUTPUT"
+        fi
         echo "prefix=${prefix}" >> "$GITHUB_OUTPUT"
-        echo "key=${prefix}${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+        echo "save_key=${prefix}${content}" >> "$GITHUB_OUTPUT"
+        echo "restore_key=${prefix}latest" >> "$GITHUB_OUTPUT"
 
     - name: Restore the most recent cache for this scope
       if: inputs.mode == 'restore'
       uses: actions/cache/restore@v4
       with:
         path: hisim/inputs/cache
-        key: ${{ steps.key.outputs.key }}
+        key: ${{ steps.key.outputs.restore_key }}
         restore-keys: ${{ steps.key.outputs.prefix }}
 
     - name: Save this run's cache for the next one
-      if: inputs.mode == 'save'
+      if: inputs.mode == 'save' && steps.key.outputs.has_content == 'true'
       uses: actions/cache/save@v4
       with:
         path: hisim/inputs/cache
-        key: ${{ steps.key.outputs.key }}
+        key: ${{ steps.key.outputs.save_key }}

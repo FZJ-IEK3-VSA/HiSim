@@ -487,6 +487,8 @@ Also in this fix:
   would only mistranslate it, and an `AttributeError` dressed up as advice about configuring a profile source
   is worse than the plain traceback. The guidance above is printed alongside, not instead. If a specific
   failure turns out to deserve a retry, that is added then, for that failure, on evidence.
+  *That case arrived: #627 (2026-09-04) retries the locked-database failure, twice, and nothing else. See
+  §11.*
 - Delete the `:904` site outright — its `try:` body is `pass` with a `# todo`, so it can only ever have been
   a no-op that made the code look defensive.
 
@@ -686,8 +688,13 @@ Add to that:
 
 - **Do not re-bless the golden references** to match a downgraded run. The references are right; the run was
   wrong. Blessing them would make the substituted household the new definition of correct.
-- **Do not add retries** around the sqlite errors. Retrying hides Fault B rather than fixing it, and the
-  existing two-attempt loop is what turns one transient error into a silent household swap.
+- ~~Do not add retries around the sqlite errors.~~ **Narrowed 2026-09-04 (#627).** The objection was to the
+  old two-attempt loop, which turned one transient error into a silent household swap; F1 removed the swap,
+  and #611 removed the cross-process sharing that was Fault B. What remained on CI was `database is locked`
+  inside a single run, and F1 foresaw this case: one retry, for one failure, on evidence. A run whose log
+  ends in that line is rerun after 5 s and again after 15 s, in the same directory with its results folder
+  removed first; every other failure is still raised at once, and a database that stays locked fails after
+  three attempts saying so. Nothing is hidden and no household changes.
 - ~~Do not delete the fallback outright.~~ **Superseded 2026-08-31.** This document first argued the
   fallback was worth keeping behind an opt-in. The owner's objection is better: if UTSP is configured and
   unavailable, the useful response is an error telling you to configure it differently, not a different

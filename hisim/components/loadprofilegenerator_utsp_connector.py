@@ -204,6 +204,23 @@ class UtspLpgConnectorConfig(ConfigBase):
             )
         return household.Name
 
+    def _clear_non_key_fields(self, view: "UtspLpgConnectorConfig") -> None:
+        """Clear the fields that only place the run from the copy hashed into the occupancy cache key.
+
+        ``result_dir_path`` (where the result file is written), ``cache_dir_path`` (where the entry goes) and
+        ``calculation_index_for_local_lpg`` (which working directory the generator used) do not change the
+        profile. The first is an absolute path that differs between machines, which is why an occupancy entry
+        computed on one machine was never found on another. Every other field stays key material, including
+        ``predefined_loadprofile_filepaths``: an external profile directory decides the result, and it is
+        machine-specific by nature, so an entry computed from one is not portable.
+
+        Args:
+            view: the copy to adjust.
+        """
+        view.result_dir_path = ""
+        view.cache_dir_path = None
+        view.calculation_index_for_local_lpg = None
+
     @constructor(note="the household catalogue of the LoadProfileGenerator")
     @classmethod
     def for_household(

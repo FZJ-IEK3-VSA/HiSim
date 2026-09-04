@@ -85,6 +85,30 @@ recordings inherit these names too, so the sequencing matters to the declarative
 
 ---
 
+### F-3 — `PVSystemConfig.location` is a string nobody reads, and once F7 lands it can contradict the field beside it **[verified]**
+
+`PVSystemConfig.location: str = "Aachen"` is passed by 26 setup call sites (`location=weather_location`) and
+serialised into every scenario JSON, and the PV component never reads it: inside `generic_pv_system.py` it
+appears as the dataclass field, a parameter of the two factory methods and their two `location=location`
+forwardings, one docstring line and the default configuration's `location="Aachen"`, and in no computation.
+Its purpose was to make the PV cache key differ between sites, which worked only as long as every setup
+copied the same variable into the weather and the PV -- a habit, not an invariant, and the origin of
+`pylpg_flakiness.md` F7.
+
+F7 (#625, open at the time of writing) gives the PV a `weather_identity` field sized from the weather itself,
+so the key no longer needs `location` for anything. The key still contains it, because the key is the whole
+configuration's JSON. What remains is a field that can then visibly disagree with its neighbour: a setup with
+Seville weather and a PV built with the default `location="Aachen"` records `location: Aachen` and
+`weather_identity: Sevilla/...` side by side, and the first is wrong without consequence.
+
+Retiring it is a P4-sweep item and not a small fix: the field is in the config class, two factory
+signatures, 26 setup call sites and 19 committed scenario JSONs, and the conversion of `PVSystemConfig`
+(B-batch, `p4_component_sweep_requirements.md` R3 row `PVSystemConfig`) is the point at which those are all
+rewritten anyway. Until then it costs nothing but a misleading line in every PV block.
+
+*Logged 2026-09-03 while landing the zenith clamp (#628), with F7 (#625) still open. Do not fix piecemeal;
+fold into the PV conversion.*
+
 ## 2. Recurrences of findings logged elsewhere
 
 ### F-2 — P3's F-2 recurred, in exactly the shape it was logged in **[verified]**

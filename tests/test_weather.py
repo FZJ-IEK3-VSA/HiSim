@@ -5,9 +5,11 @@ configuration consistency, direct-filepath configuration including
 validation that a data source is required when a direct filepath is given,
 and the cached-file pressure-column fallback in ``i_prepare_simulation``.
 """
+import math
 import pathlib
 
 import pandas as pd
+import pvlib
 import pytest
 from hisim import sim_repository
 from hisim import component
@@ -259,3 +261,58 @@ def test_weather_default_display_config_is_not_shared() -> None:
     # Mutation must not propagate across instances.
     first.my_display_config.pretty_name = "first"
     assert second.my_display_config.pretty_name is None
+
+
+@pytest.mark.base
+def test_the_zenith_clamp_bounds_the_direct_normal_irradiance_near_the_horizon() -> None:
+    """With the clamp applied, DNI is never negative and never exceeds ``dhi / cos(zenith_tol)``.
+
+    DNI is the horizontal irradiance divided by the cosine of the zenith angle; the clamp caps the angle
+    at ``zenith_tol`` so the divisor cannot approach zero or go negative. A constant non-zero horizontal
+    irradiance over a full day makes a missing clamp obvious: the night timesteps come out negative.
+    """
+    index = pd.date_range("2021-06-21", periods=24 * 12, freq="5min", tz="UTC")
+    horizontal = pd.Series(50.0, index=index)
+    zenith_tol = 87.0
+
+    dni = weather.calculate_direct_normal_radiation(horizontal, lon=6.08, lat=50.78, zenith_tol=zenith_tol)
+
+    bound = 50.0 / math.cos(math.radians(zenith_tol))
+    zenith = pvlib.solarposition.get_solarposition(index, 50.78, 6.08)["apparent_zenith"]
+    assert (zenith > zenith_tol).any(), "the day must contain low-sun timesteps for the clamp to matter"
+    assert (dni >= 0).all(), "past the horizon the divisor went negative, so the clamp did not apply"
+    assert dni.max() <= bound + 1e-9, f"DNI {dni.max():.1f} exceeds the clamped bound {bound:.1f}"
+    assert dni[zenith > zenith_tol].round(6).nunique() == 1, "every clamped timestep must divide by the same cosine"
+    highest_sun = zenith.idxmin()
+    expected_at_noon = 50.0 / math.cos(math.radians(zenith[highest_sun]))
+    assert dni[highest_sun] == pytest.approx(expected_at_noon), "an unclamped timestep must divide by its own cosine"
+
+
+@pytest.mark.base
+def test_a_zenith_clamp_outside_the_open_interval_is_refused() -> None:
+    """A clamp angle at or past 90 degrees would make the divisor zero or negative; the function refuses it.
+
+    Catches: a caller passing a clamp that defeats the clamp, which would come out as huge or negative
+    irradiance instead of an error.
+    """
+    index = pd.date_range("2021-06-21", periods=3, freq="h", tz="UTC")
+    horizontal = pd.Series(50.0, index=index)
+    for bad in (90.0, 100.0, 0.0, -20.0):
+        with pytest.raises(ValueError, match="strictly between 0 and 90"):
+            weather.calculate_direct_normal_radiation(horizontal, lon=6.08, lat=50.78, zenith_tol=bad)
+
+
+@pytest.mark.base
+def test_a_nan_in_the_horizontal_irradiance_is_reported_with_its_timestep() -> None:
+    """A gap in the weather data names the timestep and the side that was NaN, instead of a bare failure.
+
+    Catches: the error going back to a message that says nothing about where or why.
+    """
+    index = pd.date_range("2021-06-21 10:00", periods=4, freq="h", tz="UTC")
+    horizontal = pd.Series([50.0, float("nan"), 50.0, 50.0], index=index)
+    with pytest.raises(ValueError) as caught:
+        weather.calculate_direct_normal_radiation(horizontal, lon=6.08, lat=50.78)
+    message = str(caught.value)
+    assert "1 of 4 timesteps" in message
+    assert "2021-06-21 11:00" in message
+    assert "horizontal irradiance is NaN at 1" in message

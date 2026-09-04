@@ -3,7 +3,8 @@
 Two caches used to hash machine-specific paths -- the LoadProfileGenerator connector its
 ``result_dir_path``, the weather its absolute ``source_path`` -- so their entries could never be shared
 between machines. These tests pin the two overrides and the base rule: fields that decide the result
-move the key, fields that only place the run do not, and no key contains an absolute path.
+move the key, fields that only place the run do not, and a key built from the repository's own data
+files contains no absolute path.
 """
 
 # clean
@@ -17,6 +18,8 @@ from typing import Any
 import pytest
 
 from hisim import utils
+from utspclient.helpers.lpgdata import EnergyIntensityType
+
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig
 from hisim.components.weather import LocationEnum, WeatherConfig
 from hisim.config import ComponentID
@@ -37,8 +40,9 @@ class Keys:
 
     PARAMETERS = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=900)
 
-    #: A JSON string value that starts at the filesystem root: the shape of a machine-specific path.
-    ABSOLUTE_PATH_VALUE = re.compile(r'"[a-z_]+": "/[^"]*"')
+    #: A JSON string value that starts at a filesystem root, POSIX (``/``) or Windows (``C:\\``): the shape
+    #: of a machine-specific path.
+    ABSOLUTE_PATH_VALUE = re.compile(r'"[a-z_]+": "(?:/|[A-Za-z]:\\\\)[^"]*"')
 
     @classmethod
     def of(cls, config: Any) -> str:
@@ -132,7 +136,8 @@ def test_what_decides_the_occupancy_profile_still_moves_its_key() -> None:
 
     assert Keys.of(baseline) != Keys.of(dataclasses.replace(baseline, guid="another-seed"))
     assert Keys.of(baseline) != Keys.of(dataclasses.replace(baseline, profile_with_washing_machine_and_dishwasher=False))
-    other_intensity = [member for member in type(baseline.energy_intensity) if member is not baseline.energy_intensity][0]
+    assert baseline.energy_intensity is not EnergyIntensityType.EnergyIntensive, "pick another member below"
+    other_intensity = EnergyIntensityType.EnergyIntensive
     assert Keys.of(baseline) != Keys.of(dataclasses.replace(baseline, energy_intensity=other_intensity))
 
 
@@ -162,15 +167,39 @@ def test_a_different_weather_file_has_a_different_key() -> None:
     """Making the path portable must not make two files look alike.
 
     Catches: a view that drops the path altogether, so a custom weather file collides with the
-    catalogue entry of the same station.
+    catalogue entry of the same station; and one that keeps only the file name, so two custom files
+    that share a name in different directories collide with each other.
     """
     aachen = WeatherConfig.get_default(location_entry=LocationEnum.AACHEN)
     seville = WeatherConfig.get_default(location_entry=LocationEnum.SEVILLE)
-    custom = dataclasses.replace(aachen, source_path="/data/measured/my_station_2021.csv")
+    custom = dataclasses.replace(aachen, source_path="/data/measured/my_station_2021")
+    same_name_elsewhere = dataclasses.replace(aachen, source_path="/data/other_lab/my_station_2021")
 
     assert Keys.of(aachen) != Keys.of(seville)
     assert Keys.of(aachen) != Keys.of(custom)
-    assert '"source_path": "my_station_2021.csv"' in Keys.of(custom), "a file outside the inputs keeps its name only"
+    assert Keys.of(custom) != Keys.of(same_name_elsewhere)
+    assert '"source_path": "/data/measured/my_station_2021"' in Keys.of(custom), (
+        "a file outside the inputs directory keeps its absolute path"
+    )
+
+
+@pytest.mark.base
+def test_the_base_rule_survives_an_override() -> None:
+    """The building is cleared for a config with its own hook, not only for one without.
+
+    Catches: a hook design that lets a subclass bypass the base rule, so the weather or occupancy key
+    becomes house-specific again.
+    """
+    weather = WeatherConfig.get_default(location_entry=LocationEnum.AACHEN)
+    occupancy = UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    for in_house_a in (weather, occupancy):
+        in_house_b = dataclasses.replace(
+            in_house_a, component_id=dataclasses.replace(in_house_a.component_id, building="BUI2")
+        )
+        in_house_a.component_id = dataclasses.replace(in_house_a.component_id, building="BUI1")
+
+        assert Keys.of(in_house_a) == Keys.of(in_house_b), type(in_house_a).__name__
+        assert '"building": null' in Keys.of(in_house_a), type(in_house_a).__name__
 
 
 @pytest.mark.base

@@ -464,26 +464,41 @@ class WeatherConfig(ConfigBase):
         )
         return config
 
-    def cache_key_view(self) -> "WeatherConfig":
-        """Return the copy hashed into the weather cache key, with ``source_path`` made portable.
+    def _clear_non_key_fields(self, view: "WeatherConfig") -> None:
+        """Make ``source_path`` portable in the copy hashed into the weather cache key.
 
-        ``source_path`` selects the data file, so it belongs in the key, but it is an absolute path that
-        differs between machines. Under the inputs directory it is rewritten relative to that directory
-        (``weather/DWD_TRY/...``), which is the same on every checkout. A file outside the inputs directory
-        keeps only its file name. Dropping the path entirely is not an option: a custom weather file would then
-        collide with the catalogue entry of the same station.
+        ``source_path`` selects the data file, so it stays in the key, but for a catalogue file it is an
+        absolute path that differs between checkouts. A file under the inputs directory is therefore spelled
+        relative to that directory with forward slashes
+        (``weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center``), which is the
+        same on every machine. A file outside the inputs directory keeps its absolute path: it is
+        machine-specific by nature, and shortening it to its file name would make two different files that
+        share a name collide in the cache.
 
-        Returns:
-            WeatherConfig: a deep copy with ``source_path`` rewritten.
+        Args:
+            view: the copy to adjust.
         """
-        view = super().cache_key_view()
         inputs_directory = os.path.abspath(utils.get_input_directory())
         source = os.path.abspath(str(self.source_path))
-        if os.path.commonpath([inputs_directory, source]) == inputs_directory:
+        if self._is_under(inputs_directory, source):
             view.source_path = os.path.relpath(source, inputs_directory).replace(os.sep, "/")
-        else:
-            view.source_path = os.path.basename(source)
-        return view
+
+    @staticmethod
+    def _is_under(directory: str, path: str) -> bool:
+        """Whether ``path`` lies inside ``directory``, both absolute.
+
+        Args:
+            directory: the absolute directory.
+            path: the absolute path to test.
+
+        Returns:
+            bool: True if ``path`` is ``directory`` or below it. False when the two are on different
+            drives, where ``os.path.commonpath`` raises instead of answering.
+        """
+        try:
+            return os.path.commonpath([directory, path]) == directory
+        except ValueError:
+            return False
 
     @preset(note="the repository's reference climate")
     @classmethod

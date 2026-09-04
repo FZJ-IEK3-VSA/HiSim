@@ -7,7 +7,6 @@ import inspect
 import itertools
 import json
 import os
-import dataclasses
 from dataclasses import dataclass
 from functools import lru_cache
 from functools import reduce as freduce
@@ -410,8 +409,7 @@ def build_cache_key_string(parameter_class: Any, my_simulation_parameters: Simul
 
     What is hashed is ``parameter_class.cache_key_view()`` when the class provides it (every
     ``ConfigBase`` does): a copy with the fields that do not affect the result cleared and any paths made
-    portable. A parameter class without that method -- tests pass minimal stand-ins -- is hashed as it is,
-    with ``component_id.building`` cleared if it has one.
+    portable. A parameter class without that method -- tests pass minimal stand-ins -- is hashed as it is.
 
     Args:
         parameter_class: the configuration; must provide ``to_json``.
@@ -427,15 +425,8 @@ def build_cache_key_string(parameter_class: Any, my_simulation_parameters: Simul
     if my_simulation_parameters is None:
         raise ValueError("Simulation parameters was none.")
     view_method = getattr(parameter_class, "cache_key_view", None)
-    if callable(view_method):
-        parameter_class_copy = view_method()
-    else:
-        parameter_class_copy = copy.deepcopy(parameter_class)
-        component_id = getattr(parameter_class_copy, "component_id", None)
-        if component_id is not None:
-            # The identity is frozen, hence the replacement rather than an assignment.
-            setattr(parameter_class_copy, "component_id", dataclasses.replace(component_id, building=None))
-    json_str = parameter_class_copy.to_json() + my_simulation_parameters.get_unique_key()
+    hashed = view_method() if callable(view_method) else parameter_class
+    json_str = hashed.to_json() + my_simulation_parameters.get_unique_key()
     if len(json_str) < 5:
         raise ValueError("Empty json detected for caching. This is a bug.")
     return str(json_str)

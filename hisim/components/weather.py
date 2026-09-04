@@ -1346,14 +1346,25 @@ def calculate_direct_normal_radiation(
     lat: float
         Latitude of the location
     zenith_tol: float, optional
-        Avoid cosines of values above a certain zenith angle of in order to avoid division by zero.
+        The zenith angle in degrees at which the sun's position is clamped before dividing by its cosine,
+        so that the divisor cannot approach zero toward the horizon or go negative past it. Must lie
+        strictly between 0 and 90.
 
     Returns
     -------
     dni: pd.Series
 
-    """
+    Raises
+    ------
+    ValueError
+        If ``zenith_tol`` is not strictly between 0 and 90, or if the result contains NaN, which means
+        the horizontal irradiance or the solar position was NaN at some timestep.
 
+    """
+    if not 0 < zenith_tol < 90:
+        raise ValueError(
+            f"zenith_tol must lie strictly between 0 and 90 degrees so that its cosine is positive, got {zenith_tol}."
+        )
     solar_pos = pvlib.solarposition.get_solarposition(direct_horizontal_irradation.index, lat, lon)
     # Clamp the zenith angle at zenith_tol before dividing by its cosine. This must be a single .loc
     # assignment: the earlier chained form (solar_pos["apparent_zenith"][mask] = tol) wrote into a
@@ -1361,6 +1372,13 @@ def calculate_direct_normal_radiation(
     # and negative past it (pandas reported this as ChainedAssignmentError).
     solar_pos.loc[solar_pos["apparent_zenith"] > zenith_tol, "apparent_zenith"] = zenith_tol
     dni = direct_horizontal_irradation.div(solar_pos["apparent_zenith"].apply(math.radians).apply(math.cos))
-    if sum(dni.isnull()) > 0:
-        raise ValueError("Something went wrong...")
+    if dni.isnull().any():
+        nan_irradiance = int(direct_horizontal_irradation.isnull().sum())
+        nan_zenith = int(solar_pos["apparent_zenith"].isnull().sum())
+        raise ValueError(
+            f"The direct normal irradiance is NaN at {int(dni.isnull().sum())} of {len(dni)} timesteps, "
+            f"the first at {dni.index[dni.isnull()][0]}. The direct horizontal irradiance is NaN at "
+            f"{nan_irradiance} timesteps and the solar zenith angle at {nan_zenith} (lat={lat}, lon={lon}). "
+            "A NaN irradiance points at a gap in the weather file; a NaN zenith at the time index or the coordinates."
+        )
     return dni

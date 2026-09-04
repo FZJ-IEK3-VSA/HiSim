@@ -283,3 +283,36 @@ def test_the_zenith_clamp_bounds_the_direct_normal_irradiance_near_the_horizon()
     assert (dni >= 0).all(), "past the horizon the divisor went negative, so the clamp did not apply"
     assert dni.max() <= bound + 1e-9, f"DNI {dni.max():.1f} exceeds the clamped bound {bound:.1f}"
     assert dni[zenith > zenith_tol].round(6).nunique() == 1, "every clamped timestep must divide by the same cosine"
+    highest_sun = zenith.idxmin()
+    expected_at_noon = 50.0 / math.cos(math.radians(zenith[highest_sun]))
+    assert dni[highest_sun] == pytest.approx(expected_at_noon), "an unclamped timestep must divide by its own cosine"
+
+
+@pytest.mark.base
+def test_a_zenith_clamp_outside_the_open_interval_is_refused() -> None:
+    """A clamp angle at or past 90 degrees would make the divisor zero or negative; the function refuses it.
+
+    Catches: a caller passing a clamp that defeats the clamp, which would come out as huge or negative
+    irradiance instead of an error.
+    """
+    index = pd.date_range("2021-06-21", periods=3, freq="h", tz="UTC")
+    horizontal = pd.Series(50.0, index=index)
+    for bad in (90.0, 100.0, 0.0, -20.0):
+        with pytest.raises(ValueError, match="strictly between 0 and 90"):
+            weather.calculate_direct_normal_radiation(horizontal, lon=6.08, lat=50.78, zenith_tol=bad)
+
+
+@pytest.mark.base
+def test_a_nan_in_the_horizontal_irradiance_is_reported_with_its_timestep() -> None:
+    """A gap in the weather data names the timestep and the side that was NaN, instead of a bare failure.
+
+    Catches: the error going back to a message that says nothing about where or why.
+    """
+    index = pd.date_range("2021-06-21 10:00", periods=4, freq="h", tz="UTC")
+    horizontal = pd.Series([50.0, float("nan"), 50.0, 50.0], index=index)
+    with pytest.raises(ValueError) as caught:
+        weather.calculate_direct_normal_radiation(horizontal, lon=6.08, lat=50.78)
+    message = str(caught.value)
+    assert "1 of 4 timesteps" in message
+    assert "2021-06-21 11:00" in message
+    assert "horizontal irradiance is NaN at 1" in message

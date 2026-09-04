@@ -16,14 +16,13 @@ import re
 from typing import Any
 
 import pytest
-
-from hisim import utils
 from utspclient.helpers.lpgdata import EnergyIntensityType
 
+from hisim import utils
+from hisim.components.generic_pv_system import PVSystemConfig
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig
 from hisim.components.weather import LocationEnum, WeatherConfig
 from hisim.config import ComponentID
-from hisim.components.generic_pv_system import PVSystemConfig
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Noah Pflugradt"

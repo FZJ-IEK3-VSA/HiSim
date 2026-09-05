@@ -205,7 +205,7 @@ build(recorded: RecordedSystem) -> EnergySystemFile
 record_setup(module: Path, parameters: SimulationParameters, out: Path) -> RecordingResult
 normalise_parameters(parameters: SimulationParameters) -> Mapping[str, Any]
 probe(module: Path, probes: Sequence[ProbeConfiguration]) -> ProbeMatrix
-apply_grouping(flat: EnergySystemFile, grouping: Grouping) -> EnergySystemFile
+apply_grouping(grouping: Grouping, matrix: ProbeMatrix) -> EnergySystemFile
 ```
 
 ### 5.3 File naming

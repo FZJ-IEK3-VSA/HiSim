@@ -109,9 +109,10 @@ is a constructor argument the declarative path has no way to supply.
 
 ## Groups and variants: probe, decide, apply
 
-A recording observes one run, so it can only describe the branch that ran. The twelve setups driven
-by a `ModularHouseholdConfig` have branches — a battery that is there or is not, a rooftop share
-somebody picks — and which of those differences is *structure* is a judgement no diff can make. So
+A recording observes one run, so it can only describe the branch that ran. The twelve
+building-sizer setups driven by a `ModularHouseholdConfig` have branches — a battery that is there
+or is not, a rooftop share somebody picks — and which of those differences is *structure* is a
+judgement no diff can make. So
 there is a second pass with a person in the middle of it, and three files per setup.
 
 ```bash
@@ -135,10 +136,11 @@ configuration and *wired* differently in one of them, which a presence matrix ca
 is exactly what a group cannot express and a variant can. `configurations` has one row per probe,
 the module-configuration fields that produced it, and the switch positions that column stands for.
 
-The person writes one of four things in each row that is not `=` everywhere: nothing (an ordinary
-always-on component), `group:<name>`, `variant:<name>` or `variant:<name>/<option>`, or `override` —
-the difference is a value a consumer sets rather than a question of membership. Nothing is ever
-filled in automatically, and a `≠` row left empty is refused by name, twice: once by the importer
+A row that is `=` everywhere needs nothing and stays empty. Every other row must carry one of
+three answers: `group:<name>`, `variant:<name>` or `variant:<name>/<option>`, or `override` — the
+difference is a value a consumer sets rather than a question of membership. The tool never decides
+a row's meaning itself — it only writes down what it observed and carries a previously committed
+decision forward — and a `≠` row left empty is refused by name, twice: once by the importer
 against the cells, and once by the second pass against the recordings.
 
 Every probe column is then an assertion the second pass checks: put the grouped file's switches

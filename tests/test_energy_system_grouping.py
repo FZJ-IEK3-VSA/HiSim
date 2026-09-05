@@ -20,14 +20,19 @@ Each test states the failure mode it catches.
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 import dataclasses
-from typing import ClassVar, Dict
+from typing import Any, ClassVar, Dict
 
 import pytest
 
+from hisim.cli import main as cli_main
 from hisim.energy_system.errors import EnergySystemRecordingError
+from hisim.energy_system.groups import GroupExpander
 from hisim.energy_system.loader import dump_energy_system, parse_energy_system
+from hisim.energy_system.recording.session import RecordedFileWriter
 from hisim.energy_system.recording.grouping import (
     Assignment,
     AssignmentKind,
@@ -37,7 +42,7 @@ from hisim.energy_system.recording.grouping import (
 from hisim.energy_system.recording.grouping_checks import check_grouping
 from hisim.energy_system.recording.grouping_io import dump_grouping, read_grouping
 from hisim.energy_system.recording.grouping_report import CombinationSpace, GroupingReport
-from hisim.energy_system.recording.matrix import CellState, ProbeMatrix, ProbeRecording
+from hisim.energy_system.recording.matrix import CellState, EntryComparison, ProbeMatrix, ProbeRecording
 from hisim.energy_system.recording.probes import ModuleConfigMaterialiser, ProbeList
 from hisim.energy_system.recording.regrouping import ColumnRealizer, GroupedSystemBuilder
 from hisim.energy_system.recording.workbook import write_workbook
@@ -164,10 +169,9 @@ probes:
         Returns:
             The recording, its text canonicalised so that a realization can be compared with it.
         """
+        del column  # a recording is keyed by its column; the value itself no longer repeats it
         model = parse_energy_system(text)
-        return ProbeRecording(
-            column=column, path=Path(f"{column}.energy_system.yaml"), text=dump_energy_system(model), model=model
-        )
+        return ProbeRecording(text=dump_energy_system(model), model=model)
 
     @classmethod
     def decision(cls) -> Grouping:
@@ -243,14 +247,20 @@ def test_a_reference_into_a_component_the_column_lacks_is_not_a_difference() -> 
     the building, which lists the energy manager among its sources.
     """
     baseline = Fork.BASELINE.replace(
-        "  battery:\n", "  weather_extra_reader:\n    class: x.Y\n    config: {}\n    inputs:\n      - battery\n  battery:\n"
+        "    config:\n      location: Aachen\n",
+        "    config:\n      location: Aachen\n    inputs:\n      - battery\n",
+        1,
     )
     recordings = dict(Fork.recordings())
     recordings["baseline"] = Fork.recording("baseline", baseline)
     matrix = ProbeMatrix.of(Fork.probe_list(), recordings)
 
-    assert state(matrix, "weather_extra_reader", "no_battery") is CellState.ABSENT
+    # weather exists in BOTH columns and differs only by its baseline-only reference to the
+    # battery, which no_battery does not have — exactly the normalisation's case. Neutralising
+    # EntryComparison.restricted would flip this cell to DIFFERENT.
     assert state(matrix, "weather", "no_battery") is CellState.IDENTICAL
+    assert state(matrix, "weather", "baseline") is CellState.IDENTICAL
+    assert "weather" not in [row.component for row in matrix.decided_rows()]
 
 
 @pytest.mark.base
@@ -554,3 +564,368 @@ probes:
 
     assert "EF-R9" in str(refusal.value)
     assert "use_battery_and_emss" in str(refusal.value)
+
+
+class Defaults:
+    """The module-configuration defaults the Fork probe list names, small enough to see whole.
+
+    The real setups name a ``ModularHouseholdConfig`` builder here; the fixture names this class so
+    that materialiser tests need no heavy import and a default value is a fact of the test file.
+    """
+
+    @classmethod
+    def build(cls) -> "Defaults.Config":
+        """Builds the default configuration object the probe overlays are applied onto.
+
+        Returns:
+            The defaults, carrying one nested block with two fields.
+        """
+        return cls.Config()
+
+    class Config:
+        """The configuration value: one nested block, dumped the way a dataclass config would be."""
+
+        def to_dict(self) -> Dict[str, Any]:
+            """Dumps the defaults as the nested document an overlay path addresses.
+
+            Returns:
+                The document.
+            """
+            return {"energy_system_config_": {"use_battery_and_ems": True, "share_of_maximum_pv_potential": 1.0}}
+
+
+@pytest.mark.base
+def test_a_configuration_inventing_a_variant_in_every_column_is_refused() -> None:
+    """Catches the switch-validation validating a typo against itself.
+
+    The known variants were once collected from assignments *and* configurations, so a variant name
+    invented by every configuration entered the very set the guard checked against and a dead
+    single-option switch landed silently in the committed file. Only an assignment can create a
+    variant — a variant nobody assigned a component to has no members.
+    """
+    decision = Fork.decision()
+    wrong = Grouping(
+        setup=decision.setup,
+        probes=decision.probes,
+        assignments=decision.assignments,
+        configurations=(
+            ConfigurationSelection(
+                "baseline", variants={"electricity_management": "with_battery", "ghost": "on"}
+            ),
+            ConfigurationSelection(
+                "no_battery", variants={"electricity_management": "metered_directly", "ghost": "on"}
+            ),
+        ),
+    )
+
+    with pytest.raises(EnergySystemRecordingError) as refusal:
+        check_grouping(wrong, Fork.matrix())
+
+    assert "EF-R7" in str(refusal.value)
+    assert "ghost" in str(refusal.value)
+
+
+@pytest.mark.base
+def test_a_group_flag_that_is_not_a_boolean_is_refused() -> None:
+    """Catches a hand-written string flag silently switching a group on.
+
+    ``bool("false")`` is ``True``, so a committed file edited by hand to say ``pv: "off"`` would
+    read as an enabled group and only surface as a byte-for-byte non-reproduction minutes later.
+    The reader accepts a real YAML boolean and nothing else, naming the flag it refused.
+    """
+    with pytest.raises(EnergySystemRecordingError) as refusal:
+        read_grouping(
+            """
+setup: system_setups/fork.py
+probes: energy_systems/fork.probes.yaml
+configurations:
+  baseline:
+    groups:
+      pv_switch: "false"
+"""
+        )
+
+    assert "EF-R7" in str(refusal.value)
+    assert "pv_switch" in str(refusal.value)
+
+
+@pytest.mark.base
+def test_a_probe_changing_only_default_values_is_refused() -> None:
+    """Catches the vacuous-proof probe: an overlay that sets fields to what they already are.
+
+    Such a column records the baseline a second time, every cell reads ``=`` and the table looks
+    like a proof of a configuration that was never exercised. The misspelled-field refusal cannot
+    catch it — the path is real — so the materialiser compares the finished document against the
+    untouched defaults and refuses equality.
+    """
+    probe_list = ProbeList.read(
+        """
+setup: system_setups/fork.py
+defaults: tests.test_energy_system_grouping.Defaults.build
+probes:
+  - column: baseline
+  - column: no_op
+    module_config:
+      energy_system_config_.use_battery_and_ems: true
+"""
+    )
+
+    with pytest.raises(EnergySystemRecordingError) as refusal:
+        ModuleConfigMaterialiser.document(probe_list, probe_list.probes[1])
+
+    assert "EF-R9" in str(refusal.value)
+    assert "no_op" in str(refusal.value)
+
+
+@pytest.mark.base
+def test_a_probe_column_that_is_not_an_identifier_is_refused() -> None:
+    """Catches a column name escaping the probe work directory.
+
+    The column is interpolated into the recording's and the module-configuration file's names, so
+    a ``/`` or a ``..`` would write outside the throwaway directory; group and variant names have
+    carried the identifier rule from the start, and the column now gets the same one.
+    """
+    with pytest.raises(EnergySystemRecordingError) as refusal:
+        ProbeList.read(
+            """
+setup: system_setups/fork.py
+defaults: a.B.build
+probes:
+  - column: baseline
+  - column: ../../escape
+    module_config:
+      energy_system_config_.use_battery_and_ems: false
+"""
+        )
+
+    assert "EF-R9" in str(refusal.value)
+    assert "escape" in str(refusal.value)
+
+
+@pytest.mark.base
+def test_a_matrix_without_the_baseline_recording_is_refused() -> None:
+    """Catches a matrix silently re-baselining when the baseline recording is missing.
+
+    Every cell's meaning turns on columns[0] being the committed twin; promoting the next column
+    would flip the comparison rather than fail it. Unreachable through the probe runner, which
+    raises on any failed probe, but the public constructor must hold the invariant itself.
+    """
+    recordings = dict(Fork.recordings())
+    del recordings["baseline"]
+
+    with pytest.raises(EnergySystemRecordingError) as refusal:
+        ProbeMatrix.of(Fork.probe_list(), recordings)
+
+    assert "EF-R9" in str(refusal.value)
+    assert "baseline" in str(refusal.value)
+
+
+@pytest.mark.base
+def test_a_scalar_sizing_reference_into_an_absent_component_is_dropped() -> None:
+    """Catches the reference normalisation treating the two sizing_sources shapes differently.
+
+    A list of sizing references dropped vanished providers while a single dotted reference was
+    kept, so a row could read ``≠`` purely because of a reference the format's own off rule
+    explains. Latent — recordings carry no sizing_sources — but the comparison must not depend on
+    that staying true.
+    """
+    present = {"weather": object()}
+    document = {
+        "class": "x.Y",
+        "sizing_sources": {
+            "listed": ["weather.Other", "battery.Fact"],
+            "scalar_gone": "battery.Fact",
+            "scalar_kept": "weather.Other",
+        },
+    }
+
+    restricted = EntryComparison.restricted(document, present)
+
+    assert restricted["sizing_sources"]["listed"] == ["weather.Other"]
+    assert restricted["sizing_sources"]["scalar_gone"] is None
+    assert restricted["sizing_sources"]["scalar_kept"] == "weather.Other"
+
+
+@pytest.mark.base
+def test_an_assignment_that_would_not_round_trip_is_refused_at_construction() -> None:
+    """Catches an assignment whose written form parses back as a different assignment.
+
+    ``:`` and ``/`` are the separators of the written form with no escaping, so a name carrying one
+    would survive the trip to the sheet and come back meaning something else. Such a value is a
+    programming error, refused where it is constructed rather than where it is next read.
+    """
+    with pytest.raises(ValueError):
+        Assignment("x", AssignmentKind.VARIANT, "ems/high", "opt")
+    with pytest.raises(ValueError):
+        Assignment("x", AssignmentKind.GROUP, "g", "an_option")
+    with pytest.raises(ValueError):
+        Assignment("x", AssignmentKind.VARIANT, "")
+
+
+@pytest.mark.base
+def test_a_group_registered_between_ungrouped_components_still_reproduces_byte_for_byte() -> None:
+    """Catches the realizer laying dissolved components out in block order instead of observed order.
+
+    The grouped file's blocks lose the registration order — here the boiler group's member was
+    registered between the weather and the battery — and the expansion appends variant members
+    before group members, so ordering by the blocks can never reproduce an interleaved recording.
+    The realizer orders the dissolved components by the recording it is being proven against.
+    """
+    baseline_text = """
+schema_version: 3
+name: interleaved
+components:
+  weather:
+    class: hisim.components.weather.Weather
+    config:
+      location: Aachen
+  boiler:
+    class: hisim.components.generic_boiler.GenericBoiler
+    config:
+      power_in_watt: 5000.0
+  battery:
+    class: hisim.components.advanced_battery_bslib.Battery
+    config:
+      capacity_in_kilowatt_hour: 18.0
+  meter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    config: {}
+"""
+    bare_text = """
+schema_version: 3
+name: interleaved
+components:
+  weather:
+    class: hisim.components.weather.Weather
+    config:
+      location: Aachen
+  meter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    config: {}
+"""
+    probe_list = dataclasses.replace(
+        ProbeList.read(
+            """
+setup: system_setups/interleaved.py
+defaults: tests.test_energy_system_grouping.Defaults.build
+probes:
+  - column: baseline
+  - column: bare
+    module_config:
+      energy_system_config_.use_battery_and_ems: false
+"""
+        ),
+        origin="energy_systems/interleaved.probes.yaml",
+    )
+    recordings = {
+        "baseline": Fork.recording("baseline", baseline_text),
+        "bare": Fork.recording("bare", bare_text),
+    }
+    matrix = ProbeMatrix.of(probe_list, recordings)
+    decision = Grouping(
+        setup="system_setups/interleaved.py",
+        probes="energy_systems/interleaved.probes.yaml",
+        assignments=(
+            Assignment("boiler", AssignmentKind.GROUP, "heating"),
+            Assignment("battery", AssignmentKind.VARIANT, "storage", "with_battery"),
+        ),
+        configurations=(
+            ConfigurationSelection(
+                "baseline", groups={"heating": True}, variants={"storage": "with_battery"}
+            ),
+            ConfigurationSelection("bare", groups={"heating": False}, variants={"storage": "none"}),
+        ),
+        origin="interleaved.grouping.yaml",
+    )
+    check_grouping(decision, matrix)
+    builder = GroupedSystemBuilder(decision, matrix)
+    realizer = ColumnRealizer(builder.build(), builder)
+
+    for column in matrix.columns:
+        assert realizer.text(column, "") == matrix.recordings[column].text, column
+
+
+@pytest.mark.base
+def test_the_committed_grouped_sizer_realizes_the_committed_twin() -> None:
+    """Catches drift between the three committed grouping artifacts and the committed flat twin.
+
+    The grouped heat-pump-sizer file's whole claim is that, at its committed switch positions, it
+    is the flat twin with structure added. The full per-column proof needs live probe runs, but the
+    baseline half of it is a pure file computation: expand the committed grouped file, lay the
+    components out in the twin's own order, and the emitted body must equal the committed twin's
+    body byte for byte.
+    """
+    root = Path(__file__).resolve().parents[1]
+    grouped = parse_energy_system(root / "energy_systems/household_heatpump_building_sizer.grouped.energy_system.yaml")
+    twin_path = root / "energy_systems/household_heatpump_building_sizer.energy_system.yaml"
+    twin = parse_energy_system(twin_path)
+
+    expanded, _ = GroupExpander(grouped).expand()
+    dissolved = dict(expanded.components)
+    for group in expanded.groups.values():
+        dissolved.update(group.components)
+    ordered = {name: dissolved[name] for name in twin.all_components() if name in dissolved}
+    ordered.update({name: entry for name, entry in dissolved.items() if name not in ordered})
+    flat = expanded.model_copy(update={"components": ordered, "groups": {}, "variants": {}})
+
+    _, twin_body = RecordedFileWriter.split(twin_path.read_text(encoding="utf-8"))
+    assert dump_energy_system(flat) == twin_body
+
+
+@pytest.mark.base
+def test_a_workbook_without_its_provenance_properties_is_refused(tmp_path: Path) -> None:
+    """Catches an import silently guessing which setup a workbook belongs to.
+
+    The writer always records the setup and the probe list in the workbook's description property;
+    a workbook without them was re-saved by a tool that strips document properties, and a guessed
+    path would commit a decision whose provenance nobody stated — wrong only later, at
+    ``record --grouping``, after the commit.
+    """
+    path = write_workbook(tmp_path / "fork.grouping.xlsx", Fork.matrix(), Fork.probe_list(), Fork.decision())
+    from openpyxl import load_workbook  # noqa: PLC0415 - the test tampers the way a tool would
+
+    workbook = load_workbook(path)
+    workbook.properties.description = None
+    workbook.save(path)
+
+    with pytest.raises(EnergySystemRecordingError) as refusal:
+        read_workbook(path)
+
+    assert "EF-R7" in str(refusal.value)
+    assert "setup" in str(refusal.value)
+
+
+@pytest.mark.base
+def test_the_grouping_probe_verb_drives_the_shared_recorder_child(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catches the CLI wiring between the grouping verbs and the child recorder drifting.
+
+    Every probe is recorded through this repository's own command line so that a probe and a hand
+    recording cannot diverge; nothing but this test pins the argument vector that contract turns
+    on. The child is stubbed to fail, so the test also proves a failing probe surfaces as the
+    refusal exit code rather than as a traceback.
+    """
+    captured: Dict[str, Any] = {}
+
+    def fake_run(arguments, **kwargs):  # noqa: ANN001, ANN003 - mirror subprocess.run loosely
+        del kwargs  # the stub reads the argument vector and nothing else
+        captured.setdefault("argv", list(arguments))
+        return subprocess.CompletedProcess(args=arguments, returncode=1, stdout="", stderr="stubbed refusal")
+
+    monkeypatch.setattr("hisim.energy_system.recording.probe_session.subprocess.run", fake_run)
+
+    exit_code = cli_main(
+        [
+            "energy-system",
+            "grouping",
+            "probe",
+            "system_setups/household_heatpump_building_sizer.py",
+            "energy_systems/household_heatpump_building_sizer.probes.yaml",
+        ]
+    )
+
+    assert exit_code != 0
+    argv = captured["argv"]
+    assert argv[0] == sys.executable
+    assert argv[1:5] == ["-m", "hisim.cli", "energy-system", "record"]
+    assert argv[5].endswith("household_heatpump_building_sizer.py")
+    assert "--out" in argv

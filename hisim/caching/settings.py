@@ -13,6 +13,7 @@ parsed and validated so that a typo fails now, but no connection is opened yet.
 
 import enum
 import os
+import urllib.parse
 from dataclasses import dataclass
 from typing import ClassVar, Mapping, Optional
 
@@ -30,7 +31,8 @@ class CacheNetworkMode(enum.Enum):
 
     ``AUTO`` probes the internal endpoint once and falls back to the external one, then to local-only.
     ``INTERNAL`` and ``EXTERNAL`` pin one endpoint. ``OFF`` disables all network access. The enum values
-    are the exact spellings accepted in ``HISIM_CACHE_NETWORK``.
+    are the exact spellings accepted in ``HISIM_CACHE_NETWORK``. No probing happens in this phase: the
+    mode is parsed and validated, but no connection is opened until the network tier ships.
     """
 
     AUTO = "auto"
@@ -96,17 +98,21 @@ class CacheSettings:
             CacheSettings: the parsed settings.
 
         Raises:
-            CacheSettingsError: if ``HISIM_CACHE_NETWORK`` is not one of the four accepted values.
+            CacheSettingsError: if ``HISIM_CACHE_NETWORK`` is not one of the four accepted values, if a
+                set endpoint URL is not a URL, or if a pinned ``internal``/``external`` mode has no URL
+                to pin to.
         """
         source: Mapping[str, str] = os.environ if environment is None else environment
-        return cls(
-            internal_url=cls._optional(source, cls.Variables.URL_INTERNAL),
-            external_url=cls._optional(source, cls.Variables.URL_EXTERNAL),
+        settings = cls(
+            internal_url=cls._url(source, cls.Variables.URL_INTERNAL),
+            external_url=cls._url(source, cls.Variables.URL_EXTERNAL),
             network=cls._network_mode(source),
             api_key=cls._optional(source, cls.Variables.API_KEY),
             local_directory=cls._optional(source, cls.Variables.DIRECTORY),
             shared_directory=cls._optional(source, cls.Variables.SHARED_DIRECTORY),
         )
+        cls._check_mode_has_its_url(settings)
+        return settings
 
     @property
     def is_standalone(self) -> bool:
@@ -133,6 +139,59 @@ class CacheSettings:
             str: the directory to use.
         """
         return self.local_directory if self.local_directory is not None else default_directory
+
+    @classmethod
+    def _url(cls, source: Mapping[str, str], name: str) -> Optional[str]:
+        """Read one endpoint variable and refuse a value that is not a URL.
+
+        The network tier that would use the URL ships in a later phase, but a typo must fail now, at
+        configuration time, instead of surfacing as a confusing connection error months later.
+
+        Args:
+            source: the environment mapping.
+            name: the variable name.
+
+        Returns:
+            Optional[str]: the URL, or ``None`` when unset.
+
+        Raises:
+            CacheSettingsError: if the value has no scheme or no host, or the scheme is not http/https.
+        """
+        value = cls._optional(source, name)
+        if value is None:
+            return None
+        parsed = urllib.parse.urlparse(value)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise CacheSettingsError(
+                f"{name} is set to {value!r}, which is not an endpoint URL; expected something like "
+                "'https://cache.example.org'."
+            )
+        return value
+
+    @staticmethod
+    def _check_mode_has_its_url(settings: "CacheSettings") -> None:
+        """Refuse a pinned network mode whose endpoint URL is missing.
+
+        ``internal`` or ``external`` without the matching URL cannot ever connect; reporting it as
+        standalone would hide the misconfiguration until the network phase.
+
+        Args:
+            settings: the parsed settings.
+
+        Raises:
+            CacheSettingsError: if the pinned mode's URL is unset.
+        """
+        pins = {
+            CacheNetworkMode.INTERNAL: (settings.internal_url, CacheSettings.Variables.URL_INTERNAL),
+            CacheNetworkMode.EXTERNAL: (settings.external_url, CacheSettings.Variables.URL_EXTERNAL),
+        }
+        if settings.network in pins:
+            url, variable = pins[settings.network]
+            if url is None:
+                raise CacheSettingsError(
+                    f"{CacheSettings.Variables.NETWORK} pins the {settings.network.value} endpoint, but "
+                    f"{variable} is not set, so there is nothing to connect to; set the URL or drop the pin."
+                )
 
     @staticmethod
     def _optional(source: Mapping[str, str], name: str) -> Optional[str]:

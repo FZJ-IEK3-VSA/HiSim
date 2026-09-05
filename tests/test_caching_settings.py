@@ -109,6 +109,41 @@ def test_an_unknown_network_mode_is_refused_naming_the_variable_and_the_options(
 
 
 @pytest.mark.base
+@pytest.mark.parametrize("value", ["htp//10.0.0.1/not a real url", "not a url at all", "ftp://cache.example.org"])
+def test_a_malformed_endpoint_url_is_refused_naming_the_variable(value: str) -> None:
+    """A typo in an endpoint URL fails at configuration time, not in the network phase months later.
+
+    Catches: a misspelled URL being stored silently, surfacing as a confusing connection error only
+    once the network tier ships.
+    """
+    with pytest.raises(CacheSettingsError) as raised:
+        CacheSettings.from_environment({CacheSettings.Variables.URL_INTERNAL: value})
+
+    message = str(raised.value)
+    assert CacheSettings.Variables.URL_INTERNAL in message
+    assert value in message
+
+
+@pytest.mark.base
+@pytest.mark.parametrize(
+    ("mode", "variable"),
+    [("internal", CacheSettings.Variables.URL_INTERNAL), ("external", CacheSettings.Variables.URL_EXTERNAL)],
+)
+def test_a_pinned_mode_without_its_url_is_refused(mode: str, variable: str) -> None:
+    """``internal`` or ``external`` with no matching URL cannot ever connect, so it fails now.
+
+    Catches: the misconfiguration being masked as standalone operation, hiding it until the network
+    phase.
+    """
+    with pytest.raises(CacheSettingsError) as raised:
+        CacheSettings.from_environment({CacheSettings.Variables.NETWORK: mode})
+
+    message = str(raised.value)
+    assert variable in message
+    assert mode in message
+
+
+@pytest.mark.base
 def test_network_off_with_urls_set_is_still_standalone() -> None:
     """Setting the mode to ``off`` wins over any endpoint that is configured.
 

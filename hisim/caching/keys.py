@@ -29,6 +29,7 @@ import hashlib
 import importlib.metadata
 import importlib.util
 import json
+import math
 import pathlib
 import re
 import sys
@@ -93,7 +94,9 @@ class CanonicalJson:
 
     Rules: keys sorted, enums by value, payload fields omitted, nested dataclasses rendered recursively,
     paths as strings. Any other value is refused with the field's name, because stringifying an unknown
-    object could give two different inputs the same key.
+    object could give two different inputs the same key. For the same reason mapping keys must be
+    strings (coercing them would collapse ``1`` and ``"1"`` into one key) and floats must be finite
+    (every NaN would render as the same ``NaN``, which is not JSON either).
     """
 
     #: The ``json.dumps`` separators, spelled out so that the canonical form is fixed rather than
@@ -152,6 +155,11 @@ class CanonicalJson:
         Raises:
             CacheKeyError: for a value with no canonical form.
         """
+        if isinstance(value, float) and not math.isfinite(value):
+            raise CacheKeyError(
+                f"DTO field {path!r} holds the non-finite float {value!r}, which has no canonical JSON form: "
+                "every NaN would render identically and give different inputs the same key."
+            )
         if value is None or isinstance(value, (bool, int, float, str)):
             return value
         if isinstance(value, enum.Enum):
@@ -163,7 +171,14 @@ class CanonicalJson:
         if isinstance(value, (list, tuple)):
             return [cls._render(item, f"{path}[{index}]") for index, item in enumerate(value)]
         if isinstance(value, Mapping):
-            return {str(key): cls._render(item, f"{path}[{key!r}]") for key, item in value.items()}
+            for key in value:
+                if not isinstance(key, str):
+                    raise CacheKeyError(
+                        f"DTO field {path!r} holds a mapping with the non-string key {key!r}; coercing it to "
+                        "a string would let two different inputs (say the int 1 and the string '1') share "
+                        "one cache key, so mapping keys must be strings."
+                    )
+            return {key: cls._render(item, f"{path}[{key!r}]") for key, item in value.items()}
         raise CacheKeyError(
             f"DTO field {path!r} holds a {type(value).__name__}, which has no canonical JSON form. "
             "Spec §3.1: DTO fields are primitives, enums, lists, mappings, nested DTOs and artifact keys; "
@@ -183,6 +198,9 @@ class ImportClosure:
 
     #: The package whose modules are followed, e.g. ``"hisim"``.
     root_package: str
+
+    #: The module the walk started from -- the producer itself, named in error messages.
+    entry_module: str
 
     #: Every module of the root package in the closure, the starting module included, sorted.
     package_modules: Tuple[str, ...]
@@ -229,7 +247,8 @@ class ImportClosure:
             source_path = cls._source_file(current)
             module_files[current] = source_path
             tree = ast.parse(pathlib.Path(source_path).read_text(encoding="utf-8"), filename=source_path)
-            for imported in cls._imported_names(tree, current):
+            is_package = pathlib.Path(source_path).name == "__init__.py"
+            for imported in cls._imported_names(tree, current, is_package):
                 if imported == root or imported.startswith(root + "."):
                     pending.append(cls._module_or_owner(imported))
                 else:
@@ -239,6 +258,7 @@ class ImportClosure:
             dynamic.extend(cls._dynamic_import_sites(tree, current))
         return cls(
             root_package=root,
+            entry_module=name,
             package_modules=tuple(sorted(module_files)),
             module_files=dict(sorted(module_files.items())),
             third_party_top_levels=tuple(sorted(third_party)),
@@ -287,17 +307,21 @@ class ImportClosure:
         return imported.rsplit(".", 1)[0] if "." in imported else imported
 
     @staticmethod
-    def _imported_names(tree: ast.AST, module_name: str) -> Iterator[str]:
+    def _imported_names(tree: ast.AST, module_name: str, is_package: bool) -> Iterator[str]:
         """Yield the fully qualified name of every import in a module, relative imports resolved.
 
         Args:
             tree: the parsed module.
             module_name: the importing module, used to resolve relative imports.
+            is_package: whether the module is a package's ``__init__``. A relative import in a package
+                resolves against the package itself; in a plain module it resolves against the parent
+                package. Without this distinction, ``from . import sub`` in the root ``__init__`` would
+                lose the root prefix and misfile ``sub`` as a third-party name.
 
         Yields:
             str: one name per imported module or attribute.
         """
-        package_parts = module_name.split(".")[:-1]
+        package_parts = module_name.split(".") if is_package else module_name.split(".")[:-1]
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
@@ -316,6 +340,10 @@ class ImportClosure:
     def _dynamic_import_sites(cls, tree: ast.AST, module_name: str) -> Iterator[str]:
         """Yield ``module:line`` for every ``__import__`` or ``import_module`` call.
 
+        A bare name matches either spelling (``import_module`` may arrive via ``from importlib
+        import import_module``). The attribute form counts only on the ``importlib`` module itself,
+        so an unrelated object that happens to have an ``import_module`` method is not a violation.
+
         Args:
             tree: the parsed module.
             module_name: the module name, for the description.
@@ -327,7 +355,16 @@ class ImportClosure:
             if not isinstance(node, ast.Call):
                 continue
             callee = node.func
-            called = callee.id if isinstance(callee, ast.Name) else callee.attr if isinstance(callee, ast.Attribute) else ""
+            if isinstance(callee, ast.Name):
+                called = callee.id
+            elif (
+                isinstance(callee, ast.Attribute)
+                and isinstance(callee.value, ast.Name)
+                and callee.value.id == "importlib"
+            ):
+                called = callee.attr
+            else:
+                called = ""
             if called in cls.Calls.NAMES:
                 yield f"{module_name}:{node.lineno}"
 
@@ -384,7 +421,7 @@ class ProducerLayering:
         if violations:
             listed = "\n  - ".join(violations)
             raise ProducerLayeringError(
-                f"The producer {closure.package_modules[0] if closure.package_modules else '?'} breaks the producer "
+                f"The producer {closure.entry_module} breaks the producer "
                 f"layering rule:\n  - {listed}\nA producer is a pure calculation; pass plain values through its DTO instead."
             )
 
@@ -431,6 +468,11 @@ class Fingerprints:
 
         Returns:
             str: the sorted pins, separated by semicolons.
+
+        Raises:
+            CacheKeyError: if a dependency's version cannot be resolved. A pin like ``name==unknown``
+                would let two environments running different code for that package share cache
+                entries, which is the failure the fingerprint exists to prevent.
         """
         distributions = importlib.metadata.packages_distributions()
         pins: Set[str] = {f"{cls.PYTHON_LABEL}=={sys.version_info.major}.{sys.version_info.minor}"}
@@ -438,8 +480,13 @@ class Fingerprints:
             for distribution_name in distributions.get(top_level, [top_level]):
                 try:
                     pins.add(f"{distribution_name}=={importlib.metadata.version(distribution_name)}")
-                except importlib.metadata.PackageNotFoundError:
-                    pins.add(f"{distribution_name}==unknown")
+                except importlib.metadata.PackageNotFoundError as error:
+                    raise CacheKeyError(
+                        f"The producer {closure.entry_module} imports {top_level!r}, but no version can be "
+                        f"resolved for the distribution {distribution_name!r}, so the third-party fingerprint "
+                        "cannot vouch for the code that runs. Install the package with metadata, or drop the "
+                        "import from the producer."
+                    ) from error
         return ";".join(sorted(pins))
 
 
@@ -520,6 +567,11 @@ class CacheKey:
     @property
     def digest(self) -> str:
         """The sha256 hex digest of :attr:`material`: the ``{sha}`` in the remote key and the local filename.
+
+        The expression is the same as :meth:`hisim.caching.local.CacheEntryMetadata.hash_of` and must
+        stay the same, or a new-scheme key would not match the filename the local tier derives for it.
+        It is spelled out here rather than imported because this module deliberately imports the
+        standard library only.
 
         Returns:
             str: the digest.

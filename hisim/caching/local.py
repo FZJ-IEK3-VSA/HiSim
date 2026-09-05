@@ -61,12 +61,18 @@ class CacheEntryMetadata:
 
     SUFFIX: ClassVar[str] = ".meta"
 
+    #: The extension of the data file beside the metadata. The one definition; the client's filenames
+    #: and the parsing below both use it.
+    DATA_SUFFIX: ClassVar[str] = ".cache"
+
     @staticmethod
     def hash_of(cache_key_string: str) -> str:
         """Hashes the string a cache entry is named after, in the one place that defines the scheme.
 
         Both the writer of an entry's name and the validator of an existing entry have to agree on
         the digest exactly, so the algorithm lives here rather than being spelled out at each site.
+        :meth:`hisim.caching.keys.CacheKey.digest` repeats the expression (that module imports the
+        standard library only); the two must stay identical.
 
         Args:
             cache_key_string: the raw string that identifies the entry's inputs.
@@ -104,9 +110,9 @@ class CacheEntryMetadata:
                 that shape -- which is itself a reason to treat the entry as unvalidatable.
         """
         filename = os.path.basename(cache_filepath)
-        if not filename.endswith(".cache") or "_" not in filename:
+        if not filename.endswith(CacheEntryMetadata.DATA_SUFFIX) or "_" not in filename:
             return ""
-        return filename[: -len(".cache")].rsplit("_", 1)[1]
+        return filename[: -len(CacheEntryMetadata.DATA_SUFFIX)].rsplit("_", 1)[1]
 
     @classmethod
     def describes(cls, cache_filepath: str) -> bool:

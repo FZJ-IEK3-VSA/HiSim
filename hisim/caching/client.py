@@ -19,7 +19,7 @@ This module imports the standard library, ``hisim.log`` and its own package only
 import os
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import ClassVar, Iterator, Optional
+from typing import ClassVar, Iterator
 
 from hisim import log
 from hisim.caching.local import CacheEntryMetadata, atomic_cache_write
@@ -73,8 +73,12 @@ class CacheClient:
     :meth:`lookup` in later phases.
     """
 
-    #: The extension every local entry carries.
-    SUFFIX: ClassVar[str] = ".cache"
+    #: The extension every local entry carries. Defined once, on the metadata class that parses it back.
+    SUFFIX: ClassVar[str] = CacheEntryMetadata.DATA_SUFFIX
+
+    #: Whether the ``HISIM_CACHE_DIR`` redirect has been announced in the log this process. One line
+    #: is enough; the override applies to every lookup identically.
+    _override_announced: ClassVar[bool] = False
 
     def __init__(self, settings: CacheSettings) -> None:
         """Bind the client to one set of settings.
@@ -103,24 +107,34 @@ class CacheClient:
 
         Returns:
             str: the filename.
+
+        Raises:
+            ValueError: if the component key contains a path separator. The key becomes part of a
+                filename; a separator would file the entry outside the cache directory.
         """
+        if "/" in component_key or "\\" in component_key:
+            raise ValueError(
+                f"The component key {component_key!r} contains a path separator and cannot name a cache "
+                "entry; rename the component so its cache files stay inside the cache directory."
+            )
         return f"{component_key}_{digest}{cls.SUFFIX}"
 
-    def lookup(self, component_key: str, key_material: str, default_directory: str) -> CacheEntry:
-        """Look an entry up in the local directory.
+    def lookup(self, component_key: str, key_material: str, directory: str) -> CacheEntry:
+        """Look an entry up in the given directory.
 
         Creates the directory if needed. An existing file counts as a hit only if its ``.meta`` companion
-        hashes to the filename; otherwise it is deleted and the lookup is a miss.
+        hashes to the filename; otherwise it is deleted and the lookup is a miss. The caller resolves
+        which directory applies (see :meth:`CacheSettings.resolve_local_directory` for the
+        ``HISIM_CACHE_DIR`` override); the lookup itself takes the decision as given.
 
         Args:
             component_key: the filename prefix.
             key_material: the string that identifies the entry's inputs; its hash is the filename's digest.
-            default_directory: the directory to use unless ``HISIM_CACHE_DIR`` overrides it.
+            directory: the directory to look in.
 
         Returns:
             CacheEntry: with ``exists`` True only for a validated hit.
         """
-        directory = self.settings.resolve_local_directory(default_directory)
         os.makedirs(directory, exist_ok=True)
         path = os.path.join(directory, self.entry_filename(component_key, CacheEntryMetadata.hash_of(key_material)))
         return CacheEntry(path=path, exists=self._validated_local_hit(path), key_material=key_material)
@@ -163,14 +177,20 @@ class CacheClient:
         parts.append(f"network {self.settings.network.value} (not yet active in this phase)")
         return ", ".join(parts)
 
+    def announce_environment_override(self, directory: str) -> None:
+        """Log, once per process, that ``HISIM_CACHE_DIR`` is redirecting the cache.
 
-def default_client(settings: Optional[CacheSettings] = None) -> CacheClient:
-    """Return a client for the given settings, or for the environment when none are given.
+        The override silently relocates every component's cache away from the simulation's own
+        directory -- existing entries elsewhere are ignored and recomputed -- so the first redirected
+        lookup says so in the log. One line is enough: the override applies to every lookup the same
+        way, and a line per lookup would only bury it.
 
-    Args:
-        settings: settings to use; ``None`` reads the environment now.
-
-    Returns:
-        CacheClient: the client.
-    """
-    return CacheClient(settings) if settings is not None else CacheClient.from_environment()
+        Args:
+            directory: the directory the override points at.
+        """
+        if CacheClient._override_announced:
+            return
+        CacheClient._override_announced = True
+        log.information(
+            f"{CacheSettings.Variables.DIRECTORY} redirects the cache to {directory} ({self.describe()})."
+        )

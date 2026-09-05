@@ -21,7 +21,7 @@ import psutil
 import pytz
 
 from hisim import log
-from hisim.caching import CacheClient, default_client
+from hisim.caching import CacheClient
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago"
@@ -371,15 +371,15 @@ def get_cache_file(
         ValueError: if ``my_simulation_parameters`` is None or the key material is implausibly short.
     """
     key_material = build_cache_key_string(parameter_class, my_simulation_parameters)
-    client = default_client()
+    client = CacheClient.from_environment()
     if cache_dir_path is not None:
-        # The explicit argument outranks the environment: bypass the override by handing the
-        # argument in as both the default and, effectively, the only option.
-        client = CacheClient(dataclasses.replace(client.settings, local_directory=None))
-        default_directory = cache_dir_path
+        # The explicit argument outranks the environment; the override is simply not consulted.
+        directory = cache_dir_path
     else:
-        default_directory = my_simulation_parameters.cache_dir_path
-    entry = client.lookup(component_key, key_material, default_directory)
+        directory = client.settings.resolve_local_directory(my_simulation_parameters.cache_dir_path)
+        if client.settings.local_directory is not None:
+            client.announce_environment_override(directory)
+    entry = client.lookup(component_key, key_material, directory)
     return entry.exists, entry.path
 
 

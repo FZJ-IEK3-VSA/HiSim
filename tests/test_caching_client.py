@@ -17,7 +17,7 @@ from typing import ClassVar
 import pytest
 
 from hisim import utils
-from hisim.caching import CacheClient, CacheEntryMetadata, CacheSettings, atomic_cache_write, default_client
+from hisim.caching import CacheClient, CacheEntryMetadata, CacheSettings, atomic_cache_write
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Noah Pflugradt"
@@ -81,7 +81,9 @@ def test_a_miss_names_the_path_and_creates_the_directory(tmp_path: pathlib.Path)
 
     assert not entry.exists
     assert directory.is_dir()
-    expected_name = CacheClient.entry_filename(Given.COMPONENT_KEY, CacheEntryMetadata.hash_of(Given.KEY_MATERIAL))
+    # The name is spelled out rather than asked of entry_filename, so a change to the naming rule
+    # fails here instead of agreeing with itself.
+    expected_name = f"Weather_{CacheEntryMetadata.hash_of(Given.KEY_MATERIAL)}.cache"
     assert entry.path == str(directory / expected_name)
     assert entry.key_material == Given.KEY_MATERIAL
 
@@ -139,27 +141,37 @@ def test_an_entry_whose_metadata_disagrees_with_its_name_is_discarded(tmp_path: 
 
 
 @pytest.mark.base
-def test_the_environment_override_moves_the_directory(tmp_path: pathlib.Path) -> None:
-    """``HISIM_CACHE_DIR`` replaces the default directory the caller passes.
+def test_lookup_uses_exactly_the_directory_it_is_given(tmp_path: pathlib.Path) -> None:
+    """``lookup`` takes the directory decision as given and does not consult the environment.
 
-    Catches: the override being parsed but not applied.
+    The ``HISIM_CACHE_DIR`` override is applied by the caller through
+    ``CacheSettings.resolve_local_directory`` (pinned in the settings tests and, end to end, in
+    ``test_an_explicit_directory_argument_outranks_the_environment``). A lookup that second-guessed
+    the caller would apply the override even where an explicit argument had already outranked it.
+
+    Catches: the override resolution creeping back into the lookup.
     """
     override = tmp_path / "override"
     client = Given.client(tmp_path, HISIM_CACHE_DIR=str(override))
 
     entry = client.lookup(Given.COMPONENT_KEY, Given.KEY_MATERIAL, str(tmp_path / "default"))
 
-    assert entry.path.startswith(str(override))
-    assert override.is_dir()
+    assert entry.path.startswith(str(tmp_path / "default"))
+    assert not override.exists()
 
 
 @pytest.mark.base
-def test_get_cache_file_returns_exactly_the_path_it_always_did(tmp_path: pathlib.Path) -> None:
+def test_get_cache_file_returns_exactly_the_path_it_always_did(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The delegation to the client changes no cache filename.
 
     The expected path is computed here from the published rule (digest of the legacy key material under the
     component key), not asked of the client, so this test would notice the client changing the rule.
     """
+    # The suite-wide conftest fixture already clears the override; repeated here so this test stays
+    # hermetic on its own -- it asserts the exact default-directory path, which the override would move.
+    monkeypatch.delenv(CacheSettings.Variables.DIRECTORY, raising=False)
 
     @dataclasses.dataclass
     class Config:
@@ -222,15 +234,15 @@ def test_an_explicit_directory_argument_outranks_the_environment(
 
 
 @pytest.mark.base
-def test_default_client_reads_the_environment_or_takes_settings() -> None:
-    """The one-liner ``get_cache_file`` calls works both ways.
+def test_a_component_key_with_a_path_separator_is_refused(tmp_path: pathlib.Path) -> None:
+    """A component key becomes part of a filename, so a separator in it must fail loudly.
 
-    Catches: ``default_client`` ignoring the settings it was handed.
+    Catches: a component named ``a/b`` silently filing its cache entries outside the cache directory.
     """
-    given = CacheSettings.from_environment({CacheSettings.Variables.DIRECTORY: "/given"})
+    client = Given.client(tmp_path)
 
-    assert default_client(given).settings is given
-    assert isinstance(default_client().settings, CacheSettings)
+    with pytest.raises(ValueError, match="path separator"):
+        client.lookup("a/b", Given.KEY_MATERIAL, str(tmp_path))
 
 
 @pytest.mark.base

@@ -12,7 +12,7 @@ interpreter.
 
 # clean
 
-from hisim.caching.client import CacheClient, CacheEntry, default_client
+from hisim.caching.client import CacheClient, CacheEntry
 from hisim.caching.keys import (
     CacheKey,
     CacheKeyError,
@@ -42,5 +42,4 @@ __all__ = [
     "ProducerLayering",
     "ProducerLayeringError",
     "atomic_cache_write",
-    "default_client",
 ]

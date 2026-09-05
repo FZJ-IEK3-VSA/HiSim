@@ -9,11 +9,12 @@ small package written into a temporary directory, so the tests can edit source a
 
 import dataclasses
 import enum
+import hashlib
 import importlib
 import pathlib
 import sys
 from types import ModuleType
-from typing import Any, ClassVar, Dict, Optional
+from typing import Any, ClassVar, Dict
 
 import pytest
 
@@ -212,6 +213,44 @@ def test_a_value_with_no_canonical_form_is_refused_by_field_name() -> None:
 
 
 @pytest.mark.base
+def test_a_mapping_with_a_non_string_key_is_refused() -> None:
+    """A mapping key that is not a string raises, naming the field, instead of being coerced.
+
+    Coercion would let ``{1: ...}`` and ``{"1": ...}`` render identically -- two different inputs,
+    one cache key, which is the exact defect the canonical form exists to prevent.
+    """
+
+    @dataclasses.dataclass(frozen=True)
+    class WithMapping:
+        """A DTO holding a mapping with an integer key."""
+
+        table: Dict[Any, str]
+
+    with pytest.raises(CacheKeyError, match="table"):
+        CanonicalJson.dumps(WithMapping(table={1: "x"}))
+
+
+@pytest.mark.base
+def test_a_non_finite_float_is_refused() -> None:
+    """A NaN or infinity raises, naming the field, instead of rendering as a non-JSON token.
+
+    Every NaN would render as the same ``NaN``, so two different inputs would share a key -- and the
+    ``.meta`` file would not even be parseable JSON.
+    """
+
+    @dataclasses.dataclass(frozen=True)
+    class WithFloat:
+        """A DTO holding one float."""
+
+        value: float
+
+    with pytest.raises(CacheKeyError, match="value"):
+        CanonicalJson.dumps(WithFloat(value=float("nan")))
+    with pytest.raises(CacheKeyError, match="value"):
+        CanonicalJson.dumps(WithFloat(value=float("inf")))
+
+
+@pytest.mark.base
 def test_a_non_dataclass_is_not_a_dto() -> None:
     """Spec §3.1: exactly one frozen dataclass. A dict is refused so the rule stays visible.
 
@@ -250,6 +289,28 @@ def test_the_closure_follows_package_imports_and_records_third_parties(
     assert closure.package_modules == ("acme.producer", "acme.shapes", "acme.sub.helper", "acme.tables")
     assert closure.third_party_top_levels == ("numpy", "pandas")
     assert not closure.dynamic_import_sites
+
+
+@pytest.mark.base
+def test_a_relative_import_in_the_root_init_is_followed(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``from . import helper`` in the root package's ``__init__`` resolves to a package module.
+
+    A package's ``__init__`` resolves relative imports against the package itself, not against a
+    parent. Getting this wrong files ``helper`` as a third-party name, its source is never
+    fingerprinted, and edits to it stop invalidating cache entries.
+    """
+    package = SyntheticPackage(tmp_path, monkeypatch)
+    package.write("helper", "import numpy\nVALUE = 1\n")
+    (tmp_path / SyntheticPackage.ROOT / "__init__.py").write_text("from . import helper\n", encoding="utf-8")
+    package.write("producer", "import acme\n")
+
+    closure = package.closure("producer")
+
+    assert "acme.helper" in closure.package_modules
+    assert "helper" not in closure.third_party_top_levels
+    assert closure.third_party_top_levels == ("numpy",)
 
 
 @pytest.mark.base
@@ -298,6 +359,29 @@ def test_the_third_party_fingerprint_pins_versions_and_the_interpreter(
 
 
 @pytest.mark.base
+def test_an_unresolvable_third_party_version_refuses_the_key(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A dependency whose version cannot be resolved raises instead of pinning ``==unknown``.
+
+    An ``unknown`` pin would let two environments running different code for that package share
+    cache entries -- the failure the fingerprint exists to prevent.
+    """
+    del tmp_path, monkeypatch
+    closure = ImportClosure(
+        root_package="acme",
+        entry_module="acme.producer",
+        package_modules=("acme.producer",),
+        module_files={},
+        third_party_top_levels=("package_that_is_not_installed_anywhere",),
+        dynamic_import_sites=(),
+    )
+
+    with pytest.raises(CacheKeyError, match="package_that_is_not_installed_anywhere"):
+        Fingerprints.third_party(closure)
+
+
+@pytest.mark.base
 def test_component_machinery_in_the_closure_is_a_layering_violation(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -308,6 +392,7 @@ def test_component_machinery_in_the_closure_is_a_layering_violation(
     del tmp_path, monkeypatch
     closure = ImportClosure(
         root_package="hisim",
+        entry_module="hisim.components.pv_calculation",
         package_modules=("hisim.component", "hisim.components.pv_calculation"),
         module_files={},
         third_party_top_levels=(),
@@ -319,6 +404,9 @@ def test_component_machinery_in_the_closure_is_a_layering_violation(
     assert len(violations) == 1
     assert "hisim.component" in violations[0]
     with pytest.raises(ProducerLayeringError, match="hisim.component"):
+        ProducerLayering.check(closure)
+    # The error blames the producer the walk started from, not whichever closure module sorts first.
+    with pytest.raises(ProducerLayeringError, match="The producer hisim.components.pv_calculation"):
         ProducerLayering.check(closure)
 
 
@@ -337,6 +425,30 @@ def test_a_dynamic_import_is_a_layering_violation_with_a_line_number(
 
     assert closure.dynamic_import_sites == ("acme.producer:4",)
     assert any("acme.producer:4" in violation for violation in ProducerLayering.violations(closure))
+
+
+@pytest.mark.base
+def test_an_import_module_method_on_another_object_is_not_a_dynamic_import(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only ``importlib.import_module`` and the bare names count; an unrelated object's method does not.
+
+    Catches: the detector rejecting an innocent producer because some object happens to expose a
+    method called ``import_module``.
+    """
+    package = SyntheticPackage(tmp_path, monkeypatch)
+    package.write(
+        "producer",
+        "class Loader:\n"
+        "    def import_module(self, name):\n"
+        "        return name\n"
+        "\n"
+        "RESULT = Loader().import_module('json')\n",
+    )
+
+    closure = package.closure("producer")
+
+    assert not closure.dynamic_import_sites
 
 
 @pytest.mark.base
@@ -364,8 +476,9 @@ def test_a_cache_key_is_the_four_parts_and_its_digest_follows_them(
     assert parts[1] == key.code_fingerprint
     assert parts[2] == key.third_party_fingerprint
     assert parts[3] == key.dto_json
-    assert len(key.digest) == 64
-    assert key.digest == CacheKey(**dataclasses.asdict(key)).digest, "the digest must be a pure function of the parts"
+    assert key.digest == hashlib.sha256(key.material.encode("utf-8")).hexdigest(), (
+        "the digest must be the sha256 of the material -- the same rule CacheEntryMetadata.hash_of applies"
+    )
 
 
 @pytest.mark.base
@@ -388,13 +501,6 @@ def test_for_producer_runs_the_layering_check(tmp_path: pathlib.Path, monkeypatc
     package = SyntheticPackage(tmp_path, monkeypatch)
     package.write("producer", "import importlib\nMODULE = importlib.import_module('json')\n")
     module = package.load("producer")
-
-    def with_acme_root(cls: Any, target: ModuleType, root_package: Optional[str] = None) -> ImportClosure:
-        del cls, root_package
-        return original(target, root_package="acme")
-
-    original = ImportClosure.of
-    monkeypatch.setattr(ImportClosure, "of", classmethod(with_acme_root))
 
     with pytest.raises(ProducerLayeringError, match="dynamically"):
         CacheKey.for_producer("pv_series", module, inputs())

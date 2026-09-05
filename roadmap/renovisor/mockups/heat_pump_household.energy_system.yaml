@@ -1,0 +1,231 @@
+# yaml-language-server: $schema=../../../hisim/energy_system_v3.schema.json
+# ---------------------------------------------------------------------------
+# MOCKUP — the `HeatPump` base file AFTER PARAMETRISATION for one home
+# inventory. It is the external representation the requirements document
+# (roadmap/renovisor/requirements.md §6, UC2) is about, so it is a requirements
+# artifact, not a design sketch.
+#
+# Read it as a diff against a checked-in base file, not as a document the
+# translator wrote. The translator selects the base file for the inventory's
+# heating system and fills in values; it never authors an energy system from a
+# request, so every system that runs has been reviewed by a person (R1, R4).
+# Everything in it is either
+#   [base]      part of the checked-in base file, identical for every inventory
+#               that chose HeatPump, or
+#   [override]  written by the translator from a named HomeInventoryInput field,
+#               or
+#   [group]     a presence toggle driven by whether an inventory block is present.
+#
+# Checked: this file passes the real v3 structural validator
+# (hisim.energy_system.loader.load_energy_system) as of 2026-08-27.
+#
+# NOT RUNNABLE TODAY. 9 of the classes below have no preset or constructor yet —
+# the heat pump and its two controllers, both storages, the PV system, the
+# battery, the EMS and the car (P4 batches B1, B2, B4, B5, B7). Class-bound
+# validation therefore fails after the structural pass. See field_inventory.md
+# §5–§6.
+# ---------------------------------------------------------------------------
+schema_version: 3
+name: RenoVisor home inventory 3f9a2c…  (package baseline)
+description: >
+  Detached Irish single-family house of 1988, air/water heat pump with DHW
+  preparation, floor heating, 5 kWp PV and a 10 kWh battery. Generated from
+  home inventory 3f9a2c… by the RenoVisor translation layer; do not hand-edit.
+
+components:
+
+  weather:
+    class: hisim.components.weather.Weather
+    constructor:
+      for_location:
+        location: IE                       # [override] location.country_code
+        data_source: NSRDB_15MIN           # [base] follows the location, not any measure; the only Irish dataset (2019)
+
+  occupancy:
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    constructor:
+      for_household:
+        # [override, APPROXIMATED] occupancy_config.residents_count = 2,
+        # residents_type = [adult, adult],
+        # residents_employment_status = [full_time, full_time]
+        # -> the nearest of the 66 LPG catalogue households.
+        household: CHR01_Couple_both_at_Work
+        travel_route_set: Travel_Route_Set_for_10km_Commuting_Distance   # [override]
+
+  building:
+    class: hisim.components.building.Building
+    constructor:
+      for_tabula_code:
+        # [override] tabula_building_type=SFH + construction_year=1988
+        # + retrofit_status=unrenovated -> .001
+        building_code: IE.N.SFH.06.Gen.ReEx.001.001
+    config:
+      absolute_conditioned_floor_area_in_m2: 157.0    # [override] conditioned_floor_area_m2
+      number_of_apartments: 1                          # [override]
+      building_heat_capacity_class: medium             # [override]
+      set_heating_temperature_in_celsius: 20.0         # [override]
+      set_cooling_temperature_in_celsius: 25.0         # [override]
+      # [override] envelope_details — written only for the elements a measure
+      # changed or the inventory stated; omitted elements keep the TABULA value.
+      roof_u_value_in_watt_per_m2_per_kelvin: 0.16
+      roof_area_in_m2: 96.0
+    inputs:
+      - weather
+      - occupancy
+      - hds
+      - ems
+
+  hds_controller:
+    class: hisim.components.heat_distribution_system.HeatDistributionController
+    preset: standard                                   # [base]
+    config:
+      heating_system: Floorheating                     # [override] heat_distribution_system
+    inputs:
+      - weather
+      - building
+      - ems
+
+  hds:
+    class: hisim.components.heat_distribution_system.HeatDistribution
+    preset: standard                                   # [base]
+    inputs:
+      - building
+      - hds_controller
+      - buffer_storage
+
+  heat_pump:
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib
+    preset: air_water                                  # [base]
+    config:
+      with_domestic_hot_water_preparation: true        # [override] with_dhw_preparation
+      # maximal_thermal_power_in_watt stays AUTO: the inventory gave no
+      # heating_system.power_in_watt. When it does, the translator pins it here
+      # and the sizing law is not consulted (requirement A11).
+    inputs:
+      - weather
+      - heat_pump_controller_sh
+      - heat_pump_controller_dhw
+      - buffer_storage
+      - dhw_storage
+      - input: TemperatureInputPrimary
+        from: weather.DailyAverageOutsideTemperatures
+
+  heat_pump_controller_sh:
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating
+    preset: standard                                   # [base]
+    inputs: [weather, hds_controller, buffer_storage, ems]
+    sizing_sources:
+      maximal_thermal_power_in_watt: heat_pump.maximal_thermal_power_in_watt
+
+  heat_pump_controller_dhw:
+    class: hisim.components.more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW
+    preset: standard                                   # [base]
+    inputs: [dhw_storage, ems]
+    sizing_sources:
+      maximal_thermal_power_in_watt: heat_pump.maximal_thermal_power_in_watt
+
+  buffer_storage:
+    class: hisim.components.simple_water_storage.SimpleHotWaterStorage
+    preset: heat_pump                                  # [base]
+    config:
+      volume_heating_water_storage_in_liter: 500       # [override] hot_water_storage.volume_in_liters
+    inputs: [hds, heat_pump]
+    sizing_sources:
+      maximal_thermal_power_in_watt: heat_pump.maximal_thermal_power_in_watt
+
+  dhw_storage:
+    class: hisim.components.simple_water_storage.SimpleDHWStorage
+    preset: per_apartment                              # [base]
+    config:
+      volume_heating_water_storage_in_liter: 250       # [override] domestic_hot_water_storage
+    inputs: [occupancy, heat_pump]
+
+  meter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    preset: standard                                   # [base]
+    inputs:
+      - from: ems.TotalElectricityToOrFromGrid
+        tags: [ELECTRICITY_PRODUCTION]
+        weight: 999
+
+groups:
+
+  # [group] present iff energy_system_config.photovoltaics is present
+  photovoltaics:
+    enabled: true
+    components:
+      pv:
+        class: hisim.components.generic_pv_system.PVSystem
+        preset: standard
+        config:
+          power_in_watt: 5000                          # [override] photovoltaics.power_in_watt
+          azimuth: 180                                 # [override] azimuth_in_degree
+          tilt: 35                                     # [override] tilt_in_degree
+        inputs: [weather]
+
+  # [group] present iff energy_system_config.battery_storage is present
+  battery_and_ems:
+    enabled: true
+    components:
+      battery:
+        class: hisim.components.advanced_battery_bslib.Battery
+        preset: sized_to_pv
+        config:
+          custom_battery_capacity_generic_in_kilowatt_hour: 10.0   # [override] capacity_in_kwh
+      ems:
+        class: hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem
+        preset: optimize_own_consumption
+        inputs:
+          - from: occupancy
+            tags: [ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+            weight: 999
+          - from: pv
+            component_type: PV
+            tags: [ELECTRICITY_PRODUCTION]
+            weight: 999
+          - from: heat_pump
+            component_type: HEAT_PUMP_BUILDING
+            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+            weight: 2
+            dispatch: {}
+          - from: battery.AcBatteryPowerUsed
+            component_type: BATTERY
+            tags: [ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+            weight: 6
+            dispatch: {target_input: LoadingPowerInput}
+
+  # [group] present iff energy_system_config.vehicles has any entry
+  vehicles:
+    enabled: false
+    components:
+      car_1:
+        class: hisim.components.generic_car.Car
+        preset: bev_medium
+        inputs: [occupancy]
+
+# ---------------------------------------------------------------------------
+# What this mockup pins down for the requirements document
+#
+#  M1  The translator writes exactly three kinds of line — base, override, group
+#      flag. It never writes `inputs`, never writes `sizing_sources`, and never
+#      invents a component. Those live in the checked-in base file. (R4)
+#
+#  M2  Ten base files are needed, one per HeatingSystems value; only five are
+#      buildable today. `GasSolarThermal` and `HeatPumpSolarThermal` are separate
+#      base files rather than a `solar_thermal` group, because the collector's
+#      wiring differs (used_for_space_heating vs used_for_dhw) and a group is a
+#      presence flag, not a rewiring rule. (epic E4; field_inventory §1 rows 49–50)
+#
+#  M3  The EMS-less variant is a SEPARATE base file, not `battery_and_ems:
+#      enabled: false`: with the EMS off nothing feeds the meter, and adding the
+#      direct feeds would double-count while the EMS is on. This is O2 of
+#      energy_system_mockup.yaml, and it doubles the base-file count to 20.
+#
+#  M4  Every [override] line traces to one named HomeInventoryInput field. A
+#      field with no [override] line anywhere is a field the simulation ignores,
+#      which is what the translation report must state per request. (R7)
+#
+#  M5  `name:` and `description:` embed the home-inventory hash. Since the record
+#      of a run is compared byte-for-byte on re-execution, anything that varies
+#      per request — a timestamp, a job id — must NOT appear here. (R10)
+# ---------------------------------------------------------------------------

@@ -29,6 +29,23 @@ HORIZON_FACTORIES = {
     "year": "full_year",
 }
 
+# The reverse view: which horizon a parameter set's factory belongs to. Used to honour a
+# setup's own "horizons" restriction (a setup listed only for the week gate must not
+# enter the full-year matrix, whose cost is what the restriction exists to spare).
+FACTORY_HORIZONS = {factory: horizon for horizon, factory in HORIZON_FACTORIES.items()}
+
+
+def setup_runs_factory(setup: dict, factory: str) -> bool:
+    """Whether a config setup entry participates in parameter sets built by ``factory``.
+
+    A setup without a ``horizons`` key runs everything, which keeps the original eight
+    golden setups exactly as they were. A setup with one runs only the horizons it
+    names; the golden week gate grew to the whole fleet this way while the expensive
+    full-year matrix stayed with the eight.
+    """
+    horizons = setup.get("horizons")
+    return horizons is None or FACTORY_HORIZONS.get(factory) in horizons
+
 
 def build_matrix(config: dict, horizon: Optional[str] = None) -> dict:
     """Return a GitHub matrix dict for the config's pairs, optionally filtered.
@@ -47,6 +64,7 @@ def build_matrix(config: dict, horizon: Optional[str] = None) -> dict:
         {"setup": setup["id"], "param": param["id"]}
         for setup in config["setups"]
         for param in param_sets
+        if setup_runs_factory(setup, param["factory"])
     ]
     return {"include": include}
 

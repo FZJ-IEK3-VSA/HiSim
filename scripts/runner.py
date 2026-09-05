@@ -28,8 +28,10 @@ from hisim.simulationparameters import SimulationParameters
 
 try:  # importable both as ``scripts.runner`` (tests) and ``runner`` (CLI from scripts/)
     from golden_kpis import flatten  # type: ignore[import-not-found]
+    from golden_matrix import FACTORY_HORIZONS, HORIZON_FACTORIES  # type: ignore[import-not-found]
 except ModuleNotFoundError:
     from scripts.golden_kpis import flatten
+    from scripts.golden_matrix import FACTORY_HORIZONS, HORIZON_FACTORIES
 
 
 # ---------------------------------------------------------------------------
@@ -41,6 +43,23 @@ class SetupConfig:
 
     id: str
     path: str
+    #: The horizons this setup participates in (``"day"``/``"week"``/``"year"``), or
+    #: ``None`` for all of them. The whole fleet runs the cheap week gate; only the
+    #: original eight carry the cost of the full-year matrix, and this field is how the
+    #: config says so.
+    horizons: Optional[list[str]] = None
+
+    def runs_factory(self, factory: str) -> bool:
+        """Whether this setup participates in parameter sets built by ``factory``.
+
+        Args:
+            factory: the ``SimulationParameters`` factory name of a parameter set.
+
+        Returns:
+            bool: True when the setup carries no restriction, or the factory's horizon
+            is among the ones it names.
+        """
+        return self.horizons is None or FACTORY_HORIZONS.get(factory) in self.horizons
 
 
 @dataclass
@@ -136,7 +155,15 @@ def load_config(config_path: Path) -> GoldenConfig:
     for idx, entry in enumerate(setups_raw):
         if not isinstance(entry, dict) or "id" not in entry or "path" not in entry:
             raise ValueError(f"Golden config setups[{idx}] must have 'id' and 'path'.")
-        setups.append(SetupConfig(id=entry["id"], path=entry["path"]))
+        horizons = entry.get("horizons")
+        if horizons is not None:
+            unknown = [h for h in horizons if h not in HORIZON_FACTORIES]
+            if unknown:
+                raise ValueError(
+                    f"Golden config setups[{idx}] names unknown horizons {unknown}; "
+                    f"valid horizons: {sorted(HORIZON_FACTORIES)}."
+                )
+        setups.append(SetupConfig(id=entry["id"], path=entry["path"], horizons=horizons))
 
     parameter_sets: list[ParameterSetConfig] = []
     for idx, entry in enumerate(param_sets_raw):
@@ -183,6 +210,11 @@ def filter_config(
         raise ValueError(f"No setup with id {setup_id!r} in config.")
     if param_id is not None and not params:
         raise ValueError(f"No parameter set with id {param_id!r} in config.")
+    if setup_id is not None and param_id is not None and not setups[0].runs_factory(params[0].factory):
+        raise ValueError(
+            f"Setup {setup_id!r} does not run parameter set {param_id!r}: its horizons are "
+            f"{setups[0].horizons}. Asking for the pair explicitly is a mistake, not an empty run."
+        )
     return GoldenConfig(
         check_subdir=config.check_subdir,
         setups=setups,
@@ -191,8 +223,18 @@ def filter_config(
 
 
 def select_pairs(config: GoldenConfig) -> list[tuple[SetupConfig, ParameterSetConfig]]:
-    """Return every ``(setup, parameter_set)`` pair (cartesian product, config order)."""
-    return [(setup, param) for setup in config.setups for param in config.parameter_sets]
+    """Return every ``(setup, parameter_set)`` pair the config's horizons allow, in config order.
+
+    A setup that restricts its horizons is simply absent from the other horizons' pairs;
+    the golden matrix applies the identical rule, so CI slices and a full local run agree
+    on what the gate covers.
+    """
+    return [
+        (setup, param)
+        for setup in config.setups
+        for param in config.parameter_sets
+        if setup.runs_factory(param.factory)
+    ]
 
 
 # ---------------------------------------------------------------------------

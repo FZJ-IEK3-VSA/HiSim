@@ -1,15 +1,22 @@
 {
-  "config_sha256": "05d95c63ffa8c6070692370729f48365c5e0230842d2f64f002aace6bc8588da",
-  "generated_at": "2026-07-14T12:15:09.932989+00:00",
+  "config_sha256": "6de02d66f9520ba30dc0ac09ac7eaac503d45c6810bdf11ea7cad37c5a0d96f0",
+  "generated_at": "2026-09-05T12:33:52.747780+00:00",
   "golden_files": [
+    "air_conditioned_house__one_week_60s.json",
+    "automatic_default_connections__one_week_60s.json",
+    "basic_household__one_week_60s.json",
+    "default_connections__one_week_60s.json",
     "household_district_heating_building_sizer__full_year_60s.json",
     "household_district_heating_building_sizer__one_week_60s.json",
     "household_electric_heating_building_sizer__full_year_60s.json",
     "household_electric_heating_building_sizer__one_week_60s.json",
     "household_gas_building_sizer__full_year_60s.json",
     "household_gas_building_sizer__one_week_60s.json",
+    "household_gas_solar_thermal_building_sizer__one_week_60s.json",
     "household_heatpump_building_sizer__full_year_60s.json",
     "household_heatpump_building_sizer__one_week_60s.json",
+    "household_heatpump_car_building_sizer__one_week_60s.json",
+    "household_heatpump_solar_thermal_building_sizer__one_week_60s.json",
     "household_hydrogen_boiler_building_sizer__full_year_60s.json",
     "household_hydrogen_boiler_building_sizer__one_week_60s.json",
     "household_oil_building_sizer__full_year_60s.json",
@@ -19,7 +26,7 @@
     "household_wood_chips_building_sizer__full_year_60s.json",
     "household_wood_chips_building_sizer__one_week_60s.json"
   ],
-  "hisim_commit": "e77a28e50d67562ddac8cf912d3c4e9d955b5fa0",
-  "platform": "Linux-6.17.0-1018-azure-x86_64-with-glibc2.36",
-  "python_version": "3.11.15"
+  "hisim_commit": "646c0a689b1cf038e4a3b6b2609df831beddfb60",
+  "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.43",
+  "python_version": "3.12.13"
 }

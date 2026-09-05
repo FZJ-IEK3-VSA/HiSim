@@ -8,7 +8,14 @@
     {"id": "household_hydrogen_boiler_building_sizer",      "path": "system_setups/household_hydrogen_boiler_building_sizer.py"},
     {"id": "household_oil_building_sizer",                  "path": "system_setups/household_oil_building_sizer.py"},
     {"id": "household_pellets_building_sizer",              "path": "system_setups/household_pellets_building_sizer.py"},
-    {"id": "household_wood_chips_building_sizer",           "path": "system_setups/household_wood_chips_building_sizer.py"}
+    {"id": "household_wood_chips_building_sizer",           "path": "system_setups/household_wood_chips_building_sizer.py"},
+    {"id": "household_heatpump_solar_thermal_building_sizer", "path": "system_setups/household_heatpump_solar_thermal_building_sizer.py", "horizons": ["week"]},
+    {"id": "household_gas_solar_thermal_building_sizer",    "path": "system_setups/household_gas_solar_thermal_building_sizer.py", "horizons": ["week"]},
+    {"id": "household_heatpump_car_building_sizer",         "path": "system_setups/household_heatpump_car_building_sizer.py", "horizons": ["week"]},
+    {"id": "air_conditioned_house",                         "path": "system_setups/air_conditioned_house.py", "horizons": ["week"]},
+    {"id": "basic_household",                               "path": "system_setups/basic_household.py", "horizons": ["week"]},
+    {"id": "default_connections",                           "path": "system_setups/default_connections.py", "horizons": ["week"]},
+    {"id": "automatic_default_connections",                 "path": "system_setups/automatic_default_connections.py", "horizons": ["week"]}
   ],
   "parameter_sets": [
     {"id": "one_week_60s", "factory": "one_week_only", "year": 2021, "seconds_per_timestep": 60,

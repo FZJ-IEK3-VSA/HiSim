@@ -21,13 +21,14 @@ decisions that changed rather than the components that did not.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Mapping, Sequence, Tuple, Union
+from typing import Any, ClassVar, Dict, Mapping, Sequence, Tuple, Union
 
 import yaml
 
 from hisim.energy_system.document import RawDocument
 from hisim.energy_system.emitter import CanonicalDumper
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordingError
+from hisim.energy_system.recording.reading import StrictMapping
 from hisim.energy_system.repository import RepositoryLayout
 from hisim.energy_system.recording.grouping import (
     Assignment,
@@ -46,6 +47,9 @@ class GroupingReader:
     typo and is refused rather than ignored, because a decision nobody notices was dropped is worse
     than a decision that would not load.
     """
+
+    #: What this document is, spelled the way its refusals name it.
+    NOUN: ClassVar[str] = "a grouping decision"
 
     @classmethod
     def read(cls, source: Union[str, Path]) -> Grouping:
@@ -128,6 +132,19 @@ class GroupingReader:
             variants = cls._mapping(
                 entry.get(GroupingKeys.VARIANTS) or {}, f"{GroupingKeys.CONFIGURATIONS}.{column}.variants", origin
             )
+            for name, flag in groups.items():
+                # bool() would make every non-empty string True, so a hand-written "false" or
+                # "off" — which the strict YAML loader keeps as a string — would silently flip a
+                # switch on. Only a real YAML boolean is a group position.
+                if not isinstance(flag, bool):
+                    raise EnergySystemRecordingError(
+                        EnergySystemErrorId.GROUPING_UNKNOWN_OPTION,
+                        f"{origin}:{GroupingKeys.CONFIGURATIONS}.{column}.groups.{name}",
+                        f"{flag!r} is not a position a group flag can be in; write true or false.",
+                        alternatives=("true", "false"),
+                        alternatives_label="positions",
+                        offending_value=str(flag),
+                    )
             selections.append(
                 ConfigurationSelection(
                     column=str(column),
@@ -139,7 +156,7 @@ class GroupingReader:
 
     @classmethod
     def _required(cls, document: Mapping[str, Any], key: str, origin: str) -> str:
-        """Reads one required single-line string.
+        """Reads one required single-line string; the shared check with this reader's identity.
 
         Args:
             document: The parsed document.
@@ -152,18 +169,13 @@ class GroupingReader:
         Raises:
             EnergySystemRecordingError: ``EF-R7`` when the key is missing or is not a string.
         """
-        value = document.get(key)
-        if not isinstance(value, str) or not value.strip():
-            raise EnergySystemRecordingError(
-                EnergySystemErrorId.GROUPING_UNKNOWN_OPTION,
-                f"{origin}:{key}",
-                f"a grouping decision needs a non-empty '{key}'.",
-            )
-        return value.strip()
+        return StrictMapping.required_string(
+            document, key, origin, EnergySystemErrorId.GROUPING_UNKNOWN_OPTION, cls.NOUN
+        )
 
     @classmethod
     def _mapping(cls, value: Any, location: str, origin: str) -> Dict[str, Any]:
-        """Insists that one block is a mapping.
+        """Insists that one block is a mapping; the shared check with this reader's identity.
 
         Args:
             value: The raw value.
@@ -176,17 +188,11 @@ class GroupingReader:
         Raises:
             EnergySystemRecordingError: ``EF-R7`` when it is anything else.
         """
-        if not isinstance(value, dict):
-            raise EnergySystemRecordingError(
-                EnergySystemErrorId.GROUPING_UNKNOWN_OPTION,
-                f"{origin}:{location}",
-                f"'{location}' must be a mapping, not {type(value).__name__}.",
-            )
-        return dict(value)
+        return StrictMapping.mapping(value, location, origin, EnergySystemErrorId.GROUPING_UNKNOWN_OPTION)
 
     @classmethod
     def _reject_unknown(cls, block: Mapping[str, Any], allowed: Sequence[str], origin: str, where: str) -> None:
-        """Refuses the first key the block carries that the format does not declare.
+        """Refuses an undeclared key; the shared check with this reader's identity.
 
         Args:
             block: The mapping to check.
@@ -197,16 +203,9 @@ class GroupingReader:
         Raises:
             EnergySystemRecordingError: ``EF-R7`` naming the key and the valid ones.
         """
-        for key in block:
-            if key not in allowed:
-                raise EnergySystemRecordingError(
-                    EnergySystemErrorId.GROUPING_UNKNOWN_OPTION,
-                    f"{origin}:{where}",
-                    f"'{key}' is not a key a grouping decision declares.",
-                    alternatives=allowed,
-                    alternatives_label="keys",
-                    offending_value=str(key),
-                )
+        StrictMapping.reject_unknown(
+            block, allowed, origin, where, EnergySystemErrorId.GROUPING_UNKNOWN_OPTION, cls.NOUN
+        )
 
 
 class GroupingWriter:

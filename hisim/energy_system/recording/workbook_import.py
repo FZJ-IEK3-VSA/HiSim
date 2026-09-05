@@ -1,16 +1,13 @@
 """Reading a filled-in grouping workbook back into the decision it states.
 
 The importer takes the two right-hand columns of the ``components`` sheet and the two switch columns
-of the ``configurations`` sheet and nothing else. The three-state cells are the tool's own output and
-are re-derived from the probe runs rather than trusted, so a person who typed over one has changed
-nothing about what the second pass sees. What they can change is the decision, which is the only
-thing being asked for.
-
-The cells are read for one purpose all the same: the rule that a component which is not the same in
-every column must carry a decision is checked here, on the workbook alone, before anything is
-recorded. The second pass checks it again against the real recordings, but here is where it can be
-acted on — the person has the file open, and a refusal naming the row and the columns is one edit
-away from being fixed rather than four probe runs away.
+of the ``configurations`` sheet as the decision. The three-state cells are read for one early check
+and nothing else: the rule that a component which is not the same in every column must carry a
+decision is applied here, against the cells as written, because the person has the file open and a
+refusal naming the row and the columns is one edit away from being fixed rather than four probe
+runs away. The cells are the tool's own output, but a person *can* type over one — which is why the
+check that counts is the second pass's, made against the real recordings, where a typed-over cell
+has changed nothing.
 
 Every refusal names the sheet and the row, because a spreadsheet with a hundred rows is the one place
 where "something is wrong with the file" is a useless message.
@@ -29,7 +26,6 @@ from openpyxl.worksheet.worksheet import Worksheet
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordingError
 from hisim.energy_system.recording.grouping import Assignment, ConfigurationSelection, Grouping
 from hisim.energy_system.recording.matrix import CellState
-from hisim.energy_system.recording.probes import ProbeList
 from hisim.energy_system.recording.workbook import WorkbookLayout
 
 
@@ -37,9 +33,9 @@ class WorkbookReader:
     """Reads a filled-in workbook back into the decision it states.
 
     The reader takes the two right-hand columns of the components sheet and the two switch columns
-    of the configurations sheet and nothing else: the three-state cells are the tool's own output
-    and are re-derived from the probe runs rather than trusted, so a person who typed over one has
-    changed nothing. What they can change is the decision, which is the only thing being asked for.
+    of the configurations sheet as the decision, and reads the three-state cells only for the early
+    undecided-row check. A typed-over state cell can weaken that early check and nothing else: the
+    authoritative one is made by the second pass against the real recordings.
 
     Every refusal names the sheet and the row, because a spreadsheet with a hundred rows is the one
     place where "something is wrong with the file" is a useless message.
@@ -77,21 +73,36 @@ class WorkbookReader:
     def _properties(cls, description: Optional[str], path: Path) -> Tuple[str, str]:
         """Recovers the setup and the probe list the workbook was written for.
 
+        The writer always records both in the workbook's description property, so their absence
+        means the provenance was lost — a spreadsheet tool that strips document properties on save
+        is the usual culprit. Guessing the paths from the filename would commit a decision whose
+        setup/probes fields nobody stated, and the wrong guess would only surface later, loudly, at
+        ``record --grouping`` — after the decision was committed. Lost provenance is refused here
+        instead.
+
         Args:
             description: The workbook's description property, or ``None`` when it carries none.
-            path: The workbook, whose stem is the fallback.
+            path: The workbook, for the message.
 
         Returns:
             The setup path and the probe list path.
+
+        Raises:
+            EnergySystemRecordingError: ``EF-R7`` when either is missing from the properties.
         """
         found = dict(
             line.split("=", 1) for line in (description or "").splitlines() if "=" in line
         )
-        stem = path.stem.split(".", 1)[0]
-        return (
-            found.get("setup", f"system_setups/{stem}.py").strip(),
-            found.get("probes", f"energy_systems/{stem}{ProbeList.SUFFIX}").strip(),
-        )
+        for key in ("setup", "probes"):
+            if not found.get(key, "").strip():
+                raise cls._error(
+                    path,
+                    "document properties",
+                    f"the workbook does not say which {key} it was written for; its description "
+                    "property was probably stripped by the tool that saved it. Re-run 'grouping "
+                    "probe' to regenerate the workbook and carry the filled-in decision over.",
+                )
+        return found["setup"].strip(), found["probes"].strip()
 
     @classmethod
     def _assignments(cls, sheet: Worksheet, path: Path) -> Tuple[Assignment, ...]:

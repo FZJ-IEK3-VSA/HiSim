@@ -8,9 +8,12 @@ than repairs.
 
 A component that differs between two configurations and carries no assignment is refused, naming
 the row and the columns that differ: it cannot both stay an ordinary always-on component and
-disagree with itself. A configuration selecting an option, or naming a group, that no assignment
-ever created is refused too, because a table whose two sheets contradict each other has not made a
-decision at all.
+disagree with itself. A configuration naming a group or a variant that no assignment ever created
+is refused too, because a table whose two sheets contradict each other has not made a decision at
+all — and the names it is held against come from the assignments alone, never from the
+configurations themselves, which would let a typo validate itself. Option names are the one
+deliberate exception: a wiring-only variant's options are written nowhere but the configurations
+sheet, so an option is accepted wherever its variant is real.
 
 Three more checks are here for the same reason, and each of them catches a table that would produce
 a grouped file failing its own byte-for-byte proof several minutes later: a decision about a
@@ -150,7 +153,13 @@ class GroupingCheck:
         Raises:
             EnergySystemRecordingError: ``EF-R7`` naming what was selected and what exists.
         """
-        groups, variants = grouping.group_names(), grouping.variant_options()
+        # The names come from the assignments alone: variant_options() folds in the options the
+        # configurations themselves select — legitimate for a wiring-only variant's options, whose
+        # only written home is the configurations sheet — so validating a selection against it
+        # would let a configuration invent a switch that then validates itself. A name has to be
+        # created by an assignment, because a switch nobody assigned a component to has no members.
+        groups, variants = grouping.group_names(), grouping.variant_names()
+        options = grouping.variant_options()
         for column in matrix.columns:
             selection = grouping.selection(column)
             for name in selection.groups:
@@ -158,9 +167,9 @@ class GroupingCheck:
                     raise cls._unknown(grouping, column, "group", name, groups)
             for name, option in selection.variants.items():
                 if name not in variants:
-                    raise cls._unknown(grouping, column, "variant", name, tuple(variants))
-                if option not in variants[name]:
-                    raise cls._unknown(grouping, column, f"option of '{name}'", option, variants[name])
+                    raise cls._unknown(grouping, column, "variant", name, variants)
+                if option not in options.get(name, ()):
+                    raise cls._unknown(grouping, column, f"option of '{name}'", option, options.get(name, ()))
             for name in groups:
                 if name not in selection.groups:
                     raise cls._missing(grouping, column, "group", name)

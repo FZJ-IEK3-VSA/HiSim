@@ -104,6 +104,32 @@ class Assignment:
     option: Optional[str] = None
     note: str = ""
 
+    def __post_init__(self) -> None:
+        """Refuses a combination :meth:`parse` would never produce.
+
+        The written form uses ``:`` and ``/`` as separators with no escaping, so a name or an
+        option carrying one would not round-trip through :attr:`text` and :meth:`parse` — it would
+        come back as a different assignment. Constructing such a value directly is a programming
+        error rather than a malformed file, so the refusal is a plain :class:`ValueError`.
+
+        Raises:
+            ValueError: For a separator inside a name or option, a switch assignment without a
+                name, an ordinary or override assignment carrying one, or a group with an option.
+        """
+        named = self.kind in (AssignmentKind.GROUP, AssignmentKind.VARIANT)
+        if named and not self.name:
+            raise ValueError(f"a {self.kind.value} assignment needs a name.")
+        if not named and (self.name or self.option):
+            raise ValueError(f"an assignment of kind {self.kind!r} carries no name or option.")
+        if self.kind is AssignmentKind.GROUP and self.option:
+            raise ValueError("a group assignment carries no option; only a variant does.")
+        for part in (self.name, self.option or ""):
+            if self.KIND_SEPARATOR in part or self.OPTION_SEPARATOR in part:
+                raise ValueError(
+                    f"'{part}' cannot be a switch name or option: ':' and '/' are the separators "
+                    "of the written form and would not survive the round trip."
+                )
+
     @property
     def text(self) -> str:
         """The canonical spelling of this assignment, as the sheet cell and the file both write it.
@@ -258,6 +284,25 @@ class Grouping:
         names: Dict[str, None] = {}
         for assignment in self.assignments:
             if assignment.kind is AssignmentKind.GROUP:
+                names.setdefault(assignment.name, None)
+        return tuple(names)
+
+    def variant_names(self) -> Tuple[str, ...]:
+        """The variants the assignments create, in the order they are first named.
+
+        Only the assignments can create a variant, exactly as only they can create a group: a
+        variant exists because some component belongs to it, so a name that appears in the
+        ``configurations`` sheet alone has no members and is a typo to refuse rather than a switch
+        to offer. :meth:`variant_options` deliberately answers a wider question — the *options* of
+        a variant may legitimately be named by configurations alone — so the check that a selection
+        names only real switches must use this method and not that one.
+
+        Returns:
+            One name per variant.
+        """
+        names: Dict[str, None] = {}
+        for assignment in self.assignments:
+            if assignment.kind is AssignmentKind.VARIANT:
                 names.setdefault(assignment.name, None)
         return tuple(names)
 

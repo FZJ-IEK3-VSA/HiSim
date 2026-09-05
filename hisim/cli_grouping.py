@@ -159,10 +159,14 @@ class GroupingCommands:
         del error_stream  # every command shares one signature; a refusal propagates to main()
         workbook = Path(arguments.workbook)
         decision = read_workbook(workbook)
+        # The fallback is anchored to the workbook's own directory rather than resolved through
+        # the repository root: run from outside a checkout, the root falls back to the working
+        # directory and the committed decision would land in a stray energy_systems/ there, while
+        # the workbook by convention already sits where the decision belongs.
         path = (
             Path(arguments.out)
             if arguments.out
-            else GroupingPaths.grouping(Path(decision.setup), None)
+            else workbook.parent / f"{Path(decision.setup).stem}{Grouping.SUFFIX}"
         )
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(dump_grouping(decision), encoding="utf-8")

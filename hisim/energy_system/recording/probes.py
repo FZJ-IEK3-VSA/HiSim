@@ -33,8 +33,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
+from hisim.config import NameSyntax
 from hisim.energy_system.document import RawDocument
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordingError
+from hisim.energy_system.recording.reading import DocumentPaths, StrictMapping
 from hisim.energy_system.repository import RepositoryLayout
 
 
@@ -105,6 +107,9 @@ class ProbeList:
     #: The suffix an authored probe list carries, appended to the setup's own stem.
     SUFFIX: ClassVar[str] = ".probes.yaml"
 
+    #: What this document is, spelled the way its refusals name it.
+    NOUN: ClassVar[str] = "a probe list"
+
     #: The keys the document may carry. Anything else is a typo and is refused rather than ignored.
     DOCUMENT_KEYS: ClassVar[Tuple[str, ...]] = ("setup", "defaults", "probes")
 
@@ -164,9 +169,10 @@ class ProbeList:
 
         This is what bounds the claim a grouped file makes. A probe list that toggles each fork on
         its own says nothing about two forks together, and the only way to say which combinations
-        were never exercised is to know the axes and their probed values — which is exactly the
-        overlay read across all probes, with the baseline contributing the default of every field
-        some other probe changes.
+        were never exercised is to know the axes and their probed values. Only the overlay values
+        the probes state appear here — the baseline overlays nothing and contributes nothing; the
+        class default each varied field falls back to is added as a placeholder by the combination
+        space of the report, which is the one consumer that needs it.
 
         Returns:
             One entry per varied field, in the order the probes first mention it, holding the
@@ -198,9 +204,15 @@ class ProbeList:
         document, origin = RawDocument.read(source)
         if isinstance(source, Path) or origin != RawDocument.TEXT_ORIGIN:
             origin = RepositoryLayout.relative(Path(source))
-        cls._reject_unknown(document, cls.DOCUMENT_KEYS, origin, "the document")
-        setup = cls._required_string(document, "setup", origin)
-        defaults = cls._required_string(document, "defaults", origin)
+        StrictMapping.reject_unknown(
+            document, cls.DOCUMENT_KEYS, origin, "the document", EnergySystemErrorId.PROBE_LIST_MALFORMED, cls.NOUN
+        )
+        setup = StrictMapping.required_string(
+            document, "setup", origin, EnergySystemErrorId.PROBE_LIST_MALFORMED, cls.NOUN
+        )
+        defaults = StrictMapping.required_string(
+            document, "defaults", origin, EnergySystemErrorId.PROBE_LIST_MALFORMED, cls.NOUN
+        )
         entries = document.get("probes")
         if not isinstance(entries, list) or not entries:
             raise cls._error(origin, "probes", "a probe list needs a non-empty 'probes' sequence.")
@@ -227,10 +239,20 @@ class ProbeList:
         location = f"probes[{index}]"
         if not isinstance(entry, dict):
             raise cls._error(origin, location, "a probe must be a mapping of column, description and fields.")
-        cls._reject_unknown(entry, cls.PROBE_KEYS, origin, location)
+        StrictMapping.reject_unknown(
+            entry, cls.PROBE_KEYS, origin, location, EnergySystemErrorId.PROBE_LIST_MALFORMED, cls.NOUN
+        )
         column = entry.get("column")
         if not isinstance(column, str) or not column.strip():
             raise cls._error(origin, location, "a probe needs a non-empty 'column' naming its table column.")
+        # The column becomes part of a file name (the recording, the materialised module config)
+        # and a sheet header, so it gets the same identifier rule group and variant names already
+        # have; a '/' or a leading dot would otherwise write outside the probe work directory.
+        problem = NameSyntax.explain_violation(column.strip())
+        if problem is not None:
+            raise cls._error(
+                origin, f"{location}.column", f"'{column.strip()}' cannot name a probe column: {problem}."
+            )
         overlay = entry.get("module_config") or {}
         if not isinstance(overlay, dict):
             raise cls._error(origin, f"{location}.module_config", "the overlay must be a mapping of dotted fields.")
@@ -276,50 +298,6 @@ class ProbeList:
                 )
 
     @classmethod
-    def _required_string(cls, document: Mapping[str, Any], key: str, origin: str) -> str:
-        """Reads one required single-line string from the document.
-
-        Args:
-            document: The parsed document.
-            key: The key to read.
-            origin: The file it came from.
-
-        Returns:
-            The string.
-
-        Raises:
-            EnergySystemRecordingError: ``EF-R9`` when the key is missing or is not a string.
-        """
-        value = document.get(key)
-        if not isinstance(value, str) or not value.strip():
-            raise cls._error(origin, key, f"a probe list needs a non-empty '{key}'.")
-        return value.strip()
-
-    @classmethod
-    def _reject_unknown(cls, block: Mapping[str, Any], allowed: Sequence[str], origin: str, where: str) -> None:
-        """Refuses the first key the block carries that the format does not declare.
-
-        Args:
-            block: The mapping to check.
-            allowed: The keys it may carry.
-            origin: The file it came from.
-            where: How the message names the block.
-
-        Raises:
-            EnergySystemRecordingError: ``EF-R9`` naming the key and the ones that are valid.
-        """
-        for key in block:
-            if key not in allowed:
-                raise EnergySystemRecordingError(
-                    EnergySystemErrorId.PROBE_LIST_MALFORMED,
-                    f"{origin}:{where}",
-                    f"'{key}' is not a key a probe list declares.",
-                    alternatives=allowed,
-                    alternatives_label="keys",
-                    offending_value=str(key),
-                )
-
-    @classmethod
     def _error(cls, origin: str, location: str, problem: str) -> EnergySystemRecordingError:
         """Builds one probe-list rejection; the caller raises it.
 
@@ -345,14 +323,16 @@ class ModuleConfigMaterialiser:
     overlay is applied against the *dumped* form rather than against the objects, because that is
     the form the setup reads back and the only one in which a dotted path means one thing.
 
-    A path that names no field is refused rather than added. A misspelled field would otherwise
-    make a probe silently identical to the baseline, and a column that records the baseline twice
-    is the one failure this pass cannot detect from its own output — every cell would read ``=``
-    and the table would look like a proof.
+    A path that names no field is refused rather than added, and an overlay whose every value
+    equals the class default is refused as well. Both would otherwise make a probe silently
+    identical to the baseline — a column that records the baseline twice is the one failure this
+    pass cannot detect from its own output, because every cell would read ``=`` and the table
+    would look like a proof.
     """
 
-    #: Separator of a dotted overlay path.
-    SEPARATOR: ClassVar[str] = "."
+    #: Separator of a dotted overlay path; one spelling with the difference machinery, so an
+    #: overlay path and an override path can never mean two different walks.
+    SEPARATOR: ClassVar[str] = DocumentPaths.SEPARATOR
 
     #: How a materialised configuration file is named inside the work directory.
     FILE_NAME: ClassVar[str] = "{column}.module_config.json"
@@ -397,11 +377,23 @@ class ModuleConfigMaterialiser:
             The document, ready to be written as JSON.
 
         Raises:
-            EnergySystemRecordingError: ``EF-R9`` when an overlay path names no field.
+            EnergySystemRecordingError: ``EF-R9`` when an overlay path names no field, or when the
+                overlay changes nothing because every value it sets equals the class default — such
+                a probe would record the baseline a second time and read ``=`` in every cell, which
+                is indistinguishable from a proof.
         """
-        document: Dict[str, Any] = dict(cls.defaults(probe_list.defaults, probe_list.origin).to_dict())
+        pristine: Dict[str, Any] = dict(cls.defaults(probe_list.defaults, probe_list.origin).to_dict())
+        document = DocumentPaths.copy(pristine)
         for path, value in dict(probe.module_config).items():
             cls._assign(document, path, value, probe, probe_list.origin)
+        if document == pristine:
+            raise EnergySystemRecordingError(
+                EnergySystemErrorId.PROBE_LIST_MALFORMED,
+                f"{probe_list.origin}:probe '{probe.column}'.module_config",
+                "the overlay changes no effective field: every value it sets equals the class "
+                "default, so recording it would produce the baseline a second time.",
+                remedy="Probe a value that differs from the default, or drop the probe.",
+            )
         return document
 
     @classmethod
@@ -421,7 +413,7 @@ class ModuleConfigMaterialiser:
             EnergySystemRecordingError: ``EF-R9`` naming the path, the probe and the fields the
                 block it points into really has.
         """
-        keys = path.split(cls.SEPARATOR)
+        keys = path.split(DocumentPaths.SEPARATOR)
         block: Any = document
         for key in keys[:-1]:
             if not isinstance(block, dict) or key not in block or not isinstance(block[key], dict):
@@ -430,7 +422,7 @@ class ModuleConfigMaterialiser:
         leaf = keys[-1]
         if not isinstance(block, dict) or leaf not in block:
             raise cls._unknown_field(block, path, leaf, probe, origin)
-        block[leaf] = value
+        DocumentPaths.set_value(document, path, value)
 
     @classmethod
     def _unknown_field(

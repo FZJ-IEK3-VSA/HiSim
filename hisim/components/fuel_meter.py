@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import ClassVar, List, Optional, Tuple
+from typing import ClassVar, Dict, List, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -11,7 +11,12 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput, OpexCostDataClass
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
-from hisim.config.channels import DispatchRule, DynamicConnectionChannel
+from hisim.config.channels import (
+    DispatchRule,
+    DynamicConnectionChannel,
+    PortTypeCompatibility,
+    ResolvedDynamicConnection,
+)
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -101,6 +106,17 @@ class FuelMeter(DynamicComponent):
         ),
     )
 
+    #: Carriers a feed may bring in beside the configured one, keyed by the configured carrier.
+    #: Only district heating needs an entry, and it is not a relaxation but a restatement of what
+    #: this class's own :meth:`get_default_connections_from_generic_district_heating` declares: a
+    #: district-heating source types its two energy outputs by heat domain — space heating and
+    #: hot water — while the meter is configured for the network it is billed by, so the two names
+    #: legitimately differ. Every other carrier is metered by a source that types its output as
+    #: that carrier, and any other name is exactly the mispricing the carrier check must catch.
+    ADDITIONALLY_ACCEPTED_CARRIERS: ClassVar[Dict[lt.LoadTypes, Tuple[lt.LoadTypes, ...]]] = {
+        lt.LoadTypes.DISTRICTHEATING: (lt.LoadTypes.HEATING, lt.LoadTypes.WARM_WATER),
+    }
+
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
@@ -165,6 +181,67 @@ class FuelMeter(DynamicComponent):
 
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_district_heating())
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_boiler())
+
+    def resolve_dynamic_connections(self, connections: List[ResolvedDynamicConnection]) -> None:
+        """Checks the carrier of every feed against this meter's own, then creates the ports.
+
+        The channel this meter declares wildcards the load type, because it is a class-level
+        declaration and a class cannot know which fuel the instance in a given household was
+        configured for. The instance does know: :meth:`get_cost_opex` prices and books emissions
+        for ``config.fuel_loadtype`` alone. Nothing between the two would notice a wood-chip feed
+        arriving at a meter configured for oil — the numbers would be summed, priced as oil and
+        reported without a word — so the mismatch is refused here, where the configured carrier
+        and the feed's carrier are both in hand for the first time.
+
+        The check runs over the whole batch before a single port is created, so a file this meter
+        refuses leaves the component exactly as it was rather than half grown.
+
+        Args:
+            connections: The resolved feeds, already validated against this component's channels
+                by the energy-system resolver.
+
+        Raises:
+            ValueError: If a feed carries a concrete load type this meter is not configured to
+                measure. The resolver turns it into a located energy-system error.
+        """
+        self._check_feeds_carry_the_configured_fuel(connections)
+        super().resolve_dynamic_connections(connections)
+
+    def _check_feeds_carry_the_configured_fuel(
+        self, connections: List[ResolvedDynamicConnection]
+    ) -> None:
+        """Refuses a feed whose carrier this meter would measure but price as something else.
+
+        The legacy default connections are scoped by the participant class they come from, so a
+        setup building them by hand never produced this mismatch. An energy-system file addresses
+        feeds at the meter by tag alone and can therefore hand it any heat source in the system,
+        which is exactly the freedom that has to be paid for with this check. A source port typed
+        as the wildcard stays accepted, because that is what the wildcard is for: a boiler types
+        its energy-demand outputs generically and the meter's configuration decides the carrier.
+        So are the heat-domain names of :attr:`ADDITIONALLY_ACCEPTED_CARRIERS`, which is how a
+        district-heating source's own two outputs reach a district-heating meter.
+
+        Args:
+            connections: The resolved feeds to check, in resolution order.
+
+        Raises:
+            ValueError: On the first feed whose carrier disagrees with ``config.fuel_loadtype``,
+                naming the participant, its output and both carriers.
+        """
+        configured = self.config.fuel_loadtype
+        also_accepted = self.ADDITIONALLY_ACCEPTED_CARRIERS.get(configured, ())
+        for connection in connections:
+            carrier = connection.source_port.load_type
+            if PortTypeCompatibility.load_types_agree(carrier, configured):
+                continue
+            if carrier in also_accepted:
+                continue
+            raise ValueError(
+                f"the feed '{connection.source_name}.{connection.source_output}' carries "
+                f"'{carrier.name}', but this meter is configured to measure and price "
+                f"'{configured.name}' (fuel_loadtype); configure the meter for the carrier it "
+                "meters, or feed it the matching source."
+            )
 
     def get_default_connections_from_generic_district_heating(
         self,

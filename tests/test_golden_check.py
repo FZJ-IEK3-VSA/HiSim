@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.golden_check import _parse_args, golden_filename, main
+from scripts.golden_check import PORT_NAMED_KPIS, _parse_args, golden_filename, main
 from scripts.runner import GoldenConfig, RunResult, select_pairs
 
 pytestmark = pytest.mark.base
@@ -103,6 +103,33 @@ def test_fail_when_kpi_diverges(tmp_path: Path) -> None:
     assert report["pairs"][0]["deviations"]
 
 
+def test_port_named_kpis_are_excluded_from_both_sides_in_yaml_mode(tmp_path: Path) -> None:
+    """The declared port-named KPI family is dropped from run and reference alike.
+
+    The legacy path names the EMS priority KPI after ``Input_<source>_<field>_<n>``, the
+    declarative path after the aggregator input's own name (C-P3.2), so the two differ by
+    name while their values agree. With the exclusion the pair passes; without it, the
+    same data fails on the missing and new names -- which pins that the exclusion is
+    load-bearing and exactly as wide as the family.
+    """
+    config_path = _write_config(tmp_path)
+    golden_dir = tmp_path / "golden_references"
+    _write_golden(golden_dir, {"a": 1.0, "EMS.Priority for Input_Battery_AcBatteryPowerUsed_4": 2.0})
+    run_fn = _run_fn({"a": 1.0, "EMS.Priority for battery_power": 2.0})
+
+    without_exclusion = main(
+        config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
+        repo_root=tmp_path, run_fn=run_fn,
+    )
+    with_exclusion = main(
+        config_path=config_path, golden_dir=golden_dir, results_root=tmp_path,
+        repo_root=tmp_path, run_fn=run_fn, ignore_kpis=PORT_NAMED_KPIS,
+    )
+
+    assert without_exclusion == 1
+    assert with_exclusion == 0
+
+
 def test_missing_golden_bails_before_running(tmp_path: Path) -> None:
     """A missing golden file fails fast without invoking the run function."""
     config_path = _write_config(tmp_path)
@@ -190,6 +217,7 @@ def test_cli_mode_and_advisory_flags() -> None:
     parsed = _parse_args(["--mode", "json", "--advisory"])
     assert parsed.mode == "json"
     assert parsed.advisory is True
+    assert _parse_args(["--mode", "yaml"]).mode == "yaml"
 
 
 def test_setup_param_filter_narrows_to_one_pair(tmp_path: Path) -> None:

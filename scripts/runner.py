@@ -259,6 +259,28 @@ def resolve_scenario_path(setup: SetupConfig, repo_root: Path) -> Path:
     return resolved
 
 
+def resolve_twin_path(setup: SetupConfig, repo_root: Path) -> Path:
+    """Resolve the recorded ``.energy_system.yaml`` twin of the setup.
+
+    Every setup has a committed twin in ``energy_systems/``, produced by the recorder and
+    held current by the energy-system freshness gate. This returns the absolute path of
+    that twin so the YAML golden check can run the identical system through the
+    declarative executor.
+
+    Raises:
+        FileNotFoundError: if the twin does not exist; the message names the recording
+            command that produces it.
+    """
+    twin_rel = Path("energy_systems") / f"{Path(setup.path).stem}.energy_system.yaml"
+    resolved = (repo_root / twin_rel).resolve()
+    if not resolved.exists():
+        raise FileNotFoundError(
+            f"Recorded twin not found for setup {setup.id!r}: {twin_rel} (resolved to {resolved}). "
+            "Record it with 'hisim energy-system record'."
+        )
+    return resolved
+
+
 # ---------------------------------------------------------------------------
 # Execution
 # ---------------------------------------------------------------------------
@@ -275,8 +297,12 @@ def run_one(
     and flattens ``<result_directory>/all_kpis.json``. With ``mode="python"``
     (default) it runs the ``.py`` setup via :func:`hisim.hisim_main.main`; with
     ``mode="json"`` it runs the same-named ``.scenario.json`` sibling via
-    :func:`hisim.hisim_main.main_json`, passing the *same* built
-    :class:`SimulationParameters` so the two runs are directly comparable.
+    :func:`hisim.hisim_main.main_json`; with ``mode="yaml"`` it runs the recorded
+    ``.energy_system.yaml`` twin through the declarative executor. All three receive
+    the *same* built :class:`SimulationParameters`, so the runs are directly
+    comparable. The oracle is the KPI set, deliberately: the legacy and declarative
+    paths name aggregator result columns differently (C-P3.2), but KPIs do not
+    depend on column names.
 
     Any exception (including a missing ``all_kpis.json``, which means the parameter
     set did not enable both ``COMPUTE_KPIS`` and ``WRITE_KPIS_TO_JSON``) is captured
@@ -293,6 +319,12 @@ def run_one(
         if mode == "json":
             scenario_path = resolve_scenario_path(setup, repo_root)
             hisim_main.main_json(str(scenario_path), params)
+        elif mode == "yaml":
+            from hisim.energy_system.executor import build_energy_system
+
+            twin_path = resolve_twin_path(setup, repo_root)
+            built = build_energy_system(str(twin_path), params)
+            built.simulator.run_all_timesteps()
         else:
             setup_path = resolve_setup_path(setup, repo_root)
             hisim_main.main(str(setup_path), params)
@@ -346,6 +378,17 @@ def run_all_json(
     ``golden_check.main``'s ``run_fn`` (which expects the 4-argument signature).
     """
     return run_all(config, base_root, repo_root, subdir, mode="json")
+
+
+def run_all_yaml(
+    config: GoldenConfig, base_root: Path, repo_root: Path, subdir: str
+) -> list[RunResult]:
+    """Run every pair via its recorded ``.energy_system.yaml`` twin (YAML mode).
+
+    Thin ``mode="yaml"`` wrapper around :func:`run_all` so it can be injected as
+    ``golden_check.main``'s ``run_fn`` (which expects the 4-argument signature).
+    """
+    return run_all(config, base_root, repo_root, subdir, mode="yaml")
 
 
 # ---------------------------------------------------------------------------

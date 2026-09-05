@@ -1,0 +1,121 @@
+# yaml-language-server: $schema=../hisim/energy_system_v3.schema.json
+# Recorded from system_setups/default_connections.py with energy_systems/one_day_15min.simulation.yaml by the HiSim energy-system recorder v1.
+schema_version: 3
+name: default_connections
+description: Default Connections Module.
+components:
+  UTSPConnector:
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    config:
+      data_acquisition_mode: USE_PREDEFINED_PROFILE
+      household:
+        Name: CHR01 Couple both at Work
+        Guid:
+          StrVal: 516a33ab-79e1-4221-853b-967fc11cc85a
+      energy_intensity: EnergySaving
+      travel_route_set:
+        Name: Travel Route Set for 10km Commuting Distance
+        Guid:
+          StrVal: ca46be86-9cc7-47b5-9769-abff78ceca7a
+      transportation_device_set:
+        Name: Bus and one 30 km/h Car
+        Guid:
+          StrVal: 6ac74bd0-bacd-4b39-b84a-dc7ae16702c9
+      charging_station_set:
+        Name: Charging At Home with 11 kW
+        Guid:
+          StrVal: 78dae308-24c4-45cc-8bdf-b001d61f45c2
+      profile_with_washing_machine_and_dishwasher: true
+      predictive_control: false
+      predictive: false
+      result_dir_path: ${utsp_results}
+      cache_dir_path: null
+      name_of_predefined_loadprofile: CHR01 Couple both at Work
+      predefined_loadprofile_filepaths: null
+      guid: ''
+      calculation_index_for_local_lpg: null
+      cars: null
+  Weather:
+    class: hisim.components.weather.Weather
+    config:
+      location: Aachen
+      source_path: ${inputs}/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center
+      data_source: DWD_TRY
+      predictive_control: false
+  Building:
+    class: hisim.components.building.building.Building
+    preset: standard
+    inputs:
+      - Weather
+      - UTSPConnector
+      - input: ThermalPowerDelivered
+        from: HeatPump.ThermalPowerDelivered
+  PVSystem:
+    class: hisim.components.generic_pv_system.PVSystem
+    config:
+      time: 2019
+      location: Aachen
+      module_name: Trina Solar TSM-435NE09RC.05
+      integrate_inverter: true
+      inverter_name: 'Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]'
+      module_database: CEC_MODULE_DATABASE
+      inverter_database: CEC_INVERTER_DATABASE
+      power_in_watt: 10000.0
+      azimuth: 180.0
+      tilt: 30.0
+      share_of_maximum_pv_potential: 1.0
+      load_module_data: false
+      source_weight: 0
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
+      predictive: false
+      predictive_control: false
+      prediction_horizon: null
+    inputs:
+      - Weather
+  GenericHeatPumpController:
+    class: hisim.components.generic_heat_pump.GenericHeatPumpController
+    config:
+      temperature_air_heating_in_celsius: 16.0
+      temperature_air_cooling_in_celsius: 24.0
+      offset_in_celsius: 0.5
+      mode: 2
+    inputs:
+      - ElectricityMeter
+      - Building
+  HeatPump:
+    class: hisim.components.generic_heat_pump.GenericHeatPump
+    config:
+      manufacturer: Viessmann Werke GmbH & Co KG
+      heat_pump_name: Vitocal 300-A AWO-AC 301.B07
+      min_operation_time_in_seconds: 3600.0
+      min_idle_time_in_seconds: 900.0
+    inputs:
+      - GenericHeatPumpController
+      - Weather
+  ElectricityMeter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    config:
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
+    inputs:
+      - from: HeatPump.ElectricityOutput
+        component_type: HEAT_PUMP
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: PVSystem.ElectricityOutput
+        component_type: PV
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+      - from: UTSPConnector.ElectricalPowerConsumption
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999

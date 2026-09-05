@@ -27,9 +27,11 @@ from scripts.runner import (
     filter_config,
     load_config,
     resolve_scenario_path,
+    resolve_twin_path,
     resolve_setup_path,
     run_all,
     run_all_json,
+    run_all_yaml,
     run_one,
     select_pairs,
 )
@@ -235,6 +237,20 @@ def test_all_golden_setups_have_scenario_json_siblings() -> None:
         resolve_scenario_path(setup, REPO_ROOT)
 
 
+def test_all_golden_setups_have_recorded_twins() -> None:
+    """Every setup in the shipped config has a recorded ``.energy_system.yaml`` twin for YAML mode."""
+    cfg = load_config(REAL_CONFIG)
+    for setup in cfg.setups:
+        # Must not raise: the YAML golden check depends on every twin existing.
+        resolve_twin_path(setup, REPO_ROOT)
+
+
+def test_resolve_twin_path_names_the_recording_command_when_missing() -> None:
+    """A missing twin fails with the command that produces it, not a bare path."""
+    with pytest.raises(FileNotFoundError, match="hisim energy-system record"):
+        resolve_twin_path(SetupConfig("ghost", "system_setups/nope.py"), REPO_ROOT)
+
+
 # --------------------------------------------------------------------------- #
 # environment metadata
 # --------------------------------------------------------------------------- #
@@ -286,6 +302,20 @@ def test_run_all_json_passes_json_mode_to_run_one(tmp_path: Path, monkeypatch: p
     results = run_all_json(_sample_config(), tmp_path, REPO_ROOT, "golden-ref-check")
     assert len(results) == 4
     assert set(modes) == {"json"}
+
+
+def test_run_all_yaml_passes_yaml_mode_to_run_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``run_all_yaml`` drives every pair through ``run_one`` with ``mode='yaml'``."""
+    modes: list[str] = []
+
+    def fake_run_one(setup, param, result_directory, _repo_root, mode="python"):
+        modes.append(mode)
+        return RunResult(setup.id, param.id, result_directory, kpis={"k": 1.0})
+
+    monkeypatch.setattr("scripts.runner.run_one", fake_run_one)
+    results = run_all_yaml(_sample_config(), tmp_path, REPO_ROOT, "golden-ref-check")
+    assert len(results) == 4
+    assert set(modes) == {"yaml"}
 
 
 def test_run_one_captures_error_for_missing_setup(tmp_path: Path) -> None:

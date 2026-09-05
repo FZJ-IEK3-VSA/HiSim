@@ -21,6 +21,7 @@ import pytest
 
 from hisim import utils
 from hisim.components import loadprofilegenerator_utsp_connector as lpg_connector
+from hisim.components.pylpg_workspace import PylpgWorkspace
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Noah Pflugradt"
@@ -74,12 +75,18 @@ def test_local_lpg_failure_propagates_instead_of_swapping_the_household(
     pylpg installation looks like from the connector's side. The old code caught that, logged a
     warning, set ``USE_PREDEFINED_PROFILE`` and finished successfully; the new code must let the
     exception through with the mode untouched.
+
+    The binary installation is stubbed out too. It runs only when the generator's executable is not
+    on disk, and it reaches for a method of the executor class that the stub above does not have;
+    whether the executable is on disk depends on whether an earlier test computed a profile, which
+    a warm cache makes false. The test must not depend on that.
     """
 
     def raise_instead_of_executing(*_args: Any, **_kwargs: Any) -> Any:
         raise UnreachableProfileSourceError("pylpg is not available in this test")
 
     monkeypatch.setattr(lpg_connector.lpg_execution, "LPGExecutor", raise_instead_of_executing)
+    monkeypatch.setattr(PylpgWorkspace, "install_binaries_if_missing", classmethod(lambda cls: None))
     config = build_connector_config(lpg_connector.LpgDataAcquisitionMode.USE_LOCAL_LPG, str(tmp_path))
     simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
 

@@ -503,7 +503,14 @@ class Car(cp.Component):
         if file_exists:
             # load from cache
             log.information("Generic car data is taken from cache.")
-            dataframe = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding="cp1252")
+            # float_precision="round_trip" is what makes a cached run and an uncached one the same
+            # run. pandas' default CSV reader uses a fast, inexact float parser and loses the last
+            # bit of a fifth of the distances in this file -- measured on a committed year-long
+            # entry: 334 of the 1789 non-zero values of meters_driven come back different from
+            # what was written, and none do with this argument.
+            dataframe = pd.read_csv(
+                cache_filepath, sep=",", decimal=".", encoding="cp1252", float_precision="round_trip"
+            )
             self.car_location = dataframe["car_location"].tolist()
             self.meters_driven = dataframe["meters_driven"].tolist()
 

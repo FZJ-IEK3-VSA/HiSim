@@ -63,8 +63,8 @@ def test_night_setback_controller_all_window_modes() -> None:
     wrap = night_setback_controller.NightSetbackConfig(
         component_id=ComponentID(name="NightSetbackController"),
         setback_delta_in_kelvin=delta,
-        night_start_hour=22,
-        night_end_hour=6,
+        night_start_time_in_hours=22,
+        night_end_time_in_hours=6,
     )
     for hour in range(24):
         expected = delta if (hour >= 22 or hour < 6) else 0.0
@@ -74,8 +74,8 @@ def test_night_setback_controller_all_window_modes() -> None:
     within = night_setback_controller.NightSetbackConfig(
         component_id=ComponentID(name="NightSetbackController"),
         setback_delta_in_kelvin=delta,
-        night_start_hour=6,
-        night_end_hour=22,
+        night_start_time_in_hours=6,
+        night_end_time_in_hours=22,
     )
     for hour in range(24):
         expected = delta if (6 <= hour < 22) else 0.0
@@ -85,8 +85,8 @@ def test_night_setback_controller_all_window_modes() -> None:
     none = night_setback_controller.NightSetbackConfig(
         component_id=ComponentID(name="NightSetbackController"),
         setback_delta_in_kelvin=delta,
-        night_start_hour=12,
-        night_end_hour=12,
+        night_start_time_in_hours=12,
+        night_end_time_in_hours=12,
     )
     for hour in range(24):
         assert _modifier(none, hour) == 0.0, f"none hour {hour}"

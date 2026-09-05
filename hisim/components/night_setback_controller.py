@@ -9,10 +9,11 @@ and zero otherwise. The output is meant to be connected to
 is reduced during the night.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 import pandas as pd
+from dataclasses_json import config as dc_json_config
 from dataclasses_json import dataclass_json
 
 from hisim import component as cp
@@ -52,8 +53,13 @@ class NightSetbackConfig(ConfigBase):
 
     component_id: ComponentID
     setback_delta_in_kelvin: float
-    night_start_hour: int
-    night_end_hour: int
+    # The Python attributes carry the explicit ``_in_hours`` unit suffix: the
+    # value is hours since midnight (0..23). The dataclasses_json ``field_name``
+    # aliases preserve the legacy ``night_start_hour`` / ``night_end_hour``
+    # serialization keys so existing JSON/HDF5 configs and reports still load
+    # unchanged (per KB-6843, KB-5295).
+    night_start_time_in_hours: int = field(metadata=dc_json_config(field_name="night_start_hour"))
+    night_end_time_in_hours: int = field(metadata=dc_json_config(field_name="night_end_hour"))
 
     @staticmethod
     def get_default_config(
@@ -65,8 +71,8 @@ class NightSetbackConfig(ConfigBase):
         return NightSetbackConfig(
             component_id=component_id,
             setback_delta_in_kelvin=-4.0,
-            night_start_hour=22,
-            night_end_hour=6,
+            night_start_time_in_hours=22,
+            night_end_time_in_hours=6,
         )
 
 
@@ -102,21 +108,21 @@ class NightSetbackController(cp.Component):
         )
 
         self.setback_delta_in_kelvin = config.setback_delta_in_kelvin
-        self.night_start_hour = config.night_start_hour
-        self.night_end_hour = config.night_end_hour
+        self.night_start_time_in_hours = config.night_start_time_in_hours
+        self.night_end_time_in_hours = config.night_end_time_in_hours
 
         # Hoist the time-invariant night-window arithmetic out of the per-timestep
-        # hot path. ``night_start_hour``/``night_end_hour`` are fixed at construction
+        # hot path. ``night_start_time_in_hours``/``night_end_time_in_hours`` are fixed at construction
         # time and never mutated, so the corresponding second-of-day bounds and which
         # of the three evaluation branches applies are constant for the whole
         # simulation. Per KB-5685, ``timestep`` is assumed to align with 00:00, so
         # the modulo against SECONDS_PER_DAY below preserves the existing semantics.
-        self._night_start_time_in_seconds: int = self.night_start_hour * SECONDS_PER_HOUR
-        self._night_end_time_in_seconds: int = self.night_end_hour * SECONDS_PER_HOUR
-        if self.night_start_hour == self.night_end_hour:
+        self._night_start_time_in_seconds: int = self.night_start_time_in_hours * SECONDS_PER_HOUR
+        self._night_end_time_in_seconds: int = self.night_end_time_in_hours * SECONDS_PER_HOUR
+        if self.night_start_time_in_hours == self.night_end_time_in_hours:
             # No night window configured.
             self._night_mode: str = "none"
-        elif self.night_start_hour < self.night_end_hour:
+        elif self.night_start_time_in_hours < self.night_end_time_in_hours:
             # Window lies entirely within the same day.
             self._night_mode = "within"
         else:

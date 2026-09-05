@@ -7,7 +7,6 @@ import inspect
 import itertools
 import json
 import os
-import dataclasses
 from dataclasses import dataclass
 from functools import lru_cache
 from functools import reduce as freduce
@@ -21,7 +20,7 @@ import psutil
 import pytz
 
 from hisim import log
-from hisim.caching import CacheEntryMetadata
+from hisim.caching import CacheClient
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago"
@@ -344,95 +343,71 @@ def get_cache_file(
     my_simulation_parameters: SimulationParameters,
     cache_dir_path: Optional[str] = None
 ) -> Tuple[bool, str]:  # noqa
-    """Gets a cache path for a given parameter set.
+    """Return ``(exists, path)`` for the cache entry of a configuration under the given simulation parameters.
 
-    This will generate a file path based on any dataclass_json.
-    It works by turning the class into a json string, hashing the string and then using that as filename.
-    The idea is to have a unique file path for every possible configuration.
+    The key material is built here with :func:`build_cache_key_string`; the lookup itself -- filename,
+    directory, validation of an existing entry -- is :meth:`hisim.caching.CacheClient.lookup`. The
+    signature and return value are unchanged, so no component had to change when the client was introduced.
 
-    The ``exists`` flag is advisory and nothing more. It is a plain ``os.path.isfile`` check, so two
-    processes that miss the same key concurrently will both compute the entry and both write it; that
-    wastes work but is harmless, because the contents are a pure function of the key. What is *not*
-    harmless is writing the entry straight to the returned path, which lets a concurrent reader see it
-    half written -- so every writer must land its entry through
-    :func:`hisim.caching.atomic_cache_write`. This function becomes a thin delegating wrapper over
-    ``hisim/caching/`` in a later phase of ``roadmap/cache_service_spec.md`` §4.
+    ``exists`` is advisory: two processes may both miss the same key and both compute the entry, which
+    wastes work but is harmless. Never write to the returned path directly; use
+    :func:`hisim.caching.atomic_cache_write`, otherwise a concurrent reader can see a half-written file.
 
-    An existing entry only counts as a hit if its companion metadata is present and hashes to the
-    name the entry is filed under. One that fails that check is deleted here and reported as a miss:
-    either it was written before the metadata scheme existed, or its contents came from something
-    other than what its key describes, and there is no way to tell those apart from the file alone.
-    That is also what removes the need for a one-off purge whenever the key scheme changes.
+    The directory is chosen in this order: the ``cache_dir_path`` argument, then ``HISIM_CACHE_DIR``, then
+    ``my_simulation_parameters.cache_dir_path``. The argument wins over the environment so that a test
+    pointing at its own directory keeps working on a machine where the override is set.
 
     Args:
-        component_key: filename prefix for the component type.
-        parameter_class: dataclass with a ``to_json`` method; the building of its
-            ``component_id`` is nulled before hashing.
-        my_simulation_parameters: provides the cache directory and a unique key appended before hashing.
-        cache_dir_path: optional override; defaults to ``my_simulation_parameters.cache_dir_path``.
+        component_key: filename prefix, today the component's instance name.
+        parameter_class: a dataclass with ``to_json``; its ``component_id.building`` is cleared before hashing.
+        my_simulation_parameters: provides the default directory and the simulation part of the key.
+        cache_dir_path: optional directory override; see the order above.
 
     Returns:
-        Tuple[bool, str]: ``(exists, absolute_path)``. ``exists`` is advisory, see above.
+        Tuple[bool, str]: ``(exists, absolute_path)``.
 
     Raises:
-        ValueError: if ``my_simulation_parameters`` is None or the JSON string is too short.
+        ValueError: if ``my_simulation_parameters`` is None or the key material is implausibly short.
     """
-    json_str = build_cache_key_string(parameter_class, my_simulation_parameters)
-    if cache_dir_path is None:
-        cache_dir_path = my_simulation_parameters.cache_dir_path
-    sha_key = CacheEntryMetadata.hash_of(json_str)
-    filename = f"{component_key}_{sha_key}.cache"
-
-    cache_absolute_filepath = os.path.join(cache_dir_path, filename)
-    if not os.path.isdir(cache_dir_path):
-        os.mkdir(cache_dir_path)
-    if os.path.isfile(cache_absolute_filepath):
-        if CacheEntryMetadata.describes(cache_absolute_filepath):
-            return True, cache_absolute_filepath
-        # An entry whose metadata is missing or disagrees with its own filename cannot be shown to
-        # belong to this key: either it predates the metadata scheme, or something other than what
-        # the key describes produced it. Deleting it turns both cases into an ordinary miss, which
-        # is what makes the migration self-executing and a poisoning self-repairing.
-        log.warning(
-            f"Discarding the cache entry {cache_absolute_filepath}: its metadata is missing or does "
-            f"not hash to the name it is filed under, so its contents cannot be shown to belong to "
-            f"this key. It will be recomputed."
-        )
-        CacheEntryMetadata.discard(cache_absolute_filepath)
-    return False, cache_absolute_filepath
+    key_material = build_cache_key_string(parameter_class, my_simulation_parameters)
+    client = CacheClient.from_environment()
+    if cache_dir_path is not None:
+        # The explicit argument outranks the environment; the override is simply not consulted.
+        directory = cache_dir_path
+    else:
+        directory = client.settings.resolve_local_directory(my_simulation_parameters.cache_dir_path)
+        if client.settings.local_directory is not None:
+            client.announce_environment_override(directory)
+    entry = client.lookup(component_key, key_material, directory)
+    return entry.exists, entry.path
 
 
 def build_cache_key_string(parameter_class: Any, my_simulation_parameters: SimulationParameters) -> str:
-    """Builds the raw string a cache entry's name is hashed from, and its metadata records verbatim.
+    """Return the string a cache entry's filename is hashed from and its ``.meta`` file records.
 
-    The string is shared by three callers that must agree exactly: the lookup that turns it into a
-    filename, the writer that stores it beside the entry, and the validation that recomputes the hash
-    from the stored copy. Splitting it out of ``get_cache_file`` is what lets a writer record the
-    inputs that actually produced its bytes rather than re-deriving what was asked for.
+    The same string is used by the lookup (hashed into the filename), by the writer (stored beside the
+    entry) and by the validation (re-hashed and compared with the filename), so it is built in one place.
 
-    The component's building is removed from its identity first. The cached data depends on what the
-    component is and how it is parameterized, not on which building it happens to sit in, and leaving
-    the building in would file the same computation under a different name for every house.
+    What is hashed is ``parameter_class.cache_key_view()`` when the class provides it (every
+    ``ConfigBase`` does): a copy with the fields that do not affect the result cleared and any paths made
+    portable. A parameter class without that method -- tests pass minimal stand-ins -- is hashed as it is.
 
     Args:
-        parameter_class: the configuration dataclass, which must provide ``to_json``.
+        parameter_class: the configuration; must provide ``to_json``.
         my_simulation_parameters: contributes start, end, resolution, year, timesteps and country.
 
     Returns:
         str: the configuration JSON followed by the simulation parameters' unique key.
 
     Raises:
-        ValueError: if ``my_simulation_parameters`` is None, or the resulting string is too short to
-            be a real configuration, which would mean the caller passed something empty.
+        ValueError: if ``my_simulation_parameters`` is None, or the result is too short to be a real
+            configuration.
     """
     if my_simulation_parameters is None:
         raise ValueError("Simulation parameters was none.")
-    parameter_class_copy = copy.deepcopy(parameter_class)
-    component_id = getattr(parameter_class_copy, "component_id", None)
-    if component_id is not None:
-        # The identity is frozen, hence the replacement rather than an assignment.
-        setattr(parameter_class_copy, "component_id", dataclasses.replace(component_id, building=None))
-    json_str = parameter_class_copy.to_json() + my_simulation_parameters.get_unique_key()
+    view_method = getattr(parameter_class, "cache_key_view", None)
+    hashed = view_method() if callable(view_method) else parameter_class
+    json_str = hashed.to_json() + my_simulation_parameters.get_unique_key()
     if len(json_str) < 5:
         raise ValueError("Empty json detected for caching. This is a bug.")
     return str(json_str)
@@ -478,9 +453,9 @@ def measure_execution_time(my_function):  # noqa
         start = timer()
         result = my_function(*args, **kwargs)
         end = timer()
-        diff = end - start
+        diff_in_s = end - start
         log.profile(
-            "Executing " + my_function.__module__ + "." + my_function.__name__ + " took " + f"{diff:1.2f}" + " seconds"
+            "Executing " + my_function.__module__ + "." + my_function.__name__ + " took " + f"{diff_in_s:1.2f}" + " seconds"
         )
         return result
 

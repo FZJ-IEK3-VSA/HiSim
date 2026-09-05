@@ -267,6 +267,23 @@ class UtspLpgConnectorConfig(ConfigBase):
             )
         return household.Name
 
+    def _clear_non_key_fields(self, view: "UtspLpgConnectorConfig") -> None:
+        """Clear the fields that only place the run from the copy hashed into the occupancy cache key.
+
+        ``result_dir_path`` (where the result file is written), ``cache_dir_path`` (where the entry goes) and
+        ``calculation_index_for_local_lpg`` (which working directory the generator used) do not change the
+        profile. The first is an absolute path that differs between machines, which is why an occupancy entry
+        computed on one machine was never found on another. Every other field stays key material, including
+        ``predefined_loadprofile_filepaths``: an external profile directory decides the result, and it is
+        machine-specific by nature, so an entry computed from one is not portable.
+
+        Args:
+            view: the copy to adjust.
+        """
+        view.result_dir_path = ""
+        view.cache_dir_path = None
+        view.calculation_index_for_local_lpg = None
+
     @constructor(note="the household catalogue of the LoadProfileGenerator")
     @classmethod
     def for_household(
@@ -1476,26 +1493,26 @@ class UtspLpgConnector(cp.Component):
                 with open(calcspecfilename, "w", encoding="utf-8") as calcspecfile:
                     jsonrequest = request.to_json(indent=4)
                     calcspecfile.write(jsonrequest)
-                lpe.execute_lpg_binaries()
-
                 path_to_result_folder = os.path.join(lpe.calculation_directory, request.CalcSpec.OutputDirectory)
-                # Checked here, not by the readers downstream. pylpg discards the binary's return
-                # code, so a failed calculation is indistinguishable from a successful one until
-                # somebody opens a file that was never written -- and the FileNotFoundError that
-                # results names one arbitrary json and never mentions the LoadProfileGenerator.
+                # The results are checked here, not by the readers downstream. pylpg discards the
+                # binary's return code, so a failed calculation is indistinguishable from a successful
+                # one until somebody opens a file that was never written -- and the FileNotFoundError
+                # that results names one arbitrary json and never mentions the LoadProfileGenerator.
                 # The names, not merely the count: a calculation that dies partway leaves some of
                 # its outputs behind, and a directory that is non-empty tells the reader nothing
                 # about whether what it needs is in it. Which files are indispensable is already
                 # recorded against each name, so it is read from there rather than from a position
                 # in the returned tuple, which would go wrong silently if that tuple ever changed.
+                # Run and check are one call, because whether to retry (only for a locked database)
+                # is known only after the check. See PylpgWorkspace.execute_and_verify.
                 declared_result_files = self.define_required_result_files()[0]
                 required_result_files = [
                     file_name
                     for file_name, requirement in declared_result_files.items()
                     if requirement == datastructures.ResultFileRequirement.REQUIRED
                 ]
-                PylpgWorkspace.verify_results_were_produced(
-                    calculation_index, str(path_to_result_folder), required_files=required_result_files
+                PylpgWorkspace.execute_and_verify(
+                    lpe, calculation_index, str(path_to_result_folder), required_files=required_result_files
                 )
 
         return str(path_to_result_folder)

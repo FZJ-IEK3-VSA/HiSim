@@ -65,6 +65,12 @@ jobs:
     - name: Install HiSim package
       run: |
         uv pip install --system -e .
+    # The previous run's weather series and LoadProfileGenerator profiles; see the action.
+    - name: Restore the HiSim inputs cache
+      uses: ./.github/actions/hisim-cache
+      with:
+        mode: restore
+        scope: ${{ github.workflow }}-${{ matrix.name }}
     - name: Test with pytest
       working-directory: ./tests/
       env:
@@ -89,6 +95,13 @@ jobs:
         path: tests/.coverage.*
         include-hidden-files: true
         if-no-files-found: warn
+    # Kept even when the job failed; see the action for why that is safe.
+    - name: Save the HiSim inputs cache
+      if: always()
+      uses: ./.github/actions/hisim-cache
+      with:
+        mode: save
+        scope: ${{ github.workflow }}-${{ matrix.name }}
 
   coverage:
     name: combine coverage

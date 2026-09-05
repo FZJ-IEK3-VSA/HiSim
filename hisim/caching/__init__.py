@@ -1,19 +1,45 @@
-"""Public API of the HiSim cache service client.
+"""Public API of the HiSim cache client (``roadmap/cache_service_spec.md`` §4).
 
-The package is the home of everything the simulation knows about caching, as laid out in
-``roadmap/cache_service_spec.md`` §4: local paths and atomic writes, key construction, the remote
-HTTP tier, curated-dataset retrieval and the client that orchestrates them. Only the local tier of
-§10 phase 1 has been built, so the public surface is deliberately one context manager and the metadata
-rule it enforces; the remaining modules arrive with the later phases and this file is where they will
-be re-exported from.
+Phase 1 of §10 is implemented: the local tier (``local``), the settings (``settings``), the key scheme
+(``keys``) and a client with one tier behind it (``client``). The remote and shared-directory tiers and
+the dataset retrieval come with later phases and will be re-exported from here.
 
-Importing this package must stay cheap and free of side effects, because it sits at the same layer as
-``hisim/config/`` and is imported by both components and ``hisim/utils.py``. It therefore imports the
-standard library only -- never a component, the simulator or the singleton repository.
+This package sits at the same layer as ``hisim/config/`` and is imported by components and by
+``hisim/utils.py``. It therefore imports only the standard library and ``hisim.log`` -- never a component,
+the simulator, the simulation parameters or the singleton repository. A test checks this in a fresh
+interpreter.
 """
 
 # clean
 
+from hisim.caching.client import CacheClient, CacheEntry
+from hisim.caching.keys import (
+    CacheKey,
+    CacheKeyError,
+    CanonicalJson,
+    Fingerprints,
+    ImportClosure,
+    KeyMaterial,
+    ProducerLayering,
+    ProducerLayeringError,
+)
 from hisim.caching.local import CacheEntryMetadata, atomic_cache_write
+from hisim.caching.settings import CacheNetworkMode, CacheSettings, CacheSettingsError
 
-__all__ = ["CacheEntryMetadata", "atomic_cache_write"]
+__all__ = [
+    "CacheClient",
+    "CacheEntry",
+    "CacheEntryMetadata",
+    "CacheKey",
+    "CacheKeyError",
+    "CacheNetworkMode",
+    "CacheSettings",
+    "CacheSettingsError",
+    "CanonicalJson",
+    "Fingerprints",
+    "ImportClosure",
+    "KeyMaterial",
+    "ProducerLayering",
+    "ProducerLayeringError",
+    "atomic_cache_write",
+]

@@ -20,9 +20,33 @@ from typing import Set
 
 import pytest
 
+from hisim.caching import CacheSettings
 from hisim.result_path_provider import ResultPathProviderSingleton
 
 REPO_ROOT: Path = Path(__file__).resolve().parent.parent
+
+
+@pytest.fixture(autouse=True)
+def _isolate_cache_environment() -> Iterator[None]:
+    """Clears every ``HISIM_CACHE_*`` variable, so the suite runs the same on every machine.
+
+    ``hisim.utils.get_cache_file`` reads these variables on every call; a developer with
+    ``HISIM_CACHE_DIR`` in a ``.env`` or exported shell would otherwise have cache paths land outside
+    pytest's ``tmp_path`` and see spurious failures. Tests that exercise an override set the variable
+    themselves with ``monkeypatch.setenv``, which applies after this fixture.
+
+    The fixture builds its own ``MonkeyPatch`` instead of requesting the ``monkeypatch`` fixture.
+    Requesting it would instantiate the shared function-scoped instance before every later fixture,
+    and teardown runs in reverse: the stray-file guard's ``git status`` would then execute while a
+    test's own patches -- some of which replace ``subprocess.run`` globally -- are still active.
+    """
+    patcher = pytest.MonkeyPatch()
+    for attribute in vars(CacheSettings.Variables).values():
+        if isinstance(attribute, str) and attribute.startswith("HISIM_CACHE"):
+            patcher.delenv(attribute, raising=False)
+    yield
+    patcher.undo()
+
 
 # Make scripts/ importable so tests can ``from hpc_harness import ...`` at the module top.
 # The hpc_harness package uses absolute ``hpc_harness.*`` imports internally, so it must be

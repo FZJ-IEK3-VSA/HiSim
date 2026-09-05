@@ -177,8 +177,8 @@
                 },
                 "manufacturer": "Viessmann Werke GmbH & Co KG",
                 "heat_pump_name": "Vitocal 300-A AWO-AC 301.B07",
-                "min_operation_time": 3600,
-                "min_idle_time": 900
+                "min_operation_time_in_seconds": 3600,
+                "min_idle_time_in_seconds": 900
             },
             "config_full_classname": "hisim.components.generic_heat_pump.GenericHeatPumpConfig",
             "inputs": [],

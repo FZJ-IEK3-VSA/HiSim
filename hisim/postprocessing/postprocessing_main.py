@@ -392,10 +392,10 @@ class PostProcessor:
                     units=output.unit,
                     directory_path=ppdt.simulation_parameters.result_directory,
                     time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
-                    data=ppdt.results.iloc[:, index],
+                    data_with_units=ppdt.results.iloc[:, index],
                     day=0,
                     month=0,
-                    output2=ppdt.results.iloc[:, 11],
+                    output2_with_units=ppdt.results.iloc[:, 11],
                     output_description=output.output_description,
                     figure_format=ppdt.simulation_parameters.figure_format,
                 )
@@ -406,7 +406,7 @@ class PostProcessor:
                     units=output.unit,
                     directory_path=ppdt.simulation_parameters.result_directory,
                     time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
-                    data=ppdt.results.iloc[:, index],
+                    data_with_units=ppdt.results.iloc[:, index],
                     day=0,
                     month=0,
                     output_description=output.output_description,
@@ -443,7 +443,7 @@ class PostProcessor:
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
-            my_entry = my_bar.plot(data=ppdt.results_monthly.iloc[:, index])
+            my_entry = my_bar.plot(data_in_self_units=ppdt.results_monthly.iloc[:, index])
             report_image_entries.append(my_entry)
 
     def make_single_day_plots(
@@ -463,7 +463,7 @@ class PostProcessor:
                 time_correction_factor_in_hours=ppdt.time_correction_factor_in_hours_per_timestep,
                 day=days["day"],
                 month=days["month"],
-                data=ppdt.results.iloc[:, index],
+                data_with_units=ppdt.results.iloc[:, index],
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
@@ -491,7 +491,7 @@ class PostProcessor:
 
             my_entry = my_carpet.plot(
                 xdims=int((ppdt.simulation_parameters.end_date - ppdt.simulation_parameters.start_date).days),
-                data=ppdt.results.iloc[:, index],
+                data_in_self_units=ppdt.results.iloc[:, index],
             )
             report_image_entries.append(my_entry)
 
@@ -515,7 +515,7 @@ class PostProcessor:
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
-            my_entry = my_line.plot(data=ppdt.results.iloc[:, index])
+            my_entry = my_line.plot(data_in_self_units=ppdt.results.iloc[:, index])
             report_image_entries.append(my_entry)
             del my_line
 

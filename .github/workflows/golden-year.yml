@@ -68,6 +68,12 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
         run: uv pip install --system -e .
+      # The previous run's weather series and LoadProfileGenerator profiles; see the action.
+      - name: Restore the HiSim inputs cache
+        uses: ./.github/actions/hisim-cache
+        with:
+          mode: restore
+          scope: ${{ github.workflow }}-${{ matrix.setup }}-${{ matrix.param }}
       - name: Golden KPI check (full year)
         run: python scripts/golden_check.py --setup "${{ matrix.setup }}" --param "${{ matrix.param }}"
       - name: Upload deviation report
@@ -77,6 +83,13 @@ jobs:
           name: golden-year-report-${{ matrix.setup }}-${{ matrix.param }}
           path: results/golden-ref-check/report.*
           if-no-files-found: warn
+      # Kept even when the job failed; see the action for why that is safe.
+      - name: Save the HiSim inputs cache
+        if: always()
+        uses: ./.github/actions/hisim-cache
+        with:
+          mode: save
+          scope: ${{ github.workflow }}-${{ matrix.setup }}-${{ matrix.param }}
 
   summary:
     name: golden-year summary

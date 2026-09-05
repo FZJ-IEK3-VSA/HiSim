@@ -55,13 +55,13 @@ class PriceSignalConfig(ConfigBase):
     component_id: ComponentID
     country: str
     pricing_scheme: str
-    installed_capacity: float
+    installed_capacity_in_kilowatt: float
     price_signal_type: str
-    fixed_price: List[float]
-    static_tou_price: List[float]
-    price_injection: float
+    fixed_price_in_cent_per_kilowatt_timestep: List[float]
+    static_tou_price_in_cent_per_kilowatt_timestep: List[float]
+    price_injection_in_cent_per_kilowatt_timestep: float
     predictive_control: bool
-    prediction_horizon: Optional[int]
+    prediction_horizon_in_s: Optional[int]
 
     @classmethod
     def get_default_price_signal_config(
@@ -83,13 +83,13 @@ class PriceSignalConfig(ConfigBase):
             component_id=component_id,
             country="Germany",
             pricing_scheme="fixed",
-            installed_capacity=10e3,
+            installed_capacity_in_kilowatt=10e3,
             price_signal_type="dummy",
-            fixed_price=[],
-            static_tou_price=[],
-            price_injection=0.0,
+            fixed_price_in_cent_per_kilowatt_timestep=[],
+            static_tou_price_in_cent_per_kilowatt_timestep=[],
+            price_injection_in_cent_per_kilowatt_timestep=0.0,
             predictive_control=False,
-            prediction_horizon=None,
+            prediction_horizon_in_s=None,
         )
         return config
 
@@ -192,51 +192,51 @@ class PriceSignal(cp.Component):
             stsv: Single-time-step value container used to set the outputs.
             force_convergence: Unused; kept for the component interface.
         """
-        priceinjectionforecast = [0.1]
-        pricepurchaseforecast = [0.5]
-        if self.config.predictive_control and self.config.prediction_horizon:
-            priceinjectionforecast = [0.1] * int(
-                self.config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep
+        price_injection_forecast_in_cent_per_kilowatt_timestep = [0.1]
+        price_purchase_forecast_in_cent_per_kilowatt_timestep = [0.5]
+        if self.config.predictive_control and self.config.prediction_horizon_in_s:
+            price_injection_forecast_in_cent_per_kilowatt_timestep = [0.1] * int(
+                self.config.prediction_horizon_in_s / self.my_simulation_parameters.seconds_per_timestep
             )
-            pricepurchaseforecast = [0.5] * int(
-                self.config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep
+            price_purchase_forecast_in_cent_per_kilowatt_timestep = [0.5] * int(
+                self.config.prediction_horizon_in_s / self.my_simulation_parameters.seconds_per_timestep
             )
         elif self.price_signal_config.price_signal_type == "Prices at second half of 2021":
-            priceinjectionforecast = [self.price_signal_config.price_injection] * int(
-                self.config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep
+            price_injection_forecast_in_cent_per_kilowatt_timestep = [self.price_signal_config.price_injection_in_cent_per_kilowatt_timestep] * int(
+                self.config.prediction_horizon_in_s / self.my_simulation_parameters.seconds_per_timestep
             )
         elif self.price_signal_config.pricing_scheme == "dynamic":
-            pricepurchaseforecast = self.price_signal_config.static_tou_price
+            price_purchase_forecast_in_cent_per_kilowatt_timestep = self.price_signal_config.static_tou_price_in_cent_per_kilowatt_timestep
         elif self.price_signal_config.pricing_scheme == "fixed":
-            pricepurchaseforecast = self.price_signal_config.fixed_price
+            price_purchase_forecast_in_cent_per_kilowatt_timestep = self.price_signal_config.fixed_price_in_cent_per_kilowatt_timestep
         elif self.price_signal_config.price_signal_type == "dummy":
-            priceinjectionforecast = [10] * int(
-                self.config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep
+            price_injection_forecast_in_cent_per_kilowatt_timestep = [10] * int(
+                self.config.prediction_horizon_in_s / self.my_simulation_parameters.seconds_per_timestep
             )
-            pricepurchaseforecast = [50] * int(
-                self.config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep
+            price_purchase_forecast_in_cent_per_kilowatt_timestep = [50] * int(
+                self.config.prediction_horizon_in_s / self.my_simulation_parameters.seconds_per_timestep
             )
-            # pricepurchaseforecast = [ ]
+            # price_purchase_forecast_in_cent_per_kilowatt_timestep = [ ]
             # for step in range( self.day ):
             #     x = timestep % self.day
             #     if x > self.start and x < self.end:
-            #         pricepurchaseforecast.append( 20 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
+            #         price_purchase_forecast_in_cent_per_kilowatt_timestep.append( 20 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
             #     else:
-            #         pricepurchaseforecast.append( 50 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
+            #         price_purchase_forecast_in_cent_per_kilowatt_timestep.append( 50 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
         else:
-            priceinjectionforecast = [0.1]
-            pricepurchaseforecast = [0.5]
+            price_injection_forecast_in_cent_per_kilowatt_timestep = [0.1]
+            price_purchase_forecast_in_cent_per_kilowatt_timestep = [0.5]
 
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.PRICEINJECTIONFORECAST24H,
-            entry=priceinjectionforecast,
+            entry=price_injection_forecast_in_cent_per_kilowatt_timestep,
         )
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.PRICEPURCHASEFORECAST24H,
-            entry=pricepurchaseforecast,
+            entry=price_purchase_forecast_in_cent_per_kilowatt_timestep,
         )
-        stsv.set_output_value(self.price_purchase_channel, pricepurchaseforecast[0])
-        stsv.set_output_value(self.price_injection_channel, priceinjectionforecast[0])
+        stsv.set_output_value(self.price_purchase_channel, price_purchase_forecast_in_cent_per_kilowatt_timestep[0])
+        stsv.set_output_value(self.price_injection_channel, price_injection_forecast_in_cent_per_kilowatt_timestep[0])
 
     def build_dummy(self, start: int, end: int) -> None:
         """Store the start and end timestep indices of a step-function price window.
@@ -257,9 +257,10 @@ class PriceSignal(cp.Component):
         Reads the purchase-price and feed-in-tariff CSV tables for the configured
         country, converts EUR/kWh values to cent per kW-timestep, expands hourly
         prices to the simulation timestep resolution, and selects the feed-in
-        tariff band matching `installed_capacity`. Results are stored back on
-        `self.price_signal_config` (fixed_price, static_tou_price, price_injection,
-        and price_signal_type).
+        tariff band matching `installed_capacity_in_kilowatt`. Results are stored back on
+        `self.price_signal_config` (fixed_price_in_cent_per_kilowatt_timestep,
+        static_tou_price_in_cent_per_kilowatt_timestep,
+        price_injection_in_cent_per_kilowatt_timestep, and price_signal_type).
 
         Raises:
             KeyError: If the feed-in-tariff table has no entry for the configured
@@ -280,31 +281,31 @@ class PriceSignal(cp.Component):
         country = self.price_signal_config.country
         if f"Fixed_Price_{country}" in price_purchase:
             self.price_signal_config.price_signal_type = "Prices at second half of 2021"
-            fixed_price = price_purchase[f"Fixed_Price_{country}"].tolist()
+            fixed_price_in_cent_per_kilowatt_timestep = price_purchase[f"Fixed_Price_{country}"].tolist()
             # convert euro/kWh to cent/kW-timestep
             p_conversion = 100 / (1000 * 3600 / self.my_simulation_parameters.seconds_per_timestep)
-            fixed_price = [element * p_conversion for element in fixed_price]
-            self.price_signal_config.fixed_price = np.repeat(
-                fixed_price,
+            fixed_price_in_cent_per_kilowatt_timestep = [element * p_conversion for element in fixed_price_in_cent_per_kilowatt_timestep]
+            self.price_signal_config.fixed_price_in_cent_per_kilowatt_timestep = np.repeat(
+                fixed_price_in_cent_per_kilowatt_timestep,
                 int(3600 / self.my_simulation_parameters.seconds_per_timestep),
             ).tolist()
 
-            static_tou_price = price_purchase[f"Static_TOU_Price_{country}"].tolist()
-            static_tou_price = [element * p_conversion for element in static_tou_price]
-            self.price_signal_config.static_tou_price = np.repeat(
-                static_tou_price,
+            static_tou_price_in_cent_per_kilowatt_timestep = price_purchase[f"Static_TOU_Price_{country}"].tolist()
+            static_tou_price_in_cent_per_kilowatt_timestep = [element * p_conversion for element in static_tou_price_in_cent_per_kilowatt_timestep]
+            self.price_signal_config.static_tou_price_in_cent_per_kilowatt_timestep = np.repeat(
+                static_tou_price_in_cent_per_kilowatt_timestep,
                 int(3600 / self.my_simulation_parameters.seconds_per_timestep),
             ).tolist()
 
             fit_data = feed_in_tarrif.loc[self.price_signal_config.country]
-            price_injection = 0.0
+            price_injection_in_cent_per_kilowatt_timestep = 0.0
             for i in range(len(fit_data)):
                 if (
-                    fit_data["min_capacity (kW)"].values[i] < self.price_signal_config.installed_capacity
-                    and fit_data["max_capacity (kW)"].values[i] >= self.price_signal_config.installed_capacity
+                    fit_data["min_capacity (kW)"].values[i] < self.price_signal_config.installed_capacity_in_kilowatt
+                    and fit_data["max_capacity (kW)"].values[i] >= self.price_signal_config.installed_capacity_in_kilowatt
                 ):
-                    price_injection = fit_data["FIT"].values[i]
-            self.price_signal_config.price_injection = price_injection * p_conversion
+                    price_injection_in_cent_per_kilowatt_timestep = fit_data["FIT"].values[i]
+            self.price_signal_config.price_injection_in_cent_per_kilowatt_timestep = price_injection_in_cent_per_kilowatt_timestep * p_conversion
         pass
 
     def write_to_report(self) -> List[str]:

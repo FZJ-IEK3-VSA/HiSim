@@ -63,8 +63,8 @@ def test_example_storage() -> None:
 
     print("\n")
     log.information(f"timestep = {timestep}")
-    log.information(f"fill state (in the beginning) = {my_example_storage.state.fill}")
-    log.information(f"storage capacity = {my_example_storage.capacity}\n")
+    log.information(f"fill state (in the beginning) = {my_example_storage.state.fill_in_kwh}")
+    log.information(f"storage capacity = {my_example_storage.capacity_in_kwh}\n")
     log.information(f"charging output = {stsv.values[charging_output.global_index]}")
     log.information(f"discharging output  = {stsv.values[discharging_output.global_index]}\n")
 
@@ -73,7 +73,7 @@ def test_example_storage() -> None:
     my_example_storage.i_restore_state()
     my_example_storage.i_simulate(timestep, stsv, False)
 
-    log.information(f"fill state (after charging and discharging) = {my_example_storage.state.fill}\n")
+    log.information(f"fill state (after charging and discharging) = {my_example_storage.state.fill_in_kwh}\n")
     # Test charging of the storage
     assert 30 == stsv.values[charging_output.global_index]
     # Test discharging of the storage
@@ -84,6 +84,6 @@ def test_example_storage() -> None:
     timestep = 301
     log.information(f"timestep = {timestep}")
     my_example_storage.i_simulate(timestep, stsv, False)
-    log.information(f"fill state (after charging and discharging) = {my_example_storage.state.fill}\n")
+    log.information(f"fill state (after charging and discharging) = {my_example_storage.state.fill_in_kwh}\n")
     # Test current storage fill state
     assert 40 == stsv.values[my_example_storage.current_fill.global_index]

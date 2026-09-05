@@ -38,18 +38,32 @@ from __future__ import annotations
 
 import argparse
 import os
-import queue
 import subprocess
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SYSTEM_SETUPS_DIR = REPO_ROOT / "system_setups"
 CONVERTER = REPO_ROOT / "hisim" / "hisim_convert_to_json.py"
+
+# When this file runs as a script, Python puts scripts/ on sys.path, not the repository root, so
+# "import hisim" would resolve to the installed package instead of this checkout. Add the root
+# first, before anything imports hisim. When the module is imported as
+# scripts.regenerate_scenario_jsons the root is usually importable already; the insert is then
+# redundant but harmless.
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+# hisim.components.pylpg_workspace imports pylpg at module level, and pylpg is an optional
+# dependency that no requirements file declares. Importing it here would make even --help and
+# --dry-run fail in an environment without pylpg, so the runtime import is deferred to main();
+# this block never executes and exists only for the type checker.
+if TYPE_CHECKING:
+    from hisim.components.pylpg_workspace import LpgBaseIndexPool
 
 
 @dataclass
@@ -101,21 +115,30 @@ def discover_setups(only: Optional[list[str]], only_existing: bool, exclude: Opt
 def regenerate_one(
     setup_path: Path,
     python: str,
-    index_pool: "queue.Queue[int]",
+    index_pool: LpgBaseIndexPool,
     log_dir: Path,
     keep_simulation_json: bool,
 ) -> SetupResult:
-    """Regenerate a single setup's scenario JSON in a subprocess.
+    """Regenerate one setup's scenario JSON in a subprocess.
 
-    Borrows a unique local-LPG calc index from ``index_pool`` for the duration
-    of the run so concurrent workers never share a ``pylpg/C<index>`` dir.
+    Borrows a unique local-LPG calculation index from ``index_pool`` for the duration of the run, so
+    concurrent workers never share a ``pylpg/C<index>`` directory.
+
+    The child gets ``PYTHONPATH`` set to this checkout. The converter is started as a script path, and for
+    a script Python puts the *script's* directory on ``sys.path``, not the working directory; without the
+    variable, ``import hisim`` in the child resolves to the installed package, which in a git worktree is a
+    different checkout, and the regeneration silently reports no drift against the wrong code. The
+    variable is prepended, so a caller's own ``PYTHONPATH`` entries stay -- but for any name both
+    provide, above all ``hisim`` itself, the checkout wins. That shadowing is deliberate: the report
+    is about *this* checkout, so no caller may point the children at another one.
     """
     stem = setup_path.stem
     log_path = log_dir / f"{stem}.log"
-    calc_index = index_pool.get()
-    try:
-        env = dict(os.environ)
-        env["HISIM_LOCAL_LPG_CALC_INDEX"] = str(calc_index)
+    with index_pool.borrowed() as calc_index:
+        env = index_pool.child_environment(calc_index)
+        env["PYTHONPATH"] = os.pathsep.join(
+            [str(REPO_ROOT), *([env["PYTHONPATH"]] if env.get("PYTHONPATH") else [])]
+        )
         rel = setup_path.relative_to(REPO_ROOT).as_posix()
         with open(log_path, "w", encoding="utf-8") as logf:
             proc = subprocess.run(
@@ -126,8 +149,6 @@ def regenerate_one(
                 stderr=subprocess.STDOUT,
                 check=False,
             )
-    finally:
-        index_pool.put(calc_index)
 
     scenario_path = setup_path.with_suffix(".scenario.json")
     if not keep_simulation_json:
@@ -191,10 +212,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     print(f"\nUsing interpreter: {args.python}")
     print(f"Parallel jobs: {jobs}   Logs: {args.log_dir}\n")
 
-    # Pool of distinct local-LPG calc indices, one per concurrent worker slot.
-    index_pool: "queue.Queue[int]" = queue.Queue()
-    for i in range(1, jobs + 1):
-        index_pool.put(i)
+    # Deferred so that --help and --dry-run work without pylpg; see the TYPE_CHECKING note at the top.
+    from hisim.components.pylpg_workspace import LpgBaseIndexPool  # pylint: disable=import-outside-toplevel
+
+    # Pool of distinct local-LPG base indices, one per concurrent worker slot.
+    index_pool = LpgBaseIndexPool(jobs)
 
     results: list[SetupResult] = []
     print_lock = threading.Lock()

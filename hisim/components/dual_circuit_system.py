@@ -16,12 +16,16 @@ class HeatingMode(enum.Enum):
 
 @dataclass
 class SetTemperatureConfig:
-    """Configuration of set temperatures."""
+    """Configuration of set temperatures.
 
-    set_temperature_space_heating: float
-    set_temperature_dhw: Optional[float]
-    hysteresis_water_temperature_offset: Optional[float]
-    outside_temperature_threshold: Optional[float]
+    All temperatures and the hysteresis offset are expressed in degrees Celsius
+    (for an offset, degrees Celsius and kelvin are interchangeable).
+    """
+
+    set_temperature_space_heating_in_celsius: float
+    set_temperature_dhw_in_celsius: Optional[float]
+    hysteresis_water_temperature_offset_in_celsius: Optional[float]
+    outside_temperature_threshold_in_celsius: Optional[float]
 
 
 class DiverterValve:
@@ -35,7 +39,7 @@ class DiverterValve:
     def determine_operating_mode(
         with_domestic_hot_water_preparation: bool,
         current_controller_mode: HeatingMode,
-        daily_average_outside_temperature: float,
+        daily_average_outside_temperature_in_celsius: float,
         water_temperature_input_sh_in_celsius: float,
         water_temperature_input_dhw_in_celsius: Optional[float],
         set_temperatures: SetTemperatureConfig,
@@ -45,54 +49,59 @@ class DiverterValve:
 
         def dhw_heating_needed(
             controller_mode: HeatingMode,
-            actual_water_temperature: Optional[float],
-            set_water_temperature: Optional[float],
+            actual_water_temperature_in_celsius: Optional[float],
+            set_water_temperature_in_celsius: Optional[float],
         ) -> bool:
             if not with_domestic_hot_water_preparation:
                 return False
 
-            assert actual_water_temperature is not None
-            assert set_water_temperature is not None
-            assert set_temperatures.hysteresis_water_temperature_offset is not None
+            assert actual_water_temperature_in_celsius is not None
+            assert set_water_temperature_in_celsius is not None
+            assert set_temperatures.hysteresis_water_temperature_offset_in_celsius is not None
 
-            if actual_water_temperature < (
-                set_water_temperature - set_temperatures.hysteresis_water_temperature_offset
+            if actual_water_temperature_in_celsius < (
+                set_water_temperature_in_celsius
+                - set_temperatures.hysteresis_water_temperature_offset_in_celsius
             ):
                 return True
 
-            if controller_mode == HeatingMode.DOMESTIC_HOT_WATER and actual_water_temperature < set_water_temperature:
+            if (
+                controller_mode == HeatingMode.DOMESTIC_HOT_WATER
+                and actual_water_temperature_in_celsius < set_water_temperature_in_celsius
+            ):
                 return True
 
             return False
 
         def space_heating_needed(
-            current_water_temperature: float,
-            target_water_temperature: float,
+            current_water_temperature_in_celsius: float,
+            target_water_temperature_in_celsius: float,
         ) -> bool:
-            assert set_temperatures.hysteresis_water_temperature_offset is not None
+            assert set_temperatures.hysteresis_water_temperature_offset_in_celsius is not None
             if (
                 DiverterValve.determine_summer_heating_mode(
-                    daily_average_outside_temperature,
-                    set_temperatures.outside_temperature_threshold,
+                    daily_average_outside_temperature_in_celsius,
+                    set_temperatures.outside_temperature_threshold_in_celsius,
                 )
                 == "off"
             ):
                 return False
             if (
-                current_water_temperature
-                >= target_water_temperature + set_temperatures.hysteresis_water_temperature_offset
+                current_water_temperature_in_celsius
+                >= target_water_temperature_in_celsius
+                + set_temperatures.hysteresis_water_temperature_offset_in_celsius
             ):
                 return False
             return True
 
         needs_space_heating = space_heating_needed(
             water_temperature_input_sh_in_celsius,
-            set_temperatures.set_temperature_space_heating,
+            set_temperatures.set_temperature_space_heating_in_celsius,
         )
         needs_dhw_heating = dhw_heating_needed(
             current_controller_mode,
             water_temperature_input_dhw_in_celsius,
-            set_temperatures.set_temperature_dhw,
+            set_temperatures.set_temperature_dhw_in_celsius,
         )
         mode = HeatingMode.OFF
 

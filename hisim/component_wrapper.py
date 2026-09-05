@@ -1,8 +1,8 @@
 """Wraps components for use in the simulator."""
 
-# clean
-from typing import List
+from __future__ import annotations
 
+# clean
 import hisim.component as cp
 import hisim.loadtypes as lt
 from hisim import log
@@ -16,7 +16,7 @@ class ComponentWrapper:
     save/restore and simulation calls to the wrapped component.
     """
 
-    def __init__(self, component: cp.Component, is_cachable: bool, connect_automatically: bool):
+    def __init__(self, component: cp.Component, is_cachable: bool, connect_automatically: bool) -> None:
         """Initialize the wrapper with a component and caching/connect flags.
 
         Args:
@@ -26,8 +26,8 @@ class ComponentWrapper:
                 during wiring.
         """
         self.my_component: cp.Component = component
-        self.component_inputs: List[cp.ComponentInput] = []
-        self.component_outputs: List[cp.ComponentOutput] = []
+        self.component_inputs: list[cp.ComponentInput] = []
+        self.component_outputs: list[cp.ComponentOutput] = []
         # self.cachedict: = {}
         self.is_cachable: bool = is_cachable
         self.connect_automatically: bool = connect_automatically
@@ -39,7 +39,7 @@ class ComponentWrapper:
         del self.component_outputs
 
     def register_component_outputs(
-        self, all_outputs: List[cp.ComponentOutput], wrapped_components_so_far: List["ComponentWrapper"]
+        self, all_outputs: list[cp.ComponentOutput], wrapped_components_so_far: list[ComponentWrapper]
     ) -> None:
         """Register the wrapped component's outputs in the global outputs list.
 
@@ -120,7 +120,7 @@ class ComponentWrapper:
 
         log.debug(f"Registering component inputs for {self.my_component.component_name}")
         # look up input columns and cache, so we only have the correct columns saved
-        input_columns: List[cp.ComponentInput] = self.my_component.get_input_definitions()
+        input_columns: list[cp.ComponentInput] = self.my_component.get_input_definitions()
         for col in input_columns:
             global_column_entry = global_column_dict[col.fullname]
             self.component_inputs.append(global_column_entry)
@@ -166,7 +166,7 @@ class ComponentWrapper:
         log.information(f"Preparing {self.my_component.component_name} for simulation.")
         self.my_component.i_prepare_simulation()
 
-    def connect_inputs(self, all_outputs: List[cp.ComponentOutput]) -> None:
+    def connect_inputs(self, all_outputs: list[cp.ComponentOutput]) -> None:
         """Connect each of the component's inputs to a matching global output.
 
         Matches by source component name and field name, verifying load-type and unit

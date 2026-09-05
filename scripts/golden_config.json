@@ -20,7 +20,9 @@
     {"id": "household_gas_solar_thermal",                   "path": "system_setups/household_gas_solar_thermal.py", "horizons": ["week"]},
     {"id": "simple_air_conditioner_household_building_sizer", "path": "system_setups/simple_air_conditioner_household_building_sizer.py", "horizons": ["week"]},
     {"id": "simple_system_setup_one",                       "path": "system_setups/simple_system_setup_one.py", "horizons": ["week"]},
-    {"id": "simple_system_setup_two",                       "path": "system_setups/simple_system_setup_two.py", "horizons": ["week"]}
+    {"id": "simple_system_setup_two",                       "path": "system_setups/simple_system_setup_two.py", "horizons": ["week"]},
+    {"id": "dynamic_components",                            "path": "system_setups/dynamic_components.py", "horizons": ["week"]},
+    {"id": "electrolyzer_with_renewables",                  "path": "system_setups/electrolyzer_with_renewables.py", "horizons": ["week"]}
   ],
   "parameter_sets": [
     {"id": "one_week_60s", "factory": "one_week_only", "year": 2021, "seconds_per_timestep": 60,

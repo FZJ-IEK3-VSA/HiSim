@@ -15,15 +15,16 @@ survives only in a conversation. Items are removed when done, not ticked and kep
   the blocking golden gate on the YAML path — and "golden suites green on recorded files" is P3's exit
   criterion in the plan. Builds on `p3_recorded_fleet` (needs the twins); the week references for the
   whole fleet come from the `golden_week_coverage` branch, so the gate covers 15 setups from day one.
-- [ ] **Golden coverage stage 2: the last two setups.** A fresh scan (2026-09-05) showed five of the
-  seven 2026-08-28 repair items healed themselves — the toys via #616's models-no-device answers, the
-  heating-only and air-conditioner crashes gone, and `household_gas_solar_thermal`'s doubled grid
-  import fixed by #617 (verified: grid import equals consumption to the watt-hour) — so all five are
-  in the week gate with fresh blessings. Remaining: `dynamic_components` (CHP KPIs implemented on
-  the `chp_kpis` branch; joins the gate with a blessing once merged — its CHPs idle through the
-  probe window, so their KPIs are honest zeros) and `electrolyzer_with_renewables` (the
-  transformer/rectifier still needs `get_component_kpi_entries`; expect the next KPI-less component
-  in that setup to surface after it).
+- [x] **Golden coverage stage 2: the last two setups — complete, 22 of 22 (2026-09-05, pending
+  merges).** A fresh scan showed five of the seven 2026-08-28 repair items healed themselves — the
+  toys via #616's models-no-device answers, the heating-only and air-conditioner crashes gone, and
+  `household_gas_solar_thermal`'s doubled grid import fixed by #617 (verified: grid import equals
+  consumption to the watt-hour) — so all five are in the week gate with fresh blessings. The last
+  two followed: `dynamic_components` via the CHP KPIs (`chp_kpis` branch; its CHPs idle through the
+  probe window, so their KPIs are honest zeros) and `electrolyzer_with_renewables` via the
+  transformer/rectifier and electrolyzer KPIs (`electrolyzer_setup_kpis` branch). Both are blessed
+  and gated on `golden_gate_full_fleet`, which merges after #639 and the two KPI PRs. Every setup
+  in the repository is now golden-gated at week resolution or better.
 - [ ] **Multi-instance KPI collision (found 2026-09-05 while implementing the CHP KPIs).** Two
   components of one class in one building collapse into a single flattened KPI group: the two
   batteries of `dynamic_components` report one `BUI1.Battery.*` set, one instance silently

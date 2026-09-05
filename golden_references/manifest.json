@@ -1,12 +1,14 @@
 {
-  "config_sha256": "ea35cc2e5e4d05979888218b0bfca588e6ad67892bb0193c2b8df06439d6902c",
-  "generated_at": "2026-09-05T13:21:46.601249+00:00",
+  "config_sha256": "bc83be48f7288263f20245672605b11b153966de62df97ac7b89df4dc8d87f7e",
+  "generated_at": "2026-09-05T14:15:46.152374+00:00",
   "golden_files": [
     "air_conditioned_house__one_week_60s.json",
     "automatic_default_connections__one_week_60s.json",
     "basic_household__one_week_60s.json",
     "basic_household_only_heating__one_week_60s.json",
     "default_connections__one_week_60s.json",
+    "dynamic_components__one_week_60s.json",
+    "electrolyzer_with_renewables__one_week_60s.json",
     "household_district_heating_building_sizer__full_year_60s.json",
     "household_district_heating_building_sizer__one_week_60s.json",
     "household_electric_heating_building_sizer__full_year_60s.json",
@@ -31,7 +33,7 @@
     "simple_system_setup_one__one_week_60s.json",
     "simple_system_setup_two__one_week_60s.json"
   ],
-  "hisim_commit": "5bde1fe5e3b146311f75b25bcd427a499952b1c6",
+  "hisim_commit": "1d6403c0e1528345f4a0374fc79270620c4121c4",
   "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.43",
   "python_version": "3.12.13"
 }

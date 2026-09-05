@@ -65,6 +65,13 @@ survives only in a conversation. Items are removed when done, not ticked and kep
   and origin) — the parity/templating halves are ported.
 - [ ] AC-P3.4's cross-machine byte-identity is proven the first time CI's `energy-system-freshness`
   job goes green on twins recorded on the development box; note the date here and drop the item.
+- [ ] **Give the Electrolyzer and the Transformer cost models** (noted 2026-09-05, #641 review
+  round). A bare `hisim_main.py electrolyzer_with_renewables.py` falls back to
+  `full_year_all_options`, and COMPUTE_OPEX/COMPUTE_CAPEX run before COMPUTE_KPIS — both
+  components are real devices (MODELS_NO_DEVICE would be a lie) with no `get_cost_opex`/
+  `get_cost_capex`, so the stock all-options run still dies before the new KPIs compute.
+  Pre-existing, and the golden gate runs the setup KPI-only; fixing it means real cost data for
+  both devices, its own small PR.
 - [ ] **Extract the shared child-recorder helper once #636 and #638 are both merged** (decided
   2026-09-05, #638 review round). `scripts/record_all_setups.py::Recorder` and
   `hisim/energy_system/recording/probe_session.py::ProbeRunner` both build the identical child

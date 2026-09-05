@@ -75,7 +75,7 @@ def test_horizon_factories_cover_config_factories() -> None:
 def test_build_matrix_real_config_expands_to_the_pairs_the_horizons_allow() -> None:
     """The shipped config expands to one pair per (setup, parameter_set) the setup's horizons permit.
 
-    The expected counts are hand-written truths about the shipped config — twenty setups run the
+    The expected counts are hand-written truths about the shipped config — twenty-two setups run the
     week, only the original eight carry the full year — rather than re-derived through the very
     predicate under test, which would reproduce any logic error on both sides of the assertion.
     A new setup joining the config moves these literals on purpose: the reviewer of that change
@@ -83,11 +83,11 @@ def test_build_matrix_real_config_expands_to_the_pairs_the_horizons_allow() -> N
     """
     config = json.loads(REAL_CONFIG.read_text())
 
-    assert len(config["setups"]) == 20
-    assert len(build_matrix(config, horizon="week")["include"]) == 20
+    assert len(config["setups"]) == 22
+    assert len(build_matrix(config, horizon="week")["include"]) == 22
     assert len(build_matrix(config, horizon="year")["include"]) == 8
-    assert len(build_matrix(config)["include"]) == 28
-    assert 28 < len(config["setups"]) * len(config["parameter_sets"]), (
+    assert len(build_matrix(config)["include"]) == 30
+    assert 30 < len(config["setups"]) * len(config["parameter_sets"]), (
         "the shipped config restricts at least one setup, so the full product would overcount"
     )
 

@@ -5,6 +5,7 @@
 import math
 from typing import NamedTuple
 
+import pandas as pd
 import pytest
 
 from hisim import component as cp
@@ -13,6 +14,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim.config import ComponentID
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 from tests import functions_for_testing as fft
 
 
@@ -243,3 +245,54 @@ def test_chp_state_defaults() -> None:
     # Negative electricity output is rejected.
     with pytest.raises(ValueError, match="Impossible CHPState"):
         advanced_fuel_cell.CHPState(electricity_output=-1.0)
+
+
+@pytest.mark.base
+def test_chp_kpi_entries_integrate_the_period() -> None:
+    """The four CHP KPIs integrate power to energy, mass flow to mass, and read the final cycle count.
+
+    Two timesteps of 60 s at 3000 W electrical and 4000 W thermal are 0.1 kWh electrical and
+    (4000+4000)*60/3600/1000 kWh thermal; a fuel draw of 0.001 kg/s over both steps is 0.12 kg; a
+    cycle counter ending at 2 reports 2 cycles. The values are computed here by hand, so a broken
+    integration cannot agree with itself.
+    """
+    setup = build_chp_system(operating_mode="electricity", gas_type="Methan")
+    chp = setup.chp
+    outputs = [
+        chp.el_power_channel,
+        chp.th_power_channel,
+        chp.gas_demand_real_used_channel,
+        chp.number_of_cycles_channel,
+    ]
+    frame = pd.DataFrame(
+        {
+            0: [3000.0, 3000.0],
+            1: [4000.0, 4000.0],
+            2: [0.001, 0.001],
+            3: [1.0, 2.0],
+        }
+    )
+
+    entries = {entry.name: entry for entry in chp.get_component_kpi_entries(outputs, frame)}
+
+    assert entries["Electrical energy produced"].value == pytest.approx(round(3000.0 * 2 * 60 / 3600 / 1000, 3))
+    assert entries["Thermal energy produced"].value == pytest.approx(round(4000.0 * 2 * 60 / 3600 / 1000, 3))
+    assert entries["Fuel consumed"].value == pytest.approx(round(0.001 * 2 * 60, 6))
+    assert entries["Number of activation cycles"].value == 2.0
+    assert all(entry.tag is KpiTagEnumClass.CHP for entry in entries.values())
+    assert all(isinstance(entry.value, float) for entry in entries.values()), (
+        "a numpy scalar here would crash the KPI json writer"
+    )
+
+
+@pytest.mark.base
+def test_chp_kpi_entries_refuse_a_missing_output() -> None:
+    """A KPI whose output column is absent raises naming the KPI instead of reporting nothing.
+
+    Catches: a renamed output silently dropping its KPI from every future reference.
+    """
+    setup = build_chp_system(operating_mode="electricity", gas_type="Methan")
+    chp = setup.chp
+
+    with pytest.raises(ValueError, match="Electrical energy produced"):
+        chp.get_component_kpi_entries([chp.th_power_channel], pd.DataFrame({0: [4000.0]}))

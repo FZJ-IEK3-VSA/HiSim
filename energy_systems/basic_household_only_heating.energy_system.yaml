@@ -110,3 +110,35 @@ components:
       guid: ''
       calculation_index_for_local_lpg: null
       cars: null
+  ElectricityMeter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    config:
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
+    inputs:
+      - from: UTSPConnector.ElectricalPowerConsumption
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
+  GasMeter:
+    class: hisim.components.gas_meter.GasMeter
+    config:
+      total_energy_from_grid_in_kwh: 0.0
+      gas_loadtype: GAS
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
+    inputs:
+      - from: CondensingGasBoiler.EnergyDemandDhw
+        tags:
+          - GAS_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: CondensingGasBoiler.EnergyDemandSh
+        tags:
+          - GAS_CONSUMPTION_UNCONTROLLED
+        weight: 999

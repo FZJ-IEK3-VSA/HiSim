@@ -1,0 +1,175 @@
+# yaml-language-server: $schema=../hisim/energy_system_v3.schema.json
+# Recorded from system_setups/air_conditioned_house.py with energy_systems/one_day_15min.simulation.yaml by the HiSim energy-system recorder v1.
+schema_version: 3
+name: air_conditioned_house
+description: Air-conditioned household.
+components:
+  UTSPConnector:
+    class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector
+    config:
+      data_acquisition_mode: USE_PREDEFINED_PROFILE
+      household:
+        Name: CHR01 Couple both at Work
+        Guid:
+          StrVal: 516a33ab-79e1-4221-853b-967fc11cc85a
+      energy_intensity: EnergySaving
+      travel_route_set:
+        Name: Travel Route Set for 10km Commuting Distance
+        Guid:
+          StrVal: ca46be86-9cc7-47b5-9769-abff78ceca7a
+      transportation_device_set:
+        Name: Bus and one 30 km/h Car
+        Guid:
+          StrVal: 6ac74bd0-bacd-4b39-b84a-dc7ae16702c9
+      charging_station_set:
+        Name: Charging At Home with 11 kW
+        Guid:
+          StrVal: 78dae308-24c4-45cc-8bdf-b001d61f45c2
+      profile_with_washing_machine_and_dishwasher: true
+      predictive_control: false
+      predictive: false
+      result_dir_path: ${utsp_results}
+      cache_dir_path: null
+      name_of_predefined_loadprofile: CHR01 Couple both at Work
+      predefined_loadprofile_filepaths: null
+      guid: ''
+      calculation_index_for_local_lpg: null
+      cars: null
+  Weather:
+    class: hisim.components.weather.Weather
+    config:
+      location: Seville
+      source_path: ${inputs}/weather/NSRDB/Seville/Seville
+      data_source: NSRDB
+      predictive_control: false
+  PVSystem:
+    class: hisim.components.generic_pv_system.PVSystem
+    config:
+      time: 2021
+      location: Seville
+      module_name: Hanwha HSL60P6-PA-4-250T [2013]
+      integrate_inverter: true
+      inverter_name: ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_
+      module_database: SANDIA_MODULE_DATABASE
+      inverter_database: SANDIA_INVERTER_DATABASE
+      power_in_watt: 4000.0
+      azimuth: 180.0
+      tilt: 30.0
+      share_of_maximum_pv_potential: 1.0
+      load_module_data: false
+      source_weight: -1
+      device_co2_footprint_in_kg: 522.8
+      investment_costs_in_euro: 2143.24
+      lifetime_in_years: 25.0
+      maintenance_costs_in_euro_per_year: 21.432399999999998
+      subsidy_as_percentage_of_investment_costs: 0.0
+      predictive: false
+      predictive_control: false
+      prediction_horizon: null
+    inputs:
+      - Weather
+  AirConditioner:
+    class: hisim.components.air_conditioner.AirConditioner
+    config:
+      manufacturer: Panasonic
+      model_name: CS-TZ71WKEW + CU-TZ71WKE
+      scale_factor: 0.5364243908677532
+      t_out_cooling_ref:
+        - 23
+        - 30
+        - 35
+      t_out_heating_ref:
+        - -8
+        - 1
+        - 7
+      eer_ref:
+        - 4.1844
+        - 3.6138
+        - 3.17
+      cop_ref:
+        - 2.47
+        - 2.85
+        - 3.51
+      cooling_capacity_ref:
+        - 8520
+        - 7668
+        - 7100
+      heating_capacity_ref:
+        - 6130
+        - 7170
+        - 8600
+      investment_costs_in_euro: 4899.0
+      lifetime_in_years: 12
+      co2_emissions_kg_co2_eq: 165.84
+      maintenance_costs_in_euro_per_year: 244.95000000000002
+    inputs:
+      - AirConditionerControllerConfig
+      - Weather
+  Building:
+    class: hisim.components.building.building.Building
+    config:
+      heating_reference_temperature_in_celsius: 5.7
+      building_code: ES.ME.SFH.04.Gen.ReEx.001.003
+      building_heat_capacity_class: medium
+      initial_internal_temperature_in_celsius: 22.0
+      absolute_conditioned_floor_area_in_m2: null
+      total_base_area_in_m2: null
+      number_of_apartments: null
+      max_thermal_building_demand_in_watt: null
+      floor_u_value_in_watt_per_m2_per_kelvin: null
+      floor_area_in_m2: null
+      facade_u_value_in_watt_per_m2_per_kelvin: null
+      facade_area_in_m2: null
+      roof_u_value_in_watt_per_m2_per_kelvin: null
+      roof_area_in_m2: null
+      window_u_value_in_watt_per_m2_per_kelvin: null
+      window_area_in_m2: null
+      door_u_value_in_watt_per_m2_per_kelvin: null
+      door_area_in_m2: null
+      predictive: false
+      set_heating_temperature_in_celsius: 20.0
+      set_cooling_temperature_in_celsius: 24.0
+      enable_opening_windows: false
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
+    inputs:
+      - Weather
+      - UTSPConnector
+      - input: ThermalPowerDelivered
+        from: AirConditioner.ThermalPowerDelivered
+  AirConditionerControllerConfig:
+    class: hisim.components.air_conditioner.AirConditionerController
+    config:
+      heating_set_temperature_deg_c: 20.0
+      cooling_set_temperature_deg_c: 24.0
+      minimum_runtime_s: 1800.0
+      minimum_idle_time_s: 900.0
+      offset: 5.0
+      temperature_difference_full_power_deg_c: 3.0
+    inputs:
+      - Building
+  ElectricityMeter:
+    class: hisim.components.electricity_meter.ElectricityMeter
+    config:
+      device_co2_footprint_in_kg: null
+      investment_costs_in_euro: null
+      lifetime_in_years: null
+      maintenance_costs_in_euro_per_year: null
+      subsidy_as_percentage_of_investment_costs: null
+    inputs:
+      - from: AirConditioner.ElectricalPowerConsumption
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999
+      - from: PVSystem.ElectricityOutput
+        component_type: PV
+        tags:
+          - ELECTRICITY_PRODUCTION
+        weight: 999
+      - from: UTSPConnector.ElectricalPowerConsumption
+        tags:
+          - ELECTRICITY_CONSUMPTION_UNCONTROLLED
+        weight: 999

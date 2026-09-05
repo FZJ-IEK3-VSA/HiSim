@@ -5,6 +5,7 @@ green hydrogen production via electrolysis. Tests verify hydrogen flow rate calc
 based on electrical load input and activation state.
 """
 
+import pandas as pd
 import pytest
 
 from hisim import component as cp
@@ -106,3 +107,57 @@ def test_electrolyzer() -> None:
         assert stsv.values[my_electrolyzer.hydrogen_flow_rate.global_index] == pytest.approx(0.621840650119573)
 
     # python -m pytest ../tests/test_generic_electrolyzer_h2.py
+
+
+def _build_electrolyzer() -> generic_electrolyzer_h2.Electrolyzer:
+    """Construct the PEM electrolyzer of the tests above, for the KPI tests below."""
+    config = generic_electrolyzer_h2.ElectrolyzerConfig(
+        component_id=ComponentID(name="HTecME450"),
+        electrolyzer_type="PEM",
+        nom_load=987.0,
+        max_load=1028.225,
+        nom_h2_flow_rate=18.875,
+        faraday_eff=0.999,
+        i_cell_nom=2.0,
+        ramp_up_rate=0.03,
+        ramp_down_rate=0.25,
+    )
+    return generic_electrolyzer_h2.Electrolyzer(
+        config=config, my_simulation_parameters=SimulationParameters.one_day_only(2021, 60)
+    )
+
+
+@pytest.mark.base
+def test_electrolyzer_kpi_entries_read_the_final_cumulative_values() -> None:
+    """The three electrolyzer KPIs are the final values of its own cumulative outputs.
+
+    The component integrates hydrogen, energy and operating time per timestep itself, so the KPI
+    must read the last value rather than sum the column -- summing a cumulative series
+    double-counts, which is exactly what a wrong implementation would do and what the hand-picked
+    monotone series here would expose.
+    """
+    electrolyzer = _build_electrolyzer()
+    outputs = [
+        electrolyzer.total_hydrogen,
+        electrolyzer.total_energy_consumed,
+        electrolyzer.operating_time,
+    ]
+    frame = pd.DataFrame({0: [1.0, 2.5], 1: [40.0, 90.0], 2: [0.5, 1.25]})
+
+    entries = {e.name: e for e in electrolyzer.get_component_kpi_entries(outputs, frame)}
+
+    assert entries["Hydrogen produced"].value == pytest.approx(2.5)
+    assert entries["Electrical energy consumed"].value == pytest.approx(90.0)
+    assert entries["Operating time"].value == pytest.approx(1.25)
+    assert all(isinstance(e.value, float) for e in entries.values()), (
+        "a numpy scalar here would crash the KPI json writer"
+    )
+
+
+@pytest.mark.base
+def test_electrolyzer_kpi_entries_refuse_a_missing_output() -> None:
+    """A missing cumulative column raises naming the KPI instead of reporting nothing."""
+    electrolyzer = _build_electrolyzer()
+
+    with pytest.raises(ValueError, match="Hydrogen produced"):
+        electrolyzer.get_component_kpi_entries([electrolyzer.total_energy_consumed], pd.DataFrame({0: [1.0]}))

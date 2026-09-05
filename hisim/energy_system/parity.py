@@ -27,6 +27,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence, Tuple
 
+import numpy as np
 import pandas as pd
 
 from hisim.component import Component
@@ -240,6 +241,13 @@ class PortRenaming:
             raise ValueError(
                 f"The port renaming would produce column names the frame already carries: "
                 f"{clashes}. Two different outputs cannot be renamed onto one column."
+            )
+        targets = list(mapping.values())
+        collapsed = sorted({target for target in targets if targets.count(target) > 1})
+        if collapsed:
+            raise ValueError(
+                f"The port renaming would map two columns onto {collapsed}; two different "
+                "outputs cannot be renamed onto one column."
             )
         return frame.rename(columns=mapping)
 
@@ -565,9 +573,24 @@ class ResultComparison:
         for name in shared:
             left = expected[name].to_numpy(dtype=float)
             right = actual[name].to_numpy(dtype=float)
-            absolute = abs(left - right)
-            scale = pd.Series(abs(left)).combine(pd.Series(abs(right)), max).to_numpy(dtype=float)
-            relative = absolute / pd.Series(scale).replace(0.0, 1.0).to_numpy(dtype=float)
+            # NaN semantics: NaN==NaN counts as equal (a value both runs failed to produce is the
+            # same value), while NaN on one side only can never be absorbed by any tolerance, so it
+            # is a structural problem rather than a deviation — arithmetic on it would otherwise
+            # propagate NaN through max() and silently report zero deviation.
+            mismatched_nan = np.isnan(left) ^ np.isnan(right)
+            if mismatched_nan.any():
+                first = int(np.argmax(mismatched_nan))
+                comparison.structural_problems.append(
+                    f"column '{name}' is NaN on one side only in {int(mismatched_nan.sum())} "
+                    f"row(s), first at {expected.index[first]}"
+                )
+                continue
+            both_nan = np.isnan(left)
+            absolute = np.abs(left - right)
+            absolute[both_nan] = 0.0
+            scale = np.maximum(np.abs(left), np.abs(right))
+            scale[both_nan | (scale == 0.0)] = 1.0
+            relative = absolute / scale
             position = int(relative.argmax()) if relative.size else 0
             if relative.size and relative[position] > comparison.max_relative_deviation:
                 comparison.max_relative_deviation = float(relative[position])

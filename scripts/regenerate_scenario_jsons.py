@@ -105,10 +105,18 @@ def regenerate_one(
     log_dir: Path,
     keep_simulation_json: bool,
 ) -> SetupResult:
-    """Regenerate a single setup's scenario JSON in a subprocess.
+    """Regenerate one setup's scenario JSON in a subprocess.
 
-    Borrows a unique local-LPG calc index from ``index_pool`` for the duration
-    of the run so concurrent workers never share a ``pylpg/C<index>`` dir.
+    Borrows a unique local-LPG calculation index from ``index_pool`` for the duration of the run, so
+    concurrent workers never share a ``pylpg/C<index>`` directory.
+
+    The child gets ``PYTHONPATH`` set to this checkout. The converter is started as a script path, and for
+    a script Python puts the *script's* directory on ``sys.path``, not the working directory; without the
+    variable, ``import hisim`` in the child resolves to the installed package, which in a git worktree is a
+    different checkout, and the regeneration silently reports no drift against the wrong code. The
+    variable is prepended, so a caller's own ``PYTHONPATH`` entries stay -- but for any name both
+    provide, above all ``hisim`` itself, the checkout wins. That shadowing is deliberate: the report
+    is about *this* checkout, so no caller may point the children at another one.
     """
     stem = setup_path.stem
     log_path = log_dir / f"{stem}.log"
@@ -116,6 +124,9 @@ def regenerate_one(
     try:
         env = dict(os.environ)
         env["HISIM_LOCAL_LPG_CALC_INDEX"] = str(calc_index)
+        env["PYTHONPATH"] = os.pathsep.join(
+            [str(REPO_ROOT), *([env["PYTHONPATH"]] if env.get("PYTHONPATH") else [])]
+        )
         rel = setup_path.relative_to(REPO_ROOT).as_posix()
         with open(log_path, "w", encoding="utf-8") as logf:
             proc = subprocess.run(

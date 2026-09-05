@@ -15,6 +15,7 @@ from hisim.component import Component, SingleTimeStepValues, ComponentInput, Com
 from hisim import loadtypes as lt
 
 from hisim.components.configuration import PhysicsConfig
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -639,6 +640,62 @@ class CHP(Component):
 
         stsv.set_output_value(self.gas_demand_target_channel, gas_demand_target)  # CHP runs with
         stsv.set_output_value(self.gas_demand_real_used_channel, gas_demand_real_used)  # ThermalPowerOutput
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List[ComponentOutput],
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the CHP and returns all KPI entries as a list.
+
+        Four indicators describe what the unit did over the simulated period: the electrical
+        and thermal energy it produced, integrated from its power outputs; the fuel mass it
+        actually burned, integrated from the real fuel draw (not the requested one, which can
+        differ when the storage cannot deliver); and how many on/off cycles it went through,
+        read as the final value of its cumulative cycle counter. Cycles are an indicator of
+        their own because wear grows with switching, not with runtime.
+
+        Args:
+            all_outputs: every output column of the run, searched for this component's by name.
+            postprocessing_results: the per-timestep values of those columns.
+
+        Returns:
+            List[KpiEntry]: the four entries, tagged as CHP.
+        """
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        electrical_energy_in_kilowatt_hour = None
+        thermal_energy_in_kilowatt_hour = None
+        fuel_consumed_in_kg = None
+        number_of_cycles = None
+        for index, output in enumerate(all_outputs):
+            if output.component_name != self.component_name:
+                continue
+            column = postprocessing_results.iloc[:, index]
+            if output.field_name == self.ElectricityOutput and output.unit == lt.Units.WATT:
+                electrical_energy_in_kilowatt_hour = round(float(column.sum()) * seconds_per_timestep / 3600 * 1e-3, 3)
+            elif output.field_name == self.ThermalOutputPower and output.unit == lt.Units.WATT:
+                thermal_energy_in_kilowatt_hour = round(float(column.sum()) * seconds_per_timestep / 3600 * 1e-3, 3)
+            elif output.field_name == self.GasDemandReal and output.unit == lt.Units.KG_PER_SEC:
+                fuel_consumed_in_kg = round(float(column.sum()) * seconds_per_timestep, 6)
+            elif output.field_name == self.NumberofCycles:
+                number_of_cycles = float(column.iloc[-1])
+
+        entries = [
+            ("Electrical energy produced", "kWh", electrical_energy_in_kilowatt_hour),
+            ("Thermal energy produced", "kWh", thermal_energy_in_kilowatt_hour),
+            ("Fuel consumed", "kg", fuel_consumed_in_kg),
+            ("Number of activation cycles", "-", number_of_cycles),
+        ]
+        for name, unit, value in entries:
+            if value is None:
+                raise ValueError(
+                    f"The CHP output for the KPI '{name}' was not found among the run's columns for "
+                    f"{self.component_name}; the KPI cannot be reported as absent silently."
+                )
+        return [
+            KpiEntry(name=name, unit=unit, value=value, tag=KpiTagEnumClass.CHP, description=self.component_name)
+            for name, unit, value in entries
+        ]
 
     def write_to_report(self) -> List[str]:
         """Write to report."""

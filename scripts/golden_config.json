@@ -15,7 +15,12 @@
     {"id": "air_conditioned_house",                         "path": "system_setups/air_conditioned_house.py", "horizons": ["week"]},
     {"id": "basic_household",                               "path": "system_setups/basic_household.py", "horizons": ["week"]},
     {"id": "default_connections",                           "path": "system_setups/default_connections.py", "horizons": ["week"]},
-    {"id": "automatic_default_connections",                 "path": "system_setups/automatic_default_connections.py", "horizons": ["week"]}
+    {"id": "automatic_default_connections",                 "path": "system_setups/automatic_default_connections.py", "horizons": ["week"]},
+    {"id": "basic_household_only_heating",                  "path": "system_setups/basic_household_only_heating.py", "horizons": ["week"]},
+    {"id": "household_gas_solar_thermal",                   "path": "system_setups/household_gas_solar_thermal.py", "horizons": ["week"]},
+    {"id": "simple_air_conditioner_household_building_sizer", "path": "system_setups/simple_air_conditioner_household_building_sizer.py", "horizons": ["week"]},
+    {"id": "simple_system_setup_one",                       "path": "system_setups/simple_system_setup_one.py", "horizons": ["week"]},
+    {"id": "simple_system_setup_two",                       "path": "system_setups/simple_system_setup_two.py", "horizons": ["week"]}
   ],
   "parameter_sets": [
     {"id": "one_week_60s", "factory": "one_week_only", "year": 2021, "seconds_per_timestep": 60,

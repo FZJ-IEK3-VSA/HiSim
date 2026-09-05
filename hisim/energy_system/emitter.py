@@ -220,8 +220,25 @@ class EnergySystemEmitter:
         Returns:
             The YAML document, ending in a newline.
         """
+        return cls.render(cls.to_document(model))
+
+    @classmethod
+    def render(cls, document: Dict[str, Any]) -> str:
+        """Renders an already-built document in the canonical style.
+
+        The two steps are separable because more than one producer builds the document itself: the
+        run record annotates it, and later passes assemble documents of their own. All of them have
+        to come out in the same bytes as an ordinary dump, which they only do if there is one
+        renderer.
+
+        Args:
+            document: The plain nested mapping mirroring the file, keys already in canonical order.
+
+        Returns:
+            The YAML document, ending in a newline.
+        """
         rendered = yaml.dump(
-            cls.to_document(model),
+            document,
             Dumper=CanonicalDumper.configured(),
             sort_keys=False,
             default_flow_style=False,

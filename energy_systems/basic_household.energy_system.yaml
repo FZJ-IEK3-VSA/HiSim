@@ -114,8 +114,8 @@ components:
     config:
       manufacturer: Viessmann Werke GmbH & Co KG
       heat_pump_name: Vitocal 300-A AWO-AC 301.B07
-      min_operation_time: 3600.0
-      min_idle_time: 900.0
+      min_operation_time_in_seconds: 3600.0
+      min_idle_time_in_seconds: 900.0
     inputs:
       - GenericHeatPumpController
       - Weather

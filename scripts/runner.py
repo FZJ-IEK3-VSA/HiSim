@@ -28,10 +28,10 @@ from hisim.simulationparameters import SimulationParameters
 
 try:  # importable both as ``scripts.runner`` (tests) and ``runner`` (CLI from scripts/)
     from golden_kpis import flatten  # type: ignore[import-not-found]
-    from golden_matrix import FACTORY_HORIZONS, HORIZON_FACTORIES  # type: ignore[import-not-found]
+    from golden_horizons import HorizonVocabulary  # type: ignore[import-not-found]
 except ModuleNotFoundError:
     from scripts.golden_kpis import flatten
-    from scripts.golden_matrix import FACTORY_HORIZONS, HORIZON_FACTORIES
+    from scripts.golden_horizons import HorizonVocabulary
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +52,10 @@ class SetupConfig:
     def runs_factory(self, factory: str) -> bool:
         """Whether this setup participates in parameter sets built by ``factory``.
 
+        The rule itself lives in :class:`HorizonVocabulary`, shared with the CI matrix
+        emitter, so the pairs the gate fans out and the pairs a local run selects can never
+        silently disagree.
+
         Args:
             factory: the ``SimulationParameters`` factory name of a parameter set.
 
@@ -59,7 +63,7 @@ class SetupConfig:
             bool: True when the setup carries no restriction, or the factory's horizon
             is among the ones it names.
         """
-        return self.horizons is None or FACTORY_HORIZONS.get(factory) in self.horizons
+        return bool(HorizonVocabulary.runs_factory(self.horizons, factory))
 
 
 @dataclass
@@ -156,13 +160,7 @@ def load_config(config_path: Path) -> GoldenConfig:
         if not isinstance(entry, dict) or "id" not in entry or "path" not in entry:
             raise ValueError(f"Golden config setups[{idx}] must have 'id' and 'path'.")
         horizons = entry.get("horizons")
-        if horizons is not None:
-            unknown = [h for h in horizons if h not in HORIZON_FACTORIES]
-            if unknown:
-                raise ValueError(
-                    f"Golden config setups[{idx}] names unknown horizons {unknown}; "
-                    f"valid horizons: {sorted(HORIZON_FACTORIES)}."
-                )
+        HorizonVocabulary.check_horizons(horizons, f"Golden config setups[{idx}]")
         setups.append(SetupConfig(id=entry["id"], path=entry["path"], horizons=horizons))
 
     parameter_sets: list[ParameterSetConfig] = []
@@ -173,6 +171,7 @@ def load_config(config_path: Path) -> GoldenConfig:
             if req not in entry:
                 raise ValueError(f"Golden config parameter_sets[{idx}] missing required key {req!r}.")
         _validate_factory(entry["factory"])
+        HorizonVocabulary.check_factory(entry["factory"], f"Golden config parameter_sets[{idx}]")
         _validate_option_names(entry["post_processing_options"])
         parameter_sets.append(
             ParameterSetConfig(
@@ -202,7 +201,9 @@ def filter_config(
 
     Raises:
         ValueError: if a requested id matches no entry (a typo should fail loudly,
-            not silently run nothing).
+            not silently run nothing), or if both ids are given and the setup's
+            ``horizons`` exclude that parameter set — asking explicitly for a pair
+            the gate never runs is a mistake, not an empty run.
     """
     setups = [s for s in config.setups if setup_id in (None, s.id)]
     params = [p for p in config.parameter_sets if param_id in (None, p.id)]

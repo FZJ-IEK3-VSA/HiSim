@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.golden_matrix import FACTORY_HORIZONS, HORIZON_FACTORIES, build_matrix
+from scripts.golden_matrix import HORIZON_FACTORIES, build_matrix
 
 pytestmark = pytest.mark.base
 
@@ -75,23 +75,65 @@ def test_horizon_factories_cover_config_factories() -> None:
 def test_build_matrix_real_config_expands_to_the_pairs_the_horizons_allow() -> None:
     """The shipped config expands to one pair per (setup, parameter_set) the setup's horizons permit.
 
-    A setup without a ``horizons`` key runs every parameter set; a setup with one runs only
-    the horizons it names. The fleet-wide week entries are what makes these two counts differ.
+    The expected counts are hand-written truths about the shipped config — twenty setups run the
+    week, only the original eight carry the full year — rather than re-derived through the very
+    predicate under test, which would reproduce any logic error on both sides of the assertion.
+    A new setup joining the config moves these literals on purpose: the reviewer of that change
+    should see the gate grow.
     """
     config = json.loads(REAL_CONFIG.read_text())
 
-    matrix = build_matrix(config)
-
-    expected = sum(
-        1
-        for setup in config["setups"]
-        for param in config["parameter_sets"]
-        if setup.get("horizons") is None or FACTORY_HORIZONS[param["factory"]] in setup["horizons"]
-    )
-    assert len(matrix["include"]) == expected
-    assert expected < len(config["setups"]) * len(config["parameter_sets"]), (
+    assert len(config["setups"]) == 20
+    assert len(build_matrix(config, horizon="week")["include"]) == 20
+    assert len(build_matrix(config, horizon="year")["include"]) == 8
+    assert len(build_matrix(config)["include"]) == 28
+    assert 28 < len(config["setups"]) * len(config["parameter_sets"]), (
         "the shipped config restricts at least one setup, so the full product would overcount"
     )
+
+
+def test_a_malformed_horizons_value_fails_the_matrix_loudly() -> None:
+    """Catches a config mistake silently shrinking the gate instead of failing the discover job.
+
+    An empty list would make a setup participate in nothing — it vanishes from every matrix with
+    nothing red anywhere — and a bare string would iterate per character, reporting unknown
+    horizons ['w', 'e', 'e', 'k']. Both are refused with the setup named.
+    """
+    malformed: tuple = ([], "week", 3)
+    for wrong in malformed:
+        config = _config()
+        config["setups"][0]["horizons"] = wrong
+        with pytest.raises(ValueError, match="horizons|s1"):
+            build_matrix(config)
+
+
+def test_a_parameter_set_factory_outside_the_vocabulary_is_refused() -> None:
+    """Catches an unmapped factory silently splitting restricted from unrestricted setups.
+
+    A factory without a horizon resolves to None, and ``None in horizons`` is False — restricted
+    setups would silently skip the parameter set while unrestricted ones run it. A new factory
+    has to enter the vocabulary consciously instead.
+    """
+    config = _config()
+    config["parameter_sets"].append({"id": "july_60s", "factory": "one_week_july"})
+
+    with pytest.raises(ValueError, match="one_week_july"):
+        build_matrix(config)
+
+
+def test_the_matrix_and_the_runner_select_the_same_pairs() -> None:
+    """Catches the CI matrix emitter and the runner gating two different fleets.
+
+    The participation rule lives once in the shared vocabulary, and this is the proof it stays
+    that way: the pairs CI fans out over the shipped config and the pairs a local run selects
+    must be the identical set, or a one-sided edit has split the gate.
+    """
+    from scripts.runner import load_config, select_pairs
+
+    emitted = {(pair["setup"], pair["param"]) for pair in build_matrix(json.loads(REAL_CONFIG.read_text()))["include"]}
+    selected = {(setup.id, param.id) for setup, param in select_pairs(load_config(REAL_CONFIG))}
+
+    assert emitted == selected
 
 
 def test_a_setup_restricted_to_the_week_never_enters_the_year_matrix() -> None:

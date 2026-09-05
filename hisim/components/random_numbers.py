@@ -62,7 +62,7 @@ class RandomNumbers(Component):
     # see Component.MODELS_NO_DEVICE.
     MODELS_NO_DEVICE: ClassVar[bool] = True
 
-    RandomOutput: ClassVar[str] = "Random Numbers"
+    RandomOutput: ClassVar[str] = "RandomNumbers"
 
     def __init__(
         self,

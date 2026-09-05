@@ -16,9 +16,9 @@ therefore rejected here, at the one place a name or a reference enters the model
 
 from __future__ import annotations
 
-import re
 from typing import Any, ClassVar, Optional, Pattern, Tuple
 
+from hisim.config import NameSyntax
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemFormatError
 
 
@@ -38,18 +38,11 @@ class NameRules:
 
     #: The one identifier syntax of the format, used for component names, group names,
     #: variant and option names, fact names and port names alike.
-    IDENTIFIER_PATTERN: ClassVar[Pattern[str]] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+    IDENTIFIER_PATTERN: ClassVar[Pattern[str]] = NameSyntax.IDENTIFIER_PATTERN
 
-    #: Characters that only appear in wildcard or glob syntax. Their presence is always a
-    #: rejection rather than a name failing the identifier pattern: the author meant a
-    #: pattern, and patterns are not part of this format version.
-    WILDCARD_CHARACTERS: ClassVar[str] = "*?[]"
-
-    #: Characters that only appear in filesystem paths. A reference addresses a component
-    #: by name, never by location, so any of them means a path was written instead.
-    PATH_CHARACTERS: ClassVar[str] = "/\\"
-
-    #: The separator between the two halves of a reference.
+    #: The separator between the two halves of a reference. The wildcard and path character
+    #: sets live only on :class:`NameSyntax`; the reference grammar reads them through
+    #: :meth:`NameSyntax.explain_violation`, so the rule and its wording cannot drift.
     REFERENCE_SEPARATOR: ClassVar[str] = "."
 
     @classmethod
@@ -73,11 +66,13 @@ class NameRules:
             EnergySystemFormatError: ``EF-08`` if the value is not a string or does not
                 match the identifier pattern.
         """
-        if not isinstance(value, str) or cls.IDENTIFIER_PATTERN.match(value) is None:
+        if not NameSyntax.is_identifier(value):
+            # is_identifier is the narrowing type guard; explain_violation names the one rule
+            # the value breaks, so the file-side refusal reads exactly like the runtime one.
             raise EnergySystemFormatError(
                 EnergySystemErrorId.INVALID_NAME,
                 location,
-                f"'{value}' is not a usable {role} name.",
+                f"'{value}' is not a usable {role} name: {NameSyntax.explain_violation(value)}.",
                 remedy=(
                     "A name starts with a letter or underscore and continues with "
                     "letters, digits or underscores."
@@ -110,17 +105,16 @@ class NameRules:
         """
         if not isinstance(value, str) or not value:
             raise cls._reference_error(location, value, "a reference must be a non-empty string")
-        if any(character in value for character in cls.WILDCARD_CHARACTERS):
-            raise cls._reference_error(location, value, "wildcards are not part of this format version")
-        if any(character in value for character in cls.PATH_CHARACTERS):
-            raise cls._reference_error(location, value, "a reference names a component, never a path")
         parts = value.split(cls.REFERENCE_SEPARATOR)
         if len(parts) > 2 or (require_member and len(parts) != 2):
             expected = "'<component>.<fact>'" if require_member else "'<component>' or '<component>.<Output>'"
             raise cls._reference_error(location, value, f"a reference is written {expected}")
         for part in parts:
-            if cls.IDENTIFIER_PATTERN.match(part) is None:
-                raise cls._reference_error(location, value, f"'{part}' is not a usable name")
+            # The shared grammar names the specific mistake — a wildcard, a path, an empty
+            # half — so a reference and a runtime name refuse the same string the same way.
+            problem = NameSyntax.explain_violation(part)
+            if problem is not None:
+                raise cls._reference_error(location, value, f"'{part}' is not a usable name: {problem}")
         return parts[0], parts[1] if len(parts) == 2 else None
 
     @classmethod

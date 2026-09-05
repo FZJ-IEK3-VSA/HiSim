@@ -92,7 +92,7 @@ class RsocBatteryControllerConfig(ConfigBase):
         file being present.
         """
         if component_id is None:
-            component_id = ComponentID(name="rSOC and Battery Controller")
+            component_id = ComponentID(name="RsocAndBatteryController")
         if config_data is None:
             config_data = cls.read_config(rsoc_name)
 

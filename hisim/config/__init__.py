@@ -7,6 +7,10 @@ the other way round:
 
     - :mod:`hisim.config.base` — ``ComponentID``, ``ConfigBase`` and ``DisplayConfig``,
       the three classes every component configuration is built from.
+    - :mod:`hisim.config.names` — ``NameSyntax``: the one identifier grammar a component
+      name, an energy-system file key and a reference all obey, kept here because its two
+      enforcers (``hisim/component.py`` and ``hisim/energy_system/model.py``) sit on
+      opposite sides of the dependency direction and can only share a definition below both.
     - :mod:`hisim.config.presets` — the ``@preset`` and ``@constructor`` decorators
       giving a config class its typed named defaults and named constructors, their
       registries (``presets_of``, ``constructors_of``) and the preset-provenance stamp.
@@ -30,7 +34,7 @@ the other way round:
       a component makes, and the only module here that reads ``hisim.loadtypes``.
 
 The submodules are listed in dependency order, which is also the order this ``__init__``
-imports them: ``presets``, ``laws`` and ``report`` are leaves, ``context`` builds its
+imports them: ``names``, ``presets``, ``laws`` and ``report`` are leaves, ``context`` builds its
 ``Size`` terms from ``laws``, ``sizing`` uses ``laws`` and ``presets`` (to normalize field
 rules and carry the preset stamp onto a resolved copy), ``base`` uses ``context``,
 ``sizing`` and ``presets`` (whose builder-name check it runs from
@@ -61,6 +65,7 @@ fully-qualified path.
 # clean
 
 from hisim.config.base import ComponentID, ConfigBase, DisplayConfig
+from hisim.config.names import NameSyntax
 from hisim.config.presets import (
     BuilderKind,
     ConfigBuilder,
@@ -137,6 +142,7 @@ __all__ = [
     "FactContribution",
     "FieldInfo",
     "Many",
+    "NameSyntax",
     "NothingToSizeError",
     "OwnFields",
     "ParameterInfo",

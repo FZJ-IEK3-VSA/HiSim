@@ -7,7 +7,7 @@
             "component_full_classname": "hisim.components.random_numbers.RandomNumbers",
             "configuration": {
                 "component_id": {
-                    "name": "Random numbers 100-200",
+                    "name": "RandomNumbers100To200",
                     "building": null,
                     "unit": null
                 },
@@ -24,7 +24,7 @@
             "component_full_classname": "hisim.components.random_numbers.RandomNumbers",
             "configuration": {
                 "component_id": {
-                    "name": "Random numbers 10-20",
+                    "name": "RandomNumbers10To20",
                     "building": null,
                     "unit": null
                 },
@@ -41,7 +41,7 @@
             "component_full_classname": "hisim.components.example_transformer.ExampleTransformer",
             "configuration": {
                 "component_id": {
-                    "name": "Example Transformer default",
+                    "name": "ExampleTransformerDefault",
                     "building": null,
                     "unit": null
                 },
@@ -73,32 +73,32 @@
     "connections": [
         {
             "source": {
-                "component_name": "Random numbers 10-20",
-                "field_name": "Random Numbers"
+                "component_name": "RandomNumbers10To20",
+                "field_name": "RandomNumbers"
             },
             "target": {
-                "component_name": "Example Transformer default",
+                "component_name": "ExampleTransformerDefault",
                 "field_name": "Input1"
             }
         },
         {
             "source": {
-                "component_name": "Random numbers 100-200",
-                "field_name": "Random Numbers"
+                "component_name": "RandomNumbers100To200",
+                "field_name": "RandomNumbers"
             },
             "target": {
                 "component_name": "Sum",
-                "field_name": "Input 1"
+                "field_name": "Input1"
             }
         },
         {
             "source": {
-                "component_name": "Example Transformer default",
+                "component_name": "ExampleTransformerDefault",
                 "field_name": "MyTransformerOutput"
             },
             "target": {
                 "component_name": "Sum",
-                "field_name": "Input 2"
+                "field_name": "Input2"
             }
         }
     ]

@@ -141,7 +141,7 @@ class CSVLoader(cp.Component):
 
     """
 
-    Output1: str = "CSV Profile"
+    Output1: str = "CSVProfile"
 
     # A loader that replays a recorded profile is a data source, not a device: it has
     # nothing to buy, nothing to run and no indicators of its own. Declaring that is

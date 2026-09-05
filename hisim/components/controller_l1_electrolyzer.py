@@ -40,7 +40,7 @@ class L1ElectrolyzerControllerConfig(ConfigBase):
     ) -> "L1ElectrolyzerControllerConfig":
         """Returns the default configuration of an electrolyzer controller."""
         if component_id is None:
-            component_id = ComponentID(name="L1 Electrolyzer Controller")
+            component_id = ComponentID(name="L1ElectrolyzerController")
         config = L1ElectrolyzerControllerConfig(
             component_id=component_id,
             source_weight=1,

@@ -35,7 +35,7 @@ def test_example_component() -> None:
     # Define outputs
     thermal_energy_delivered_output = cp.ComponentOutput(
         object_name="source",
-        field_name="thermal energy delivered",
+        field_name="ThermalEnergyDelivered",
         load_type=lt.LoadTypes.HEATING,
         unit=lt.Units.WATT,
         component_id=ComponentID("source"),

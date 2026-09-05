@@ -6,7 +6,9 @@ hashable value object, that it survives a JSON round trip as a nested object ins
 configuration, and that the derived name no longer depends on the ``multiple_buildings``
 simulation parameter. They also cover the postprocessing grouping helpers that replaced the
 former name-substring matching, so that a district-style setup can be verified without
-running a full district simulation.
+running a full district simulation. A final section covers the identifier rule the runtime
+name has to satisfy, and that the declarative file format enforces the very same rule from
+the very same definition.
 """
 
 # clean
@@ -20,8 +22,10 @@ from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.config import ConfigBase, ComponentID, DisplayConfig
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, NameSyntax
 from hisim.components import example_component
+from hisim.energy_system.errors import EnergySystemFormatError
+from hisim.energy_system.model import NameRules
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -212,11 +216,11 @@ def test_default_factories_produce_building_less_identities() -> None:
     """
     config = example_component.ExampleComponentConfig.get_default_example_component()
     assert config.component_id.building is None
-    assert config.component_id.key == "Example Component"
+    assert config.component_id.key == "ExampleComponent"
 
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
-    assert component.get_component_name() == "Example Component"
+    assert component.get_component_name() == "ExampleComponent"
     assert component.component_id is config.component_id
 
 
@@ -225,7 +229,7 @@ def test_outputs_carry_the_identity_of_their_component() -> None:
     """Every output records the identity of the component that produced it."""
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     config = example_component.ExampleComponentConfig.get_default_example_component(
-        component_id=ComponentID(name="Example Component", building="BUI2")
+        component_id=ComponentID(name="ExampleComponent", building="BUI2")
     )
     component = example_component.ExampleComponent(config=config, my_simulation_parameters=sim_params)
     assert component.outputs
@@ -269,9 +273,9 @@ def test_district_style_setup_groups_by_building() -> None:
     """
     sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     identities = [
-        ComponentID(name="Example Component", building="BUI1"),
-        ComponentID(name="Example Component", building="BUI2"),
-        ComponentID(name="Example Component", building=lt.DistrictNames.DISTRICT.value),
+        ComponentID(name="ExampleComponent", building="BUI1"),
+        ComponentID(name="ExampleComponent", building="BUI2"),
+        ComponentID(name="ExampleComponent", building=lt.DistrictNames.DISTRICT.value),
     ]
     components = [
         example_component.ExampleComponent(
@@ -282,9 +286,9 @@ def test_district_style_setup_groups_by_building() -> None:
     ]
 
     assert [component.get_component_name() for component in components] == [
-        "BUI1_Example Component",
-        "BUI2_Example Component",
-        "District_Example Component",
+        "BUI1_ExampleComponent",
+        "BUI2_ExampleComponent",
+        "District_ExampleComponent",
     ]
 
     building_objects = {component.component_id.building_label for component in components}
@@ -296,3 +300,115 @@ def test_district_style_setup_groups_by_building() -> None:
     for component in components:
         for output in component.outputs:
             assert output.building_label == component.component_id.building
+
+
+# --------------------------------------------------------------------------- #
+# The identifier rule on the runtime name
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.base
+def test_a_component_id_refuses_every_field_that_is_not_an_identifier() -> None:
+    """A ComponentID with a non-identifier name, building or unit fails at construction, by field.
+
+    The key joins the present fields verbatim, so a building label with a space or a leading
+    digit would make the joined key fail the name rule later — at component construction, with
+    a message blaming the *name* for a string the author never typed. Refusing each field where
+    the identity is created names the field that is actually wrong.
+    """
+    with pytest.raises(ValueError, match="component name"):
+        ComponentID(name="Example Component")
+    with pytest.raises(ValueError, match="building label"):
+        ComponentID(name="Weather", building="BUI 1")
+    with pytest.raises(ValueError, match="building label"):
+        ComponentID(name="Weather", building="101")
+    with pytest.raises(ValueError, match="unit label"):
+        ComponentID(name="HeatPump", building="BUI1", unit="APT 2")
+    assert ComponentID(name="HeatPump", building="BUI1", unit="APT2").key == "BUI1_APT2_HeatPump"
+
+
+@pytest.mark.base
+def test_a_component_refuses_a_runtime_name_that_is_not_an_identifier() -> None:
+    """The runtime name passed to ``Component.__init__`` is checked as the last line of defence.
+
+    Every in-tree caller passes the already-validated ``component_id.key``, but the name is a
+    plain argument and a direct construction could pass anything; the key check is what keeps
+    the two from diverging silently.
+    """
+    sim_params = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    config = example_component.ExampleComponentConfig.get_default_example_component()
+    with pytest.raises(ValueError) as rejection:
+        cp.Component(
+            name="Bad Name",
+            my_simulation_parameters=sim_params,
+            my_config=config,
+            my_display_config=DisplayConfig(),
+        )
+    assert "Bad Name" in str(rejection.value)
+    assert "component name" in str(rejection.value)
+
+
+@pytest.mark.base
+def test_a_port_refuses_a_field_or_object_name_that_is_not_an_identifier() -> None:
+    """Both halves of a port's full name are held to the identifier rule at construction.
+
+    The field name becomes the dotted half of ``from: <component>.<port>`` in a declarative
+    file, and the object name is the column prefix; a port nobody could reference or a prefix
+    that defeats the rule must fail when the port is built, not years later when something
+    first tries to write the system down.
+    """
+    identity = ComponentID(name="Source")
+    with pytest.raises(ValueError, match="component output"):
+        cp.ComponentOutput("Source", "Bad Port", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, component_id=identity)
+    with pytest.raises(ValueError, match="component input"):
+        cp.ComponentInput("Source", "Bad Port", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
+    with pytest.raises(ValueError, match="component name"):
+        cp.ComponentOutput("Bad Prefix", "Out", lt.LoadTypes.ELECTRICITY, lt.Units.WATT, component_id=identity)
+
+
+@pytest.mark.base
+def test_the_identifier_rule_names_the_specific_mistake() -> None:
+    """Each way of getting a name wrong is reported as itself, not as one generic message.
+
+    A glob pattern and a filesystem path are deliberate acts, not typos, so telling their
+    author that patterns and paths are not part of the vocabulary is far more useful than
+    repeating which characters an identifier may contain.
+    """
+    NameSyntax.require_identifier("Pv_South_1", "component")
+    with pytest.raises(ValueError, match="wildcards are not part of this vocabulary"):
+        NameSyntax.require_identifier("pv_*", "component")
+    with pytest.raises(ValueError, match="never a path"):
+        NameSyntax.require_identifier("../pv", "component")
+    with pytest.raises(ValueError, match="must not be empty"):
+        NameSyntax.require_identifier("", "component")
+    with pytest.raises(ValueError, match="must be a string"):
+        NameSyntax.require_identifier(3, "component")
+
+
+@pytest.mark.base
+def test_the_file_format_and_the_component_runtime_share_one_identifier_rule() -> None:
+    """The two enforcers accept and refuse the same strings with the same explanation.
+
+    A name accepted at construction but refused as a file key — or the reverse — is exactly
+    the failure the shared definition exists to make impossible, so this feeds the same
+    strings through both enforcers instead of asserting how the modules are wired: a drift in
+    actual behaviour fails here even if the wiring still looks shared.
+    """
+    NameSyntax.require_identifier("Pv_South_1", "component")
+    assert NameRules.check_identifier("Pv_South_1", "key", "component") == "Pv_South_1"
+
+    for bad, phrase in (
+        ("pv 1", "letter or underscore"),
+        ("pv_*", "wildcards are not part of this vocabulary"),
+        ("../pv", "never a path"),
+    ):
+        with pytest.raises(ValueError, match=phrase):
+            NameSyntax.require_identifier(bad, "component")
+        with pytest.raises(EnergySystemFormatError, match=phrase):
+            NameRules.check_identifier(bad, "some.key", "component")
+
+    with pytest.raises(EnergySystemFormatError, match="wildcards are not part of this vocabulary"):
+        NameRules.split_reference("pv_*.Output", "some.key", require_member=False)
+
+    # The exporter publishes the pattern itself, so the object stays shared, not copied.
+    assert NameRules.IDENTIFIER_PATTERN is NameSyntax.IDENTIFIER_PATTERN

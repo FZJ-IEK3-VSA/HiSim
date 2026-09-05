@@ -9,12 +9,11 @@ survives only in a conversation. Items are removed when done, not ticked and kep
 
 ## Missing deliverables (code)
 
-- [ ] **The golden-YAML gate (AC-P3.2, R3.1).** A blocking workflow `golden-yaml-check.yml` that runs
-  the golden setups *from their recorded twins* through `hisim energy-system run` against the unchanged
-  `golden_references/`. The stack ships the freshness gate and the hand-dispatched parity rig, but not
-  the blocking golden gate on the YAML path — and "golden suites green on recorded files" is P3's exit
-  criterion in the plan. Builds on `p3_recorded_fleet` (needs the twins); the week references for the
-  whole fleet come from the `golden_week_coverage` branch, so the gate covers 15 setups from day one.
+- [x] **The golden-YAML gate (AC-P3.2, R3.1) — shipped 2026-09-05 on `p3_recorded_fleet`.**
+  `golden-yaml-check.yml` runs the golden setups from their recorded twins through the executor
+  against the unchanged `golden_references/`, with the port-named EMS priority KPIs excluded on
+  both comparison sides by a declared pattern (`PORT_NAMED_KPIS`, unit-tested as load-bearing).
+  Merges with the stack; remove this entry once it is on main.
 - [x] **Golden coverage stage 2: the last two setups — complete, 22 of 22 (2026-09-05, pending
   merges).** A fresh scan showed five of the seven 2026-08-28 repair items healed themselves — the
   toys via #616's models-no-device answers, the heating-only and air-conditioner crashes gone, and
@@ -42,10 +41,10 @@ survives only in a conversation. Items are removed when done, not ticked and kep
   the 2026-09-02 amendment (two setups retired independently by #596, `air_conditioned_house` stays
   because #605 removed the cache wipe, the fleet is twenty-two) but the requirements doc still says all
   three are deleted and counts 21. Amend the three places.
-- [ ] **The rig's own files contradict R11.8.** `p3-parity.yml`'s header and `p3_parity_verdicts.py`'s
-  docstring still say "deleted in P3's last PR" and cite AC-P3.20; R11.8 was amended 2026-08-31 to move
-  the teardown to P6 and commit `403c8a34` updated the roadmap but not these two headers. Two-line fix
-  on `p3_parity_rig`.
+- [x] **The rig's own files contradict R11.8 — fixed 2026-09-05 on `p3_parity_rig`** (the #637
+  review round found all seven stale headers, not two): every rig file and the workflow now say
+  phase P6, the workflow's deletion list gained `p3_parity_verdicts.py`, and the coverage counts
+  read 22 setups / 44 triples. Remove this entry once #637 is on main.
 
 ## Decision needed (owner)
 

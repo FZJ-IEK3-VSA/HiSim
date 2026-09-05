@@ -44,7 +44,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SYSTEM_SETUPS_DIR = REPO_ROOT / "system_setups"
@@ -52,14 +52,18 @@ CONVERTER = REPO_ROOT / "hisim" / "hisim_convert_to_json.py"
 
 # When this file runs as a script, Python puts scripts/ on sys.path, not the repository root, so
 # "import hisim" would resolve to the installed package instead of this checkout. Add the root
-# first. When the module is imported as scripts.regenerate_scenario_jsons the root is already on
-# the path and this does nothing.
+# first, before anything imports hisim. When the module is imported as
+# scripts.regenerate_scenario_jsons the root is usually importable already; the insert is then
+# redundant but harmless.
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-# This import must come after the sys.path change above.
-# pylint: disable=wrong-import-position
-from hisim.components.pylpg_workspace import LpgBaseIndexPool  # noqa: E402
+# hisim.components.pylpg_workspace imports pylpg at module level, and pylpg is an optional
+# dependency that no requirements file declares. Importing it here would make even --help and
+# --dry-run fail in an environment without pylpg, so the runtime import is deferred to main();
+# this block never executes and exists only for the type checker.
+if TYPE_CHECKING:
+    from hisim.components.pylpg_workspace import LpgBaseIndexPool
 
 
 @dataclass
@@ -131,7 +135,7 @@ def regenerate_one(
     stem = setup_path.stem
     log_path = log_dir / f"{stem}.log"
     with index_pool.borrowed() as calc_index:
-        env = LpgBaseIndexPool.child_environment(calc_index)
+        env = index_pool.child_environment(calc_index)
         env["PYTHONPATH"] = os.pathsep.join(
             [str(REPO_ROOT), *([env["PYTHONPATH"]] if env.get("PYTHONPATH") else [])]
         )
@@ -207,6 +211,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     jobs = min(args.jobs, len(setups))
     print(f"\nUsing interpreter: {args.python}")
     print(f"Parallel jobs: {jobs}   Logs: {args.log_dir}\n")
+
+    # Deferred so that --help and --dry-run work without pylpg; see the TYPE_CHECKING note at the top.
+    from hisim.components.pylpg_workspace import LpgBaseIndexPool  # pylint: disable=import-outside-toplevel
 
     # Pool of distinct local-LPG base indices, one per concurrent worker slot.
     index_pool = LpgBaseIndexPool(jobs)

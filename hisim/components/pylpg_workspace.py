@@ -494,14 +494,19 @@ class LpgBaseIndexPool:
 
         pool = LpgBaseIndexPool(slots=4)
         with pool.borrowed() as base_index:
-            env = LpgBaseIndexPool.child_environment(base_index)
+            env = pool.child_environment(base_index)
             subprocess.run([...], env=env)
 
     Why small numbers instead of the process-id default of :meth:`PylpgWorkspace.default_base_index`:
-    they are easier to read in a log. ``C1`` to ``C4`` can be followed by eye; four process ids cannot.
+    they are easier to read in a log. The directories they lead to are easy to tell apart -- base
+    index 1 computes in ``C100``, 2 in ``C200`` and so on, because a base index is strided through
+    :meth:`PylpgWorkspace.calculation_index` before it names a directory -- where the directories of
+    four process ids cannot be told apart at a glance.
 
-    The pool is thread-safe (it is a ``queue.Queue``). It is not shared between processes; a script
-    that forks must create one pool per process.
+    The pool is thread-safe (it is a ``queue.Queue``). It is not shared between processes: a script
+    that forks must create one pool per process, and two independent drivers that each own a pool on
+    one machine hand out the same indices ``1`` to ``slots`` and collide. Runs that cannot coordinate
+    with each other must stay with the process-id default instead of using a pool.
     """
 
     def __init__(self, slots: int) -> None:
@@ -516,7 +521,6 @@ class LpgBaseIndexPool:
         """
         if slots < 1:
             raise ValueError(f"A pool needs at least one slot to lend from; {slots} were asked for.")
-        self.slots = slots
         self._available: "queue.Queue[int]" = queue.Queue()
         for index in range(1, slots + 1):
             self._available.put(index)

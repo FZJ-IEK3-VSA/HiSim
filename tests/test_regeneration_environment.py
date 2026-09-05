@@ -1,9 +1,18 @@
 """Tests for the environment the scenario-JSON regeneration passes to its subprocesses.
 
-The converter runs as a script, and for a script Python puts the script's directory on ``sys.path``,
-not the working directory. So ``import hisim`` in the child resolves to the installed package unless
-``PYTHONPATH`` names this checkout; in a git worktree that is a different checkout, and the regeneration
-then reports no drift against the wrong code. The first test pins the mechanism, the second the fix.
+The regeneration driver rebuilds every ``system_setups/*.py`` in a subprocess and then reports
+whether the committed ``.scenario.json`` files still match. That report is only worth having if
+each child ran *this* checkout's HiSim, and nothing about the way the child is started makes that
+true by itself: the converter is invoked as a script path, so Python seeds ``sys.path`` with the
+script's own directory (``scripts/``) rather than with the working directory, and the editable
+install's finder is then free to answer ``import hisim`` from whichever checkout happens to be
+installed. In a second checkout the driver would regenerate everything against the wrong tree and
+announce no drift -- a false all-clear, which is worse than a failure because nobody investigates
+it.
+
+The first test pins the mechanism, so that the reasoning above stays checkable rather than being a
+comment nobody can verify. The second pins the fix. The third pins the other half of the child's
+contract, the borrowed local-LPG base index. Each test states the failure mode it catches.
 """
 
 # clean
@@ -18,7 +27,7 @@ from typing import ClassVar, Dict, List
 
 import pytest
 
-from hisim.components.pylpg_workspace import LpgBaseIndexPool
+from hisim.components.pylpg_workspace import LpgBaseIndexPool, PylpgWorkspace
 from scripts.regenerate_scenario_jsons import REPO_ROOT, regenerate_one
 
 
@@ -148,3 +157,30 @@ def test_the_child_is_told_to_import_hisim_from_this_checkout(tmp_path: Path, mo
     entries = recorded.environments[0]["PYTHONPATH"].split(os.pathsep)
     assert entries[0] == str(REPO_ROOT), f"PYTHONPATH does not lead with the checkout: {entries}"
     assert "/somewhere/the/caller/cares/about" in entries, f"the caller's own entry was dropped: {entries}"
+
+
+@pytest.mark.base
+def test_the_child_is_handed_the_borrowed_base_index(tmp_path: Path, monkeypatch) -> None:
+    """The base index borrowed from the pool must arrive in the child's environment.
+
+    The pool and its ``child_environment`` are unit-tested on their own, but ``regenerate_one`` is
+    the only place that composes them, and only this test observes that composition: without it the
+    driver could stop borrowing, or hand every child the same constant, and no test would fail until
+    concurrent workers corrupted each other's ``pylpg/C<index>`` directories again.
+
+    Catches: a refactor of ``regenerate_one`` that drops or bypasses the borrow.
+    """
+    recorded = RecordedChild()
+    monkeypatch.setattr("scripts.regenerate_scenario_jsons.subprocess.run", recorded)
+
+    regenerate_one(
+        setup_path=REPO_ROOT / "system_setups" / "simple_system_setup_one.py",
+        python=sys.executable,
+        index_pool=LpgBaseIndexPool(slots=1),
+        log_dir=tmp_path,
+        keep_simulation_json=True,
+    )
+
+    assert len(recorded.environments) == 1
+    handed = recorded.environments[0].get(PylpgWorkspace.INDEX_ENVIRONMENT_VARIABLE)
+    assert handed == "1", f"the borrowed base index did not reach the child: {handed!r}"

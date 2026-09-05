@@ -472,10 +472,12 @@ def test_the_real_check_recognises_the_locked_database_in_the_log_and_the_retry_
 
 
 @pytest.mark.base
-def test_two_slots_borrowing_at_once_get_different_base_indices() -> None:
-    """Two concurrent borrowers never hold the same index.
+def test_two_borrows_held_at_the_same_time_get_different_base_indices() -> None:
+    """Two borrows held at the same time never share an index.
 
-    If they did, two HiSim processes would compute in the same ``pylpg/C<index>`` directory.
+    If they did, two HiSim processes would compute in the same ``pylpg/C<index>`` directory. Both
+    borrows happen on this one thread; that a second *thread* borrowing sees the same distinctness
+    is the standard library's ``queue.Queue`` guarantee, which a test here could not add to.
     """
     pool = LpgBaseIndexPool(slots=2)
 

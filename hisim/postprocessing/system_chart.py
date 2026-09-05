@@ -311,7 +311,9 @@ class SystemChart:
         if not isinstance(source_output, ComponentOutput):
             return None
         assert self.ppdt.results_cumulative is not None
-        output_cumulative_result = self.ppdt.results_cumulative.at[
+        # The unit is runtime-determined from source_output.unit and tracked
+        # separately in cumulative_unit; shown alongside the value in the label.
+        output_cumulative_result_value = self.ppdt.results_cumulative.at[
             0, source_output.get_pretty_name()
         ]
         output_unit = source_output.unit
@@ -322,6 +324,6 @@ class SystemChart:
             cumulative_unit = _cumulative_unit_for_sum(output_unit)
             aggregation_kind = "sum"
         return (
-            f": {round(output_cumulative_result, 3)} {cumulative_unit}"
+            f": {round(output_cumulative_result_value, 3)} {cumulative_unit}"
             f" ({aggregation_kind})"
         )

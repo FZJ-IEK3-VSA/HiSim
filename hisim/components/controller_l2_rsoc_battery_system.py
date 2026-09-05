@@ -30,7 +30,7 @@ class RsocBatteryControllerConfig(ConfigBase):
     """Configutation of the rSOC and Battery Controller."""
 
     @classmethod
-    def get_main_classname(cls):
+    def get_main_classname(cls) -> str:
         """Returns the full class name of the base class."""
         return RsocBatteryController.get_full_classname()
 
@@ -81,7 +81,7 @@ class RsocBatteryControllerConfig(ConfigBase):
         operation_mode: str,
         component_id: Optional[ComponentID] = None,
         config_data: dict[str, Any] | None = None,
-    ) -> Any:
+    ) -> "RsocBatteryControllerConfig":
         """Configure rsoc.
 
         When ``config_data`` is ``None`` the manufacturer config is read from
@@ -115,14 +115,14 @@ class RsocBatteryController(Component):
     """rSOC and Battery  Controller."""
 
     # Inputs
-    RESLoad = "RESLoad"
-    Demand = "Demand"
-    StateOfCharge = "StateOfCharge"
+    RESLoad: str = "RESLoad"
+    Demand: str = "Demand"
+    StateOfCharge: str = "StateOfCharge"
 
     # Outputs
-    PowerToBattery = "PowerToBattery"
-    PowerToSystem = "PowerToSystem"
-    Power = "Power"
+    PowerToBattery: str = "PowerToBattery"
+    PowerToSystem: str = "PowerToSystem"
+    Power: str = "Power"
 
     def __init__(
         self,
@@ -216,12 +216,12 @@ class RsocBatteryController(Component):
 
     def system_operation(
         self,
-        operation_mode,
-        power_delta_in_kw,
-        nom_power_in_kw,
-        min_power_in_kw,
-        max_power_in_kw,
-    ):
+        operation_mode: str,
+        power_delta_in_kw: float,
+        nom_power_in_kw: float,
+        min_power_in_kw: float,
+        max_power_in_kw: float,
+    ) -> tuple[float, float]:
         """System operation."""
 
         if operation_mode == "NominalLoad":

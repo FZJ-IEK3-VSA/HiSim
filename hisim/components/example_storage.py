@@ -18,44 +18,44 @@ from hisim import loadtypes as lt
 class ExampleStorageState:
     """A class to simulate the Example Storage State."""
 
-    def __init__(self, min_val: float, max_val: float) -> None:
+    def __init__(self, min_val_in_kwh: float, max_val_in_kwh: float) -> None:
         """Constructs all the neccessary attributes for the ExampleStorage object."""
 
-        self.fill: float = 0
-        self.max_val: float = max_val
-        self.min_val: float = min_val
+        self.fill_in_kwh: float = 0
+        self.max_val_in_kwh: float = max_val_in_kwh
+        self.min_val_in_kwh: float = min_val_in_kwh
 
-    def store(self, val: float) -> float:
+    def store(self, val_in_kwh: float) -> float:
         """Returns how much is put in the storage."""
 
-        if self.fill + val < self.max_val:
+        if self.fill_in_kwh + val_in_kwh < self.max_val_in_kwh:
             # fits completely
-            self.fill += val
-            return val
-        if self.fill >= self.max_val:
+            self.fill_in_kwh += val_in_kwh
+            return val_in_kwh
+        if self.fill_in_kwh >= self.max_val_in_kwh:
             # full
             return 0
-        if self.fill < self.max_val:
+        if self.fill_in_kwh < self.max_val_in_kwh:
             # fits partially
-            amount = self.max_val - self.fill
-            self.fill += amount
+            amount = self.max_val_in_kwh - self.fill_in_kwh
+            self.fill_in_kwh += amount
             return amount
         raise ValueError("forgotten case")
 
-    def withdraw(self, val: float) -> float:
+    def withdraw(self, val_in_kwh: float) -> float:
         """Returns how much is taken out of the storage."""
 
-        if self.fill > val:
+        if self.fill_in_kwh > val_in_kwh:
             # has enough
-            self.fill -= val
-            return val
-        if self.fill <= self.min_val:
+            self.fill_in_kwh -= val_in_kwh
+            return val_in_kwh
+        if self.fill_in_kwh <= self.min_val_in_kwh:
             # empty
             return 0
-        if self.fill < val:
+        if self.fill_in_kwh < val_in_kwh:
             # fits partially
-            amount = self.fill
-            self.fill = 0
+            amount = self.fill_in_kwh
+            self.fill_in_kwh = 0
             return amount
         raise ValueError("forgotten case")
 
@@ -73,7 +73,7 @@ class SimpleStorageConfig(ConfigBase):
     component_id: ComponentID
     loadtype: lt.LoadTypes
     unit: lt.Units
-    capacity: float
+    capacity_in_kwh: float
 
     @classmethod
     def get_default_thermal_storage(
@@ -87,7 +87,7 @@ class SimpleStorageConfig(ConfigBase):
             component_id=component_id,
             loadtype=lt.LoadTypes.WARM_WATER,
             unit=lt.Units.KWH,
-            capacity=50,
+            capacity_in_kwh=50,
         )
 
 
@@ -120,8 +120,8 @@ class SimpleStorage(Component):
             my_display_config=my_display_config,
         )
         # Initialized variables
-        self.state: ExampleStorageState = ExampleStorageState(0, self.simplestorageconfig.capacity)
-        self.capacity: float = self.simplestorageconfig.capacity
+        self.state: ExampleStorageState = ExampleStorageState(0, self.simplestorageconfig.capacity_in_kwh)
+        self.capacity_in_kwh: float = self.simplestorageconfig.capacity_in_kwh
         self.previous_state: ExampleStorageState = copy.copy(self.state)
 
         self.charging_input: ComponentInput = self.add_input(
@@ -171,16 +171,16 @@ class SimpleStorage(Component):
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the storage."""
 
-        charging = stsv.get_input_value(self.charging_input)
-        discharging = stsv.get_input_value(self.discharging_input)
-        if charging < 0:
-            raise ValueError("trying to charge with negative amount" + str(charging))
-        if discharging > 0:
-            raise ValueError("trying to discharge with positive amount: " + str(discharging))
-        charging_delta = self.state.store(charging)
-        discharging_delta = self.state.withdraw(discharging * -1) * -1
-        actual_delta = charging_delta + discharging_delta
-        stsv.set_output_value(self.actual_delta, actual_delta)
-        stsv.set_output_value(self.current_fill, self.state.fill)
-        percent_fill = self.state.fill / self.capacity
+        charging_in_kwh = stsv.get_input_value(self.charging_input)
+        discharging_in_kwh = stsv.get_input_value(self.discharging_input)
+        if charging_in_kwh < 0:
+            raise ValueError("trying to charge with negative amount" + str(charging_in_kwh))
+        if discharging_in_kwh > 0:
+            raise ValueError("trying to discharge with positive amount: " + str(discharging_in_kwh))
+        charging_delta_in_kwh = self.state.store(charging_in_kwh)
+        discharging_delta_in_kwh = self.state.withdraw(discharging_in_kwh * -1) * -1
+        actual_delta_in_kwh = charging_delta_in_kwh + discharging_delta_in_kwh
+        stsv.set_output_value(self.actual_delta, actual_delta_in_kwh)
+        stsv.set_output_value(self.current_fill, self.state.fill_in_kwh)
+        percent_fill = self.state.fill_in_kwh / self.capacity_in_kwh
         stsv.set_output_value(self.current_fill_percent, percent_fill)

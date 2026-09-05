@@ -21,8 +21,10 @@ class SumBuilderConfig(ConfigBase):
     ``loadtype`` and ``unit`` define the physical quantity and its unit for
     every input and the single output of the sum-builder.  Because the unit is
     chosen at runtime (default ``lt.Units.ANY``), the local variables inside
-    ``i_simulate`` (``val1``, ``val2``, ``val3``, ``total``) carry values in
-    ``unit`` but do not encode it in their names.  ``config.unit`` is the
+    ``i_simulate`` (``val1_in_config_unit``, ``val2_in_config_unit``,
+    ``val3_in_config_unit``, ``total_in_config_unit``) use the
+    ``_in_config_unit`` suffix to document that they carry values in ``unit``
+    rather than encoding a concrete unit.  ``config.unit`` is the
     single source of truth for the unit of all values; the framework enforces
     consistency between connected ``ComponentInput`` and ``ComponentOutput``
     units during wiring (see ``ComponentWrapper.connect_inputs``).
@@ -125,27 +127,28 @@ class CalculateOperation(cp.Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates.
 
-        ``val1`` (each input value) and ``total`` (the running result) carry
-        values in ``self.config.unit`` — the single source of truth for the
-        physical unit.  The unit is runtime-determined, so it is not encoded
-        in the variable names.
+        ``val1_in_config_unit`` (each input value) and ``total_in_config_unit``
+        (the running result) carry values in ``self.config.unit`` — the
+        single source of truth for the physical unit.  The unit is
+        runtime-determined, so the variable names use the ``_in_config_unit``
+        suffix instead of a concrete unit.
         """
-        total: float = 0
+        total_in_config_unit: float = 0
         for index, input_channel in enumerate(self.inputs):
-            val1 = stsv.get_input_value(input_channel)
+            val1_in_config_unit = stsv.get_input_value(input_channel)
             if index == 0:
-                total = val1
+                total_in_config_unit = val1_in_config_unit
             elif self.operations[index - 1] == "Sum":
-                total = total + val1
+                total_in_config_unit = total_in_config_unit + val1_in_config_unit
             elif self.operations[index - 1] == "Subtract":
-                total = total - val1
+                total_in_config_unit = total_in_config_unit - val1_in_config_unit
             elif self.operations[index - 1] == "Multiply":
-                total = total * val1
+                total_in_config_unit = total_in_config_unit * val1_in_config_unit
             elif self.operations[index - 1] == "Divide":
-                total = total / val1
+                total_in_config_unit = total_in_config_unit / val1_in_config_unit
             else:
                 raise ValueError("Operation invalid!")
-        stsv.set_output_value(self.output1, total)
+        stsv.set_output_value(self.output1, total_in_config_unit)
 
 
 class SumBuilderForTwoInputs(Component):
@@ -220,13 +223,14 @@ class SumBuilderForTwoInputs(Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Adds the two values.
 
-        ``val1`` and ``val2`` carry values in ``self.config.unit`` — the single
-        source of truth for the physical unit.  The unit is runtime-determined,
-        so it is not encoded in the variable names.
+        ``val1_in_config_unit`` and ``val2_in_config_unit`` carry values in
+        ``self.config.unit`` — the single source of truth for the physical
+        unit.  The unit is runtime-determined, so the variable names use the
+        ``_in_config_unit`` suffix instead of a concrete unit.
         """
-        val1 = stsv.get_input_value(self.input1)
-        val2 = stsv.get_input_value(self.input2)
-        stsv.set_output_value(self.output1, val1 + val2)
+        val1_in_config_unit = stsv.get_input_value(self.input1)
+        val2_in_config_unit = stsv.get_input_value(self.input2)
+        stsv.set_output_value(self.output1, val1_in_config_unit + val2_in_config_unit)
 
     def write_to_report(self) -> List[str]:
         """Writes information to the report."""
@@ -309,11 +313,13 @@ class SumBuilderForThreeInputs(Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Performs the addition of the values.
 
-        ``val1``, ``val2`` and ``val3`` carry values in ``self.config.unit`` —
-        the single source of truth for the physical unit.  The unit is
-        runtime-determined, so it is not encoded in the variable names.
+        ``val1_in_config_unit``, ``val2_in_config_unit`` and
+        ``val3_in_config_unit`` carry values in ``self.config.unit`` — the
+        single source of truth for the physical unit.  The unit is
+        runtime-determined, so the variable names use the ``_in_config_unit``
+        suffix instead of a concrete unit.
         """
-        val1 = stsv.get_input_value(self.input1)
-        val2 = stsv.get_input_value(self.input2)
-        val3 = stsv.get_input_value(self.input3)
-        stsv.set_output_value(self.output1, val1 + val2 + val3)
+        val1_in_config_unit = stsv.get_input_value(self.input1)
+        val2_in_config_unit = stsv.get_input_value(self.input2)
+        val3_in_config_unit = stsv.get_input_value(self.input3)
+        stsv.set_output_value(self.output1, val1_in_config_unit + val2_in_config_unit + val3_in_config_unit)

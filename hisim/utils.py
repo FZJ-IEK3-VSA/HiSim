@@ -472,9 +472,9 @@ def measure_execution_time(my_function):  # noqa
         start = timer()
         result = my_function(*args, **kwargs)
         end = timer()
-        diff = end - start
+        diff_in_s = end - start
         log.profile(
-            "Executing " + my_function.__module__ + "." + my_function.__name__ + " took " + f"{diff:1.2f}" + " seconds"
+            "Executing " + my_function.__module__ + "." + my_function.__name__ + " took " + f"{diff_in_s:1.2f}" + " seconds"
         )
         return result
 

@@ -53,11 +53,11 @@ class WindturbineConfig(ConfigBase):
     # Typename of the wind turbine.
     turbine_type: str
     # Hub height of the wind turbine in m.
-    hub_height: Optional[float]
+    hub_height_in_m: Optional[float]
     # The nominal output of the wind turbine in W
-    nominal_power: Optional[float]
+    nominal_power_in_watt: Optional[float]
     # Diameter of the rotor in m
-    rotor_diameter: Optional[float]
+    rotor_diameter_in_m: Optional[float]
     # Power coefficient curve of the wind turbine
     power_coefficient_curve: None
     # Power curve of the wind turbine.
@@ -71,11 +71,11 @@ class WindturbineConfig(ConfigBase):
     # Defines which model is used to calculate the turbine power output.
     power_output_model: str
     density_correction: bool
-    obstacle_height: float
-    measuring_height_wind_speed: float
-    measuring_height_temperature: float
-    measuring_height_pressure: float
-    measuring_height_roughness_length: float
+    obstacle_height_in_m: float
+    measuring_height_wind_speed_in_m: float
+    measuring_height_temperature_in_m: float
+    measuring_height_pressure_in_m: float
+    measuring_height_roughness_length_in_m: float
     hellman_exp: float
 
     source_weight: int
@@ -102,9 +102,9 @@ class WindturbineConfig(ConfigBase):
         return WindturbineConfig(
             component_id=component_id,
             turbine_type="V126/3300",
-            hub_height=137,
-            nominal_power=None,
-            rotor_diameter=126,
+            hub_height_in_m=137,
+            nominal_power_in_watt=None,
+            rotor_diameter_in_m=126,
             power_coefficient_curve=None,
             power_curve=None,
             wind_speed_model="logarithmic",  # 'logarithmic' ,'hellman', 'interpolation_extrapolation' , 'log_interpolation_extrapolation'
@@ -112,11 +112,11 @@ class WindturbineConfig(ConfigBase):
             density_model="barometric",  # 'barometric','ideal_gas','interpolation_extrapolation'
             power_output_model="power_curve",  # power_curve','power_coefficient_curve'
             density_correction=False,
-            obstacle_height=0,
-            measuring_height_wind_speed=10,
-            measuring_height_temperature=2,
-            measuring_height_pressure=125,
-            measuring_height_roughness_length=0,
+            obstacle_height_in_m=0,
+            measuring_height_wind_speed_in_m=10,
+            measuring_height_temperature_in_m=2,
+            measuring_height_pressure_in_m=125,
+            measuring_height_roughness_length_in_m=0,
             hellman_exp=0,  # This parameter is only used if the parameter `wind_speed_model` is 'hellman'.
             source_weight=999,
             device_co2_footprint_in_kg=0,
@@ -166,32 +166,32 @@ class Windturbine(cp.Component):
         self.calculation_cache: Dict = {}
 
         self.turbine_type = self.windturbineconfig.turbine_type
-        self.hub_height = self.windturbineconfig.hub_height
-        self.rotor_diameter = self.windturbineconfig.rotor_diameter
+        self.hub_height_in_m = self.windturbineconfig.hub_height_in_m
+        self.rotor_diameter_in_m = self.windturbineconfig.rotor_diameter_in_m
         self.power_coefficient_curve = self.windturbineconfig.power_coefficient_curve
         self.power_curve = self.windturbineconfig.power_curve
-        self.nominal_power = self.windturbineconfig.nominal_power
+        self.nominal_power_in_watt = self.windturbineconfig.nominal_power_in_watt
 
         self.wind_speed_model = self.windturbineconfig.wind_speed_model
         self.temperature_model = self.windturbineconfig.temperature_model
         self.density_model = self.windturbineconfig.density_model
         self.power_output_model = self.windturbineconfig.power_output_model
         self.density_correction = self.windturbineconfig.density_correction
-        self.obstacle_height = self.windturbineconfig.obstacle_height
-        self.measuring_height_wind_speed = self.windturbineconfig.measuring_height_wind_speed
-        self.measuring_height_temperature = self.windturbineconfig.measuring_height_temperature
-        self.measuring_height_pressure = self.windturbineconfig.measuring_height_pressure
-        self.measuring_height_roughness_length = self.windturbineconfig.measuring_height_roughness_length
+        self.obstacle_height_in_m = self.windturbineconfig.obstacle_height_in_m
+        self.measuring_height_wind_speed_in_m = self.windturbineconfig.measuring_height_wind_speed_in_m
+        self.measuring_height_temperature_in_m = self.windturbineconfig.measuring_height_temperature_in_m
+        self.measuring_height_pressure_in_m = self.windturbineconfig.measuring_height_pressure_in_m
+        self.measuring_height_roughness_length_in_m = self.windturbineconfig.measuring_height_roughness_length_in_m
         self.hellman_exp = self.windturbineconfig.hellman_exp
 
         # Inistialisieren Windkraftanlage
         self.windturbine_module = WindTurbine(
-            hub_height=self.hub_height,
-            nominal_power=self.nominal_power,
+            hub_height=self.hub_height_in_m,
+            nominal_power=self.nominal_power_in_watt,
             path="oedb",
             power_curve=self.power_curve,
             power_coefficient_curve=self.power_coefficient_curve,
-            rotor_diameter=self.rotor_diameter,
+            rotor_diameter=self.rotor_diameter_in_m,
             turbine_type=self.turbine_type,
         )
 
@@ -203,7 +203,7 @@ class Windturbine(cp.Component):
             density_model=self.density_model,
             power_output_model=self.power_output_model,
             density_correction=self.density_correction,
-            obstacle_height=self.obstacle_height,
+            obstacle_height=self.obstacle_height_in_m,
             hellman_exp=self.hellman_exp,
         )
 
@@ -333,10 +333,10 @@ class Windturbine(cp.Component):
             np.array(["wind_speed", "temperature", "pressure", "roughness_length"]),
             np.array(
                 [
-                    self.measuring_height_wind_speed,
-                    self.measuring_height_temperature,
-                    self.measuring_height_pressure,
-                    self.measuring_height_roughness_length,
+                    self.measuring_height_wind_speed_in_m,
+                    self.measuring_height_temperature_in_m,
+                    self.measuring_height_pressure_in_m,
+                    self.measuring_height_roughness_length_in_m,
                 ]
             ),
         ]
@@ -368,10 +368,10 @@ class Windturbine(cp.Component):
     def get_cost_capex(config: WindturbineConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         seconds_per_year = 365 * 24 * 60 * 60
-        capex_per_simulated_period = (config.investment_costs_in_euro / config.lifetime_in_years) * (
+        capex_per_simulated_period_in_euro = (config.investment_costs_in_euro / config.lifetime_in_years) * (
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
-        device_co2_footprint_per_simulated_period = (config.device_co2_footprint_in_kg / config.lifetime_in_years) * (
+        device_co2_footprint_per_simulated_period_in_kg = (config.device_co2_footprint_in_kg / config.lifetime_in_years) * (
             simulation_parameters.duration.total_seconds() / seconds_per_year
         )
 
@@ -379,8 +379,8 @@ class Windturbine(cp.Component):
             capex_investment_cost_in_euro=config.investment_costs_in_euro,
             device_co2_footprint_in_kg=config.device_co2_footprint_in_kg,
             lifetime_in_years=config.lifetime_in_years,
-            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
-            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period_in_euro,
+            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period_in_kg,
             kpi_tag=KpiTagEnumClass.WINDTURBINE
         )
         return capex_cost_data_class

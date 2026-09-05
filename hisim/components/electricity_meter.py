@@ -723,8 +723,8 @@ class ElectricityMeter(DynamicComponent):
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         total_energy_from_grid_in_kwh: float
         total_energy_to_grid_in_kwh: float
-        total_power_from_grid_in_watt: float
-        total_power_to_grid_in_watt: float
+        total_power_from_grid_in_kw: float
+        total_power_to_grid_in_kw: float
 
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
@@ -734,19 +734,19 @@ class ElectricityMeter(DynamicComponent):
                 elif output.field_name == self.ElectricityToGrid:
                     total_energy_to_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
                 elif output.field_name == self.ElectricityFromGridInWatt:
-                    total_power_from_grid_in_watt = postprocessing_results.iloc[:, index] * 1e-3
+                    total_power_from_grid_in_kw = postprocessing_results.iloc[:, index] * 1e-3
                 elif output.field_name == self.ElectricityToGridInWatt:
-                    total_power_to_grid_in_watt = postprocessing_results.iloc[:, index] * 1e-3
+                    total_power_to_grid_in_kw = postprocessing_results.iloc[:, index] * 1e-3
 
-        (mean_total_power_from_grid_in_watt,
-        max_total_power_from_grid_in_watt,
-        min_total_power_from_grid_in_watt,
-         ) = KpiHelperClass.compute_mean_max_min_values(list_or_pandas_series=total_power_from_grid_in_watt)
+        (mean_total_power_from_grid_in_kw,
+        max_total_power_from_grid_in_kw,
+        min_total_power_from_grid_in_kw,
+         ) = KpiHelperClass.compute_mean_max_min_values(list_or_pandas_series=total_power_from_grid_in_kw)
 
-        (mean_total_power_to_grid_in_watt,
-        max_total_power_to_grid_in_watt,
-        min_total_power_to_grid_in_watt,
-         ) = KpiHelperClass.compute_mean_max_min_values(list_or_pandas_series=total_power_to_grid_in_watt)
+        (mean_total_power_to_grid_in_kw,
+        max_total_power_to_grid_in_kw,
+        min_total_power_to_grid_in_kw,
+         ) = KpiHelperClass.compute_mean_max_min_values(list_or_pandas_series=total_power_to_grid_in_kw)
 
         total_energy_from_grid_in_kwh_entry = KpiEntry(
             name="Total energy from grid",
@@ -766,59 +766,59 @@ class ElectricityMeter(DynamicComponent):
         )
         list_of_kpi_entries.append(total_energy_to_grid_in_kwh_entry)
 
-        mean_total_power_from_grid_in_watt_entry = KpiEntry(
+        mean_total_power_from_grid_in_kw_entry = KpiEntry(
             name="Mean power from grid",
             unit="kW",
-            value=mean_total_power_from_grid_in_watt,
+            value=mean_total_power_from_grid_in_kw,
             tag=KpiTagEnumClass.ELECTRICITY_METER,
             description=self.component_name,
         )
-        list_of_kpi_entries.append(mean_total_power_from_grid_in_watt_entry)
+        list_of_kpi_entries.append(mean_total_power_from_grid_in_kw_entry)
 
-        max_total_power_from_grid_in_watt_entry = KpiEntry(
+        max_total_power_from_grid_in_kw_entry = KpiEntry(
             name="Max power from grid",
             unit="kW",
-            value=max_total_power_from_grid_in_watt,
+            value=max_total_power_from_grid_in_kw,
             tag=KpiTagEnumClass.ELECTRICITY_METER,
             description=self.component_name,
         )
-        list_of_kpi_entries.append(max_total_power_from_grid_in_watt_entry)
+        list_of_kpi_entries.append(max_total_power_from_grid_in_kw_entry)
 
-        min_total_power_from_grid_in_watt_entry = KpiEntry(
+        min_total_power_from_grid_in_kw_entry = KpiEntry(
             name="Min power from grid",
             unit="kW",
-            value=min_total_power_from_grid_in_watt,
+            value=min_total_power_from_grid_in_kw,
             tag=KpiTagEnumClass.ELECTRICITY_METER,
             description=self.component_name,
         )
-        list_of_kpi_entries.append(min_total_power_from_grid_in_watt_entry)
+        list_of_kpi_entries.append(min_total_power_from_grid_in_kw_entry)
 
-        mean_total_power_to_grid_in_watt_entry = KpiEntry(
+        mean_total_power_to_grid_in_kw_entry = KpiEntry(
             name="Mean power to grid",
             unit="kW",
-            value=mean_total_power_to_grid_in_watt,
+            value=mean_total_power_to_grid_in_kw,
             tag=KpiTagEnumClass.ELECTRICITY_METER,
             description=self.component_name,
         )
-        list_of_kpi_entries.append(mean_total_power_to_grid_in_watt_entry)
+        list_of_kpi_entries.append(mean_total_power_to_grid_in_kw_entry)
 
-        max_total_power_to_grid_in_watt_entry = KpiEntry(
+        max_total_power_to_grid_in_kw_entry = KpiEntry(
             name="Max power to grid",
             unit="kW",
-            value=max_total_power_to_grid_in_watt,
+            value=max_total_power_to_grid_in_kw,
             tag=KpiTagEnumClass.ELECTRICITY_METER,
             description=self.component_name,
         )
-        list_of_kpi_entries.append(max_total_power_to_grid_in_watt_entry)
+        list_of_kpi_entries.append(max_total_power_to_grid_in_kw_entry)
 
-        min_total_power_to_grid_in_watt_entry = KpiEntry(
+        min_total_power_to_grid_in_kw_entry = KpiEntry(
             name="Min power to grid",
             unit="kW",
-            value=min_total_power_to_grid_in_watt,
+            value=min_total_power_to_grid_in_kw,
             tag=KpiTagEnumClass.ELECTRICITY_METER,
             description=self.component_name,
         )
-        list_of_kpi_entries.append(min_total_power_to_grid_in_watt_entry)
+        list_of_kpi_entries.append(min_total_power_to_grid_in_kw_entry)
 
         # get opex costs
         opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)

@@ -59,30 +59,30 @@ class PIDState:
 
     def __init__(
         self,
-        integrator: float,
-        derivator: float,
-        integrator_d3: float,
-        integrator_d4: float,
-        integrator_d5: float,
-        manipulated_variable: float,
+        integrator_in_celsius: float,
+        derivator_in_celsius: float,
+        integrator_d3_in_celsius: float,
+        integrator_d4_in_celsius: float,
+        integrator_d5_in_celsius: float,
+        manipulated_variable_in_watt: float,
     ) -> None:
         """Initializes the state of the PID."""
-        self.integrator: float = integrator
-        self.derivator: float = derivator
-        self.integrator_d_three: float = integrator_d3
-        self.integrator_d_four: float = integrator_d4
-        self.integrator_d_five: float = integrator_d5
-        self.manipulated_variable: float = manipulated_variable
+        self.integrator_in_celsius: float = integrator_in_celsius
+        self.derivator_in_celsius: float = derivator_in_celsius
+        self.integrator_d_three_in_celsius: float = integrator_d3_in_celsius
+        self.integrator_d_four_in_celsius: float = integrator_d4_in_celsius
+        self.integrator_d_five_in_celsius: float = integrator_d5_in_celsius
+        self.manipulated_variable_in_watt: float = manipulated_variable_in_watt
 
     def clone(self) -> "PIDState":
         """Storing last timestep errors."""
         return PIDState(
-            self.integrator,
-            self.derivator,
-            self.integrator_d_three,
-            self.integrator_d_four,
-            self.integrator_d_five,
-            self.manipulated_variable,
+            self.integrator_in_celsius,
+            self.derivator_in_celsius,
+            self.integrator_d_three_in_celsius,
+            self.integrator_d_four_in_celsius,
+            self.integrator_d_five_in_celsius,
+            self.manipulated_variable_in_watt,
         )
 
 
@@ -101,31 +101,31 @@ class BuildingThermalModel5R1C:
 
     def __init__(
         self,
-        h_tr_w: float,
-        h_tr_ms: float,
-        h_tr_em: float,
-        h_ve_adj: float,
-        h_tr_is: float,
-        c_m: float,
+        h_tr_w_in_watt_per_kelvin: float,
+        h_tr_ms_in_watt_per_kelvin: float,
+        h_tr_em_in_watt_per_kelvin: float,
+        h_ve_adj_in_watt_per_kelvin: float,
+        h_tr_is_in_watt_per_kelvin: float,
+        c_m_in_joule_per_kelvin: float,
         seconds_per_timestep: float,
     ) -> None:
         """Initializes the 5R1C thermal model and identifies its open-loop gains."""
-        self.h_tr_w: float = h_tr_w
-        self.h_tr_ms: float = h_tr_ms
-        self.h_tr_em: float = h_tr_em
-        self.h_ve_adj: float = h_ve_adj
-        self.h_tr_is: float = h_tr_is
-        self.c_m: float = c_m
+        self.h_tr_w_in_watt_per_kelvin: float = h_tr_w_in_watt_per_kelvin
+        self.h_tr_ms_in_watt_per_kelvin: float = h_tr_ms_in_watt_per_kelvin
+        self.h_tr_em_in_watt_per_kelvin: float = h_tr_em_in_watt_per_kelvin
+        self.h_ve_adj_in_watt_per_kelvin: float = h_ve_adj_in_watt_per_kelvin
+        self.h_tr_is_in_watt_per_kelvin: float = h_tr_is_in_watt_per_kelvin
+        self.c_m_in_joule_per_kelvin: float = c_m_in_joule_per_kelvin
         self.seconds_per_timestep: float = seconds_per_timestep
         # Derived state-space and open-loop quantities (populated by identify()).
         self.transition_matrix: np.ndarray
         self.selection_matrix: np.ndarray
-        self.process_gain: float
-        self.t_out_gain: float
-        self.phi_ia_gain: float
-        self.phi_st_gain: float
-        self.phi_m_gain: float
-        self.time_constant: float
+        self.process_gain_in_kelvin_per_watt: float
+        self.t_out_gain_dimensionless: float
+        self.phi_ia_gain_in_kelvin_per_watt: float
+        self.phi_st_gain_in_kelvin_per_watt: float
+        self.phi_m_gain_in_kelvin_per_watt: float
+        self.time_constant_in_seconds: float
         self.identify()
 
     @classmethod
@@ -133,12 +133,12 @@ class BuildingThermalModel5R1C:
         """Reads the 5R1C thermal coefficients from the singleton simulation repository."""
         repo = SingletonSimRepository()
         return cls(
-            h_tr_w=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING),
-            h_tr_ms=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS),
-            h_tr_em=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM),
-            h_ve_adj=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION),
-            h_tr_is=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR),
-            c_m=repo.get_entry(key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE),
+            h_tr_w_in_watt_per_kelvin=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING),
+            h_tr_ms_in_watt_per_kelvin=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS),
+            h_tr_em_in_watt_per_kelvin=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM),
+            h_ve_adj_in_watt_per_kelvin=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION),
+            h_tr_is_in_watt_per_kelvin=repo.get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR),
+            c_m_in_joule_per_kelvin=repo.get_entry(key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE),
             seconds_per_timestep=seconds_per_timestep,
         )
 
@@ -151,20 +151,45 @@ class BuildingThermalModel5R1C:
         thermal model parameters or timestep change.
         """
         seconds_per_timestep = self.seconds_per_timestep
-        x_value = ((self.h_tr_w + self.h_tr_ms) * (self.h_ve_adj + self.h_tr_is)) + (self.h_ve_adj * self.h_tr_is)
-        a11 = (((self.h_tr_ms**2) * (self.h_tr_is + self.h_ve_adj) / x_value) - self.h_tr_ms - self.h_tr_em) / (
-            self.c_m / seconds_per_timestep
+        x_value = (
+            (self.h_tr_w_in_watt_per_kelvin + self.h_tr_ms_in_watt_per_kelvin)
+            * (self.h_ve_adj_in_watt_per_kelvin + self.h_tr_is_in_watt_per_kelvin)
+        ) + (self.h_ve_adj_in_watt_per_kelvin * self.h_tr_is_in_watt_per_kelvin)
+        a11 = (
+            (
+                (self.h_tr_ms_in_watt_per_kelvin**2)
+                * (self.h_tr_is_in_watt_per_kelvin + self.h_ve_adj_in_watt_per_kelvin)
+                / x_value
+            )
+            - self.h_tr_ms_in_watt_per_kelvin
+            - self.h_tr_em_in_watt_per_kelvin
+        ) / (
+            self.c_m_in_joule_per_kelvin / seconds_per_timestep
         )  # ((self.c_m_ref * self.A_f) * 3600)
 
-        b11 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * x_value)
-
-        b_d11 = ((self.h_tr_ms * self.h_tr_w * (self.h_tr_is + self.h_ve_adj) / x_value) + self.h_tr_em) / (
-            self.c_m / seconds_per_timestep
+        b11 = (self.h_tr_ms_in_watt_per_kelvin * self.h_tr_is_in_watt_per_kelvin) / (
+            (self.c_m_in_joule_per_kelvin / seconds_per_timestep) * x_value
         )
-        b_d12 = (self.h_tr_ms * self.h_tr_is * self.h_ve_adj) / ((self.c_m / seconds_per_timestep) * x_value)
-        b_d13 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * x_value)
-        b_d14 = (self.h_tr_ms * (self.h_tr_is + self.h_ve_adj)) / ((self.c_m / seconds_per_timestep) * x_value)
-        b_d15 = 1 / (self.c_m / seconds_per_timestep)
+
+        b_d11 = (
+            (
+                self.h_tr_ms_in_watt_per_kelvin
+                * self.h_tr_w_in_watt_per_kelvin
+                * (self.h_tr_is_in_watt_per_kelvin + self.h_ve_adj_in_watt_per_kelvin)
+                / x_value
+            )
+            + self.h_tr_em_in_watt_per_kelvin
+        ) / (self.c_m_in_joule_per_kelvin / seconds_per_timestep)
+        b_d12 = (self.h_tr_ms_in_watt_per_kelvin * self.h_tr_is_in_watt_per_kelvin * self.h_ve_adj_in_watt_per_kelvin) / (
+            (self.c_m_in_joule_per_kelvin / seconds_per_timestep) * x_value
+        )
+        b_d13 = (self.h_tr_ms_in_watt_per_kelvin * self.h_tr_is_in_watt_per_kelvin) / (
+            (self.c_m_in_joule_per_kelvin / seconds_per_timestep) * x_value
+        )
+        b_d14 = (self.h_tr_ms_in_watt_per_kelvin * (self.h_tr_is_in_watt_per_kelvin + self.h_ve_adj_in_watt_per_kelvin)) / (
+            (self.c_m_in_joule_per_kelvin / seconds_per_timestep) * x_value
+        )
+        b_d15 = 1 / (self.c_m_in_joule_per_kelvin / seconds_per_timestep)
 
         """ #comment out due to pylint warning W0612 (unused-variable)
         c11=(self.h_tr_ms*self.h_tr_is)/X
@@ -210,12 +235,12 @@ class BuildingThermalModel5R1C:
         time_interval_ns = 20000
         time_scale = np.linspace(0, time_interval_ns, time_interval_ns + 1)
         # input step signal
-        input_step_signal = np.zeros(time_interval_ns + 1)
+        input_step_signal_in_watt = np.zeros(time_interval_ns + 1)
         for i in range(time_interval_ns):
             if i == 0:
-                input_step_signal = 0 * np.ones(time_interval_ns + 1)
+                input_step_signal_in_watt = 0 * np.ones(time_interval_ns + 1)
             else:
-                input_step_signal = 22 * np.ones(time_interval_ns + 1)
+                input_step_signal_in_watt = 22 * np.ones(time_interval_ns + 1)
 
         """ Converting the state space model into transfer function.
         We have one state variable wich is the thermal mass temperature and 6 inputs...
@@ -225,19 +250,19 @@ class BuildingThermalModel5R1C:
         # transfer function:
         tf_tm = control.TransferFunction([selection_matrix[0, 0]], [1, -(transition_matrix[0, 0])])
 
-        # open loop step response:
-        # timestep_tm_o, tm_o = control.forced_response(tf_tm, t, u)
-        _, tm_o = control.forced_response(tf_tm, time_scale, input_step_signal)
+        # open loop step response (tm_o_in_kelvin is the thermal-mass temperature response in K):
+        # timestep_tm_o, tm_o_in_kelvin = control.forced_response(tf_tm, t, u)
+        _, tm_o_in_kelvin = control.forced_response(tf_tm, time_scale, input_step_signal_in_watt)
         # save 'timestep_tm_o' in dummy variable due to pylint warning W0612 (unused-variable)
         # since function 'control.forced_response' can only be used with a return value with a tuple of length 2
         # dummy1 = timestep_tm_o
 
         # steady state value:
-        tm_steady_state = tm_o[time_interval_ns]
+        tm_steady_state_in_kelvin = tm_o_in_kelvin[time_interval_ns]
 
         # time constant "value at 63.2%" :
-        t_m_initial = 0
-        tm_at_tau = t_m_initial - 0.632 * (t_m_initial - tm_steady_state)
+        t_m_initial_in_kelvin = 0
+        tm_at_tau_in_kelvin = t_m_initial_in_kelvin - 0.632 * (t_m_initial_in_kelvin - tm_steady_state_in_kelvin)
 
         # find time constant tau_p
 
@@ -246,13 +271,13 @@ class BuildingThermalModel5R1C:
             idx = (np.abs(array - value)).argmin()
             return float(array[idx])
 
-        tm_at_tau_tf_tm = find_nearest(tm_o, tm_at_tau)
-        time_constant_tm = 0
+        tm_at_tau_tf_tm_in_kelvin = find_nearest(tm_o_in_kelvin, tm_at_tau_in_kelvin)
+        time_constant_in_seconds = 0
         for i in range(time_interval_ns):
-            if tm_o[i] == tm_at_tau_tf_tm:
-                time_constant_tm = i
+            if tm_o_in_kelvin[i] == tm_at_tau_tf_tm_in_kelvin:
+                time_constant_in_seconds = i
 
-        return time_constant_tm
+        return time_constant_in_seconds
 
     def identify(self) -> None:
         """Builds the state-space model and derives the open-loop gains and time constant."""
@@ -261,17 +286,17 @@ class BuildingThermalModel5R1C:
         """ Gains of the uncontrolled systems, used for feedforward implementation """
 
         # Tm(s)/Pth(s)= K/Ts+1
-        self.process_gain = self.selection_matrix[0, 0] / -self.transition_matrix[0, 0]
-        # Tm(s)/Tout(s)= K/Ts+1
-        self.t_out_gain = self.selection_matrix[0, 1] / -self.transition_matrix[0, 0]
+        self.process_gain_in_kelvin_per_watt = self.selection_matrix[0, 0] / -self.transition_matrix[0, 0]
+        # Tm(s)/Tout(s)= K/Ts+1  (dimensionless: dT_m/dT_out in K/K)
+        self.t_out_gain_dimensionless = self.selection_matrix[0, 1] / -self.transition_matrix[0, 0]
         # Tm(s)/phi_ia(s)= K/Ts+1
-        self.phi_ia_gain = self.selection_matrix[0, 3] / -self.transition_matrix[0, 0]
+        self.phi_ia_gain_in_kelvin_per_watt = self.selection_matrix[0, 3] / -self.transition_matrix[0, 0]
         # Tm(s)/phi_st(s)= K/Ts+1
-        self.phi_st_gain = self.selection_matrix[0, 4] / -self.transition_matrix[0, 0]
+        self.phi_st_gain_in_kelvin_per_watt = self.selection_matrix[0, 4] / -self.transition_matrix[0, 0]
         # Tm(s)/phi_m(s)= K/Ts+1
-        self.phi_m_gain = self.selection_matrix[0, 5] / -self.transition_matrix[0, 0]
+        self.phi_m_gain_in_kelvin_per_watt = self.selection_matrix[0, 5] / -self.transition_matrix[0, 0]
 
-        self.time_constant = self._compute_open_loop_response(self.transition_matrix, self.selection_matrix)
+        self.time_constant_in_seconds = self._compute_open_loop_response(self.transition_matrix, self.selection_matrix)
 
 
 def compute_pi_gains(thermal_model: BuildingThermalModel5R1C) -> tuple[float, float, float]:
@@ -296,28 +321,35 @@ def compute_pi_gains(thermal_model: BuildingThermalModel5R1C) -> tuple[float, fl
 
     denominator = s^2 + (2 * damping ratio * natural frequency ) s + (natural frequency)^2
     """
-    time_constant_tm = thermal_model.time_constant
+    time_constant_in_seconds = thermal_model.time_constant_in_seconds
     selection_matrix = thermal_model.selection_matrix
     transition_matrix = thermal_model.transition_matrix
 
     # Few assumptions
-    settling_time = time_constant_tm * 0.3
+    settling_time_in_seconds = time_constant_in_seconds * 0.3
     over_shooting = 20
 
     damping_ratio = -np.log(over_shooting / 100) / (np.pi**2 + (np.log(over_shooting / 100)) ** 2) ** (1 / 2)
-    natural_frequency = 4 / (settling_time * damping_ratio)
-    # damping_frequency=natural_frequency * np.sqrt(1-damping_ratio**2) #comment out due to pylint warning W0612 (unused-variable)
+    natural_frequency_in_rad_per_s = 4 / (settling_time_in_seconds * damping_ratio)
+    # damping_frequency=natural_frequency_in_rad_per_s * np.sqrt(1-damping_ratio**2) #comment out due to pylint warning W0612 (unused-variable)
 
+    # m_value (1/b11) and b_value (-a11/b11) are first-order plant coefficients.
+    # As computed they are in W/K, but the pole-placement formulas below assume a
+    # continuous-time plant (where m_value would be in W*s/K); the discrete-time
+    # implementation applies the resulting gains as W/K. The unit is left
+    # unsuffixed intentionally rather than masking this ambiguity with a fabricated suffix.
     m_value = 1 / selection_matrix[0, 0]
     b_value = -transition_matrix[0, 0] / selection_matrix[0, 0]
 
-    integral_gain = natural_frequency**2 * m_value
-    proportional_gain = (natural_frequency * damping_ratio * 2 * m_value) - b_value
-    derivative_gain = 0
+    integral_gain_in_watt_per_kelvin = natural_frequency_in_rad_per_s**2 * m_value
+    proportional_gain_in_watt_per_kelvin = (
+        natural_frequency_in_rad_per_s * damping_ratio * 2 * m_value
+    ) - b_value
+    derivative_gain_in_watt_per_kelvin = 0
 
-    log.information(f"gain Ki= {integral_gain}")
-    log.information(f"gain Kp= {proportional_gain}")
-    return proportional_gain, integral_gain, derivative_gain
+    log.information(f"gain Ki= {integral_gain_in_watt_per_kelvin}")
+    log.information(f"gain Kp= {proportional_gain_in_watt_per_kelvin}")
+    return proportional_gain_in_watt_per_kelvin, integral_gain_in_watt_per_kelvin, derivative_gain_in_watt_per_kelvin
 
 
 class PIDController(cp.Component):
@@ -366,21 +398,25 @@ class PIDController(cp.Component):
         self.thermal_model: BuildingThermalModel5R1C = BuildingThermalModel5R1C.from_sim_repository(
             self.my_simulation_parameters.seconds_per_timestep
         )
-        proportional_gain, integral_gain, derivative_gain = compute_pi_gains(self.thermal_model)
+        (
+            proportional_gain_in_watt_per_kelvin,
+            integral_gain_in_watt_per_kelvin,
+            derivative_gain_in_watt_per_kelvin,
+        ) = compute_pi_gains(self.thermal_model)
         # --------------------------------------------------
-        # control saturation
-        self.mv_min: float = 0
-        self.mv_max: float = 5000
-        self.integral_gain: float = integral_gain
-        self.proportional_gain: float = proportional_gain
-        self.derivative_gain: float = derivative_gain
+        # control saturation (manipulated-variable power limits in W)
+        self.mv_min_in_watt: float = 0
+        self.mv_max_in_watt: float = 5000
+        self.integral_gain_in_watt_per_kelvin: float = integral_gain_in_watt_per_kelvin
+        self.proportional_gain_in_watt_per_kelvin: float = proportional_gain_in_watt_per_kelvin
+        self.derivative_gain_in_watt_per_kelvin: float = derivative_gain_in_watt_per_kelvin
         self.state: PIDState = PIDState(
-            integrator=0,
-            integrator_d3=0,
-            integrator_d4=0,
-            integrator_d5=0,
-            derivator=0,
-            manipulated_variable=0,
+            integrator_in_celsius=0,
+            integrator_d3_in_celsius=0,
+            integrator_d4_in_celsius=0,
+            integrator_d5_in_celsius=0,
+            derivator_in_celsius=0,
+            manipulated_variable_in_watt=0,
         )
         self.previous_state: PIDState = self.state.clone()
 
@@ -515,8 +551,8 @@ class PIDController(cp.Component):
         lines = []
         lines.append("PID Controller")
         lines.append("Control algorithm of the Air conditioner is: PI \n")
-        lines.append(f"Controller Proportional gain is {self.proportional_gain:4.2f} \n")
-        lines.append(f"Controller Integral gain is {self.integral_gain:4.2f} \n")
+        lines.append(f"Controller Proportional gain is {self.proportional_gain_in_watt_per_kelvin:4.2f} \n")
+        lines.append(f"Controller Integral gain is {self.integral_gain_in_watt_per_kelvin:4.2f} \n")
         return lines
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
@@ -524,90 +560,93 @@ class PIDController(cp.Component):
         if force_convergence:
             return
         # Retrieve Disturbance forecast
-        phi_m = stsv.get_input_value(self.heat_flow_rate_to_internal_mass_node_channel)
-        phi_st = stsv.get_input_value(self.heat_flow_rate_to_internal_surface_node_channel)
+        phi_m_in_watt = stsv.get_input_value(self.heat_flow_rate_to_internal_mass_node_channel)
+        phi_st_in_watt = stsv.get_input_value(self.heat_flow_rate_to_internal_surface_node_channel)
 
         # Retrieve building temperature
-        building_temperature_t_mc = stsv.get_input_value(self.temperature_mean_channel)
-        # log.information('building_temperature_t_mc {}'.format(building_temperature_t_mc))
-        feed_forward_signal = self.feedforward(phi_st, phi_m)
+        building_temperature_in_celsius = stsv.get_input_value(self.temperature_mean_channel)
+        # log.information('building_temperature_in_celsius {}'.format(building_temperature_in_celsius))
+        feed_forward_signal_in_watt = self.feedforward(phi_st_in_watt, phi_m_in_watt)
 
-        set_point: float = 24.0
+        set_point_in_celsius: float = 24.0
 
-        proportional_gain: float = self.proportional_gain  # controller Proportional gain
-        integral_gain: float = self.integral_gain  # integral gain
-        derivative_gain: float = self.derivative_gain  # Derivative gain
+        proportional_gain_in_watt_per_kelvin: float = self.proportional_gain_in_watt_per_kelvin  # controller Proportional gain
+        integral_gain_in_watt_per_kelvin: float = self.integral_gain_in_watt_per_kelvin  # integral gain
+        derivative_gain_in_watt_per_kelvin: float = self.derivative_gain_in_watt_per_kelvin  # Derivative gain
 
-        error = set_point - building_temperature_t_mc  # e(tk)
+        error_in_celsius = set_point_in_celsius - building_temperature_in_celsius  # e(tk)
 
-        p_value = proportional_gain * error
-        d_value = derivative_gain * (error - self.state.derivator)
+        p_value_in_watt = proportional_gain_in_watt_per_kelvin * error_in_celsius
+        d_value_in_watt = derivative_gain_in_watt_per_kelvin * (error_in_celsius - self.state.derivator_in_celsius)
 
-        self.state.derivator = error
-        self.state.integrator = self.state.integrator + error
+        self.state.derivator_in_celsius = error_in_celsius
+        self.state.integrator_in_celsius = self.state.integrator_in_celsius + error_in_celsius
 
-        limit = 500
-        if self.state.integrator > limit:
-            self.state.integrator = limit
-        elif self.state.integrator < -limit:
-            self.state.integrator = -limit
+        integrator_limit_in_celsius = 500
+        if self.state.integrator_in_celsius > integrator_limit_in_celsius:
+            self.state.integrator_in_celsius = integrator_limit_in_celsius
+        elif self.state.integrator_in_celsius < -integrator_limit_in_celsius:
+            self.state.integrator_in_celsius = -integrator_limit_in_celsius
 
-        i_value = self.state.integrator * integral_gain
-        manipulated_variable = p_value + i_value + d_value
+        i_value_in_watt = self.state.integrator_in_celsius * integral_gain_in_watt_per_kelvin
+        manipulated_variable_in_watt = p_value_in_watt + i_value_in_watt + d_value_in_watt
 
         """ Un-comment to prevent heating and cooling in specific periods  """
 
         # if timestep <= (151-20)*24*3600/self.my_simulation_parameters.seconds_per_timestep:
-        #     if manipulated_variable + feed_forward_signal < 0:
-        #         manipulated_variable=0
+        #     if manipulated_variable_in_watt + feed_forward_signal_in_watt < 0:
+        #         manipulated_variable_in_watt=0
         # if timestep >= 304*24*3600/self.my_simulation_parameters.seconds_per_timestep:
-        #     if manipulated_variable + feed_forward_signal < 0:
-        #         manipulated_variable=0
+        #     if manipulated_variable_in_watt + feed_forward_signal_in_watt < 0:
+        #         manipulated_variable_in_watt=0
         # if (timestep > (151-20)*24*3600/self.my_simulation_parameters.seconds_per_timestep and
         # timestep <= 243*24*3600/self.my_simulation_parameters.seconds_per_timestep):
-        #     if manipulated_variable + feed_forward_signal > 0:
-        #         manipulated_variable = 0
+        #     if manipulated_variable_in_watt + feed_forward_signal_in_watt > 0:
+        #         manipulated_variable_in_watt = 0
 
-        self.state.manipulated_variable = manipulated_variable
+        self.state.manipulated_variable_in_watt = manipulated_variable_in_watt
 
-        stsv.set_output_value(self.error_pvalue_output_channel, p_value)
-        stsv.set_output_value(self.error_dvalue_output_channel, d_value)
-        stsv.set_output_value(self.error_ivalue_output_channel, i_value)
-        stsv.set_output_value(self.error_output_channel, error)
-        stsv.set_output_value(self.integrator_output_channel, self.state.integrator)
-        stsv.set_output_value(self.derivator_output_channel, self.state.derivator)
-        stsv.set_output_value(self.thermal_power_channel, manipulated_variable)
-        stsv.set_output_value(self.feed_forward_signal_channel, feed_forward_signal)
+        stsv.set_output_value(self.error_pvalue_output_channel, p_value_in_watt)
+        stsv.set_output_value(self.error_dvalue_output_channel, d_value_in_watt)
+        stsv.set_output_value(self.error_ivalue_output_channel, i_value_in_watt)
+        stsv.set_output_value(self.error_output_channel, error_in_celsius)
+        stsv.set_output_value(self.integrator_output_channel, self.state.integrator_in_celsius)
+        stsv.set_output_value(self.derivator_output_channel, self.state.derivator_in_celsius)
+        stsv.set_output_value(self.thermal_power_channel, manipulated_variable_in_watt)
+        stsv.set_output_value(self.feed_forward_signal_channel, feed_forward_signal_in_watt)
 
-    def feedforward(self, phi_st: float, phi_m: float) -> float:
-        """Computes the feed-forward disturbance compensation signal.
+    def feedforward(self, phi_st_in_watt: float, phi_m_in_watt: float) -> float:
+        """Computes the feed-forward disturbance compensation signal in W.
 
         The gains are derived from the 5R1C state-space model identified by
         :class:`BuildingThermalModel5R1C`.
         """
-        process_gain: float = self.thermal_model.process_gain
-        phi_st_gain: float = self.thermal_model.phi_st_gain
-        phi_m_gain: float = self.thermal_model.phi_m_gain
+        process_gain_in_kelvin_per_watt: float = self.thermal_model.process_gain_in_kelvin_per_watt
+        phi_st_gain_in_kelvin_per_watt: float = self.thermal_model.phi_st_gain_in_kelvin_per_watt
+        phi_m_gain_in_kelvin_per_watt: float = self.thermal_model.phi_m_gain_in_kelvin_per_watt
 
-        feed_forward_signal = -((phi_st_gain * phi_st) + (phi_m_gain * phi_m)) / process_gain
+        feed_forward_signal_in_watt = -(
+            (phi_st_gain_in_kelvin_per_watt * phi_st_in_watt)
+            + (phi_m_gain_in_kelvin_per_watt * phi_m_in_watt)
+        ) / process_gain_in_kelvin_per_watt
 
-        return feed_forward_signal
+        return feed_forward_signal_in_watt
 
-    def determine_conditions(self, current_temperature: float, set_point: float) -> str:
+    def determine_conditions(self, current_temperature_in_celsius: float, set_point_in_celsius: float) -> str:
         """For determining heating and cooling mode and implementing a dead zone. Currently disabled."""
         offset_in_degree_celsius = 0.5
-        maximum_heating_set_temp = set_point + offset_in_degree_celsius
-        minimum_cooling_set_temp = set_point - offset_in_degree_celsius
+        maximum_heating_set_temp_in_celsius = set_point_in_celsius + offset_in_degree_celsius
+        minimum_cooling_set_temp_in_celsius = set_point_in_celsius - offset_in_degree_celsius
 
         mode = "off"
-        if mode == "heating" and current_temperature > maximum_heating_set_temp:  # 23 22.5
+        if mode == "heating" and current_temperature_in_celsius > maximum_heating_set_temp_in_celsius:  # 23 22.5
             return "off"
-        if mode == "cooling" and current_temperature < minimum_cooling_set_temp:  # 24 21.5
+        if mode == "cooling" and current_temperature_in_celsius < minimum_cooling_set_temp_in_celsius:  # 24 21.5
             mode = "off"
         if mode == "off":
-            if current_temperature < set_point:  # 21
+            if current_temperature_in_celsius < set_point_in_celsius:  # 21
                 mode = "heating"
-            if current_temperature > set_point:  # 26
+            if current_temperature_in_celsius > set_point_in_celsius:  # 26
                 mode = "cooling"
         return mode
 

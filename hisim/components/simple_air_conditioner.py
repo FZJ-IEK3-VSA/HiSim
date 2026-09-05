@@ -277,13 +277,13 @@ class SimpleAirConditioner(cp.Component):
 
         t_in_k = t_in_c + 273.15
         t_out_k = t_out_c + 273.15
-        delta_t = t_out_k - t_in_k
+        delta_t_in_k = t_out_k - t_in_k
 
         # modulation_signal < 0 means cooling (signed convention from existing AC)
         is_cooling = modulation_signal < 0
 
-        if is_cooling and delta_t > self.config.temperature_epsilon_k:
-            cop_carnot = t_in_k / delta_t
+        if is_cooling and delta_t_in_k > self.config.temperature_epsilon_k:
+            cop_carnot = t_in_k / delta_t_in_k
             cop_real = self.config.eta_carnot * cop_carnot
             # modulation_signal is negative; abs() gives the fraction, clamped to [0, 1]
             modulation_fraction = min(abs(modulation_signal), 1.0)
@@ -300,10 +300,10 @@ class SimpleAirConditioner(cp.Component):
             thermal_power_delivered_w = 0.0
             running_state = 0
 
-        spt = self.my_simulation_parameters.seconds_per_timestep
+        seconds_per_timestep_in_s = self.my_simulation_parameters.seconds_per_timestep
         # Convert watts to watt-hours: W * seconds / 3600 = Wh (3.6e3 = 3600 s/h)
-        thermal_energy_wh = thermal_power_delivered_w * spt / 3.6e3
-        electric_energy_wh = electric_w * spt / 3.6e3
+        thermal_energy_wh = thermal_power_delivered_w * seconds_per_timestep_in_s / 3.6e3
+        electric_energy_wh = electric_w * seconds_per_timestep_in_s / 3.6e3
 
         stsv.set_output_value(
             self.thermal_power_generation_channel, thermal_power_delivered_w
@@ -334,18 +334,18 @@ class SimpleAirConditioner(cp.Component):
         )
 
         investment_cost = 1500.0
-        co2_footprint = 100.0
-        lifetime = 15
+        co2_footprint_in_kg = 100.0
+        lifetime_in_years = 15
 
-        capex_per_period = (investment_cost / lifetime) * duration_ratio
-        co2_per_period = (co2_footprint / lifetime) * duration_ratio
+        capex_per_period = (investment_cost / lifetime_in_years) * duration_ratio
+        co2_footprint_for_simulated_period_in_kg = (co2_footprint_in_kg / lifetime_in_years) * duration_ratio
 
         return CapexCostDataClass(
             capex_investment_cost_in_euro=investment_cost,
-            device_co2_footprint_in_kg=co2_footprint,
-            lifetime_in_years=lifetime,
+            device_co2_footprint_in_kg=co2_footprint_in_kg,
+            lifetime_in_years=lifetime_in_years,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_period,
-            device_co2_footprint_for_simulated_period_in_kg=co2_per_period,
+            device_co2_footprint_for_simulated_period_in_kg=co2_footprint_for_simulated_period_in_kg,
             kpi_tag=KpiTagEnumClass.AIR_CONDITIONER,
         )
 
@@ -671,13 +671,13 @@ class SimpleAirConditionerController(cp.Component):
         if force_convergence:
             return
 
-        t_in = stsv.get_input_value(self.indoor_air_temperature_channel)
-        upper = self.config.setpoint_temperature_c + self.config.deadband_k
-        lower = self.config.setpoint_temperature_c - self.config.deadband_k
+        t_in_in_celsius = stsv.get_input_value(self.indoor_air_temperature_channel)
+        upper_threshold_in_celsius = self.config.setpoint_temperature_c + self.config.deadband_k
+        lower_threshold_in_celsius = self.config.setpoint_temperature_c - self.config.deadband_k
 
-        if t_in > upper:
+        if t_in_in_celsius > upper_threshold_in_celsius:
             self.state.state = 1  # turn on cooling
-        elif t_in < lower:
+        elif t_in_in_celsius < lower_threshold_in_celsius:
             self.state.state = 0  # turn off cooling
         # else: within deadband -> maintain previous state (hysteresis)
 

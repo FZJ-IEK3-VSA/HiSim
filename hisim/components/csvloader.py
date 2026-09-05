@@ -97,29 +97,40 @@ class CSVLoader(cp.Component):
 
     Attributes
     ----------
-    column_values: np.ndarray
+    column_values_in_loaded_unit: np.ndarray
         The loaded profile values as a float array, indexed by the
-        simulation timestep. Read in :meth:`i_simulate` as
-        ``self.column_values[timestep] * self.multiplier``.
+        simulation timestep. The values carry the physical unit
+        declared in :attr:`CSVLoaderConfig.unit`
+        (``self.csvconfig.unit``); the ``_in_loaded_unit`` suffix
+        signals that a unit applies even though it is not statically
+        determinable from the attribute name. Read in
+        :meth:`i_simulate` as
+        ``self.column_values_in_loaded_unit[timestep] * self.multiplier``.
     column_name: str
         Name of the column the profile was read from (mirrors
         ``CSVLoaderConfig.column_name``).
     multiplier: float
         Multiplication factor applied to every value in
-        :attr:`column_values` when producing the output (mirrors
+        :attr:`column_values_in_loaded_unit` when producing the output (mirrors
         ``CSVLoaderConfig.multiplier``).
 
     Notes
     -----
-    ``column_values`` was previously named ``self.column``. That bare
-    name was misleading because it collided with
-    ``self.csvconfig.column`` (an ``int`` column index) -- see issue
-    #758. A repo-wide audit (``grep -rn "\.column\b" --include="*.py"``
-    excluding ``csvconfig.column``, ``.columns``, and ``column_values``)
-    found no remaining reads of ``.column`` on :class:`CSVLoader`
-    instances, so the rename is safe in-tree. A deprecated ``column``
-    property is kept as a backward-compatible alias for any downstream
-    code that may still introspect component state.
+    ``column_values_in_loaded_unit`` was previously named
+    ``self.column`` (issue #758) and then ``self.column_values``. The
+    bare ``column`` name was misleading because it collided with
+    ``self.csvconfig.column`` (an ``int`` column index), and
+    ``column_values`` carried no unit suffix despite holding physical
+    quantities (issue #1924). Because the unit is runtime-determined
+    via :attr:`CSVLoaderConfig.unit`, the suffix ``_in_loaded_unit``
+    is used instead of a fixed ``_in_<unit>`` suffix. A repo-wide
+    audit (``grep -rn "\.column\b" --include="*.py"`` excluding
+    ``csvconfig.column``, ``.columns``, and ``column_values``) found
+    no remaining reads of ``.column`` on :class:`CSVLoader``
+    instances, so the rename is safe in-tree. Deprecated ``column``
+    and ``column_values`` properties are kept as backward-compatible
+    aliases for any downstream code that may still introspect
+    component state.
 
     """
 
@@ -194,9 +205,9 @@ class CSVLoader(cp.Component):
                 "simulation timesteps."
             )
 
-        self.column_values: np.ndarray = dfcolumn.to_numpy(dtype=float)
-        if not np.all(np.isfinite(self.column_values)):
-            bad_rows = np.where(~np.isfinite(self.column_values))[0]
+        self.column_values_in_loaded_unit: np.ndarray = dfcolumn.to_numpy(dtype=float)
+        if not np.all(np.isfinite(self.column_values_in_loaded_unit)):
+            bad_rows = np.where(~np.isfinite(self.column_values_in_loaded_unit))[0]
             raise ValueError(
                 f"CSV '{self.csvconfig.csv_filename}' column "
                 f"'{self.column_name}' contains non-finite values "
@@ -206,38 +217,73 @@ class CSVLoader(cp.Component):
 
     @property
     def column(self) -> np.ndarray:
-        """Deprecated alias for :attr:`column_values`.
+        """Deprecated alias for :attr:`column_values_in_loaded_unit`.
 
         The instance attribute previously named ``self.column`` held the
         loaded profile values as a :class:`numpy.ndarray` (indexed by
         timestep), which collided with ``self.csvconfig.column`` (an
-        ``int`` column index). It was renamed to :attr:`column_values`
-        for clarity (see issue #758). A repo-wide audit found no
-        remaining references to ``.column`` on :class:`CSVLoader`
-        instances, but this alias is kept as a backward-compatible shim
-        for any downstream code that may still introspect component
-        state.
+        ``int`` column index). It was renamed to ``column_values``
+        for clarity (see issue #758) and later to
+        :attr:`column_values_in_loaded_unit` to carry its physical
+        unit (see issue #1924). A repo-wide audit found no remaining
+        references to ``.column`` on :class:`CSVLoader` instances,
+        but this alias is kept as a backward-compatible shim for any
+        downstream code that may still introspect component state.
 
         Returns
         -------
         np.ndarray
             The loaded profile values (same object as
-            :attr:`column_values`).
+            :attr:`column_values_in_loaded_unit`).
 
         Warns
         -----
         DeprecationWarning
-            Always, on every access. Use :attr:`column_values` instead.
+            Always, on every access. Use :attr:`column_values_in_loaded_unit` instead.
         """
         warnings.warn(
-            "CSVLoader.column is deprecated; use CSVLoader.column_values "
+            "CSVLoader.column is deprecated; use CSVLoader.column_values_in_loaded_unit "
             "instead. The attribute was renamed because the bare name "
             "'column' was confused with the integer column index "
             "CSVLoaderConfig.column.",
             DeprecationWarning,
             stacklevel=2,
         )
-        return self.column_values
+        return self.column_values_in_loaded_unit
+
+    @property
+    def column_values(self) -> np.ndarray:
+        """Deprecated alias for :attr:`column_values_in_loaded_unit`.
+
+        The attribute was renamed from ``column_values`` to
+        :attr:`column_values_in_loaded_unit` to signal that the loaded
+        profile values carry a physical unit (the one declared in
+        :attr:`CSVLoaderConfig.unit`), which is not statically
+        determinable from the attribute name alone (see issue #1924).
+        This alias is kept as a backward-compatible shim for any
+        downstream code that may still reference ``column_values``.
+
+        Returns
+        -------
+        np.ndarray
+            The loaded profile values (same object as
+            :attr:`column_values_in_loaded_unit`).
+
+        Warns
+        -----
+        DeprecationWarning
+            Always, on every access. Use
+            :attr:`column_values_in_loaded_unit` instead.
+        """
+        warnings.warn(
+            "CSVLoader.column_values is deprecated; use "
+            "CSVLoader.column_values_in_loaded_unit instead. The "
+            "attribute was renamed to carry its physical unit, which "
+            "is runtime-determined via CSVLoaderConfig.unit.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.column_values_in_loaded_unit
 
     @staticmethod
     def _read_csv(config: CSVLoaderConfig, inputs_dir: Path) -> pd.DataFrame:
@@ -315,7 +361,7 @@ class CSVLoader(cp.Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Write the profile value for *timestep* to the output channel.
 
-        Looks up ``self.column_values[timestep]``, multiplies it by
+        Looks up ``self.column_values_in_loaded_unit[timestep]``, multiplies it by
         ``self.multiplier``, and stores the result in *stsv* via
         ``self.output1_channel``.
 
@@ -325,7 +371,7 @@ class CSVLoader(cp.Component):
             force_convergence: Unused; accepted for interface compatibility
                 with the component lifecycle.
         """
-        stsv.set_output_value(self.output1_channel, float(self.column_values[timestep]) * self.multiplier)
+        stsv.set_output_value(self.output1_channel, float(self.column_values_in_loaded_unit[timestep]) * self.multiplier)
 
     def i_prepare_simulation(self) -> None:
         """No-op override of the pre-simulation preparation hook.

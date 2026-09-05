@@ -9,6 +9,7 @@ Each test verifies a specific aspect of the component system.
 
 import pytest
 
+from unittest.mock import patch
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
@@ -762,8 +763,15 @@ def test_connect_inputs_warns_for_allow_unconnected_mandatory() -> None:
     component.inputs.append(optional_mandatory_input)
 
     wrapper = ComponentWrapper(component, is_cachable=False, connect_automatically=False)
-    # Should not raise — the input is marked as allow_unconnected_mandatory.
-    wrapper.connect_inputs(all_outputs=[])
+    with patch.object(log, 'warning') as mock_warning:
+        # Should not raise — the input is marked as allow_unconnected_mandatory.
+        wrapper.connect_inputs(all_outputs=[])
+        mock_warning.assert_called_once()
+        # Verify the warning actually concerns the unconnected mandatory input,
+        # not some unrelated message (the specific silent-degradation risk the
+        # test name claims to guard against).
+        args, _ = mock_warning.call_args
+        assert "not connected" in args[0]
     assert optional_mandatory_input.source_output is None
 
 

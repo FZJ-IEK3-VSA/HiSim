@@ -142,20 +142,20 @@ def _apply_single_measure(result: MeasureApplication, path: str, measure_type: s
             note += f" (requested kW={params['kW']} ignored: the setup auto-sizes the heat pump)"
         result.report_notes.append((path, "used", note))
     elif measure_type == "pv":
-        kwp = _numeric_param(params, "kWp")
-        if kwp is None:
+        power_in_kWp = _numeric_param(params, "kWp")
+        if power_in_kWp is None:
             result.report_notes.append((path, "ignored", "pv measure without a numeric 'kWp' param"))
             return
-        home.setdefault("pv", {})["kWp"] = kwp
-        result.report_notes.append((path, "used", f"pv.kWp set to {kwp} (new total)"))
+        home.setdefault("pv", {})["kWp"] = power_in_kWp
+        result.report_notes.append((path, "used", f"pv.kWp set to {power_in_kWp} (new total)"))
     elif measure_type == "battery":
-        kwh = _numeric_param(params, "kWh")
-        if kwh is None:
+        energy_in_kWh = _numeric_param(params, "kWh")
+        if energy_in_kWh is None:
             result.report_notes.append((path, "ignored", "battery measure without a numeric 'kWh' param"))
             return
-        home.setdefault("battery", {})["kWh"] = kwh
+        home.setdefault("battery", {})["kWh"] = energy_in_kWh
         result.report_notes.append(
-            (path, "approximated", f"battery.kWh set to {kwh} (new total); size is auto-sized by the setup")
+            (path, "approximated", f"battery.kWh set to {energy_in_kWh} (new total); size is auto-sized by the setup")
         )
     elif measure_type == "solar_thermal":
         solar_thermal = home.setdefault("solarThermal", {})

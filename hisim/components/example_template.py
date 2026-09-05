@@ -110,7 +110,7 @@ class ComponentName(Component):
         self.state: "ComponentNameState" = ComponentNameState()
         self.previous_state: "ComponentNameState" = deepcopy(self.state)
         # Initialized variables
-        self.factor: float = 1.0
+        self.factor_in_w: float = 1.0
 
         self.input_from_other_component: ComponentInput = self.add_input(
             object_name=self.componentnameconfig.component_id.name,
@@ -138,11 +138,11 @@ class ComponentName(Component):
 
     def i_save_state(self) -> None:
         """Saves the current state."""
-        self.previous_state = ComponentNameState(output_with_state=self.state.output_with_state)
+        self.previous_state = ComponentNameState(output_with_state_in_wh=self.state.output_with_state_in_wh)
 
     def i_restore_state(self) -> None:
         """Restores previous state."""
-        self.state = ComponentNameState(output_with_state=self.previous_state.output_with_state)
+        self.state = ComponentNameState(output_with_state_in_wh=self.previous_state.output_with_state_in_wh)
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """No-op hook for optional post-simulation consistency checks.
@@ -166,19 +166,23 @@ class ComponentName(Component):
             force_convergence: Whether to force convergence (unused in this template).
         """
         # define local variables
-        input_1 = stsv.get_input_value(self.input_from_other_component)
-        input_2 = self.state.output_with_state
+        input_1_in_w = stsv.get_input_value(self.input_from_other_component)
+        input_2_in_wh = self.state.output_with_state_in_wh
 
         # do your calculations
-        output_1 = input_2 + input_1 * self.my_simulation_parameters.seconds_per_timestep
-        output_2 = input_1 + self.factor
+        # NOTE: arithmetic is dimensionally inconsistent with the declared output
+        # units: input_1_in_w * seconds_per_timestep is W·s (J), not Wh, and
+        # output_2_in_wh sums two powers (W) for a WATT_HOUR output. Suffixes
+        # follow the declared channel units; this is a known template limitation.
+        output_1_in_wh = input_2_in_wh + input_1_in_w * self.my_simulation_parameters.seconds_per_timestep
+        output_2_in_wh = input_1_in_w + self.factor_in_w
 
         # write values for output time series
-        stsv.set_output_value(self.output_with_state, output_1)
-        stsv.set_output_value(self.output_without_state, output_2)
+        stsv.set_output_value(self.output_with_state, output_1_in_wh)
+        stsv.set_output_value(self.output_without_state, output_2_in_wh)
 
         # write values to state
-        self.state.output_with_state = output_1
+        self.state.output_with_state_in_wh = output_1_in_wh
 
 
 @dataclass
@@ -187,10 +191,10 @@ class ComponentNameState:
 
     Parameters
     ----------
-    output_with_state : int
-        Stores the state of the output_with_state value from
-        :py:class:`~hisim.component.ComponentName`.
+    output_with_state_in_wh : float
+        Stores the accumulated energy (in Wh) of the ``OutputWithState``
+        output channel from :py:class:`~hisim.component.ComponentName`.
 
     """
 
-    output_with_state: float = 0
+    output_with_state_in_wh: float = 0

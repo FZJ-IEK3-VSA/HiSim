@@ -44,28 +44,36 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             path_checker=path_checker,
         )
 
-    def plot(self, xdims: int, data: pd.Series) -> ReportImageEntry | None:
-        """Makes a carpet plot.
+    def plot(self, xdims: int, data_in_self_units: pd.Series) -> ReportImageEntry | None:
+        """Make a carpet plot.
+
+        Args:
+            xdims: Number of days (columns) the data is reshaped into.
+            data_in_self_units: Physical simulation output to plot, with values
+                expressed in the unit tracked by ``self.units`` (e.g. W, kWh,
+                °C, kg/s). The unit is dynamic and may be rescaled during
+                plotting.
 
         Returns:
-            ReportImageEntry or None -- None when data cannot be reshaped into entire days.
+            ReportImageEntry or None -- None when the data cannot be reshaped
+            into entire days.
         """
         log.trace("starting carpet plots")
         self.ensure_output_dir()
-        ydims = len(data) // xdims  # number of calculated timesteps per day
+        ydims = len(data_in_self_units) // xdims  # number of calculated timesteps per day
         y_steps_per_hour = ydims // 24
 
         try:
-            database = data.values.reshape(xdims, ydims)
+            reshaped_data_in_self_units = data_in_self_units.values.reshape(xdims, ydims)
         except ValueError:
             log.error("Carpet plot can only deal with data containing entire days")
             return None
 
-        if np.max(np.abs(data.values)) > 1.5e3:
-            database = database * 1e-3
+        if np.max(np.abs(data_in_self_units.values)) > 1.5e3:
+            reshaped_data_in_self_units = reshaped_data_in_self_units * 1e-3
             self.units = f"k{self.units}"
 
-        plot_data = np.flip(database.transpose(), axis=0)
+        plot_data_in_self_units = np.flip(reshaped_data_in_self_units.transpose(), axis=0)
 
         fig = plt.figure(figsize=self.figsize, dpi=self.dpi)
 
@@ -73,7 +81,7 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         mycolors = "viridis"
         color_map = mpl.colormaps.get_cmap(mycolors)
 
-        plot = axis.pcolormesh(plot_data, cmap=color_map)
+        plot = axis.pcolormesh(plot_data_in_self_units, cmap=color_map)
         plt.colorbar(plot).set_label(self.units, fontsize=self.fontsize_label)
 
         y_ticks = np.arange(0, 25 * y_steps_per_hour, 6 * y_steps_per_hour).tolist()
@@ -141,26 +149,34 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         )
 
     @utils.measure_memory_leak
-    def plot(self, data: pd.Series) -> ReportImageEntry:
-        """Makes a line plot."""
+    def plot(self, data_in_self_units: pd.Series) -> ReportImageEntry:
+        """Make a line plot.
+
+        Args:
+            data_in_self_units: Physical simulation output to plot, with values
+                expressed in the unit tracked by ``self.units`` (e.g. W, kWh,
+                °C, kg/s). The unit is dynamic and may be rescaled during
+                plotting. The series index is a ``DatetimeIndex`` used as the
+                time axis.
+        """
 
         mpl.use("Agg")
         self.ensure_output_dir()
 
         _fig, axis = plt.subplots(figsize=self.figsize, dpi=self.dpi)
-        x_zero = data.index
+        time_index = data_in_self_units.index
         plt.xticks(fontsize=self.fontsize_ticks, rotation=20)
         plt.yticks(fontsize=self.fontsize_ticks)
 
         # Rescale values in case they are too high
-        data, self.units = self.rescale_y_axis(y_values=data, units=self.units)
+        data_in_self_units, self.units = self.rescale_y_axis(y_values=data_in_self_units, units=self.units)
 
-        plt.plot(x_zero, data, color="green", linewidth=1.0)
+        plt.plot(time_index, data_in_self_units, color="green", linewidth=1.0)
         plt.ylabel(f"[{self.units}]", fontsize=self.fontsize_label)
         plt.xlabel("Time", fontsize=self.fontsize_label)
         plt.grid()
         plt.title(self.title, fontsize=self.fontsize_title)
-        axis.set_xlim(xmin=x_zero[0])
+        axis.set_xlim(xmin=time_index[0])
         plt.tight_layout()
         # plt.savefig(self.filepath)
         plt.savefig(self.filepath2)
@@ -172,7 +188,7 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         # showed memory usage ballooning without it. The per-call overhead is
         # intentional and outweighed by avoiding unbounded growth across the
         # hundreds-to-thousands of plots produced in a parametric study.
-        del x_zero
+        del time_index
         gc.collect(2)
         return ReportImageEntry(
             category=None,
@@ -229,8 +245,15 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         )
         self.filename = f"monthly_{self.output}{self.figure_format}"
 
-    def plot(self, data: pd.Series) -> ReportImageEntry:
-        """Plots the bar chart."""
+    def plot(self, data_in_self_units: pd.Series) -> ReportImageEntry:
+        """Plot the bar chart.
+
+        Args:
+            data_in_self_units: Physical simulation output to plot, with values
+                expressed in the unit tracked by ``self.units`` (e.g. W, kWh,
+                °C, kg/s). The unit is dynamic and may be rescaled during
+                plotting.
+        """
         # Specify the values of blue bars (height)
         self.ensure_output_dir()
 
@@ -241,10 +264,10 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         width = 0.4
 
         # Rescale values in case they are too high
-        data, self.units = self.rescale_y_axis(y_values=data, units=self.units)
+        data_in_self_units, self.units = self.rescale_y_axis(y_values=data_in_self_units, units=self.units)
 
         plt.subplots(figsize=self.figsize, dpi=self.dpi)
-        plt.bar(ind, data, width)
+        plt.bar(ind, data_in_self_units, width)
         plt.xticks(
             ticks=ind,
             labels=[str(i) for i in self.months_abbrev_uppercase],

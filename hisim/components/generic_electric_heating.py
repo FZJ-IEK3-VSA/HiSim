@@ -973,16 +973,16 @@ class ElectricHeatingController(Component):
         self.controller_mode = DiverterValve.determine_operating_mode(
             with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
             current_controller_mode=self.controller_mode,
-            daily_average_outside_temperature=daily_avg_outside_temperature_in_celsius,
+            daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
             water_temperature_input_sh_in_celsius=0,  # artificial because no sh water used
             water_temperature_input_dhw_in_celsius=(
                 dhw_current_temperature_deg_c if self.config.with_domestic_hot_water_preparation else None
             ),
             set_temperatures=SetTemperatureConfig(
-                set_temperature_space_heating=60,  # artificial because no sh water used
-                set_temperature_dhw=self.warm_water_temperature_aim_in_celsius,
-                hysteresis_water_temperature_offset=self.config.hysteresis_water_temperature_offset,
-                outside_temperature_threshold=self.config.set_heating_threshold_outside_temperature_in_celsius,
+                set_temperature_space_heating_in_celsius=60,  # artificial because no sh water used
+                set_temperature_dhw_in_celsius=self.warm_water_temperature_aim_in_celsius,
+                hysteresis_water_temperature_offset_in_celsius=self.config.hysteresis_water_temperature_offset,
+                outside_temperature_threshold_in_celsius=self.config.set_heating_threshold_outside_temperature_in_celsius,
             ),
             parallel_space_heating_and_dhw_option=self.config.parallel_space_heating_and_dhw_option,
         )

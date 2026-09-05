@@ -1166,8 +1166,8 @@ def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
     # get the geoposition
     with open(filepath + ".dat", encoding="utf-8") as file_stream:
         lines = file_stream.readlines()
-        lat = float(lines[1][20:37])
-        lon = float(lines[2][15:30])
+        lat_in_degrees = float(lines[1][20:37])
+        lon_in_degrees = float(lines[2][15:30])
     # check if time series data already exists as .csv with DNI
     if os.path.isfile(filepath + ".csv"):
         data = pd.read_csv(filepath + ".csv", index_col=0, parse_dates=True, sep=";", decimal=",")
@@ -1193,7 +1193,7 @@ def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
         )
 
         # calculate direct normal
-        data["DNI"] = calculate_direct_normal_radiation(data["B"], lon, lat)
+        data["DNI"] = calculate_direct_normal_irradiance_in_watt_per_square_meter(data["B"], lon_in_degrees, lat_in_degrees)
     return data
 
 
@@ -1248,8 +1248,8 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
         header=None,
         names=pd.read_csv(filepath, nrows=1).columns,
     )
-    longitude = location["longitude"][0]
-    latitude = location["latitude"][0]
+    longitude_in_degrees = location["longitude"][0]
+    latitude_in_degrees = location["latitude"][0]
 
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
@@ -1270,7 +1270,7 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
     )
     # calculate direct normal
     data["direct_horizontal_irradiance"] = data["GHI"] - data["DHI"]
-    data["DNI"] = calculate_direct_normal_radiation(data["direct_horizontal_irradiance"], longitude, latitude)
+    data["DNI"] = calculate_direct_normal_irradiance_in_watt_per_square_meter(data["direct_horizontal_irradiance"], longitude_in_degrees, latitude_in_degrees)
 
     return data
 
@@ -1289,8 +1289,8 @@ def read_dwd_15min_data(filepath: str, simulation_parameters: SimulationParamete
         header=None,
         names=pd.read_csv(filepath, nrows=1).columns,
     )
-    longitude = location["longitude"][0]
-    latitude = location["latitude"][0]
+    longitude_in_degrees = location["longitude"][0]
+    latitude_in_degrees = location["latitude"][0]
 
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
@@ -1318,7 +1318,7 @@ def read_dwd_15min_data(filepath: str, simulation_parameters: SimulationParamete
     )
     # calculate direct normal
     data["direct_horizontal_irradiance"] = data["GHI"] - data["DHI"]
-    data["DNI"] = calculate_direct_normal_radiation(data["direct_horizontal_irradiance"], longitude, latitude)
+    data["DNI"] = calculate_direct_normal_irradiance_in_watt_per_square_meter(data["direct_horizontal_irradiance"], longitude_in_degrees, latitude_in_degrees)
 
     return data
 
@@ -1337,8 +1337,8 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
         header=None,
         names=pd.read_csv(filepath, nrows=1).columns,
     )
-    longitude = location["longitude"][0]
-    latitude = location["latitude"][0]
+    longitude_in_degrees = location["longitude"][0]
+    latitude_in_degrees = location["latitude"][0]
 
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
@@ -1358,41 +1358,46 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
     )
     # calculate direct normal
     data["DHI"] = data["GHI"] - data["direct_irradiance"]
-    data["DNI"] = calculate_direct_normal_radiation(data["direct_irradiance"], longitude, latitude)
+    data["DNI"] = calculate_direct_normal_irradiance_in_watt_per_square_meter(data["direct_irradiance"], longitude_in_degrees, latitude_in_degrees)
 
     return data
 
 
-def calculate_direct_normal_radiation(
-    direct_horizontal_irradation: pd.Series,
-    lon: float,
-    lat: float,
-    zenith_tol: float = 87.0,
+def calculate_direct_normal_irradiance_in_watt_per_square_meter(
+    direct_horizontal_irradiance_in_watt_per_square_meter: pd.Series,
+    lon_in_degrees: float,
+    lat_in_degrees: float,
+    zenith_tol_in_degrees: float = 87.0,
 ) -> pd.Series:
-    """Calculates the direct NORMAL irradiance from the direct horizontal irradiance with the help of the PV lib.
+    """Calculates the direct NORMAL irradiance in W/m² from the direct horizontal irradiance in W/m² using PV lib.
 
     Based on the tsib project @[tsib-kotzur] (Check header)
 
     Parameters
     ----------
-    direct_horizontal_irradation: pd.Series with time index
-        Direct horizontal irradiance
-    lon: float
-        Longitude of the location
-    lat: float
-        Latitude of the location
-    zenith_tol: float, optional
-        Avoid cosines of values above a certain zenith angle of in order to avoid division by zero.
+    direct_horizontal_irradiance_in_watt_per_square_meter: pd.Series with time index
+        Direct horizontal irradiance in W/m²
+    lon_in_degrees: float
+        Longitude of the location in degrees
+    lat_in_degrees: float
+        Latitude of the location in degrees
+    zenith_tol_in_degrees: float, optional
+        Avoid cosines of values above a certain zenith angle in degrees in order to avoid division by zero.
 
     Returns
     -------
-    dni: pd.Series
+    dni_in_watt_per_square_meter: pd.Series
+        Direct normal irradiance in W/m²
 
     """
 
-    solar_pos = pvlib.solarposition.get_solarposition(direct_horizontal_irradation.index, lat, lon)
-    solar_pos["apparent_zenith"][solar_pos.apparent_zenith > zenith_tol] = zenith_tol
-    dni = direct_horizontal_irradation.div(solar_pos["apparent_zenith"].apply(math.radians).apply(math.cos))
-    if sum(dni.isnull()) > 0:
+    solar_pos = pvlib.solarposition.get_solarposition(
+        direct_horizontal_irradiance_in_watt_per_square_meter.index, lat_in_degrees, lon_in_degrees
+    )
+    solar_pos["apparent_zenith"][solar_pos.apparent_zenith > zenith_tol_in_degrees] = zenith_tol_in_degrees
+    dni_in_watt_per_square_meter = direct_horizontal_irradiance_in_watt_per_square_meter.div(
+        solar_pos["apparent_zenith"].apply(math.radians).apply(math.cos)
+    )
+    if sum(dni_in_watt_per_square_meter.isnull()) > 0:
         raise ValueError("Something went wrong...")
-    return dni
+    return dni_in_watt_per_square_meter

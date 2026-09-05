@@ -73,15 +73,15 @@ class SmartDeviceState:
 
     def __init__(
         self,
-        actual_power: float = 0,
+        actual_power_in_W: float = 0,
         timestep_of_activation: int = -999,
         time_to_go: int = 0,
         profile_index: int = 0,
     ) -> None:
         """Initilization of state.
 
-        :param actual_power: power of smart appliance at given timestep, defaults to 0
-        :type actual_power: float, optional
+        :param actual_power_in_W: power of smart appliance at given timestep, defaults to 0
+        :type actual_power_in_W: float, optional
         :param timestep_of_activation: timestep, where the device was activated, defaults to -999
         :type timestep_of_activation: int, optional
         :param time_to_go: duration of the power profile, which follows for the nex time steps, defaults to 0
@@ -89,7 +89,7 @@ class SmartDeviceState:
         :param profile_index: index of demand profile relevent for the given timestep, defaults to 0
         :type profile_index: int, optional
         """
-        self.actual_power: float = actual_power
+        self.actual_power_in_W: float = actual_power_in_W
         self.timestep_of_activation: int = timestep_of_activation
         self.time_to_go: int = time_to_go
         self.profile_index: int = profile_index
@@ -97,35 +97,35 @@ class SmartDeviceState:
     def clone(self) -> "SmartDeviceState":
         """Copy state efficiently."""
         return SmartDeviceState(
-            self.actual_power,
+            self.actual_power_in_W,
             self.timestep_of_activation,
             self.time_to_go,
             self.profile_index,
         )
 
-    def run(self, timestep: int, electricity_profile: List[float]) -> None:
+    def run(self, timestep: int, electricity_profile_in_W: List[float]) -> None:
         """Check device state based on previous time step.
 
         :param timestep: timestep of simulation
         :type timestep: int
-        :param electricity_profile: load profile of device for actual or next activation
-        :type electricity_profile: List[float]
+        :param electricity_profile_in_W: load profile of device for actual or next activation
+        :type electricity_profile_in_W: List[float]
         """
         # device activation
         if timestep > self.timestep_of_activation + self.time_to_go:
             self.timestep_of_activation = timestep
-            self.time_to_go = len(electricity_profile)
-            self.actual_power = electricity_profile[0]
+            self.time_to_go = len(electricity_profile_in_W)
+            self.actual_power_in_W = electricity_profile_in_W[0]
 
         if timestep < self.timestep_of_activation + self.time_to_go:
             # device is running
-            self.actual_power = electricity_profile[timestep - self.timestep_of_activation]
+            self.actual_power_in_W = electricity_profile_in_W[timestep - self.timestep_of_activation]
 
         # device deactivation
         if timestep == self.timestep_of_activation + self.time_to_go:
             self.profile_index += 1
             self.time_to_go = 0
-            self.actual_power = 0
+            self.actual_power_in_W = 0
 
 
 class SmartDevice(cp.Component):
@@ -176,7 +176,7 @@ class SmartDevice(cp.Component):
         )
         self.previous_state: SmartDeviceState
         self.state: SmartDeviceState
-        self.consumption: float = 0
+        self.consumption_in_kWh: float = 0
         if my_simulation_parameters.surplus_control and config.smart_devices_included:
             postprocessing_flag: list[Enum] = [
                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
@@ -244,7 +244,7 @@ class SmartDevice(cp.Component):
         """
 
         # initialize power
-        self.state.actual_power = 0
+        self.state.actual_power_in_W = 0
 
         # if not already running: check if activation makes sense
         if timestep > self.state.timestep_of_activation + self.state.time_to_go:
@@ -253,21 +253,21 @@ class SmartDevice(cp.Component):
                 activation_timestep: int = timestep + 10
                 # if surplus controller is connected get related signal
                 if self.electricity_target_channel.source_output is not None:
-                    electricity_target = stsv.get_input_value(self.electricity_target_channel)
-                    if electricity_target >= self.electricity_profile[self.state.profile_index][0]:
+                    electricity_target_in_W = stsv.get_input_value(self.electricity_target_channel)
+                    if electricity_target_in_W >= self.electricity_profile_in_W[self.state.profile_index][0]:
                         activation_timestep = timestep
                 # if last possible switch on force activation
                 if timestep >= self.latest_start[self.state.profile_index]:  # needs to be activated
                     activation_timestep = timestep
 
                 if timestep == activation_timestep:
-                    self.state.run(timestep, self.electricity_profile[self.state.profile_index])
+                    self.state.run(timestep, self.electricity_profile_in_W[self.state.profile_index])
 
         # run device if it was already activated
         else:
-            self.state.run(timestep, self.electricity_profile[self.state.profile_index])
+            self.state.run(timestep, self.electricity_profile_in_W[self.state.profile_index])
 
-        stsv.set_output_value(self.electricity_output_channel, self.state.actual_power)
+        stsv.set_output_value(self.electricity_output_channel, self.state.actual_power_in_W)
 
     def build(self, identifier: str, source_weight: int, seconds_per_timestep: int = 60) -> None:
         """Load and process smart device flexibility profiles from LPG output.
@@ -298,7 +298,7 @@ class SmartDevice(cp.Component):
         # initializing relevant data
         earliest_start: list[int] = []
         latest_start: list[int] = []
-        electricity_profile: list[list[float]] = []
+        electricity_profile_in_W: list[list[float]] = []
 
         minutes_per_timestep = seconds_per_timestep / 60
 
@@ -330,28 +330,28 @@ class SmartDevice(cp.Component):
                 latest_start.append(ma.ceil(latest_start_timestep))
 
                 # get shiftable load profile
-                el_shiftable_load: list[float] = sample["Profiles"][2]["TimeOffsetInSteps"] * [0] + sample["Profiles"][2]["Values"]
+                el_shiftable_load_in_W: list[float] = sample["Profiles"][2]["TimeOffsetInSteps"] * [0] + sample["Profiles"][2]["Values"]
 
                 # average profiles given in 1 minute resolution to given time resolution
-                resampled_electricity_profile: list[float] = []
+                resampled_electricity_profile_in_W: list[float] = []
                 # append first timestep which may not fill  the entire 15 minutes
-                resampled_electricity_profile.append(sum(el_shiftable_load[:offset]) / offset)
+                resampled_electricity_profile_in_W.append(sum(el_shiftable_load_in_W[:offset]) / offset)
 
                 i = 0
                 for i in range(profile_duration_timesteps - 2):
-                    resampled_electricity_profile.append(
+                    resampled_electricity_profile_in_W.append(
                         sum(
-                            el_shiftable_load[
+                            el_shiftable_load_in_W[
                                 offset + minutes_per_timestep * i : offset + (i + 1) * minutes_per_timestep
                             ]
                         )
                         / minutes_per_timestep
                     )
 
-                remaining_load_values: list[float] = el_shiftable_load[offset + (i + 1) * minutes_per_timestep :]
+                remaining_load_values: list[float] = el_shiftable_load_in_W[offset + (i + 1) * minutes_per_timestep :]
                 if offset != minutes_per_timestep:
-                    resampled_electricity_profile.append(sum(remaining_load_values) / (minutes_per_timestep - offset))
-                electricity_profile.append(resampled_electricity_profile)
+                    resampled_electricity_profile_in_W.append(sum(remaining_load_values) / (minutes_per_timestep - offset))
+                electricity_profile_in_W.append(resampled_electricity_profile_in_W)
 
         self.source_weight: int = source_weight
         earliest_start = earliest_start + [
@@ -370,7 +370,7 @@ class SmartDevice(cp.Component):
             year=self.my_simulation_parameters.year,
             seconds_per_timestep=seconds_per_timestep,
         )
-        self.electricity_profile: List[List[float]] = electricity_profile
+        self.electricity_profile_in_W: List[List[float]] = electricity_profile_in_W
         self.state = SmartDeviceState()
         self.previous_state = SmartDeviceState()
 
@@ -378,7 +378,7 @@ class SmartDevice(cp.Component):
         """Writes relevant information to report."""
         lines: List[str] = []
         lines.append(f"DeviceName: {self.component_name}")
-        lines.append(f"Consumption: {self.consumption:.2f}")
+        lines.append(f"Consumption: {self.consumption_in_kWh:.2f}")
         return lines
 
     def get_cost_opex(
@@ -389,7 +389,7 @@ class SmartDevice(cp.Component):
         """Get opex costs."""
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.load_type == lt.LoadTypes.ELECTRICITY:
-                self.consumption = (
+                self.consumption_in_kWh = (
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6
@@ -398,7 +398,7 @@ class SmartDevice(cp.Component):
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=0,  # TODO: add maintenance costs
             co2_footprint_in_kg=0,
-            total_consumption_in_kwh=self.consumption,
+            total_consumption_in_kwh=self.consumption_in_kWh,
             loadtype=lt.LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.SMART_DEVICE
         )

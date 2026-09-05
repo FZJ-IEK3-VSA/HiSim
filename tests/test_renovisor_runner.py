@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import pytest
 
@@ -50,7 +50,11 @@ def test_run_simulation_forwards_arguments_to_runner_and_returns_its_path(tmp_pa
 
     recorded: dict[str, Any] = {}
 
-    def fake_runner(path_to_module: str, my_simulation_parameters: Any, my_module_config: str) -> str:
+    def fake_runner(
+        path_to_module: str,
+        my_simulation_parameters: Any = None,
+        my_module_config: Optional[str] = None,
+    ) -> str:
         recorded["path_to_module"] = path_to_module
         recorded["my_simulation_parameters"] = my_simulation_parameters
         recorded["my_module_config"] = my_module_config
@@ -79,7 +83,7 @@ def test_run_simulation_creates_result_directory_if_missing(tmp_path: Path) -> N
     result_directory = tmp_path / "nested" / "results"
     assert not result_directory.exists()
 
-    def fake_runner(**_kwargs: Any) -> str:
+    def fake_runner(*args: Any, **_kwargs: Any) -> str:
         return str(result_directory)
 
     run_simulation(
@@ -132,7 +136,7 @@ def test_run_simulation_raises_for_missing_setup_before_calling_runner(tmp_path:
     """A missing setup file fails fast with ``FileNotFoundError`` and never invokes the runner."""
     called: list[Any] = []
 
-    def fake_runner(**kwargs: Any) -> str:
+    def fake_runner(*args: Any, **kwargs: Any) -> str:
         called.append(kwargs)
         return str(tmp_path)
 
@@ -167,7 +171,11 @@ def test_run_simulation_uses_injected_setup_path_resolver_without_filesystem(tmp
 
     recorded: dict[str, Any] = {}
 
-    def fake_runner(path_to_module: str, my_simulation_parameters: Any, my_module_config: str) -> str:
+    def fake_runner(
+        path_to_module: str,
+        my_simulation_parameters: Any = None,
+        my_module_config: Optional[str] = None,
+    ) -> str:
         recorded["path_to_module"] = path_to_module
         recorded["my_simulation_parameters"] = my_simulation_parameters
         recorded["my_module_config"] = my_module_config

@@ -127,12 +127,12 @@ class Transformer(StatelessComponent):
             stsv: The single-timestep values container holding inputs and outputs.
             force_convergence: Whether to force convergence (unused in this component).
         """
-        input_value = stsv.get_input_value(self.electricity_input)
-        # print(f"Input from CSV: {input_value}")
+        input_power_in_kW = stsv.get_input_value(self.electricity_input)
+        # print(f"Input from CSV: {input_power_in_kW}")
         efficiency = self.transformerconfig.efficiency
         # print(f"individual efficiency: {efficiency}")
 
-        stsv.set_output_value(self.electricity_output, float(input_value * efficiency))
+        stsv.set_output_value(self.electricity_output, float(input_power_in_kW * efficiency))
 
     def write_to_report(self) -> list[str]:
         """Return report lines describing this transformer.

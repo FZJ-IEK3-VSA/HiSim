@@ -366,34 +366,68 @@ on one of them.
 
 ### Fixes
 
-**F7 — widen the keys of PV, building and car** `[decided 2026-08-31, owner]`
+**F7 — make the keys of PV, building and car complete** `[decided 2026-08-31, owner; implemented 2026-09-02 by a
+different mechanism than the one decided, see below]`
 
-**This fix is deliberately temporary and should be deleted, not defended.** PR #584 §3 answers the problem
-properly: a per-calculation DTO plus an automatic code fingerprint, which requires producers to be extracted
-into standalone modules first. That extraction is its own phase and lands after the local tier
-`[decided 2026-08-31]`. Between now and then, four caches can serve one household's results to another, so
-the keys are widened by hand in the meantime and removed when the DTO scheme arrives. Say so in the code, or
-someone will maintain it.
+The finding stands as written: PV, the building and the car keyed their cached artifacts on their *own*
+configuration while deriving them from an *upstream* one -- the weather for the first two, the occupancy for the
+car -- so two households sharing a PV config but not a weather shared one PV entry. PV's `location` string only
+tended to track the weather because setups copied one variable into both, a habit and not an invariant.
 
-- **PV and building** take the weather configuration's hash. Both derive their artifact from weather series
-  while keying on their own config; PV's `location` string only tends to track the weather because setups
-  copy one variable into both, which is a habit and not an invariant.
-- **The car takes a hash of the occupancy's configuration** `[decided 2026-08-31]`, not merely the household
-  name. The profile is a function of the whole occupancy setup — household, energy intensity, travel route
-  set, transportation device set — and any of those changes the driving pattern. Putting the household name
-  into `CarConfig` was rejected: it duplicates state that belongs to the occupancy, and two sources of truth
-  drift.
-  *How it reaches the car:* the occupancy already publishes the per-car profile into the simulation
-  repository, so it publishes the hash of its own configuration alongside, under the same identity. The car
-  reads both — the data it consumes and the fingerprint of what produced it — which is the same shape the DTO
-  scheme will formalise later, so this stopgap points in the right direction rather than away from it.
+**What was decided on 2026-08-31** was a stopgap: hash the upstream configuration into the downstream key by
+hand, have the occupancy publish that hash into the simulation repository beside the car profile, and delete all
+of it when #584's DTO scheme arrived. **What landed instead** keeps the finding and changes the mechanism, for a
+reason found while building the cache client's local tier: the DTO scheme does not remove the question of *how*
+PV learns the weather's identity -- its `weather_artifact_key` is "filled by the component" -- so solving it once
+in a shape the DTO consumes is better than solving it twice.
+
+- **The sizing engine carries the identity.** `WeatherConfig` contributes a `weather_identity` fact and
+  `UtspLpgConnectorConfig` an `occupancy_identity` fact (`SIZING_CONTRIBUTIONS`); `PVSystemConfig` and
+  `BuildingConfig` declare `weather_identity: Sizable[str]` and `CarConfig` declares
+  `occupancy_identity: Sizable[str]`, each sized from the matching fact. The engine is the typed successor of the
+  singleton repository for exactly this kind of cross-component fact, and it resolves before any component is
+  built -- so the run-time lookup the stopgap needed, and the order dependence that came with it, never arise.
+- **The identity is a readable string, not a hash** `[decided 2026-09-02, owner; discriminator widened after
+  review 2026-09-05]`: `Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center`
+  names the station, the data set and the file. The machine-specific prefix of ``source_path`` is left out
+  because it differs between machines and says nothing about the data, but the path *below the inputs
+  directory* is kept: that is where the dataset families live, and two families could hold files of the same
+  name -- a bare file stem would let two different datasets share one identity (found in review). A file
+  outside the inputs directory contributes only its basename. For the occupancy it is the acquisition mode,
+  the household names, the energy intensity, the three catalogue sets, the appliance flag, the predefined
+  profile name, the predefined profile file and the request guid. Not part of it, deliberately: the local
+  LPG's ``random_seed`` (wired nowhere -- both call sites pass ``None``; it must join the identity if it ever
+  becomes configurable), ``calculation_index_for_local_lpg`` (a scratch-directory slot, not profile content;
+  parallel drivers vary it per worker), and ``cars`` (a dead config field nothing reads -- removing it is a
+  separate serialization change). Readable because the value is written into every recorded energy system
+  beside the component that depends on it, where a reader should see which weather that was; the cache key
+  hashes it anyway.
+- **The key needs no widening code at all.** Once the identity is a field of the downstream configuration, the
+  legacy key -- a hash over the whole configuration JSON -- is complete by construction, and the DTO scheme later
+  reads the same field as its `weather_artifact_key`. Nothing here is deleted when #584 arrives; it is what #584
+  consumes.
+- **On the declarative path it costs little.** For the shipped scenarios -- exactly one weather each -- the
+  bare fact binds without a `sizing_sources` line; the repository's example file resolves the building's
+  identity with no edit to the file. A scenario with several weathers must name its source in a
+  `sizing_sources` line, because a bare fact with two providers is ambiguous and the engine refuses it.
+  On the Python path a setup sets the field before it builds the component
+  (`my_building_config.weather_identity = my_weather_config.identity()`), because a config that still carries
+  `AUTO` -- or a vacuous value: `None` from a JSON `null`, or an empty string -- is refused at construction,
+  which is the property that makes the fix hold: no run can produce an entry under an incomplete key again.
+  Every setup and every test that builds one of the three components was given that line; a test with no
+  weather in it sets a description instead of a station. **This is a breaking change for external setups**:
+  any script that builds a Building, PVSystem or Car directly must now set the identity field from its
+  upstream's `identity()` (or resolve through the sizing engine); the `ConfigSizingError` names the field and
+  the one-line fix. On the scenario-JSON path the identities are recorded literals (the JSON path has no
+  sizing engine); the executor cross-checks each literal against the identity of the file's single
+  weather/occupancy and refuses a stale one, so a hand-edited provider block cannot silently keep serving
+  cache entries computed for the old data.
 - **Solar thermal is not in this list.** F8 restricts its artifact to the solar position, whose inputs are
   already exactly its key, so it needs no widening at all.
 
-**What this does not fix**, and must not be claimed to: a widened key still describes *inputs the component
+**What this does not fix**, and must not be claimed to: a complete key still describes *inputs the component
 knows about*. It cannot notice a change in code, in a library version, or in an input nobody thought to add.
-Those are what #584's `code_fingerprint` and `third_party_fingerprint` are for, and they are the reason this
-is a stopgap rather than a solution.
+Those are what #584's `code_fingerprint` and `third_party_fingerprint` are for.
 
 **F8 — cache the sun position, and nothing else** `[specified 2026-08-31, owner]`
 

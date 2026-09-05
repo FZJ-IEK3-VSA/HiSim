@@ -7,7 +7,8 @@ import math
 import os
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Any, List, Optional, Union
+from pathlib import PurePath
+from typing import Any, Dict, List, Optional, Union
 
 from dataclasses_json import dataclass_json
 import numpy as np
@@ -17,7 +18,7 @@ import pvlib
 from hisim import loadtypes as lt
 from hisim import log, utils
 from hisim.caching import atomic_cache_write
-from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor, preset
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, FactContribution, constructor, preset
 from hisim.component import Component, ComponentOutput, SingleTimeStepValues, OpexCostDataClass, CapexCostDataClass
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
@@ -464,6 +465,48 @@ class WeatherConfig(ConfigBase):
         )
         return config
 
+    def identity(self) -> str:
+        """Return a short string that says which weather this configuration reads: station, data set, file.
+
+        Example: ``"Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center"``.
+        Components whose cached results depend on the weather (PV, building) store this string in their
+        own configuration, sized from the weather through the sizing engine, so that their cache keys
+        include which weather they were computed with. See ``roadmap/pylpg_flakiness.md`` F7.
+
+        It is a readable string rather than a hash because it is written into every recorded energy-system
+        file. For a file under the repository's inputs directory the path relative to that directory is
+        kept -- the machine-specific prefix says nothing about the data, but the directories below the
+        inputs root are where the dataset families live (two of the shipped families could hold files of
+        the same name), so dropping them would let two different datasets share one identity. A file
+        outside the inputs directory contributes only its basename.
+
+        Returns:
+            str: ``<location>/<data source>/<inputs-relative path or basename>``.
+        """
+        inputs_directory = os.path.abspath(utils.get_input_directory())
+        source = os.path.abspath(str(self.source_path))
+        if self._is_under(inputs_directory, source):
+            relative = os.path.relpath(source, inputs_directory)
+        else:
+            relative = os.path.basename(source)
+        return f"{self.location}/{self.data_source.value}/{PurePath(relative).as_posix()}"
+
+    @staticmethod
+    def identity_facts(config: "WeatherConfig", ctx: Any) -> Dict[str, Any]:
+        """Provide :meth:`identity` as the sizing fact ``weather_identity``.
+
+        Registered in ``SIZING_CONTRIBUTIONS`` below; the sizing engine calls it with the resolved config.
+
+        Args:
+            config: this weather configuration.
+            ctx: the sizing context; unused.
+
+        Returns:
+            Dict[str, Any]: ``{"weather_identity": config.identity()}``.
+        """
+        del ctx
+        return {"weather_identity": config.identity()}
+
     def _clear_non_key_fields(self, view: "WeatherConfig") -> None:
         """Make ``source_path`` portable in the copy hashed into the weather cache key.
 
@@ -549,6 +592,13 @@ class WeatherConfig(ConfigBase):
             data_source=data_source if data_source is not None else catalogue_source,
             predictive_control=False,
         )
+
+
+# Declared after the class because it refers to it. Every scenario has exactly one weather, so the
+# bare fact ``weather_identity`` binds to this contribution without any consumer naming a source.
+WeatherConfig.SIZING_CONTRIBUTIONS = (
+    FactContribution(facts=("weather_identity",), compute=WeatherConfig.identity_facts),
+)
 
 
 class Weather(Component):

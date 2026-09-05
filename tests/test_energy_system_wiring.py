@@ -366,12 +366,16 @@ def test_an_input_fed_by_two_sources_is_rejected(tmp_path: Path) -> None:
         + """  building:
     class: hisim.components.building.Building
     preset: standard
+    sizing_sources:
+      weather_identity: weather.weather_identity
     inputs:
       - weather
       - input: TemperatureOutside
         from: other_weather.TemperatureOutside
 """
     )
+    # Two weathers make the building's weather_identity ambiguous, and sizing runs before wiring, so the
+    # fixture names its source: this test is about the second feed, not about which weather sizes it.
 
     with pytest.raises(EnergySystemWiringError) as failure:
         Systems.build(entries, tmp_path)

@@ -461,13 +461,25 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "weather_identity": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
                   }
                 }
               },
               "sizing_sources": {
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
-                  "enum": []
+                  "enum": [
+                    "weather_identity"
+                  ]
                 }
               }
             }
@@ -1054,13 +1066,25 @@
                   },
                   "subsidy_as_percentage_of_investment_costs": {
                     "type": "number"
+                  },
+                  "occupancy_identity": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "const": "AUTO"
+                      }
+                    ]
                   }
                 }
               },
               "sizing_sources": {
                 "$ref": "#/$defs/sizing_sources",
                 "propertyNames": {
-                  "enum": []
+                  "enum": [
+                    "occupancy_identity"
+                  ]
                 }
               }
             }

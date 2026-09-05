@@ -239,6 +239,8 @@ def setup_components_and_connections(scenario_data: dict[str, Any], sim: simulat
         sim.add_component(component, connect_automatically=component_def["connect_automatically"])
         component_dict[component.config.component_id.name] = component
 
+    _verify_identity_literals([component.config for component in component_dict.values()])
+
     # Connect components
     for conn in scenario_data.get("connections", []):
         try:
@@ -275,6 +277,52 @@ def setup_components_and_connections(scenario_data: dict[str, Any], sim: simulat
 
         except KeyError as e:
             raise ValueError(f"Malformed connection entry: missing {e}") from e
+
+
+#: The sizing facts that are identity strings of an upstream component. A scenario JSON records them
+#: as literals on the consumer configs (the JSON path has no sizing engine), so they can silently go
+#: stale when someone edits the provider block by hand; the check below is what catches that.
+_IDENTITY_FACTS = ("weather_identity", "occupancy_identity")
+
+
+def _verify_identity_literals(configs: list[Any]) -> None:
+    """Refuse a scenario whose recorded identity literals disagree with the provider in the same file.
+
+    On the JSON path ``weather_identity``/``occupancy_identity`` are frozen strings, written when the
+    scenario was generated. A user who edits the weather or occupancy block by hand and forgets the
+    literals would otherwise run with a cache key naming the *old* upstream -- and silently be served
+    entries computed for different data, which is exactly what the identity exists to prevent.
+
+    The provider of a fact is found through its class's ``SIZING_CONTRIBUTIONS``, the same declaration
+    the sizing engine uses on the YAML path. The check only fires when the file holds exactly one
+    provider for a fact; with none or several, no single expected value exists and the literal is
+    taken as given.
+
+    Args:
+        configs: the configs of every component built from the scenario, in file order.
+
+    Raises:
+        ValueError: naming the stale literal, the provider's actual identity, and the fix.
+    """
+    for fact in _IDENTITY_FACTS:
+        providers = [
+            config
+            for config in configs
+            if any(fact in contribution.facts for contribution in getattr(type(config), "SIZING_CONTRIBUTIONS", ()))
+        ]
+        if len(providers) != 1:
+            continue
+        expected = providers[0].identity()
+        for config in configs:
+            recorded = getattr(config, fact, None)
+            if isinstance(recorded, str) and recorded != expected:
+                raise ValueError(
+                    f"The scenario records {fact} = {recorded!r} on '{config.component_id.key}' "
+                    f"({type(config).__name__}), but the {type(providers[0]).__name__} in the same file "
+                    f"has identity {expected!r}. The literal went stale -- most likely the provider block "
+                    "was edited by hand. Regenerate the scenario JSON from its .py setup, or update the "
+                    "literal to the provider's identity."
+                )
 
 
 def _resolve_input_directory_placeholder(path_with_placeholder: str) -> str:

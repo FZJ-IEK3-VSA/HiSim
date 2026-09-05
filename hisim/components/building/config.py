@@ -19,7 +19,7 @@ from typing import ClassVar, Optional
 
 from dataclasses_json import dataclass_json
 
-from hisim.config import ComponentID, ConfigBase, constructor, preset
+from hisim.config import ComponentID, ConfigBase, Sizable, Size, constructor, preset, sized_field
 
 
 @dataclass_json
@@ -76,6 +76,11 @@ class BuildingConfig(ConfigBase):
     maintenance_costs_in_euro_per_year:  Optional[float]
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: Optional[float]
+
+    #: The weather this building is computed with, as ``WeatherConfig.identity()`` spells it. Sized
+    #: from the weather by the sizing engine, so the solar-gains cache key includes it.
+    #: See ``roadmap/pylpg_flakiness.md`` F7.
+    weather_identity: Sizable[str] = sized_field(rule=Size.WEATHER_IDENTITY, value_type=str)
 
     #: Sizing facts this config contributes to the scenario-wide fact pool.
     #: Computed from the config alone via BuildingInformation, so the TABULA lookup runs

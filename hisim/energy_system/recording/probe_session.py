@@ -63,12 +63,11 @@ class ProbeRunner:
     #: The child command that records one probe, completed with the paths.
     COMMAND: ClassVar[Tuple[str, ...]] = ("-m", "hisim.cli", "energy-system", "record")
 
-    #: Environment variable naming the local load-profile-generator working directory. The probes
-    #: run one after another, so one index serves all of them.
+    #: Environment variable naming the local load-profile-generator working directory. It is
+    #: cleared from the child's environment rather than set: cleared, each probe derives its index
+    #: from its own process and so stays out of the way of anything else using local profiles,
+    #: while an inherited setting cannot make one machine's probes differ from another's.
     LPG_INDEX_VARIABLE: ClassVar[str] = "HISIM_LOCAL_LPG_CALC_INDEX"
-
-    #: The index handed to every child.
-    LPG_INDEX: ClassVar[str] = "1"
 
     #: Prefix of the throwaway directory the probes are recorded into.
     WORK_PREFIX: ClassVar[str] = ".probes-"
@@ -160,7 +159,7 @@ class ProbeRunner:
             arguments += ["--module-config", str(module_config), "--probe", probe.column]
             arguments += ["--probes", probe_list.origin]
         environment = dict(os.environ)
-        environment[cls.LPG_INDEX_VARIABLE] = cls.LPG_INDEX
+        environment.pop(cls.LPG_INDEX_VARIABLE, None)
         completed = subprocess.run(  # nosec B603 - fixed argument vector, no shell
             arguments, env=environment, capture_output=True, text=True, check=False
         )

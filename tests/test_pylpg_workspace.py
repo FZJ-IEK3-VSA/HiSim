@@ -6,7 +6,7 @@ multi-household request restarted its own counter at ``1``, which put every conc
 ``pylpg/C1``: sqlite files corrupted each other and a finishing run deleted the folder a running one
 was still using. These tests pin the replacement rule -- distinct base indices give disjoint blocks
 of directories, an occupied directory stops the run by name, and a run releases what it claimed
-whether it succeeded or failed.
+whether it succeeded or failed -- and the pool a parallel driver hands those base indices out from.
 
 None of them touch pylpg or start a calculation; they exercise arithmetic and one filesystem check,
 which is why they are ``base`` rather than ``utsp``.
@@ -21,6 +21,7 @@ import pytest
 
 from hisim.components.pylpg_workspace import (
     LocalLpgCalculationFailedError,
+    LpgBaseIndexPool,
     PylpgWorkingDirectoryInUseError,
     PylpgWorkspace,
 )
@@ -468,3 +469,83 @@ def test_the_real_check_recognises_the_locked_database_in_the_log_and_the_retry_
     assert generator.runs == 2
     assert generator.files_present_at_start == [[], []], "the second run must start without the first one's a.json"
     assert (result_folder / "b.json").is_file()
+
+
+@pytest.mark.base
+def test_two_borrows_held_at_the_same_time_get_different_base_indices() -> None:
+    """Two borrows held at the same time never share an index.
+
+    If they did, two HiSim processes would compute in the same ``pylpg/C<index>`` directory. Both
+    borrows happen on this one thread; that a second *thread* borrowing sees the same distinctness
+    is the standard library's ``queue.Queue`` guarantee, which a test here could not add to.
+    """
+    pool = LpgBaseIndexPool(slots=2)
+
+    with pool.borrowed() as first, pool.borrowed() as second:
+        assert first != second
+        assert {first, second} == {1, 2}
+
+
+@pytest.mark.base
+def test_an_index_is_lent_again_once_its_slot_is_free() -> None:
+    """A returned index can be borrowed again.
+
+    A script runs more subprocesses than it has workers, so each index is used many times.
+    """
+    pool = LpgBaseIndexPool(slots=1)
+
+    with pool.borrowed() as first:
+        assert first == 1
+    with pool.borrowed() as second:
+        assert second == 1
+
+
+@pytest.mark.base
+def test_a_borrower_that_raises_still_returns_its_index() -> None:
+    """An exception inside the ``with`` block does not lose the index.
+
+    Otherwise every failed subprocess would shrink the pool, and after ``slots`` failures the script
+    would block forever.
+    """
+    pool = LpgBaseIndexPool(slots=1)
+
+    with pytest.raises(RuntimeError):
+        with pool.borrowed():
+            raise RuntimeError("the child failed")
+
+    with pool.borrowed() as reused:
+        assert reused == 1
+
+
+@pytest.mark.base
+def test_a_pool_with_no_slots_is_refused() -> None:
+    """``slots=0`` is rejected at construction instead of blocking on the first borrow."""
+    with pytest.raises(ValueError, match="at least one slot"):
+        LpgBaseIndexPool(slots=0)
+
+
+@pytest.mark.base
+def test_the_child_environment_is_read_back_as_the_default_base_index(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The variable the pool writes is the one the child reads.
+
+    Checked as a round trip through ``PylpgWorkspace.default_base_index`` rather than against the
+    variable's literal name, so the two sides cannot drift apart unnoticed.
+    """
+    child = LpgBaseIndexPool.child_environment(7, {"UNRELATED": "kept"})
+
+    assert child["UNRELATED"] == "kept"
+    for name, value in child.items():
+        monkeypatch.setenv(name, value)
+    assert PylpgWorkspace.default_base_index() == 7
+
+
+@pytest.mark.base
+def test_the_child_environment_is_a_copy() -> None:
+    """The environment passed in is not modified."""
+    original = {"HOME": "/somewhere"}
+
+    LpgBaseIndexPool.child_environment(3, original)
+
+    assert original == {"HOME": "/somewhere"}

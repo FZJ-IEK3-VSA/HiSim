@@ -14,6 +14,11 @@ is claimed before it is created and released once the attempt ends, whether it s
 claiming one that already exists fails immediately with a message naming the index, because the
 alternative is two runs silently interleaving in one folder. See ``roadmap/pylpg_flakiness.md`` F3
 and F4.
+
+A script that runs several HiSim processes in parallel must give each process a different base index,
+otherwise two of them compute in the same ``pylpg/C<index>`` directory. :class:`LpgBaseIndexPool` hands
+those indices out and takes them back. It lives in this module so that the pool and
+:meth:`PylpgWorkspace.default_base_index` share one definition of the environment variable's name.
 """
 
 # clean
@@ -21,10 +26,11 @@ and F4.
 import contextlib
 import os
 import pathlib
+import queue
 import shutil
 import sys
 import time
-from typing import ClassVar, Iterator, List, Optional, Sequence, Tuple
+from typing import ClassVar, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 from pylpg import lpg_execution
 
@@ -471,3 +477,85 @@ class PylpgWorkspace:
                     log.information(f"Local LPG working directory '{directory.name}' deleted.")
             except OSError as error:
                 log.warning(f"Could not delete the local LPG working directory '{directory}': {error}")
+
+
+class LpgBaseIndexPool:
+    """A fixed set of local-LPG base indices that parallel workers borrow one at a time.
+
+    Background: pylpg computes each LoadProfileGenerator request inside a directory named
+    ``pylpg/C<index>``. The *base index* is the number a HiSim process derives that name from
+    (see :meth:`PylpgWorkspace.calculation_index`). Two processes with the same base index write
+    into the same directory and corrupt each other's results.
+
+    A script such as ``scripts/regenerate_scenario_jsons.py`` runs N worker threads, each of which
+    starts one HiSim subprocess after another. Numbering the subprocesses would not work, because
+    there are more of them than workers and the numbers would grow without bound. Instead the script
+    creates a pool of N indices and each worker borrows one for the duration of a subprocess::
+
+        pool = LpgBaseIndexPool(slots=4)
+        with pool.borrowed() as base_index:
+            env = pool.child_environment(base_index)
+            subprocess.run([...], env=env)
+
+    Why small numbers instead of the process-id default of :meth:`PylpgWorkspace.default_base_index`:
+    they are easier to read in a log. The directories they lead to are easy to tell apart -- base
+    index 1 computes in ``C100``, 2 in ``C200`` and so on, because a base index is strided through
+    :meth:`PylpgWorkspace.calculation_index` before it names a directory -- where the directories of
+    four process ids cannot be told apart at a glance.
+
+    The pool is thread-safe (it is a ``queue.Queue``). It is not shared between processes: a script
+    that forks must create one pool per process, and two independent drivers that each own a pool on
+    one machine hand out the same indices ``1`` to ``slots`` and collide. Runs that cannot coordinate
+    with each other must stay with the process-id default instead of using a pool.
+    """
+
+    def __init__(self, slots: int) -> None:
+        """Create a pool holding the indices ``1`` to ``slots``.
+
+        Args:
+            slots: the number of workers that will borrow at the same time.
+
+        Raises:
+            ValueError: if ``slots`` is less than one. An empty pool would make the first
+                :meth:`borrowed` call wait forever.
+        """
+        if slots < 1:
+            raise ValueError(f"A pool needs at least one slot to lend from; {slots} were asked for.")
+        self._available: "queue.Queue[int]" = queue.Queue()
+        for index in range(1, slots + 1):
+            self._available.put(index)
+
+    @contextlib.contextmanager
+    def borrowed(self) -> Iterator[int]:
+        """Take one index for the duration of a ``with`` block and return it afterwards.
+
+        If all indices are out, the call blocks until one is returned. The index is returned in a
+        ``finally`` clause, so it comes back even when the block raises.
+
+        Yields:
+            int: a base index that no other ``with`` block holds at the same time.
+        """
+        base_index = self._available.get()
+        try:
+            yield base_index
+        finally:
+            self._available.put(base_index)
+
+    @staticmethod
+    def child_environment(base_index: int, environment: Optional[Mapping[str, str]] = None) -> Dict[str, str]:
+        """Return a copy of an environment with the base index set for a child process.
+
+        The variable written is :attr:`PylpgWorkspace.INDEX_ENVIRONMENT_VARIABLE`, which
+        :meth:`PylpgWorkspace.default_base_index` reads in the child. Both sides use the same
+        constant, so they cannot disagree about the variable's name.
+
+        Args:
+            base_index: the index to pass on, normally the one from :meth:`borrowed`.
+            environment: the environment to copy; ``os.environ`` when omitted. It is not modified.
+
+        Returns:
+            Dict[str, str]: the environment for the child, with the variable set.
+        """
+        child = dict(os.environ if environment is None else environment)
+        child[PylpgWorkspace.INDEX_ENVIRONMENT_VARIABLE] = str(base_index)
+        return child

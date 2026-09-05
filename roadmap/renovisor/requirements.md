@@ -418,10 +418,12 @@ than the 66 catalogue households HiSim can simulate. Either the contract offers 
 supported compositions, or it states that the composition is matched to the nearest catalogue
 household and the match is reported.
 
-**A5 — Reconcile mileage with `travel_route_set`.** `[proposed; field_inventory §2]`
+**A5 — Reconcile mileage with `travel_route_set`.** `[decided 2026-09-05, review; field_inventory §2]`
 v0.3 dropped v1's `kmPerYear` but kept per-km consumption, so a vehicle's annual energy is driven by
-an *occupancy* field. Either restore a per-vehicle mileage field with a stated consumer, or state
-that mileage comes from `travel_route_set`.
+an *occupancy* field. Decided: restore a per-vehicle mileage field. The contract regains an optional
+`vehicles[].km_per_year`; when stated it scales the car's annual driving energy, and the
+travel-route set remains the fallback (and still shapes when the car is away). The stated consumer
+is the translation layer, which must scale car consumption independently of the LPG profile.
 
 **A18 — Simulation parameters arrive from the caller.** `[decided 2026-08-27, owner]`
 The service supplies a `simulationparameters.json` alongside the configuration; period, resolution

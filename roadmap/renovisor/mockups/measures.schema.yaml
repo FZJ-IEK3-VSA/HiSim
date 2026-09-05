@@ -109,8 +109,9 @@ BuildingElement:
   description: |
     The elements the thermal model actually resolves, and the ONLY vocabulary a
     measure may target. It is deliberately the five of `envelope_details`, not
-    the nine of `condition_assessment.building_elements`; see footer F5, which
-    is a defect in the draft this mockup does not paper over.
+    the nine of `condition_assessment.building_elements` and not the finer
+    categories of the measures database; footer F5 carries the mapping that
+    folds those onto these five.
   type: string
   enum: [roof, facade, floor, window, door]
 
@@ -128,7 +129,12 @@ InsulateMeasure:
           description: One of roof, facade, floor. Rejected for window and door, which are replaced, not insulated.
         material_id:
           type: string
-          description: A `/materials` entry. Optional, and PRICING-ONLY unless the catalogue carries thermal conductivity (A7).
+          description: |
+            A `/materials` entry. The catalogue row carries the format as well
+            as the material — rigid board, semi-flexible mat, blown-in, blanket,
+            bale, insulating plaster — so the measure does not repeat it.
+            Optional, and PRICING-ONLY unless the catalogue carries thermal
+            conductivity (A7).
         thickness_mm:
           type: number
           description: Optional, pricing-only. It does not determine the U-value; the U-value is stated outright.
@@ -136,9 +142,13 @@ InsulateMeasure:
           type: number
           description: |
             The element's U-value after the work. REQUIRED and authoritative:
-            the one number the simulation consumes. Whoever computes it from a
-            material and a thickness does so before the request, so that the
-            backend never has to guess a build-up it was not told about.
+            the one number the simulation consumes. In practice it is the
+            country's regulatory target U-value for the element, as the
+            measures database carries it; the insulation thickness is derived
+            from the existing and target U-values for pricing, never the other
+            way around. Whoever computes either does so before the request, so
+            that the backend never has to guess a build-up it was not told
+            about.
           examples: [0.16]
 
 ReplaceWindowsMeasure:
@@ -150,7 +160,10 @@ ReplaceWindowsMeasure:
     - type: object
       required: [resulting_u_value_in_watt_per_m2_per_kelvin]
       properties:
-        resulting_u_value_in_watt_per_m2_per_kelvin: { type: number, examples: [0.9] }
+        resulting_u_value_in_watt_per_m2_per_kelvin:
+          type: number
+          description: Typically the country's regulatory target U-value for windows (measures database).
+          examples: [0.9]
         resulting_area_in_m2:
           type: number
           description: Only when the opening is resized; omit to keep the existing area.
@@ -164,7 +177,10 @@ ReplaceDoorMeasure:
     - type: object
       required: [resulting_u_value_in_watt_per_m2_per_kelvin]
       properties:
-        resulting_u_value_in_watt_per_m2_per_kelvin: { type: number, examples: [1.2] }
+        resulting_u_value_in_watt_per_m2_per_kelvin:
+          type: number
+          description: Typically the country's regulatory target U-value for doors (measures database).
+          examples: [1.2]
         material_id: { type: string, description: Pricing only. }
 
 ImproveAirtightnessMeasure:
@@ -173,8 +189,9 @@ ImproveAirtightnessMeasure:
     NO SIMULATION CONSUMER TODAY. `BuildingConfig` has no infiltration
     parameter, so this measure is priced but not simulated, and the translation
     report must say so on every request that carries it (R7). Kept in the
-    vocabulary because it is a real product offering and because inventing it
-    later would be a breaking change.
+    vocabulary because it is a real product offering — a *shallow measure*, in
+    the measures database's taxonomy — and because inventing it later would be
+    a breaking change.
   x-writes: nothing (pricing and reporting only)
   allOf:
     - $ref: '#/components/schemas/MeasureBase'
@@ -257,8 +274,15 @@ InstallPhotovoltaicsMeasure:
       required: [power_in_watt]
       properties:
         power_in_watt: { type: number, examples: [5000] }
-        azimuth_in_degree: { type: number, examples: [180] }
-        tilt_in_degree: { type: number, examples: [35] }
+        azimuth_in_degree:
+          type: number
+          description: |
+            Free value, deliberately: the inventory carries no roof geometry, so
+            the backend cannot validate against the roof. Whoever builds the
+            request derives azimuth and tilt from the roof's shape and
+            orientation; omitted, the base file's defaults apply.
+          examples: [180]
+        tilt_in_degree: { type: number, examples: [35], description: See `azimuth_in_degree`. }
 
 InstallBatteryStorageMeasure:
   x-contract-status: provisional
@@ -286,7 +310,7 @@ InstallSolarThermalMeasure:
       required: [collector_area_in_m2]
       properties:
         collector_area_in_m2: { type: number, examples: [8] }
-        azimuth_in_degree: { type: number, examples: [180] }
+        azimuth_in_degree: { type: number, examples: [180], description: Free value, same convention as the photovoltaics measure. }
         tilt_in_degree: { type: number, examples: [35] }
         used_for_space_heating: { type: boolean }
         used_for_dhw: { type: boolean }
@@ -294,13 +318,13 @@ InstallSolarThermalMeasure:
 InstallVentilationMeasure:
   x-contract-status: provisional
   description: |
-    NO INVENTORY BLOCK TO WRITE TO. `condition_assessment.energy_systems` has a
-    `ventilation_system` entry, but `energy_system_config` has no ventilation
-    block at all, so the contract can describe the condition of a ventilation
-    system it cannot describe the existence of (footer F6). Either
-    `HomeInventoryInput` gains the block or this measure is dropped; it cannot
-    stay as drafted.
-  x-writes: energy_system_config.ventilation_system — DOES NOT EXIST, see F6
+    `condition_assessment.energy_systems` has a `ventilation_system` entry, but
+    `energy_system_config` had no ventilation block at all, so the contract
+    could describe the condition of a ventilation system it could not describe
+    the existence of. DECIDED (footer F6): `HomeInventoryInput` gains the block
+    — and an air-conditioning block besides, which has the same gap — and the
+    measure stays.
+  x-writes: energy_system_config.ventilation_system — to be added to the inventory, see F6
   allOf:
     - $ref: '#/components/schemas/MeasureBase'
     - type: object
@@ -334,6 +358,12 @@ ReplaceVehicleMeasure:
     omit it to add a vehicle without removing anything. The replacement is
     always an electric vehicle — a package that swaps one combustion car for
     another is not a renovation measure and is out of the product's scope.
+
+    The replaced car's own consumption is not restated here: `target` points
+    into the inventory, which already carries it, and that is where the cost
+    module reads it. The replacement cannot be a `VehicleRef`, because it is a
+    new vehicle the inventory has never seen — it needs a specification, not a
+    name.
   x-writes: energy_system_config.vehicles
   allOf:
     - $ref: '#/components/schemas/MeasureBase'
@@ -353,7 +383,10 @@ ReplaceVehicleMeasure:
 
 InstallChargerMeasure:
   x-contract-status: provisional
-  description: A home charge point. Annual mileage comes from `occupancy_config.travel_route_set`, not from here (A5).
+  description: |
+    A home charge point. Annual mileage does not come from here: it comes from
+    `vehicles[].km_per_year` when stated, and from `occupancy_config.travel_route_set`
+    otherwise (A5, decided; field_inventory §2).
   x-writes: energy_system_config.vehicles.charger
   allOf:
     - $ref: '#/components/schemas/MeasureBase'
@@ -406,7 +439,10 @@ Schedule:
         type: object
         required: [measure_ids]
         properties:
-          starts_in_year: { type: integer, examples: [2026] }
+          starts_in:
+            type: string
+            description: '`yyyy-MM`, the same convention as `preferred_start`.'
+            examples: ['2027-03']
           measure_ids:
             type: array
             items: { type: string }
@@ -448,23 +484,37 @@ PackageDefinition:
 #
 # F4  Vehicle entries in `HomeInventoryInput` need a stable `vehicle_id` so a
 #     measure can name one. This is a change to the inventory, not only to the
-#     measure — the two cannot be revised separately.
+#     measure — the two cannot be revised separately. The simpler alternative
+#     raised in review — no identity, "replace one fossil car", the backend
+#     counting what is left — was considered and rejected: with two fossil cars
+#     of different consumption, which one goes changes the result, and a
+#     content-addressed package must not leave the backend a choice that
+#     changes the result.
 #
-# F5  The contract carries TWO disagreeing element vocabularies: five in
-#     `envelope_details` (floor, facade, roof, window, door), nine in
-#     `condition_assessment.building_elements` (external_facade, exterior_walls,
-#     interior_walls, floors, attic_ceiling, attic_roof, roof_covering, windows,
-#     house_door). They do not nest: `attic_ceiling`, `attic_roof` and
-#     `roof_covering` all fall into `roof`, and `interior_walls` maps to nothing
-#     thermal at all. Measures target the five, because those are what the
-#     thermal model resolves. Whether the condition vocabulary shrinks to match,
-#     or stays as a finer-grained survey instrument that maps onto the five, is
-#     a decision for the frontend team (A21).
+# F5  DECIDED: the measure vocabulary stays the five elements the thermal model
+#     resolves; every finer vocabulary maps onto them. The contract carries a
+#     nine-element survey vocabulary in `condition_assessment.building_elements`,
+#     and the measures database is finer still (basement ceiling, basement
+#     floor, walls, ground-contacting components). The mapping:
 #
-# F6  `install_ventilation_system` has nowhere to write: `condition_assessment`
-#     can report a ventilation system's condition, but `energy_system_config`
-#     has no ventilation block, so the inventory cannot say one exists. Either
-#     the block is added or the measure goes.
+#         roof    <- attic_ceiling, attic_roof, roof_covering
+#         facade  <- external_facade, exterior_walls, walls (above ground)
+#         floor   <- floors, basement ceiling, basement floor,
+#                    ground-contacting components
+#         window  <- windows
+#         door    <- house_door
+#         (none)  <- interior_walls — nothing thermal to write
+#
+#     The survey vocabulary stays as the finer instrument it is; only measures
+#     are constrained to the five, because only the five have inventory fields
+#     to write (A21 records the frontend-side half of this).
+#
+# F6  DECIDED: `install_ventilation_system` stays, and `HomeInventoryInput`
+#     gains what it needs. `condition_assessment` can report a ventilation
+#     system's condition while `energy_system_config` cannot say one exists;
+#     the same holds for air conditioning. `energy_system_config` therefore
+#     gains a ventilation block AND an air-conditioning block. Like F4, an
+#     inventory change, not only a measures change.
 #
 # F7  Units follow the inventory's convention (`_in_watt`, `_in_kwh`,
 #     `_in_liters`, `_in_degree`), replacing the drafted `thickness_mm` /
@@ -478,7 +528,16 @@ PackageDefinition:
 #     materials catalogue carries thermal conductivity, which today it does not
 #     (A7). Making the U-value authoritative and the material advisory removes
 #     the dependency in the direction that blocks nothing: the catalogue can
-#     gain conductivity later without a contract change.
+#     gain conductivity later without a contract change. This is also how the
+#     measures database works: the target U-value per element per country comes
+#     from regulation, and the thickness is derived from the existing and
+#     target U-values — the derived quantity prices the work, the target
+#     quantity is the contract.
+#
+# F9  The `type` names above are this mockup's spelling. They are to be
+#     reconciled with the measures database once it lands in the repository
+#     that carries `openapi.yaml`; the SHAPE of each variant is the proposal,
+#     the spelling of its name is not.
 #
 # COST OF THIS PROPOSAL
 #   14 measure schemas instead of 1, plus changes to `Schedule`,

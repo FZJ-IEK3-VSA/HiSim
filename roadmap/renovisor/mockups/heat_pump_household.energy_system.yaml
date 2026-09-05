@@ -39,7 +39,7 @@ components:
     constructor:
       for_location:
         location: IE                       # [override] location.country_code
-        data_source: NSRDB_15MIN           # [base] the only Irish dataset (2019)
+        data_source: NSRDB_15MIN           # [base] follows the location, not any measure; the only Irish dataset (2019)
 
   occupancy:
     class: hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector

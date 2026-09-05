@@ -827,18 +827,20 @@ components:
         financing: { $ref: '#/components/schemas/Financing' }
 
     Measure:
-      x-contract-status: provisional
+      x-contract-status: superseded
+      description: |
+        SUPERSEDED — the authoritative schema is the discriminated union in
+        `mockups/measures.schema.yaml` (agreed in review), which replaces this
+        draft's flat shape: `thickness_mm` and `capacity_kw` gave way to
+        authoritative resulting values in the inventory's unit convention (its
+        footer F7/F8), and `alternatives` was removed (F1). The mockup is
+        pasted over this stub when the schemas are merged; kept as a stub so
+        the `$ref`s in this file stay resolvable until then.
       type: object
-      required: [type]
+      required: [measure_id, type]
       properties:
-        type: { type: string, examples: [wall_insulation] }
-        material_id: { type: string }
-        subtype: { type: string }
-        thickness_mm: { type: number }
-        capacity_kw: { type: number }
-        alternatives:
-          type: array
-          items: { type: string }
+        measure_id: { type: string }
+        type: { type: string, examples: [insulate] }
 
     Grants:
       x-contract-status: provisional
@@ -849,13 +851,14 @@ components:
         eligibility_criteria: { type: object, additionalProperties: true }
 
     Schedule:
-      x-contract-status: provisional
+      x-contract-status: superseded
+      description: |
+        SUPERSEDED — replaced by the `Schedule` of `mockups/measures.schema.yaml`,
+        whose phases reference `measure_id`s; the drafted `phase_order` strings
+        named nothing (mockup footer F2).
       type: object
       properties:
         preferred_start: { type: string, examples: ['2026-09'] }
-        phase_order:
-          type: array
-          items: { type: string }
 
     Financing:
       x-contract-status: provisional

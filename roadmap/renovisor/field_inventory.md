@@ -33,7 +33,7 @@ This file holds the raw survey. The requirements document quotes only the headli
 | 8 | `…general.number_of_apartments` | used | `BuildingConfig.number_of_apartments` |
 | 9 | `…general.set_heating_temperature_in_celsius` | used | same name |
 | 10 | `…general.set_cooling_temperature_in_celsius` | used | same name |
-| 11 | `…general.retrofit_status` | used | TABULA variant `.001` / `.002` / `.003` |
+| 11 | `…general.retrofit_status` | used | TABULA variant `.001` / `.002` / `.003` of the generic `Gen.ReEx.001` rows. Higher trailing numbers in the dataset (e.g. `IE.N.SFH.01.325SB…`) are special sub-typologies, not further refurbishment states; the translation excludes them. |
 | 12 | `…general.max_thermal_building_demand_in_watt` | used | same name; precedence against the sizing kernel undefined (requirement A11) |
 | 13–22 | `…envelope_details.*` (10 fields) | used | `BuildingConfig.{floor,facade,roof,window,door}_{u_value_in_watt_per_m2_per_kelvin,area_in_m2}` — **identical names** |
 | 23 | `occupancy_config.residents_count` | approximated | one of 66 `utspclient.helpers.lpgdata.Households` entries |
@@ -93,6 +93,14 @@ consumption but no mileage. HiSim's driving distance comes from the LPG travel-r
 occupancy profile, so mileage is *implied* by field 26 and cannot be stated independently.
 Consequence: a car's annual energy is a function of `travel_route_set`, which the contract
 documents as an occupancy field, not a vehicle field.
+
+**Decided (2026-09-05, review):** the next contract revision reinstates `vehicles[].km_per_year`
+as an optional field. The travel-route set encodes the commute, and commute distance under-states
+a household whose kilometres are holidays and hobbies — a car can do 20 000 km/year on a 5 km
+commute without any of it touching the route set. When stated, `km_per_year` scales the car's
+annual driving energy; the travel-route set remains the fallback and still shapes *when* the car
+is away from home. This puts a requirement on the translation layer: a stated mileage must scale
+car consumption independently of the LPG profile (A5).
 
 ## 3. `Kpis` — 13 leaf fields
 

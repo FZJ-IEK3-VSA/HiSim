@@ -191,7 +191,7 @@ database (R14, A15). What the *service* then does with that stamp — whether it
 content hash, namespaces the result store, or weakens the `immutable` claim — is the service's
 design decision, and the analysis is kept here rather than posed as an open question there.
 
-**Q2 — Does the calculation version enter the content hash, namespace the results, or weaken the immutability claim?** · blocks R14, A15, AC10
+**Q2 — Does the calculation version enter the content hash, namespace the results, or weaken the immutability claim?** · DECIDED · was blocking R14, A15, AC10
 
 *Context.* The contract states a finished result "never changes and may be cached indefinitely
 (`Cache-Control: public, max-age=31536000, immutable`)" because the input is content-addressed.
@@ -206,11 +206,13 @@ an internal generation counter. Consequence: cheap for the frontend, but a clien
 year-old response still shows stale numbers. (c) **Weaken `immutable`** to a short max-age plus
 an ETag. Consequence: correctness at the cost of the contract's central caching claim.
 
-*Recommendation.* (a) for correctness, with the version exposed in the finished result so a
-frontend can display it. The expense is real but a wrong renovation cost cached for a year is
-worse.
+*Decision (2026-08-27, agreed in review).* (a), for correctness, with the version exposed in the
+finished result so a frontend can display it. The expense is real but a wrong renovation cost
+cached for a year is worse. Review concurred: a model change must recompute; (b) causes stale
+cached results with no way for a client to tell; (c) is (a) with fewer guarantees and no
+advantage.
 
-*Blocks.* R14, A15, AC10.
+*Settles.* R14, A15, AC10 proceed on this basis.
 
 
 ---

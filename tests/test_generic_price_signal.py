@@ -54,13 +54,14 @@ def test_get_default_price_signal_config_custom_building() -> None:
 
 
 @pytest.mark.base
-def test_get_default_price_signal_config_empty_building() -> None:
-    """An empty building is accepted unchanged (no coercion/rejection)."""
-    config = PriceSignalConfig.get_default_price_signal_config(
-        component_id=ComponentID(name="PriceSignal", building="")
-    )
-    assert isinstance(config, PriceSignalConfig)
-    _assert_defaults(config, "")
+def test_get_default_price_signal_config_empty_building_is_refused() -> None:
+    """An empty building label is refused at the identity, naming the field.
+
+    Passed through, it would silently join into a key with a leading underscore — a component
+    nobody addressed that way — so the identity layer refuses it where it is written.
+    """
+    with pytest.raises(ValueError, match="building label"):
+        ComponentID(name="PriceSignal", building="")
 
 
 @pytest.mark.base

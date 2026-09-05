@@ -104,15 +104,14 @@ def test_get_default_template_component_custom_building() -> None:
 
 
 @pytest.mark.base
-def test_get_default_template_component_empty_building() -> None:
-    """An empty building is passed through without validation."""
-    config = example_template.ComponentNameConfig.get_default_template_component(
-        component_id=ComponentID(name="ComponentNameDefault", building="")
-    )
-    assert config.component_id.building == ""
-    assert config.component_id.name == "ComponentNameDefault"
-    assert config.loadtype == lt.LoadTypes.ELECTRICITY
-    assert config.unit == lt.Units.WATT
+def test_get_default_template_component_empty_building_is_refused() -> None:
+    """An empty building label is refused at the identity, naming the field.
+
+    Passed through, it would silently join into a key with a leading underscore — a component
+    nobody addressed that way — so the identity layer refuses it where it is written.
+    """
+    with pytest.raises(ValueError, match="building label"):
+        ComponentID(name="ComponentNameDefault", building="")
 
 
 @pytest.mark.base

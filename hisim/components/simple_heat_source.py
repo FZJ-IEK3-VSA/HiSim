@@ -227,7 +227,7 @@ _dataclass_json_from_dict: "Callable[..., SimpleHeatSourceConfig]" = (
 @classmethod
 def _from_dict_with_legacy_aliases(
     cls: "type[SimpleHeatSourceConfig]",
-    kvs: Any,
+    config_dict: Any,
     *,
     infer_missing: bool = False,
 ) -> "SimpleHeatSourceConfig":
@@ -238,8 +238,8 @@ def _from_dict_with_legacy_aliases(
     so callers can migrate saved configs. When both the old and the new name are
     present, the new name takes precedence and the legacy key is dropped.
     """
-    if isinstance(kvs, dict):
-        legacy_keys = [old for old in _LEGACY_CONFIG_FIELD_ALIASES if old in kvs]
+    if isinstance(config_dict, dict):
+        legacy_keys = [old for old in _LEGACY_CONFIG_FIELD_ALIASES if old in config_dict]
         if legacy_keys:
             warnings.warn(
                 "SimpleHeatSourceConfig: the JSON field name(s) "
@@ -250,14 +250,14 @@ def _from_dict_with_legacy_aliases(
                 DeprecationWarning,
                 stacklevel=2,
             )
-            kvs = dict(kvs)
+            config_dict = dict(config_dict)
             for old_name in legacy_keys:
                 new_name = _LEGACY_CONFIG_FIELD_ALIASES[old_name]
-                if new_name not in kvs:
-                    kvs[new_name] = kvs.pop(old_name)
+                if new_name not in config_dict:
+                    config_dict[new_name] = config_dict.pop(old_name)
                 else:
-                    kvs.pop(old_name)
-    return _dataclass_json_from_dict(cls, kvs, infer_missing=infer_missing)
+                    config_dict.pop(old_name)
+    return _dataclass_json_from_dict(cls, config_dict, infer_missing=infer_missing)
 
 
 SimpleHeatSourceConfig.from_dict = _from_dict_with_legacy_aliases  # type: ignore[method-assign,assignment]

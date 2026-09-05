@@ -18,6 +18,7 @@ delegate to :mod:`hisim.config.sizing`) without closing an import cycle through
 
 from __future__ import annotations
 
+import copy
 import dataclasses as dc
 import enum
 import sys
@@ -318,6 +319,42 @@ class ConfigBase:
     def get_config_classname(cls):
         """Gets the class name. Helper function for default connections."""
         return cls.__module__ + "." + cls.__name__
+
+    def cache_key_view(self: ConfigBaseT) -> ConfigBaseT:
+        """Return the copy of this configuration that is hashed into its cache key.
+
+        Not every field of a configuration affects the cached result. The base rule, applied to every config,
+        clears ``component_id.building``: the same PV system computes the same series in every house, so the
+        house must not be part of the key. Then the copy is handed to ``_clear_non_key_fields``, which a
+        subclass overrides to remove its own non-key fields. The base rule always runs, whatever the subclass
+        does; this method is not meant to be overridden.
+
+        The copy is deep, so neither this method nor the hook ever modifies the live configuration.
+
+        Returns:
+            A deep copy of this configuration with the non-key fields cleared or normalised.
+        """
+        view = copy.deepcopy(self)
+        component_id = getattr(view, "component_id", None)
+        if component_id is not None:
+            # The identity is frozen, hence the replacement rather than an assignment.
+            setattr(view, "component_id", dc.replace(component_id, building=None))
+        self._clear_non_key_fields(view)
+        return view
+
+    def _clear_non_key_fields(self: ConfigBaseT, view: ConfigBaseT) -> None:
+        """Remove from ``view`` the fields of this configuration that do not decide the cached result.
+
+        ``view`` is the deep copy that ``cache_key_view`` is about to hash, with the building already
+        cleared. A subclass overrides this to clear fields that only place a run (where a result file is
+        written, which worker index was used) and to make file paths portable (relative to the inputs
+        directory instead of absolute), so that an entry computed on one machine can be found on another.
+        The override mutates ``view`` in place and does not need to call ``super()``. The default clears
+        nothing.
+
+        Args:
+            view: the copy to adjust; the live configuration is a different object.
+        """
 
     def to_dict(self) -> Dict[str, Any]:
         """Dumps this configuration as a plain dict of its dataclass fields.

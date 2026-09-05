@@ -7,7 +7,6 @@ import inspect
 import itertools
 import json
 import os
-import dataclasses
 from dataclasses import dataclass
 from functools import lru_cache
 from functools import reduce as freduce
@@ -384,36 +383,31 @@ def get_cache_file(
 
 
 def build_cache_key_string(parameter_class: Any, my_simulation_parameters: SimulationParameters) -> str:
-    """Builds the raw string a cache entry's name is hashed from, and its metadata records verbatim.
+    """Return the string a cache entry's filename is hashed from and its ``.meta`` file records.
 
-    The string is shared by three callers that must agree exactly: the lookup that turns it into a
-    filename, the writer that stores it beside the entry, and the validation that recomputes the hash
-    from the stored copy. Splitting it out of ``get_cache_file`` is what lets a writer record the
-    inputs that actually produced its bytes rather than re-deriving what was asked for.
+    The same string is used by the lookup (hashed into the filename), by the writer (stored beside the
+    entry) and by the validation (re-hashed and compared with the filename), so it is built in one place.
 
-    The component's building is removed from its identity first. The cached data depends on what the
-    component is and how it is parameterized, not on which building it happens to sit in, and leaving
-    the building in would file the same computation under a different name for every house.
+    What is hashed is ``parameter_class.cache_key_view()`` when the class provides it (every
+    ``ConfigBase`` does): a copy with the fields that do not affect the result cleared and any paths made
+    portable. A parameter class without that method -- tests pass minimal stand-ins -- is hashed as it is.
 
     Args:
-        parameter_class: the configuration dataclass, which must provide ``to_json``.
+        parameter_class: the configuration; must provide ``to_json``.
         my_simulation_parameters: contributes start, end, resolution, year, timesteps and country.
 
     Returns:
         str: the configuration JSON followed by the simulation parameters' unique key.
 
     Raises:
-        ValueError: if ``my_simulation_parameters`` is None, or the resulting string is too short to
-            be a real configuration, which would mean the caller passed something empty.
+        ValueError: if ``my_simulation_parameters`` is None, or the result is too short to be a real
+            configuration.
     """
     if my_simulation_parameters is None:
         raise ValueError("Simulation parameters was none.")
-    parameter_class_copy = copy.deepcopy(parameter_class)
-    component_id = getattr(parameter_class_copy, "component_id", None)
-    if component_id is not None:
-        # The identity is frozen, hence the replacement rather than an assignment.
-        setattr(parameter_class_copy, "component_id", dataclasses.replace(component_id, building=None))
-    json_str = parameter_class_copy.to_json() + my_simulation_parameters.get_unique_key()
+    view_method = getattr(parameter_class, "cache_key_view", None)
+    hashed = view_method() if callable(view_method) else parameter_class
+    json_str = hashed.to_json() + my_simulation_parameters.get_unique_key()
     if len(json_str) < 5:
         raise ValueError("Empty json detected for caching. This is a bug.")
     return str(json_str)
@@ -459,9 +453,9 @@ def measure_execution_time(my_function):  # noqa
         start = timer()
         result = my_function(*args, **kwargs)
         end = timer()
-        diff = end - start
+        diff_in_s = end - start
         log.profile(
-            "Executing " + my_function.__module__ + "." + my_function.__name__ + " took " + f"{diff:1.2f}" + " seconds"
+            "Executing " + my_function.__module__ + "." + my_function.__name__ + " took " + f"{diff_in_s:1.2f}" + " seconds"
         )
         return result
 

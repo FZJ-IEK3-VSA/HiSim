@@ -144,7 +144,20 @@ jobs:
     - name: Install HiSim package
       run: |
         uv pip install --system -e .
+    # The previous run's weather series and LoadProfileGenerator profiles; see the action.
+    - name: Restore the HiSim inputs cache
+      uses: ./.github/actions/hisim-cache
+      with:
+        mode: restore
+        scope: ${{ github.workflow }}-basic-execution
     - name: Run hisim_main.py directly from the command line
       working-directory: ./system_setups/
       run: |
         python ../hisim/hisim_main.py household_heatpump_building_sizer.py
+    # Kept even when the job failed; see the action for why that is safe.
+    - name: Save the HiSim inputs cache
+      if: always()
+      uses: ./.github/actions/hisim-cache
+      with:
+        mode: save
+        scope: ${{ github.workflow }}-basic-execution

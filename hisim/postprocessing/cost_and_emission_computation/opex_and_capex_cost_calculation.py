@@ -45,32 +45,32 @@ def opex_calculation(
 
     total_summary: Dict[str, Dict[str, float]] = {
         "all_components": {
-            "consumption": 0.0,
-            "co2_emissions": 0.0,
-            "energy_cost": 0.0,
-            "maintenance": 0.0,
+            "consumption_in_kwh": 0.0,
+            "co2_emissions_in_kg": 0.0,
+            "energy_cost_in_euro": 0.0,
+            "maintenance_in_euro": 0.0,
         },
         "without_hp": {
-            "consumption": 0.0,
-            "co2_emissions": 0.0,
-            "energy_cost": 0.0,
-            "maintenance": 0.0,
+            "consumption_in_kwh": 0.0,
+            "co2_emissions_in_kg": 0.0,
+            "energy_cost_in_euro": 0.0,
+            "maintenance_in_euro": 0.0,
         },
     }
 
     for building_object in building_objects_in_district_list:
         totals_per_building: Dict[str, Dict[str, float]] = {
             "all_components": {
-                "consumption": 0.0,
-                "co2_emissions": 0.0,
-                "energy_cost": 0.0,
-                "maintenance": 0.0,
+                "consumption_in_kwh": 0.0,
+                "co2_emissions_in_kg": 0.0,
+                "energy_cost_in_euro": 0.0,
+                "maintenance_in_euro": 0.0,
             },
             "without_hp": {
-                "consumption": 0.0,
-                "co2_emissions": 0.0,
-                "energy_cost": 0.0,
-                "maintenance": 0.0,
+                "consumption_in_kwh": 0.0,
+                "co2_emissions_in_kg": 0.0,
+                "energy_cost_in_euro": 0.0,
+                "maintenance_in_euro": 0.0,
             },
         }
 
@@ -93,10 +93,10 @@ def opex_calculation(
                     log.debug(str(opex))
                     continue
 
-                energy_consumption = round(opex.total_consumption_in_kwh, 2)
-                co2 = round(opex.co2_footprint_in_kg, 2)
-                energy_costs = round(opex.opex_energy_cost_in_euro, 2)
-                maintenance = round(opex.opex_maintenance_cost_in_euro, 2)
+                energy_consumption_in_kwh = round(opex.total_consumption_in_kwh, 2)
+                co2_in_kg = round(opex.co2_footprint_in_kg, 2)
+                energy_costs_in_euro = round(opex.opex_energy_cost_in_euro, 2)
+                maintenance_in_euro = round(opex.opex_maintenance_cost_in_euro, 2)
 
                 # Classify component once — both checks depend only on component_unwrapped,
                 # not on group, so they need not be re-evaluated inside the loop below.
@@ -120,13 +120,19 @@ def opex_calculation(
                         continue
 
                     # Add values to the appropriate group
-                    totals_per_building[group]["consumption"] += energy_consumption
-                    totals_per_building[group]["co2_emissions"] += co2
-                    totals_per_building[group]["energy_cost"] += energy_costs
-                    totals_per_building[group]["maintenance"] += maintenance
+                    totals_per_building[group]["consumption_in_kwh"] += energy_consumption_in_kwh
+                    totals_per_building[group]["co2_emissions_in_kg"] += co2_in_kg
+                    totals_per_building[group]["energy_cost_in_euro"] += energy_costs_in_euro
+                    totals_per_building[group]["maintenance_in_euro"] += maintenance_in_euro
 
                 # Write component opex values to table
-                component_row: List[Union[str, float, None]] = [component_unwrapped.component_name, energy_consumption, co2, energy_costs, maintenance]
+                component_row: List[Union[str, float, None]] = [
+                    component_unwrapped.component_name,
+                    energy_consumption_in_kwh,
+                    co2_in_kg,
+                    energy_costs_in_euro,
+                    maintenance_in_euro,
+                ]
 
                 if not is_meter:
                     opex_rows.append(component_row)
@@ -220,11 +226,21 @@ def opex_calculation(
 def _accumulate_capex(target: Dict[str, Optional[float]], key: str, amount: float) -> None:
     """Add ``amount`` to ``target[key]``, failing loudly if the current total is ``None``.
 
-    The capex summary dictionaries mix always-float keys (investment, co2, ...)
-    with always-None keys (subsidy, lifetime) under a shared ``Optional[float]``
-    annotation. Accumulation only ever targets the float keys, so a ``None``
-    value here signals a broken invariant; raise instead of silently attempting
-    ``None + amount`` (which would raise a confusing ``TypeError``).
+    The capex summary dictionaries mix always-float keys (investment_in_euro,
+    co2_in_kg, ...) with always-None keys (subsidy, lifetime_in_years) under a
+    shared ``Optional[float]`` annotation. Accumulation only ever targets the
+    float keys, so a ``None`` value here signals a broken invariant; raise
+    instead of silently attempting ``None + amount`` (which would raise a
+    confusing ``TypeError``).
+
+    ``amount`` is unit-polymorphic: its physical unit is determined by ``key``.
+    Cost keys (investment_in_euro, rest_investment_in_euro,
+    investment_for_simulated_period_in_euro,
+    rest_investment_for_simulated_period_in_euro) carry EUR, while CO2 keys
+    (co2_in_kg, co2_for_simulated_period_in_kg) carry kg. Callers must pass an
+    ``amount`` whose unit matches the unit encoded in ``key``; a unit-specific
+    parameter name is not possible without splitting this generic accumulator
+    by unit.
     """
     current = target[key]
     if current is None:
@@ -280,48 +296,48 @@ def capex_calculation(
 
     total_summary: Dict[str, Dict[str, Optional[float]]] = {
         "all_components": {
-            "investment": 0.0,
-            "co2": 0.0,
+            "investment_in_euro": 0.0,
+            "co2_in_kg": 0.0,
             "subsidy": None,
-            "rest_investment": 0.0,
-            "lifetime": None,
-            "investment_period": 0.0,
-            "rest_investment_period": 0.0,
-            "co2_period": 0.0,
+            "rest_investment_in_euro": 0.0,
+            "lifetime_in_years": None,
+            "investment_for_simulated_period_in_euro": 0.0,
+            "rest_investment_for_simulated_period_in_euro": 0.0,
+            "co2_for_simulated_period_in_kg": 0.0,
         },
         "without_hp": {
-            "investment": 0.0,
-            "co2": 0.0,
+            "investment_in_euro": 0.0,
+            "co2_in_kg": 0.0,
             "subsidy": None,
-            "rest_investment": 0.0,
-            "lifetime": None,
-            "investment_period": 0.0,
-            "rest_investment_period": 0.0,
-            "co2_period": 0.0,
+            "rest_investment_in_euro": 0.0,
+            "lifetime_in_years": None,
+            "investment_for_simulated_period_in_euro": 0.0,
+            "rest_investment_for_simulated_period_in_euro": 0.0,
+            "co2_for_simulated_period_in_kg": 0.0,
         },
     }
 
     for building_object in building_objects_in_district_list:
         totals_per_building: Dict[str, Dict[str, Optional[float]]] = {
             "all_components": {
-                "investment": 0.0,
-                "co2": 0.0,
+                "investment_in_euro": 0.0,
+                "co2_in_kg": 0.0,
                 "subsidy": None,
-                "rest_investment": 0.0,
-                "lifetime": None,
-                "investment_period": 0.0,
-                "rest_investment_period": 0.0,
-                "co2_period": 0.0,
+                "rest_investment_in_euro": 0.0,
+                "lifetime_in_years": None,
+                "investment_for_simulated_period_in_euro": 0.0,
+                "rest_investment_for_simulated_period_in_euro": 0.0,
+                "co2_for_simulated_period_in_kg": 0.0,
             },
             "without_hp": {
-                "investment": 0.0,
-                "co2": 0.0,
+                "investment_in_euro": 0.0,
+                "co2_in_kg": 0.0,
                 "subsidy": None,
-                "rest_investment": 0.0,
-                "lifetime": None,
-                "investment_period": 0.0,
-                "rest_investment_period": 0.0,
-                "co2_period": 0.0,
+                "rest_investment_in_euro": 0.0,
+                "lifetime_in_years": None,
+                "investment_for_simulated_period_in_euro": 0.0,
+                "rest_investment_for_simulated_period_in_euro": 0.0,
+                "co2_for_simulated_period_in_kg": 0.0,
             },
         }
 
@@ -346,14 +362,14 @@ def capex_calculation(
                     log.warning(f"Invalid lifetime in {component_unwrapped.component_name}, skipping entry.")
                     continue
 
-                investment = round(capex.capex_investment_cost_in_euro, 2)
-                co2 = round(capex.device_co2_footprint_in_kg, 2)
+                investment_in_euro = round(capex.capex_investment_cost_in_euro, 2)
+                co2_in_kg = round(capex.device_co2_footprint_in_kg, 2)
                 subsidy_pct = round(capex.subsidy_as_percentage_of_investment_costs, 2)
-                rest_investment = round(investment * (1 - subsidy_pct), 2)
-                lifetime = round(capex.lifetime_in_years, 2)
-                investment_period = round(capex.capex_investment_cost_for_simulated_period_in_euro, 2)
-                rest_investment_period = round(investment_period * (1 - subsidy_pct), 2)
-                co2_period = round(capex.device_co2_footprint_for_simulated_period_in_kg, 2)
+                rest_investment_in_euro = round(investment_in_euro * (1 - subsidy_pct), 2)
+                lifetime_in_years = round(capex.lifetime_in_years, 2)
+                investment_for_simulated_period_in_euro = round(capex.capex_investment_cost_for_simulated_period_in_euro, 2)
+                rest_investment_for_simulated_period_in_euro = round(investment_for_simulated_period_in_euro * (1 - subsidy_pct), 2)
+                co2_for_simulated_period_in_kg = round(capex.device_co2_footprint_for_simulated_period_in_kg, 2)
 
                 # Add to total and subtotal
                 for group in ["all_components", "without_hp"]:
@@ -363,24 +379,24 @@ def capex_calculation(
                     ):
                         continue
                     group_totals = totals_per_building[group]
-                    _accumulate_capex(group_totals, "investment", investment)
-                    _accumulate_capex(group_totals, "co2", co2)
-                    _accumulate_capex(group_totals, "rest_investment", rest_investment)
-                    _accumulate_capex(group_totals, "investment_period", investment_period)
-                    _accumulate_capex(group_totals, "rest_investment_period", rest_investment_period)
-                    _accumulate_capex(group_totals, "co2_period", co2_period)
+                    _accumulate_capex(group_totals, "investment_in_euro", investment_in_euro)
+                    _accumulate_capex(group_totals, "co2_in_kg", co2_in_kg)
+                    _accumulate_capex(group_totals, "rest_investment_in_euro", rest_investment_in_euro)
+                    _accumulate_capex(group_totals, "investment_for_simulated_period_in_euro", investment_for_simulated_period_in_euro)
+                    _accumulate_capex(group_totals, "rest_investment_for_simulated_period_in_euro", rest_investment_for_simulated_period_in_euro)
+                    _accumulate_capex(group_totals, "co2_for_simulated_period_in_kg", co2_for_simulated_period_in_kg)
 
                 capex_rows.append(
                     [
                         component_unwrapped.component_name,
-                        investment,
-                        co2,
+                        investment_in_euro,
+                        co2_in_kg,
                         subsidy_pct,
-                        rest_investment,
-                        lifetime,
-                        investment_period,
-                        rest_investment_period,
-                        co2_period,
+                        rest_investment_in_euro,
+                        lifetime_in_years,
+                        investment_for_simulated_period_in_euro,
+                        rest_investment_for_simulated_period_in_euro,
+                        co2_for_simulated_period_in_kg,
                     ]
                 )
 

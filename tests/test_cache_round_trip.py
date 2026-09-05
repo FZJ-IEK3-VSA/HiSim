@@ -30,10 +30,9 @@ class CacheReaders:
     Listed explicitly rather than discovered, because a new cache reader should have to be added
     here deliberately -- which is the moment to ask whether it parses exactly.
 
-    The solar thermal collector is absent on purpose: its cache is rebuilt on a separate branch
-    (roadmap/pylpg_flakiness.md F8) and its own test asserts the same guarantee behaviourally, by
-    comparing a computed run against a cached one. Whichever of the two lands second should add it
-    here, so that this list is once again every reader rather than most of them.
+    The list is now all six of them. Four arrived with the argument; the solar thermal collector
+    was rebuilt on its own branch (roadmap/pylpg_flakiness.md F8) and was added once both had
+    landed; the car was simply missed, and had been reading its cache inexactly the whole time.
     """
 
     SITES: Tuple[Tuple[str, str], ...] = (
@@ -41,6 +40,8 @@ class CacheReaders:
         ("hisim/components/building/building.py", "if not self.is_in_cache:  #"),
         ("hisim/components/weather.py", "my_weather = pd.read_csv("),
         ("hisim/components/loadprofilegenerator_utsp_connector.py", "dataframe = pd.read_csv("),
+        ("hisim/components/solar_thermal_system.py", "Get solar position from cache."),
+        ("hisim/components/generic_car.py", "Generic car data is taken from cache."),
     )
 
     EXACT = 'float_precision="round_trip"'

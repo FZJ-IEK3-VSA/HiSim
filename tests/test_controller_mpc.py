@@ -34,7 +34,7 @@ def _make_mpc_config() -> MpcControllerConfig:
         optimizer_sampling_rate_in_min=15,
         initial_temperature_in_celsius=22.0,
         flexibility_element="basic_buidling_configuration",
-        initial_state_of_charge=10 / 15,
+        initial_state_of_charge_in_watt_hour=10 / 15,
         temp_forecast_in_celsius=[],
         phi_m_forecast_in_watt=[],
         phi_st_forecast_in_watt=[],

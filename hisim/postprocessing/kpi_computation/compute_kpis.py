@@ -7,7 +7,7 @@ https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiede
 """
 
 
-from typing import List, Dict
+from typing import List, Dict, Any
 from dataclasses import dataclass
 from hisim.loadtypes import DistrictNames
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
@@ -19,9 +19,9 @@ class KpiGenerator(KpiPreparation):
     """Class for generating and calculating key performance indicators."""
 
     post_processing_data_transfer: PostProcessingDataTransfer
-    building_objects_in_district_list: list
+    building_objects_in_district_list: List[str]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Build the dataclass from input data.
 
         Orchestrates the KPI computation for every entry in
@@ -51,7 +51,7 @@ class KpiGenerator(KpiPreparation):
 
         self.return_table_for_report()
 
-    def create_kpi_collection(self, building_objects_in_district):
+    def create_kpi_collection(self, building_objects_in_district: str) -> None:
         """Create kpi collection and write back into post processing data transfer.
 
         Computes the electricity KPIs for a single ``building_objects_in_district``
@@ -214,7 +214,7 @@ class KpiGenerator(KpiPreparation):
         # get capex and opex costs
         self.read_opex_and_capex_costs_from_results(building_object=building_objects_in_district)
 
-    def create_overall_district_kpi(self, district_name):
+    def create_overall_district_kpi(self, district_name: str) -> None:
         """Creation of overall district kpis.
 
         Aggregates the per-building KPIs of a district (``district_name``) into
@@ -295,7 +295,7 @@ class KpiGenerator(KpiPreparation):
             name="Overall self-sufficiency according to solar htw berlin in district",
         )
 
-    def return_table_for_report(self):
+    def return_table_for_report(self) -> List[List[str]]:
         """Return a table with all kpis for the report.
 
         Builds a list of rows from the tag-sorted KPI collection
@@ -305,7 +305,7 @@ class KpiGenerator(KpiPreparation):
         table fits the report layout. The table is returned but not persisted on
         the instance.
         """
-        table: List = []
+        table: List[List[str]] = []
         table.append(["Object", "KPI", "Value", "Unit"])
         for building_object in self.building_objects_in_district_list:
             for kpi_tag, kpi_entries in self.kpi_collection_dict_sorted[building_object].items():
@@ -322,7 +322,7 @@ class KpiGenerator(KpiPreparation):
                 table.append(["\n", "\n", "\n", "\n"])
 
         #  Insert line break for report
-        wrapped_table_data = []
+        wrapped_table_data: List[List[str]] = []
         for row in table:
             wrapped_row = []
             for cell in row:
@@ -332,7 +332,9 @@ class KpiGenerator(KpiPreparation):
 
         return wrapped_table_data
 
-    def sort_kpi_collection_according_to_kpi_tags(self, kpi_collection_dict_unsorted: Dict) -> Dict:
+    def sort_kpi_collection_according_to_kpi_tags(
+        self, kpi_collection_dict_unsorted: Dict[str, Dict[str, Dict[str, Any]]]
+    ) -> Dict[str, Dict[KpiTagEnumClass, Dict[str, Any]]]:
         """Sort KPI collection dict according to KPI tags.
 
         Reorganises ``kpi_collection_dict_unsorted`` so that, for every building
@@ -342,7 +344,7 @@ class KpiGenerator(KpiPreparation):
         preserves the building-object order of ``building_objects_in_district_list``.
         """
 
-        kpi_collection_dict_sorted: Dict[str, Dict] = {
+        kpi_collection_dict_sorted: Dict[str, Dict[KpiTagEnumClass, Dict[str, Any]]] = {
             building_objects: {} for building_objects in self.building_objects_in_district_list
         }
 

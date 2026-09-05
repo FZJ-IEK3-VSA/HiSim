@@ -5,7 +5,7 @@ import importlib
 from pathlib import Path
 import sys
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 # Third party imports
 from dotenv import load_dotenv
 # First party imports
@@ -115,7 +115,7 @@ def main(
     )
 
     # Build method
-    setup_function_ref = getattr(targetmodule, function_in_module)
+    setup_function_ref: Callable[..., Any] = getattr(targetmodule, function_in_module)
     # Call the setup function, passing the simulator as an argument
     setup_function_ref(my_sim, my_simulation_parameters)
     # Write the simulation parameters now, then alter them to include advanced logging
@@ -223,13 +223,13 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         log.information("HiSim converter needs at least one argument.")
         sys.exit(1)
-    FILE_NAME = sys.argv[1]
-    FUNCTION_NAME = "setup_function"
+    FILE_NAME: str = sys.argv[1]
+    FUNCTION_NAME: str = "setup_function"
     if len(sys.argv) == 2:
         log.information(f"calling {FUNCTION_NAME} from {FILE_NAME}")
         main(path_to_module=FILE_NAME)
     if len(sys.argv) == 3:
-        MODULE_CONFIG = sys.argv[2]
+        MODULE_CONFIG: str = sys.argv[2]
         log.information(f"calling {FUNCTION_NAME} from {FILE_NAME} with module config {MODULE_CONFIG}")
         main(
             path_to_module=FILE_NAME,

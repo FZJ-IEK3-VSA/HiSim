@@ -123,7 +123,7 @@ class GasMeter(DynamicComponent):
         self.production_inputs: List[ComponentInput] = []
         self.consumption_uncontrolled_inputs: List[ComponentInput] = []
 
-        self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        self.timestep_duration_in_s = self.my_simulation_parameters.seconds_per_timestep
         # Component has states
         self.state = GasMeterState(cumulative_production_in_watt_hour=0, cumulative_consumption_in_watt_hour=0)
         self.previous_state = self.state.self_copy()
@@ -329,14 +329,14 @@ class GasMeter(DynamicComponent):
             self.my_simulation_parameters.year, self.my_simulation_parameters.country
         )
         if self.config.gas_loadtype == lt.LoadTypes.GAS:
-            co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
-            euro_per_unit = emissions_and_cost_factors.gas_costs_in_euro_per_kwh
+            co2_footprint_in_kg_per_kwh = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
+            gas_cost_in_euro_per_kwh = emissions_and_cost_factors.gas_costs_in_euro_per_kwh
         elif self.config.gas_loadtype == lt.LoadTypes.GREEN_HYDROGEN:
-            co2_per_unit = emissions_and_cost_factors.green_hydrogen_gas_footprint_in_kg_per_kwh
-            euro_per_unit = emissions_and_cost_factors.green_hydrogen_gas_costs_in_euro_per_kwh
+            co2_footprint_in_kg_per_kwh = emissions_and_cost_factors.green_hydrogen_gas_footprint_in_kg_per_kwh
+            gas_cost_in_euro_per_kwh = emissions_and_cost_factors.green_hydrogen_gas_costs_in_euro_per_kwh
 
-        opex_cost_per_simulated_period_in_euro = total_energy_from_grid_in_kwh * euro_per_unit
-        co2_per_simulated_period_in_kg = total_energy_from_grid_in_kwh * co2_per_unit
+        opex_cost_per_simulated_period_in_euro = total_energy_from_grid_in_kwh * gas_cost_in_euro_per_kwh
+        co2_per_simulated_period_in_kg = total_energy_from_grid_in_kwh * co2_footprint_in_kg_per_kwh
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=opex_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=0,

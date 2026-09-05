@@ -32,12 +32,12 @@ SECONDS_PER_TIMESTEP = 60
 def _build_thermal_model() -> BuildingThermalModel5R1C:
     """Constructs a thermal model with explicit coefficients (no singleton dependency)."""
     return BuildingThermalModel5R1C(
-        h_tr_w=H_TR_W,
-        h_tr_ms=H_TR_MS,
-        h_tr_em=H_TR_EM,
-        h_ve_adj=H_VE_ADJ,
-        h_tr_is=H_TR_IS,
-        c_m=C_M,
+        h_tr_w_in_watt_per_kelvin=H_TR_W,
+        h_tr_ms_in_watt_per_kelvin=H_TR_MS,
+        h_tr_em_in_watt_per_kelvin=H_TR_EM,
+        h_ve_adj_in_watt_per_kelvin=H_VE_ADJ,
+        h_tr_is_in_watt_per_kelvin=H_TR_IS,
+        c_m_in_joule_per_kelvin=C_M,
         seconds_per_timestep=SECONDS_PER_TIMESTEP,
     )
 
@@ -73,12 +73,12 @@ def test_building_thermal_model_identifies_gains_and_time_constant() -> None:
     assert tm.transition_matrix.shape == (1, 1)
     assert tm.selection_matrix.shape == (1, 6)
 
-    assert tm.process_gain == pytest.approx(0.0011278195488721803)
-    assert tm.t_out_gain == pytest.approx(0.9548872180451127)
-    assert tm.phi_ia_gain == pytest.approx(0.0011278195488721803)
-    assert tm.phi_st_gain == pytest.approx(0.005639097744360902)
-    assert tm.phi_m_gain == pytest.approx(0.006729323308270676)
-    assert tm.time_constant == 3348
+    assert tm.process_gain_in_kelvin_per_watt == pytest.approx(0.0011278195488721803)
+    assert tm.t_out_gain_dimensionless == pytest.approx(0.9548872180451127)
+    assert tm.phi_ia_gain_in_kelvin_per_watt == pytest.approx(0.0011278195488721803)
+    assert tm.phi_st_gain_in_kelvin_per_watt == pytest.approx(0.005639097744360902)
+    assert tm.phi_m_gain_in_kelvin_per_watt == pytest.approx(0.006729323308270676)
+    assert tm.time_constant_in_seconds == 3348
 
 
 @pytest.mark.base
@@ -96,13 +96,13 @@ def test_compute_pi_gains_returns_pole_placement_gains() -> None:
 def test_from_sim_repository_reads_coefficients() -> None:
     """from_sim_repository reads the 5R1C coefficients from the singleton (KB-5214)."""
     tm = BuildingThermalModel5R1C.from_sim_repository(SECONDS_PER_TIMESTEP)
-    assert tm.h_tr_w == H_TR_W
-    assert tm.h_tr_ms == H_TR_MS
-    assert tm.h_tr_em == H_TR_EM
-    assert tm.h_ve_adj == H_VE_ADJ
-    assert tm.h_tr_is == H_TR_IS
-    assert tm.c_m == C_M
-    assert tm.process_gain == pytest.approx(0.0011278195488721803)
+    assert tm.h_tr_w_in_watt_per_kelvin == H_TR_W
+    assert tm.h_tr_ms_in_watt_per_kelvin == H_TR_MS
+    assert tm.h_tr_em_in_watt_per_kelvin == H_TR_EM
+    assert tm.h_ve_adj_in_watt_per_kelvin == H_VE_ADJ
+    assert tm.h_tr_is_in_watt_per_kelvin == H_TR_IS
+    assert tm.c_m_in_joule_per_kelvin == C_M
+    assert tm.process_gain_in_kelvin_per_watt == pytest.approx(0.0011278195488721803)
 
 
 @pytest.mark.base
@@ -126,12 +126,12 @@ def test_pid_controller_tunes_from_thermal_model() -> None:
         config=PIDControllerConfig.get_default_config(),
     )
 
-    assert controller.proportional_gain == pytest.approx(22875.446701181467)
-    assert controller.integral_gain == pytest.approx(227.60105749117776)
-    assert controller.derivative_gain == 0
-    assert controller.thermal_model.process_gain == pytest.approx(0.0011278195488721803)
-    assert controller.thermal_model.phi_st_gain == pytest.approx(0.005639097744360902)
-    assert controller.thermal_model.phi_m_gain == pytest.approx(0.006729323308270676)
+    assert controller.proportional_gain_in_watt_per_kelvin == pytest.approx(22875.446701181467)
+    assert controller.integral_gain_in_watt_per_kelvin == pytest.approx(227.60105749117776)
+    assert controller.derivative_gain_in_watt_per_kelvin == 0
+    assert controller.thermal_model.process_gain_in_kelvin_per_watt == pytest.approx(0.0011278195488721803)
+    assert controller.thermal_model.phi_st_gain_in_kelvin_per_watt == pytest.approx(0.005639097744360902)
+    assert controller.thermal_model.phi_m_gain_in_kelvin_per_watt == pytest.approx(0.006729323308270676)
 
 
 @pytest.mark.base
@@ -142,7 +142,7 @@ def test_pid_controller_feedforward() -> None:
         my_simulation_parameters=simulation_parameters,
         config=PIDControllerConfig.get_default_config(),
     )
-    feed_forward_signal = controller.feedforward(phi_st=100.0, phi_m=200.0)
+    feed_forward_signal = controller.feedforward(phi_st_in_watt=100.0, phi_m_in_watt=200.0)
     assert feed_forward_signal == pytest.approx(-1693.3333333333333)
 
 

@@ -307,30 +307,30 @@ class FuelMeter(DynamicComponent):
 
         if self.config.fuel_loadtype == lt.LoadTypes.OIL:
 
-            co2_per_unit = emissions_and_cost_factors.oil_footprint_in_kg_per_l
-            euro_per_unit = emissions_and_cost_factors.oil_costs_in_euro_per_l
-            opex_cost_per_simulated_period_in_euro = fuel_consumption_in_liter * euro_per_unit
-            co2_per_simulated_period_in_kg = fuel_consumption_in_liter * co2_per_unit
+            co2_footprint_in_kg_per_l = emissions_and_cost_factors.oil_footprint_in_kg_per_l
+            fuel_cost_in_euro_per_l = emissions_and_cost_factors.oil_costs_in_euro_per_l
+            opex_cost_per_simulated_period_in_euro = fuel_consumption_in_liter * fuel_cost_in_euro_per_l
+            co2_per_simulated_period_in_kg = fuel_consumption_in_liter * co2_footprint_in_kg_per_l
 
         elif self.config.fuel_loadtype == lt.LoadTypes.PELLETS:
 
-            co2_per_unit = emissions_and_cost_factors.pellet_footprint_in_kg_per_kwh
-            euro_per_unit = emissions_and_cost_factors.pellet_costs_in_euro_per_t
-            co2_per_simulated_period_in_kg = total_heat_consumed_in_kwh * co2_per_unit
-            opex_cost_per_simulated_period_in_euro = fuel_consumption_in_kg / 1000 * euro_per_unit
+            co2_footprint_in_kg_per_kwh = emissions_and_cost_factors.pellet_footprint_in_kg_per_kwh
+            fuel_cost_in_euro_per_t = emissions_and_cost_factors.pellet_costs_in_euro_per_t
+            co2_per_simulated_period_in_kg = total_heat_consumed_in_kwh * co2_footprint_in_kg_per_kwh
+            opex_cost_per_simulated_period_in_euro = fuel_consumption_in_kg / 1000 * fuel_cost_in_euro_per_t
 
         elif self.config.fuel_loadtype == lt.LoadTypes.WOOD_CHIPS:
 
-            co2_per_unit = emissions_and_cost_factors.wood_chip_footprint_in_kg_per_kwh
-            euro_per_unit = emissions_and_cost_factors.wood_chip_costs_in_euro_per_t
-            co2_per_simulated_period_in_kg = total_heat_consumed_in_kwh * co2_per_unit
-            opex_cost_per_simulated_period_in_euro = fuel_consumption_in_kg / 1000 * euro_per_unit
+            co2_footprint_in_kg_per_kwh = emissions_and_cost_factors.wood_chip_footprint_in_kg_per_kwh
+            fuel_cost_in_euro_per_t = emissions_and_cost_factors.wood_chip_costs_in_euro_per_t
+            co2_per_simulated_period_in_kg = total_heat_consumed_in_kwh * co2_footprint_in_kg_per_kwh
+            opex_cost_per_simulated_period_in_euro = fuel_consumption_in_kg / 1000 * fuel_cost_in_euro_per_t
 
         elif self.config.fuel_loadtype == lt.LoadTypes.DISTRICTHEATING:
-            co2_per_unit = emissions_and_cost_factors.district_heating_footprint_in_kg_per_kwh
-            euro_per_unit = emissions_and_cost_factors.district_heating_costs_in_euro_per_kwh
-            co2_per_simulated_period_in_kg = total_heat_consumed_in_kwh * co2_per_unit
-            opex_cost_per_simulated_period_in_euro = total_heat_consumed_in_kwh * euro_per_unit
+            co2_footprint_in_kg_per_kwh = emissions_and_cost_factors.district_heating_footprint_in_kg_per_kwh
+            fuel_cost_in_euro_per_kwh = emissions_and_cost_factors.district_heating_costs_in_euro_per_kwh
+            co2_per_simulated_period_in_kg = total_heat_consumed_in_kwh * co2_footprint_in_kg_per_kwh
+            opex_cost_per_simulated_period_in_euro = total_heat_consumed_in_kwh * fuel_cost_in_euro_per_kwh
         else:
             raise ValueError(f"The loadtype {self.config.fuel_loadtype} is not implemented for the Fuel meter.")
 

@@ -66,6 +66,14 @@ class Systems:
     preset: condensing_gas
 """
 
+    #: The weather every building is computed against. A building records which weather that is as a
+    #: sized field, so a fixture with a building needs one weather in it -- exactly one, so that the
+    #: fact binds without a source line and the fixtures stay about the relation they were written for.
+    WEATHER: ClassVar[str] = """  weather:
+    class: hisim.components.weather.Weather
+    preset: standard
+"""
+
     @classmethod
     def parse(cls, entries: str) -> EnergySystemFile:
         """Parses one inline document made of the given component entries.
@@ -263,9 +271,9 @@ def test_a_system_of_converted_classes_is_configured_and_sized() -> None:
     the ordinary case actually goes through: the boiler's power band has to come out as the
     number the building's heating load implies.
     """
-    system = Systems.configure(Systems.building("building") + Systems.BOILER)
+    system = Systems.configure(Systems.WEATHER + Systems.building("building") + Systems.BOILER)
 
-    assert [name for name, _ in system.configs] == ["building", "boiler"]
+    assert [name for name, _ in system.configs] == ["weather", "building", "boiler"]
     boiler = system.config_of("boiler")
     assert isinstance(boiler.maximal_thermal_power_in_watt, float)
     assert boiler.maximal_thermal_power_in_watt > 0.0
@@ -281,7 +289,7 @@ def test_two_providers_of_one_fact_are_refused_with_the_candidates_and_a_paste_r
     the rule turns a working file into a puzzle the moment a second provider is added.
     """
     with pytest.raises(EnergySystemSizingError) as raised:
-        Systems.configure(Systems.building("house_a") + Systems.building("house_b") + Systems.BOILER)
+        Systems.configure(Systems.WEATHER + Systems.building("house_a") + Systems.building("house_b") + Systems.BOILER)
 
     message = str(raised.value)
     assert raised.value.error_id is EnergySystemErrorId.SIZING_AMBIGUOUS
@@ -299,7 +307,8 @@ def test_a_source_line_settles_the_ambiguity_the_two_providers_created() -> None
     having no effect at all.
     """
     system = Systems.configure(
-        Systems.building("house_a")
+        Systems.WEATHER
+        + Systems.building("house_a")
         + Systems.building("house_b")
         + """  boiler:
     class: hisim.components.generic_boiler.GenericBoiler
@@ -339,7 +348,8 @@ def test_a_source_naming_a_component_that_does_not_provide_the_fact_is_refused()
     """
     with pytest.raises(EnergySystemSizingError) as raised:
         Systems.configure(
-            Systems.building("building")
+            Systems.WEATHER
+            + Systems.building("building")
             + """  hds:
     class: hisim.components.heat_distribution_system.HeatDistribution
     preset: standard
@@ -368,7 +378,8 @@ def test_a_list_written_for_a_fact_a_law_reads_once_is_refused() -> None:
     """
     with pytest.raises(EnergySystemSizingError) as raised:
         Systems.configure(
-            Systems.building("building")
+            Systems.WEATHER
+            + Systems.building("building")
             + """  boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas
@@ -485,14 +496,16 @@ def test_auto_in_a_config_block_reopens_a_field_the_preset_had_pinned() -> None:
     than as the preset's fixed one.
     """
     pinned = Systems.configure(
-        Systems.building("building")
+        Systems.WEATHER
+        + Systems.building("building")
         + """  boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas_12kw
 """
     ).config_of("boiler")
     reopened = Systems.configure(
-        Systems.building("building")
+        Systems.WEATHER
+        + Systems.building("building")
         + """  boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas_12kw
@@ -516,7 +529,8 @@ def test_a_value_that_does_not_fit_its_field_is_refused_naming_the_entry() -> No
     """
     with pytest.raises(EnergySystemBindingError) as raised:
         Systems.configure(
-            Systems.building("building")
+            Systems.WEATHER
+            + Systems.building("building")
             + """  boiler:
     class: hisim.components.generic_boiler.GenericBoiler
     preset: condensing_gas
@@ -562,7 +576,7 @@ def test_a_fact_nobody_reads_produces_a_warning_and_not_a_refusal() -> None:
     group switched off — but it is also what a misspelled source line looks like from outside,
     so the run says it and continues.
     """
-    system = Systems.configure(Systems.building("building") + Systems.BOILER)
+    system = Systems.configure(Systems.WEATHER + Systems.building("building") + Systems.BOILER)
 
     assert any("conditioned_floor_area_in_m2" in line for line in system.warnings)
     assert all("building" in line or "boiler" in line for line in system.warnings)

@@ -89,6 +89,11 @@ def setup_function(
 
     # =================================================================================================================================
     # Build Building
+    # The weather config is created first: the building and PV configs copy its identity
+    # (weather_identity) and must have it before those components are built. The weather
+    # component itself is still added further down, so the simulator's component order is unchanged.
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
+
     my_building_config = building.BuildingConfig.preset_standard("Building")
     my_building_config.set_heating_temperature_in_celsius = 20.0
     my_building_config.set_cooling_temperature_in_celsius = 25.0
@@ -99,13 +104,13 @@ def setup_function(
     )
     my_building_config.number_of_apartments = number_of_apartments
     my_building_config.enable_opening_windows = True
+    my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # =================================================================================================================================
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )

@@ -93,6 +93,26 @@ class CarReports:
         return {"car_states": [{}], "car_locations": [{}], "driving_distances": [{}]}
 
 
+def _car_config(name: str, household_name: str, car_name: str) -> CarConfig:
+    """A car configuration for a test that publishes its driving profile by hand.
+
+    The occupancy identity is what the car's cache key is completed with in a real setup, where the
+    occupancy config contributes it; here there is no occupancy component, only a profile placed in the
+    repository directly, so the identity is a description of that.
+
+    Args:
+        name: The car's component name.
+        household_name: The household the profile is filed under.
+        car_name: The car within that household.
+
+    Returns:
+        CarConfig: buildable, with the identity set.
+    """
+    config = CarConfig.for_household(name=name, household_name=household_name, car_name=car_name)
+    config.occupancy_identity = f"profile published by the test for {household_name}"
+    return config
+
+
 @pytest.mark.base
 def test_the_car_constructor_takes_nothing_but_parameters_config_and_display():
     """The car is buildable the way the executor builds every component, and only that way.
@@ -182,7 +202,7 @@ def test_a_car_prepared_before_its_occupancy_says_so():
     """
     car = Car(
         my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60),
-        config=CarConfig.for_household(name="Car", household_name="CHR01", car_name="Small_Car"),
+        config=_car_config(name="Car", household_name="CHR01", car_name="Small_Car"),
     )
     car.set_sim_repo(SimRepository())
     with pytest.raises(CarProfileNotPublishedError) as raised:
@@ -204,7 +224,7 @@ def test_a_car_naming_a_profile_nobody_published_lists_the_ones_that_exist():
     )
     car = Car(
         my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60),
-        config=CarConfig.for_household(name="Car", household_name="CHR99", car_name="Truck"),
+        config=_car_config(name="Car", household_name="CHR99", car_name="Truck"),
     )
     car.set_sim_repo(repository)
     with pytest.raises(CarProfileNotPublishedError) as raised:
@@ -228,7 +248,7 @@ def test_a_car_registered_with_a_simulator_finds_the_published_profile():
     )
     car = Car(
         my_simulation_parameters=SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60),
-        config=CarConfig.for_household(name="VanOfCHR02", household_name="CHR02", car_name="Van"),
+        config=_car_config(name="VanOfCHR02", household_name="CHR02", car_name="Van"),
     )
     car.set_sim_repo(repository)
     car.i_prepare_simulation()

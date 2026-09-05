@@ -170,7 +170,13 @@ extension of the golden gate and it blesses nothing.
   `household_gas_solar_thermal` (grid import above total consumption) — measured by
   `scripts/golden_validate.py --scan-all` on 2026-08-28. R11.3's first two comparisons need no KPIs, so those setups
   are covered anyway and the crash is recorded as a known state rather than counted as a parity failure. Repairing
-  them is its own workstream and does not gate P3.
+  them is its own workstream and does not gate P3. `[amended 2026-09-05]` The first spelling let an unavailable KPI
+  stage *pass* its triple, which made a new KPI regression indistinguishable from a known-broken setup — both read
+  green. The KPI repair workstream has since covered the fleet (the golden week gate compares every setup's KPIs
+  against blessed references), so the expectation flipped: the KPI stage is still reported as UNAVAILABLE rather than
+  as a parity failure, with a note naming which side crashed and why, but a triple with an unavailable stage no longer
+  counts as parity. What survives of the first spelling is the part that matters: a KPI crash never turns into an
+  exception, and the wiring and result comparisons are still made and reported.
 - R11.5 **Two windows.** Every triple runs a January week and a July week — `one_week_only` and a new `one_week_july`,
   both at 60 s. A single window measures the cooling and solar-thermal setups at their annual minimum, and the
   January-only window is why the air-conditioner setup divides by zero in the scan.
@@ -185,7 +191,7 @@ extension of the golden gate and it blesses nothing.
   re-records the fleet on every batch** (Q-P3.1, and P4's own assumption A1 reviews each batch against the recorded
   file diff), so the rig is the only thing proving a re-recorded file still reproduces its setup while 88 config
   classes change how those files are written. The permanent golden gate cannot stand in for it — it watches 8 setups
-  against blessed references, the rig watches 20 across two windows and needs none, and 8 of those setups have no KPI
+  against blessed references, the rig watches every recorded setup (22 today, 44 triples) across two windows and needs none, and 8 of those setups have no KPI
   oracle at all. Deleting the rig at the end of P3 would retire the migration's safety net exactly as the migration
   reached its largest change.
   What survives the teardown is whatever earned a place in the permanent gate: the six setups the scan already clears
@@ -229,7 +235,7 @@ extension of the golden gate and it blesses nothing.
 | AC-P3.16 | The grouping report lists the `override` differences as consumer knobs and names the fork combinations the probe list never exercised. | R10.5, R10.7 |
 | AC-P3.17 | One dispatch of the rig covers every in-scope (setup, configuration, window) triple and prints them as one table; the January and July windows both appear for every triple. | R11.1, R11.5, R11.7 |
 | AC-P3.18 | Changing one config value in a recorded file makes its triple fail and the report names the columns or KPIs that moved; the comparison is exact, so no threshold can hide it. | R11.2, R11.3 |
-| AC-P3.19 | The seven KPI-broken setups return a structural verdict — component set and wire set compared, KPI stage reported as unavailable — rather than an error. | R11.4, R11.3 |
+| AC-P3.19 `[amended 2026-09-05]` | The seven KPI-broken setups return a structural verdict — component set and wire set compared, KPI stage reported as unavailable — rather than an error. The unavailable stage fails the triple in the summary table (R11.4 as amended); what the criterion pins is that the failure is a named verdict with both structural comparisons made, never an exception. | R11.4, R11.3 |
 | AC-P3.20 `[deferred to P6, 2026-08-31]` | The phase-6 teardown deletes the workflow, its configuration and its scripts, and the repository contains no reference to them afterwards. It is an acceptance criterion of P6, not of P3 — P3 ships the rig, P6 removes it. | R11.8 |
 | AC-P3.21 | Recording a setup whose parameters equal a shipped `energy_systems/*.simulation.yaml` writes no parameter file and references that one; changing one option makes it write exactly one new file. | R8.2, R8.3 |
 | AC-P3.22 | Recording two setups with identical parameters that match nothing shipped produces one shared file, not two, and both recordings reference it. | R8.3, R8.5 |

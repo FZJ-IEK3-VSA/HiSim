@@ -2,7 +2,7 @@
 """The two halves of one parity triple: the Python setup and its recorded twin, run side by side.
 
 TEMPORARY — this module belongs to the P3 migration parity rig (requirements R11) and is deleted
-together with the rig in P3's last PR (R11.8, AC-P3.20).
+together with the rig in phase P6 (R11.8 amended and AC-P3.20 deferred to P6, 2026-08-31).
 
 The rig's whole claim is that the two paths produce the same simulation, so the two runs have to
 differ in nothing a run can be made to share: the same period, the same resolution, the same
@@ -122,15 +122,6 @@ class RunOutcome:
     #: The traceback of a crash that left no result frame at all.
     fatal_error: Optional[str] = None
 
-    @property
-    def usable(self) -> bool:
-        """Whether this side produced enough to be compared structurally.
-
-        Returns:
-            ``True`` when a wiring snapshot and a result frame both exist.
-        """
-        return self.snapshot is not None and self.frame is not None
-
 
 class ParitySide:
     """Runs one side of a triple and reports what it produced, never raising for a KPI crash.
@@ -227,7 +218,11 @@ class ParitySide:
         if outcome.frame is None and outcome.kpi_error is not None:
             outcome.fatal_error = outcome.kpi_error
             outcome.kpi_error = None
-        outcome.kpis = cls.read_kpis(result_directory)
+        try:
+            outcome.kpis = cls.read_kpis(result_directory)
+        except Exception:  # noqa: BLE001 - an unreadable KPI file fails the KPI stage, not the dispatch
+            if outcome.kpi_error is None and outcome.fatal_error is None:
+                outcome.kpi_error = traceback.format_exc()
         if outcome.kpis is None and outcome.kpi_error is None and outcome.fatal_error is None:
             outcome.kpi_error = f"no {cls.KPI_FILENAME} was written to {result_directory}"
         return outcome
@@ -263,6 +258,10 @@ class ParitySide:
 
         Returns:
             The flattened KPIs, or ``None`` when KPI computation wrote nothing.
+
+        Raises:
+            Exception: If the file exists but cannot be parsed or flattened; :meth:`finish`
+                records that as the side's KPI error so the triple still receives a verdict.
         """
         path = result_directory / cls.KPI_FILENAME
         if not path.exists():

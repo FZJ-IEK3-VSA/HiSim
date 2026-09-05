@@ -2,7 +2,7 @@
 """What the parity rig concluded about a triple, and how it says so.
 
 TEMPORARY — this module belongs to the P3 migration parity rig (requirements R11) and is deleted
-with it in P3's last PR (R11.8, AC-P3.20).
+with it in phase P6 (R11.8 amended and AC-P3.20 deferred to P6, 2026-08-31).
 
 The comparison lives next door in ``p3_parity_check.py``; what lives here is the vocabulary it
 answers in and everything that turns an answer into output. The two are separated because they
@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any, ClassVar, List, Optional, Sequence, Tuple
 
@@ -38,23 +39,34 @@ except ModuleNotFoundError:  # pragma: no cover - depends on how scripts/ is on 
     from scripts.p3_parity_runs import ColumnDifference, Differences, RunOutcome, TripleInputs
 
 
-class Verdict:
+class Verdict(Enum):
     """The four states one comparison of one triple can be in, and how a table shows them.
 
-    Four rather than two, because "the two runs agree" and "there was nothing to compare" are
-    different answers and collapsing them is exactly the mistake R11.4 warns against: a setup whose
-    KPI layer crashes must not be reported as a parity failure, and must not be reported as a pass
-    either. ``TOLERATED`` is the fourth, and it is loud on purpose — a triple that only agrees once
-    a tolerance is allowed is a finding, so it can never look like a plain pass.
+    An enum rather than string constants so that a state outside the four is unrepresentable — a
+    misspelled verdict must be an error at the point of assignment, not a row that quietly renders
+    as FAIL. Four states rather than two, because "the two runs agree" and "there was nothing to
+    compare" are different answers and a table must show which one it is. ``TOLERATED`` is loud on
+    purpose — a triple that only agrees once a tolerance is allowed is a finding, so it can never
+    look like a plain pass. ``UNAVAILABLE`` names its stage's state precisely but fails its triple
+    (R11.4, amended 2026-09-05): every setup's KPI layer is expected to work now that the golden
+    gate covers the whole fleet, so a stage that could not run is something to investigate, not a
+    shrug — the note beside it says which side and why.
     """
 
-    OK: ClassVar[str] = "OK"
-    FAILED: ClassVar[str] = "FAILED"
-    UNAVAILABLE: ClassVar[str] = "UNAVAILABLE"
-    TOLERATED: ClassVar[str] = "TOLERATED"
+    OK = "OK"
+    FAILED = "FAILED"
+    UNAVAILABLE = "UNAVAILABLE"
+    TOLERATED = "TOLERATED"
 
-    #: The states that do not make a triple fail.
-    PASSING: ClassVar[Tuple[str, ...]] = (OK, UNAVAILABLE, TOLERATED)
+    @property
+    def passes(self) -> bool:
+        """Whether a stage in this state lets its triple count as parity.
+
+        Returns:
+            ``True`` for ``OK`` and for ``TOLERATED`` (which is marked loudly elsewhere); ``False``
+            for ``FAILED`` and for ``UNAVAILABLE``.
+        """
+        return self in (Verdict.OK, Verdict.TOLERATED)
 
 
 @dataclass
@@ -69,9 +81,9 @@ class TripleVerdict:
 
     stem: str
     window: str
-    wiring: str = Verdict.UNAVAILABLE
-    results: str = Verdict.UNAVAILABLE
-    kpis: str = Verdict.UNAVAILABLE
+    wiring: Verdict = Verdict.UNAVAILABLE
+    results: Verdict = Verdict.UNAVAILABLE
+    kpis: Verdict = Verdict.UNAVAILABLE
     notes: List[str] = field(default_factory=list)
     wire_diff: str = ""
     differences: Differences = field(default_factory=Differences)
@@ -82,9 +94,10 @@ class TripleVerdict:
         """Whether this triple counts as parity.
 
         Returns:
-            ``True`` when no comparison failed; an unavailable KPI stage does not fail a triple.
+            ``True`` when every stage passes; an unavailable stage fails the triple (R11.4,
+            amended 2026-09-05).
         """
-        return all(state in Verdict.PASSING for state in (self.wiring, self.results, self.kpis))
+        return all(state.passes for state in (self.wiring, self.results, self.kpis))
 
     def row(self) -> str:
         """Renders this triple as one row of the summary table.
@@ -94,8 +107,8 @@ class TripleVerdict:
         """
         note = "; ".join(self.notes)
         return (
-            f"| {self.stem} | {self.window} | {self.wiring} | {self.results} | {self.kpis} | "
-            f"{'PASS' if self.passed else 'FAIL'} | {note} |"
+            f"| {self.stem} | {self.window} | {self.wiring.value} | {self.results.value} | "
+            f"{self.kpis.value} | {'PASS' if self.passed else 'FAIL'} | {note} |"
         )
 
     def to_json(self) -> dict:
@@ -107,9 +120,9 @@ class TripleVerdict:
         return {
             "setup": self.stem,
             "window": self.window,
-            "wiring": self.wiring,
-            "results": self.results,
-            "kpis": self.kpis,
+            "wiring": self.wiring.value,
+            "results": self.results.value,
+            "kpis": self.kpis.value,
             "passed": self.passed,
             "tolerated": self.tolerated,
             "notes": list(self.notes),
@@ -145,9 +158,19 @@ class Tolerance:
         Args:
             relative: Largest relative deviation still counted as equal; ``0.0`` is exact.
             absolute: Largest absolute deviation still counted as equal; ``0.0`` is exact.
+
+        Raises:
+            ValueError: If either slack is negative — a typo like ``--rel-tol -1`` would otherwise
+                silently behave like exact equality while the report prints the nonsense value as
+                if it had been measured against.
         """
         self.relative = float(relative)
         self.absolute = float(absolute)
+        if self.relative < 0.0 or self.absolute < 0.0:
+            raise ValueError(
+                f"A tolerance cannot be negative (rel_tol={self.relative:g}, "
+                f"abs_tol={self.absolute:g})."
+            )
 
     @property
     def exact(self) -> bool:
@@ -157,6 +180,27 @@ class Tolerance:
             ``True`` when neither slack was raised above zero.
         """
         return self.relative == 0.0 and self.absolute == 0.0
+
+    @staticmethod
+    def equal(expected: Any, actual: Any) -> bool:
+        """Exact equality with one adjustment: two NaN values count as equal.
+
+        A value both runs failed to produce is the same value, and ``nan != nan`` would otherwise
+        make a byte-identical pair of runs fail its comparison. This is the rig's single notion of
+        "exactly equal", so exact mode and tolerant mode cannot disagree about identical NaNs.
+
+        Args:
+            expected: The Python run's value.
+            actual: The declarative run's value.
+
+        Returns:
+            ``True`` when the two are equal, NaN==NaN included.
+        """
+        if expected == actual:
+            return True
+        if not isinstance(expected, float) or not isinstance(actual, float):
+            return False
+        return bool(np.isnan(expected) and np.isnan(actual))
 
     def accepts(self, expected: Any, actual: Any) -> bool:
         """Whether two values count as equal under this tolerance.
@@ -172,13 +216,33 @@ class Tolerance:
         Returns:
             ``True`` when the two are equal, or close enough under a non-zero tolerance.
         """
-        if expected == actual:
+        if self.equal(expected, actual):
             return True
         if not isinstance(expected, (int, float)) or not isinstance(actual, (int, float)):
             return False
         if self.exact:
             return False
         return bool(np.isclose(expected, actual, rtol=self.relative, atol=self.absolute, equal_nan=True))
+
+    def accepts_column(self, expected: np.ndarray, actual: np.ndarray) -> np.ndarray:
+        """Row-wise :meth:`accepts` over two whole result columns.
+
+        A column has to be judged at every row, not at its single worst-absolute row: under a
+        relative tolerance the out-of-tolerance row can be a low-magnitude one whose absolute
+        deviation is unremarkable, and probing only the worst-absolute row would silently skip it.
+
+        Args:
+            expected: The Python run's column as floats.
+            actual: The declarative run's column as floats.
+
+        Returns:
+            A boolean mask, ``True`` where the two rows count as equal under this tolerance.
+        """
+        equal = np.asarray((expected == actual) | (np.isnan(expected) & np.isnan(actual)), dtype=bool)
+        if self.exact:
+            return equal
+        close = np.isclose(expected, actual, rtol=self.relative, atol=self.absolute, equal_nan=True)
+        return np.asarray(equal | close, dtype=bool)
 
     def describe(self) -> str:
         """Renders the tolerance for the report header.
@@ -281,7 +345,8 @@ class Report:
         lines = [
             f"PARITY FAILURE: {verdict.stem} / {verdict.window} (compared at {tolerance.describe()})",
             "",
-            f"wiring: {verdict.wiring}   results: {verdict.results}   KPIs: {verdict.kpis}",
+            f"wiring: {verdict.wiring.value}   results: {verdict.results.value}   "
+            f"KPIs: {verdict.kpis.value}",
         ]
         lines.extend(f"  note: {note}" for note in verdict.notes)
         if verdict.wiring == Verdict.FAILED:
@@ -311,7 +376,7 @@ class Report:
         return lines
 
     @classmethod
-    def summarize(cls, directory: Path) -> Tuple[str, int]:
+    def summarize(cls, directory: Path) -> Tuple[str, int, int]:
         """Renders one table from the verdict files a whole dispatch left behind.
 
         The workflow runs each triple in its own container, so no single job sees more than one
@@ -323,7 +388,9 @@ class Report:
             directory: A directory tree holding the ``verdict.json`` files of one dispatch.
 
         Returns:
-            The rendered table and the number of triples that did not reach parity.
+            The rendered table, the number of triples it covers, and the number that did not
+            reach parity. The count of covered triples is returned so the caller can refuse a
+            dispatch that covered nothing — an empty verdict directory must not read as a pass.
         """
         rows: List[TripleVerdict] = []
         for path in sorted(directory.rglob("*.json")):
@@ -332,15 +399,15 @@ class Report:
                     TripleVerdict(
                         stem=entry["setup"],
                         window=entry["window"],
-                        wiring=entry["wiring"],
-                        results=entry["results"],
-                        kpis=entry["kpis"],
+                        wiring=Verdict(entry["wiring"]),
+                        results=Verdict(entry["results"]),
+                        kpis=Verdict(entry["kpis"]),
                         notes=list(entry.get("notes", ())),
                         tolerated=bool(entry.get("tolerated", False)),
                     )
                 )
         rows.sort(key=lambda verdict: (verdict.stem, verdict.window))
-        return cls.table(rows), len([row for row in rows if not row.passed])
+        return cls.table(rows), len(rows), len([row for row in rows if not row.passed])
 
     @classmethod
     def entries(cls, payload: Any) -> List[dict]:

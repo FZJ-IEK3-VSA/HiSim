@@ -3,11 +3,12 @@
 TEMPORARY — this module tests the rig of requirements R11 and is deleted together with it in P3's
 last PR (R11.8, AC-P3.20).
 
-The rig's own claim is that it can tell a reproduced setup from a broken one, so the two tests that
-matter run it for real rather than against a fake: one on a recorded twin as committed, and one on
-the same twin with a single configuration value changed. Both use the cheapest setup that reaches
-parity today — an electrolyzer fed from a CSV profile, three components, no weather and no load
-profile — so a real comparison over a whole simulated week costs seconds rather than minutes.
+The rig's own claim is that it can tell a reproduced setup from a changed one, so the tests that
+matter run it for real rather than against a fake: one on a recorded twin as committed, one on the
+same twin with a single configuration value changed, and one on the twin with a component renamed.
+All use the cheapest setup that reaches parity today — an electrolyzer fed from a CSV profile,
+four components, no weather and no load profile — so a real comparison over a whole simulated week
+costs seconds rather than minutes.
 
 That setup is also one of the seven whose KPI computation crashes (R11.4), which is why one fixture
 answers both spec tests: T-21 asks that such a setup receive a structural verdict rather than an
@@ -20,17 +21,34 @@ Each test states the failure mode it catches.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import ClassVar, Optional
 
+import pandas as pd
 import pytest
 
+from hisim.energy_system.parity import PortRenaming, ResultComparison
 from hisim.simulationparameters import SimulationParameters
-from scripts.p3_parity_check import ParityChecker, discover
+
+# The rig's shared names are imported through the checker's namespace on purpose: the scripts are
+# importable both as ``p3_parity_*`` and as ``scripts.p3_parity_*``, and those are two separate
+# module instances. With plain strings that was invisible; with the ``Verdict`` enum, comparing a
+# member from one copy against a member from the other is always False, so the test must hold
+# exactly the classes the checker itself resolved.
+from scripts.p3_parity_check import (
+    DeclaredPortRenamings,
+    ParityChecker,
+    ParityWindows,
+    Report,
+    RunOutcome,
+    Tolerance,
+    TripleInputs,
+    TripleVerdict,
+    Verdict,
+    discover,
+)
 from scripts.p3_parity_matrix import MatrixPaths, build_matrix
-from scripts.p3_parity_renamings import DeclaredPortRenamings
-from scripts.p3_parity_runs import ParityWindows, TripleInputs
-from scripts.p3_parity_verdicts import Report, Tolerance, Verdict
 
 
 class Rig:
@@ -66,6 +84,11 @@ class Rig:
 
     #: The component whose result columns the altered value has to move.
     ALTERED_COMPONENT: ClassVar[str] = "StandardTransformerAndRectifier"
+
+    #: What the structural-change test renames that component to. Renaming is the structural
+    #: mutation of choice because the twin stays buildable — the wire references are renamed with
+    #: it — so the failure the test asserts comes from the wiring comparison, not from a crash.
+    RENAMED_COMPONENT: ClassVar[str] = "RenamedTransformerAndRectifier"
 
     @classmethod
     def triple(cls, work: Path, energy_system: Optional[Path] = None) -> TripleInputs:
@@ -203,18 +226,20 @@ def test_an_indicator_quoting_an_undeclared_port_still_fails_literally() -> None
 
 @pytest.mark.base
 def test_a_kpi_broken_setup_gets_a_structural_verdict(tmp_path: Path) -> None:
-    """Catches a rig that turns a broken KPI layer into a parity failure or an exception (T-21).
+    """Catches a rig that turns a broken KPI layer into an exception instead of a verdict (T-21).
 
     Seven in-scope setups crash inside KPI computation after the simulation has finished. R11.4
     requires them to be covered anyway: the first two comparisons need no KPIs, so the triple must
     still report on the wiring and on every result column, and the third stage must say it was
-    unavailable rather than failing or raising.
+    unavailable rather than raising. Since the 2026-09-05 amendment an unavailable stage fails the
+    triple — a new KPI regression must not read green — so the verdict is a named failure, never
+    an error and never a pass.
     """
     verdict = Rig.checker().check(Rig.triple(tmp_path)).verdict
     assert verdict.wiring == Verdict.OK
     assert verdict.results == Verdict.OK
     assert verdict.kpis == Verdict.UNAVAILABLE
-    assert verdict.passed
+    assert not verdict.passed
     assert any("KPI stage unavailable" in note for note in verdict.notes)
 
 
@@ -242,3 +267,132 @@ def test_an_altered_recorded_file_fails_and_names_what_moved(tmp_path: Path) -> 
     report = Report.failure(verdict, Tolerance())
     assert "result columns that differ" in report
     assert Rig.ALTERED_COMPONENT in report
+
+
+@pytest.mark.base
+def test_a_structurally_changed_recorded_file_fails_the_wiring_comparison(tmp_path: Path) -> None:
+    """Catches a wiring comparison that cannot tell a rewired system from a reproduced one.
+
+    The value-change test proves the numeric comparison; nothing else proves the *structural* one,
+    and a wiring diff that silently reported everything as identical would leave every test green
+    while defeating the rig's first comparison. Renaming a component (references included) keeps
+    the twin buildable, so the run succeeds and the difference can only be caught by the wiring
+    stage — which must fail the triple and name the component in the diff.
+    """
+    committed = (Rig.ENERGY_SYSTEMS / f"{Rig.FIXTURE}.energy_system.yaml").read_text(encoding="utf-8")
+    assert Rig.ALTERED_COMPONENT in committed, "the fixture no longer carries the component this test renames"
+    altered = tmp_path / f"{Rig.FIXTURE}.energy_system.yaml"
+    altered.write_text(committed.replace(Rig.ALTERED_COMPONENT, Rig.RENAMED_COMPONENT), encoding="utf-8")
+
+    verdict = Rig.checker().check(Rig.triple(tmp_path / "work", altered)).verdict
+    assert verdict.wiring == Verdict.FAILED
+    assert not verdict.passed
+    assert Rig.RENAMED_COMPONENT in verdict.wire_diff
+
+
+@pytest.mark.base
+def test_a_column_nan_on_one_side_only_is_a_structural_problem() -> None:
+    """Catches the exact comparison silently passing a run that produced NaN where the other did not.
+
+    NaN propagates through every arithmetic reduction as "no deviation" — ``max(0.0, nan)`` keeps
+    0.0 — so before this was a structural problem, a column NaN on one side and finite on the other
+    was reported as zero deviation and the triple passed. That is the one difference an exact rig
+    must never absorb, and no tolerance may absorb it either.
+    """
+    expected = pd.DataFrame({"X": [1.0, float("nan"), 3.0]})
+    actual = pd.DataFrame({"X": [1.0, 5.0, 3.0]})
+
+    comparison = ResultComparison.between(expected, actual)
+
+    assert any("NaN on one side only" in problem for problem in comparison.structural_problems)
+    assert not comparison.is_identical()
+
+
+@pytest.mark.base
+def test_identical_nan_columns_compare_equal() -> None:
+    """Catches the comparison inventing a difference out of two identical NaN columns.
+
+    A value both runs failed to produce is the same value: a recorded twin that reproduces its
+    setup NaN for NaN must pass, in the frame comparison and under the exact KPI tolerance alike,
+    or every setup with an undefined indicator would fail parity while being byte-identical.
+    """
+    frame = pd.DataFrame({"X": [float("nan"), 2.0]})
+
+    comparison = ResultComparison.between(frame, frame.copy())
+
+    assert not comparison.structural_problems
+    assert comparison.max_absolute_deviation == 0.0
+    assert Tolerance().accepts(float("nan"), float("nan"))
+    assert not Tolerance().accepts(float("nan"), 1.0)
+
+
+@pytest.mark.base
+def test_a_kpi_nan_on_both_sides_passes_the_exact_comparison() -> None:
+    """Catches the third comparison failing a KPI that both runs reproduced as NaN.
+
+    ``nan != nan`` made the exact branch report such a pair as a difference while any non-zero
+    tolerance accepted it (``equal_nan=True``), so the two modes disagreed about identical values.
+    The rig's single notion of exact equality treats them as equal in both.
+    """
+    verdict = TripleVerdict(stem="s", window="january")
+
+    Rig.checker().compare_kpis(
+        RunOutcome(kpis={"BUI1.Battery.State of charge": float("nan")}),
+        RunOutcome(kpis={"BUI1.Battery.State of charge": float("nan")}),
+        verdict,
+    )
+
+    assert verdict.kpis == Verdict.OK
+
+
+@pytest.mark.base
+def test_a_differing_column_is_judged_at_every_row() -> None:
+    """Catches the failure report probing the tolerance only at the worst-absolute row.
+
+    Under a relative tolerance the out-of-tolerance row can be a low-magnitude one whose absolute
+    deviation is unremarkable: here the large row is within one permille while the small row is off
+    by nine percent. Judged at the worst-absolute row alone, the column would be skipped and the
+    triple read TOLERATED with a worst-relative note far above its own allowance.
+    """
+    checker = ParityChecker(Tolerance(relative=0.01), DeclaredPortRenamings.port_renaming())
+    expected = pd.DataFrame({"C": [1000.0, 1.0]})
+    actual = pd.DataFrame({"C": [1001.0, 1.1]})
+
+    columns = checker.differing_columns(expected, actual)
+
+    assert [difference.column for difference in columns] == ["C"]
+    assert columns[0].relative > 0.01
+    assert math.isclose(columns[0].expected, 1.0)
+
+
+@pytest.mark.base
+def test_an_unavailable_stage_fails_its_triple_and_a_negative_tolerance_is_refused() -> None:
+    """Catches the two verdict rules the 2026-09-05 review round pinned down.
+
+    An UNAVAILABLE stage fails its triple (R11.4 as amended): a new KPI regression must not read
+    green just because the crash also made the comparison impossible. And a negative tolerance is
+    a typo, not a stricter run — accepted silently it would behave like exact equality while the
+    report prints the nonsense value as if it had been measured against.
+    """
+    verdict = TripleVerdict(
+        stem="s", window="january", wiring=Verdict.OK, results=Verdict.OK, kpis=Verdict.UNAVAILABLE
+    )
+    assert not verdict.passed
+    with pytest.raises(ValueError):
+        Tolerance(relative=-1.0)
+
+
+@pytest.mark.base
+def test_two_ports_renamed_onto_one_column_are_refused() -> None:
+    """Catches a renaming table collapsing two result columns into one without an error.
+
+    The KPI translation already refuses to map two indicators onto one key; the frame translation
+    only refused a rename landing on an *untouched* column, so two renames landing on the same new
+    name produced a frame with duplicate column labels that the comparison then mis-indexed. Both
+    halves of the table now enforce the same invariant.
+    """
+    frame = pd.DataFrame({"Agg - PortA [Power - W]": [1.0], "Agg - PortB [Power - W]": [2.0]})
+    renaming = PortRenaming(renamings={("Agg", "PortA"): "Same", ("Agg", "PortB"): "Same"})
+
+    with pytest.raises(ValueError, match="onto"):
+        renaming.apply_to_results(frame)

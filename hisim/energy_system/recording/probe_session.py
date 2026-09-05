@@ -46,7 +46,7 @@ from hisim.energy_system.recording.grouping_report import (
 )
 from hisim.energy_system.recording.matrix import ProbeMatrix, ProbeRecording
 from hisim.energy_system.recording.probes import ModuleConfigMaterialiser, ProbeConfiguration, ProbeList
-from hisim.energy_system.recording.regrouping import ColumnRealizer, GroupedSystemBuilder
+from hisim.energy_system.recording.regrouping import ColumnRealizer, GroupedSystemBuilder, apply_grouping
 from hisim.energy_system.recording.session import RecordedFileWriter, RecordingSession
 
 
@@ -87,7 +87,12 @@ class ProbeRunner:
         try:
             yield directory
         finally:
-            shutil.rmtree(directory, ignore_errors=True)
+            try:
+                shutil.rmtree(directory)
+            except OSError as refusal:
+                # A leftover directory must at least be named: it sits untracked in the checkout
+                # and holds probe recordings that must not be committed.
+                print(f"warning: the probe work directory {directory} could not be removed: {refusal}")
 
     @classmethod
     def run(
@@ -167,7 +172,7 @@ class ProbeRunner:
         if completed.returncode != 0 or not path.exists():
             raise cls._failed(probe, completed.returncode, completed.stdout + completed.stderr)
         text = path.read_text(encoding="utf-8")
-        return ProbeRecording(column=probe.column, path=path, text=text, model=parse_energy_system(path))
+        return ProbeRecording(text=text, model=parse_energy_system(path))
 
     @classmethod
     def _failed(cls, probe: ProbeConfiguration, code: int, output: str) -> EnergySystemRecordingError:
@@ -258,8 +263,10 @@ class GroupingPass:
                 matrix, and ``EF-R10`` when a column does not reproduce.
         """
         check_grouping(grouping, matrix)
+        # The grouped file comes through the same public seam any other caller would use; the
+        # builder is kept beside it because the realizer and the knob report ask it per column.
+        grouped = apply_grouping(grouping, matrix)
         builder = GroupedSystemBuilder(grouping, matrix)
-        grouped = builder.build()
         realizer = ColumnRealizer(grouped, builder)
         verdicts = tuple(cls._verdict(realizer, builder, matrix, column) for column in matrix.columns)
         report = GroupingReport(

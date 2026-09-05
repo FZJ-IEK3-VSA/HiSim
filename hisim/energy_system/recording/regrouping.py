@@ -266,15 +266,7 @@ class GroupedSystemBuilder:
         source = self.source_column(component, column)
         if source == column:
             return {}
-        recording = self.matrix.recordings[column]
-        present = recording.entries()
-        stated_entry = self.matrix.recordings[source].entries().get(component)
-        recorded = present.get(component)
-        if stated_entry is None or recorded is None:
-            return {}
-        before = EntryComparison.restricted(EntryComparison.document(stated_entry), present)
-        after = EntryComparison.restricted(EntryComparison.document(recorded), present)
-        return DocumentDifference.between(before, after)
+        return self.matrix.differences(component, column, source=source)
 
     def _stated(self, component: str, column: str, path: str) -> Any:
         """The value the file states at one dotted path of one component's entry.
@@ -329,9 +321,12 @@ class ColumnRealizer:
             column: The probe column to realize.
 
         Returns:
-            The expanded file with every surviving group dissolved into the top level, in the order
-            the expansion put them: the ungrouped components, then what the variants contributed,
-            then the members of each enabled group.
+            The expanded file with every surviving group dissolved into the top level, ordered the
+            way that column's flat recording lists them. The blocks of the grouped file lose the
+            setup's registration order — a group's members may have been registered between two
+            ungrouped components — and the recording is the one place that order was observed, so
+            the dissolved components are laid out by it; a component the recording does not have
+            stays at the end, where the byte comparison will name it.
         """
         selection = self.builder.grouping.selection(column)
         switched = self.grouped.model_copy(
@@ -349,9 +344,14 @@ class ColumnRealizer:
             }
         )
         expanded, _ = GroupExpander(switched).expand()
-        components: Dict[str, ComponentEntry] = dict(expanded.components)
+        dissolved: Dict[str, ComponentEntry] = dict(expanded.components)
         for group in expanded.groups.values():
-            components.update(group.components)
+            dissolved.update(group.components)
+        observed = self.builder.matrix.recordings[column].entries()
+        components: Dict[str, ComponentEntry] = {
+            name: dissolved[name] for name in observed if name in dissolved
+        }
+        components.update({name: entry for name, entry in dissolved.items() if name not in components})
         return expanded.model_copy(update={"components": components, "groups": {}, "variants": {}})
 
     def document(self, column: str) -> Dict[str, Any]:

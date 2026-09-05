@@ -215,3 +215,6 @@ results/
 # throwaway directory of "record_all_setups.py --check"; removed by the script itself,
 # ignored here so an interrupted run cannot leave the working tree looking dirty
 .record-check-*/
+
+# Throwaway probe-recording directories of the grouping pass (see hisim/energy_system/recording/probe_session.py).
+.probes-*/

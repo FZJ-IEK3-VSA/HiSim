@@ -30,12 +30,13 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, ClassVar, Dict, Mapping, Optional, Tuple
 
 from hisim.energy_system.emitter import EnergySystemEmitter
+from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemRecordingError
 from hisim.energy_system.model import ComponentEntry, EnergySystemFile
 from hisim.energy_system.recording.probes import ProbeList
+from hisim.energy_system.recording.reading import DocumentPaths
 
 
 class CellState(enum.Enum):
@@ -86,8 +87,9 @@ class DocumentDifference:
     #: remove a key as well as change one.
     ABSENT: ClassVar[str] = "\x00absent"
 
-    #: Separator of a dotted path into an entry document.
-    SEPARATOR: ClassVar[str] = "."
+    #: Separator of a dotted path into an entry document; one spelling with the probe overlays,
+    #: because both address the same nested documents.
+    SEPARATOR: ClassVar[str] = DocumentPaths.SEPARATOR
 
     @classmethod
     def between(cls, before: Mapping[str, Any], after: Mapping[str, Any]) -> Dict[str, Any]:
@@ -136,14 +138,10 @@ class DocumentDifference:
         """
         result = cls.copy(document)
         for path, value in differences.items():
-            keys = path.split(cls.SEPARATOR)
-            block = result
-            for key in keys[:-1]:
-                block = block.setdefault(key, {})
             if value == cls.ABSENT:
-                block.pop(keys[-1], None)
+                DocumentPaths.remove(result, path)
             else:
-                block[keys[-1]] = value
+                DocumentPaths.set_value(result, path, value)
         return result
 
     @classmethod
@@ -154,11 +152,9 @@ class DocumentDifference:
             document: The document to copy.
 
         Returns:
-            A fresh mapping whose nested mappings are fresh too.
+            A fresh, fully independent document.
         """
-        return {
-            key: cls.copy(value) if isinstance(value, Mapping) else value for key, value in document.items()
-        }
+        return DocumentPaths.copy(document)
 
 
 class EntryComparison:
@@ -236,6 +232,8 @@ class EntryComparison:
         """
         if isinstance(value, list):
             return [item for item in value if str(item).split(".", 1)[0] in present]
+        if isinstance(value, str) and value.split(".", 1)[0] not in present:
+            return None
         return value
 
     @classmethod
@@ -257,15 +255,14 @@ class EntryComparison:
 
 @dataclass(frozen=True)
 class ProbeRecording:
-    """One probe's flat recording: the column it fills, the file it wrote and what that file says.
+    """One probe's flat recording: the whole text of the file it wrote, and what that file says.
 
     Both halves are kept because both are used and neither can be recomputed cheaply from the
     other. The text is what the byte-for-byte proof compares against, header comments included; the
-    model is what the matrix diffs and what the grouped file's entries are taken from.
+    model is what the matrix diffs and what the grouped file's entries are taken from. The column a
+    recording fills is the key it is held under, not a field of its own.
     """
 
-    column: str
-    path: Path
     text: str
     model: EnergySystemFile
 
@@ -383,26 +380,30 @@ class ProbeMatrix:
         """
         return tuple(row for row in self.rows if not row.is_uniform)
 
-    def differences(self, component: str, column: str) -> Dict[str, Any]:
-        """The dotted differences of one component's entry between the baseline and one column.
+    def differences(self, component: str, column: str, source: Optional[str] = None) -> Dict[str, Any]:
+        """The dotted differences of one component's entry between two columns' recordings.
 
         This is what an ``override`` row's knob values are read from, and what the realization of
-        that column re-applies to the grouped file's entry.
+        a column re-applies to the grouped file's entry: the builder asks it with the column whose
+        world the file states the entry from as the source, and the baseline is the source when
+        none is named.
 
         Args:
             component: The component to diff.
-            column: The column to diff against the baseline.
+            column: The column whose values the difference carries.
+            source: The column whose recording states the reference entry; the baseline when
+                omitted.
 
         Returns:
             The differing paths with the column's values; empty when the two agree.
         """
-        baseline_entry = self.recordings[self.baseline].entries().get(component)
+        source_entry = self.recordings[source or self.baseline].entries().get(component)
         column_recording = self.recordings[column]
         column_entry = column_recording.entries().get(component)
-        if baseline_entry is None or column_entry is None:
+        if source_entry is None or column_entry is None:
             return {}
         present = column_recording.entries()
-        before = EntryComparison.restricted(EntryComparison.document(baseline_entry), present)
+        before = EntryComparison.restricted(EntryComparison.document(source_entry), present)
         after = EntryComparison.restricted(EntryComparison.document(column_entry), present)
         return DocumentDifference.between(before, after)
 
@@ -417,6 +418,15 @@ class ProbeMatrix:
         Returns:
             The matrix.
         """
+        if probe_list.baseline.column not in recordings:
+            # Every comparison in the matrix reads columns[0] as "the committed twin"; silently
+            # promoting the next column would flip the meaning of every cell rather than fail.
+            raise EnergySystemRecordingError(
+                EnergySystemErrorId.PROBE_LIST_MALFORMED,
+                f"{probe_list.origin}:probes[0]",
+                f"the baseline column '{probe_list.baseline.column}' has no recording, so there is "
+                "nothing for the other columns to be compared against.",
+            )
         columns = tuple(column for column in probe_list.columns if column in recordings)
         baseline = recordings[columns[0]].entries()
         names: Dict[str, str] = {name: entry.class_path for name, entry in baseline.items()}

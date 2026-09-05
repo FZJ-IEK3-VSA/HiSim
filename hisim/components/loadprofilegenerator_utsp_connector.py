@@ -93,25 +93,31 @@ class UtspLpgConnectorConfig(ConfigBase):
         The car component stores this string in its configuration, sized from the occupancy through the
         sizing engine, so that its cache key includes which occupancy produced its driving profile. The
         household name alone is not enough: the energy intensity, the travel-route and device sets, the
-        appliance flag and the seed all change the profile. See ``roadmap/pylpg_flakiness.md`` F7.
+        appliance flag, the predefined profile (name and file) and the request guid all change the
+        profile. The local LPG's ``random_seed`` is deliberately not part of it, because it is wired
+        nowhere (both call sites pass ``None``); if it ever becomes configurable it must join this list.
+        ``calculation_index_for_local_lpg`` is deliberately not part of it either: it selects the
+        scratch directory a profile is computed in, not the profile's content, and parallel drivers
+        vary it per worker slot.
 
         Catalogue references are named by their ``Name``, which is unique within the generator's catalogue
         and readable; the string is written into every recorded energy-system file.
 
         Returns:
             str: the acquisition mode, household names, energy intensity, the three sets, the appliance flag,
-            the predefined profile name and the seed, separated by ``/``.
+            the predefined profile name, the predefined profile file and the request guid, separated by ``/``.
         """
         households = self.household if isinstance(self.household, list) else [self.household]
         parts = [
             str(self.data_acquisition_mode.value),
-            "+".join(str(getattr(household, "Name", household)) for household in households),
+            "+".join(self._reference_name(household) for household in households),
             str(self.energy_intensity.value),
             self._reference_name(self.travel_route_set),
             self._reference_name(self.transportation_device_set),
             self._reference_name(self.charging_station_set),
             "with-appliances" if self.profile_with_washing_machine_and_dishwasher else "no-appliances",
             str(self.name_of_predefined_loadprofile) if self.name_of_predefined_loadprofile else "-",
+            os.path.basename(str(self.predefined_loadprofile_filepaths)) if self.predefined_loadprofile_filepaths else "-",
             self.guid or "-",
         ]
         return "/".join(parts)

@@ -106,7 +106,7 @@
                 "lifetime_in_years": null,
                 "maintenance_costs_in_euro_per_year": null,
                 "subsidy_as_percentage_of_investment_costs": null,
-                "weather_identity": "Aachen/DWD_TRY/aachen_center"
+                "weather_identity": "Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center"
             },
             "config_full_classname": "hisim.components.building.config.BuildingConfig",
             "inputs": [],
@@ -142,7 +142,7 @@
                 "predictive": false,
                 "predictive_control": false,
                 "prediction_horizon": null,
-                "weather_identity": "Aachen/DWD_TRY/aachen_center"
+                "weather_identity": "Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center"
             },
             "config_full_classname": "hisim.components.generic_pv_system.PVSystemConfig",
             "inputs": [],

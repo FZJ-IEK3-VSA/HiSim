@@ -7,6 +7,7 @@ import math
 import os
 from dataclasses import dataclass
 from enum import Enum, unique
+from pathlib import PurePath
 from typing import Any, Dict, List, Optional, Union
 
 from dataclasses_json import dataclass_json
@@ -465,20 +466,31 @@ class WeatherConfig(ConfigBase):
         return config
 
     def identity(self) -> str:
-        """Return a short string that says which weather this configuration reads: station, data set, file stem.
+        """Return a short string that says which weather this configuration reads: station, data set, file.
 
-        Example: ``"Aachen/DWD_TRY/aachen_center"``. Components whose cached results depend on the weather
-        (PV, building) store this string in their own configuration, sized from the weather through the
-        sizing engine, so that their cache keys include which weather they were computed with. See
-        ``roadmap/pylpg_flakiness.md`` F7.
+        Example: ``"Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center"``.
+        Components whose cached results depend on the weather (PV, building) store this string in their
+        own configuration, sized from the weather through the sizing engine, so that their cache keys
+        include which weather they were computed with. See ``roadmap/pylpg_flakiness.md`` F7.
 
         It is a readable string rather than a hash because it is written into every recorded energy-system
-        file. The directory of ``source_path`` is left out because it differs between machines.
+        file. For a file under the repository's inputs directory the path relative to that directory is
+        kept -- the machine-specific prefix says nothing about the data, but the directories below the
+        inputs root are where the dataset families live (two of the shipped families could hold files of
+        the same name), so dropping them would let two different datasets share one identity. A file
+        outside the inputs directory contributes only its basename.
 
         Returns:
-            str: ``<location>/<data source>/<file stem>``.
+            str: ``<location>/<data source>/<inputs-relative path or basename>``.
         """
-        return f"{self.location}/{self.data_source.value}/{os.path.basename(str(self.source_path))}"
+        path = str(self.source_path)
+        try:
+            relative = os.path.relpath(path, utils.get_input_directory())
+        except ValueError:  # a different drive on Windows: no relative path exists
+            relative = None
+        if relative is None or relative.startswith(".."):
+            relative = os.path.basename(path)
+        return f"{self.location}/{self.data_source.value}/{PurePath(relative).as_posix()}"
 
     @staticmethod
     def identity_facts(config: "WeatherConfig", ctx: Any) -> Dict[str, Any]:

@@ -38,7 +38,7 @@
                 "lifetime_in_years": null,
                 "maintenance_costs_in_euro_per_year": null,
                 "subsidy_as_percentage_of_investment_costs": null,
-                "weather_identity": "Aachen/DWD_TRY/aachen_center"
+                "weather_identity": "Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center"
             },
             "config_full_classname": "hisim.components.building.config.BuildingConfig",
             "inputs": [],
@@ -142,7 +142,7 @@
                 "predictive": false,
                 "predictive_control": false,
                 "prediction_horizon": null,
-                "weather_identity": "Aachen/DWD_TRY/aachen_center"
+                "weather_identity": "Aachen/DWD_TRY/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center"
             },
             "config_full_classname": "hisim.components.generic_pv_system.PVSystemConfig",
             "inputs": [],
@@ -328,7 +328,7 @@
                 "lifetime_in_years": 18.0,
                 "maintenance_costs_in_euro_per_year": 889.96,
                 "subsidy_as_percentage_of_investment_costs": 0,
-                "occupancy_identity": "use_local_lpg/CHR01 Couple both at Work/EnergySaving/Travel Route Set for 10km Commuting Distance/Bus and one 30 km/h Car/Charging At Home with 11 kW/with-appliances/CHR01 Couple both at Work/-"
+                "occupancy_identity": "use_local_lpg/CHR01 Couple both at Work/EnergySaving/Travel Route Set for 10km Commuting Distance/Bus and one 30 km/h Car/Charging At Home with 11 kW/with-appliances/CHR01 Couple both at Work/-/-"
             },
             "config_full_classname": "hisim.components.generic_car.CarConfig",
             "inputs": [],

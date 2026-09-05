@@ -231,7 +231,9 @@ class Component:
                     f"The config of component '{my_config.component_id.key}' "
                     f"({type(my_config).__name__}) still requires sizing in "
                     f"{len(unresolved)} field(s):\n{cfg.describe_auto_fields(my_config)}\n"
-                    "Call .resolve(ctx) with a SizingContext or set the fields explicitly."
+                    "Call .resolve(ctx) with a SizingContext or set the fields explicitly -- for an "
+                    "identity field, from its provider, e.g. "
+                    "config.weather_identity = my_weather_config.identity()."
                 )
             # Subclasses read their concrete config's fields off this base-typed slot; that
             # works for the type checker because ConfigBase carries a checking-only

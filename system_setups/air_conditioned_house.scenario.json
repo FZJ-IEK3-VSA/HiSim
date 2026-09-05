@@ -100,7 +100,7 @@
                 "predictive": false,
                 "predictive_control": false,
                 "prediction_horizon": null,
-                "weather_identity": "Seville/NSRDB/Seville"
+                "weather_identity": "Seville/NSRDB/weather/NSRDB/Seville/Seville"
             },
             "config_full_classname": "hisim.components.generic_pv_system.PVSystemConfig",
             "inputs": [],
@@ -193,7 +193,7 @@
                 "lifetime_in_years": null,
                 "maintenance_costs_in_euro_per_year": null,
                 "subsidy_as_percentage_of_investment_costs": null,
-                "weather_identity": "Seville/NSRDB/Seville"
+                "weather_identity": "Seville/NSRDB/weather/NSRDB/Seville/Seville"
             },
             "config_full_classname": "hisim.components.building.config.BuildingConfig",
             "inputs": [],

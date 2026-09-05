@@ -13,6 +13,11 @@ the file says and never on the order its lines happen to be written in. The deri
 the sorted feeds produce are defined on the resolved connection itself, next door in
 :mod:`hisim.energy_system.resolution`.
 
+Between the sorting and the creation sits one decision this module delegates rather than makes:
+which port each dispatch block's control signal comes out of. An aggregator often already publishes
+the signal a feed asks for, and growing a second one would leave it unable to tell the two apart, so
+:mod:`hisim.energy_system.dispatch_signals` settles that per feed before any port is created.
+
 The module reaches into components by duck typing over two well-known names — a ``CHANNELS``
 class attribute and a ``resolve_dynamic_connections`` method — and imports no component module
 at all, which is what keeps a component free to import the resolved-connection record without
@@ -29,6 +34,7 @@ from hisim import loadtypes as lt
 from hisim.energy_system.aggregator_ports import AggregatorPortChecker
 from hisim.energy_system.channel_matching import ChannelMatcher
 from hisim.energy_system.channels import DynamicConnectionChannel, FeedRequest
+from hisim.energy_system.dispatch_signals import DispatchSignalPlanner
 from hisim.energy_system.errors import EnergySystemErrorId, EnergySystemWiringError
 from hisim.energy_system.resolution import (
     ResolvedDispatch,
@@ -212,7 +218,8 @@ class DynamicConnectionResolver:
             feeds: The feeds addressed at it.
 
         Returns:
-            The resolved connections in deterministic order.
+            The resolved connections in deterministic order, each dispatching one carrying the
+            control port it was assigned.
 
         Raises:
             EnergySystemWiringError: On any feed condition of the error catalogue.
@@ -222,6 +229,7 @@ class DynamicConnectionResolver:
         resolved = [self._resolve_feed(target_name, target, channels, feed) for feed in feeds]
         AggregatorPortChecker.check_participant_ports_are_unique(target_name, resolved)
         resolved.sort(key=lambda connection: connection.sort_key())
+        resolved = DispatchSignalPlanner(target_name, target).plan(resolved)
         created = AggregatorPortChecker.check_port_names_are_free(target_name, target, resolved)
         getattr(target, self.RESOLUTION_HOOK)(list(resolved))
         AggregatorPortChecker.check_ports_were_created(target_name, target, resolved)

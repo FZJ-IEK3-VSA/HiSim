@@ -78,6 +78,9 @@ class AggregatorPortChecker:
         check runs before the aggregator creates anything, so a failing file leaves the
         component untouched.
 
+        A dispatch block that adopted a port the aggregator already publishes is not a collision
+        but the absence of one: nothing is created for it, so it contributes no name here.
+
         Args:
             target_name: Name of the aggregator.
             target: The aggregator component.
@@ -93,7 +96,7 @@ class AggregatorPortChecker:
         existing |= {port.field_name for port in target.outputs}
         created: List[str] = []
         for connection in resolved:
-            for name in (connection.aggregator_input_name, connection.dispatch_output_name):
+            for name in (connection.aggregator_input_name, connection.created_dispatch_output_name):
                 if name is None:
                     continue
                 if name in existing:

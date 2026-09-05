@@ -40,6 +40,8 @@ import yaml
 
 from hisim import log
 from hisim.config.introspection import SizableFieldKind
+from hisim.config.sizing import AUTO, _AutoSize  # pylint: disable=protected-access
+from hisim.config.laws import SizingLaw
 from hisim.energy_system.audit_records import (
     AuditRecord,
     BuiltFrom,
@@ -194,11 +196,36 @@ class AuditBuilder:
         return tuple(
             OverriddenField(
                 field=field,
-                preset_default=ConfigBlockWriter.plain(getattr(origin, field, None), name, field),
+                preset_default=self.origin_value(getattr(origin, field, None), name, field),
                 value=ConfigBlockWriter.plain(getattr(final, field, None), name, field),
             )
             for field in binding.entry.config
         )
+
+    @classmethod
+    def origin_value(cls, value: Any, name: str, field: str) -> Any:
+        """Renders what a preset or a constructor had put in one field before the file overrode it.
+
+        The value a record writes is always concrete, but the value it *replaced* need not be: a
+        preset routinely leaves a field for a law to compute, and an entry that pins such a field
+        is exactly the interesting kind of override. Writing that as the sentinel's own spelling
+        says "the preset left this open" instead of refusing to describe the entry at all, which is
+        what the plain-data writer does when it meets a sentinel it may not put into a record.
+
+        Args:
+            value: The value the origin produced for the field.
+            name: The component's name, for the message when the value is not plain data.
+            field: The field's name, likewise.
+
+        Returns:
+            The sentinel's wire spelling for a value awaiting sizing, the law's own description for
+            a law, and the plain form of anything else.
+        """
+        if value is AUTO:
+            return _AutoSize.WIRE_SPELLING
+        if isinstance(value, SizingLaw):
+            return value.describe()
+        return ConfigBlockWriter.plain(value, name, field)
 
     @classmethod
     def sized_fields(cls, name: str, config: Any) -> Tuple[SizedField, ...]:

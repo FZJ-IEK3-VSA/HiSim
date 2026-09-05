@@ -23,8 +23,9 @@ one produces.
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Dict
+from typing import Any, ClassVar, Dict, Type
 
+import numpy as np
 import yaml
 
 from hisim.energy_system.model import (
@@ -69,6 +70,85 @@ class CanonicalDumper(yaml.SafeDumper):
                 which is why the pragma above is there.
         """
         super().increase_indent(flow, False)
+
+    @classmethod
+    def configured(cls) -> Type["CanonicalDumper"]:
+        """Registers the numeric overrides on this class and returns it.
+
+        A component configuration is not guaranteed to hold the plain Python numbers its field
+        annotations promise. Anything a setup derives from a sized building, a pandas table or a
+        pvlib call arrives as a numpy scalar instead, and the safe dumper refuses a type it has no
+        representer for -- so a setup that computes one number that way cannot be written down at
+        all, which reads as the format being unable to express the setup when it is only the writer
+        being unable to spell the number. Registering the numpy scalar kinds by their abstract base
+        classes covers every width of each, and an array is written as the list it would have been
+        had nobody put it in an array.
+
+        The values are converted rather than tagged, so the file stays ordinary YAML that any
+        reader can load: what comes back is a Python ``float``, ``int`` or ``bool``, which is what
+        the field annotation said in the first place. Registration happens here rather than at
+        import time so that importing this module has no side effect, and it is idempotent.
+
+        Returns:
+            This class, ready to be handed to a YAML dump.
+        """
+        cls.add_multi_representer(np.integer, cls.represent_numpy_integer)
+        cls.add_multi_representer(np.floating, cls.represent_numpy_float)
+        cls.add_multi_representer(np.bool_, cls.represent_numpy_bool)
+        cls.add_representer(np.ndarray, cls.represent_numpy_array)
+        return cls
+
+    @staticmethod
+    def represent_numpy_integer(dumper: Any, data: Any) -> Any:
+        """Writes a numpy integer of any width as a plain integer.
+
+        Args:
+            dumper: The dumper doing the work; passed by the dispatch table.
+            data: The numpy integer to write.
+
+        Returns:
+            The scalar node for the integer.
+        """
+        return dumper.represent_int(int(data))
+
+    @staticmethod
+    def represent_numpy_float(dumper: Any, data: Any) -> Any:
+        """Writes a numpy float of any width as a plain float.
+
+        Args:
+            dumper: The dumper doing the work; passed by the dispatch table.
+            data: The numpy float to write.
+
+        Returns:
+            The scalar node for the float.
+        """
+        return dumper.represent_float(float(data))
+
+    @staticmethod
+    def represent_numpy_bool(dumper: Any, data: Any) -> Any:
+        """Writes a numpy boolean as a plain boolean.
+
+        Args:
+            dumper: The dumper doing the work; passed by the dispatch table.
+            data: The numpy boolean to write.
+
+        Returns:
+            The scalar node for the boolean.
+        """
+        return dumper.represent_bool(bool(data))
+
+    @staticmethod
+    def represent_numpy_array(dumper: Any, data: Any) -> Any:
+        """Writes a numpy array as the list of plain numbers it stands for.
+
+        Args:
+            dumper: The dumper doing the work; passed by the dispatch table.
+            data: The array to write.
+
+        Returns:
+            The sequence node for the list.
+        """
+        return dumper.represent_list(data.tolist())
 
 
 class EnergySystemEmitter:
@@ -140,9 +220,26 @@ class EnergySystemEmitter:
         Returns:
             The YAML document, ending in a newline.
         """
+        return cls.render(cls.to_document(model))
+
+    @classmethod
+    def render(cls, document: Dict[str, Any]) -> str:
+        """Renders an already-built document in the canonical style.
+
+        The two steps are separable because more than one producer builds the document itself: the
+        run record annotates it, and later passes assemble documents of their own. All of them have
+        to come out in the same bytes as an ordinary dump, which they only do if there is one
+        renderer.
+
+        Args:
+            document: The plain nested mapping mirroring the file, keys already in canonical order.
+
+        Returns:
+            The YAML document, ending in a newline.
+        """
         rendered = yaml.dump(
-            cls.to_document(model),
-            Dumper=CanonicalDumper,
+            document,
+            Dumper=CanonicalDumper.configured(),
             sort_keys=False,
             default_flow_style=False,
             allow_unicode=True,

@@ -29,13 +29,15 @@ from __future__ import annotations
 import io
 from typing import Any, ClassVar, List, Optional, Tuple, Type
 
+import numpy as np
+
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 from ruamel.yaml.representer import RoundTripRepresenter
 
 from hisim.config.introspection import SizableFieldKind
 from hisim.energy_system.audit_records import AuditRecord, BuiltFrom, ComponentAudit
-from hisim.energy_system.emitter import EnergySystemEmitter
+from hisim.energy_system.emitter import CanonicalDumper, EnergySystemEmitter
 from hisim.energy_system.loader import EnergySystemReader, dump_energy_system
 from hisim.energy_system.model import ComponentEntry, EnergySystemFile
 from hisim.energy_system.metadata import RunMetadata
@@ -69,7 +71,13 @@ class CanonicalRepresenter(RoundTripRepresenter):
 
     @classmethod
     def configured(cls) -> Type["CanonicalRepresenter"]:
-        """Registers the two overrides on this class and returns it.
+        """Registers this class's overrides and returns it.
+
+        Two of them are the spellings described above. The rest are the numeric conversions the
+        canonical dumper makes, borrowed from it rather than restated: a configuration value that
+        arrives as a numpy scalar has to be written the same way by both writers, or the annotated
+        file and the plain one stop being the same bytes and the test that holds them together
+        fails for a reason that has nothing to do with comments.
 
         Registration happens here rather than at import time so that importing this module has
         no side effect, and it is idempotent: registering the same function for the same type
@@ -80,6 +88,10 @@ class CanonicalRepresenter(RoundTripRepresenter):
         """
         cls.add_representer(type(None), cls.represent_canonical_null)
         cls.add_representer(str, cls.represent_canonical_string)
+        cls.add_multi_representer(np.integer, CanonicalDumper.represent_numpy_integer)
+        cls.add_multi_representer(np.floating, CanonicalDumper.represent_numpy_float)
+        cls.add_multi_representer(np.bool_, CanonicalDumper.represent_numpy_bool)
+        cls.add_representer(np.ndarray, CanonicalDumper.represent_numpy_array)
         return cls
 
     @staticmethod

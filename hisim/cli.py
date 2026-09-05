@@ -12,7 +12,9 @@ named constructors and their parameters, how each sizable field is computed and 
 and which facts it contributes to the rest of a system. ``hisim energy-system facts`` takes a
 whole file and prints the resolution table — every fact somebody provides, every fact somebody
 reads, and which provider each read resolved to — without running a single timestep.
-``hisim energy-system schema`` writes the JSON Schema an editor binds to. And ``hisim
+``hisim energy-system schema`` writes the JSON Schema an editor binds to. ``hisim energy-system
+record`` goes the other way and writes a Python setup out as such a file, which is how the setups
+this repository already has become declarative twins without anybody retyping them. And ``hisim
 energy-system run`` runs a file, which is the same thing ``hisim_main.py`` does when handed one.
 
 Two conventions hold throughout. Nothing here decides anything: every command asks the same code
@@ -44,7 +46,9 @@ from hisim.energy_system.configure import configure_energy_system
 from hisim.energy_system.errors import EnergySystemError
 from hisim.energy_system.executor import run_energy_system
 from hisim.energy_system.groups import expand_groups
+from hisim.energy_system.executor import SimulationParametersReader
 from hisim.energy_system.loader import parse_energy_system
+from hisim.energy_system.recording.session import RecordingSession, record_setup
 from hisim.energy_system.schema_classes import ComponentClassScan
 from hisim.energy_system.schema_export import default_schema_path, export_schema
 from hisim.energy_system.validation import validate_structure
@@ -406,7 +410,7 @@ class FactsRenderer(Report):
 
 
 class EnergySystemCommands:
-    """The four verbs of the ``energy-system`` noun, one method each.
+    """The five verbs of the ``energy-system`` noun, one method each.
 
     Each method takes the parsed arguments and the two streams, does one thing and returns an
     exit code. Keeping them free of argument parsing is what lets a test drive them the way a
@@ -436,6 +440,29 @@ class EnergySystemCommands:
         """Writes the JSON Schema of the format, either to the committed file or to a given path."""
         del error_stream  # every command shares one signature; this one reports nothing separately
         print(f"Wrote the schema of the energy-system format to {export_schema(arguments.out)}.", file=out)
+        return ExitCodes.OK
+
+    @classmethod
+    def record(cls, arguments: argparse.Namespace, out: TextIO, error_stream: TextIO) -> int:
+        """Records one Python setup as an energy-system file and proves the file builds again.
+
+        The verb that turns the existing Python setups into declarative twins: it runs the setup,
+        observes what it built and writes the file that describes it, then loads that file back
+        through the executor. A recorded file that does not build is reported as a failure of the
+        recording rather than written and left for somebody to discover.
+        """
+        del error_stream  # every command shares one signature; a refusal propagates to main()
+        module = Path(arguments.setup)
+        parameters_path = Path(arguments.simulation_parameters)
+        directory = Path(arguments.out) if arguments.out else RecordingSession.default_output_directory(module)
+        parameters = SimulationParametersReader.read(parameters_path)
+        result = record_setup(module, parameters, directory, parameters_path=parameters_path)
+        origin = "wrote" if result.parameters.written else "referenced"
+        print(
+            f"Recorded {result.setup} as {result.path} "
+            f"({len(result.model.components)} components); {origin} {result.parameters.path}.",
+            file=out,
+        )
         return ExitCodes.OK
 
     @classmethod
@@ -481,6 +508,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--out", default=None, help=f"where to write it (default: {default_schema_path()})"
     )
 
+    record = verbs.add_parser("record", help="write a Python setup out as an energy-system file")
+    record.add_argument("setup", metavar="SETUP", help="the system_setups/*.py module to record")
+    record.add_argument(
+        "simulation_parameters",
+        metavar="SIMULATION",
+        help="the *.simulation.yaml or *.simulation.json file the setup is run with",
+    )
+    record.add_argument(
+        "--out",
+        default=None,
+        help=f"where the recorded file goes (default: the repository's {RecordingSession.DEFAULT_OUTPUT_DIRECTORY}/)",
+    )
+
     run = verbs.add_parser("run", help="run a file over a simulation period")
     run.add_argument("energy_system", metavar="ENERGY_SYSTEM", help="the *.energy_system.yaml file")
     run.add_argument(
@@ -517,6 +557,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     verbs = {
         "describe": EnergySystemCommands.describe,
         "facts": EnergySystemCommands.facts,
+        "record": EnergySystemCommands.record,
         "schema": EnergySystemCommands.schema,
         "run": EnergySystemCommands.run,
     }

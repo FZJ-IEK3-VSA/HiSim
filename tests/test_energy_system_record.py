@@ -681,3 +681,34 @@ def test_a_re_run_that_does_not_reproduce_its_record_is_reported(tmp_path: Path)
 
     assert failure.value.error_id.value == "EF-61"
     assert "minimal_thermal_power_in_watt" in str(failure.value)
+
+
+@pytest.mark.base
+def test_an_override_of_a_field_the_preset_left_open_is_auditable(tmp_path: Path) -> None:
+    """Catches the audit refusing to describe the most interesting kind of override.
+
+    A preset that leaves a power band for a law to compute holds the ``AUTO`` sentinel in that
+    field, and an entry that pins such a field is exactly the override a reader wants explained.
+    The plain-data writer rightly refuses to put a sentinel into a record, so the audit has to
+    spell it through the sizing layer's own encoder instead — and before it did, this file, which
+    is legal by every schema rule, crashed the audit rendering of an otherwise successful build.
+    """
+    source = Fixtures.MINIMAL.read_text(encoding="utf-8")
+    pinned = source.replace(
+        "    preset: condensing_gas",
+        "    preset: condensing_gas\n    config:\n      maximal_thermal_power_in_watt: 5000.0",
+        1,
+    )
+    assert pinned != source
+    overriding = tmp_path / "pinned_boiler.energy_system.yaml"
+    overriding.write_text(pinned, encoding="utf-8")
+
+    built = Fixtures.build(overriding, tmp_path)
+    audit = build_audit(built)
+    rendered = AnnotatedEmitter.render(realize(built), audit)
+
+    boiler = next(component for component in audit.components if component.name == "boiler")
+    override = next(entry for entry in boiler.overrides if entry.field == "maximal_thermal_power_in_watt")
+    assert override.preset_default == "AUTO"
+    assert override.value == 5000.0
+    assert "maximal_thermal_power_in_watt: 5000.0" in rendered

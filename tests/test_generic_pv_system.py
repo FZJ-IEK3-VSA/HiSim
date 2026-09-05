@@ -53,6 +53,7 @@ def _run_pv_at_timestep_655(
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
 
+    pvs_config.weather_identity = my_weather_config.identity()
     my_pvs = generic_pv_system.PVSystem(
         config=pvs_config, my_simulation_parameters=mysim
     )
@@ -166,6 +167,7 @@ def test_photovoltaic_cache_roundtrip(tmp_path) -> None:
     my_weather.i_prepare_simulation()
 
     my_pvs_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
+    my_pvs_config.weather_identity = my_weather_config.identity()
     my_pvs = generic_pv_system.PVSystem(
         config=my_pvs_config, my_simulation_parameters=my_sim_params
     )
@@ -186,6 +188,7 @@ def test_photovoltaic_cache_roundtrip(tmp_path) -> None:
         == my_sim_params.timesteps
     )
 
+    my_pvs_config.weather_identity = my_weather_config.identity()
     my_pvs_cached = generic_pv_system.PVSystem(
         config=my_pvs_config, my_simulation_parameters=my_sim_params
     )

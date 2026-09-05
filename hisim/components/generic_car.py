@@ -19,7 +19,7 @@ from hisim import loadtypes as lt
 from hisim import utils, log
 from hisim.caching import atomic_cache_write
 from hisim.component import OpexCostDataClass, CapexCostDataClass
-from hisim.config import ConfigBase, ComponentID, DisplayConfig, constructor
+from hisim.config import ConfigBase, ComponentID, DisplayConfig, Sizable, Size, constructor, sized_field
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.loadtypes import Units, ComponentType
 
@@ -85,6 +85,10 @@ class CarConfig(ConfigBase):
     maintenance_costs_in_euro_per_year: float
     # subsidies as percentage of investment costs
     subsidy_as_percentage_of_investment_costs: float
+    #: The occupancy whose driving profile this car uses, as ``UtspLpgConnectorConfig.identity()``
+    #: spells it. Sized from the occupancy by the sizing engine, so the cache key includes it; the
+    #: household name alone does not determine the profile. See ``roadmap/pylpg_flakiness.md`` F7.
+    occupancy_identity: Sizable[str] = sized_field(rule=Size.OCCUPANCY_IDENTITY, value_type=str)
 
     @classmethod
     def get_main_classname(cls):

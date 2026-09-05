@@ -140,7 +140,11 @@ def _sizable_decoder(value_type: Optional[type]) -> Callable[[Any], Any]:
     """
 
     def decode(raw: Any) -> Any:
-        if isinstance(raw, str) and raw == _AutoSize.WIRE_SPELLING:
+        # dataclasses_json also runs this decoder on the *default* of a missing key, so ``raw`` can be
+        # the AUTO sentinel itself. It must pass through unchanged: coercing it with ``value_type``
+        # would turn it into the string "AUTO" for str-typed fields (silently -- ``str(AUTO)`` is the
+        # wire spelling), and the engine would then treat the field as already set.
+        if raw is AUTO or (isinstance(raw, str) and raw == _AutoSize.WIRE_SPELLING):
             return AUTO
         if value_type is not None and raw is not None and not isinstance(raw, value_type):
             return value_type(raw)
@@ -164,12 +168,16 @@ class SizedFieldMetadata:
     #: The concrete type the field's wire decoder coerces into, recorded so that the
     #: class-creation check can tell a declared ``value_type`` from a forgotten one.
     VALUE_TYPE: ClassVar[str] = "hisim_sizing_value_type"
+    #: Whether the field's law may legitimately resolve to ``None``. Without this flag a
+    #: vacuous value (``None``, a blank string) on a sized field counts as unresolved,
+    #: because a JSON ``null`` must not slip past the AUTO guard into a cache key.
+    OPTIONAL: ClassVar[str] = "hisim_sizing_optional"
 
 
 def sized_field(
     *, rule: Any, default: Any = AUTO, value_type: Optional[type] = None,
     reads: Optional[Tuple[Any, ...]] = None, fields: Optional[Tuple[str, ...]] = None,
-    note: Optional[str] = None, **field_kwargs: Any,
+    note: Optional[str] = None, optional: bool = False, **field_kwargs: Any,
 ) -> Any:
     """Declares a sizable dataclass field: its law and its AUTO wire codec in one place.
 
@@ -192,6 +200,10 @@ def sized_field(
         note: Where the value comes from, when the author knows it (a standard, a
             datasheet). Optional and never a placeholder; it is recorded as-is and
             rendered by the audit trail so a hard-coded constant can cite its source.
+        optional: Declare that the law may legitimately resolve to ``None`` (the field is
+            ``Sizable[Optional[...]]``). Without it, ``None`` -- which a JSON ``null``
+            decodes to -- and a blank string count as unresolved, so they cannot slip past
+            the construction guard into a cache key.
         **field_kwargs: Passed through to ``dataclasses.field`` (respecting an existing
             ``metadata`` mapping by merging into it).
 
@@ -204,6 +216,8 @@ def sized_field(
         metadata[SizedFieldMetadata.NOTE] = note
     if value_type is not None:
         metadata[SizedFieldMetadata.VALUE_TYPE] = value_type
+    if optional:
+        metadata[SizedFieldMetadata.OPTIONAL] = True
     metadata.update(dataclasses_json_config(encoder=_encode_sizable, decoder=_sizable_decoder(value_type)))
     # invalid-field-call is a false positive here: this helper returns the field()
     # descriptor for use inside a dataclass body, exactly like dataclasses_json.config.
@@ -257,11 +271,14 @@ def sizable_fields(config_class: type) -> Mapping[str, SizingLaw]:
 
 
 def auto_fields(config: Any) -> Tuple[str, ...]:
-    """Names the fields of a config instance that currently carry the AUTO sentinel.
+    """Names the fields of a config instance that still require resolution.
 
     Used by the central ``Component.__init__`` check: a component must never be
     constructed from a config that still requires sizing, no matter whether the config
-    came from a preset, a scenario file or manual construction.
+    came from a preset, a scenario file or manual construction. For a *sized* field a
+    vacuous value counts as unresolved too: ``None`` (which a JSON ``null`` decodes to)
+    and, for strings, the empty string are never a resolved size -- letting them pass
+    would put a meaningless value into a cache key without any error.
     """
     if not dataclasses.is_dataclass(config):
         return ()
@@ -269,12 +286,39 @@ def auto_fields(config: Any) -> Tuple[str, ...]:
         field.name
         for field in dataclasses.fields(config)
         if _needs_sizing(getattr(config, field.name, None))
+        or (
+            SizedFieldMetadata.LAW in field.metadata
+            and not field.metadata.get(SizedFieldMetadata.OPTIONAL, False)
+            and _is_vacuous(getattr(config, field.name, None))
+        )
     )
 
 
 def _needs_sizing(value: Any) -> bool:
     """True when a field value still requires resolution: AUTO, or a per-preset law."""
     return value is AUTO or isinstance(value, SizingLaw)
+
+
+def _is_vacuous(value: Any) -> bool:
+    """True for values that can never be a resolved size: ``None``, or a blank string.
+
+    Only meaningful for sized fields -- an ordinary optional field holds ``None``
+    legitimately, so callers must pair this check with the field's sizing metadata.
+    """
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+def _optional_sized_fields(config_class: type) -> Set[str]:
+    """Names the sized fields of a class whose law may legitimately resolve to ``None``.
+
+    These are the fields declared with ``sized_field(..., optional=True)``; a vacuous value
+    on them is a resolved value, not a request for sizing.
+    """
+    return {
+        field.name
+        for field in dataclasses.fields(config_class)
+        if field.metadata.get(SizedFieldMetadata.OPTIONAL, False)
+    }
 
 
 def describe_auto_fields(config: Any) -> str:
@@ -440,10 +484,11 @@ def resolve_config(
     # A preset may override the class law for one field by assigning a SizingLaw as the
     # field value (the per-preset escape hatch) — e.g. the pellet boiler's minimal power
     # is a twelfth of its own maximal power, while the gas boiler's is a constant zero.
+    optional_fields = _optional_sized_fields(type(config))
     pending: Dict[str, SizingLaw] = {}
     for field_name, declared_law in laws.items():
         current = getattr(config, field_name)
-        if not _needs_sizing(current):
+        if not (_needs_sizing(current) or (_is_vacuous(current) and field_name not in optional_fields)):
             continue
         pending[field_name] = current if isinstance(current, SizingLaw) else declared_law
     own = OwnFields(config, pending)

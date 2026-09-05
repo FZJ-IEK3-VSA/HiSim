@@ -35,6 +35,7 @@ from dataclasses_json import dataclass_json
 # line. The aliases keep the module-level functions reachable from the identically named
 # ``ConfigBase`` methods that delegate to them.
 from hisim.config.context import SizingContext
+from hisim.config.names import NameSyntax
 from hisim.config.presets import check_builder_declarations
 from hisim.config.sizing import (
     SizedFieldMetadata,
@@ -182,15 +183,24 @@ class ComponentID:
     DEFAULT_BUILDING_LABEL: ClassVar[str] = "BUI1"
 
     def __post_init__(self) -> None:
-        """Validates the identity right after construction.
+        """Validates the identity right after construction, one field at a time.
 
-        The name is the only mandatory part of a component identity, and an empty or
-        whitespace-only name would silently produce an empty or malformed key later on.
-        Rejecting it here turns a confusing downstream naming problem into an immediate,
-        clearly attributable error.
+        Every present field has to be an identifier on its own, because the key joins them
+        verbatim: a building label with a space or a leading digit would make the joined key
+        fail the name rule at component construction with a message blaming the *name* for a
+        string the author never typed. Rejecting each field here means the refusal names the
+        field that is actually wrong, at the moment the identity is created — and a key built
+        from valid identifier fields is an identifier by construction.
+
+        Raises:
+            ValueError: If ``name``, ``building`` or ``unit`` is present and not an
+                identifier; the message names the offending field and the rule it broke.
         """
-        if not isinstance(self.name, str) or not self.name.strip():
-            raise ValueError(f"A ComponentID needs a non-empty name, but got {self.name!r}.")
+        NameSyntax.require_identifier(self.name, "component")
+        if self.building is not None:
+            NameSyntax.require_identifier(self.building, "building label")
+        if self.unit is not None:
+            NameSyntax.require_identifier(self.unit, "unit label")
 
     @property
     def key(self) -> str:

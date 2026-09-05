@@ -57,6 +57,24 @@ class _SizableFixtureConfig(ConfigBase):
 
 @dataclass_json
 @dataclass
+class _StringSizedFixtureConfig(ConfigBase):
+    """A config with one string-typed sizable field, for the wire-format tests.
+
+    ``str`` is the one type whose constructor accepts the ``AUTO`` sentinel without an error
+    (``str(AUTO)`` is the wire spelling), which is what made the decoder defect below silent.
+    """
+
+    component_id: ComponentID
+    upstream_identity: Sizable[str] = sized_field(rule=Size.WEATHER_IDENTITY, value_type=str)
+
+    @classmethod
+    def get_main_classname(cls) -> str:
+        """Returns the class name, as every config does."""
+        return cls.__name__
+
+
+@dataclass_json
+@dataclass
 class _UnsizableFixtureConfig(ConfigBase):
     """A config declaring no sizable field at all — the NothingToSizeError case."""
 
@@ -312,3 +330,23 @@ def test_ems_preset_has_nothing_to_size():
     assert config.strategy == "optimize_own_consumption"
     with pytest.raises(NothingToSizeError):
         config.resolve(SizingContext(heating_load_in_watt=10_000.0))
+
+
+@pytest.mark.base
+def test_a_string_typed_sizable_field_left_out_of_a_dict_is_still_auto():
+    """A sized field missing from a dict decodes to the ``AUTO`` sentinel, not to the string ``"AUTO"``.
+
+    ``dataclasses_json`` runs the field decoder on a missing key's default too. The decoder used to
+    coerce that default through ``value_type``; for ``str`` that produced the text ``"AUTO"``, which the
+    engine then treated as a set value and never sized.
+    """
+    absent = _StringSizedFixtureConfig.from_dict({"component_id": {"name": "Fixture"}})
+    spelled = _StringSizedFixtureConfig.from_dict({"component_id": {"name": "Fixture"}, "upstream_identity": "AUTO"})
+    concrete = _StringSizedFixtureConfig.from_dict(
+        {"component_id": {"name": "Fixture"}, "upstream_identity": "Aachen/DWD_TRY/aachen_center"}
+    )
+
+    assert absent.upstream_identity is AUTO
+    assert spelled.upstream_identity is AUTO
+    assert concrete.upstream_identity == "Aachen/DWD_TRY/aachen_center"
+    assert sizing.auto_fields(absent) == ("upstream_identity",)

@@ -161,8 +161,30 @@ class EntryConfigurator:
                 builder that refused the arguments the entry passed.
         """
         origin = self._realize_origin()
-        config = origin if self.origin_is_the_entrys_own_block else self._apply_overrides(origin)
+        if self.origin_is_the_entrys_own_block:
+            # The block is origin and configuration at once, and path expansion mutates its
+            # target in place — expanding a copy keeps the returned origin at the file's own
+            # ${var} spelling instead of quietly reporting the expanded value.
+            config = self._copy_with_provenance(origin)
+        else:
+            config = self._apply_overrides(origin)
         return origin, self._expand_paths(config)
+
+    @staticmethod
+    def _copy_with_provenance(config: Any) -> Any:
+        """Copies a configuration, carrying the preset stamp the copy would otherwise lose.
+
+        Args:
+            config: The configuration to copy.
+
+        Returns:
+            A fresh instance equal to ``config``, provenance included.
+        """
+        copied = dataclasses.replace(config)
+        provenance = getattr(config, ConfigBuilder.PROVENANCE_ATTRIBUTE, None)
+        if provenance is not None:
+            setattr(copied, ConfigBuilder.PROVENANCE_ATTRIBUTE, provenance)
+        return copied
 
     @property
     def origin_is_the_entrys_own_block(self) -> bool:

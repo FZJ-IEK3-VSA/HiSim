@@ -8,8 +8,9 @@ grammar governs all of them: a letter or underscore followed by letters, digits 
 underscores.
 
 The rule lives in :mod:`hisim.config` rather than next to either of its users because it has
-two of them on opposite sides of the dependency direction. ``hisim/energy_system/model.py``
-enforces it on what an author writes in a file, ``hisim/component.py`` enforces it on what a
+two of them on opposite sides of the dependency direction. ``hisim/energy_system/names.py``
+enforces it on what an author writes in a file — the loader and the entry readers refuse
+their keys and references through it — while ``hisim/component.py`` enforces it on what a
 component is constructed with, and the energy-system package already imports the component
 runtime, so the component runtime cannot import back. The configuration package is the
 bottom layer both of them import, which makes it the only place a single definition can sit.
@@ -107,10 +108,13 @@ class NameSyntax:
     def require_identifier(cls, value: Any, role: str) -> None:
         """Raises unless ``value`` is a well-formed name for the given role.
 
-        This is the enforcing form used at the two points where a name becomes real: when a
-        component is constructed with its runtime name, and when a declarative file's key is
-        read. Rejecting there rather than downstream means an unusable name surfaces at the
-        moment it is introduced, with the offending string in the message, instead of as a
+        This is the enforcing form used where a runtime name becomes real: a component
+        identity's fields, the component's constructed name, and both halves of a port. The
+        declarative file format enforces the same grammar through ``NameRules``, whose
+        refusals carry their own error family but build their wording from
+        :meth:`explain_violation`, so a rejected file key and a rejected runtime name tell
+        the author the same thing about the same string. Rejecting at introduction means an
+        unusable name surfaces with the offending string in the message, instead of as a
         malformed result column or an unresolvable reference much later.
 
         Args:

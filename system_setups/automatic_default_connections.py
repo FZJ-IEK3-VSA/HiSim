@@ -63,10 +63,16 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # Build Basic Components
 
     # Build Building
+    # The weather config is created first: the building and PV configs copy its identity
+    # (weather_identity) and must have it before those components are built. The weather
+    # component itself is still added further down, so the simulator's component order is unchanged.
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+
     my_building_config = building.BuildingConfig.preset_standard("Building")
     my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
 
     my_building_information = building.BuildingInformation(config=my_building_config)
+    my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build Occupancy
@@ -76,13 +82,13 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
 
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Build PV
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
         rooftop_area_in_m2=my_building_information.roof_area_in_m2
     )
+    my_photovoltaic_system_config.weather_identity = my_weather_config.identity()
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,

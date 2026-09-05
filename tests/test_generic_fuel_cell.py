@@ -25,12 +25,12 @@ def test_electrolyzer() -> None:
 
     name: str = "NedstackFCS10XXL"
     type_electrolyzer: str = "PEM"
-    nom_output_in_kW: float = 10.3
-    max_output_in_kW: float = 8.81
-    min_output_in_kW: float = 0.0
+    nom_output_in_kilowatt: float = 10.3
+    max_output_in_kilowatt: float = 8.81
+    min_output_in_kilowatt: float = 0.0
     nom_h2_flow_rate_in_m3_per_h: float = 0.647  # [m^3/h]
     faraday_eff: float = 0.98
-    i_cell_nom_in_A_per_cm2: float = 0.7
+    i_cell_nom_in_ampere_per_cm2: float = 0.7
     ramp_up_rate_in_percent_per_s: float = 0.1
     ramp_down_rate_in_percent_per_s: float = 0.2
 
@@ -41,12 +41,12 @@ def test_electrolyzer() -> None:
     my_fuelcell_config = generic_fuel_cell.FuelCellConfig(
         component_id=ComponentID(name=name),
         type=type_electrolyzer,
-        nom_output_in_kW=nom_output_in_kW,
-        max_output_in_kW=max_output_in_kW,
-        min_output_in_kW=min_output_in_kW,
+        nom_output_in_kilowatt=nom_output_in_kilowatt,
+        max_output_in_kilowatt=max_output_in_kilowatt,
+        min_output_in_kilowatt=min_output_in_kilowatt,
         nom_h2_flow_rate_in_m3_per_h=nom_h2_flow_rate_in_m3_per_h,
         faraday_eff=faraday_eff,
-        i_cell_nom_in_A_per_cm2=i_cell_nom_in_A_per_cm2,
+        i_cell_nom_in_ampere_per_cm2=i_cell_nom_in_ampere_per_cm2,
         ramp_up_rate_in_percent_per_s=ramp_up_rate_in_percent_per_s,
         ramp_down_rate_in_percent_per_s=ramp_down_rate_in_percent_per_s,
     )

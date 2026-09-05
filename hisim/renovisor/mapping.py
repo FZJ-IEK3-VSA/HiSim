@@ -277,7 +277,7 @@ def _build_archetype_config(
 
     building_code = _resolve_building_code(home, envelope_measure_types, country, report)
     lpg_household = _resolve_lpg_household(home, report)
-    pv_capacity_in_kW, azimuth_in_degrees, tilt_in_degrees = _resolve_pv(home, report)
+    pv_capacity_in_kilowatt, azimuth_in_degrees, tilt_in_degrees = _resolve_pv(home, report)
 
     report.used("homeInputs.floorAreaM2", "conditioned floor area")
 
@@ -293,7 +293,7 @@ def _build_archetype_config(
         building_id=job_id,
         pv_azimuth=azimuth_in_degrees,
         pv_tilt=tilt_in_degrees,
-        pv_rooftop_capacity_in_kilowatt=pv_capacity_in_kW,
+        pv_rooftop_capacity_in_kilowatt=pv_capacity_in_kilowatt,
         building_code=building_code,
         conditioned_floor_area_in_m2=float(home["floorAreaM2"]),
         number_of_dwellings_per_building=1,
@@ -387,12 +387,12 @@ def _resolve_pv(home: Dict[str, Any], report: MappingReport) -> Tuple[Optional[f
     """Resolve PV capacity, azimuth and tilt from the inventory (spec section 4.2)."""
     pv: Dict[str, Any] = home.get("pv") or {}
     kilowatt_peak = float(pv.get("kWp") or 0.0)
-    capacity_in_kW: Optional[float]
+    capacity_in_kilowatt: Optional[float]
     if kilowatt_peak > 0:
-        capacity_in_kW = kilowatt_peak
+        capacity_in_kilowatt = kilowatt_peak
         report.used("homeInputs.pv.kWp", f"PV capacity {kilowatt_peak} kWp")
     else:
-        capacity_in_kW = None
+        capacity_in_kilowatt = None
         report.used("homeInputs.pv.kWp", "0: no PV built (share of PV potential set to 0)")
 
     orientation = pv.get("orientation")
@@ -411,7 +411,7 @@ def _resolve_pv(home: Dict[str, Any], report: MappingReport) -> Tuple[Optional[f
 
     roof_construction = (home.get("roof") or {}).get("construction")
     tilt_in_degrees = 10.0 if roof_construction == "flat" else 30.0
-    return capacity_in_kW, azimuth_in_degrees, tilt_in_degrees
+    return capacity_in_kilowatt, azimuth_in_degrees, tilt_in_degrees
 
 
 def _iter_leaf_paths(value: Any, prefix: str = "") -> Iterator[str]:

@@ -7,9 +7,10 @@ Each test verifies a specific aspect of the component system.
 
 # clean
 
+from unittest.mock import patch
+
 import pytest
 
-from unittest.mock import patch
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log

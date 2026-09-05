@@ -205,7 +205,7 @@ class ExampleTransformer(Component):
         # supplies. Its concrete unit cannot be confirmed from this component
         # (the only wiring feeds unit-less random numbers), so this remains an
         # UNRESOLVED missing-unit defect (GitLab #1932): do NOT silently
-        # append a fabricated _in_W / _in_kw suffix without a confirmed
+        # append a fabricated _in_watt / _in_kw suffix without a confirmed
         # wiring contract -- that would mask the ambiguity rather than fix it.
         input_value_1 = stsv.get_input_value(self.input1)
         input_value_2_in_kw = stsv.get_input_value(self.input2)

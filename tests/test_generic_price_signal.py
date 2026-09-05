@@ -26,11 +26,11 @@ def _assert_defaults(config: PriceSignalConfig, expected_building: Optional[str]
     assert config.component_id.name == "PriceSignal"
     assert config.country == "Germany"
     assert config.pricing_scheme == "fixed"
-    assert config.installed_capacity_in_kW == 10e3
+    assert config.installed_capacity_in_kilowatt == 10e3
     assert config.price_signal_type == "dummy"
-    assert config.fixed_price_in_cent_per_kW_timestep == []
-    assert config.static_tou_price_in_cent_per_kW_timestep == []
-    assert config.price_injection_in_cent_per_kW_timestep == 0.0
+    assert config.fixed_price_in_cent_per_kilowatt_timestep == []
+    assert config.static_tou_price_in_cent_per_kilowatt_timestep == []
+    assert config.price_injection_in_cent_per_kilowatt_timestep == 0.0
     assert config.predictive_control is False
     assert config.prediction_horizon_in_s is None
 
@@ -82,5 +82,5 @@ def test_config_is_pure_and_does_not_mutate() -> None:
     assert first.component_id.building is None
     assert second.component_id.building == "BUI2"
     # The list defaults are fresh instances, not shared mutable state.
-    first.fixed_price_in_cent_per_kW_timestep.append(1.0)
-    assert not second.fixed_price_in_cent_per_kW_timestep
+    first.fixed_price_in_cent_per_kilowatt_timestep.append(1.0)
+    assert not second.fixed_price_in_cent_per_kilowatt_timestep

@@ -73,7 +73,9 @@ class SimulationRunner(Protocol):
         path_to_module: str,
         my_simulation_parameters: Optional[SimulationParameters] = None,
         my_module_config: Optional[str] = None,
-    ) -> str: ...
+    ) -> str:
+        """Run one simulation and return the path of its result directory."""
+
 
 # Defaults per spec section 5; the year matches the Dublin NSRDB weather dataset.
 DEFAULT_YEAR: int = 2019

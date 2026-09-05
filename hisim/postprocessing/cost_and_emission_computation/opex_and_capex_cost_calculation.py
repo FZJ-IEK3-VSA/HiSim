@@ -126,7 +126,13 @@ def opex_calculation(
                     totals_per_building[group]["maintenance_in_euro"] += maintenance_in_euro
 
                 # Write component opex values to table
-                component_row: List[Union[str, float, None]] = [component_unwrapped.component_name, energy_consumption_in_kwh, co2_in_kg, energy_costs_in_euro, maintenance_in_euro]
+                component_row: List[Union[str, float, None]] = [
+                    component_unwrapped.component_name,
+                    energy_consumption_in_kwh,
+                    co2_in_kg,
+                    energy_costs_in_euro,
+                    maintenance_in_euro,
+                ]
 
                 if not is_meter:
                     opex_rows.append(component_row)

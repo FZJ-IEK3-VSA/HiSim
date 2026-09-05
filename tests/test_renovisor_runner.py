@@ -83,7 +83,7 @@ def test_run_simulation_creates_result_directory_if_missing(tmp_path: Path) -> N
     result_directory = tmp_path / "nested" / "results"
     assert not result_directory.exists()
 
-    def fake_runner(*args: Any, **_kwargs: Any) -> str:
+    def fake_runner(*_args: Any, **_kwargs: Any) -> str:
         return str(result_directory)
 
     run_simulation(
@@ -136,7 +136,7 @@ def test_run_simulation_raises_for_missing_setup_before_calling_runner(tmp_path:
     """A missing setup file fails fast with ``FileNotFoundError`` and never invokes the runner."""
     called: list[Any] = []
 
-    def fake_runner(*args: Any, **kwargs: Any) -> str:
+    def fake_runner(*_args: Any, **kwargs: Any) -> str:
         called.append(kwargs)
         return str(tmp_path)
 

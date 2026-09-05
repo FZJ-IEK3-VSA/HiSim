@@ -13,9 +13,11 @@ them.
 
 Each setup is recorded in its own subprocess, because setups mutate module state, HiSim
 singletons and the local load-profile-generator calculation index, and two setups in one
-interpreter would record each other's leftovers. The runs are sequential rather than parallel for
-a second reason: two setups needing the same *new* simulation-parameters file have to share one
-file, and that only works if the second one can see what the first one wrote.
+interpreter would record each other's leftovers. The subprocesses run in parallel (``--jobs``),
+which is safe because nothing they share is order-dependent: the inputs cache is written
+atomically, every child derives its own load-profile-generator index from its own process, and a
+*new* simulation-parameters file is named by its content and created exclusively, so two setups
+needing the same new file converge on one file whichever of them records first.
 
 Examples
 --------
@@ -32,9 +34,10 @@ import shutil
 import subprocess  # nosec B404 - the only child is this repository's own CLI
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from typing import ClassVar, List, Optional, Sequence, Tuple
 
 
 class Paths:
@@ -94,24 +97,28 @@ class SetupOutcome:
 class CheckReport:
     """The differences a ``--check`` run found between the committed twins and fresh recordings.
 
-    Three kinds, because they call for three different fixes: a twin whose content moved, a setup
-    with no committed twin at all, and a simulation-parameters file the recording needed and the
-    repository does not have. Collected together so that one run tells a contributor everything
-    they have to regenerate rather than one thing at a time.
+    Four kinds, because they call for four different fixes: a twin whose content moved, a setup
+    with no committed twin at all, a simulation-parameters file the recording needed and the
+    repository does not have, and a recording that claimed success but left no file behind —
+    unreachable through today's recorder, which always writes before exiting zero, but the one
+    state the gate must never read as clean. Collected together so that one run tells a
+    contributor everything they have to regenerate rather than one thing at a time.
     """
 
     changed: List[Tuple[str, str]] = field(default_factory=list)
     missing: List[str] = field(default_factory=list)
     new_parameters: List[str] = field(default_factory=list)
+    vanished: List[str] = field(default_factory=list)
 
     @property
     def clean(self) -> bool:
         """Whether the committed files are exactly what recording produces.
 
         Returns:
-            ``True`` when nothing changed, nothing is missing and no parameter file was needed.
+            ``True`` when nothing changed, nothing is missing, no parameter file was needed and
+            every successful recording actually left a file.
         """
-        return not (self.changed or self.missing or self.new_parameters)
+        return not (self.changed or self.missing or self.new_parameters or self.vanished)
 
 
 class SetupDiscovery:
@@ -168,6 +175,12 @@ class Recorder:
     #: The command that records one setup, completed with the three paths.
     COMMAND = ("-m", "hisim.cli", "energy-system", "record")
 
+    #: How many children record at once unless ``--jobs`` says otherwise. Capped at four rather
+    #: than at the machine's core count because each child builds a complete system — occupancy
+    #: profiles included — and holds it in memory; the CI runner has four cores and seven
+    #: gigabytes, and four children fit both. A bigger machine can raise it on the command line.
+    DEFAULT_JOBS: ClassVar[int] = min(4, os.cpu_count() or 1)
+
     #: Environment variable naming the local load-profile-generator working directory. It is
     #: cleared from every child's environment rather than set, so a machine with a stale setting
     #: records the same thing as a clean one and no recording run is pinned to a fixed directory.
@@ -213,29 +226,42 @@ class Recorder:
         )
 
     @classmethod
-    def record_all(cls, setups: Sequence[Path], parameters: Path, out_dir: Path, python: str) -> List[SetupOutcome]:
-        """Records every setup in turn, printing each verdict as it arrives.
+    def record_all(
+        cls, setups: Sequence[Path], parameters: Path, out_dir: Path, python: str, jobs: int = 0
+    ) -> List[SetupOutcome]:
+        """Records every setup, a few at a time, printing each verdict as it arrives.
 
-        Sequential, and printing as it goes rather than at the end, because a fleet-wide run takes
-        minutes per setup: a caller watching it needs to see progress, and the next setup needs to
-        see any simulation-parameters file its predecessor had to write.
+        Parallel across setups because nothing the children share is order-dependent (see the
+        module header), and printing as it goes rather than at the end because a fleet-wide run
+        takes minutes per setup and a caller watching it needs to see progress. The returned list
+        keeps the setups' own order, so the summary reads the same however the children were
+        scheduled.
 
         Args:
             setups: The setups to record.
             parameters: The simulation-parameters file each setup is started from.
             out_dir: Where the recorded files go.
             python: The interpreter to run the recorder with.
+            jobs: How many children run at once; ``0`` means :attr:`DEFAULT_JOBS`.
 
         Returns:
-            One outcome per setup, in the order they were recorded.
+            One outcome per setup, in the setups' order.
         """
-        outcomes: List[SetupOutcome] = []
-        for index, setup in enumerate(setups, start=1):
-            outcome = cls.record(setup, parameters, out_dir, python)
-            outcomes.append(outcome)
-            status = "OK  " if outcome.ok else "FAIL"
-            print(f"[{index}/{len(setups)}] {status} {outcome.stem}", flush=True)
-        return outcomes
+        workers = jobs or cls.DEFAULT_JOBS
+        results: List[Optional[SetupOutcome]] = [None] * len(setups)
+        finished = 0
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(cls.record, setup, parameters, out_dir, python): position
+                for position, setup in enumerate(setups)
+            }
+            for future in as_completed(futures):
+                outcome = future.result()
+                results[futures[future]] = outcome
+                finished += 1
+                status = "OK  " if outcome.ok else "FAIL"
+                print(f"[{finished}/{len(setups)}] {status} {outcome.stem}", flush=True)
+        return [outcome for outcome in results if outcome is not None]
 
     @classmethod
     def tail(cls, output: str, lines: int = 20) -> str:
@@ -267,20 +293,23 @@ class FreshnessCheck:
     """
 
     @classmethod
-    def run(cls, setups: Sequence[Path], parameters: Path, python: str) -> Tuple[List[SetupOutcome], CheckReport]:
+    def run(
+        cls, setups: Sequence[Path], parameters: Path, python: str, jobs: int = 0
+    ) -> Tuple[List[SetupOutcome], CheckReport]:
         """Records every setup into a temporary directory and diffs the results.
 
         Args:
             setups: The setups to record.
             parameters: The simulation-parameters file each setup is started from.
             python: The interpreter to run the recorder with.
+            jobs: How many children record at once; ``0`` means the recorder's default.
 
         Returns:
             The per-setup outcomes and the report of everything that differs.
         """
         scratch = Path(tempfile.mkdtemp(prefix=Paths.CHECK_PREFIX, dir=Paths.REPO_ROOT))
         try:
-            outcomes = Recorder.record_all(setups, parameters, scratch, python)
+            outcomes = Recorder.record_all(setups, parameters, scratch, python, jobs)
             return outcomes, cls.compare(outcomes, scratch)
         finally:
             shutil.rmtree(scratch, ignore_errors=True)
@@ -306,6 +335,9 @@ class FreshnessCheck:
             fresh = scratch / f"{outcome.stem}{Paths.RECORDED_SUFFIX}"
             committed = Paths.ENERGY_SYSTEMS / f"{outcome.stem}{Paths.RECORDED_SUFFIX}"
             if not fresh.exists():
+                # A recording that reported success without leaving a file is a defect of the
+                # recorder itself; skipping it here would let the gate call the run clean.
+                report.vanished.append(outcome.stem)
                 continue
             if not committed.exists():
                 report.missing.append(outcome.stem)
@@ -377,27 +409,36 @@ class Report:
     """
 
     @classmethod
-    def outcomes(cls, outcomes: Sequence[SetupOutcome]) -> None:
+    def outcomes(cls, outcomes: Sequence[SetupOutcome]) -> List[SetupOutcome]:
         """Prints the failures of a run in full, naming every setup that could not be recorded.
 
         Args:
             outcomes: What each setup produced.
+
+        Returns:
+            The failures, so the caller derives its exit code from the same list it printed.
         """
         failures = [outcome for outcome in outcomes if not outcome.ok]
         if not failures:
-            return
+            return failures
         print(f"\n{len(failures)} setup(s) could not be recorded:")
         for outcome in failures:
             print(f"\n  {outcome.stem}: {outcome.message}")
             for line in outcome.log.splitlines():
                 print(f"    {line}")
+        return failures
 
     @classmethod
-    def check(cls, report: CheckReport) -> None:
+    def check(cls, report: CheckReport, failures: Sequence[SetupOutcome]) -> None:
         """Prints what a ``--check`` run found.
+
+        The all-clear line is printed only when the run had no failed recordings either: a report
+        that is clean because a failed setup was never compared is not an all-clear, and printing
+        one under the failure listing would contradict the exit code two lines later.
 
         Args:
             report: The differences found.
+            failures: The setups that could not be recorded at all.
         """
         for stem, diff in report.changed:
             print(f"\nThe committed twin of {stem} is out of date:")
@@ -408,9 +449,11 @@ class Report:
             print(
                 f"\nRecording needed a simulation-parameters file that is not committed: {name}."
             )
-        if report.clean:
+        for stem in report.vanished:
+            print(f"\n{stem} reported a successful recording but left no file — a recorder defect.")
+        if report.clean and not failures:
             print("\nEvery committed twin is exactly what recording produces.")
-        else:
+        elif not report.clean:
             print("\nRun 'python scripts/record_all_setups.py' and commit what it writes.")
 
 
@@ -441,7 +484,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--python", default=sys.executable, help="the interpreter to run the recorder with"
     )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=Recorder.DEFAULT_JOBS,
+        help=f"how many setups record at once (default: {Recorder.DEFAULT_JOBS})",
+    )
     arguments = parser.parse_args(argv)
+    if arguments.jobs < 1:
+        raise SystemExit("--jobs must be at least 1")
 
     setups = SetupDiscovery.select(arguments.only)
     print(f"Setups to record ({len(setups)}):")
@@ -450,18 +501,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     print()
 
     if arguments.check:
-        outcomes, report = FreshnessCheck.run(setups, arguments.parameters, arguments.python)
-        Report.outcomes(outcomes)
-        Report.check(report)
+        outcomes, report = FreshnessCheck.run(
+            setups, arguments.parameters, arguments.python, arguments.jobs
+        )
+        failed = Report.outcomes(outcomes)
+        Report.check(report, failed)
         duplicates = DuplicateParameterCheck.run()
         for message in duplicates:
             print(f"\nTwo simulation-parameters files normalise equal: {message}.")
-        failed = [outcome for outcome in outcomes if not outcome.ok]
         return 1 if failed or not report.clean or duplicates else 0
 
-    outcomes = Recorder.record_all(setups, arguments.parameters, Paths.ENERGY_SYSTEMS, arguments.python)
-    Report.outcomes(outcomes)
-    failed = [outcome for outcome in outcomes if not outcome.ok]
+    outcomes = Recorder.record_all(
+        setups, arguments.parameters, Paths.ENERGY_SYSTEMS, arguments.python, arguments.jobs
+    )
+    failed = Report.outcomes(outcomes)
     print(f"\nDONE: {len(outcomes) - len(failed)} recorded, {len(failed)} failed.")
     return 1 if failed else 0
 

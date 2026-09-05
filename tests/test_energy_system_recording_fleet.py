@@ -37,6 +37,8 @@ from hisim.energy_system.recording.session import RecordedFileWriter, RecordingS
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 from scripts.record_all_setups import (
+    CheckReport,
+    FreshnessCheck,
     Paths,
     Recorder,
     Report,
@@ -302,8 +304,8 @@ def test_the_driver_records_every_setup_and_has_no_skip_list(monkeypatch: pytest
     monkeypatch.setattr(Recorder, "record", stub.record)
 
     assert main([]) == 0
-    assert stub.asked == [path.stem for path in SetupDiscovery.all_setups()]
-    assert stub.asked == sorted(
+    assert sorted(stub.asked) == [path.stem for path in SetupDiscovery.all_setups()]
+    assert sorted(stub.asked) == sorted(
         path.stem for path in Fleet.SETUPS.glob("*.py") if path.name != "__init__.py"
     )
 
@@ -325,7 +327,7 @@ def test_the_driver_keeps_going_and_fails_naming_every_setup_it_could_not_record
     printed = capsys.readouterr().out
 
     assert exit_code == 1
-    assert stub.asked == [path.stem for path in SetupDiscovery.all_setups()]
+    assert sorted(stub.asked) == [path.stem for path in SetupDiscovery.all_setups()]
     for stem in refused:
         assert f"{stem}: stub refusal" in printed
 
@@ -388,7 +390,13 @@ def test_recording_the_same_setup_twice_is_byte_identical(tmp_path: Path) -> Non
         ("2021-01-01T00:00:00", "2021-01-02T00:00:00", 900, ("EXPORT_TO_CSV",), "one_day_15min_export"),
         ("2021-01-01T00:00:00", "2022-01-01T00:00:00", 60, ("PLOT_LINE",), "2021_minutely_plots"),
         ("2021-01-01T00:00:00", "2021-01-08T00:00:00", 3600, (), "one_week_hourly_plain"),
-        ("2021-03-01T00:00:00", "2021-03-04T12:00:00", 120, ("COMPUTE_OPEX",), None),
+        (
+            "2021-03-01T00:00:00",
+            "2021-03-04T12:00:00",
+            120,
+            ("COMPUTE_OPEX",),
+            "20210301T0000to20210304T1200_120s_costs",
+        ),
     ],
 )
 def test_a_generated_name_describes_horizon_resolution_and_purpose(
@@ -397,9 +405,9 @@ def test_a_generated_name_describes_horizon_resolution_and_purpose(
     """Catches a naming scheme that would rename files between two runs of the recorder.
 
     The name has to be a function of the content and of nothing else, or the freshness job would
-    see a rename every time somebody recorded the fleet. The last case has no expected name on
-    purpose: what it checks is that an awkward period still produces something, and the same
-    something twice.
+    see a rename every time somebody recorded the fleet. The last case is the awkward-period
+    fallback — no table word covers three and a half days — and its expected name is pinned as a
+    literal like the others, so a broken fallback cannot hide behind a vacuous self-comparison.
     """
     normalised = {
         "start_date": start,
@@ -408,11 +416,7 @@ def test_a_generated_name_describes_horizon_resolution_and_purpose(
         ParameterNormalisation.OPTIONS_KEY: options,
     }
 
-    stem = ParameterFileName.stem(normalised)
-
-    assert stem == ParameterFileName.stem(normalised)
-    if expected is not None:
-        assert stem == expected
+    assert ParameterFileName.stem(normalised) == expected
 
 
 class RecordedChildEnvironment:
@@ -469,3 +473,160 @@ def test_a_recording_child_picks_its_own_profile_directory(monkeypatch: pytest.M
         "the recorder pinned or passed on a local-LPG calculation index; cleared, the child derives "
         "its own from its process and cannot collide with another run"
     )
+
+
+class CopyingStubRecorder:
+    """A stand-in for the subprocess recorder that copies the committed twin as its recording.
+
+    The freshness check's own rules — what counts as changed, missing, vanished or clean, and
+    what the exit code says — are decisions about files, not about simulations, so a stub that
+    produces a file per setup exercises all of them in under a second. What the stub writes is
+    configurable per stem, and a stem it is told to refuse fails the way a real unrecordable
+    setup would.
+    """
+
+    def __init__(self, failing: Sequence[str] = (), altered: Sequence[str] = (), silent: Sequence[str] = ()) -> None:
+        """Prepares a stub.
+
+        Args:
+            failing: Stems the stub refuses outright.
+            altered: Stems whose fresh recording differs from the committed twin.
+            silent: Stems the stub reports as recorded without writing any file.
+        """
+        self.failing = set(failing)
+        self.altered = set(altered)
+        self.silent = set(silent)
+
+    def record(self, setup: Path, parameters: Path, out_dir: Path, python: str) -> SetupOutcome:
+        """Pretends to record one setup by copying (or perturbing) its committed twin.
+
+        Args:
+            setup: The setup module.
+            parameters: Ignored.
+            out_dir: Where the pretended recording goes.
+            python: Ignored.
+
+        Returns:
+            The outcome a real child with this behavior would produce.
+        """
+        del parameters, python
+        if setup.stem in self.failing:
+            return SetupOutcome(stem=setup.stem, ok=False, message="stub refusal", log="EF-R5")
+        if setup.stem not in self.silent:
+            committed = Fleet.ENERGY_SYSTEMS / f"{setup.stem}{Paths.RECORDED_SUFFIX}"
+            content = committed.read_text(encoding="utf-8")
+            if setup.stem in self.altered:
+                content += "# moved\n"
+            (out_dir / committed.name).write_text(content, encoding="utf-8")
+        return SetupOutcome(stem=setup.stem, ok=True)
+
+
+@pytest.mark.base
+def test_the_freshness_compare_classifies_every_kind_of_drift(tmp_path: Path) -> None:
+    """Catches a freshness comparison that lets one kind of drift through as clean.
+
+    The gate is only as strong as this classification: a changed twin, a setup with no committed
+    twin, a recording that succeeded without leaving a file, and a failed recording must land in
+    exactly the buckets the report prints and the exit code reads. The failed one lands in *no*
+    bucket on purpose — it is already a failure of the run — and the vanished one must never be
+    skipped the way it once was.
+    """
+    committed_stem = Fleet.CHEAPEST_SETUP
+    (tmp_path / f"{committed_stem}{Paths.RECORDED_SUFFIX}").write_text(
+        (Fleet.ENERGY_SYSTEMS / f"{committed_stem}{Paths.RECORDED_SUFFIX}").read_text(encoding="utf-8")
+        + "# moved\n",
+        encoding="utf-8",
+    )
+    (tmp_path / f"not_a_committed_setup{Paths.RECORDED_SUFFIX}").write_text("anything", encoding="utf-8")
+    outcomes = [
+        SetupOutcome(stem=committed_stem, ok=True),
+        SetupOutcome(stem="not_a_committed_setup", ok=True),
+        SetupOutcome(stem="vanished_setup", ok=True),
+        SetupOutcome(stem="broken_setup", ok=False, message="stub refusal"),
+    ]
+
+    report = FreshnessCheck.compare(outcomes, tmp_path)
+
+    assert [stem for stem, _ in report.changed] == [committed_stem]
+    assert report.missing == ["not_a_committed_setup"]
+    assert report.vanished == ["vanished_setup"]
+    assert not report.clean
+    assert CheckReport().clean, "an empty report is the clean baseline the buckets are judged against"
+
+
+@pytest.mark.base
+def test_a_check_run_with_a_failed_recording_prints_no_all_clear(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Catches the all-clear line contradicting the failure listing above it.
+
+    A setup that fails to record is excluded from the comparison, so the report alone is clean;
+    printing "every committed twin is exactly what recording produces" under a traceback naming a
+    setup that never recorded misleads exactly the contributor the output exists for. The exit
+    code was always right — this pins the words to it.
+    """
+    stub = CopyingStubRecorder(failing=["basic_household"])
+    monkeypatch.setattr(Recorder, "record", stub.record)
+
+    exit_code = main(["--check"])
+    printed = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "basic_household: stub refusal" in printed
+    assert "Every committed twin is exactly what recording produces." not in printed
+
+
+@pytest.mark.base
+def test_a_clean_check_run_passes_and_says_so(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Catches the --check path itself: exit code zero and the all-clear, only when both are earned.
+
+    This is the code the CI gate runs verbatim, and until now nothing drove it: a compare that
+    always answered clean, or an exit code ignoring the report, would have shipped unnoticed.
+    """
+    stub = CopyingStubRecorder()
+    monkeypatch.setattr(Recorder, "record", stub.record)
+
+    exit_code = main(["--check"])
+    printed = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Every committed twin is exactly what recording produces." in printed
+
+
+@pytest.mark.base
+def test_two_parallel_writers_of_the_same_new_parameters_converge_on_one_file(tmp_path: Path) -> None:
+    """Catches the race the parallel fleet run would otherwise hit on a new parameter file.
+
+    Two libraries that both read the directory before either wrote — exactly the state of two
+    recorder children starting together — must both end up referencing one file: the name is a
+    function of the content and creation is exclusive, so the loser adopts the winner's file
+    instead of writing a discriminated duplicate that would fail the duplicate check and make
+    the recorded twins depend on scheduling.
+    """
+    first_library = Fleet.library(tmp_path)
+    second_library = Fleet.library(tmp_path)
+
+    first = first_library.reference(Fleet.unshipped())
+    second = second_library.reference(Fleet.unshipped())
+
+    assert first.path == second.path
+    assert Fleet.written(tmp_path) == [first.path.name]
+
+
+@pytest.mark.base
+def test_a_parallel_fleet_run_reports_outcomes_in_the_setups_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Catches a parallel run whose summary order depends on scheduling.
+
+    Verdict lines print as children finish, but the outcome list feeds the summary and the
+    comparison, and both have to read the same on every run: the list keeps the setups' own
+    order however the pool interleaved them.
+    """
+    stub = StubRecorder()
+    monkeypatch.setattr(Recorder, "record", stub.record)
+    setups = SetupDiscovery.all_setups()
+
+    outcomes = Recorder.record_all(setups, Fleet.ONE_DAY, Fleet.ENERGY_SYSTEMS, sys.executable, jobs=4)
+
+    assert [outcome.stem for outcome in outcomes] == [setup.stem for setup in setups]

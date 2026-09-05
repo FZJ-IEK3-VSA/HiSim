@@ -67,6 +67,12 @@ survives only in a conversation. Items are removed when done, not ticked and kep
   and origin) — the parity/templating halves are ported.
 - [ ] AC-P3.4's cross-machine byte-identity is proven the first time CI's `energy-system-freshness`
   job goes green on twins recorded on the development box; note the date here and drop the item.
+- [ ] **Flip `energy-system-freshness` from advisory to blocking after its burn-in** (decided
+  2026-09-05, #636 review round). The gate merges with `continue-on-error: true` because
+  byte-identical re-recording is proven by test for one setup and only by design for the other
+  twenty-one; after a week of green runs on main, delete that one line (the workflow header
+  carries the same instruction) and the gate blocks. This subsumes the AC-P3.4 item above — the
+  first green run is the evidence, the week of them is the confidence.
 
 ## Deferred by design (not P3's debt, listed so it is findable)
 

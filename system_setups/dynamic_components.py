@@ -99,6 +99,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
+    my_photovoltaic_system_config.weather_identity = my_weather_config.identity()
     my_photovoltaic_system = generic_pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters,
         config=my_photovoltaic_system_config,

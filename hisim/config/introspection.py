@@ -83,8 +83,10 @@ class PresetInfo:
 
     #: Instance name handed to a preset builder purely to inspect the result. It is never
     #: part of a description and never reaches a simulation; it is spelled unmistakably so
-    #: that it is obvious if it ever leaks into an error message.
-    PROBE_NAME: ClassVar[str] = "<describe-probe>"
+    #: that it is obvious if it ever leaks into an error message — while still being a valid
+    #: identifier, because the builder puts it into a ComponentID and the identity layer
+    #: refuses anything a result column or a declarative file could not carry.
+    PROBE_NAME: ClassVar[str] = "_describe_probe_"
 
     name: str
     canonical: bool

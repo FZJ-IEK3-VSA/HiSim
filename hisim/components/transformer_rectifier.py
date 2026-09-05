@@ -8,9 +8,12 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
+import pandas as pd
+
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.component import StatelessComponent, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -23,10 +26,12 @@ class TransformerConfig(ConfigBase):
     ----------
     efficiency : float
         Conversion efficiency of the transformer/rectifier, expressed as a
-        dimensionless fraction in the range [0, 1] (e.g. ``0.95`` for 95 %).
+        dimensionless fraction in the range (0, 1] (e.g. ``0.95`` for 95 %).
         It is applied as a direct multiplicative scalar on the input power,
         so passing a percentage (e.g. ``95``) would silently scale the output
-        by 100x. Use a fraction, not a percentage.
+        by 100x — which is why the range is validated at construction: a
+        percentage, a negative value or a zero is refused loudly instead of
+        producing plausible but wrong outputs and negative loss indicators.
     """
 
     @classmethod
@@ -37,7 +42,24 @@ class TransformerConfig(ConfigBase):
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
     component_id: ComponentID
-    efficiency: float  # conversion efficiency as a fraction in [0, 1] (not a percentage)
+    efficiency: float  # conversion efficiency as a fraction in (0, 1] (not a percentage)
+
+    def __post_init__(self) -> None:
+        """Refuses an efficiency outside the fraction range (0, 1].
+
+        A percentage (``95``) would silently scale the output a hundredfold, a negative value
+        would invert it, and a zero would make the conversion-loss indicator a division by zero —
+        all three run happily as simulations and only surface as wrong numbers in a report, so
+        the configuration is where they stop.
+
+        Raises:
+            ValueError: For an efficiency that is not in (0, 1].
+        """
+        if not 0.0 < self.efficiency <= 1.0:
+            raise ValueError(
+                f"The transformer efficiency must be a fraction in (0, 1], not {self.efficiency}. "
+                "Write 0.95 for 95 %, never a percentage."
+            )
 
     @classmethod
     def get_default_transformer_config(cls) -> TransformerConfig:
@@ -133,6 +155,80 @@ class Transformer(StatelessComponent):
         # print(f"individual efficiency: {efficiency}")
 
         stsv.set_output_value(self.electricity_output, float(input_power_in_kilowatt * efficiency))
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: list,
+        postprocessing_results: pd.DataFrame,
+    ) -> list[KpiEntry]:
+        """Calculates KPIs for the transformer/rectifier and returns all KPI entries as a list.
+
+        Two indicators describe what the unit did over the simulated period: the electrical
+        energy it delivered, integrated from its output power, and the conversion losses. The
+        losses are not observable as a column of their own -- the unit has one input and one
+        output port -- but the output is by construction the input scaled by the configured
+        efficiency, so the loss follows exactly: ``delivered * (1/efficiency - 1)``.
+
+        Args:
+            all_outputs: every output column of the run, searched for this component's outputs
+                by name.
+            postprocessing_results: the per-timestep values of those columns.
+
+        Returns:
+            list[KpiEntry]: the two entries, tagged as Transformer.
+
+        Raises:
+            ValueError: if the output column is missing, empty or carries NaN — a value pandas
+                would otherwise drop silently from the sum — so the KPIs are either computed from
+                complete values or refused, never reported wrongly in silence.
+        """
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        delivered_in_kilowatt_hour = None
+        for index, output in enumerate(all_outputs):
+            if output.component_name != self.component_name:
+                continue
+            if output.field_name == Transformer.TransformerOutput and output.unit == lt.Units.KILOWATT:
+                column = postprocessing_results.iloc[:, index]
+                if column.empty or bool(column.isna().any()):
+                    raise ValueError(
+                        f"The transformer output column of {self.component_name} is "
+                        f"{'empty' if column.empty else 'carrying NaN'}; its KPIs would be "
+                        "silently wrong rather than absent, so they are refused instead."
+                    )
+                # The output is in kilowatt and the shared conversion speaks watt, so the column
+                # is scaled up rather than the conversion restated inline.
+                delivered_in_kilowatt_hour = round(
+                    KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        column * 1000.0, seconds_per_timestep
+                    ),
+                    3,
+                )
+        if delivered_in_kilowatt_hour is None:
+            raise ValueError(
+                f"The transformer output column was not found for {self.component_name}; its KPIs "
+                "cannot be reported as absent silently."
+            )
+        losses_in_kilowatt_hour = round(
+            delivered_in_kilowatt_hour * (1.0 / self.transformerconfig.efficiency - 1.0), 3
+        )
+        return [
+            KpiEntry(
+                name="Electrical energy delivered",
+                unit="kWh",
+                value=delivered_in_kilowatt_hour,
+                tag=KpiTagEnumClass.TRANSFORMER,
+                description=self.component_name,
+                name_of_source_component=self.component_name,
+            ),
+            KpiEntry(
+                name="Conversion losses",
+                unit="kWh",
+                value=losses_in_kilowatt_hour,
+                tag=KpiTagEnumClass.TRANSFORMER,
+                description=self.component_name,
+                name_of_source_component=self.component_name,
+            ),
+        ]
 
     def write_to_report(self) -> list[str]:
         """Return report lines describing this transformer.

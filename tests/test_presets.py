@@ -461,7 +461,8 @@ def test_describe_config_covers_the_other_pilots_and_rejects_a_non_dataclass():
     assert tabula.parameters[0].name == "building_code"
     assert tabula.parameters[0].default is dataclasses.MISSING
     assert {parameter.name for parameter in tabula.parameters} >= {"number_of_apartments", "building_code"}
-    assert not building.sizable_fields
+    # The building sizes exactly one field from the system: which weather it is computed against.
+    assert [field.name for field in building.sizable_fields] == ["weather_identity"]
     assert "heating_load_in_watt" in building.facts_provided
 
     with pytest.raises(TypeError, match="config dataclass"):
@@ -501,7 +502,8 @@ def test_a_config_class_outside_the_kernel_resolves_through_resolve_all():
 
     building = BuildingConfig.preset_standard("Building")
     storage = _StorageConfig.preset_standard("Tank")
-    resolved = resolve_all([building, storage])
+    # No weather in this scenario, so the fact the building now reads is seeded by the test.
+    resolved = resolve_all([building, storage], seed=SizingContext(weather_identity="test weather"))
     resolved_storage = next(config for config in resolved if isinstance(config, _StorageConfig))
     volume = cast(float, resolved_storage.volume_in_liter)  # resolved: nothing left to size
     assert volume > 0.0

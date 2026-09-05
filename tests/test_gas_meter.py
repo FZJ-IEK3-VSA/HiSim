@@ -91,6 +91,7 @@ def test_house(
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
         share_of_maximum_pv_potential=1, rooftop_area_in_m2=120
     )
+    my_photovoltaic_system_config.weather_identity = my_weather_config.identity()
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -99,6 +100,7 @@ def test_house(
     # Build Building
     my_building_config = building.BuildingConfig.preset_standard("Building")
     my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+    my_building_config.weather_identity = my_weather_config.identity()
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     my_building_information = building.BuildingInformation(config=my_building_config)
 

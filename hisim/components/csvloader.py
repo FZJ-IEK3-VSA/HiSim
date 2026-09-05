@@ -12,7 +12,7 @@ single output channel.
 
 import warnings
 from pathlib import Path
-from typing import List
+from typing import ClassVar, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import numpy as np
@@ -68,6 +68,13 @@ class CSVLoader(cp.Component):
     Class component loads CSV file containing some
     load profile relevant to the applied setup
     function.
+
+    The loader declares :attr:`~hisim.component.Component.MODELS_NO_DEVICE`, so cost and KPI
+    computation treat it as a data source with nothing to buy and nothing to report. Do not use
+    it to stand in for a real, costed device — a generator or a metered appliance replayed
+    through it would silently contribute zero cost and zero indicators to the system totals
+    instead of failing loudly.
+
 
     Parameters
     ----------
@@ -135,6 +142,12 @@ class CSVLoader(cp.Component):
     """
 
     Output1: str = "CSVProfile"
+
+    # A loader that replays a recorded profile is a data source, not a device: it has
+    # nothing to buy, nothing to run and no indicators of its own. Declaring that is
+    # what lets a setup built from it compute costs and KPIs at all;
+    # see Component.MODELS_NO_DEVICE.
+    MODELS_NO_DEVICE: ClassVar[bool] = True
 
     def __init__(
         self,

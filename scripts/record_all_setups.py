@@ -168,13 +168,11 @@ class Recorder:
     #: The command that records one setup, completed with the three paths.
     COMMAND = ("-m", "hisim.cli", "energy-system", "record")
 
-    #: Environment variable naming the local load-profile-generator working directory. It is
-    #: cleared from every child's environment rather than set, so a machine with a stale setting
-    #: records the same thing as a clean one and no recording run is pinned to a fixed directory.
-    #: Cleared, PylpgWorkspace.default_base_index() derives the index from the child's own process,
-    #: which is what keeps a recording run out of the way of anything else using local profiles on
-    #: the same machine -- the collisions #611 exists to prevent. Pinning it to a constant would
-    #: reintroduce them for the length of a fleet-wide run, which is the better part of an hour.
+    #: The variable that selects the local LoadProfileGenerator's working directory. It is removed
+    #: from each child's environment: the child then derives its index from its own process id (see
+    #: PylpgWorkspace.default_base_index) and cannot collide with other runs on the machine, and an
+    #: exported value on the parent cannot leak in. A fixed index would pin an hour-long recording
+    #: to one directory shared with everything else using local profiles.
     LPG_INDEX_VARIABLE = "HISIM_LOCAL_LPG_CALC_INDEX"
 
     @classmethod

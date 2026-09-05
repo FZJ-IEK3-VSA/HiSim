@@ -71,20 +71,16 @@ class CanonicalRepresenter(RoundTripRepresenter):
 
     @classmethod
     def configured(cls) -> Type["CanonicalRepresenter"]:
-        """Registers this class's overrides and returns it.
+        """Register this class's representers and return the class.
 
-        Two of them are the spellings described above. The rest are the numeric conversions the
-        canonical dumper makes, borrowed from it rather than restated: a configuration value that
-        arrives as a numpy scalar has to be written the same way by both writers, or the annotated
-        file and the plain one stop being the same bytes and the test that holds them together
-        fails for a reason that has nothing to do with comments.
-
-        Registration happens here rather than at import time so that importing this module has
-        no side effect, and it is idempotent: registering the same function for the same type
-        twice is the same as registering it once.
+        Two are the spellings described above (``null``, quoted strings). The rest convert numpy scalars and
+        arrays to plain values, borrowed from :class:`CanonicalDumper` so that the annotated writer and the
+        plain writer render a numpy value identically -- a test holds the two writers to the same bytes.
+        Registration is done here instead of at import time so importing this module has no side effect;
+        calling it twice is harmless.
 
         Returns:
-            This class, ready to be handed to a YAML instance.
+            This class, ready to be assigned as a YAML instance's ``Representer``.
         """
         cls.add_representer(type(None), cls.represent_canonical_null)
         cls.add_representer(str, cls.represent_canonical_string)

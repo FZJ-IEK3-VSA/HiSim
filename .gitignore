@@ -163,6 +163,10 @@ tests/test_system_setups/results/
 tests/test/
 
 components_information.xlsx
+# Grouping workbooks are the editing surface of the grouping pass, not its artefact: the
+# committed form is energy_systems/<setup>.grouping.yaml and the workbook is regenerated from
+# the probe runs whenever it is wanted.
+energy_systems/*.grouping.xlsx
 hisim/components_information.xlsx
 tests/components_information.xlsx
 system_setups/ac_test
@@ -211,3 +215,6 @@ results/
 # throwaway directory of "record_all_setups.py --check"; removed by the script itself,
 # ignored here so an interrupted run cannot leave the working tree looking dirty
 .record-check-*/
+
+# Throwaway probe-recording directories of the grouping pass (see hisim/energy_system/recording/probe_session.py).
+.probes-*/

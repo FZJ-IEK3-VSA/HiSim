@@ -59,6 +59,12 @@ class EnergySystemErrorId(enum.Enum):
     of which an author can cause: a record that is not fully concrete, and a re-execution
     that did not reproduce the record it was handed.
 
+    The ``EF-Rx`` band is the odd one out and is described on
+    :class:`EnergySystemRecordingError`: its subject is a Python setup and the two authored
+    files that describe how that setup is probed, not an energy-system file. ``EF-R8`` is
+    deliberately absent — the implementation specification reserves it for two simulation
+    parameter files that normalise equal, which the fleet driver checks without raising.
+
     Not every member is reachable from the loader and the structural validator alone:
     the identifiers covering presets, config fields, ports and channels can only be
     decided once the component classes are imported, which happens in a later stage
@@ -132,6 +138,10 @@ class EnergySystemErrorId(enum.Enum):
     RECORDED_ABSOLUTE_PATH = "EF-R3"
     RECORDED_PRESET_GONE = "EF-R4"
     RECORDED_FILE_REJECTED = "EF-R5"
+    GROUPING_UNASSIGNED_DIFFERENCE = "EF-R6"
+    GROUPING_UNKNOWN_OPTION = "EF-R7"
+    PROBE_LIST_MALFORMED = "EF-R9"
+    GROUPING_NOT_REPRODUCED = "EF-R10"
 
 
 class EnergySystemError(Exception):
@@ -389,4 +399,11 @@ class EnergySystemRecordingError(EnergySystemCatalogueError):
     machinery broke its promise about a record it wrote; this one means the input it was asked to
     record cannot be expressed in the format, which is a finding about the setup and is reported
     naming the setup module, the component and the rule.
+
+    The grouping pass adds four more of them, and they are the same kind of finding one step
+    further out: a probe list that cannot be read, a component that differs between two probes
+    without anybody having said what that difference means, a configuration selecting an option no
+    assignment ever created, and a grouped file that does not reproduce one of the flat recordings
+    it was built from. All four are about the authored description of a setup's configurations
+    rather than about a file somebody will run.
     """

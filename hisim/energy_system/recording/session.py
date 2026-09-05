@@ -34,6 +34,7 @@ from hisim.energy_system.model import EnergySystemFile
 from hisim.energy_system.recording.builder import build
 from hisim.energy_system.recording.observe import RecordedSystem, observe
 from hisim.energy_system.recording.parameters import ParameterFileLibrary, ParameterReference
+from hisim.energy_system.repository import RepositoryLayout
 from hisim.energy_system.schema_export import default_schema_path
 from hisim.simulationparameters import SimulationParameters
 
@@ -89,6 +90,11 @@ class RecordedFileWriter:
         "# Recorded from {setup} with {parameters} by the HiSim energy-system recorder v{version}."
     )
 
+    #: The extra line a probe recording carries, naming the module configuration it was recorded
+    #: under. The baseline probe never carries it: it is recorded with no module configuration at
+    #: all, so its file has to be the very twin the plain recorder writes, header included.
+    PROBE_LINE: ClassVar[str] = "# Probe configuration '{probe}' of {probes}."
+
     #: What every comment line of the header starts with, which is how the body is found again.
     COMMENT_PREFIX: ClassVar[str] = "#"
 
@@ -96,13 +102,23 @@ class RecordedFileWriter:
     SUFFIX: ClassVar[str] = ".energy_system.yaml"
 
     @classmethod
-    def header(cls, setup: str, parameters: str, out_dir: Path) -> str:
+    def header(
+        cls,
+        setup: str,
+        parameters: str,
+        out_dir: Path,
+        probe: str = "",
+        probes: str = "",
+    ) -> str:
         """Builds the comment header of one recorded file.
 
         Args:
             setup: The setup module, spelled as the file should name it.
             parameters: The simulation-parameters file, likewise.
             out_dir: Where the file is written, which is what the schema reference is relative to.
+            probe: The probe column this recording is one of, empty for an ordinary recording and
+                for the baseline probe, whose file is the ordinary recording.
+            probes: The probe list the column comes from, named beside it.
 
         Returns:
             The header, ending in a newline.
@@ -112,6 +128,8 @@ class RecordedFileWriter:
             cls.SCHEMA_LINE.format(schema=schema),
             cls.ORIGIN_LINE.format(setup=setup, parameters=parameters, version=cls.RECORDER_VERSION),
         ]
+        if probe:
+            lines.append(cls.PROBE_LINE.format(probe=probe, probes=probes))
         return "\n".join(lines) + "\n"
 
     @classmethod
@@ -145,8 +163,9 @@ class RecordingSession:
     """
 
     #: Files that mark the repository root, used to spell the two input paths relatively and to
-    #: find the directory recorded files belong in.
-    ROOT_MARKERS: ClassVar[Tuple[str, ...]] = ("setup.py", "hisim")
+    #: find the directory recorded files belong in. Taken from the shared layout so that the
+    #: recorder, the probe list and the command line all find the same checkout.
+    ROOT_MARKERS: ClassVar[Tuple[str, ...]] = RepositoryLayout.ROOT_MARKERS
 
     #: Where recorded files go unless a caller says otherwise: beside the hand-written exemplar and
     #: the shared parameter files, which is where every file of this format lives.
@@ -158,6 +177,10 @@ class RecordingSession:
         parameters_path: Path,
         out_dir: Path,
         library: Optional[ParameterFileLibrary] = None,
+        *,
+        module_config: Optional[Path] = None,
+        probe: str = "",
+        probes: str = "",
     ) -> None:
         """Prepares one recording.
 
@@ -170,12 +193,22 @@ class RecordingSession:
                 One library shared across a fleet-wide run is what lets two setups needing the
                 same new parameters share a single file; the default library searches both the
                 repository's own directory and the output directory.
+            module_config: A module-configuration file handed to the setup, which is how one probe
+                of a grouping pass differs from another. Omitted for an ordinary recording and for
+                the baseline probe, both of which record the setup's own class defaults.
+            probe: The probe column this recording fills, which becomes part of the file's name and
+                of its header so that several probes can live in one directory and be told apart.
+                Empty for an ordinary recording and for the baseline, whose file is that recording.
+            probes: The probe list the column comes from, named in the header beside the column.
         """
         self.module_path = Path(module_path).resolve()
         self.parameters_path = Path(parameters_path)
         self.out_dir = Path(out_dir)
         self.stem = self.module_path.stem
         self.library = library if library is not None else self.default_library(self.module_path, self.out_dir)
+        self.module_config = Path(module_config) if module_config is not None else None
+        self.probe = probe
+        self.probes = probes
 
     @classmethod
     def default_library(cls, near: Path, out_dir: Path) -> ParameterFileLibrary:
@@ -213,10 +246,7 @@ class RecordingSession:
         Returns:
             The output directory.
         """
-        for parent in Path(near).resolve().parents:
-            if all((parent / marker).exists() for marker in cls.ROOT_MARKERS):
-                return parent / cls.DEFAULT_OUTPUT_DIRECTORY
-        return Path(cls.DEFAULT_OUTPUT_DIRECTORY)
+        return RepositoryLayout.root(near) / cls.DEFAULT_OUTPUT_DIRECTORY
 
     @classmethod
     def relative(cls, path: Path) -> str:
@@ -228,11 +258,7 @@ class RecordingSession:
         Returns:
             A forward-slash path that is the same string on every machine.
         """
-        resolved = Path(path).resolve()
-        for parent in resolved.parents:
-            if all((parent / marker).exists() for marker in cls.ROOT_MARKERS):
-                return resolved.relative_to(parent).as_posix()
-        return resolved.name
+        return RepositoryLayout.relative(path)
 
     def record(self, parameters: SimulationParameters) -> RecordingResult:
         """Runs the setup, writes the file and proves that the file builds.
@@ -251,7 +277,8 @@ class RecordingSession:
         from hisim.hisim_main import get_description_from_py, initialize_from_python  # noqa: PLC0415
 
         setup_name = self.relative(self.module_path)
-        simulator = initialize_from_python(str(self.module_path), parameters, None)
+        configuration = str(self.module_config) if self.module_config is not None else None
+        simulator = initialize_from_python(str(self.module_path), parameters, configuration)
         simulator.prepare_calculation()
         simulator.connect_all_components()
         observed = observe(simulator, setup=setup_name)
@@ -273,9 +300,11 @@ class RecordingSession:
         """Where this recording's file goes.
 
         Returns:
-            ``<out dir>/<setup stem>.energy_system.yaml``.
+            ``<out dir>/<setup stem>.energy_system.yaml``, with the probe column inserted before
+            the suffix when this recording is one probe of several sharing a directory.
         """
-        return self.out_dir / f"{self.stem}{RecordedFileWriter.SUFFIX}"
+        label = f".{self.probe}" if self.probe else ""
+        return self.out_dir / f"{self.stem}{label}{RecordedFileWriter.SUFFIX}"
 
     def write(self, model: EnergySystemFile, setup_name: str, parameters_path: Path) -> str:
         """Writes the header and the canonical body of one recorded file.
@@ -290,7 +319,9 @@ class RecordingSession:
             The text written.
         """
         self.out_dir.mkdir(parents=True, exist_ok=True)
-        header = RecordedFileWriter.header(setup_name, self.relative(parameters_path), self.out_dir)
+        header = RecordedFileWriter.header(
+            setup_name, self.relative(parameters_path), self.out_dir, self.probe, self.probes
+        )
         text = header + dump_energy_system(model)
         self.path.write_text(text, encoding="utf-8")
         return text
@@ -384,6 +415,9 @@ def record_setup(
     *,
     parameters_path: Path,
     library: Optional[ParameterFileLibrary] = None,
+    module_config: Optional[Path] = None,
+    probe: str = "",
+    probes: str = "",
 ) -> RecordingResult:
     """Records one Python setup as an energy-system file and proves the file builds.
 
@@ -401,6 +435,10 @@ def record_setup(
         library: The parameter files this recording may reference; the default searches the
             repository's own directory and the output directory. A caller recording several setups
             passes one library to all of them so that they can share a newly written file.
+        module_config: A module-configuration file handed to the setup; ``None`` records the
+            setup's own class defaults, which is what an ordinary recording does.
+        probe: The probe column this recording fills, empty for an ordinary recording.
+        probes: The probe list the column comes from.
 
     Returns:
         The recording, carrying the file, its text and the observation it was built from.
@@ -408,5 +446,13 @@ def record_setup(
     Raises:
         EnergySystemRecordingError: For any of the ``EF-Rx`` conditions.
     """
-    session = RecordingSession(Path(module_path), Path(parameters_path), Path(out_dir), library)
+    session = RecordingSession(
+        Path(module_path),
+        Path(parameters_path),
+        Path(out_dir),
+        library,
+        module_config=module_config,
+        probe=probe,
+        probes=probes,
+    )
     return session.record(parameters)

@@ -12,6 +12,9 @@ preset pins and every value the system computes for itself, follows from those d
 |---|---|
 | `gas_boiler_household.energy_system.yaml` | A single-family house with a condensing gas boiler, floor heating and grid electricity. The reference system of this directory, and the only hand-written one. |
 | `<setup>.energy_system.yaml` | The recorded twin of `system_setups/<setup>.py`, one per setup. Generated; see "Recording a Python setup" below. |
+| `<setup>.probes.yaml` | The module configurations `<setup>` is recorded under — the *probe list*. Authored; the first entry is always the class defaults. See "Groups and variants" below. |
+| `<setup>.grouping.yaml` | What a person decided each difference between those configurations means. Authored through a workbook and committed in this form. |
+| `<setup>.grouped.energy_system.yaml` | The twin again, with the differences that are structure expressed as groups and variants. Generated from the two files above. |
 | `one_day_15min.simulation.yaml` | One January day at a quarter-hour resolution. The pair to reach for when trying a file out; the test suite and every recording run against this file too. |
 | `2021_minutely.simulation.yaml` | The whole of 2021 at a one-minute resolution with the standard plots. |
 
@@ -103,6 +106,57 @@ twice — once explicitly and once through the meter's own declared default — 
 the duplicate feed the setup really does build; and `household_heatpump_car_building_sizer`, whose
 `Car` components need a data dictionary computed from the occupancy instance at setup time, which
 is a constructor argument the declarative path has no way to supply.
+
+## Groups and variants: probe, decide, apply
+
+A recording observes one run, so it can only describe the branch that ran. The twelve
+building-sizer setups driven by a `ModularHouseholdConfig` have branches — a battery that is there
+or is not, a rooftop share somebody picks — and which of those differences is *structure* is a
+judgement no diff can make. So
+there is a second pass with a person in the middle of it, and three files per setup.
+
+```bash
+# 1. record the setup under every configuration of its probe list and prefill the workbook
+hisim energy-system grouping probe system_setups/household_heatpump_building_sizer.py \
+    energy_systems/household_heatpump_building_sizer.probes.yaml
+
+# 2. a person fills in the two right-hand columns of the workbook, then:
+hisim energy-system grouping import energy_systems/household_heatpump_building_sizer.grouping.xlsx
+
+# 3. build the grouped file and prove it against every probe
+hisim energy-system record system_setups/household_heatpump_building_sizer.py \
+    energy_systems/one_day_15min.simulation.yaml \
+    --grouping energy_systems/household_heatpump_building_sizer.grouping.yaml
+```
+
+The workbook has two sheets. `components` has one row per component in the union of the probe runs
+and one cell per probe holding `—` (not there), `=` (there, says the same) or `≠` (there, says
+something else). The third state is the point: an electricity meter is present in every
+configuration and *wired* differently in one of them, which a presence matrix cannot see and which
+is exactly what a group cannot express and a variant can. `configurations` has one row per probe,
+the module-configuration fields that produced it, and the switch positions that column stands for.
+
+A row that is `=` everywhere needs nothing and stays empty. Every other row must carry one of
+three answers: `group:<name>`, `variant:<name>` or `variant:<name>/<option>`, or `override` — the
+difference is a value a consumer sets rather than a question of membership. The tool never decides
+a row's meaning itself — it only writes down what it observed and carries a previously committed
+decision forward — and a `≠` row left empty is refused by name, twice: once by the importer
+against the cells, and once by the second pass against the recordings.
+
+Every probe column is then an assertion the second pass checks: put the grouped file's switches
+where that column stands, resolve it, and the result equals that column's flat recording byte for
+byte. The baseline column is what makes the grouped file provably the committed twin with structure
+added. `override` differences are not in the file at all — the file states the baseline's value and
+the pass lists each of them as a *consumer knob*, so a column's verdict says exactly how much the
+file itself determined.
+
+Two limits are printed rather than implied. The knob list is what the file does not decide. And a
+grouped file's guarantees reach exactly as far as its probe list: a list that toggles each fork on
+its own has tested no two of them together, so the report names every combination nobody exercised.
+
+The workbook is a scratch artefact and is git-ignored; the probe list and the grouping decision are
+committed and reviewed. Re-probing a setup carries the committed decision back into the workbook, so
+a setup that grew a component is asked about that row and no other.
 
 ## Simulation-parameters files are shared, never duplicated
 

@@ -73,24 +73,17 @@ class CanonicalDumper(yaml.SafeDumper):
 
     @classmethod
     def configured(cls) -> Type["CanonicalDumper"]:
-        """Registers the numeric overrides on this class and returns it.
+        """Register representers for numpy scalars and arrays on this dumper class, and return the class.
 
-        A component configuration is not guaranteed to hold the plain Python numbers its field
-        annotations promise. Anything a setup derives from a sized building, a pandas table or a
-        pvlib call arrives as a numpy scalar instead, and the safe dumper refuses a type it has no
-        representer for -- so a setup that computes one number that way cannot be written down at
-        all, which reads as the format being unable to express the setup when it is only the writer
-        being unable to spell the number. Registering the numpy scalar kinds by their abstract base
-        classes covers every width of each, and an array is written as the list it would have been
-        had nobody put it in an array.
-
-        The values are converted rather than tagged, so the file stays ordinary YAML that any
-        reader can load: what comes back is a Python ``float``, ``int`` or ``bool``, which is what
-        the field annotation said in the first place. Registration happens here rather than at
-        import time so that importing this module has no side effect, and it is idempotent.
+        A config field annotated ``float`` may hold a ``numpy.float64`` -- anything computed from a sized
+        building, a pandas table or pvlib arrives that way -- and the safe dumper refuses a type it has no
+        representer for, which made such a setup unrecordable. The representers convert the value (``int``,
+        ``float``, ``bool``, ``list``) rather than tagging it, so the file stays plain YAML. Registration is
+        done here instead of at import time so importing this module has no side effect; calling it twice is
+        harmless.
 
         Returns:
-            This class, ready to be handed to a YAML dump.
+            The dumper class, ready to pass to ``yaml.dump``.
         """
         cls.add_multi_representer(np.integer, cls.represent_numpy_integer)
         cls.add_multi_representer(np.floating, cls.represent_numpy_float)
@@ -227,9 +220,9 @@ class EnergySystemEmitter:
         """Renders an already-built document in the canonical style.
 
         The two steps are separable because more than one producer builds the document itself: the
-        run record annotates it, and later passes assemble documents of their own. All of them have
-        to come out in the same bytes as an ordinary dump, which they only do if there is one
-        renderer.
+        run record annotates it, and the grouping pass assembles one column's realization out of a
+        grouped file and the knobs that column sets. All of them have to come out in the same
+        bytes as an ordinary dump, which they only do if there is one renderer.
 
         Args:
             document: The plain nested mapping mirroring the file, keys already in canonical order.
@@ -261,7 +254,7 @@ class EnergySystemEmitter:
         document: Dict[str, Any] = {"schema_version": model.schema_version, "name": model.name}
         if model.description is not None:
             document["description"] = model.description
-        document["components"] = {name: cls._entry(entry) for name, entry in model.components.items()}
+        document["components"] = {name: cls.entry(entry) for name, entry in model.components.items()}
         if model.groups:
             document["groups"] = {name: cls._group(group) for name, group in model.groups.items()}
         if model.variants:
@@ -279,7 +272,7 @@ class EnergySystemEmitter:
         """
         return {
             "enabled": group.enabled,
-            "components": {name: cls._entry(entry) for name, entry in group.components.items()},
+            "components": {name: cls.entry(entry) for name, entry in group.components.items()},
         }
 
     @classmethod
@@ -297,13 +290,13 @@ class EnergySystemEmitter:
         return {
             "selected": variant.selected,
             "options": {
-                name: {"components": {member: cls._entry(entry) for member, entry in option.components.items()}}
+                name: {"components": {member: cls.entry(entry) for member, entry in option.components.items()}}
                 for name, option in variant.options.items()
             },
         }
 
     @classmethod
-    def _entry(cls, entry: ComponentEntry) -> Dict[str, Any]:
+    def entry(cls, entry: ComponentEntry) -> Dict[str, Any]:
         """Renders one component entry with its keys in the canonical order.
 
         The order — what it is, how it is configured, where its inputs come from, where its

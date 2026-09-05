@@ -341,12 +341,17 @@ class KpiPreparation:
                 timeresolution=self.simulation_parameters.seconds_per_timestep,
             )
 
-            # compute self consumption rate and autarkie rate
+            # compute self consumption rate and autarkie rate. A system can produce without
+            # consuming anything -- a bare generation chain feeding a converter, like the
+            # electrolyzer setup -- and a rate over zero consumption is not a number; it is
+            # reported as zero, matching the no-production branch below.
             self_consumption_rate_in_percent = 100 * (
                 self_consumption_in_kilowatt_hour / electricity_production_in_kilowatt_hour
             )
-            self_sufficiency_rate_in_percent = 100 * (
-                self_consumption_in_kilowatt_hour / electricity_consumption_in_kilowatt_hour
+            self_sufficiency_rate_in_percent = (
+                100 * (self_consumption_in_kilowatt_hour / electricity_consumption_in_kilowatt_hour)
+                if electricity_consumption_in_kilowatt_hour > 0
+                else 0
             )
             if self_sufficiency_rate_in_percent > 100:
                 raise ValueError(

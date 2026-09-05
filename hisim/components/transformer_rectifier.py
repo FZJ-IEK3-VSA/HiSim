@@ -8,9 +8,12 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
+import pandas as pd
+
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim.component import StatelessComponent, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -133,6 +136,63 @@ class Transformer(StatelessComponent):
         # print(f"individual efficiency: {efficiency}")
 
         stsv.set_output_value(self.electricity_output, float(input_power_in_kilowatt * efficiency))
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: list,
+        postprocessing_results: pd.DataFrame,
+    ) -> list[KpiEntry]:
+        """Calculates KPIs for the transformer/rectifier and returns all KPI entries as a list.
+
+        Two indicators describe what the unit did over the simulated period: the electrical
+        energy it delivered, integrated from its output power, and the conversion losses. The
+        losses are not observable as a column of their own -- the unit has one input and one
+        output port -- but the output is by construction the input scaled by the configured
+        efficiency, so the loss follows exactly: ``delivered * (1/efficiency - 1)``.
+
+        Args:
+            all_outputs: every output column of the run, searched for this component's by name.
+            postprocessing_results: the per-timestep values of those columns.
+
+        Returns:
+            list[KpiEntry]: the two entries, tagged as Transformer.
+
+        Raises:
+            ValueError: if the output column is missing, so a renamed output cannot silently
+                drop the KPIs from every future reference.
+        """
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        delivered_in_kilowatt_hour = None
+        for index, output in enumerate(all_outputs):
+            if output.component_name != self.component_name:
+                continue
+            if output.field_name == Transformer.TransformerOutput and output.unit == lt.Units.KILOWATT:
+                column = postprocessing_results.iloc[:, index]
+                delivered_in_kilowatt_hour = round(float(column.sum()) * seconds_per_timestep / 3600, 3)
+        if delivered_in_kilowatt_hour is None:
+            raise ValueError(
+                f"The transformer output column was not found for {self.component_name}; its KPIs "
+                "cannot be reported as absent silently."
+            )
+        losses_in_kilowatt_hour = round(
+            delivered_in_kilowatt_hour * (1.0 / self.transformerconfig.efficiency - 1.0), 3
+        )
+        return [
+            KpiEntry(
+                name="Electrical energy delivered",
+                unit="kWh",
+                value=delivered_in_kilowatt_hour,
+                tag=KpiTagEnumClass.TRANSFORMER,
+                description=self.component_name,
+            ),
+            KpiEntry(
+                name="Conversion losses",
+                unit="kWh",
+                value=losses_in_kilowatt_hour,
+                tag=KpiTagEnumClass.TRANSFORMER,
+                description=self.component_name,
+            ),
+        ]
 
     def write_to_report(self) -> list[str]:
         """Return report lines describing this transformer.

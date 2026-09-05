@@ -8,6 +8,7 @@ simulation, no I/O.
 
 # clean
 
+import pandas as pd
 import pytest
 
 from hisim.components.transformer_rectifier import Transformer, TransformerConfig
@@ -203,3 +204,35 @@ def test_transformer_simulate_zero_efficiency_produces_zero_output() -> None:
     stsv.values[source_output.global_index] = 42.0
     transformer.i_simulate(timestep=0, stsv=stsv, force_convergence=False)
     assert stsv.values[transformer.electricity_output.global_index] == pytest.approx(0.0)
+
+
+@pytest.mark.base
+def test_transformer_kpi_entries_integrate_output_and_derive_losses() -> None:
+    """The two transformer KPIs integrate the delivered kilowatts and derive the losses from the efficiency.
+
+    Two timesteps of 60 s at 100 kW are 100*2*60/3600 kWh delivered; with the default 95 %
+    efficiency the losses are delivered*(1/0.95 - 1). Both are computed here by hand, so a broken
+    integration or a losses formula reading the wrong field cannot agree with itself.
+    """
+    mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    transformer = Transformer(my_simulation_parameters=mysim, config=TransformerConfig.get_default_transformer_config())
+    frame = pd.DataFrame({0: [100.0, 100.0]})
+
+    entries = {e.name: e for e in transformer.get_component_kpi_entries([transformer.electricity_output], frame)}
+
+    delivered = round(100.0 * 2 * 60 / 3600, 3)
+    assert entries["Electrical energy delivered"].value == pytest.approx(delivered)
+    assert entries["Conversion losses"].value == pytest.approx(round(delivered * (1 / 0.95 - 1), 3))
+    assert all(isinstance(e.value, float) for e in entries.values()), (
+        "a numpy scalar here would crash the KPI json writer"
+    )
+
+
+@pytest.mark.base
+def test_transformer_kpi_entries_refuse_a_missing_output() -> None:
+    """A missing output column raises naming the component instead of reporting nothing."""
+    mysim = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+    transformer = Transformer(my_simulation_parameters=mysim, config=TransformerConfig.get_default_transformer_config())
+
+    with pytest.raises(ValueError, match="transformer output column"):
+        transformer.get_component_kpi_entries([], pd.DataFrame())

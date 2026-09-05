@@ -105,8 +105,9 @@ def test_a_script_started_by_path_cannot_import_from_its_working_directory(tmp_p
 class RecordedChild:
     """A stand-in for :func:`subprocess.run` that keeps the environment it was handed.
 
-    The driver's contract with its children is entirely in that environment, so capturing it is
-    enough to test the contract, and it means the test never pays for a simulation.
+    The environment is the part of the driver's contract with its children that this test file is
+    about (the argument vector, working directory and log routing are the rest), and it is captured
+    whole -- so recording it is enough here, and the test never pays for a simulation.
     """
 
     def __init__(self) -> None:

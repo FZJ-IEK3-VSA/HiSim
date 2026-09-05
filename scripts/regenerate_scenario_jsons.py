@@ -114,7 +114,9 @@ def regenerate_one(
     a script Python puts the *script's* directory on ``sys.path``, not the working directory; without the
     variable, ``import hisim`` in the child resolves to the installed package, which in a git worktree is a
     different checkout, and the regeneration silently reports no drift against the wrong code. The
-    variable is prepended, so a caller's own ``PYTHONPATH`` entries still apply.
+    variable is prepended, so a caller's own ``PYTHONPATH`` entries stay -- but for any name both
+    provide, above all ``hisim`` itself, the checkout wins. That shadowing is deliberate: the report
+    is about *this* checkout, so no caller may point the children at another one.
     """
     stem = setup_path.stem
     log_path = log_dir / f"{stem}.log"

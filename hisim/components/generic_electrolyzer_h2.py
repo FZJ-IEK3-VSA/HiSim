@@ -8,11 +8,13 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from scipy.interpolate import interp1d
 import numpy as np
+import pandas as pd
 
 # Import modules from HiSim
 from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim.config import ConfigBase, ComponentID, DisplayConfig
 from hisim import loadtypes as lt
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 
@@ -760,6 +762,52 @@ class Electrolyzer(cp.Component):
             stsv.set_output_value(self.current_efficiency_state, current_sys_eff_soec)
         else:
             stsv.set_output_value(self.current_efficiency_state, current_eff)
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the electrolyzer and returns all KPI entries as a list.
+
+        Three indicators describe what the unit did over the simulated period, each read as the
+        final value of one of the electrolyzer's own cumulative outputs -- the component already
+        integrates them per timestep, so summing here would double-count: the hydrogen it
+        produced, the electrical energy it consumed doing so, and how long it actually operated.
+
+        Args:
+            all_outputs: every output column of the run, searched for this component's by name.
+            postprocessing_results: the per-timestep values of those columns.
+
+        Returns:
+            List[KpiEntry]: the three entries, tagged as Electrolyzer.
+
+        Raises:
+            ValueError: if one of the three columns is missing, so a renamed output cannot
+                silently drop its KPI from every future reference.
+        """
+        wanted = {
+            Electrolyzer.TotalHydrogenProduced: ("Hydrogen produced", "kg", lt.Units.KG),
+            Electrolyzer.TotalEnergyConsumed: ("Electrical energy consumed", "kWh", lt.Units.KWH),
+            Electrolyzer.OperatingTime: ("Operating time", "h", lt.Units.HOURS),
+        }
+        found: dict = {}
+        for index, output in enumerate(all_outputs):
+            if output.component_name != self.component_name or output.field_name not in wanted:
+                continue
+            name, unit, expected_unit = wanted[output.field_name]
+            if output.unit == expected_unit:
+                found[name] = (unit, float(postprocessing_results.iloc[:, index].iloc[-1]))
+        missing = [name for name, _, _ in wanted.values() if name not in found]
+        if missing:
+            raise ValueError(
+                f"The electrolyzer outputs for the KPI(s) {missing} were not found for "
+                f"{self.component_name}; they cannot be reported as absent silently."
+            )
+        return [
+            KpiEntry(name=name, unit=unit, value=value, tag=KpiTagEnumClass.ELECTROLYZER, description=self.component_name)
+            for name, (unit, value) in found.items()
+        ]
 
     def write_to_report(self) -> List[str]:
         """Writes a report."""

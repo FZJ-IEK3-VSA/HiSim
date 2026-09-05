@@ -18,6 +18,7 @@ class KpiTagEnumClass(Enum):
     BUILDING = "Building"
     AIR_CONDITIONER = "Air Conditioner"
     BATTERY = "Battery"
+    CHP = "CHP"
     HEAT_DISTRIBUTION_SYSTEM = "Heat Distribution System"
     HEATPUMP_SPACE_HEATING = "Heat Pump For Space Heating"
     HEATPUMP_DOMESTIC_HOT_WATER = "Heat Pump For Domestic Hot Water"

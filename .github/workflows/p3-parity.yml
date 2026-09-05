@@ -8,10 +8,11 @@
 #
 # It is dispatched by hand and never on push (R11.7). It blesses nothing and gates nothing.
 #
-# THIS FILE IS DELETED IN P3'S LAST PR, together with scripts/p3_parity_check.py,
-# scripts/p3_parity_runs.py, scripts/p3_parity_renamings.py, scripts/p3_parity_matrix.py and
-# tests/test_p3_parity.py (R11.8, AC-P3.20). Whatever earns a place in the permanent gate moves
-# into golden_config.json at that point; nothing here is meant to survive.
+# THIS FILE IS DELETED IN PHASE P6, together with scripts/p3_parity_check.py,
+# scripts/p3_parity_runs.py, scripts/p3_parity_verdicts.py, scripts/p3_parity_renamings.py,
+# scripts/p3_parity_matrix.py and tests/test_p3_parity.py (R11.8 amended and AC-P3.20 deferred
+# to P6, 2026-08-31). Whatever earns a place in the permanent gate moves into golden_config.json
+# at that point; nothing here is meant to survive.
 
 name: p3-parity
 
@@ -132,7 +133,11 @@ jobs:
           path: verdicts
           merge-multiple: false
       - name: Print one table covering every triple
+        # pipefail keeps the checker's own exit code — the summarize path returns 1 when any
+        # triple missed parity or when no verdicts were collected at all, and `tee` would
+        # otherwise replace that with its own 0.
         run: |
+          set -o pipefail
           python3 scripts/p3_parity_check.py --summarize verdicts | tee "$GITHUB_STEP_SUMMARY"
       - name: Fail if any triple did not reach parity
         run: '[ "${{ needs.parity.result }}" = "success" ] || exit 1'

@@ -2,7 +2,7 @@
 """The declared translation between the two paths' aggregator port names.
 
 TEMPORARY — this table belongs to the P3 migration parity rig (requirements R11) and is deleted
-with it in P3's last PR (R11.8, AC-P3.20).
+with it in phase P6 (R11.8 amended and AC-P3.20 deferred to P6, 2026-08-31).
 
 An aggregator does not declare a port per participant; it grows one per feed, and the two paths
 derive that port's name differently. The imperative add-API names an aggregator input after the

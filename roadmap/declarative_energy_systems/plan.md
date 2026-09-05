@@ -165,7 +165,7 @@ needed it is finished. Its first spelling had P3 delete it, which was decided be
 P4 re-records the fleet on **every batch**, and its own assumption A1 reviews each batch against the recorded
 file diff, so the rig is the only thing proving a re-recorded file still reproduces its setup while 88 config
 classes change how those files are written. The permanent golden gate is not a substitute — it watches eight
-setups against blessed references; the rig watches twenty across two windows, needs no references, and covers
+setups against blessed references; the rig watches every recorded setup — twenty-two today, forty-four triples — across two windows, needs no references, and covers
 eight setups that have no KPI oracle at all.
 
 **Entry condition: P1, P2, P2.1, P3, P4 and P5 are all merged.** Until then the rig is dispatched by every

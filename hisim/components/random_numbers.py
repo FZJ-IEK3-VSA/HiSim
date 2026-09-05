@@ -18,7 +18,17 @@ from hisim.simulationparameters import SimulationParameters
 @dataclass_json
 @dataclass
 class RandomNumbersConfig(ConfigBase):
-    """Configuration of the Random Numbers."""
+    """Configuration of the Random Numbers.
+
+    Holds the range to draw from and the seed that fixes which numbers are drawn. The seed is part
+    of the configuration rather than an argument because a system description has to be able to say
+    what a run will do: two runs of one configuration produce the same series, which is what lets a
+    recorded energy-system file reproduce the setup it was recorded from.
+
+    How many values are drawn is deliberately *not* configured. That count is the length of the
+    simulation, which belongs to the simulation parameters, and writing it here would pin a
+    component to the horizon it happened to be built under.
+    """
 
     @classmethod
     def get_main_classname(cls) -> str:
@@ -26,18 +36,18 @@ class RandomNumbersConfig(ConfigBase):
         return RandomNumbers.get_full_classname()
 
     component_id: ComponentID
-    timesteps: int
     minimum: float
     maximum: float
+    seed: int
 
     @classmethod
     def get_default_config(cls) -> "RandomNumbersConfig":
         """Gets a default config."""
         return RandomNumbersConfig(
             component_id=ComponentID(name="RandomNumbers"),
-            timesteps=100,
             minimum=1,
             maximum=20,
+            seed=1,
         )
 
 
@@ -74,17 +84,15 @@ class RandomNumbers(Component):
         """Initialize the class.
 
         Args:
-            config: Configuration holding the number of timesteps and the
-                ``[minimum, maximum]`` range to draw from.
-            my_simulation_parameters: Simulation parameters of the run.
+            config: Configuration holding the ``[minimum, maximum]`` range to draw from and the
+                seed that fixes the series.
+            my_simulation_parameters: Simulation parameters of the run; their timestep count is how
+                many values are drawn.
             my_display_config: Display configuration for the component.
-            rng: Optional :class:`random.Random` instance used to draw the
-                values. When ``None`` (the default) a fresh
-                ``random.Random()`` is used so the global ``random`` module
-                state is never mutated and production output stays
-                non-deterministic. Passing a seeded instance (e.g.
-                ``random.Random(0)``) makes ``self.values`` reproducible,
-                which is what tests want.
+            rng: Optional :class:`random.Random` instance used instead of the one the seed builds.
+                Only a test that wants to inject a specific generator needs this; leaving it
+                ``None`` draws from ``random.Random(config.seed)``, which never touches the global
+                ``random`` module state and gives the same series on every run.
         """
         if my_display_config is None:
             my_display_config = DisplayConfig()
@@ -100,11 +108,11 @@ class RandomNumbers(Component):
         self.minimum = config.minimum
         self.maximum = config.maximum
         if rng is None:
-            rng = random.Random()
+            rng = random.Random(config.seed)
         self.values: List[float] = self._generate_values(
             minimum=config.minimum,
             maximum=config.maximum,
-            timesteps=config.timesteps,
+            timesteps=my_simulation_parameters.timesteps,
             rng=rng,
         )
         self.random_output = self.add_output(

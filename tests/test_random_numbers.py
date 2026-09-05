@@ -18,6 +18,7 @@ injected RNG through to ``self.values``.
 # These tests deliberately exercise the private helper ``RandomNumbers._generate_values``.
 # pylint: disable=protected-access
 
+import datetime
 import random
 
 import pytest
@@ -27,13 +28,33 @@ from hisim.components.random_numbers import RandomNumbers, RandomNumbersConfig
 from hisim.simulationparameters import SimulationParameters
 
 
-def _make_config(timesteps: int = 10, minimum: float = 1.0, maximum: float = 20.0) -> RandomNumbersConfig:
-    """Build a small ``RandomNumbersConfig`` for testing."""
+def _make_config(minimum: float = 1.0, maximum: float = 20.0, seed: int = 1) -> RandomNumbersConfig:
+    """Build a small ``RandomNumbersConfig`` for testing.
+
+    How many values the component draws is no longer part of its configuration — it is the length of
+    the simulation — so this helper only carries the range and the seed, and the tests pair it with
+    :func:`_make_parameters`.
+    """
     return RandomNumbersConfig(
         component_id=ComponentID(name="RandomNumbers"),
-        timesteps=timesteps,
         minimum=minimum,
         maximum=maximum,
+        seed=seed,
+    )
+
+
+def _make_parameters(timesteps: int) -> SimulationParameters:
+    """Build simulation parameters that run for exactly ``timesteps`` steps.
+
+    The component draws one value per timestep of the run, so a test that wants a short series says
+    so here rather than in the configuration. One minute per step keeps the arithmetic obvious.
+    """
+    seconds_per_timestep = 60
+    start = datetime.datetime(2021, 1, 1)
+    return SimulationParameters(
+        start,
+        start + datetime.timedelta(seconds=timesteps * seconds_per_timestep),
+        seconds_per_timestep,
     )
 
 
@@ -103,8 +124,8 @@ def test_generate_values_does_not_touch_global_random() -> None:
 @pytest.mark.base
 def test_component_uses_injected_rng() -> None:
     """Passing ``rng`` to the constructor makes ``self.values`` reproducible."""
-    sp = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = _make_config(timesteps=10, minimum=1.0, maximum=20.0)
+    sp = _make_parameters(10)
+    config = _make_config(minimum=1.0, maximum=20.0)
     expected = RandomNumbers._generate_values(1.0, 20.0, 10, random.Random(0))
 
     component = RandomNumbers(
@@ -121,8 +142,8 @@ def test_component_uses_injected_rng() -> None:
 @pytest.mark.base
 def test_component_default_rng_stays_in_bounds() -> None:
     """Without ``rng`` the component still produces in-range, correctly-sized values."""
-    sp = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = _make_config(timesteps=25, minimum=10.0, maximum=30.0)
+    sp = _make_parameters(25)
+    config = _make_config(minimum=10.0, maximum=30.0)
 
     component = RandomNumbers(
         config=config,
@@ -143,8 +164,8 @@ def test_default_display_config_not_shared_between_instances() -> None:
     Using ``None`` as a sentinel and creating a fresh ``DisplayConfig`` inside
     ``__init__`` prevents that shared state.
     """
-    sp = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
-    config = _make_config(timesteps=5, minimum=1.0, maximum=20.0)
+    sp = _make_parameters(5)
+    config = _make_config(minimum=1.0, maximum=20.0)
 
     # The seeded rng is only required to satisfy the constructor signature;
     # the assertions concern display-config identity, not RNG output.

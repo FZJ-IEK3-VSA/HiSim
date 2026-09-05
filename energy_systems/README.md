@@ -97,12 +97,13 @@ directory and fails on any difference, which is what the `energy-system-freshnes
 every pull request, so a setup cannot change without its twin.
 
 There is no skip list. A setup that cannot be recorded is a defect in the setup or a gap in the
-format, and the driver names every one it could not record and exits non-zero. Two setups are in
-that state today: `household_gas_solar_thermal`, whose electricity meter is wired to the occupancy
-twice — once explicitly and once through the meter's own declared default — so the format refuses
-the duplicate feed the setup really does build; and `household_heatpump_car_building_sizer`, whose
-`Car` components need a data dictionary computed from the occupancy instance at setup time, which
-is a constructor argument the declarative path has no way to supply.
+format, and the driver names every one it could not record and exits non-zero. Every setup in the
+repository records today, and the rule has already done its work twice rather than never:
+`household_gas_solar_thermal` could not be recorded until its doubled meter feed — wired to the
+occupancy once explicitly and once through the meter's own declared default — was fixed in the
+setup, and `household_heatpump_car_building_sizer` could not be recorded until the `Car`
+occupancy-data spelling the declarative path can supply existed. Both were repaired rather than
+skipped, which is the point of having no list.
 
 ## Simulation-parameters files are shared, never duplicated
 

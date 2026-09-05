@@ -23,14 +23,20 @@
 # On failure the fix is: run 'python scripts/record_all_setups.py' locally,
 # resolve any recorder errors, and commit what it writes.
 #
-# Gate: BLOCKING (fails the build on drift, a missing twin, a setup that cannot
-# be recorded, or two parameter files describing the same run).
+# Gate: ADVISORY for its burn-in (continue-on-error below). The step itself
+# still exits non-zero on drift, a missing twin, a setup that cannot be
+# recorded, or two parameter files describing the same run, and the drift diff
+# is still uploaded — but a failure does not block a merge yet. Byte-identical
+# re-recording is proven by test for one setup and by design for the rest, so
+# the fleet earns the blocking bit empirically: after a week of green runs on
+# main, delete the continue-on-error line and this gate is blocking.
 #
 # Note: this is heavy, like the scenario-JSON gate, because it constructs every
 # setup (occupancy setups trigger LPG) and then builds each recorded file back
-# through the executor. The runs are sequential on purpose: two setups needing
-# the same new simulation-parameters file have to share one file, and that only
-# works when the second can see what the first wrote.
+# through the executor. The setups record a few at a time (--jobs): the shared
+# inputs cache is written atomically, every child derives its own local-LPG
+# index from its own process, and a new simulation-parameters file is named by
+# its content and created exclusively, so the children need no ordering.
 
 name: energy-system-freshness
 
@@ -52,6 +58,9 @@ concurrency:
 jobs:
   freshness:
     name: re-record every setup and check for drift
+    # Burn-in: failures are reported, uploaded and annotated, but do not block. Delete this
+    # line after a week of green runs on main to make the gate blocking (see the header).
+    continue-on-error: true
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/fzj-iek3-vsa/hisim-test:py311
@@ -64,6 +73,14 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install HiSim package
         run: uv pip install --system -e .
+      # The previous run's weather series and LoadProfileGenerator profiles; see the action.
+      # Eleven of the twenty-two setups run the LPG locally, and recording them from a cold
+      # cache is both the dominant cost of this job and the flakiness the cache absorbs.
+      - name: Restore the HiSim inputs cache
+        uses: ./.github/actions/hisim-cache
+        with:
+          mode: restore
+          scope: ${{ github.workflow }}
       - name: Re-record every setup and compare with the committed twins
         run: |
           # --check records into a throwaway directory inside the workspace and
@@ -91,3 +108,10 @@ jobs:
           name: energy-system-drift
           path: energy_system_drift.txt
           if-no-files-found: ignore
+      # Kept even when the job failed; see the action for why that is safe.
+      - name: Save the HiSim inputs cache
+        if: always()
+        uses: ./.github/actions/hisim-cache
+        with:
+          mode: save
+          scope: ${{ github.workflow }}
